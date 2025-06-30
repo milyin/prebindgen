@@ -1,0 +1,31 @@
+[package]
+name = "prebindgen_tests"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "prebindgen_tests"
+path = "src/lib.rs"
+
+[dependencies]
+prebindgen = { path = ".." }
+
+# Test dependencies
+[dev-dependencies]
+tempfile = "3.8"
+
+[[bin]]
+name = "debug"
+path = "src/debug.rs"
+
+[[test]]
+name = "copy_structs_enums"
+path = "tests/copy_structs_enums.rs"
+
+[[test]]
+name = "path_access"
+path = "tests/path_access.rs"
+
+[[test]]
+name = "no_out_dir"
+path = "tests/no_out_dir.rs"

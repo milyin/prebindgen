@@ -41,6 +41,13 @@
 //! ```ignore
 //! include!(concat!(env!("OUT_DIR"), "/prebindgen.rs"));
 //! ```
+//! 
+//! Or use the `prebindgen_path!` macro to get the directory path:
+//! 
+//! ```ignore
+//! prebindgen_path!(DEST_DIR);
+//! let file_path = format!("{}/prebindgen.rs", DEST_DIR);
+//! ```
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -49,9 +56,8 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, Once};
-use std::process;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // Global destination directory path, initialized once
 static DEST_DIR_INIT: Once = Once::new();
@@ -63,7 +69,18 @@ fn get_dest_dir() -> String {
         let dir = if let Ok(out_dir) = env::var("OUT_DIR") {
             out_dir
         } else {
-            create_unique_temp_dir()
+            // Generate a random subpath in temp directory
+            let temp_dir = env::temp_dir();
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis();
+            let pid = std::process::id();
+            let random_suffix = format!("{:x}", timestamp % 0xFFFFFF); // Use last 6 hex digits
+            let random_name = format!("prebindgen_{}_{}", pid, random_suffix);
+            let fallback_dir = temp_dir.join(random_name);
+            let _ = std::fs::create_dir_all(&fallback_dir);
+            fallback_dir.to_string_lossy().to_string()
         };
         
         *DEST_DIR.lock().unwrap() = Some(dir);
@@ -96,7 +113,13 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     
     // Check if this definition already exists in the file
     let definition_name = parsed.ident.to_string();
-    if !existing_content.contains(&definition_name) {
+    
+    // Create a more specific pattern to check for the actual definition
+    let struct_pattern = format!("struct {}", definition_name);
+    let enum_pattern = format!("enum {}", definition_name);
+    let already_exists = existing_content.contains(&struct_pattern) || existing_content.contains(&enum_pattern);
+    
+    if !already_exists {
         // Append the new definition to the file
         if let Ok(mut file) = OpenOptions::new()
             .create(true)
@@ -127,72 +150,22 @@ pub fn prebindgen_path(input: TokenStream) -> TokenStream {
         parse_macro_input!(input as Ident)
     };
     
-    // Get the global destination directory
+    // Use the same global destination directory as prebindgen
     let dest_dir = get_dest_dir();
     
     let expanded = quote! {
-        const #const_name: &str = #dest_dir;
+        pub const #const_name: &str = #dest_dir;
     };
     
     TokenStream::from(expanded)
 }
 
-/// Creates a unique temporary directory for prebindgen when OUT_DIR is not available
-fn create_unique_temp_dir() -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    
-    let temp_dir = env::temp_dir();
-    let pid = process::id();
-    let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let unique_name = format!("prebindgen_{}_{}_{}", pid, counter, 
-                             std::time::SystemTime::now()
-                                 .duration_since(std::time::UNIX_EPOCH)
-                                 .unwrap_or_default()
-                                 .as_millis());
-    
-    let unique_dir = temp_dir.join(unique_name);
-    
-    // Create the directory if it doesn't exist
-    if std::fs::create_dir_all(&unique_dir).is_err() {
-        // Fallback to just temp dir if we can't create the unique one
-        return temp_dir.to_string_lossy().to_string();
-    }
-    
-    unique_dir.to_string_lossy().to_string()
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Mutex;
-    
-    // Static mutex to ensure tests don't interfere with each other when modifying env vars
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
-    
+mod tests {    
     #[test]
     fn test_macro_exists() {
         // This is just a placeholder test to ensure the macro compiles
         let _test = true;
         assert!(_test);
-    }
-    
-    #[test]
-    fn test_unique_temp_dir_creation() {
-        let _lock = ENV_MUTEX.lock().unwrap();
-        
-        // Test that create_unique_temp_dir creates different paths
-        let dir1 = create_unique_temp_dir();
-        let dir2 = create_unique_temp_dir();
-        
-        assert_ne!(dir1, dir2, "Unique temp directories should be different");
-        assert!(dir1.contains("prebindgen_"), "Directory should contain prebindgen prefix");
-        assert!(dir2.contains("prebindgen_"), "Directory should contain prebindgen prefix");
-        
-        // Verify the directories exist or can be created
-        let path1 = std::path::Path::new(&dir1);
-        let path2 = std::path::Path::new(&dir2);
-        
-        assert!(path1.exists() || std::fs::create_dir_all(path1).is_ok());
-        assert!(path2.exists() || std::fs::create_dir_all(path2).is_ok());
     }
 }
