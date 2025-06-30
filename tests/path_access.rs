@@ -1,6 +1,24 @@
-use prebindgen_tests::{CUSTOM_PATH, PREBINDGEN_PATH, PathTestStruct, PathTestEnum};
+use prebindgen::{prebindgen, prebindgen_path};
 use std::fs;
 use std::env;
+
+// Test structures for path access tests
+#[prebindgen]
+pub struct PathTestStruct {
+    pub id: u64,
+    pub name: String,
+}
+
+#[prebindgen]
+pub enum PathTestEnum {
+    Alpha,
+    Beta(String),
+    Gamma { value: i32 },
+}
+
+// Generate path constants
+prebindgen_path!(CUSTOM_PATH);
+prebindgen_path!(); // This creates PREBINDGEN_PATH
 
 #[test]
 fn test_path_constant_generation() {
@@ -16,8 +34,9 @@ fn test_path_constant_generation() {
     
     // Should be a valid path
     assert!(
-        !CUSTOM_PATH.is_empty(),
-        "Path constant should not be empty"
+        CUSTOM_PATH.starts_with('/') || CUSTOM_PATH.contains("temp") || CUSTOM_PATH.contains("tmp"),
+        "Path should be absolute or in temp directory: {}",
+        CUSTOM_PATH
     );
     
     // Should be an absolute path or a recognizable temp path

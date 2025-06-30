@@ -1,7 +1,24 @@
-use prebindgen_tests::{TEST_PATH, NoOutDirStruct, NoOutDirEnum};
+use prebindgen::{prebindgen, prebindgen_path};
 use std::fs;
 use std::env;
 use std::process;
+
+// Test structures for no_out_dir tests
+#[prebindgen]
+pub struct NoOutDirStruct {
+    pub data: String,
+    pub timestamp: u64,
+}
+
+#[prebindgen]
+pub enum NoOutDirEnum {
+    State1,
+    State2 { info: String },
+    State3(i32, String),
+}
+
+// Generate path when OUT_DIR might not be available
+prebindgen_path!(TEST_PATH);
 
 #[test]
 fn test_works_without_out_dir() {
@@ -14,9 +31,11 @@ fn test_works_without_out_dir() {
     println!("TEST_PATH: {}", TEST_PATH);
     
     // Path should still be valid
+    println!("Path length: {}", TEST_PATH.len());
     assert!(
-        !TEST_PATH.is_empty(),
-        "Path should not be empty even without OUT_DIR"
+        TEST_PATH.starts_with('/') || TEST_PATH.contains("temp") || TEST_PATH.contains("tmp"),
+        "Path should be valid even without OUT_DIR: {}",
+        TEST_PATH
     );
     
     // Should be accessible
@@ -30,7 +49,9 @@ fn test_works_without_out_dir() {
     
     // Restore OUT_DIR if it was originally set
     if let Some(out_dir) = original_out_dir {
-        env::set_var("OUT_DIR", out_dir);
+        unsafe {
+            env::set_var("OUT_DIR", out_dir);
+        }
     }
 }
 
@@ -137,12 +158,10 @@ fn test_fallback_path_permissions() {
     
     // Should find at least the prebindgen.rs file
     let mut found_prebindgen_file = false;
-    for entry in entries {
-        if let Ok(entry) = entry {
-            if entry.file_name() == "prebindgen.rs" {
-                found_prebindgen_file = true;
-                break;
-            }
+    for entry in entries.flatten() {
+        if entry.file_name() == "prebindgen.rs" {
+            found_prebindgen_file = true;
+            break;
         }
     }
     
