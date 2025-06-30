@@ -1,6 +1,6 @@
 # prebindgen
 
-A Rust proc-macro crate that provides the `#[prebindgen]` attribute macro for copying struct and enum definitions to a file during compilation.
+A Rust proc-macro crate that provides the `#[prebindgen]` attribute macro for copying struct and enum definitions to a file during compilation, and `prebindgen_path!` for accessing the destination directory path.
 
 ## Features
 
@@ -9,6 +9,8 @@ A Rust proc-macro crate that provides the `#[prebindgen]` attribute macro for co
 - Falls back to a unique directory in the system temp directory when `OUT_DIR` is not available
 - Avoids duplicate definitions in the output file
 - Works in both build-time and development contexts
+- **NEW:** `prebindgen_path!` macro to generate string constants with the destination directory path
+- **NEW:** Global path management - destination path is generated once and reused
 
 ## Usage
 
@@ -22,7 +24,7 @@ prebindgen = "0.1.0"
 Then use the macro on your structs and enums:
 
 ```rust
-use prebindgen::prebindgen;
+use prebindgen::{prebindgen, prebindgen_path};
 
 #[prebindgen]
 #[derive(Debug, Clone)]
@@ -39,9 +41,40 @@ pub enum Status {
     Inactive,
     Pending { reason: String },
 }
+
+// Generate a constant with the prebindgen destination directory
+prebindgen_path!(PREBINDGEN_DIR);
+
+// Or use the default constant name
+prebindgen_path!(); // Creates PREBINDGEN_PATH
+
+fn main() {
+    println!("Prebindgen directory: {}", PREBINDGEN_DIR);
+    let file_path = format!("{}/prebindgen.rs", PREBINDGEN_DIR);
+    // Use the file_path as needed...
+}
 ```
 
 ## Accessing Generated Definitions
+
+### Using prebindgen_path! macro
+
+The `prebindgen_path!` macro generates a string constant containing the destination directory path:
+
+```rust
+use prebindgen::prebindgen_path;
+
+// Generate a constant with a custom name
+prebindgen_path!(MY_DEST_DIR);
+
+// Generate a constant with the default name (PREBINDGEN_PATH)
+prebindgen_path!();
+
+fn access_generated_file() {
+    let file_path = format!("{}/prebindgen.rs", MY_DEST_DIR);
+    // Now you can read the generated file, pass the path to other tools, etc.
+}
+```
 
 ### During Build Time (with OUT_DIR)
 

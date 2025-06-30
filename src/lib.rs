@@ -1,12 +1,13 @@
 //! # prebindgen
 //! 
 //! A proc-macro crate that provides the `#[prebindgen]` attribute macro for copying 
-//! struct and enum definitions to a file during compilation.
+//! struct and enum definitions to a file during compilation, and `prebindgen_path!` 
+//! for accessing the destination directory path.
 //!
 //! ## Usage
 //!
 //! ```rust
-//! use prebindgen::prebindgen;
+//! use prebindgen::{prebindgen, prebindgen_path};
 //!
 //! #[prebindgen]
 //! #[derive(Debug, Clone)]
@@ -20,6 +21,14 @@
 //! pub enum MyEnum {
 //!     Variant1,
 //!     Variant2(String),
+//! }
+//!
+//! // Get the prebindgen destination directory as a string constant
+//! prebindgen_path!(PREBINDGEN_DIR);
+//! 
+//! // Now you can use PREBINDGEN_DIR to access the path at runtime
+//! fn get_prebindgen_file_path() -> String {
+//!     format!("{}/prebindgen.rs", PREBINDGEN_DIR)
 //! }
 //! ```
 //!
@@ -35,13 +44,33 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, Ident};
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, Once};
 use std::process;
+
+// Global destination directory path, initialized once
+static DEST_DIR_INIT: Once = Once::new();
+static DEST_DIR: Mutex<Option<String>> = Mutex::new(None);
+
+/// Get or initialize the global destination directory path
+fn get_dest_dir() -> String {
+    DEST_DIR_INIT.call_once(|| {
+        let dir = if let Ok(out_dir) = env::var("OUT_DIR") {
+            out_dir
+        } else {
+            create_unique_temp_dir()
+        };
+        
+        *DEST_DIR.lock().unwrap() = Some(dir);
+    });
+    
+    DEST_DIR.lock().unwrap().as_ref().unwrap().clone()
+}
 
 /// Attribute macro that copies the annotated struct or enum definition to prebindgen.rs in OUT_DIR
 #[proc_macro_attribute]
@@ -49,14 +78,8 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
     let parsed = parse_macro_input!(input as DeriveInput);
     
-    // Get the destination directory - prefer OUT_DIR, fallback to temp with unique path
-    let dest_dir = if let Ok(out_dir) = env::var("OUT_DIR") {
-        out_dir
-    } else {
-        // Create a unique directory in temp for this session
-        create_unique_temp_dir()
-    };
-    
+    // Get the global destination directory
+    let dest_dir = get_dest_dir();
     let dest_path = Path::new(&dest_dir).join("prebindgen.rs");
     
     // Convert the parsed input back to tokens for writing to file
@@ -85,6 +108,33 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     
     // Return the original input unchanged
     input_clone
+}
+
+/// Proc-macro that generates a constant with the prebindgen destination directory path
+/// 
+/// Usage:
+/// ```rust
+/// use prebindgen::prebindgen_path;
+/// 
+/// prebindgen_path!(PREBINDGEN_DIR);
+/// // This generates: const PREBINDGEN_DIR: &str = "/path/to/prebindgen/dir";
+/// ```
+#[proc_macro]
+pub fn prebindgen_path(input: TokenStream) -> TokenStream {
+    let const_name = if input.is_empty() {
+        quote::format_ident!("PREBINDGEN_PATH")
+    } else {
+        parse_macro_input!(input as Ident)
+    };
+    
+    // Get the global destination directory
+    let dest_dir = get_dest_dir();
+    
+    let expanded = quote! {
+        const #const_name: &str = #dest_dir;
+    };
+    
+    TokenStream::from(expanded)
 }
 
 /// Creates a unique temporary directory for prebindgen when OUT_DIR is not available
