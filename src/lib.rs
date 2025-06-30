@@ -97,15 +97,21 @@ fn get_dest_dir() -> String {
     DEST_DIR.lock().unwrap().as_ref().unwrap().clone()
 }
 
+/// Get the full path to the prebindgen.rs file
+fn get_prebindgen_file_path() -> String {
+    let dest_dir = get_dest_dir();
+    format!("{}/prebindgen.rs", dest_dir)
+}
+
 /// Attribute macro that copies the annotated struct or enum definition to prebindgen.rs in OUT_DIR
 #[proc_macro_attribute]
 pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
     let parsed = parse_macro_input!(input as DeriveInput);
     
-    // Get the global destination directory
-    let dest_dir = get_dest_dir();
-    let dest_path = Path::new(&dest_dir).join("prebindgen.rs");
+    // Get the full path to the prebindgen.rs file
+    let file_path = get_prebindgen_file_path();
+    let dest_path = Path::new(&file_path);
     
     // Convert the parsed input back to tokens for writing to file
     let tokens = quote! { #parsed };
@@ -114,7 +120,7 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     // Read existing content if file exists
     let mut existing_content = String::new();
     if dest_path.exists() {
-        if let Ok(mut file) = File::open(&dest_path) {
+        if let Ok(mut file) = File::open(dest_path) {
             let _ = file.read_to_string(&mut existing_content);
         }
     }
@@ -132,7 +138,7 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
         if let Ok(mut file) = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&dest_path) {
+            .open(dest_path) {
             let _ = writeln!(file, "{}", code);
         }
     }
@@ -158,9 +164,8 @@ pub fn prebindgen_path(input: TokenStream) -> TokenStream {
         parse_macro_input!(input as Ident)
     };
     
-    // Use the same global destination directory as prebindgen
-    let dest_dir = get_dest_dir();
-    let file_path = format!("{}/prebindgen.rs", dest_dir);
+    // Use the helper function to get the full file path
+    let file_path = get_prebindgen_file_path();
     
     let expanded = quote! {
         pub const #const_name: &str = #file_path;
