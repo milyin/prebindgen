@@ -1,4 +1,3 @@
 fn main() {
     println!("cargo:warning=OUT_DIR: {}", std::env::var("OUT_DIR").unwrap());
-    println!("cargo:warning=Generated path: {}", ffi_common::GENERATED_PATH);
 }
