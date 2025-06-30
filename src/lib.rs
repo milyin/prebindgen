@@ -69,6 +69,14 @@ fn get_dest_dir() -> String {
         let dir = if let Ok(out_dir) = env::var("OUT_DIR") {
             out_dir
         } else {
+            // Emit a warning when OUT_DIR is not available (unless suppressed)
+            #[cfg(not(feature = "suppress-outdir-warning"))]
+            {
+                // Use standard Rust warning format with color codes
+                eprintln!("\x1b[33mwarning\x1b[0m: OUT_DIR not set - this usually happens when build.rs is not defined in the project");
+                eprintln!("   \x1b[34m=\x1b[0m \x1b[1mnote\x1b[0m: Falling back to temporary directory. Consider adding a build.rs file.");
+            }
+            
             // Generate a random subpath in temp directory
             let temp_dir = env::temp_dir();
             let timestamp = SystemTime::now()
