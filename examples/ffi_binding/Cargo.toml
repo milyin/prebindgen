@@ -1,0 +1,13 @@
+[package]
+name = "ffi_binding"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+prebindgen = { path = "../../" }
+ffi_common = { path = "../ffi_common" }
+
+[build-dependencies]
+prebindgen = { path = "../../" }
+ffi_common = { path = "../ffi_common" }

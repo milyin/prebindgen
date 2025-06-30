@@ -10,7 +10,6 @@ pub struct ExampleStruct {
     pub id: u64,
 }
 
-// Even if rust-analyzer shows an error here, this will work when compiled
 prebindgen_path!(GENERATED_PATH);
 
 fn main() {
