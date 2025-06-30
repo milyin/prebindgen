@@ -23,12 +23,12 @@
 //!     Variant2(String),
 //! }
 //!
-//! // Get the prebindgen destination directory as a string constant
-//! prebindgen_path!(PREBINDGEN_DIR);
+//! // Get the prebindgen file path as a string constant
+//! prebindgen_path!(PREBINDGEN_FILE);
 //! 
-//! // Now you can use PREBINDGEN_DIR to access the path at runtime
+//! // Now you can use PREBINDGEN_FILE to access the file at runtime
 //! fn get_prebindgen_file_path() -> String {
-//!     format!("{}/prebindgen.rs", PREBINDGEN_DIR)
+//!     PREBINDGEN_FILE.to_string()
 //! }
 //! ```
 //!
@@ -42,11 +42,11 @@
 //! include!(concat!(env!("OUT_DIR"), "/prebindgen.rs"));
 //! ```
 //! 
-//! Or use the `prebindgen_path!` macro to get the directory path:
+//! Or use the `prebindgen_path!` macro to get the file path:
 //! 
 //! ```ignore
-//! prebindgen_path!(DEST_DIR);
-//! let file_path = format!("{}/prebindgen.rs", DEST_DIR);
+//! prebindgen_path!(DEST_FILE);
+//! let content = std::fs::read_to_string(DEST_FILE)?;
 //! ```
 
 use proc_macro::TokenStream;
@@ -141,14 +141,14 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     input_clone
 }
 
-/// Proc-macro that generates a constant with the prebindgen destination directory path
+/// Proc-macro that generates a constant with the prebindgen file path
 /// 
 /// Usage:
 /// ```rust
 /// use prebindgen::prebindgen_path;
 /// 
-/// prebindgen_path!(PREBINDGEN_DIR);
-/// // This generates: const PREBINDGEN_DIR: &str = "/path/to/prebindgen/dir";
+/// prebindgen_path!(PREBINDGEN_FILE);
+/// // This generates: const PREBINDGEN_FILE: &str = "/path/to/prebindgen/dir/prebindgen.rs";
 /// ```
 #[proc_macro]
 pub fn prebindgen_path(input: TokenStream) -> TokenStream {
@@ -160,9 +160,10 @@ pub fn prebindgen_path(input: TokenStream) -> TokenStream {
     
     // Use the same global destination directory as prebindgen
     let dest_dir = get_dest_dir();
+    let file_path = format!("{}/prebindgen.rs", dest_dir);
     
     let expanded = quote! {
-        pub const #const_name: &str = #dest_dir;
+        pub const #const_name: &str = #file_path;
     };
     
     TokenStream::from(expanded)
