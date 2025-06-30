@@ -1,3 +1,3 @@
 fn main() {
-    panic!("{}", ffi_common::GENERATED_PATH);
+    println!("cargo:warning=Generated path: {}", ffi_common::GENERATED_PATH);
 }

@@ -13,6 +13,9 @@ dependencies = [
 [[package]]
 name = "ffi_common"
 version = "0.1.0"
+dependencies = [
+ "prebindgen",
+]
 
 [[package]]
 name = "prebindgen"
