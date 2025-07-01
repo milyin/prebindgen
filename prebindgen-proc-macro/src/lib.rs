@@ -43,24 +43,7 @@ use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
-
-/// Represents a record of a struct, enum, or union definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Record {
-    kind: RecordKind,
-    name: String,
-    content: String,
-}
-
-/// The kind of record (struct, enum, or union)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum RecordKind {
-    Struct,
-    Enum,
-    Union,
-}
+use prebindgen::{Record, RecordKind};
 
 /// Get the full path to the prebindgen.json file from OUT_DIR
 /// Panics if OUT_DIR is not set (which means build.rs is not defined)

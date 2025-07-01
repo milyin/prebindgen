@@ -43,6 +43,7 @@ dependencies = [
 name = "prebindgen-proc-macro"
 version = "0.1.0"
 dependencies = [
+ "prebindgen",
  "proc-macro2",
  "quote",
  "serde",
