@@ -17,8 +17,8 @@ pub enum PathTestEnum {
 }
 
 // Generate path constants
-prebindgen_path!(CUSTOM_PATH);
-prebindgen_path!(); // This creates PREBINDGEN_PATH
+const CUSTOM_PATH: &str = prebindgen_path!();
+const PREBINDGEN_PATH: &str = prebindgen_path!();
 
 #[test]
 fn test_path_constant_generation() {
@@ -26,16 +26,16 @@ fn test_path_constant_generation() {
     println!("CUSTOM_PATH: {}", CUSTOM_PATH);
     println!("PREBINDGEN_PATH: {}", PREBINDGEN_PATH);
     
-    // Both should point to the same directory
+    // Both should point to the same file
     assert_eq!(
         CUSTOM_PATH, PREBINDGEN_PATH,
-        "Both path constants should point to the same directory"
+        "Both path constants should point to the same file"
     );
     
-    // Should be a valid path
+    // Should be a valid path ending with prebindgen.rs
     assert!(
-        CUSTOM_PATH.starts_with('/') || CUSTOM_PATH.contains("temp") || CUSTOM_PATH.contains("tmp"),
-        "Path should be absolute or in temp directory: {}",
+        CUSTOM_PATH.ends_with("/prebindgen.rs"),
+        "Path should end with /prebindgen.rs: {}",
         CUSTOM_PATH
     );
     
@@ -51,18 +51,18 @@ fn test_path_constant_generation() {
 
 #[test]
 fn test_access_generated_content_via_path() {
-    // Use the generated path constant to access the file
-    let file_path = format!("{}/prebindgen.rs", CUSTOM_PATH);
+    // Use the generated path constant to access the file directly
+    let file_path = CUSTOM_PATH;
     
     // Verify the file exists
     assert!(
-        std::path::Path::new(&file_path).exists(),
-        "prebindgen.rs should exist at path constructed from constant: {}",
+        std::path::Path::new(file_path).exists(),
+        "prebindgen.rs should exist at path: {}",
         file_path
     );
     
     // Read and verify content
-    let content = fs::read_to_string(&file_path)
+    let content = fs::read_to_string(file_path)
         .expect("Should be able to read prebindgen.rs using path constant");
     
     // Verify our test definitions are in the content
@@ -86,11 +86,12 @@ fn test_access_generated_content_via_path() {
 
 #[test]
 fn test_path_matches_out_dir() {
-    // When OUT_DIR is available, our path should match it
+    // When OUT_DIR is available, our path should be in that directory
     if let Ok(out_dir) = env::var("OUT_DIR") {
+        let expected_path = format!("{}/prebindgen.rs", out_dir);
         assert_eq!(
-            CUSTOM_PATH, out_dir,
-            "When OUT_DIR is available, path constant should match it"
+            CUSTOM_PATH, expected_path,
+            "When OUT_DIR is available, path constant should be OUT_DIR/prebindgen.rs"
         );
         println!("✅ Path matches OUT_DIR test passed");
     } else {
@@ -116,28 +117,34 @@ fn test_multiple_path_constants_consistency() {
 }
 
 #[test]
-fn test_path_directory_exists() {
-    // The directory specified by the path should exist
-    assert!(
-        std::path::Path::new(CUSTOM_PATH).exists(),
-        "Directory specified by path constant should exist: {}",
-        CUSTOM_PATH
-    );
+fn test_path_file_can_be_created() {
+    // The file specified by the path should be creatable/accessible
+    let path = std::path::Path::new(CUSTOM_PATH);
     
-    // Should be a directory, not a file
-    assert!(
-        std::path::Path::new(CUSTOM_PATH).is_dir(),
-        "Path should point to a directory: {}",
-        CUSTOM_PATH
-    );
+    // The parent directory should exist
+    if let Some(parent) = path.parent() {
+        assert!(
+            parent.exists(),
+            "Parent directory of prebindgen file should exist: {}",
+            parent.display()
+        );
+        
+        assert!(
+            parent.is_dir(),
+            "Parent should be a directory: {}",
+            parent.display()
+        );
+    }
     
-    println!("✅ Path directory exists test passed");
+    println!("✅ Path file can be created test passed");
 }
 
 #[test]
 fn test_can_create_additional_files_in_path() {
-    // Test that we can create additional files in the same directory
-    let test_file_path = format!("{}/test_file.txt", CUSTOM_PATH);
+    // Test that we can create additional files in the same directory as the prebindgen file
+    let path = std::path::Path::new(CUSTOM_PATH);
+    let parent_dir = path.parent().expect("Should have a parent directory");
+    let test_file_path = parent_dir.join("test_file.txt");
     
     // Write a test file
     fs::write(&test_file_path, "test content")
@@ -145,7 +152,7 @@ fn test_can_create_additional_files_in_path() {
     
     // Verify it exists
     assert!(
-        std::path::Path::new(&test_file_path).exists(),
+        test_file_path.exists(),
         "Should be able to create files in the prebindgen directory"
     );
     

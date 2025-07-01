@@ -37,22 +37,22 @@ pub struct GenericStruct<T> {
 }
 
 // Generate path constant for tests
-prebindgen_path!(TEST_PATH);
+const TEST_PATH: &str = prebindgen_path!();
 
 #[test]
 fn test_struct_copying() {
     // Get the prebindgen file path using our path constant
-    let prebindgen_path = format!("{}/prebindgen.rs", TEST_PATH);
+    let prebindgen_path = TEST_PATH;
     
     // Verify the file exists
     assert!(
-        std::path::Path::new(&prebindgen_path).exists(),
+        std::path::Path::new(prebindgen_path).exists(),
         "prebindgen.rs should exist at: {}",
         prebindgen_path
     );
     
     // Read the generated content
-    let content = fs::read_to_string(&prebindgen_path)
+    let content = fs::read_to_string(prebindgen_path)
         .expect("Should be able to read prebindgen.rs");
     
     println!("Generated content:\n{}", content);
@@ -89,8 +89,8 @@ fn test_struct_copying() {
 
 #[test]
 fn test_enum_copying() {
-    let prebindgen_path = format!("{}/prebindgen.rs", TEST_PATH);
-    let content = fs::read_to_string(&prebindgen_path)
+    let prebindgen_path = TEST_PATH;
+    let content = fs::read_to_string(prebindgen_path)
         .expect("Should be able to read prebindgen.rs");
     
     // Verify TestEnum was copied
@@ -125,8 +125,8 @@ fn test_enum_copying() {
 
 #[test]
 fn test_generic_struct_copying() {
-    let prebindgen_path = format!("{}/prebindgen.rs", TEST_PATH);
-    let content = fs::read_to_string(&prebindgen_path)
+    let prebindgen_path = TEST_PATH;
+    let content = fs::read_to_string(prebindgen_path)
         .expect("Should be able to read prebindgen.rs");
     
     // Verify GenericStruct was copied with generics
@@ -145,8 +145,8 @@ fn test_generic_struct_copying() {
 
 #[test]
 fn test_derive_attributes_preserved() {
-    let prebindgen_path = format!("{}/prebindgen.rs", TEST_PATH);
-    let content = fs::read_to_string(&prebindgen_path)
+    let prebindgen_path = TEST_PATH;
+    let content = fs::read_to_string(prebindgen_path)
         .expect("Should be able to read prebindgen.rs");
     
     // Check for derive attributes (they should be preserved)
@@ -160,8 +160,8 @@ fn test_derive_attributes_preserved() {
 
 #[test]
 fn test_no_duplicate_definitions() {
-    let prebindgen_path = format!("{}/prebindgen.rs", TEST_PATH);
-    let content = fs::read_to_string(&prebindgen_path)
+    let prebindgen_path = TEST_PATH;
+    let content = fs::read_to_string(prebindgen_path)
         .expect("Should be able to read prebindgen.rs");
     
     // Count occurrences of TestStruct

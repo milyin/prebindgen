@@ -18,7 +18,7 @@ pub enum NoOutDirEnum {
 }
 
 // Generate path when OUT_DIR might not be available
-prebindgen_path!(TEST_PATH);
+const TEST_PATH: &str = prebindgen_path!();
 
 #[test]
 fn test_works_without_out_dir() {
@@ -30,20 +30,24 @@ fn test_works_without_out_dir() {
     // Test that even if OUT_DIR was not set, our path constant works
     println!("TEST_PATH: {}", TEST_PATH);
     
-    // Path should still be valid
+    // Path should still be valid and end with prebindgen.rs
     println!("Path length: {}", TEST_PATH.len());
+    assert!(TEST_PATH.ends_with("/prebindgen.rs"), "Path should end with /prebindgen.rs");
     assert!(
         TEST_PATH.starts_with('/') || TEST_PATH.contains("temp") || TEST_PATH.contains("tmp"),
         "Path should be valid even without OUT_DIR: {}",
         TEST_PATH
     );
     
-    // Should be accessible
-    assert!(
-        std::path::Path::new(TEST_PATH).exists(),
-        "Directory should exist even without OUT_DIR: {}",
-        TEST_PATH
-    );
+    // Parent directory should be accessible
+    let path = std::path::Path::new(TEST_PATH);
+    if let Some(parent) = path.parent() {
+        assert!(
+            parent.exists(),
+            "Parent directory should exist even without OUT_DIR: {}",
+            parent.display()
+        );
+    }
     
     println!("✅ Works without OUT_DIR test passed");
     
@@ -86,17 +90,17 @@ fn test_temp_directory_fallback() {
 #[test]
 fn test_generated_content_accessible_without_out_dir() {
     // Verify that generated content is accessible via the fallback path
-    let file_path = format!("{}/prebindgen.rs", TEST_PATH);
+    let file_path = TEST_PATH;
     
     // File should exist
     assert!(
-        std::path::Path::new(&file_path).exists(),
+        std::path::Path::new(file_path).exists(),
         "prebindgen.rs should exist even without OUT_DIR: {}",
         file_path
     );
     
     // Content should be readable
-    let content = fs::read_to_string(&file_path)
+    let content = fs::read_to_string(file_path)
         .expect("Should be able to read prebindgen.rs even without OUT_DIR");
     
     // Our definitions should be present
@@ -121,26 +125,30 @@ fn test_generated_content_accessible_without_out_dir() {
 #[test]
 fn test_unique_path_generation() {
     // Test that the unique path generation works correctly
-    let path = TEST_PATH;
+    let file_path = TEST_PATH;
+    let path = std::path::Path::new(file_path);
     
-    // Should be a valid directory
+    // Should be a valid file
     assert!(
-        std::path::Path::new(path).is_dir(),
-        "Generated path should be a valid directory: {}",
-        path
+        path.is_file(),
+        "Generated path should be a valid file: {}",
+        file_path
     );
     
+    // Get the parent directory path
+    let parent_dir = path.parent().unwrap().to_string_lossy();
+    
     // If it's a unique temp path, it should contain identifying information
-    if path.contains("prebindgen") {
+    if parent_dir.contains("prebindgen") {
         // Should contain process-specific or time-specific components for uniqueness
-        let has_unique_component = path.contains(&process::id().to_string()) ||
-                                  path.contains("prebindgen_") ||
-                                  path.chars().any(|c| c.is_numeric());
+        let has_unique_component = parent_dir.contains(&process::id().to_string()) ||
+                                  parent_dir.contains("prebindgen_") ||
+                                  parent_dir.chars().any(|c| c.is_numeric());
         
         assert!(
             has_unique_component,
             "Unique temp path should contain identifying components: {}",
-            path
+            parent_dir
         );
     }
     
@@ -150,10 +158,12 @@ fn test_unique_path_generation() {
 #[test]
 fn test_fallback_path_permissions() {
     // Test that we have proper permissions on the fallback directory
-    let path = TEST_PATH;
+    let file_path = TEST_PATH;
+    let path = std::path::Path::new(file_path);
+    let parent_dir = path.parent().unwrap();
     
-    // Should be able to read the directory
-    let entries = fs::read_dir(path)
+    // Should be able to read the directory containing the prebindgen.rs file
+    let entries = fs::read_dir(parent_dir)
         .expect("Should be able to read the prebindgen directory");
     
     // Should find at least the prebindgen.rs file
@@ -171,7 +181,7 @@ fn test_fallback_path_permissions() {
     );
     
     // Test write permissions by creating a temporary file
-    let test_file = format!("{}/permission_test.tmp", path);
+    let test_file = parent_dir.join("permission_test.tmp");
     fs::write(&test_file, "test")
         .expect("Should have write permissions in the prebindgen directory");
     
@@ -187,8 +197,8 @@ fn test_complete_workflow_without_out_dir() {
     println!("🧪 Testing complete workflow without OUT_DIR dependency");
     
     // 1. Verify structs and enums were processed
-    let file_path = format!("{}/prebindgen.rs", TEST_PATH);
-    let content = fs::read_to_string(&file_path)
+    let file_path = TEST_PATH;
+    let content = fs::read_to_string(file_path)
         .expect("Generated file should be readable");
     
     // 2. Verify content integrity

@@ -2,7 +2,7 @@
 //! 
 //! A proc-macro crate that provides the `#[prebindgen]` attribute macro for copying 
 //! struct and enum definitions to a file during compilation, and `prebindgen_path!` 
-//! for accessing the destination directory path.
+//! for accessing the destination file path.
 //!
 //! ## Usage
 //!
@@ -23,35 +23,13 @@
 //!     Variant2(String),
 //! }
 //!
-//! // Get the prebindgen file path as a string constant
-//! prebindgen_path!(PREBINDGEN_FILE);
+//! // Get the prebindgen file path as a string
+//! const PREBINDGEN_FILE: &str = prebindgen_path!();
 //! 
-//! // Now you can use PREBINDGEN_FILE to access the file at runtime
-//! fn get_prebindgen_file_path() -> String {
-//!     PREBINDGEN_FILE.to_string()
-//! }
 //! ```
-//!
-//! The macro will copy these definitions to `prebindgen.rs` in your `OUT_DIR` 
-//! (when available during build), or to a unique directory in the system temp 
-//! directory when `OUT_DIR` is not available.
-//!
-//! You can then include this file using:
-//!
-//! ```ignore
-//! include!(concat!(env!("OUT_DIR"), "/prebindgen.rs"));
-//! ```
-//! 
-//! Or use the `prebindgen_path!` macro to get the file path:
-//! 
-//! ```ignore
-//! prebindgen_path!(DEST_FILE);
-//! let content = std::fs::read_to_string(DEST_FILE)?;
-//! ```
-
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Ident};
+use syn::{parse_macro_input, DeriveInput};
 use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
@@ -147,28 +125,24 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     input_clone
 }
 
-/// Proc-macro that generates a constant with the prebindgen file path
+/// Proc-macro that returns the prebindgen file path as a string literal
 /// 
 /// Usage:
 /// ```rust
 /// use prebindgen::prebindgen_path;
 /// 
-/// prebindgen_path!(PREBINDGEN_FILE);
-/// // This generates: const PREBINDGEN_FILE: &str = "/path/to/prebindgen/dir/prebindgen.rs";
+/// const PREBINDGEN_FILE: &str = prebindgen_path!();
+/// // or
+/// let path = prebindgen_path!();
 /// ```
 #[proc_macro]
-pub fn prebindgen_path(input: TokenStream) -> TokenStream {
-    let const_name = if input.is_empty() {
-        quote::format_ident!("PREBINDGEN_PATH")
-    } else {
-        parse_macro_input!(input as Ident)
-    };
-    
-    // Use the helper function to get the full file path
+pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
+    // Use the helper function to get the file path
     let file_path = get_prebindgen_file_path();
     
+    // Return just the string literal
     let expanded = quote! {
-        pub const #const_name: &str = #file_path;
+        #file_path
     };
     
     TokenStream::from(expanded)
