@@ -2,6 +2,7 @@
 members = [
     ".",
     "prebindgen-proc-macro",
+    "tests-integration",
     "examples/ffi_binding",
     "examples/ffi_common",
 ]
@@ -20,8 +21,6 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-prebindgen-proc-macro = { path = "prebindgen-proc-macro" }
 
 [dev-dependencies]
 serde_json = "1.0"
-prebindgen-proc-macro = { path = "prebindgen-proc-macro" }

@@ -1,6 +1,9 @@
-use prebindgen_proc_macro::prebindgen;
+//! Test structures binary for integration testing
+//! This generates the prebindgen.json file that tests can examine
 
-// Define these structs to ensure they get processed during compilation
+use prebindgen_proc_macro::{prebindgen, prebindgen_path};
+
+// Define test structures that will be processed by prebindgen
 #[prebindgen]
 #[derive(Debug, Clone, PartialEq)]
 pub struct TestStruct {
@@ -48,7 +51,10 @@ pub enum PathTestEnum {
     Gamma { value: i32 },
 }
 
+// Generate path constant for tests
+pub const TEST_PATH: &str = prebindgen_path!();
+
 fn main() {
-    // This binary ensures that the structs above are compiled and processed by prebindgen
-    println!("Test structures compiled successfully");
+    println!("Test structures binary executed");
+    println!("Generated prebindgen file at: {}", TEST_PATH);
 }
