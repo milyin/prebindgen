@@ -5,4 +5,4 @@ edition = "2024"
 build = "build.rs"
 
 [dependencies]
-prebindgen = { path = "../../" }
+prebindgen = { workspace = true }

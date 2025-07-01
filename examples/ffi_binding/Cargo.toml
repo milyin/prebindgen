@@ -5,9 +5,9 @@ edition = "2024"
 build = "build.rs"
 
 [dependencies]
-prebindgen = { path = "../../" }
+prebindgen = { workspace = true }
 ffi_common = { path = "../ffi_common" }
 
 [build-dependencies]
-prebindgen = { path = "../../" }
+prebindgen = { workspace = true }
 ffi_common = { path = "../ffi_common" }

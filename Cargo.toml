@@ -1,3 +1,14 @@
+[workspace]
+members = [
+    ".",
+    "examples/ffi_binding",
+    "examples/ffi_common",
+]
+resolver = "2"
+
+[workspace.dependencies]
+prebindgen = { path = "." }
+
 [package]
 name = "prebindgen"
 version = "0.1.0"
