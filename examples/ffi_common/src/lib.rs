@@ -1,4 +1,4 @@
-use prebindgen::{prebindgen, prebindgen_path};
+use prebindgen_proc_macro::{prebindgen, prebindgen_path};
 
 pub const GENERATED_PATH: &str = prebindgen_path!();
 

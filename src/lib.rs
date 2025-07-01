@@ -1,135 +1,107 @@
 //! # prebindgen
 //! 
-//! A proc-macro crate that provides the `#[prebindgen]` attribute macro for copying 
-//! struct and enum definitions to a file during compilation, and `prebindgen_path!` 
-//! for accessing the destination file path.
+//! JSON structure definitions for the prebindgen system.
+//! 
+//! This crate defines the data structures used to represent struct and enum definitions
+//! in JSON format. These structures are used by the `prebindgen-proc-macro` crate
+//! to serialize code definitions and by build scripts to deserialize and process them.
 //!
-//! This crate requires the `OUT_DIR` environment variable to be set, which means
-//! you need to have a `build.rs` file in your project (even if it's empty).
+//! The JSON format is JSON-lines where each line contains a separate record:
+//! ```json
+//! {"kind": "struct", "name": "MyStruct", "content": "pub struct MyStruct { ... }"}
+//! {"kind": "enum", "name": "MyEnum", "content": "pub enum MyEnum { ... }"}
+//! ```
 //!
 //! ## Usage
 //!
 //! ```rust
-//! use prebindgen::{prebindgen, prebindgen_path};
+//! use prebindgen::{Record, RecordKind};
+//! use serde_json;
 //!
-//! #[prebindgen]
-//! #[derive(Debug, Clone)]
-//! pub struct MyStruct {
-//!     pub name: String,
-//!     pub value: i32,
-//! }
-//!
-//! #[prebindgen]
-//! #[derive(Debug, PartialEq)]
-//! pub enum MyEnum {
-//!     Variant1,
-//!     Variant2(String),
-//! }
-//!
-//! // Get the prebindgen file path as a string
-//! const PREBINDGEN_FILE: &str = prebindgen_path!();
+//! // Parse a JSON line into a Record
+//! let json_line = r#"{"kind":"struct","name":"MyStruct","content":"pub struct MyStruct { ... }"}"#;
+//! let record: Record = serde_json::from_str(json_line)?;
 //! 
+//! assert_eq!(record.kind, RecordKind::Struct);
+//! assert_eq!(record.name, "MyStruct");
+//! # Ok::<(), serde_json::Error>(())
 //! ```
-use proc_macro::TokenStream;
-use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
-use std::env;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
-use std::path::Path;
 
-/// Get the full path to the prebindgen.rs file from OUT_DIR
-/// Panics if OUT_DIR is not set (which means build.rs is not defined)
-fn get_prebindgen_file_path() -> String {
-    let out_dir = env::var("OUT_DIR")
-        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    format!("{}/prebindgen.rs", out_dir)
+use serde::{Deserialize, Serialize};
+
+/// Represents a record of a struct, enum, or union definition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Record {
+    /// The kind of definition (struct, enum, or union)
+    pub kind: RecordKind,
+    /// The name of the type
+    pub name: String,
+    /// The full source code content of the definition
+    pub content: String,
 }
 
-/// Attribute macro that copies the annotated struct or enum definition to prebindgen.rs in OUT_DIR
-#[proc_macro_attribute]
-pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
-    let input_clone = input.clone();
-    let parsed = parse_macro_input!(input as DeriveInput);
-    
-    // Get the full path to the prebindgen.rs file
-    let file_path = get_prebindgen_file_path();
-    let dest_path = Path::new(&file_path);
-    
-    // Convert the parsed input back to tokens for writing to file
-    let tokens = quote! { #parsed };
-    let code = tokens.to_string();
-    
-    // Read existing content if file exists
-    let mut existing_content = String::new();
-    if dest_path.exists() {
-        if let Ok(mut file) = File::open(dest_path) {
-            let _ = file.read_to_string(&mut existing_content);
-        }
-    }
-    
-    // Check if this definition already exists in the file
-    let definition_name = parsed.ident.to_string();
-    
-    // Create a more specific pattern to check for the actual definition
-    let struct_pattern = format!("struct {}", definition_name);
-    let enum_pattern = format!("enum {}", definition_name);
-    let already_exists = existing_content.contains(&struct_pattern) || existing_content.contains(&enum_pattern);
-    
-    if !already_exists {
-        // Append the new definition to the file
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(dest_path) {
-            let _ = writeln!(file, "{}", code);
-        }
-    }
-    
-    // Return the original input unchanged
-    input_clone
+/// The kind of record (struct, enum, or union)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RecordKind {
+    /// A struct definition
+    Struct,
+    /// An enum definition
+    Enum,
+    /// A union definition
+    Union,
 }
 
-/// Proc-macro that returns the prebindgen file path as a string literal
-/// 
-/// Usage:
-/// ```rust
-/// use prebindgen::prebindgen_path;
-/// 
-/// const PREBINDGEN_FILE: &str = prebindgen_path!();
-/// // or
-/// let path = prebindgen_path!();
-/// ```
-#[proc_macro]
-pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
-    // Use the helper function to get the file path
-    let file_path = get_prebindgen_file_path();
-    
-    // Return just the string literal
-    let expanded = quote! {
-        #file_path
-    };
-    
-    TokenStream::from(expanded)
+impl Record {
+    /// Create a new record
+    pub fn new(kind: RecordKind, name: String, content: String) -> Self {
+        Self { kind, name, content }
+    }
+}
+
+impl std::fmt::Display for RecordKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RecordKind::Struct => write!(f, "struct"),
+            RecordKind::Enum => write!(f, "enum"),
+            RecordKind::Union => write!(f, "union"),
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {    
+mod tests {
+    use super::*;
+
     #[test]
-    fn test_out_dir_required() {
-        // This test verifies that our function requires OUT_DIR
-        let current_out_dir = std::env::var("OUT_DIR");
+    fn test_record_serialization() {
+        let record = Record::new(
+            RecordKind::Struct,
+            "TestStruct".to_string(),
+            "pub struct TestStruct { pub field: i32 }".to_string(),
+        );
+
+        let json = serde_json::to_string(&record).unwrap();
+        let deserialized: Record = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(record, deserialized);
+    }
+
+    #[test]
+    fn test_record_kind_display() {
+        assert_eq!(RecordKind::Struct.to_string(), "struct");
+        assert_eq!(RecordKind::Enum.to_string(), "enum");
+        assert_eq!(RecordKind::Union.to_string(), "union");
+    }
+
+    #[test]
+    fn test_record_kind_serialization() {
+        let kinds = vec![RecordKind::Struct, RecordKind::Enum, RecordKind::Union];
         
-        // If OUT_DIR is set, our function should work
-        if current_out_dir.is_ok() {
-            let path = super::get_prebindgen_file_path();
-            assert!(path.ends_with("/prebindgen.rs"));
-            assert!(!path.is_empty());
+        for kind in kinds {
+            let json = serde_json::to_string(&kind).unwrap();
+            let deserialized: RecordKind = serde_json::from_str(&json).unwrap();
+            assert_eq!(kind, deserialized);
         }
-        // If OUT_DIR is not set, our function would panic - but we can't test that
-        // easily in a unit test without potentially breaking the test environment
-        
-        // The important thing is that the function compiles and has the right signature
-        assert!(true);
     }
 }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     ".",
+    "prebindgen-proc-macro",
     "examples/ffi_binding",
     "examples/ffi_common",
 ]
@@ -8,16 +9,19 @@ resolver = "2"
 
 [workspace.dependencies]
 prebindgen = { path = "." }
+prebindgen-proc-macro = { path = "prebindgen-proc-macro" }
 
 [package]
 name = "prebindgen"
 version = "0.1.0"
 edition = "2024"
-
-[lib]
-proc-macro = true
+description = "JSON structure definitions for prebindgen"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "2.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+prebindgen-proc-macro = { path = "prebindgen-proc-macro" }
+
+[dev-dependencies]
+serde_json = "1.0"
+prebindgen-proc-macro = { path = "prebindgen-proc-macro" }

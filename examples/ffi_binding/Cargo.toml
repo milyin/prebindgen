@@ -11,3 +11,4 @@ ffi_common = { path = "../ffi_common" }
 [build-dependencies]
 prebindgen = { workspace = true }
 ffi_common = { path = "../ffi_common" }
+serde_json = "1.0"

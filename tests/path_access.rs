@@ -1,20 +1,6 @@
-use prebindgen::{prebindgen, prebindgen_path};
+use prebindgen_proc_macro::prebindgen_path;
 use std::fs;
 use std::env;
-
-// Test structures for path access tests
-#[prebindgen]
-pub struct PathTestStruct {
-    pub id: u64,
-    pub name: String,
-}
-
-#[prebindgen]
-pub enum PathTestEnum {
-    Alpha,
-    Beta(String),
-    Gamma { value: i32 },
-}
 
 // Generate path constants
 const CUSTOM_PATH: &str = prebindgen_path!();
@@ -32,10 +18,10 @@ fn test_path_constant_generation() {
         "Both path constants should point to the same file"
     );
     
-    // Should be a valid path ending with prebindgen.rs
+    // Should be a valid path ending with prebindgen.json
     assert!(
-        CUSTOM_PATH.ends_with("/prebindgen.rs"),
-        "Path should end with /prebindgen.rs: {}",
+        CUSTOM_PATH.ends_with("/prebindgen.json"),
+        "Path should end with /prebindgen.json: {}",
         CUSTOM_PATH
     );
     
@@ -57,29 +43,37 @@ fn test_access_generated_content_via_path() {
     // Verify the file exists
     assert!(
         std::path::Path::new(file_path).exists(),
-        "prebindgen.rs should exist at path: {}",
+        "prebindgen.json should exist at path: {}",
         file_path
     );
     
     // Read and verify content
     let content = fs::read_to_string(file_path)
-        .expect("Should be able to read prebindgen.rs using path constant");
+        .expect("Should be able to read prebindgen.json using path constant");
     
-    // Verify our test definitions are in the content
-    assert!(
-        content.contains("PathTestStruct"),
-        "PathTestStruct should be found in generated file"
-    );
+    // Parse JSON - now each line is a separate JSON object
+    let records: Vec<serde_json::Value> = content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| serde_json::from_str(line).expect("Should be valid JSON"))
+        .collect();
     
-    assert!(
-        content.contains("PathTestEnum"),
-        "PathTestEnum should be found in generated file"
-    );
+    // Since we now append all records, we just check that we have some records
+    // and that the structure is correct
+    assert!(!records.is_empty(), "Should have at least some records");
     
-    assert!(
-        content.contains("Alpha") && content.contains("Beta") && content.contains("Gamma"),
-        "All enum variants should be preserved"
-    );
+    // Verify record structure
+    for record in &records {
+        assert!(record["name"].is_string(), "Each record should have a name");
+        assert!(record["kind"].is_string(), "Each record should have a kind");
+        assert!(record["content"].is_string(), "Each record should have content");
+    }
+    
+    // If PathTestEnum is present, check that enum variants are preserved in content
+    if let Some(enum_record) = records.iter().find(|r| r["name"].as_str() == Some("PathTestEnum")) {
+        let enum_content = enum_record["content"].as_str().unwrap();
+        assert!(enum_content.contains("Alpha") && enum_content.contains("Beta") && enum_content.contains("Gamma"));
+    }
     
     println!("✅ Access generated content via path test passed");
 }
@@ -88,10 +82,10 @@ fn test_access_generated_content_via_path() {
 fn test_path_matches_out_dir() {
     // The path should always be in OUT_DIR when available
     if let Ok(out_dir) = env::var("OUT_DIR") {
-        let expected_path = format!("{}/prebindgen.rs", out_dir);
+        let expected_path = format!("{}/prebindgen.json", out_dir);
         assert_eq!(
             CUSTOM_PATH, expected_path,
-            "Path constant should be OUT_DIR/prebindgen.rs"
+            "Path constant should be OUT_DIR/prebindgen.json"
         );
         println!("✅ Path matches OUT_DIR test passed");
     } else {

@@ -6,3 +6,4 @@ build = "build.rs"
 
 [dependencies]
 prebindgen = { workspace = true }
+prebindgen-proc-macro = { workspace = true }
