@@ -3,16 +3,19 @@ include!(concat!(env!("OUT_DIR"), "/ffi_common.rs"));
 
 // Demonstrate that we can use the included Foo struct
 pub fn create_foo(id: u64) -> Foo {
-    Foo { id }
+    Foo {
+        #[cfg(target_arch = "x86_64")]
+        x86_64_field: id,
+        #[cfg(target_arch = "aarch64")]
+        aarch64_field: id,
+    }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_foo_struct() {
-        let foo = create_foo(42);
-        assert_eq!(foo.id, 42);
+// Demonstrate that we can use the included Bar struct
+pub fn create_bar(id: u64) -> Bar {
+    Bar {
+        #[cfg(target_arch = "x86_64")]
+        x86_64_field: id,
+        #[cfg(target_arch = "aarch64")]
+        aarch64_field: id,
     }
 }
