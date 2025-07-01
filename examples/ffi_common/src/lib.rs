@@ -1,10 +1,10 @@
 use prebindgen::{prebindgen, prebindgen_path};
 
-prebindgen_path!(GENERATED_PATH);
+pub const GENERATED_PATH: &str = prebindgen_path!();
 
 #[prebindgen]
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Foo {
     pub id: u64,
 }
