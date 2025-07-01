@@ -39,10 +39,10 @@ fn test_path_constant_generation() {
         CUSTOM_PATH
     );
     
-    // Should be an absolute path or a recognizable temp path
+    // Should be an absolute path within OUT_DIR
     assert!(
-        CUSTOM_PATH.starts_with('/') || CUSTOM_PATH.contains("temp") || CUSTOM_PATH.contains("tmp"),
-        "Path should be absolute or in temp directory: {}",
+        CUSTOM_PATH.starts_with('/'),
+        "Path should be absolute: {}",
         CUSTOM_PATH
     );
     
@@ -86,22 +86,16 @@ fn test_access_generated_content_via_path() {
 
 #[test]
 fn test_path_matches_out_dir() {
-    // When OUT_DIR is available, our path should be in that directory
+    // The path should always be in OUT_DIR when available
     if let Ok(out_dir) = env::var("OUT_DIR") {
         let expected_path = format!("{}/prebindgen.rs", out_dir);
         assert_eq!(
             CUSTOM_PATH, expected_path,
-            "When OUT_DIR is available, path constant should be OUT_DIR/prebindgen.rs"
+            "Path constant should be OUT_DIR/prebindgen.rs"
         );
         println!("✅ Path matches OUT_DIR test passed");
     } else {
-        // If OUT_DIR is not available, path should be in temp directory
-        assert!(
-            CUSTOM_PATH.contains("temp") || CUSTOM_PATH.contains("tmp") || CUSTOM_PATH.contains("prebindgen"),
-            "When OUT_DIR is not available, path should be in temp directory: {}",
-            CUSTOM_PATH
-        );
-        println!("✅ Path fallback to temp directory test passed");
+        panic!("OUT_DIR should be set during tests with build.rs");
     }
 }
 

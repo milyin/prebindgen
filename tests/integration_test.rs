@@ -1,32 +1,16 @@
-use std::env;
-use std::fs;
-
 #[cfg(test)]
-mod integration_tests {
-    use super::*;
-    
-    // This is a mock test to demonstrate how the macro would be used
-    // In a real scenario, these would be in a separate crate that depends on prebindgen
-    
+mod integration_tests {    
     #[test]
-    fn test_generated_file_creation() {
-        // This test simulates what would happen when OUT_DIR is available
-        let temp_dir = env::temp_dir();
-        let test_out_dir = temp_dir.join("test_prebindgen");
-        fs::create_dir_all(&test_out_dir).unwrap();
+    fn test_out_dir_available() {
+        // This test verifies that OUT_DIR is available during testing
+        // (which it should be when build.rs is present)
+        let out_dir = std::env::var("OUT_DIR")
+            .expect("OUT_DIR should be set during cargo test when build.rs is present");
         
-        // Set OUT_DIR for this test
-        unsafe {
-            env::set_var("OUT_DIR", &test_out_dir);
-        }
+        assert!(!out_dir.is_empty(), "OUT_DIR should not be empty");
+        assert!(std::path::Path::new(&out_dir).exists(), "OUT_DIR path should exist");
         
-        // Test code would be here - but since we can't easily test proc macros in the same crate,
-        // this serves as documentation
-        
-        assert!(test_out_dir.exists());
-        
-        // Clean up
-        let _ = fs::remove_dir_all(&test_out_dir);
+        println!("✅ OUT_DIR is available: {}", out_dir);
     }
 }
 

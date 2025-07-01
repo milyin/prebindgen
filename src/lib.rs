@@ -4,6 +4,9 @@
 //! struct and enum definitions to a file during compilation, and `prebindgen_path!` 
 //! for accessing the destination file path.
 //!
+//! This crate requires the `OUT_DIR` environment variable to be set, which means
+//! you need to have a `build.rs` file in your project (even if it's empty).
+//!
 //! ## Usage
 //!
 //! ```rust
@@ -34,51 +37,13 @@ use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{Mutex, Once};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-// Global destination directory path, initialized once
-static DEST_DIR_INIT: Once = Once::new();
-static DEST_DIR: Mutex<Option<String>> = Mutex::new(None);
-
-/// Get or initialize the global destination directory path
-fn get_dest_dir() -> String {
-    DEST_DIR_INIT.call_once(|| {
-        let dir = if let Ok(out_dir) = env::var("OUT_DIR") {
-            out_dir
-        } else {
-            // Emit a warning when OUT_DIR is not available (unless suppressed)
-            #[cfg(not(feature = "suppress-outdir-warning"))]
-            {
-                // Use standard Rust warning format with color codes
-                eprintln!("\x1b[33mwarning\x1b[0m: OUT_DIR not set - this usually happens when build.rs is not defined in the project");
-                eprintln!("   \x1b[34m=\x1b[0m \x1b[1mnote\x1b[0m: Falling back to temporary directory. Consider adding a build.rs file.");
-            }
-            
-            // Generate a random subpath in temp directory
-            let temp_dir = env::temp_dir();
-            let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            let pid = std::process::id();
-            let random_suffix = format!("{:x}", timestamp % 0xFFFFFF); // Use last 6 hex digits
-            let random_name = format!("prebindgen_{}_{}", pid, random_suffix);
-            let fallback_dir = temp_dir.join(random_name);
-            let _ = std::fs::create_dir_all(&fallback_dir);
-            fallback_dir.to_string_lossy().to_string()
-        };
-        
-        *DEST_DIR.lock().unwrap() = Some(dir);
-    });
-    
-    DEST_DIR.lock().unwrap().as_ref().unwrap().clone()
-}
-
-/// Get the full path to the prebindgen.rs file
+/// Get the full path to the prebindgen.rs file from OUT_DIR
+/// Panics if OUT_DIR is not set (which means build.rs is not defined)
 fn get_prebindgen_file_path() -> String {
-    let dest_dir = get_dest_dir();
-    format!("{}/prebindgen.rs", dest_dir)
+    let out_dir = env::var("OUT_DIR")
+        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    format!("{}/prebindgen.rs", out_dir)
 }
 
 /// Attribute macro that copies the annotated struct or enum definition to prebindgen.rs in OUT_DIR
@@ -151,9 +116,20 @@ pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
 #[cfg(test)]
 mod tests {    
     #[test]
-    fn test_macro_exists() {
-        // This is just a placeholder test to ensure the macro compiles
-        let _test = true;
-        assert!(_test);
+    fn test_out_dir_required() {
+        // This test verifies that our function requires OUT_DIR
+        let current_out_dir = std::env::var("OUT_DIR");
+        
+        // If OUT_DIR is set, our function should work
+        if current_out_dir.is_ok() {
+            let path = super::get_prebindgen_file_path();
+            assert!(path.ends_with("/prebindgen.rs"));
+            assert!(!path.is_empty());
+        }
+        // If OUT_DIR is not set, our function would panic - but we can't test that
+        // easily in a unit test without potentially breaking the test environment
+        
+        // The important thing is that the function compiles and has the right signature
+        assert!(true);
     }
 }
