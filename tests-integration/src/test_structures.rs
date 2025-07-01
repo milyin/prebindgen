@@ -54,7 +54,7 @@ pub enum PathTestEnum {
 // Generate path constant for tests
 pub const TEST_PATH: &str = prebindgen_path!();
 
-fn main() {
+pub fn main() {
     println!("Test structures binary executed");
     println!("Generated prebindgen file at: {}", TEST_PATH);
 }

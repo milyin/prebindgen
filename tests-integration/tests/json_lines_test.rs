@@ -49,7 +49,7 @@ fn test_no_deduplication() {
     let test_path = prebindgen_proc_macro::prebindgen_path!();
     
     if std::path::Path::new(&test_path).exists() {
-        let content = std::fs::read_to_string(&test_path)
+        let content = std::fs::read_to_string(test_path)
             .expect("Should be able to read prebindgen.json");
         
         // Parse all records
