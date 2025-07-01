@@ -36,22 +36,13 @@
 //! const PREBINDGEN_FILE: &str = prebindgen_path!();
 //! ```
 
-use prebindgen::{Record, RecordKind};
+use prebindgen::{Record, RecordKind, get_prebindgen_file_path};
 use proc_macro::TokenStream;
 use quote::quote;
-use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, parse_macro_input};
-
-/// Get the full path to the prebindgen.json file from OUT_DIR
-/// Panics if OUT_DIR is not set (which means build.rs is not defined)
-fn get_prebindgen_file_path() -> String {
-    let out_dir = env::var("OUT_DIR")
-        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    format!("{}/prebindgen.json", out_dir)
-}
 
 /// Attribute macro that copies the annotated struct or enum definition to prebindgen.json in OUT_DIR
 #[proc_macro_attribute]

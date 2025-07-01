@@ -28,6 +28,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use std::env;
 
 /// Represents a record of a struct, enum, or union definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -67,4 +68,19 @@ impl std::fmt::Display for RecordKind {
             RecordKind::Union => write!(f, "union"),
         }
     }
+}
+
+/// Get the full path to the prebindgen.json file from OUT_DIR
+/// 
+/// This function is used by both the proc-macro and build scripts to determine
+/// where to write/read the prebindgen JSON file.
+/// 
+/// # Panics
+/// 
+/// Panics if the `OUT_DIR` environment variable is not set, which means 
+/// a `build.rs` file is not defined in the project.
+pub fn get_prebindgen_file_path() -> String {
+    let out_dir = env::var("OUT_DIR")
+        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    format!("{}/prebindgen.json", out_dir)
 }
