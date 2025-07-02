@@ -4,31 +4,41 @@ use quote::quote;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-use syn::{DeriveInput, parse_macro_input};
+use syn::{DeriveInput, ItemFn};
 
-/// Attribute macro that copies the annotated struct or enum definition in the "source" ffi crate to prebindgen.json in OUT_DIR
+/// Attribute macro that copies the annotated struct, enum, union, or function definition in the "source" ffi crate to prebindgen.json in OUT_DIR
 #[proc_macro_attribute]
 pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
-    let parsed = parse_macro_input!(input as DeriveInput);
-
+    
     // Get the full path to the prebindgen.json file
     let file_path = get_prebindgen_json_path();
     let dest_path = Path::new(&file_path);
 
-    // Determine the record kind
-    let kind = match &parsed.data {
-        syn::Data::Struct(_) => RecordKind::Struct,
-        syn::Data::Enum(_) => RecordKind::Enum,
-        syn::Data::Union(_) => RecordKind::Union,
+    // Try to parse as different item types
+    let (kind, name, content) = if let Ok(parsed) = syn::parse::<DeriveInput>(input.clone()) {
+        // Handle struct, enum, union
+        let kind = match &parsed.data {
+            syn::Data::Struct(_) => RecordKind::Struct,
+            syn::Data::Enum(_) => RecordKind::Enum,
+            syn::Data::Union(_) => RecordKind::Union,
+        };
+        let tokens = quote! { #parsed };
+        (kind, parsed.ident.to_string(), tokens.to_string())
+    } else if let Ok(parsed) = syn::parse::<ItemFn>(input.clone()) {
+        // Handle function
+        // For functions, we want to store only the signature without the body
+        let mut fn_sig = parsed.clone();
+        fn_sig.block = syn::parse_quote! {{ /* placeholder */ }};
+        let tokens = quote! { #fn_sig };
+        (RecordKind::Function, parsed.sig.ident.to_string(), tokens.to_string())
+    } else {
+        // If we can't parse it, return the original input and skip processing
+        return input_clone;
     };
 
-    // Convert the parsed input back to tokens for storing content
-    let tokens = quote! { #parsed };
-    let content = tokens.to_string();
-
     // Create the new record
-    let new_record = Record::new(kind, parsed.ident.to_string(), content);
+    let new_record = Record::new(kind, name, content);
 
     // Convert record to JSON and append to file
     if let Ok(json_content) = serde_json::to_string(&new_record) {

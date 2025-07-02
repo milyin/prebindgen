@@ -2,7 +2,7 @@
 //!
 //! JSON structure definitions for the prebindgen system.
 //!
-//! This crate defines the data structures used to represent struct and enum definitions
+//! This crate defines the data structures used to represent struct, enum, union, and function definitions
 //! in JSON format. These structures are used by the `prebindgen-proc-macro` crate
 //! to serialize code definitions and by build scripts to deserialize and process them.
 //!
@@ -10,6 +10,7 @@
 //! ```json
 //! {"kind": "struct", "name": "MyStruct", "content": "pub struct MyStruct { ... }"}
 //! {"kind": "enum", "name": "MyEnum", "content": "pub enum MyEnum { ... }"}
+//! {"kind": "function", "name": "my_function", "content": "pub fn my_function() { ... }"}
 //! ```
 //!
 //! ## Usage
@@ -34,7 +35,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-/// Represents a record of a struct, enum, or union definition
+/// Represents a record of a struct, enum, union, or function definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Record {
     /// The kind of definition (struct, enum, or union)
@@ -45,7 +46,7 @@ pub struct Record {
     pub content: String,
 }
 
-/// The kind of record (struct, enum, or union)
+/// The kind of record (struct, enum, union, or function)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RecordKind {
@@ -55,6 +56,8 @@ pub enum RecordKind {
     Enum,
     /// A union definition
     Union,
+    /// A function definition
+    Function,
 }
 
 impl Record {
@@ -74,6 +77,7 @@ impl std::fmt::Display for RecordKind {
             RecordKind::Struct => write!(f, "struct"),
             RecordKind::Enum => write!(f, "enum"),
             RecordKind::Union => write!(f, "union"),
+            RecordKind::Function => write!(f, "function"),
         }
     }
 }
@@ -156,7 +160,17 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
         let mut dest_file = fs::File::create(dest_path)?;
 
         for record in unique_records.values() {
-            writeln!(dest_file, "{}", record.content)?;
+            match record.kind {
+                RecordKind::Function => {
+                    // For functions, transform the prototype to no_mangle extern "C" with todo!() body
+                    let function_stub = transform_function_to_stub(&record.content)?;
+                    writeln!(dest_file, "{}", function_stub)?;
+                }
+                _ => {
+                    // For structs, enums, and unions, write content as-is
+                    writeln!(dest_file, "{}", record.content)?;
+                }
+            }
         }
 
         dest_file.flush()?;
@@ -169,4 +183,44 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
             prebindgen_json_path.as_ref().to_string_lossy()
         );
     }
+}
+
+/// Transform a function prototype to a no_mangle extern "C" function with todo!() body
+fn transform_function_to_stub(function_content: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Parse the function using syn
+    let parsed: syn::ItemFn = syn::parse_str(function_content)?;
+    
+    // Extract function signature parts
+    let fn_name = &parsed.sig.ident;
+    let output = &parsed.sig.output;
+    let vis = &parsed.vis;
+    
+    // Transform inputs to add underscore prefix to avoid unused variable warnings
+    let inputs = parsed.sig.inputs.iter().map(|input| {
+        match input {
+            syn::FnArg::Typed(pat_type) => {
+                if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                    let new_ident = syn::Ident::new(&format!("_{}", pat_ident.ident), pat_ident.ident.span());
+                    let mut new_pat_ident = pat_ident.clone();
+                    new_pat_ident.ident = new_ident;
+                    let mut new_pat_type = pat_type.clone();
+                    new_pat_type.pat = Box::new(syn::Pat::Ident(new_pat_ident));
+                    syn::FnArg::Typed(new_pat_type)
+                } else {
+                    input.clone()
+                }
+            }
+            _ => input.clone(),
+        }
+    });
+    
+    // Build the no_mangle extern "C" function with unsafe attribute syntax for newer Rust editions
+    let stub = quote::quote! {
+        #[unsafe(no_mangle)]
+        #vis extern "C" fn #fn_name(#(#inputs),*) #output {
+            todo!()
+        }
+    };
+    
+    Ok(stub.to_string())
 }

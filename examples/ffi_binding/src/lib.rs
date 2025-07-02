@@ -19,3 +19,9 @@ pub fn create_bar(id: u64) -> Bar {
         aarch64_field: id,
     }
 }
+
+pub fn test_calling_generated_functions() {
+    // These functions should be available from the generated ffi_common.rs
+    let _result = test_function(42, 3.14);
+    let _flag = another_test_function();
+}
