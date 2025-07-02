@@ -193,6 +193,54 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
     }
 }
 
+/// Helper function to check if a type contains any of the defined types
+fn contains_defined_type(ty: &syn::Type, defined_types: &std::collections::HashSet<String>) -> bool {
+    match ty {
+        syn::Type::Path(type_path) => {
+            // Check if the type itself is defined
+            if let Some(segment) = type_path.path.segments.last() {
+                let type_name = segment.ident.to_string();
+                if defined_types.contains(&type_name) {
+                    return true;
+                }
+                
+                // Check generic arguments recursively
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    for arg in &args.args {
+                        if let syn::GenericArgument::Type(inner_ty) = arg {
+                            if contains_defined_type(inner_ty, defined_types) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            false
+        }
+        syn::Type::Reference(type_ref) => {
+            // Check the referenced type
+            contains_defined_type(&type_ref.elem, defined_types)
+        }
+        syn::Type::Ptr(type_ptr) => {
+            // Check the pointed-to type
+            contains_defined_type(&type_ptr.elem, defined_types)
+        }
+        syn::Type::Slice(type_slice) => {
+            // Check the slice element type
+            contains_defined_type(&type_slice.elem, defined_types)
+        }
+        syn::Type::Array(type_array) => {
+            // Check the array element type
+            contains_defined_type(&type_array.elem, defined_types)
+        }
+        syn::Type::Tuple(type_tuple) => {
+            // Check all tuple element types
+            type_tuple.elems.iter().any(|elem_ty| contains_defined_type(elem_ty, defined_types))
+        }
+        _ => false,
+    }
+}
+
 /// Transform a function prototype to a no_mangle extern "C" function that calls the original function
 fn transform_function_to_stub(
     function_content: &str, 
@@ -201,53 +249,6 @@ fn transform_function_to_stub(
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Helper function to check if a type needs transmute
     let needs_transmute = |ty: &syn::Type| -> bool {
-        fn contains_defined_type(ty: &syn::Type, defined_types: &std::collections::HashSet<String>) -> bool {
-            match ty {
-                syn::Type::Path(type_path) => {
-                    // Check if the type itself is defined
-                    if let Some(segment) = type_path.path.segments.last() {
-                        let type_name = segment.ident.to_string();
-                        if defined_types.contains(&type_name) {
-                            return true;
-                        }
-                        
-                        // Check generic arguments recursively
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            for arg in &args.args {
-                                if let syn::GenericArgument::Type(inner_ty) = arg {
-                                    if contains_defined_type(inner_ty, defined_types) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    false
-                }
-                syn::Type::Reference(type_ref) => {
-                    // Check the referenced type
-                    contains_defined_type(&type_ref.elem, defined_types)
-                }
-                syn::Type::Ptr(type_ptr) => {
-                    // Check the pointed-to type
-                    contains_defined_type(&type_ptr.elem, defined_types)
-                }
-                syn::Type::Slice(type_slice) => {
-                    // Check the slice element type
-                    contains_defined_type(&type_slice.elem, defined_types)
-                }
-                syn::Type::Array(type_array) => {
-                    // Check the array element type
-                    contains_defined_type(&type_array.elem, defined_types)
-                }
-                syn::Type::Tuple(type_tuple) => {
-                    // Check all tuple element types
-                    type_tuple.elems.iter().any(|elem_ty| contains_defined_type(elem_ty, defined_types))
-                }
-                _ => false,
-            }
-        }
-        
         contains_defined_type(ty, defined_types)
     };
     // Parse the function using syn
