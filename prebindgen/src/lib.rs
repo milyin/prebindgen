@@ -88,16 +88,18 @@ pub fn get_prebindgen_json_path() -> std::path::PathBuf {
     Path::new(&out_dir).join("prebindgen.json")
 }
 
-/// Initialize the prebindgen.json file by cleaning it up and adding "[" to the first line.
+/// Initialize the prebindgen.json file by cleaning it up and adding "[{}" to the first line.
 /// This function should be called in build.rs instead of deleting the prebindgen.json file.
 ///
-/// This prepares the file to collect JSON records in an array format.
+/// This prepares the file to collect JSON records in an array format by starting with
+/// an empty object, allowing the prebindgen macro to add records with leading commas.
 pub fn init_prebindgen_json() {
     let path = get_prebindgen_json_path();
     let init_closure = || -> Result<(), Box<dyn std::error::Error>> {
-        // Write "[" to the file to start a JSON array
+        // Write "[{}" to the file to start a JSON array and allow appending records with
+        // leading commas
         let mut file = fs::File::create(&path)?;
-        file.write_all(b"[")?;
+        file.write_all(b"[{}")?;
         file.flush()?;
         Ok(())
     };

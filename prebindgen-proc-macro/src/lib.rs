@@ -71,8 +71,8 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     // Convert record to JSON and append to file
     if let Ok(json_content) = serde_json::to_string(&new_record) {
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(dest_path) {
-            // Force a flush after writing to ensure the newline is written
-            let _ = writeln!(file, "{}", json_content);
+            // Write with leading comma to append to the JSON array
+            let _ = write!(file, ",{}", json_content);
             let _ = file.flush();
         }
     }
