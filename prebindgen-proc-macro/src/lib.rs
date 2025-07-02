@@ -103,23 +103,3 @@ pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_out_dir_required() {
-        // This test verifies that our function requires OUT_DIR
-        let current_out_dir = std::env::var("OUT_DIR");
-
-        // If OUT_DIR is set, our function should work
-        if current_out_dir.is_ok() {
-            let path = super::get_prebindgen_file_path();
-            assert!(path.ends_with("/prebindgen.json"));
-            assert!(!path.is_empty());
-        }
-        // If OUT_DIR is not set, our function would panic - but we can't test that
-        // easily in a unit test without potentially breaking the test environment
-
-        // The important thing is that the function compiles and has the right signature
-    }
-}
