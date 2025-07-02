@@ -72,16 +72,23 @@
 //!     // Create prebindgen context with path to generated data and crate name
 //!     let mut pb = Prebindgen::new(
 //!         Path::new(my_common_ffi::PREBINDGEN_OUT_DIR),
-//!         "my_common_ffi".to_string()
+//!         "my_common_ffi"  // String literals work due to Into<String>
 //!     );
 //!
 //!     // Read the prebindgen data by group
 //!     pb.read("structs");
 //!     pb.read("functions");
+//!     
+//!     // Or read all available groups at once
+//!     // pb.read_all();
 //!
 //!     // Generate Rust FFI code files
-//!     pb.write("structs", "ffi_structs.rs");
-//!     pb.write("functions", "ffi_functions.rs");
+//!     let structs_file = pb.create("ffi_structs.rs").append("structs");
+//!     let functions_file = pb.create("ffi_functions.rs").append("functions");
+//!
+//!     // Alternative: Write all groups to a single file
+//!     // let combined_file = pb.create("ffi_bindings.rs").append_all();
+//!     // println!("Generated file: {}", combined_file.get_path().display());
 //!
 //!     // Now pass the generated files to your binding generator:
 //!     // - cbindgen for C/C++
@@ -96,6 +103,9 @@
 //! // In src/lib.rs or src/main.rs
 //! include!(concat!(env!("OUT_DIR"), "/ffi_structs.rs"));
 //! include!(concat!(env!("OUT_DIR"), "/ffi_functions.rs"));
+//!
+//! // Or if using a single combined file:
+//! // include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 //! ```
 //!
 //! ## Benefits
@@ -109,6 +119,14 @@
 //! ## Core API
 //!
 //! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
+//!   - [`Prebindgen::read()`]: Read exported definitions for a group
+//!   - [`Prebindgen::read_all()`]: Read exported definitions for all available groups
+//!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
+//! - [`FileBuilder`]: Builder for appending groups to a file
+//!   - [`FileBuilder::append()`]: Append a specific group to the file
+//!   - [`FileBuilder::append_all()`]: Append all loaded groups to the file
+//!   - [`FileBuilder::get_path()`]: Get the absolute path to the generated file
+//!   - [`FileBuilder::into_path()`]: Convert the builder to a PathBuf
 //! - [`Record`]: Represents a single exported definition (struct, enum, union, or function)
 //! - [`RecordKind`]: Enum indicating the type of definition
 //! - [`init_prebindgen()`]: Utility to initialize the prebindgen system in build scripts
@@ -246,14 +264,20 @@ pub struct Prebindgen {
     crate_name: String,
 }
 
+/// Builder for writing groups to files with append capability
+pub struct FileBuilder<'a> {
+    prebindgen: &'a Prebindgen,
+    file_path: std::path::PathBuf,
+}
+
 impl Prebindgen {
     /// Create a new Prebindgen context with specified directory and crate name
-    pub fn new<P: AsRef<Path>>(input_dir: P, crate_name: String) -> Self {
+    pub fn new<P: AsRef<Path>, S: Into<String>>(input_dir: P, crate_name: S) -> Self {
         Self {
             records: std::collections::HashMap::new(),
             defined_types: std::collections::HashSet::new(),
             input_dir: input_dir.as_ref().to_path_buf(),
-            crate_name,
+            crate_name: crate_name.into(),
         }
     }
 
@@ -301,11 +325,74 @@ impl Prebindgen {
         }
     }
 
-    pub fn write<P: AsRef<Path>>(&self, group: &str, file_name: P) -> std::path::PathBuf {
+    /// Read all exported files for all available groups
+    /// 
+    /// This method automatically discovers all available groups by scanning for 
+    /// `.jsonl` files in the input directory and reads all of them.
+    pub fn read_all(&mut self) {
+        let mut groups = std::collections::HashSet::new();
+        
+        // Discover all available groups
+        if let Ok(entries) = fs::read_dir(&self.input_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if file_name.ends_with(JSONL_EXTENSION) {
+                        // Extract group name from filename (everything before the first underscore)
+                        if let Some(underscore_pos) = file_name.find('_') {
+                            let group_name = &file_name[..underscore_pos];
+                            groups.insert(group_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Read all discovered groups
+        for group in groups {
+            self.read(&group);
+        }
+    }
+
+    /// Create a new file for writing groups
+    /// 
+    /// This method creates a new file (or overwrites an existing one) and returns
+    /// a FileBuilder for writing groups to it.
+    /// 
+    /// # Parameters
+    /// - `file_name`: The name of the file to create in OUT_DIR
+    /// 
+    /// # Returns
+    /// A FileBuilder that allows appending groups to the file
+    pub fn create<P: AsRef<Path>>(&self, file_name: P) -> FileBuilder<'_> {
+        let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+        let dest_path = PathBuf::from(&out_dir).join(&file_name);
+        
+        // Create an empty file
+        fs::File::create(&dest_path).unwrap_or_else(|e| {
+            panic!("Failed to create {}: {}", dest_path.display(), e);
+        });
+        
+        FileBuilder {
+            prebindgen: self,
+            file_path: dest_path,
+        }
+    }
+
+    /// Internal method to write records with optional append mode
+    fn write_internal<P: AsRef<Path>>(&self, group: &str, file_name: P, append: bool) -> std::path::PathBuf {
         let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
         let dest_path = PathBuf::from(&out_dir).join(&file_name);
         (|| -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-            let mut dest = fs::File::create(&dest_path)?;
+            let mut dest = if append {
+                fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&dest_path)?
+            } else {
+                fs::File::create(&dest_path)?
+            };
+            
             if let Some(group_records) = self.records.get(group) {
                 for record in group_records {
                     match record.kind {
@@ -329,6 +416,58 @@ impl Prebindgen {
         .unwrap_or_else(|e| {
             panic!("Failed to generate {}: {}", dest_path.display(), e);
         })
+    }
+}
+
+impl<'a> FileBuilder<'a> {
+    /// Append records for a group to the file
+    /// 
+    /// This method appends records from the specified group to the file
+    /// that was created by the `create` method.
+    /// 
+    /// # Parameters
+    /// - `group`: The name of the group to append
+    /// 
+    /// # Returns
+    /// Self for method chaining
+    pub fn append(self, group: &str) -> Self {
+        // Extract just the filename from the full path
+        if let Some(file_name) = self.file_path.file_name() {
+            self.prebindgen.write_internal(group, file_name, true);
+        }
+        self
+    }
+
+    /// Append all loaded groups to the file
+    /// 
+    /// This method appends records from all groups that have been loaded
+    /// via `read()` or `read_all()` calls.
+    /// 
+    /// # Returns
+    /// Self for method chaining
+    pub fn append_all(self) -> Self {
+        if let Some(file_name) = self.file_path.file_name() {
+            for group_name in self.prebindgen.records.keys() {
+                self.prebindgen.write_internal(group_name, file_name, true);
+            }
+        }
+        self
+    }
+
+    /// Get the absolute path to the generated file
+    /// 
+    /// # Returns
+    /// The absolute path to the file that was created
+    pub fn get_path(&self) -> &std::path::Path {
+        &self.file_path
+    }
+
+    /// Converts the FileBuilder to a string representation of the file path
+    /// 
+    /// # Returns
+    /// A path object representing the file path
+    pub fn into_path(self) -> std::path::PathBuf {
+        self.file_path
     }
 }
 

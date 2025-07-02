@@ -1,6 +1,5 @@
-// Include the copied example_ffi.rs file from OUT_DIR
-include!(concat!(env!("OUT_DIR"), "/example_ffi_structs.rs"));
-include!(concat!(env!("OUT_DIR"), "/example_ffi_functions.rs"));
+// Include the combined example_ffi bindings file from OUT_DIR
+include!(concat!(env!("OUT_DIR"), "/example_ffi.rs"));
 
 // Demonstrate that we can use the included Foo struct
 pub fn create_foo(id: u64) -> Foo {
