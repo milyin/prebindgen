@@ -7,9 +7,17 @@ use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, ItemFn};
 
-/// Get the full path to `<name>.json` generated in OUT_DIR.
+/// Get the full path to `{group}_{pid}_{thread_id}.json` generated in OUT_DIR.
 fn get_prebindgen_json_path(name: &str) -> std::path::PathBuf {
-    get_prebindgen_out_dir().join(format!("{}.json", name))
+    let thread_id = std::thread::current().id();
+    let process_id = std::process::id();
+    // Extract numeric thread ID from ThreadId debug representation
+    let thread_id_str = format!("{:?}", thread_id);
+    let thread_id_num = thread_id_str
+        .strip_prefix("ThreadId(")
+        .and_then(|s| s.strip_suffix(")"))
+        .unwrap_or("0");
+    get_prebindgen_out_dir().join(format!("{}_{}_{}.json", name, process_id, thread_id_num))
 }
 
 #[proc_macro]

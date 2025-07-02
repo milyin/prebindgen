@@ -142,34 +142,52 @@ impl Prebindgen {
         }
     }
 
-    /// Read `<group>.json`, panicking on error with detailed path info
-    pub fn read_json(&mut self, group: &str) {
-        let path = self.input_dir.join(format!("{}.json", group));
-        (|| -> Result<(), Box<dyn std::error::Error>> {
-            let mut content = fs::read_to_string(&path)?;
-            if content.ends_with(',') {
-                content.pop();
-            }
-            content.push(']');
-            let parsed: Vec<Record> = serde_json::from_str(&content)?;
-            let mut map = std::collections::HashMap::new();
-            for record in parsed {
-                map.insert(record.name.clone(), record);
-            }
-            let group_records: Vec<Record> = map.values().cloned().collect();
-            self.records.insert(group.to_string(), group_records.clone());
-            
-            // Update defined_types with all types from all groups
-            for record in &group_records {
-                if matches!(record.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union) {
-                    self.defined_types.insert(record.name.clone());
+    /// Read all JSON files matching the group name pattern `<group>_*.json`, panicking on error with detailed path info
+    pub fn read(&mut self, group: &str) {
+        let pattern = format!("{}_", group);
+        let mut record_map = std::collections::HashMap::new();
+        
+        // Read the directory and find all matching files
+        if let Ok(entries) = fs::read_dir(&self.input_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if file_name.starts_with(&pattern) && file_name.ends_with(".json") {
+                        trace!("Reading file: {}", path.display());
+                        let path_clone = path.clone();
+                        (|| -> Result<(), Box<dyn std::error::Error>> {
+                            let mut content = fs::read_to_string(&path)?;
+                            if content.ends_with(',') {
+                                content.pop();
+                            }
+                            content.push(']');
+                            let parsed: Vec<Record> = serde_json::from_str(&content)?;
+                            for record in parsed {
+                                // Use HashMap to deduplicate records by name
+                                record_map.insert(record.name.clone(), record);
+                            }
+                            Ok(())
+                        })()
+                        .unwrap_or_else(|e| {
+                            panic!("Failed to read {}: {}", path_clone.display(), e);
+                        });
+                    }
                 }
             }
-            Ok(())
-        })()
-        .unwrap_or_else(|e| {
-            panic!("Failed to read {}: {}", path.display(), e);
-        });
+        }
+        
+        // Convert map values to vector
+        let all_records: Vec<Record> = record_map.values().cloned().collect();
+        
+        // Store the deduplicated records for this group
+        self.records.insert(group.to_string(), all_records.clone());
+        
+        // Update defined_types with all types from all groups
+        for record in &all_records {
+            if matches!(record.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union) {
+                self.defined_types.insert(record.name.clone());
+            }
+        }
     }
 
     /// Generate `<group>.rs`, panicking on error with detailed path info
