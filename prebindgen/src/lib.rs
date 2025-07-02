@@ -88,7 +88,7 @@ pub fn get_prebindgen_json_path() -> std::path::PathBuf {
     Path::new(&out_dir).join("prebindgen.json")
 }
 
-/// Initialize the prebindgen.json file by cleaning it up and adding "[{}" to the first line.
+/// Initialize the prebindgen.json file by cleaning it up and adding "[" to the first line.
 /// This function should be called in build.rs instead of deleting the prebindgen.json file.
 ///
 /// This prepares the file to collect JSON records in an array format by starting with
@@ -96,10 +96,8 @@ pub fn get_prebindgen_json_path() -> std::path::PathBuf {
 pub fn init_prebindgen_json() {
     let path = get_prebindgen_json_path();
     let init_closure = || -> Result<(), Box<dyn std::error::Error>> {
-        // Write "[{}" to the file to start a JSON array and allow appending records with
-        // leading commas
         let mut file = fs::File::create(&path)?;
-        file.write_all(b"[{}")?;
+        file.write_all(b"[")?;
         file.flush()?;
         Ok(())
     };
@@ -121,8 +119,11 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
         // Read the prebindgen.json file
         let mut content = fs::read_to_string(&prebindgen_json_path)?;
 
-        // Add trailing `]` to complete the JSON array
-        content.push(']');
+        // Replace last trailing comma to `]` to complete the JSON array
+        if content.ends_with(',') {
+            content.pop(); // Remove the last comma
+        }
+        content.push(']'); // Add trailing `]` to complete the JSON array
 
         // Parse as JSON array
         let records: Vec<Record> = serde_json::from_str(&content)?;
