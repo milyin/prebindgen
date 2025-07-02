@@ -160,11 +160,18 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
         trace!("Writing to: {}", dest_path.display());
         let mut dest_file = fs::File::create(dest_path)?;
 
+        // Collect all type names that were defined in the records
+        let defined_types: std::collections::HashSet<String> = unique_records
+            .values()
+            .filter(|record| matches!(record.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union))
+            .map(|record| record.name.clone())
+            .collect();
+
         for record in unique_records.values() {
             match record.kind {
                 RecordKind::Function => {
                     // For functions, transform the prototype to no_mangle extern "C" with call to original function
-                    let function_stub = transform_function_to_stub(&record.content, source_crate)?;
+                    let function_stub = transform_function_to_stub(&record.content, source_crate, &defined_types)?;
                     writeln!(dest_file, "{}", function_stub)?;
                 }
                 _ => {
@@ -187,7 +194,25 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
 }
 
 /// Transform a function prototype to a no_mangle extern "C" function that calls the original function
-fn transform_function_to_stub(function_content: &str, source_crate: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn transform_function_to_stub(
+    function_content: &str, 
+    source_crate: &str, 
+    defined_types: &std::collections::HashSet<String>
+) -> Result<String, Box<dyn std::error::Error>> {
+    // Helper function to check if a type needs transmute
+    let needs_transmute = |ty: &syn::Type| -> bool {
+        match ty {
+            syn::Type::Path(type_path) => {
+                if let Some(segment) = type_path.path.segments.last() {
+                    let type_name = segment.ident.to_string();
+                    defined_types.contains(&type_name)
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    };
     // Parse the function using syn
     let parsed: syn::ItemFn = syn::parse_str(function_content)?;
     
@@ -221,7 +246,11 @@ fn transform_function_to_stub(function_content: &str, source_crate: &str) -> Res
             syn::FnArg::Typed(pat_type) => {
                 if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                     let param_name = syn::Ident::new(&format!("_{}", pat_ident.ident), pat_ident.ident.span());
-                    Some(quote::quote! { std::mem::transmute(#param_name) })
+                    if needs_transmute(&pat_type.ty) {
+                        Some(quote::quote! { std::mem::transmute(#param_name) })
+                    } else {
+                        Some(quote::quote! { #param_name })
+                    }
                 } else {
                     None
                 }
@@ -241,11 +270,17 @@ fn transform_function_to_stub(function_content: &str, source_crate: &str) -> Res
                 #source_crate_ident::#fn_name(#(#call_args),*);
             }
         }
-        _ => {
+        syn::ReturnType::Type(_, return_type) => {
             // Function with return value
-            quote::quote! {
-                let result = #source_crate_ident::#fn_name(#(#call_args),*);
-                std::mem::transmute(result)
+            if needs_transmute(return_type) {
+                quote::quote! {
+                    let result = #source_crate_ident::#fn_name(#(#call_args),*);
+                    std::mem::transmute(result)
+                }
+            } else {
+                quote::quote! {
+                    #source_crate_ident::#fn_name(#(#call_args),*)
+                }
             }
         }
     };
