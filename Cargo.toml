@@ -2,7 +2,6 @@
 members = [
     "prebindgen",
     "prebindgen-proc-macro",
-    "tests",
     "examples/ffi_binding",
     "examples/ffi_common",
 ]
