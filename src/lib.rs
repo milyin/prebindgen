@@ -26,6 +26,10 @@
 //! assert_eq!(record.name, "MyStruct");
 //! # Ok::<(), serde_json::Error>(())
 //! ```
+//!
+//! The crate also provides utility functions for working with the prebindgen system:
+//! 
+//! - [`get_prebindgen_file_path`]: Get the path to the prebindgen JSON file
 
 use serde::{Deserialize, Serialize};
 use std::env;

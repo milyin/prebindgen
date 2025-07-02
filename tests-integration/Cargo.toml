@@ -9,6 +9,9 @@ prebindgen = { path = ".." }
 prebindgen-proc-macro = { path = "../prebindgen-proc-macro" }
 serde_json = "1.0"
 
+[build-dependencies]
+prebindgen = { path = ".." }
+
 [[bin]]
 name = "test_structures"
 path = "src/test_structures.rs"
