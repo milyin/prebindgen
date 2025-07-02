@@ -132,7 +132,8 @@ pub fn init_prebindgen_json() {
 /// - Parses the result as JSON, ignoring the first empty record
 /// - Deduplicates records by name (later records override earlier ones)
 /// - Writes the content of all records to OUT_DIR/{ffi_rs}
-pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &str) {
+/// - For functions, generates extern "C" stubs that call the original functions from the source crate
+pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &str, source_crate: &str) {
     let process_closure = || -> Result<(), Box<dyn std::error::Error>> {
         // Read the prebindgen.json file
         trace!("Reading: {}", prebindgen_json_path.as_ref().display());
@@ -162,8 +163,8 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
         for record in unique_records.values() {
             match record.kind {
                 RecordKind::Function => {
-                    // For functions, transform the prototype to no_mangle extern "C" with todo!() body
-                    let function_stub = transform_function_to_stub(&record.content)?;
+                    // For functions, transform the prototype to no_mangle extern "C" with call to original function
+                    let function_stub = transform_function_to_stub(&record.content, source_crate)?;
                     writeln!(dest_file, "{}", function_stub)?;
                 }
                 _ => {
@@ -185,8 +186,8 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
     }
 }
 
-/// Transform a function prototype to a no_mangle extern "C" function with todo!() body
-fn transform_function_to_stub(function_content: &str) -> Result<String, Box<dyn std::error::Error>> {
+/// Transform a function prototype to a no_mangle extern "C" function that calls the original function
+fn transform_function_to_stub(function_content: &str, source_crate: &str) -> Result<String, Box<dyn std::error::Error>> {
     // Parse the function using syn
     let parsed: syn::ItemFn = syn::parse_str(function_content)?;
     
@@ -195,8 +196,8 @@ fn transform_function_to_stub(function_content: &str) -> Result<String, Box<dyn 
     let output = &parsed.sig.output;
     let vis = &parsed.vis;
     
-    // Transform inputs to add underscore prefix to avoid unused variable warnings
-    let inputs = parsed.sig.inputs.iter().map(|input| {
+    // Create parameter names for the extern "C" function (with underscore prefix)
+    let extern_inputs = parsed.sig.inputs.iter().map(|input| {
         match input {
             syn::FnArg::Typed(pat_type) => {
                 if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
@@ -214,11 +215,48 @@ fn transform_function_to_stub(function_content: &str) -> Result<String, Box<dyn 
         }
     });
     
-    // Build the no_mangle extern "C" function with unsafe attribute syntax for newer Rust editions
+    // Extract parameter names for calling the original function
+    let call_args = parsed.sig.inputs.iter().filter_map(|input| {
+        match input {
+            syn::FnArg::Typed(pat_type) => {
+                if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                    let param_name = syn::Ident::new(&format!("_{}", pat_ident.ident), pat_ident.ident.span());
+                    Some(quote::quote! { std::mem::transmute(#param_name) })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    });
+    
+    // Create the source crate identifier
+    let source_crate_ident = syn::Ident::new(source_crate, proc_macro2::Span::call_site());
+    
+    // Generate the function body that calls the original function
+    let function_body = match &parsed.sig.output {
+        syn::ReturnType::Default => {
+            // Void function
+            quote::quote! {
+                #source_crate_ident::#fn_name(#(#call_args),*);
+            }
+        }
+        _ => {
+            // Function with return value
+            quote::quote! {
+                let result = #source_crate_ident::#fn_name(#(#call_args),*);
+                std::mem::transmute(result)
+            }
+        }
+    };
+    
+    // Build the no_mangle extern "C" function
     let stub = quote::quote! {
         #[unsafe(no_mangle)]
-        #vis extern "C" fn #fn_name(#(#inputs),*) #output {
-            todo!()
+        #vis extern "C" fn #fn_name(#(#extern_inputs),*) #output {
+            unsafe {
+                #function_body
+            }
         }
     };
     

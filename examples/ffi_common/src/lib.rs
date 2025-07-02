@@ -37,3 +37,8 @@ pub fn test_function(a: i32, b: f64) -> i32 {
 pub fn another_test_function() -> bool {
     false
 }
+
+#[prebindgen]
+pub fn void_function(x: i32) {
+    println!("Called void_function with x = {}", x);
+}
