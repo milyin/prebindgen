@@ -1,26 +1,33 @@
 use prebindgen::{Record, RecordKind};
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::LitStr;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, ItemFn};
 
-/// Get the full path to the file prebindgen.json generated in OUT_DIR.
-/// Local helper moved from prebindgen crate.
-fn get_prebindgen_json_path() -> std::path::PathBuf {
+/// Get the full path to `<name>.json` generated in OUT_DIR.
+fn get_prebindgen_json_path(name: &str) -> std::path::PathBuf {
     let out_dir = std::env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    std::path::Path::new(&out_dir).join("prebindgen.json")
+    std::path::Path::new(&out_dir).join(format!("{}.json", name))
 }
 
 /// Attribute macro that copies the annotated struct, enum, union, or function definition in the "source" ffi crate to prebindgen.json in OUT_DIR
 #[proc_macro_attribute]
-pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
-
-    // Get the full path to the prebindgen.json file
-    let file_path = get_prebindgen_json_path();
+    // Parse optional JSON basename from macro args, default to "prebindgen"
+    let name = if args.is_empty() {
+        "prebindgen".to_string()
+    } else {
+        syn::parse2::<LitStr>(args.into())
+            .expect("Expected string literal for JSON basename")
+            .value()
+    };
+    // Get the full path to the JSON file
+    let file_path = get_prebindgen_json_path(&name);
     let dest_path = Path::new(&file_path);
 
     // Try to parse as different item types

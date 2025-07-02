@@ -1,5 +1,6 @@
 fn main() {
-    prebindgen::init_prebindgen_json();
+    prebindgen::init_prebindgen_json(Some("structs"));
+    prebindgen::init_prebindgen_json(Some("functions"));
 
     // The code below is ususally not needed in the typical project. It illustrates the spectifc case when
     // build.rs generates the source code for specific the target architecture.
@@ -19,9 +20,9 @@ fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let generate_for_target = |target: &str| {
         let bar = if target.contains("x86_64") {
-            "#[prebindgen]\n#[repr(C)]\npub struct Bar { pub x86_64_field: u64 }".to_string()
+            "#[prebindgen(\"structs\")]\n#[repr(C)]\npub struct Bar { pub x86_64_field: u64 }".to_string()
         } else if target.contains("aarch64") {
-            "#[prebindgen]\n#[repr(C)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
+            "#[prebindgen(\"structs\")]\n#[repr(C)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
         } else {
             panic!("Unsupported architecture: {}", target);
         };

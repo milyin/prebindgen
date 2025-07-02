@@ -12,7 +12,7 @@ pub const OUT_DIR: &str = env!("OUT_DIR");
 // See build.rs for details.
 include!(concat!(env!("OUT_DIR"), "/bar.rs"));
 
-#[prebindgen]
+#[prebindgen("structs")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Foo {
@@ -23,25 +23,25 @@ pub struct Foo {
     pub aarch64_field: u64,
 }
 
-#[prebindgen]
+#[prebindgen("functions")]
 pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
 }
 
-#[prebindgen]
+#[prebindgen("functions")]
 pub fn test_function(a: i32, b: f64) -> i32 {
     // This implementation will be ignored, only the signature is stored
     a + b as i32
 }
 
-#[prebindgen]
+#[prebindgen("functions")]
 pub fn another_test_function() -> bool {
     false
 }
 
-#[prebindgen]
+#[prebindgen("functions")]
 pub fn void_function(x: i32) {
     println!("Called void_function with x = {}", x);
 }
