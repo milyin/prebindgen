@@ -21,6 +21,7 @@ pub struct Foo {
     pub aarch64_field: u64,
 }
 
+#[prebindgen]
 pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) {
     unsafe {
         dst.as_mut_ptr().write(*src);
