@@ -27,8 +27,8 @@
 //! # Ok::<(), serde_json::Error>(())
 //! ```
 
-use serde::{Deserialize, Serialize};
 use core::panic;
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -82,9 +82,9 @@ impl std::fmt::Display for RecordKind {
 macro_rules! trace {
     ($($arg:tt)*) => {
         #[cfg(debug_assertions)]
-        println!("cargo:warning=[{}:{}] {}", 
-            file!(), 
-            line!(), 
+        println!("cargo:warning=[{}:{}] {}",
+            file!(),
+            line!(),
             format!($($arg)*)
         );
     };
@@ -145,7 +145,7 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
 
         // Skip the first empty record and deduplicate by name
         let mut unique_records = std::collections::HashMap::new();
-        for record in records.into_iter().skip(1) {
+        for record in records.into_iter() {
             unique_records.insert(record.name.clone(), record);
         }
 
@@ -164,6 +164,9 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
     };
 
     if let Err(e) = process_closure() {
-        panic!("Failed to process {}: {e}", prebindgen_json_path.as_ref().to_string_lossy());
+        panic!(
+            "Failed to process {}: {e}",
+            prebindgen_json_path.as_ref().to_string_lossy()
+        );
     }
 }
