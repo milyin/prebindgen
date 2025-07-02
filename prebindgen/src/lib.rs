@@ -30,10 +30,9 @@
 
 use core::panic;
 use serde::{Deserialize, Serialize};
-use std::env;
-use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 /// Represents a record of a struct, enum, union, or function definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -115,30 +114,37 @@ pub fn init_prebindgen() {
         }
     } else {
         fs::create_dir_all(&prebindgen_dir).unwrap_or_else(|e| {
-            panic!("Failed to create prebindgen directory {}: {}", prebindgen_dir.display(), e);
+            panic!(
+                "Failed to create prebindgen directory {}: {}",
+                prebindgen_dir.display(),
+                e
+            );
         });
     }
 }
 
 /// Helper for reading JSON records and generating Rust bindings per group
-#[derive(Default)]
 pub struct Prebindgen {
-    records: Vec<Record>,
+    records: std::collections::HashMap<String, Vec<Record>>,
     defined_types: std::collections::HashSet<String>,
+    input_dir: std::path::PathBuf,
+    crate_name: String,
 }
 
 impl Prebindgen {
-    /// Create a new Prebindgen context
-    pub fn new() -> Self {
+    /// Create a new Prebindgen context with specified directory and crate name
+    pub fn new<P: AsRef<Path>>(input_dir: P, crate_name: String) -> Self {
         Self {
-            records: Vec::new(),
+            records: std::collections::HashMap::new(),
             defined_types: std::collections::HashSet::new(),
+            input_dir: input_dir.as_ref().to_path_buf(),
+            crate_name,
         }
     }
 
     /// Read `<group>.json`, panicking on error with detailed path info
-    pub fn read_json<P: AsRef<Path>>(&mut self, dir: P, group: &str) {
-        let path = dir.as_ref().join(format!("{}.json", group));
+    pub fn read_json(&mut self, group: &str) {
+        let path = self.input_dir.join(format!("{}.json", group));
         (|| -> Result<(), Box<dyn std::error::Error>> {
             let mut content = fs::read_to_string(&path)?;
             if content.ends_with(',') {
@@ -150,46 +156,50 @@ impl Prebindgen {
             for record in parsed {
                 map.insert(record.name.clone(), record);
             }
-            self.records = map.values().cloned().collect();
-            self.defined_types = self
-                .records
-                .iter()
-                .filter(|r| matches!(r.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union))
-                .map(|r| r.name.clone())
-                .collect();
+            let group_records: Vec<Record> = map.values().cloned().collect();
+            self.records.insert(group.to_string(), group_records.clone());
+            
+            // Update defined_types with all types from all groups
+            for record in &group_records {
+                if matches!(record.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union) {
+                    self.defined_types.insert(record.name.clone());
+                }
+            }
             Ok(())
-        })().unwrap_or_else(|e| {
+        })()
+        .unwrap_or_else(|e| {
             panic!("Failed to read {}: {}", path.display(), e);
         });
     }
 
     /// Generate `<group>.rs`, panicking on error with detailed path info
-    pub fn make_rs<P: AsRef<Path>>(
-        &self,
-        out_dir: P,
-        group: &str,
-        source_crate: &str,
-    ) -> std::path::PathBuf {
+    pub fn make_rs<P: AsRef<Path>>(&self, group: &str, file_name: P) -> std::path::PathBuf {
+        let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+        let dest_path = PathBuf::from(&out_dir).join(&file_name);
         (|| -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-            let file_name = format!("{}.rs", group);
-            let dest_path = out_dir.as_ref().join(&file_name);
             let mut dest = fs::File::create(&dest_path)?;
-            for record in &self.records {
-                match record.kind {
-                    RecordKind::Function => {
-                        let stub = transform_function_to_stub(&record.content, source_crate, &self.defined_types)?;
-                        writeln!(dest, "{}", stub)?;
-                    }
-                    _ => {
-                        writeln!(dest, "{}", record.content)?;
+            if let Some(group_records) = self.records.get(group) {
+                for record in group_records {
+                    match record.kind {
+                        RecordKind::Function => {
+                            let stub = transform_function_to_stub(
+                                &record.content,
+                                &self.crate_name,
+                                &self.defined_types,
+                            )?;
+                            writeln!(dest, "{}", stub)?;
+                        }
+                        _ => {
+                            writeln!(dest, "{}", record.content)?;
+                        }
                     }
                 }
             }
             dest.flush()?;
-            Ok(dest_path)
-        })().unwrap_or_else(|e| {
-            let path = out_dir.as_ref().join(format!("{}.rs", group));
-            panic!("Failed to generate {}: {}", path.display(), e);
+            Ok(dest_path.clone())
+        })()
+        .unwrap_or_else(|e| {
+            panic!("Failed to generate {}: {}", dest_path.display(), e);
         })
     }
 }

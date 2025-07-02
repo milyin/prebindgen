@@ -2,11 +2,11 @@ use prebindgen::Prebindgen;
 
 fn main() {
     // Initialize Prebindgen and process JSON groups
-    let mut pb = Prebindgen::new();
     // Read JSON output directory from ffi_common buildscript via Cargo metadata
     let src_dir = ffi_common::PREBINDGEN_OUT_DIR;
-    pb.read_json(src_dir, "structs");
-    pb.read_json(src_dir, "functions");
-    pb.make_rs(src_dir, "structs", "ffi_common");
-    pb.make_rs(src_dir, "functions", "ffi_common");
+    let mut pb = Prebindgen::new(src_dir, "ffi_common".to_string());
+    pb.read_json("structs");
+    pb.read_json("functions");
+    pb.make_rs("structs", "ffi_common_structs.rs");
+    pb.make_rs("functions", "ffi_common_functions.rs");
 }
