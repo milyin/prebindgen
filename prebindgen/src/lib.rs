@@ -103,14 +103,14 @@ pub fn init_prebindgen_json() {
         file.flush()?;
         Ok(())
     };
-    
+
     if let Err(e) = init_closure() {
         panic!("Failed to initialize {}: {e}", path.display());
     }
 }
 
 /// Process the prebindgen.json file and write ffi definitions to passed rust file in OUT_DIR.
-/// 
+///
 /// This function:
 /// - Reads the specified prebindgen.json file and adds trailing `]` to complete the JSON array
 /// - Parses the result as JSON, ignoring the first empty record
@@ -120,33 +120,33 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
     let process_closure = || -> Result<(), Box<dyn std::error::Error>> {
         // Read the prebindgen.json file
         let mut content = fs::read_to_string(&prebindgen_json_path)?;
-        
+
         // Add trailing `]` to complete the JSON array
         content.push(']');
-        
+
         // Parse as JSON array
         let records: Vec<Record> = serde_json::from_str(&content)?;
-        
+
         // Skip the first empty record and deduplicate by name
         let mut unique_records = std::collections::HashMap::new();
         for record in records.into_iter().skip(1) {
             unique_records.insert(record.name.clone(), record);
         }
-        
+
         // Write content to destination file
         let out_dir = env::var("OUT_DIR")?;
         let dest_path = Path::new(&out_dir).join(ffi_rs);
         let mut dest_file = fs::File::create(dest_path)?;
-        
+
         for record in unique_records.values() {
             writeln!(dest_file, "{}", record.content)?;
         }
-        
+
         dest_file.flush()?;
         Ok(())
     };
-    
+
     if let Err(e) = process_closure() {
-        panic!("Failed to process prebindgen.json: {}", e);
+        panic!("Failed to process {}: {e}", prebindgen_json_path.as_ref().to_string_lossy());
     }
 }

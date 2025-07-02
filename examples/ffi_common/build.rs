@@ -1,4 +1,6 @@
 fn main() {
+    prebindgen::init_prebindgen_json();
+
     // The code below is ususally not needed in the typical project. It illustrates the spectifc case when
     // build.rs generates the source code for specific the target architecture.
     //
