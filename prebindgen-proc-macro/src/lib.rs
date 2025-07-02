@@ -14,20 +14,17 @@ fn get_prebindgen_json_path(name: &str) -> std::path::PathBuf {
     std::path::Path::new(&out_dir).join(format!("{}.json", name))
 }
 
-/// Attribute macro that copies the annotated struct, enum, union, or function definition in the "source" ffi crate to prebindgen.json in OUT_DIR
+/// Attribute macro that copies the annotated item into `<group>.json` in OUT_DIR.
+/// Requires a string literal group name: `#[prebindgen("group_name")]`.
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
-    // Parse optional JSON basename from macro args, default to "prebindgen"
-    let name = if args.is_empty() {
-        "prebindgen".to_string()
-    } else {
-        syn::parse2::<LitStr>(args.into())
-            .expect("Expected string literal for JSON basename")
-            .value()
-    };
+    // Parse required JSON group name literal
+    let group_lit = syn::parse::<LitStr>(args)
+        .expect("`#[prebindgen]` requires a string literal group name");
+    let group = group_lit.value();
     // Get the full path to the JSON file
-    let file_path = get_prebindgen_json_path(&name);
+    let file_path = get_prebindgen_json_path(&group);
     let dest_path = Path::new(&file_path);
 
     // Try to parse as different item types
