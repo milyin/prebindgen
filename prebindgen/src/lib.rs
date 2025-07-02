@@ -1,7 +1,7 @@
 //! # prebindgen
-//! 
+//!
 //! JSON structure definitions for the prebindgen system.
-//! 
+//!
 //! This crate defines the data structures used to represent struct and enum definitions
 //! in JSON format. These structures are used by the `prebindgen-proc-macro` crate
 //! to serialize code definitions and by build scripts to deserialize and process them.
@@ -21,7 +21,7 @@
 //! // Parse a JSON line into a Record
 //! let json_line = r#"{"kind":"struct","name":"MyStruct","content":"pub struct MyStruct { ... }"}"#;
 //! let record: Record = serde_json::from_str(json_line)?;
-//! 
+//!
 //! assert_eq!(record.kind, RecordKind::Struct);
 //! assert_eq!(record.name, "MyStruct");
 //! # Ok::<(), serde_json::Error>(())
@@ -29,6 +29,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 /// Represents a record of a struct, enum, or union definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -56,7 +59,11 @@ pub enum RecordKind {
 impl Record {
     /// Create a new record
     pub fn new(kind: RecordKind, name: String, content: String) -> Self {
-        Self { kind, name, content }
+        Self {
+            kind,
+            name,
+            content,
+        }
     }
 }
 
@@ -70,13 +77,33 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
-/// Get the full path to the file prebindgen.json 
+/// Get the full path to the file prebindgen.json
 /// generated in OUT_DIR by #[prebindgen] macro.
-/// 
+///
 /// This function primarily used internally,
 /// but is also available for debugging or testing purposes.
 pub fn get_prebindgen_json_path() -> String {
     let out_dir = env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
     format!("{}/prebindgen.json", out_dir)
+}
+
+/// Initialize the prebindgen.json file by cleaning it up and adding "[" to the first line.
+/// This function should be called in build.rs instead of deleting the prebindgen.json file.
+///
+/// This prepares the file to collect JSON records in an array format.
+pub fn init_prebindgen_json() {
+    let path = get_prebindgen_json_path();
+    let init_closure = || -> Result<(), Box<dyn std::error::Error>> {
+        let path = Path::new(&path);
+        // Write "[" to the file to start a JSON array
+        let mut file = fs::File::create(path)?;
+        file.write_all(b"[")?;
+        file.flush()?;
+        Ok(())
+    };
+    
+    if let Err(e) = init_closure() {
+        panic!("Failed to initialize {path}: {e}");
+    }
 }
