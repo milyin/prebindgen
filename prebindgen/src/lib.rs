@@ -26,10 +26,6 @@
 //! assert_eq!(record.name, "MyStruct");
 //! # Ok::<(), serde_json::Error>(())
 //! ```
-//!
-//! The crate also provides utility functions for working with the prebindgen system:
-//! 
-//! - [`get_prebindgen_file_path`]: Get the path to the prebindgen JSON file
 
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -74,16 +70,12 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
-/// Get the full path to the prebindgen.json file from OUT_DIR
+/// Get the full path to the file prebindgen.json 
+/// generated in OUT_DIR by #[prebindgen] macro.
 /// 
-/// This function is used by both the proc-macro and build scripts to determine
-/// where to write/read the prebindgen JSON file.
-/// 
-/// # Panics
-/// 
-/// Panics if the `OUT_DIR` environment variable is not set, which means 
-/// a `build.rs` file is not defined in the project.
-pub fn get_prebindgen_file_path() -> String {
+/// This function primarily used internally,
+/// but is also available for debugging or testing purposes.
+pub fn get_prebindgen_json_path() -> String {
     let out_dir = env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
     format!("{}/prebindgen.json", out_dir)

@@ -36,7 +36,7 @@
 //! const PREBINDGEN_FILE: &str = prebindgen_path!();
 //! ```
 
-use prebindgen::{Record, RecordKind, get_prebindgen_file_path};
+use prebindgen::{Record, RecordKind, get_prebindgen_json_path};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::fs::OpenOptions;
@@ -51,7 +51,7 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as DeriveInput);
 
     // Get the full path to the prebindgen.json file
-    let file_path = get_prebindgen_file_path();
+    let file_path = get_prebindgen_json_path();
     let dest_path = Path::new(&file_path);
 
     // Determine the record kind
@@ -94,7 +94,7 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
     // Use the helper function to get the file path
-    let file_path = get_prebindgen_file_path();
+    let file_path = get_prebindgen_json_path();
 
     // Return just the string literal
     let expanded = quote! {
