@@ -82,10 +82,10 @@ impl std::fmt::Display for RecordKind {
 ///
 /// This function primarily used internally,
 /// but is also available for debugging or testing purposes.
-pub fn get_prebindgen_json_path() -> String {
+pub fn get_prebindgen_json_path() -> std::path::PathBuf {
     let out_dir = env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    format!("{}/prebindgen.json", out_dir)
+    Path::new(&out_dir).join("prebindgen.json")
 }
 
 /// Initialize the prebindgen.json file by cleaning it up and adding "[" to the first line.
@@ -95,15 +95,14 @@ pub fn get_prebindgen_json_path() -> String {
 pub fn init_prebindgen_json() {
     let path = get_prebindgen_json_path();
     let init_closure = || -> Result<(), Box<dyn std::error::Error>> {
-        let path = Path::new(&path);
         // Write "[" to the file to start a JSON array
-        let mut file = fs::File::create(path)?;
+        let mut file = fs::File::create(&path)?;
         file.write_all(b"[")?;
         file.flush()?;
         Ok(())
     };
     
     if let Err(e) = init_closure() {
-        panic!("Failed to initialize {path}: {e}");
+        panic!("Failed to initialize {}: {e}", path.display());
     }
 }
