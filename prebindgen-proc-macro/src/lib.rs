@@ -7,8 +7,8 @@ use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, ItemFn};
 
-/// Get the full path to `{group}_{pid}_{thread_id}.json` generated in OUT_DIR.
-fn get_prebindgen_json_path(name: &str) -> std::path::PathBuf {
+/// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
+fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
     let thread_id = std::thread::current().id();
     let process_id = std::process::id();
     // Extract numeric thread ID from ThreadId debug representation
@@ -17,7 +17,7 @@ fn get_prebindgen_json_path(name: &str) -> std::path::PathBuf {
         .strip_prefix("ThreadId(")
         .and_then(|s| s.strip_suffix(")"))
         .unwrap_or("0");
-    get_prebindgen_out_dir().join(format!("{}_{}_{}.json", name, process_id, thread_id_num))
+    get_prebindgen_out_dir().join(format!("{}_{}_{}.jsonl", name, process_id, thread_id_num))
 }
 
 #[proc_macro]
@@ -33,7 +33,7 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Attribute macro that copies the annotated item into `<group>.json` in OUT_DIR.
+/// Attribute macro that copies the annotated item into `<group>.jsonl` in OUT_DIR.
 /// Requires a string literal group name: `#[prebindgen("group_name")]`.
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -42,8 +42,8 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let group_lit = syn::parse::<LitStr>(args)
         .expect("`#[prebindgen]` requires a string literal group name");
     let group = group_lit.value();
-    // Get the full path to the JSON file
-    let file_path = get_prebindgen_json_path(&group);
+    // Get the full path to the JSONL file
+    let file_path = get_prebindgen_jsonl_path(&group);
     let dest_path = Path::new(&file_path);
 
     // Try to parse as different item types
@@ -75,20 +75,19 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     // Create the new record
     let new_record = Record::new(kind, name, content);
 
-    // Convert record to JSON and append to file
+    // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(dest_path) {
             // Check if file is empty (just created or was deleted)
             let is_empty = metadata(dest_path).map(|m| m.len() == 0).unwrap_or(true);
 
             if is_empty {
-                // Write opening bracket for JSON array
-                trace!("Creating json file: {}", dest_path.display());
-                let _ = write!(file, "[{},", json_content);
-            } else {
-                // Just append the record with comma
-                let _ = write!(file, "{},", json_content);
+                // Create new JSONL file
+                trace!("Creating jsonl file: {}", dest_path.display());
             }
+            
+            // Write the record as a single line (JSON-lines format)
+            let _ = writeln!(file, "{}", json_content);
             let _ = file.flush();
         }
     }

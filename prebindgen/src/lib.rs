@@ -1,13 +1,13 @@
 //! # prebindgen
 //!
-//! JSON structure definitions for the prebindgen system.
+//! JSON-lines structure definitions for the prebindgen system.
 //!
 //! This crate defines the data structures used to represent struct, enum, union, and function definitions
-//! in JSON format. These structures are used by the `prebindgen-proc-macro` crate
+//! in JSON-lines format. These structures are used by the `prebindgen-proc-macro` crate
 //! to serialize code definitions and by build scripts to deserialize and process them.
 //!
-//! The JSON format is JSON-lines where each line contains a separate record:
-//! ```json
+//! The JSON-lines format stores each record as a separate JSON object on its own line:
+//! ```jsonl
 //! {"kind": "struct", "name": "MyStruct", "content": "pub struct MyStruct { ... }"}
 //! {"kind": "enum", "name": "MyEnum", "content": "pub enum MyEnum { ... }"}
 //! {"kind": "function", "name": "my_function", "content": "pub fn my_function() { ... }"}
@@ -16,16 +16,24 @@
 //! ## Usage
 //!
 //! ```rust
-//! use prebindgen::{Record, RecordKind};
+//! use prebindgen::{Record, RecordKind, read_jsonl_file, write_jsonl_file};
 //! use serde_json;
 //!
-//! // Parse a JSON line into a Record
+//! // Parse a single JSON line into a Record
 //! let json_line = r#"{"kind":"struct","name":"MyStruct","content":"pub struct MyStruct { ... }"}"#;
 //! let record: Record = serde_json::from_str(json_line)?;
 //!
 //! assert_eq!(record.kind, RecordKind::Struct);
 //! assert_eq!(record.name, "MyStruct");
-//! # Ok::<(), serde_json::Error>(())
+//!
+//! // Write records to a JSON-lines file
+//! let records = vec![record];
+//! write_jsonl_file("output.jsonl", &records)?;
+//!
+//! // Read records from a JSON-lines file
+//! let loaded_records = read_jsonl_file("output.jsonl")?;
+//! assert_eq!(loaded_records.len(), 1);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 use core::panic;
@@ -33,6 +41,14 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
+
+mod jsonl;
+pub use jsonl::{read_jsonl_file, write_jsonl_file};
+
+/// File extension for JSON-lines files
+const JSONL_EXTENSION: &str = ".jsonl";
+/// Name of the prebindgen output directory
+const PREBINDGEN_DIR: &str = "prebindgen";
 
 /// Represents a record of a struct, enum, union, or function definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -68,6 +84,11 @@ impl Record {
             content,
         }
     }
+
+    /// Serialize this record to a JSON-lines compatible string
+    pub fn to_jsonl_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
 }
 
 impl std::fmt::Display for RecordKind {
@@ -92,11 +113,12 @@ macro_rules! trace {
         );
     };
 }
-/// Get the full path to `<name>.json` generated in OUT_DIR.
+/// Get the full path to the prebindgen output directory in OUT_DIR.
+/// This directory contains generated `.jsonl` files with exported definitions.
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
     let out_dir = std::env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    std::path::Path::new(&out_dir).join("prebindgen")
+    std::path::Path::new(&out_dir).join(PREBINDGEN_DIR)
 }
 
 pub fn init_prebindgen() {
@@ -142,7 +164,7 @@ impl Prebindgen {
         }
     }
 
-    /// Read all JSON files matching the group name pattern `<group>_*.json`, panicking on error with detailed path info
+    /// Read all JSONL files matching the group name pattern `<group>_*.jsonl`, panicking on error with detailed path info
     pub fn read(&mut self, group: &str) {
         let pattern = format!("{}_", group);
         let mut record_map = std::collections::HashMap::new();
@@ -152,25 +174,21 @@ impl Prebindgen {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.starts_with(&pattern) && file_name.ends_with(".json") {
-                        trace!("Reading file: {}", path.display());
+                    if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
+                        trace!("Reading JSONL file: {}", path.display());
                         let path_clone = path.clone();
-                        (|| -> Result<(), Box<dyn std::error::Error>> {
-                            let mut content = fs::read_to_string(&path)?;
-                            if content.ends_with(',') {
-                                content.pop();
+                        
+                        match jsonl::read_jsonl_file(&path) {
+                            Ok(records) => {
+                                for record in records {
+                                    // Use HashMap to deduplicate records by name
+                                    record_map.insert(record.name.clone(), record);
+                                }
                             }
-                            content.push(']');
-                            let parsed: Vec<Record> = serde_json::from_str(&content)?;
-                            for record in parsed {
-                                // Use HashMap to deduplicate records by name
-                                record_map.insert(record.name.clone(), record);
+                            Err(e) => {
+                                panic!("Failed to read {}: {}", path_clone.display(), e);
                             }
-                            Ok(())
-                        })()
-                        .unwrap_or_else(|e| {
-                            panic!("Failed to read {}: {}", path_clone.display(), e);
-                        });
+                        }
                     }
                 }
             }
