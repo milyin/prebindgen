@@ -95,6 +95,7 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
 pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
     // Use the helper function to get the file path
     let file_path = get_prebindgen_json_path();
+    let file_path = file_path.to_string_lossy();
 
     // Return just the string literal
     let expanded = quote! {
