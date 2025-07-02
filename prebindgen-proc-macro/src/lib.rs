@@ -1,41 +1,3 @@
-//! # prebindgen-proc-macro
-//!
-//! Proc-macro crate that provides the `#[prebindgen]` attribute macro for copying
-//! struct and enum definitions to a JSON file during compilation, and `prebindgen_path!`
-//! for accessing the destination file path.
-//!
-//! This crate requires the `OUT_DIR` environment variable to be set, which means
-//! you need to have a `build.rs` file in your project (even if it's empty).
-//!
-//! The macro saves records as JSON-lines format where each line is a separate JSON object:
-//! ```json
-//! {"kind": "struct", "name": "MyStruct", "content": "pub struct MyStruct { ... }"}
-//! {"kind": "enum", "name": "MyEnum", "content": "pub enum MyEnum { ... }"}
-//! ```
-//!
-//! ## Usage
-//!
-//! ```rust,ignore
-//! use prebindgen_proc_macro::{prebindgen, prebindgen_path};
-//!
-//! #[prebindgen]
-//! #[derive(Debug, Clone)]
-//! pub struct MyStruct {
-//!     pub name: String,
-//!     pub value: i32,
-//! }
-//!
-//! #[prebindgen]
-//! #[derive(Debug, PartialEq)]
-//! pub enum MyEnum {
-//!     Variant1,
-//!     Variant2(String),
-//! }
-//!
-//! // Get the prebindgen file path as a string
-//! const PREBINDGEN_FILE: &str = prebindgen_path!();
-//! ```
-
 use prebindgen::{Record, RecordKind, get_prebindgen_json_path};
 use proc_macro::TokenStream;
 use quote::quote;
@@ -44,7 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, parse_macro_input};
 
-/// Attribute macro that copies the annotated struct or enum definition to prebindgen.json in OUT_DIR
+/// Attribute macro that copies the annotated struct or enum definition in the "source" ffi crate to prebindgen.json in OUT_DIR
 #[proc_macro_attribute]
 pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
@@ -81,18 +43,20 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     input_clone
 }
 
-/// Proc-macro that returns the prebindgen file path as a string literal
+/// Proc-macro that returns the prebindgen json file path as a string literal
 ///
-/// Usage:
+/// It should be used in the "source" ffi crate like this:
 /// ```rust,ignore
-/// use prebindgen_proc_macro::prebindgen_path;
+/// use prebindgen_proc_macro::prebindgen_json_path;
 ///
-/// const PREBINDGEN_FILE: &str = prebindgen_path!();
-/// // or
-/// let path = prebindgen_path!();
+/// const PREBINDGEN_JSON: &str = prebindgen_json_path!();
 /// ```
+///
+/// This constant should be passed to `prebindgen_json_to_rs` function in the build.rs
+/// of the "destination" ffi crate to generate the no-mangle extern "C" bindings to
+/// the generated Rust code.
 #[proc_macro]
-pub fn prebindgen_path(_input: TokenStream) -> TokenStream {
+pub fn prebindgen_json_path(_input: TokenStream) -> TokenStream {
     // Use the helper function to get the file path
     let file_path = get_prebindgen_json_path();
     let file_path = file_path.to_string_lossy();

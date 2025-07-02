@@ -1,7 +1,7 @@
 //! Test structures binary for integration testing
 //! This generates the prebindgen.json file that tests can examine
 
-use prebindgen_proc_macro::{prebindgen, prebindgen_path};
+use prebindgen_proc_macro::{prebindgen, prebindgen_json_path};
 
 // Define test structures that will be processed by prebindgen
 #[prebindgen]
@@ -52,7 +52,7 @@ pub enum PathTestEnum {
 }
 
 // Generate path constant for tests
-pub const TEST_PATH: &str = prebindgen_path!();
+pub const TEST_PATH: &str = prebindgen_json_path!();
 
 pub fn main() {
     println!("Test structures binary executed");

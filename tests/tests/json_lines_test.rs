@@ -1,7 +1,7 @@
 #[test]
 fn test_json_lines_format() {
     // Get the path where prebindgen writes files
-    let test_path = prebindgen_proc_macro::prebindgen_path!();
+    let test_path = prebindgen_proc_macro::prebindgen_json_path!();
     
     // Check if the file exists (it should since we've built the test_structures binary)
     if std::path::Path::new(&test_path).exists() {
@@ -46,7 +46,7 @@ fn test_json_lines_format() {
 #[test]
 fn test_no_deduplication() {
     // This test verifies that records are appended without deduplication
-    let test_path = prebindgen_proc_macro::prebindgen_path!();
+    let test_path = prebindgen_proc_macro::prebindgen_json_path!();
     
     if std::path::Path::new(&test_path).exists() {
         let content = std::fs::read_to_string(test_path)
@@ -89,7 +89,7 @@ fn test_no_deduplication() {
 #[test]
 fn test_append_only_behavior() {
     // This test verifies that the macro appends to the file without reading it first
-    let test_path = prebindgen_proc_macro::prebindgen_path!();
+    let test_path = prebindgen_proc_macro::prebindgen_json_path!();
     
     if std::path::Path::new(&test_path).exists() {
         let content = std::fs::read_to_string(test_path)

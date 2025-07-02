@@ -3,8 +3,8 @@ use std::fs;
 use std::env;
 
 // Generate path constants
-const CUSTOM_PATH: &str = prebindgen_path!();
-const PREBINDGEN_PATH: &str = prebindgen_path!();
+const CUSTOM_PATH: &str = prebindgen_json_path!();
+const PREBINDGEN_PATH: &str = prebindgen_json_path!();
 
 #[test]
 fn test_path_constant_generation() {

@@ -1,4 +1,7 @@
 fn main() {
+    // The code below is ususally not needed in the typical project. It illustrates the spectifc case when
+    // build.rs generates the source code for specific the target architecture.
+    //
     // Simulate the case when part of the source code is generated in ffi_common/build.rs and this code
     // depends on the target architecture.
     // In this case the ffi_common/build.rs is called twice:

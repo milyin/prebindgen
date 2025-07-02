@@ -1,6 +1,6 @@
-use prebindgen_proc_macro::{prebindgen, prebindgen_path};
+use prebindgen_proc_macro::{prebindgen, prebindgen_json_path};
 
-pub const GENERATED_PATH: &str = prebindgen_path!();
+pub const PREBINDGEN_JSON: &str = prebindgen_json_path!();
 
 // Simulate the situation when part of the ffi code is generated
 // on build.rs stage. This may cause the problem with cross-compilation, 

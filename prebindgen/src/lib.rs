@@ -112,15 +112,14 @@ pub fn init_prebindgen_json() {
 /// Process the prebindgen.json file and write ffi definitions to passed rust file in OUT_DIR.
 /// 
 /// This function:
-/// - Reads the prebindgen.json file and adds trailing `]` to complete the JSON array
+/// - Reads the specified prebindgen.json file and adds trailing `]` to complete the JSON array
 /// - Parses the result as JSON, ignoring the first empty record
 /// - Deduplicates records by name (later records override earlier ones)
 /// - Writes the content of all records to OUT_DIR/{ffi_rs}
-pub fn process_prebindgen_json(ffi_rs: &str) {
+pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &str) {
     let process_closure = || -> Result<(), Box<dyn std::error::Error>> {
         // Read the prebindgen.json file
-        let prebindgen_path = get_prebindgen_json_path();
-        let mut content = fs::read_to_string(&prebindgen_path)?;
+        let mut content = fs::read_to_string(&prebindgen_json_path)?;
         
         // Add trailing `]` to complete the JSON array
         content.push(']');
