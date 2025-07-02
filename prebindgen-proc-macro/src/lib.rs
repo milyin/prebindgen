@@ -1,7 +1,7 @@
 use prebindgen::{Record, RecordKind, get_prebindgen_json_path};
 use proc_macro::TokenStream;
 use quote::quote;
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, ItemFn};
@@ -10,7 +10,7 @@ use syn::{DeriveInput, ItemFn};
 #[proc_macro_attribute]
 pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
-    
+
     // Get the full path to the prebindgen.json file
     let file_path = get_prebindgen_json_path();
     let dest_path = Path::new(&file_path);
@@ -31,7 +31,11 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
         let mut fn_sig = parsed.clone();
         fn_sig.block = syn::parse_quote! {{ /* placeholder */ }};
         let tokens = quote! { #fn_sig };
-        (RecordKind::Function, parsed.sig.ident.to_string(), tokens.to_string())
+        (
+            RecordKind::Function,
+            parsed.sig.ident.to_string(),
+            tokens.to_string(),
+        )
     } else {
         // If we can't parse it, return the original input and skip processing
         return input_clone;
@@ -43,7 +47,16 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
     // Convert record to JSON and append to file
     if let Ok(json_content) = serde_json::to_string(&new_record) {
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(dest_path) {
-            let _ = write!(file, "{},", json_content);
+            // Check if file is empty (just created or was deleted)
+            let is_empty = metadata(dest_path).map(|m| m.len() == 0).unwrap_or(true);
+
+            if is_empty {
+                // Write opening bracket for JSON array
+                let _ = write!(file, "[{},", json_content);
+            } else {
+                // Just append the record with comma
+                let _ = write!(file, "{},", json_content);
+            }
             let _ = file.flush();
         }
     }
