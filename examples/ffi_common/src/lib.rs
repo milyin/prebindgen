@@ -1,8 +1,4 @@
-use std::env;
-
 use prebindgen_proc_macro::prebindgen;
-
-pub const OUT_DIR: &str = env!("OUT_DIR");
 
 // Simulate the situation when part of the ffi code is generated
 // on build.rs stage. This may cause the problem with cross-compilation, 

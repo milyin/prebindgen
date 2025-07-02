@@ -1,4 +1,4 @@
-use prebindgen::{Record, RecordKind};
+use prebindgen::{trace, Record, RecordKind};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::LitStr;
@@ -64,6 +64,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 
             if is_empty {
                 // Write opening bracket for JSON array
+                trace!("Creating json file: {}", dest_path.display());
                 let _ = write!(file, "[{},", json_content);
             } else {
                 // Just append the record with comma

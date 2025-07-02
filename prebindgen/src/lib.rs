@@ -132,70 +132,61 @@ impl Prebindgen {
         }
     }
 
-    /// Read `<group>.json` from the given directory and populate records and defined types
-    pub fn read_json_with_err<P: AsRef<Path>>(
-        &mut self,
-        dir: P,
-        group: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    /// Read `<group>.json`, panicking on error with detailed path info
+    pub fn read_json<P: AsRef<Path>>(&mut self, dir: P, group: &str) {
         let path = dir.as_ref().join(format!("{}.json", group));
-        let mut content = fs::read_to_string(&path)?;
-        if content.ends_with(',') {
-            content.pop();
-        }
-        content.push(']');
-        let parsed: Vec<Record> = serde_json::from_str(&content)?;
-        let mut map = std::collections::HashMap::new();
-        for record in parsed {
-            map.insert(record.name.clone(), record);
-        }
-        self.records = map.values().cloned().collect();
-        self.defined_types = self
-            .records
-            .iter()
-            .filter(|r| matches!(r.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union))
-            .map(|r| r.name.clone())
-            .collect();
-        Ok(())
+        (|| -> Result<(), Box<dyn std::error::Error>> {
+            let mut content = fs::read_to_string(&path)?;
+            if content.ends_with(',') {
+                content.pop();
+            }
+            content.push(']');
+            let parsed: Vec<Record> = serde_json::from_str(&content)?;
+            let mut map = std::collections::HashMap::new();
+            for record in parsed {
+                map.insert(record.name.clone(), record);
+            }
+            self.records = map.values().cloned().collect();
+            self.defined_types = self
+                .records
+                .iter()
+                .filter(|r| matches!(r.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union))
+                .map(|r| r.name.clone())
+                .collect();
+            Ok(())
+        })().unwrap_or_else(|e| {
+            panic!("Failed to read {}: {}", path.display(), e);
+        });
     }
 
-    /// Generate `<group>.rs` from loaded records, writing to OUT_DIR and returning its path
-    pub fn make_rs_with_err<P: AsRef<Path>>(
+    /// Generate `<group>.rs`, panicking on error with detailed path info
+    pub fn make_rs<P: AsRef<Path>>(
         &self,
         out_dir: P,
         group: &str,
         source_crate: &str,
-    ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-        let file_name = format!("{}.rs", group);
-        let dest_path = out_dir.as_ref().join(&file_name);
-        let mut dest = fs::File::create(&dest_path)?;
-        for record in &self.records {
-            match record.kind {
-                RecordKind::Function => {
-                    let stub = transform_function_to_stub(&record.content, source_crate, &self.defined_types)?;
-                    writeln!(dest, "{}", stub)?;
-                }
-                _ => {
-                    writeln!(dest, "{}", record.content)?;
+    ) -> std::path::PathBuf {
+        (|| -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+            let file_name = format!("{}.rs", group);
+            let dest_path = out_dir.as_ref().join(&file_name);
+            let mut dest = fs::File::create(&dest_path)?;
+            for record in &self.records {
+                match record.kind {
+                    RecordKind::Function => {
+                        let stub = transform_function_to_stub(&record.content, source_crate, &self.defined_types)?;
+                        writeln!(dest, "{}", stub)?;
+                    }
+                    _ => {
+                        writeln!(dest, "{}", record.content)?;
+                    }
                 }
             }
-        }
-        dest.flush()?;
-        Ok(dest_path)
-    }
-    /// Read `<group>.json`, panicking on error with a detailed message
-    pub fn read_json<P: AsRef<Path>>(&mut self, dir: P, group: &str) {
-        if let Err(e) = self.read_json_with_err(dir, group) {
-            panic!("Failed to read {}.json: {}", group, e);
-        }
-    }
-
-    /// Generate `<group>.rs`, panicking on error with a detailed message, returns the path
-    pub fn make_rs<P: AsRef<Path>>(&self, out_dir: P, group: &str, source_crate: &str) -> std::path::PathBuf {
-        match self.make_rs_with_err(out_dir, group, source_crate) {
-            Ok(path) => path,
-            Err(e) => panic!("Failed to generate {}.rs: {}", group, e),
-        }
+            dest.flush()?;
+            Ok(dest_path)
+        })().unwrap_or_else(|e| {
+            let path = out_dir.as_ref().join(format!("{}.rs", group));
+            panic!("Failed to generate {}: {}", path.display(), e);
+        })
     }
 }
 
