@@ -94,23 +94,14 @@ macro_rules! trace {
     };
 }
 
-/// Get the full path to the file prebindgen.json
-/// generated in OUT_DIR by #[prebindgen] macro.
-///
-/// This function primarily used internally,
-/// but is also available for debugging or testing purposes.
-pub fn get_prebindgen_json_path() -> std::path::PathBuf {
-    let out_dir = env::var("OUT_DIR")
-        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    Path::new(&out_dir).join("prebindgen.json")
-}
-
 /// Initialize the prebindgen.json file by deleting it.
 /// This function should be called in build.rs to clean up any existing prebindgen.json file.
 ///
 /// The prebindgen macro will handle writing the opening "[" when it encounters an empty file.
 pub fn init_prebindgen_json() {
-    let path = get_prebindgen_json_path();
+    // Construct the path to prebindgen.json based on OUT_DIR
+    let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set.");
+    let path = Path::new(&out_dir).join("prebindgen.json");
 
     if path.exists() {
         if let Err(e) = fs::remove_file(&path) {
@@ -125,22 +116,23 @@ pub fn init_prebindgen_json() {
     }
 }
 
-/// Process the prebindgen.json file and write ffi definitions to passed rust file in OUT_DIR.
+/// Process the `prebindgen.json` file in the given directory and write ffi definitions to the specified Rust file in OUT_DIR.
 ///
 /// This function:
-/// - Reads the specified prebindgen.json file and adds trailing `]` to complete the JSON array
+/// - Reads the `prebindgen.json` file from the given directory and adds trailing `]` to complete the JSON array
 /// - Parses the result as JSON, ignoring the first empty record
 /// - Deduplicates records by name (later records override earlier ones)
 /// - Writes the content of all records to OUT_DIR/{ffi_rs}
 /// - For functions, generates extern "C" stubs that call the original functions from the source crate
 pub fn prebindgen_json_to_rs<P: AsRef<Path>>(
-    prebindgen_json_path: P,
+    prebindgen_json_dir: P,
     ffi_rs: &str,
     source_crate: &str,
 ) {
     let process_closure = || -> Result<(), Box<dyn std::error::Error>> {
-        // Read the prebindgen.json file
-        trace!("Reading: {}", prebindgen_json_path.as_ref().display());
+        // Build path to prebindgen.json
+        let prebindgen_json_path = prebindgen_json_dir.as_ref().join("prebindgen.json");
+        trace!("Reading: {}", prebindgen_json_path.display());
         let mut content = fs::read_to_string(&prebindgen_json_path)?;
 
         // Replace last trailing comma to `]` to complete the JSON array
@@ -198,7 +190,10 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(
     if let Err(e) = process_closure() {
         panic!(
             "Failed to process {}: {e}",
-            prebindgen_json_path.as_ref().to_string_lossy()
+            prebindgen_json_dir
+                .as_ref()
+                .join("prebindgen.json")
+                .display()
         );
     }
 }

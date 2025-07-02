@@ -1,10 +1,18 @@
-use prebindgen::{Record, RecordKind, get_prebindgen_json_path};
+use prebindgen::{Record, RecordKind};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, ItemFn};
+
+/// Get the full path to the file prebindgen.json generated in OUT_DIR.
+/// Local helper moved from prebindgen crate.
+fn get_prebindgen_json_path() -> std::path::PathBuf {
+    let out_dir = std::env::var("OUT_DIR")
+        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    std::path::Path::new(&out_dir).join("prebindgen.json")
+}
 
 /// Attribute macro that copies the annotated struct, enum, union, or function definition in the "source" ffi crate to prebindgen.json in OUT_DIR
 #[proc_macro_attribute]
@@ -63,30 +71,4 @@ pub fn prebindgen(_args: TokenStream, input: TokenStream) -> TokenStream {
 
     // Return the original input unchanged
     input_clone
-}
-
-/// Proc-macro that returns the prebindgen json file path as a string literal
-///
-/// It should be used in the "source" ffi crate like this:
-/// ```rust,ignore
-/// use prebindgen_proc_macro::prebindgen_json_path;
-///
-/// const PREBINDGEN_JSON: &str = prebindgen_json_path!();
-/// ```
-///
-/// This constant should be passed to `prebindgen_json_to_rs` function in the build.rs
-/// of the "destination" ffi crate to generate the no-mangle extern "C" bindings to
-/// the generated Rust code.
-#[proc_macro]
-pub fn prebindgen_json_path(_input: TokenStream) -> TokenStream {
-    // Use the helper function to get the file path
-    let file_path = get_prebindgen_json_path();
-    let file_path = file_path.to_string_lossy();
-
-    // Return just the string literal
-    let expanded = quote! {
-        #file_path
-    };
-
-    TokenStream::from(expanded)
 }
