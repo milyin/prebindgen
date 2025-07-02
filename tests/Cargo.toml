@@ -5,12 +5,12 @@ edition = "2024"
 publish = false
 
 [dependencies]
-prebindgen = { path = ".." }
-prebindgen-proc-macro = { path = "../prebindgen-proc-macro" }
+prebindgen = { workspace = true }
+prebindgen-proc-macro = { workspace = true }
 serde_json = "1.0"
 
 [build-dependencies]
-prebindgen = { path = ".." }
+prebindgen = { workspace = true }
 
 [[bin]]
 name = "test_structures"
