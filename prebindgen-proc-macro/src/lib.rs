@@ -1,4 +1,4 @@
-use prebindgen::{trace, Record, RecordKind};
+use prebindgen::{get_prebindgen_out_dir, trace, Record, RecordKind};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::LitStr;
@@ -9,9 +9,20 @@ use syn::{DeriveInput, ItemFn};
 
 /// Get the full path to `<name>.json` generated in OUT_DIR.
 fn get_prebindgen_json_path(name: &str) -> std::path::PathBuf {
-    let out_dir = std::env::var("OUT_DIR")
-        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-    std::path::Path::new(&out_dir).join(format!("{}.json", name))
+    get_prebindgen_out_dir().join(format!("{}.json", name))
+}
+
+#[proc_macro]
+pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
+    let file_path = get_prebindgen_out_dir();
+    let path_str = file_path.to_string_lossy();
+
+    // Return just the string literal
+    let expanded = quote! {
+        #path_str
+    };
+
+    TokenStream::from(expanded)
 }
 
 /// Attribute macro that copies the annotated item into `<group>.json` in OUT_DIR.

@@ -93,26 +93,30 @@ macro_rules! trace {
         );
     };
 }
+/// Get the full path to `<name>.json` generated in OUT_DIR.
+pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
+    let out_dir = std::env::var("OUT_DIR")
+        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    std::path::Path::new(&out_dir).join("prebindgen")
+}
 
-/// Initialize the JSON file by deleting it. The file name is `<group>.json` in OUT_DIR.
-/// This function should be called in build.rs to clean up any existing prebindgen.json file.
-///
-/// The prebindgen macro will handle writing the opening "[" when it encounters an empty file.
-pub fn init_prebindgen_json(group: &str) {
-    let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set.");
-    let path = Path::new(&out_dir).join(format!("{}.json", group));
-
-    if path.exists() {
-        if let Err(e) = fs::remove_file(&path) {
-            panic!("Failed to delete {}: {e}", path.display());
+pub fn init_prebindgen() {
+    // delete all files in the prebindgen directory
+    let prebindgen_dir = get_prebindgen_out_dir();
+    if prebindgen_dir.exists() {
+        for entry in fs::read_dir(&prebindgen_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_file() {
+                fs::remove_file(&path).unwrap_or_else(|e| {
+                    panic!("Failed to delete {}: {}", path.display(), e);
+                });
+            }
         }
-        trace!("Deleted existing prebindgen.json at: {}", path.display());
     } else {
-        trace!(
-            "No existing {}.json to delete at: {}",
-            group,
-            path.display()
-        );
+        fs::create_dir_all(&prebindgen_dir).unwrap_or_else(|e| {
+            panic!("Failed to create prebindgen directory {}: {}", prebindgen_dir.display(), e);
+        });
     }
 }
 

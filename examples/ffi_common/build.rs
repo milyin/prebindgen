@@ -1,8 +1,7 @@
 fn main() {
-    prebindgen::init_prebindgen_json("structs");
-    prebindgen::init_prebindgen_json("functions");
+    prebindgen::init_prebindgen();
 
-    // The code below is ususally not needed in the typical project. It illustrates the spectifc case when
+    // The code below is usually not needed in the typical project. It illustrates the specific case when
     // build.rs generates the source code for specific the target architecture.
     //
     // Simulate the case when part of the source code is generated in ffi_common/build.rs and this code
@@ -35,6 +34,4 @@ fn main() {
         generate_for_target(&target);
     }
     generate_for_target(&std::env::var("TARGET").unwrap());
-    // Provide JSON output directory to dependent build scripts; downstream sees DEP_FFI_COMMON_JSON_OUT_DIR
-    println!("cargo:json-out-dir={}", out_dir);
 }
