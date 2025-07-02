@@ -288,10 +288,8 @@ fn transform_function_to_stub(
     // Build the no_mangle extern "C" function
     let stub = quote::quote! {
         #[unsafe(no_mangle)]
-        #vis extern "C" fn #fn_name(#(#extern_inputs),*) #output {
-            unsafe {
-                #function_body
-            }
+        #vis unsafe extern "C" fn #fn_name(#(#extern_inputs),*) #output {
+            #function_body
         }
     };
     

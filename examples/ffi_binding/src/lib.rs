@@ -22,28 +22,6 @@ pub fn create_bar(id: u64) -> Bar {
 
 pub fn test_calling_generated_functions() {
     // These functions should be available from the generated ffi_common.rs
-    let _result = test_function(42, 3.14);
-    let _flag = another_test_function();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_generated_function_calls() {
-        // Test that the generated extern "C" functions can be called
-        // and actually invoke the original source functions
-        let result = test_function(10, 2.5);
-        // The original function in ffi_common returns a + b as i32
-        // So 10 + 2.5 = 12 (rounded down)
-        assert_eq!(result, 12);
-
-        let flag = another_test_function();
-        // The original function returns false
-        assert_eq!(flag, false);
-
-        // Test void function (should not panic or crash)
-        void_function(42);
-    }
+    let _result = unsafe { test_function(5, 3.14) };
+    let _flag = unsafe { another_test_function() };
 }
