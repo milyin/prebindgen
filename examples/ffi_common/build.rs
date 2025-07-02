@@ -26,7 +26,9 @@ fn main() {
             panic!("Unsupported architecture: {}", target);
         };
         // write with append
-        std::fs::write(format!("{}/generated.rs", out_dir), bar).unwrap();
+        let bar_rs = format!("{}/bar.rs", out_dir);
+        prebindgen::trace!("Generating {bar_rs} for target: {target}");
+        std::fs::write(bar_rs, bar).unwrap();
     };
     if let Ok(target) = std::env::var("PREBINDGEN_TARGET") {
         generate_for_target(&target);

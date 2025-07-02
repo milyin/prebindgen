@@ -8,7 +8,7 @@ pub const PREBINDGEN_JSON: &str = prebindgen_json_path!();
 // `#[prebindgen]` macro and available by `prebindgen_path!()` macro
 // is correct for the target architecture.
 // See build.rs for details.
-include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+include!(concat!(env!("OUT_DIR"), "/bar.rs"));
 
 #[prebindgen]
 #[repr(C)]

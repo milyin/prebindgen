@@ -28,6 +28,7 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+use core::panic;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -77,6 +78,18 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
+#[macro_export]
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        #[cfg(debug_assertions)]
+        println!("cargo:warning=[{}:{}] {}", 
+            file!().split('/').last().unwrap_or(file!()), 
+            line!(), 
+            format!($($arg)*)
+        );
+    };
+}
+
 /// Get the full path to the file prebindgen.json
 /// generated in OUT_DIR by #[prebindgen] macro.
 ///
@@ -99,6 +112,7 @@ pub fn init_prebindgen_json() {
         let mut file = fs::File::create(&path)?;
         file.write_all(b"[")?;
         file.flush()?;
+        trace!("Initialized prebindgen.json at: {}", path.display());
         Ok(())
     };
 
@@ -117,6 +131,7 @@ pub fn init_prebindgen_json() {
 pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &str) {
     let process_closure = || -> Result<(), Box<dyn std::error::Error>> {
         // Read the prebindgen.json file
+        trace!("Reading: {}", prebindgen_json_path.as_ref().display());
         let mut content = fs::read_to_string(&prebindgen_json_path)?;
 
         // Replace last trailing comma to `]` to complete the JSON array
@@ -137,6 +152,7 @@ pub fn prebindgen_json_to_rs<P: AsRef<Path>>(prebindgen_json_path: P, ffi_rs: &s
         // Write content to destination file
         let out_dir = env::var("OUT_DIR")?;
         let dest_path = Path::new(&out_dir).join(ffi_rs);
+        trace!("Writing to: {}", dest_path.display());
         let mut dest_file = fs::File::create(dest_path)?;
 
         for record in unique_records.values() {
