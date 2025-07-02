@@ -5,7 +5,7 @@ fn test_json_lines_format() {
     
     // Check if the file exists (it should since we've built the test_structures binary)
     if std::path::Path::new(&test_path).exists() {
-        let content = std::fs::read_to_string(&test_path)
+        let content = std::fs::read_to_string(test_path)
             .expect("Should be able to read prebindgen.json");
         
         println!("📄 JSON file content ({} bytes):", content.len());
@@ -92,7 +92,7 @@ fn test_append_only_behavior() {
     let test_path = prebindgen_proc_macro::prebindgen_path!();
     
     if std::path::Path::new(&test_path).exists() {
-        let content = std::fs::read_to_string(&test_path)
+        let content = std::fs::read_to_string(test_path)
             .expect("Should be able to read prebindgen.json");
         
         // The fact that we can read the file and parse each line individually
