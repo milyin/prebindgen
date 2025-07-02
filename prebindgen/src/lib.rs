@@ -1,40 +1,132 @@
 //! # prebindgen
 //!
-//! Structure definitions and utilities for the prebindgen system.
+//! A system for separating common FFI interface implementation from language-specific binding generation.
 //!
-//! This crate defines the data structures used to represent struct, enum, union, and function definitions
-//! for cross-language binding generation. These structures are used by the `prebindgen-proc-macro` crate
-//! to serialize code definitions and by build scripts to deserialize and process them.
+//! ## Problem
 //!
-//! ## Usage
+//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, you face a dilemma:
+//! - `#[no_mangle] extern "C"` functions can only be defined in `cdylib`/`staticlib` crates
+//! - If you need bindings for multiple languages, you must either:
+//!   - Generate all bindings from the same crate (tight coupling)
+//!   - Manually duplicate FFI functions in each language-specific crate (code duplication)
 //!
-//! ```rust,no_run
-//! use prebindgen::{Record, RecordKind, Prebindgen};
-//! use std::path::Path;
+//! ## Solution
 //!
-//! // Create a prebindgen context
-//! let mut pb = Prebindgen::new(Path::new("input_dir"), "my_crate".to_string());
+//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` source code from a common Rust library crate.
+//! Language-specific binding crates can then include this generated code and pass it to their respective
+//! binding generators (cbindgen, csbindgen, etc.).
 //!
-//! // Read exported definitions from a group
-//! pb.read("structs");
-//! pb.read("functions");
+//! ## How to Use
 //!
-//! // Generate Rust binding files
-//! pb.write("structs", "generated_structs.rs");
-//! pb.write("functions", "generated_functions.rs");
+//! ### 1. In the Common FFI Library Crate
+//!
+//! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
+//!
+//! ```rust,ignore
+//! use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
+//! 
+//! // Declare a public constant with the path to prebindgen data:
+//! pub const PREBINDGEN_OUT_DIR : &str = prebindgen_out_dir!();
+//!
+//! // Group structures and functions for selective handling
+//! #[prebindgen("structs")]
+//! #[repr(C)]
+//! pub struct MyStruct {
+//!     pub field: i32,
+//! }
+//!
+//! #[prebindgen("functions")]
+//! pub fn my_function(arg: i32) -> i32 {
+//!     arg * 2
+//! }
 //! ```
 //!
-//! ## Creating Records
+//! Call `init_prebindgen()` in the crate's `build.rs`:
+//!
+//! ```rust,ignore
+//! // build.rs
+//! use prebindgen::init_prebindgen;
+//!
+//! fn main() {
+//!     init_prebindgen();
+//! }
+//! ```
+//!
+//! ### 2. In Language-Specific FFI Binding Crates
+//!
+//! Add the common FFI library to build dependencies in `Cargo.toml`:
+//!
+//! ```toml
+//! [build-dependencies]
+//! my_common_ffi = { path = "../my_common_ffi" }
+//! prebindgen = "0.1"
+//! ```
+//!
+//! In the binding crate's `build.rs`:
+//!
+//! ```rust,ignore
+//! use prebindgen::Prebindgen;
+//! use std::path::Path;
+//!
+//! fn main() {
+//!     // Create prebindgen context with path to generated data and crate name
+//!     let mut pb = Prebindgen::new(
+//!         Path::new(my_common_ffi::PREBINDGEN_OUT_DIR),
+//!         "my_common_ffi".to_string()
+//!     );
+//!
+//!     // Read the prebindgen data by group
+//!     pb.read("structs");
+//!     pb.read("functions");
+//!
+//!     // Generate Rust FFI code files
+//!     pb.write("structs", "ffi_structs.rs");
+//!     pb.write("functions", "ffi_functions.rs");
+//!
+//!     // Now pass the generated files to your binding generator:
+//!     // - cbindgen for C/C++
+//!     // - csbindgen for C#
+//!     // - etc.
+//! }
+//! ```
+//!
+//! Include the generated Rust files in your project:
+//!
+//! ```rust,ignore
+//! // In src/lib.rs or src/main.rs
+//! include!(concat!(env!("OUT_DIR"), "/ffi_structs.rs"));
+//! include!(concat!(env!("OUT_DIR"), "/ffi_functions.rs"));
+//! ```
+//!
+//! ## Benefits
+//!
+//! - **Separation of concerns**: Common FFI interface logic stays in one place
+//! - **Multiple language support**: Generate bindings for different languages from separate crates
+//! - **Code reuse**: No duplication of FFI function implementations
+//! - **Flexibility**: Group definitions by functionality for selective inclusion
+//! - **Tool integration**: Generated code works with existing binding generators
+//!
+//! ## Core API
+//!
+//! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
+//! - [`Record`]: Represents a single exported definition (struct, enum, union, or function)
+//! - [`RecordKind`]: Enum indicating the type of definition
+//! - [`init_prebindgen()`]: Utility to initialize the prebindgen system in build scripts
+//!
+//! ## Basic API Example
 //!
 //! ```rust
 //! use prebindgen::{Record, RecordKind};
 //!
-//! // Create a record for a struct definition
+//! // Create a record representing a struct definition
 //! let record = Record::new(
 //!     RecordKind::Struct,
 //!     "MyStruct".to_string(),
-//!     "pub struct MyStruct { field: i32 }".to_string()
+//!     "#[repr(C)] pub struct MyStruct { pub field: i32 }".to_string()
 //! );
+//!
+//! assert_eq!(record.kind, RecordKind::Struct);
+//! assert_eq!(record.name, "MyStruct");
 //! ```
 
 use core::panic;
