@@ -83,7 +83,7 @@ macro_rules! trace {
     ($($arg:tt)*) => {
         #[cfg(debug_assertions)]
         println!("cargo:warning=[{}:{}] {}", 
-            file!().split('/').last().unwrap_or(file!()), 
+            file!(), 
             line!(), 
             format!($($arg)*)
         );
