@@ -208,8 +208,7 @@ impl Prebindgen {
         }
     }
 
-    /// Generate `<group>.rs`, panicking on error with detailed path info
-    pub fn make_rs<P: AsRef<Path>>(&self, group: &str, file_name: P) -> std::path::PathBuf {
+    pub fn write<P: AsRef<Path>>(&self, group: &str, file_name: P) -> std::path::PathBuf {
         let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
         let dest_path = PathBuf::from(&out_dir).join(&file_name);
         (|| -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
