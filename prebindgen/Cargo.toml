@@ -2,7 +2,7 @@
 name = "prebindgen"
 version = "0.1.0"
 edition = "2024"
-description = "JSON structure definitions for prebindgen"
+description = "Structure definitions and utilities for cross-language binding generation"
 license = "MIT OR Apache-2.0"
 
 [dependencies]

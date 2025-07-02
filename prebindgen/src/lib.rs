@@ -1,39 +1,40 @@
 //! # prebindgen
 //!
-//! JSON-lines structure definitions for the prebindgen system.
+//! Structure definitions and utilities for the prebindgen system.
 //!
 //! This crate defines the data structures used to represent struct, enum, union, and function definitions
-//! in JSON-lines format. These structures are used by the `prebindgen-proc-macro` crate
+//! for cross-language binding generation. These structures are used by the `prebindgen-proc-macro` crate
 //! to serialize code definitions and by build scripts to deserialize and process them.
-//!
-//! The JSON-lines format stores each record as a separate JSON object on its own line:
-//! ```jsonl
-//! {"kind": "struct", "name": "MyStruct", "content": "pub struct MyStruct { ... }"}
-//! {"kind": "enum", "name": "MyEnum", "content": "pub enum MyEnum { ... }"}
-//! {"kind": "function", "name": "my_function", "content": "pub fn my_function() { ... }"}
-//! ```
 //!
 //! ## Usage
 //!
+//! ```rust,no_run
+//! use prebindgen::{Record, RecordKind, Prebindgen};
+//! use std::path::Path;
+//!
+//! // Create a prebindgen context
+//! let mut pb = Prebindgen::new(Path::new("input_dir"), "my_crate".to_string());
+//!
+//! // Read exported definitions from a group
+//! pb.read("structs");
+//! pb.read("functions");
+//!
+//! // Generate Rust binding files
+//! pb.write("structs", "generated_structs.rs");
+//! pb.write("functions", "generated_functions.rs");
+//! ```
+//!
+//! ## Creating Records
+//!
 //! ```rust
-//! use prebindgen::{Record, RecordKind, read_jsonl_file, write_jsonl_file};
-//! use serde_json;
+//! use prebindgen::{Record, RecordKind};
 //!
-//! // Parse a single JSON line into a Record
-//! let json_line = r#"{"kind":"struct","name":"MyStruct","content":"pub struct MyStruct { ... }"}"#;
-//! let record: Record = serde_json::from_str(json_line)?;
-//!
-//! assert_eq!(record.kind, RecordKind::Struct);
-//! assert_eq!(record.name, "MyStruct");
-//!
-//! // Write records to a JSON-lines file
-//! let records = vec![record];
-//! write_jsonl_file("output.jsonl", &records)?;
-//!
-//! // Read records from a JSON-lines file
-//! let loaded_records = read_jsonl_file("output.jsonl")?;
-//! assert_eq!(loaded_records.len(), 1);
-//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! // Create a record for a struct definition
+//! let record = Record::new(
+//!     RecordKind::Struct,
+//!     "MyStruct".to_string(),
+//!     "pub struct MyStruct { field: i32 }".to_string()
+//! );
 //! ```
 
 use core::panic;
@@ -45,7 +46,7 @@ use std::{env, fs};
 mod jsonl;
 pub use jsonl::{read_jsonl_file, write_jsonl_file};
 
-/// File extension for JSON-lines files
+/// File extension for data files
 const JSONL_EXTENSION: &str = ".jsonl";
 /// Name of the prebindgen output directory
 const PREBINDGEN_DIR: &str = "prebindgen";
@@ -114,7 +115,7 @@ macro_rules! trace {
     };
 }
 /// Get the full path to the prebindgen output directory in OUT_DIR.
-/// This directory contains generated `.jsonl` files with exported definitions.
+/// This directory contains generated data files with exported definitions.
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
     let out_dir = std::env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
@@ -145,7 +146,7 @@ pub fn init_prebindgen() {
     }
 }
 
-/// Helper for reading JSON records and generating Rust bindings per group
+/// Helper for reading exported records and generating Rust bindings per group
 pub struct Prebindgen {
     records: std::collections::HashMap<String, Vec<Record>>,
     defined_types: std::collections::HashSet<String>,
@@ -164,7 +165,7 @@ impl Prebindgen {
         }
     }
 
-    /// Read all JSONL files matching the group name pattern `<group>_*.jsonl`, panicking on error with detailed path info
+    /// Read all exported files matching the group name pattern `<group>_*`, panicking on error with detailed path info
     pub fn read(&mut self, group: &str) {
         let pattern = format!("{}_", group);
         let mut record_map = std::collections::HashMap::new();
@@ -175,7 +176,7 @@ impl Prebindgen {
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                     if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
-                        trace!("Reading JSONL file: {}", path.display());
+                        trace!("Reading exported file: {}", path.display());
                         let path_clone = path.clone();
                         
                         match jsonl::read_jsonl_file(&path) {

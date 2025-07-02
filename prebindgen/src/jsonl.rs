@@ -1,4 +1,4 @@
-//! JSON-lines format utilities for reading and writing records.
+//! Serialization utilities for reading and writing records.
 
 use crate::Record;
 use std::fs;
