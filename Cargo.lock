@@ -25,27 +25,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "fastrand"
-version = "2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
-
-[[package]]
-name = "ffi_binding"
+name = "example-cbindgen"
 version = "0.1.0"
 dependencies = [
- "ffi_common",
+ "example-ffi",
  "prebindgen",
  "serde_json",
 ]
 
 [[package]]
-name = "ffi_common"
+name = "example-ffi"
 version = "0.1.0"
 dependencies = [
  "prebindgen",
  "prebindgen-proc-macro",
 ]
+
+[[package]]
+name = "fastrand"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "getrandom"

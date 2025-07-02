@@ -2,8 +2,8 @@
 members = [
     "prebindgen",
     "prebindgen-proc-macro",
-    "examples/ffi_binding",
-    "examples/ffi_common",
+    "examples/example-cbindgen",
+    "examples/example-ffi",
 ]
 resolver = "2"
 

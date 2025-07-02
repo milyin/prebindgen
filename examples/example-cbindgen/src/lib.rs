@@ -1,6 +1,6 @@
-// Include the copied ffi_common.rs file from OUT_DIR
-include!(concat!(env!("OUT_DIR"), "/ffi_common_structs.rs"));
-include!(concat!(env!("OUT_DIR"), "/ffi_common_functions.rs"));
+// Include the copied example_ffi.rs file from OUT_DIR
+include!(concat!(env!("OUT_DIR"), "/example_ffi_structs.rs"));
+include!(concat!(env!("OUT_DIR"), "/example_ffi_functions.rs"));
 
 // Demonstrate that we can use the included Foo struct
 pub fn create_foo(id: u64) -> Foo {
@@ -22,7 +22,7 @@ pub fn create_bar(id: u64) -> Bar {
 }
 
 pub fn test_calling_generated_functions() {
-    // These functions should be available from the generated ffi_common.rs
+    // These functions should be available from the generated example_ffi.rs
     let _result = unsafe { test_function(5, 1.234) };
     let _flag = unsafe { another_test_function() };
 }

@@ -4,12 +4,12 @@ fn main() {
     // The code below is usually not needed in the typical project. It illustrates the specific case when
     // build.rs generates the source code for specific the target architecture.
     //
-    // Simulate the case when part of the source code is generated in ffi_common/build.rs and this code
+    // Simulate the case when part of the source code is generated in example-ffi/build.rs and this code
     // depends on the target architecture.
-    // In this case the ffi_common/build.rs is called twice:
-    // - once for the host platform as a dependency for ffi_binding/build.rs, The goal: generate the OUT_DIR/prebindgen.rs file
-    // - once for the target platform as a dependency for ffi_common itself. The goal: build the binding library for the target platform.
-    // The problem is that on the host platform call the target architecture is unknown, but ffi_common/build.rs should generate the source code for it.
+    // In this case the example-ffi/build.rs is called twice:
+    // - once for the host platform as a dependency for example-cbindgen/build.rs, The goal: generate the OUT_DIR/prebindgen.rs file
+    // - once for the target platform as a dependency for example-ffi itself. The goal: build the binding library for the target platform.
+    // The problem is that on the host platform call the target architecture is unknown, but example-ffi/build.rs should generate the source code for it.
     // To make things work correctly the target architecture must be passed by some independent from cargo environment variable.
     // ( PREBINDGEN_TARGET in this case ).
     // E.g. to cross-build for x86_64-unknown-linux-gnu run
