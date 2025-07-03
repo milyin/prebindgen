@@ -24,7 +24,7 @@
 //!
 //! ```rust,ignore
 //! use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
-//! 
+//!
 //! // Declare a public constant with the path to prebindgen data:
 //! pub const PREBINDGEN_OUT_DIR : &str = prebindgen_out_dir!();
 //!
@@ -123,7 +123,7 @@
 //!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
 //! - [`Builder`]: Builder for configuring Prebindgen with optional parameters
 //!   - [`Builder::new()`]: Create a new Builder with the input directory path
-//!   - [`Builder::crate_name()`]: Set the source crate name (optional)
+//!   - [`Builder::crate_name()`]: Set the source crate name (optional, auto-detected from init_prebindgen if not set, panics if not initialized)
 //!   - [`Builder::edition()`]: Set the Rust edition (optional, defaults to "2021")
 //!   - [`Builder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
 //!   - [`Builder::generate()`]: Generate the configured Prebindgen instance with groups loaded
@@ -165,6 +165,8 @@ pub use jsonl::{read_jsonl_file, write_jsonl_file};
 const JSONL_EXTENSION: &str = ".jsonl";
 /// Name of the prebindgen output directory
 const PREBINDGEN_DIR: &str = "prebindgen";
+/// Name of the file storing the crate name
+const CRATE_NAME_FILE: &str = "crate_name.txt";
 
 /// Represents a record of a struct, enum, union, or function definition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -237,7 +239,20 @@ pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
     std::path::Path::new(&out_dir).join(PREBINDGEN_DIR)
 }
 
+/// Read the crate name from the stored file
+fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
+    let crate_name_path = input_dir.join(CRATE_NAME_FILE);
+    fs::read_to_string(&crate_name_path)
+        .ok()
+        .map(|s| s.trim().to_string())
+}
+
 pub fn init_prebindgen() {
+    // Get the crate name from CARGO_PKG_NAME
+    let crate_name = env::var("CARGO_PKG_NAME").expect(
+        "CARGO_PKG_NAME environment variable not set. This should be available in build.rs",
+    );
+
     // delete all files in the prebindgen directory
     let prebindgen_dir = get_prebindgen_out_dir();
     if prebindgen_dir.exists() {
@@ -259,6 +274,16 @@ pub fn init_prebindgen() {
             );
         });
     }
+
+    // Store the crate name in a separate file
+    let crate_name_path = prebindgen_dir.join(CRATE_NAME_FILE);
+    fs::write(&crate_name_path, &crate_name).unwrap_or_else(|e| {
+        panic!(
+            "Failed to write crate name to {}: {}",
+            crate_name_path.display(),
+            e
+        );
+    });
 }
 
 /// Helper for reading exported records and generating Rust bindings per group
@@ -289,7 +314,7 @@ impl Prebindgen {
     fn read_group_internal(&mut self, group: &str) {
         let pattern = format!("{}_", group);
         let mut record_map = std::collections::HashMap::new();
-        
+
         // Read the directory and find all matching files
         if let Ok(entries) = fs::read_dir(&self.input_dir) {
             for entry in entries.flatten() {
@@ -298,7 +323,7 @@ impl Prebindgen {
                     if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
                         trace!("Reading exported file: {}", path.display());
                         let path_clone = path.clone();
-                        
+
                         match jsonl::read_jsonl_file(&path) {
                             Ok(records) => {
                                 for record in records {
@@ -314,16 +339,19 @@ impl Prebindgen {
                 }
             }
         }
-        
+
         // Convert map values to vector
         let all_records: Vec<Record> = record_map.values().cloned().collect();
-        
+
         // Store the deduplicated records for this group
         self.records.insert(group.to_string(), all_records.clone());
-        
+
         // Update defined_types with all types from all groups
         for record in &all_records {
-            if matches!(record.kind, RecordKind::Struct | RecordKind::Enum | RecordKind::Union) {
+            if matches!(
+                record.kind,
+                RecordKind::Struct | RecordKind::Enum | RecordKind::Union
+            ) {
                 self.defined_types.insert(record.name.clone());
             }
         }
@@ -332,7 +360,7 @@ impl Prebindgen {
     /// Internal method to read all exported files for all available groups
     fn read_all_groups_internal(&mut self) {
         let mut groups = std::collections::HashSet::new();
-        
+
         // Discover all available groups
         if let Ok(entries) = fs::read_dir(&self.input_dir) {
             for entry in entries.flatten() {
@@ -348,7 +376,7 @@ impl Prebindgen {
                 }
             }
         }
-        
+
         // Read all discovered groups
         for group in groups {
             self.read_group_internal(&group);
@@ -356,24 +384,24 @@ impl Prebindgen {
     }
 
     /// Create a new file for writing groups
-    /// 
+    ///
     /// This method creates a new file (or overwrites an existing one) and returns
     /// a FileBuilder for writing groups to it.
-    /// 
+    ///
     /// # Parameters
     /// - `file_name`: The name of the file to create in OUT_DIR
-    /// 
+    ///
     /// # Returns
     /// A FileBuilder that allows appending groups to the file
     pub fn create<P: AsRef<Path>>(&self, file_name: P) -> FileBuilder<'_> {
         let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
         let dest_path = PathBuf::from(&out_dir).join(&file_name);
-        
+
         // Create an empty file
         fs::File::create(&dest_path).unwrap_or_else(|e| {
             panic!("Failed to create {}: {}", dest_path.display(), e);
         });
-        
+
         FileBuilder {
             prebindgen: self,
             file_path: dest_path,
@@ -381,7 +409,12 @@ impl Prebindgen {
     }
 
     /// Internal method to write records with optional append mode
-    fn write_internal<P: AsRef<Path>>(&self, group: &str, file_name: P, append: bool) -> std::path::PathBuf {
+    fn write_internal<P: AsRef<Path>>(
+        &self,
+        group: &str,
+        file_name: P,
+        append: bool,
+    ) -> std::path::PathBuf {
         let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
         let dest_path = PathBuf::from(&out_dir).join(&file_name);
         (|| -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
@@ -393,7 +426,7 @@ impl Prebindgen {
             } else {
                 fs::File::create(&dest_path)?
             };
-            
+
             if let Some(group_records) = self.records.get(group) {
                 for record in group_records {
                     match record.kind {
@@ -423,13 +456,13 @@ impl Prebindgen {
 
 impl Builder {
     /// Create a new Builder for configuring Prebindgen with the specified input directory
-    /// 
+    ///
     /// # Parameters
     /// - `input_dir`: Path to the directory containing prebindgen data files
-    /// 
+    ///
     /// # Returns
     /// A Builder for configuring optional parameters
-    /// 
+    ///
     /// # Example
     /// ```rust,ignore
     /// let pb = Builder::new(Path::new("/path/to/prebindgen/data"))
@@ -447,10 +480,12 @@ impl Builder {
     }
 
     /// Set the crate name for the Prebindgen context
-    /// 
+    ///
     /// This is used when generating function stubs to call the original functions.
-    /// If not set, defaults to "unknown_crate".
-    /// 
+    /// If not set, it will try to read the crate name from the stored file (written by init_prebindgen).
+    /// If the crate name file is not found, it will panic with a message indicating that the
+    /// directory was not properly initialized with init_prebindgen().
+    ///
     /// # Parameters
     /// - `crate_name`: The name of the source crate containing the original functions
     pub fn crate_name<S: Into<String>>(mut self, crate_name: S) -> Self {
@@ -459,10 +494,10 @@ impl Builder {
     }
 
     /// Set the Rust edition for the Prebindgen context
-    /// 
+    ///
     /// This affects how certain attributes are generated (e.g., #[unsafe(no_mangle)] for 2024 edition).
     /// If not set, defaults to "2021".
-    /// 
+    ///
     /// # Parameters
     /// - `edition`: The Rust edition as a string (e.g., "2021", "2024")
     pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
@@ -471,10 +506,10 @@ impl Builder {
     }
 
     /// Select a specific group to read when generating the Prebindgen instance
-    /// 
+    ///
     /// This method can be called multiple times to select multiple groups.
     /// If no groups are selected, all available groups will be read.
-    /// 
+    ///
     /// # Parameters
     /// - `group_name`: The name of the group to read
     pub fn with_group<S: Into<String>>(mut self, group_name: S) -> Self {
@@ -488,18 +523,28 @@ impl Builder {
     }
 
     /// Generate the Prebindgen instance with the configured parameters
-    /// 
+    ///
     /// This method automatically reads the selected groups (or all groups if none selected)
     /// and returns a fully configured Prebindgen instance.
-    /// 
+    ///
     /// # Returns
     /// A configured Prebindgen instance with groups already loaded
     pub fn generate(self) -> Prebindgen {
+        // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
+        let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
+            panic!(
+                "The directory {} was not initialized with init_prebindgen(). \
+                Please ensure that init_prebindgen() is called in the build.rs of the source crate.",
+                self.input_dir.display()
+            )
+        });
+        let crate_name = self.crate_name.unwrap_or(original_crate_name);
+
         let mut pb = Prebindgen {
             records: std::collections::HashMap::new(),
             defined_types: std::collections::HashSet::new(),
             input_dir: self.input_dir,
-            crate_name: self.crate_name.unwrap_or_else(|| "unknown_crate".to_string()),
+            crate_name,
             edition: self.edition.unwrap_or_else(|| "2021".to_string()),
         };
 
@@ -520,13 +565,13 @@ impl Builder {
 
 impl<'a> FileBuilder<'a> {
     /// Append records for a group to the file
-    /// 
+    ///
     /// This method appends records from the specified group to the file
     /// that was created by the `create` method.
-    /// 
+    ///
     /// # Parameters
     /// - `group`: The name of the group to append
-    /// 
+    ///
     /// # Returns
     /// Self for method chaining
     pub fn append(self, group: &str) -> Self {
@@ -538,10 +583,10 @@ impl<'a> FileBuilder<'a> {
     }
 
     /// Append all loaded groups to the file
-    /// 
+    ///
     /// This method appends records from all groups that have been loaded
     /// via `read()` or `read_all()` calls.
-    /// 
+    ///
     /// # Returns
     /// Self for method chaining
     pub fn append_all(self) -> Self {
@@ -554,7 +599,7 @@ impl<'a> FileBuilder<'a> {
     }
 
     /// Get the absolute path to the generated file
-    /// 
+    ///
     /// # Returns
     /// The absolute path to the file that was created
     pub fn get_path(&self) -> &std::path::Path {
@@ -562,7 +607,7 @@ impl<'a> FileBuilder<'a> {
     }
 
     /// Converts the FileBuilder to a string representation of the file path
-    /// 
+    ///
     /// # Returns
     /// A path object representing the file path
     pub fn into_path(self) -> std::path::PathBuf {
@@ -677,8 +722,9 @@ fn transform_function_to_stub(
         _ => None,
     });
 
-    // Create the source crate identifier
-    let source_crate_ident = syn::Ident::new(source_crate, proc_macro2::Span::call_site());
+    // Create the source crate identifier (convert hyphens to underscores for valid identifier)
+    let source_crate_name = source_crate.replace('-', "_");
+    let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
 
     // Generate the function body that calls the original function
     let function_body = match &parsed.sig.output {
@@ -715,7 +761,10 @@ fn transform_function_to_stub(
         no_mangle_attr,
         quote::quote! { #vis },
         fn_name,
-        extern_inputs.map(|arg| quote::quote! { #arg }.to_string()).collect::<Vec<_>>().join(", "),
+        extern_inputs
+            .map(|arg| quote::quote! { #arg }.to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
         quote::quote! { #output },
         function_body.to_string().trim()
     );

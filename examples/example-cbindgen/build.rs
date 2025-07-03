@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 fn main() {
     let pb = prebindgen::Builder::new(example_ffi::PREBINDGEN_OUT_DIR)
-        .crate_name("example_ffi")
         .edition("2024")
         .generate();
 
