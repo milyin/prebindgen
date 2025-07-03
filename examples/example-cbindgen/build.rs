@@ -3,7 +3,7 @@ use std::path::PathBuf;
 fn main() {
     let pb = prebindgen::Builder::new(example_ffi::PREBINDGEN_OUT_DIR)
         .edition("2024")
-        .generate();
+        .build();
 
     // Create a file and append all groups to it
     let bindings_file = pb

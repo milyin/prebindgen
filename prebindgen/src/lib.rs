@@ -75,13 +75,13 @@
 //!         .edition("2024")
 //!         .with_group("structs")
 //!         .with_group("functions")
-//!         .generate();
+//!         .build();
 //!
 //!     // Or create with all groups (if no with_group calls)
 //!     // let pb = Builder::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
 //!     //     .crate_name("my_common_ffi")
 //!     //     .edition("2024")
-//!     //     .generate();
+//!     //     .build();
 //!
 //!     // Generate Rust FFI code files
 //!     let structs_file = pb.create("ffi_structs.rs").append("structs");
@@ -126,7 +126,7 @@
 //!   - [`Builder::crate_name()`]: Set the source crate name (optional, auto-detected from init_prebindgen if not set, panics if not initialized)
 //!   - [`Builder::edition()`]: Set the Rust edition (optional, defaults to "2021")
 //!   - [`Builder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
-//!   - [`Builder::generate()`]: Generate the configured Prebindgen instance with groups loaded
+//!   - [`Builder::build()`]: Generate the configured Prebindgen instance with groups loaded
 //! - [`FileBuilder`]: Builder for appending groups to a file
 //!   - [`FileBuilder::append()`]: Append a specific group to the file
 //!   - [`FileBuilder::append_all()`]: Append all loaded groups to the file
@@ -468,7 +468,7 @@ impl Builder {
     /// let pb = Builder::new(Path::new("/path/to/prebindgen/data"))
     ///     .crate_name("my_crate")
     ///     .edition("2024")
-    ///     .generate();
+    ///     .build();
     /// ```
     pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
         Self {
@@ -529,7 +529,7 @@ impl Builder {
     ///
     /// # Returns
     /// A configured Prebindgen instance with groups already loaded
-    pub fn generate(self) -> Prebindgen {
+    pub fn build(self) -> Prebindgen {
         // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
         let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
             panic!(
