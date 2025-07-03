@@ -1,5 +1,5 @@
 fn main() {
-    prebindgen::init_prebindgen();
+    prebindgen::init_prebindgen_out_dir();
 
     // The code below is usually not needed in the typical project. It illustrates the specific case when
     // build.rs generates the source code for specific the target architecture.

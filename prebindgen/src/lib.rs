@@ -41,14 +41,14 @@
 //! }
 //! ```
 //!
-//! Call `init_prebindgen()` in the crate's `build.rs`:
+//! Call `init_prebindgen_out_dir()` in the crate's `build.rs`:
 //!
 //! ```rust,ignore
 //! // build.rs
-//! use prebindgen::init_prebindgen;
+//! use prebindgen::init_prebindgen_out_dir;
 //!
 //! fn main() {
-//!     init_prebindgen();
+//!     init_prebindgen_out_dir();
 //! }
 //! ```
 //!
@@ -108,50 +108,6 @@
 //! // Or if using a single combined file:
 //! // include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 //! ```
-//!
-//! ## Benefits
-//!
-//! - **Separation of concerns**: Common FFI interface logic stays in one place
-//! - **Multiple language support**: Generate bindings for different languages from separate crates
-//! - **Code reuse**: No duplication of FFI function implementations
-//! - **Flexibility**: Group definitions by functionality for selective inclusion
-//! - **Tool integration**: Generated code works with existing binding generators
-//!
-//! ## Core API
-//!
-//! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
-//!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
-//! - [`Builder`]: Builder for configuring Prebindgen with optional parameters
-//!   - [`Builder::new()`]: Create a new Builder with the input directory path
-//!   - [`Builder::crate_name()`]: Set the source crate name (optional, auto-detected from init_prebindgen if not set, panics if not initialized)
-//!   - [`Builder::edition()`]: Set the Rust edition (optional, defaults to "2021")
-//!   - [`Builder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
-//!   - [`Builder::build()`]: Generate the configured Prebindgen instance with groups loaded
-//! - [`FileBuilder`]: Builder for appending groups to a file
-//!   - [`FileBuilder::append()`]: Append a specific group to the file
-//!   - [`FileBuilder::append_all()`]: Append all loaded groups to the file
-//!   - [`FileBuilder::get_path()`]: Get the absolute path to the generated file
-//!   - [`FileBuilder::into_path()`]: Convert the builder to a PathBuf
-//! - [`Record`]: Represents a single exported definition (struct, enum, union, or function)
-//! - [`RecordKind`]: Enum indicating the type of definition
-//! - [`init_prebindgen()`]: Utility to initialize the prebindgen system in build scripts
-//!
-//! ## Basic API Example
-//!
-//! ```rust
-//! use prebindgen::{Record, RecordKind};
-//!
-//! // Create a record representing a struct definition
-//! let record = Record::new(
-//!     RecordKind::Struct,
-//!     "MyStruct".to_string(),
-//!     "#[repr(C)] pub struct MyStruct { pub field: i32 }".to_string()
-//! );
-//!
-//! assert_eq!(record.kind, RecordKind::Struct);
-//! assert_eq!(record.name, "MyStruct");
-//! ```
-
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -247,7 +203,7 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
-pub fn init_prebindgen() {
+pub fn init_prebindgen_out_dir() {
     // Get the crate name from CARGO_PKG_NAME
     let crate_name = env::var("CARGO_PKG_NAME").expect(
         "CARGO_PKG_NAME environment variable not set. This should be available in build.rs",
@@ -383,16 +339,6 @@ impl Prebindgen {
         }
     }
 
-    /// Create a new file for writing groups
-    ///
-    /// This method creates a new file (or overwrites an existing one) and returns
-    /// a FileBuilder for writing groups to it.
-    ///
-    /// # Parameters
-    /// - `file_name`: The name of the file to create in OUT_DIR
-    ///
-    /// # Returns
-    /// A FileBuilder that allows appending groups to the file
     pub fn create<P: AsRef<Path>>(&self, file_name: P) -> FileBuilder<'_> {
         let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
         let dest_path = PathBuf::from(&out_dir).join(&file_name);
@@ -482,9 +428,9 @@ impl Builder {
     /// Set the crate name for the Prebindgen context
     ///
     /// This is used when generating function stubs to call the original functions.
-    /// If not set, it will try to read the crate name from the stored file (written by init_prebindgen).
+    /// If not set, it will try to read the crate name from the stored file (written by init_prebindgen_out_dir).
     /// If the crate name file is not found, it will panic with a message indicating that the
-    /// directory was not properly initialized with init_prebindgen().
+    /// directory was not properly initialized with init_prebindgen_out_dir().
     ///
     /// # Parameters
     /// - `crate_name`: The name of the source crate containing the original functions
@@ -533,8 +479,8 @@ impl Builder {
         // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
         let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
             panic!(
-                "The directory {} was not initialized with init_prebindgen(). \
-                Please ensure that init_prebindgen() is called in the build.rs of the source crate.",
+                "The directory {} was not initialized with init_prebindgen_out_dir(). \
+                Please ensure that init_prebindgen_out_dir() is called in the build.rs of the source crate.",
                 self.input_dir.display()
             )
         });
