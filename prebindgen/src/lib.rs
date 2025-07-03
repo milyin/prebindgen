@@ -72,7 +72,8 @@
 //!     // Create prebindgen context with path to generated data and crate name
 //!     let mut pb = Prebindgen::new(
 //!         Path::new(my_common_ffi::PREBINDGEN_OUT_DIR),
-//!         "my_common_ffi"  // String literals work due to Into<String>
+//!         "my_common_ffi",  // String literals work due to Into<String>
+//!         2024.to_string()
 //!     );
 //!
 //!     // Read the prebindgen data by group
@@ -262,6 +263,7 @@ pub struct Prebindgen {
     defined_types: std::collections::HashSet<String>,
     input_dir: std::path::PathBuf,
     crate_name: String,
+    edition: String,
 }
 
 /// Builder for writing groups to files with append capability
@@ -271,13 +273,14 @@ pub struct FileBuilder<'a> {
 }
 
 impl Prebindgen {
-    /// Create a new Prebindgen context with specified directory and crate name
-    pub fn new<P: AsRef<Path>, S: Into<String>>(input_dir: P, crate_name: S) -> Self {
+    /// Create a new Prebindgen context with specified directory, crate name, and edition
+    pub fn new<P: AsRef<Path>, S: Into<String>, E: Into<String>>(input_dir: P, crate_name: S, edition: E) -> Self {
         Self {
             records: std::collections::HashMap::new(),
             defined_types: std::collections::HashSet::new(),
             input_dir: input_dir.as_ref().to_path_buf(),
             crate_name: crate_name.into(),
+            edition: edition.into(),
         }
     }
 
@@ -401,6 +404,7 @@ impl Prebindgen {
                                 &record.content,
                                 &self.crate_name,
                                 &self.defined_types,
+                                &self.edition,
                             )?;
                             writeln!(dest, "{}", stub)?;
                         }
@@ -530,6 +534,7 @@ fn transform_function_to_stub(
     function_content: &str,
     source_crate: &str,
     defined_types: &std::collections::HashSet<String>,
+    edition: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Helper function to check if a type needs transmute
     let needs_transmute = |ty: &syn::Type| -> bool { contains_defined_type(ty, defined_types) };
@@ -603,13 +608,22 @@ fn transform_function_to_stub(
         }
     };
 
-    // Build the no_mangle extern "C" function
-    let stub = quote::quote! {
-        #[unsafe(no_mangle)]
-        #vis unsafe extern "C" fn #fn_name(#(#extern_inputs),*) #output {
-            #function_body
-        }
+    // Determine the correct no_mangle attribute depending on the Rust edition
+    let no_mangle_attr = match edition {
+        "2024" => "#[unsafe(no_mangle)]",
+        _ => "#[no_mangle]",
     };
 
-    Ok(stub.to_string())
+    // Build the no_mangle extern "C" function
+    let stub = format!(
+        "{}\n{} unsafe extern \"C\" fn {}({}) {} {{\n{}\n}}",
+        no_mangle_attr,
+        quote::quote! { #vis },
+        fn_name,
+        extern_inputs.map(|arg| quote::quote! { #arg }.to_string()).collect::<Vec<_>>().join(", "),
+        quote::quote! { #output },
+        function_body.to_string().trim()
+    );
+
+    Ok(stub)
 }
