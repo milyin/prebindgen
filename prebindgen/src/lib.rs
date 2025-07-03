@@ -65,51 +65,17 @@
 //! In the binding crate's `build.rs`:
 //!
 //! ```rust,ignore
-//! use prebindgen::Builder;
-//! use std::path::Path;
-//!
-//! fn main() {
-//!     // Create prebindgen context with selected groups
-//!     let pb = Builder::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
-//!         .crate_name("my_common_ffi")
-//!         .edition("2024")
-//!         .with_group("structs")
-//!         .with_group("functions")
-//!         .build();
-//!
-//!     // Or create with all groups (if no with_group calls)
-//!     // let pb = Builder::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
-//!     //     .crate_name("my_common_ffi")
-//!     //     .edition("2024")
-//!     //     .build();
-//!
-//!     // Generate Rust FFI code files
-//!     let structs_file = pb.create("ffi_structs.rs").append("structs");
-//!     let functions_file = pb.create("ffi_functions.rs").append("functions");
-//!
-//!     // Alternative: Write all groups to a single file
-//!     // let combined_file = pb.create("ffi_bindings.rs").append_all();
-//!     // println!("Generated file: {}", combined_file.get_path().display());
-//!
-//!     // Now pass the generated files to your binding generator:
-//!     // - cbindgen for C/C++
-//!     // - csbindgen for C#
-//!     // - etc.
-//! }
+//! // TODO
 //! ```
 //!
 //! Include the generated Rust files in your project:
 //!
 //! ```rust,ignore
-//! // In src/lib.rs or src/main.rs
-//! include!(concat!(env!("OUT_DIR"), "/ffi_structs.rs"));
-//! include!(concat!(env!("OUT_DIR"), "/ffi_functions.rs"));
-//!
-//! // Or if using a single combined file:
-//! // include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
+//! // TODO
 //! ```
 use core::panic;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
@@ -262,7 +228,7 @@ pub struct Builder {
 /// Builder for writing groups to files with append capability
 pub struct FileBuilder<'a> {
     prebindgen: &'a Prebindgen,
-    file_path: std::path::PathBuf,
+    groups: Vec<String>,
 }
 
 impl Prebindgen {
@@ -339,64 +305,46 @@ impl Prebindgen {
         }
     }
 
-    pub fn create<P: AsRef<Path>>(&self, file_name: P) -> FileBuilder<'_> {
-        let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-        let dest_path = PathBuf::from(&out_dir).join(&file_name);
-
-        // Create an empty file
-        fs::File::create(&dest_path).unwrap_or_else(|e| {
-            panic!("Failed to create {}: {}", dest_path.display(), e);
-        });
-
+    pub fn group(&self, group_name: &str) -> FileBuilder<'_> {
         FileBuilder {
             prebindgen: self,
-            file_path: dest_path,
+            groups: vec![group_name.to_string()],
+        }
+    }
+
+    pub fn all(&self) -> FileBuilder<'_> {
+        FileBuilder {
+            prebindgen: self,
+            groups: self.records.keys().cloned().collect(),
         }
     }
 
     /// Internal method to write records with optional append mode
-    fn write_internal<P: AsRef<Path>>(
+    fn write_internal(
         &self,
+        dest: &mut File,
         group: &str,
-        file_name: P,
-        append: bool,
-    ) -> std::path::PathBuf {
-        let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
-        let dest_path = PathBuf::from(&out_dir).join(&file_name);
-        (|| -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-            let mut dest = if append {
-                fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&dest_path)?
-            } else {
-                fs::File::create(&dest_path)?
-            };
-
-            if let Some(group_records) = self.records.get(group) {
-                for record in group_records {
-                    match record.kind {
-                        RecordKind::Function => {
-                            let stub = transform_function_to_stub(
-                                &record.content,
-                                &self.crate_name,
-                                &self.defined_types,
-                                &self.edition,
-                            )?;
-                            writeln!(dest, "{}", stub)?;
-                        }
-                        _ => {
-                            writeln!(dest, "{}", record.content)?;
-                        }
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(group_records) = self.records.get(group) {
+            for record in group_records {
+                match record.kind {
+                    RecordKind::Function => {
+                        let stub = transform_function_to_stub(
+                            &record.content,
+                            &self.crate_name,
+                            &self.defined_types,
+                            &self.edition,
+                        )?;
+                        writeln!(dest, "{}", stub)?;
+                    }
+                    _ => {
+                        writeln!(dest, "{}", record.content)?;
                     }
                 }
             }
-            dest.flush()?;
-            Ok(dest_path.clone())
-        })()
-        .unwrap_or_else(|e| {
-            panic!("Failed to generate {}: {}", dest_path.display(), e);
-        })
+        }
+        dest.flush()?;
+        Ok(())
     }
 }
 
@@ -417,7 +365,7 @@ impl Builder {
         self.edition = Some(edition.into());
         self
     }
-    pub fn with_group<S: Into<String>>(mut self, group_name: S) -> Self {
+    pub fn select_group<S: Into<String>>(mut self, group_name: S) -> Self {
         if self.selected_groups.is_none() {
             self.selected_groups = Some(std::collections::HashSet::new());
         }
@@ -461,26 +409,43 @@ impl Builder {
 }
 
 impl<'a> FileBuilder<'a> {
-    pub fn append(self, group: &str) -> Self {
-        // Extract just the filename from the full path
-        if let Some(file_name) = self.file_path.file_name() {
-            self.prebindgen.write_internal(group, file_name, true);
-        }
+    pub fn group<S: Into<String>>(mut self, group_name: S) -> Self {
+        self.groups.push(group_name.into());
         self
     }
-    pub fn append_all(self) -> Self {
-        if let Some(file_name) = self.file_path.file_name() {
-            for group_name in self.prebindgen.records.keys() {
-                self.prebindgen.write_internal(group_name, file_name, true);
-            }
+
+    pub fn write_to_file<P: AsRef<Path>>(self, file_name: P) -> std::path::PathBuf {
+        // Prepend with OUT_DIR if file_name is relative
+        let file_name = if file_name.as_ref().is_relative() {
+            let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+            PathBuf::from(out_dir).join(file_name)
+        } else {
+            file_name.as_ref().to_path_buf()
+        };
+        let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+        let dest_path = PathBuf::from(&out_dir).join(&file_name);
+        let mut dest = fs::File::create(&dest_path).unwrap_or_else(|e| {
+            panic!("Failed to create {}: {}", dest_path.display(), e);
+        });
+        for group in &self.groups {
+            // Write the records for each group
+            self.prebindgen
+                .write_internal(&mut dest, group)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to write records for group {} to {}: {}",
+                        group,
+                        dest_path.display(),
+                        e
+                    )
+                });
         }
-        self
-    }
-    pub fn get_path(&self) -> &std::path::Path {
-        &self.file_path
-    }
-    pub fn into_path(self) -> std::path::PathBuf {
-        self.file_path
+        trace!(
+            "Generated bindings for groups [{}] written to: {}",
+            self.groups.join(", "),
+            dest_path.display()
+        );
+        dest_path
     }
 }
 
