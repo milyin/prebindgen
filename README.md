@@ -65,7 +65,6 @@ Generate bindings in `build.rs`:
 ```rust
 fn main() {
     let pb = prebindgen::Builder::new(my_common_ffi::PREBINDGEN_OUT_DIR)
-        .edition("2024")
         .build();
 
     let bindings_file = pb.all().write_to_file("ffi_bindings.rs");
