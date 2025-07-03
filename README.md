@@ -1,10 +1,10 @@
 # prebindgen
 
-A Rust utility crate for separating common FFI interface implementation and language-specific binding generation into deifferent crates.
+A Rust utility crate for separating common FFI interface implementation and language-specific binding generation into different crates.
 
 ## Problem
 
-In the Rust `#[no_mangle] extern "C"` functions must be defined in `cdylib`/`staticlib` crate. The reexport of them from simple `lib` crate doesn't work. The issue [2771](https://github.com/rust-lang/rfcs/issues/2771) mentioning this problem is still open.
+In Rust, `#[no_mangle] extern "C"` functions must be defined in a `cdylib`/`staticlib` crate. Re-exporting them from a simple `lib` crate doesn't work. The issue [2771](https://github.com/rust-lang/rfcs/issues/2771) mentioning this problem is still open.
 
 So when creating Rust libraries that need to expose FFI interfaces to multiple languages, you face a dilemma:
 
