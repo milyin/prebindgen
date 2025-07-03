@@ -65,12 +65,12 @@
 //! In the binding crate's `build.rs`:
 //!
 //! ```rust,ignore
-//! use prebindgen::Prebindgen;
+//! use prebindgen::Builder;
 //! use std::path::Path;
 //!
 //! fn main() {
 //!     // Create prebindgen context with selected groups
-//!     let pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
+//!     let pb = Builder::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
 //!         .crate_name("my_common_ffi")
 //!         .edition("2024")
 //!         .with_group("structs")
@@ -78,7 +78,7 @@
 //!         .generate();
 //!
 //!     // Or create with all groups (if no with_group calls)
-//!     // let pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
+//!     // let pb = Builder::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
 //!     //     .crate_name("my_common_ffi")
 //!     //     .edition("2024")
 //!     //     .generate();
@@ -120,9 +120,9 @@
 //! ## Core API
 //!
 //! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
-//!   - [`Prebindgen::new()`]: Create a new Builder with the input directory path
 //!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
 //! - [`Builder`]: Builder for configuring Prebindgen with optional parameters
+//!   - [`Builder::new()`]: Create a new Builder with the input directory path
 //!   - [`Builder::crate_name()`]: Set the source crate name (optional)
 //!   - [`Builder::edition()`]: Set the Rust edition (optional, defaults to "2021")
 //!   - [`Builder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
@@ -285,30 +285,6 @@ pub struct FileBuilder<'a> {
 }
 
 impl Prebindgen {
-    /// Create a new Builder for configuring Prebindgen with the specified input directory
-    /// 
-    /// # Parameters
-    /// - `input_dir`: Path to the directory containing prebindgen data files
-    /// 
-    /// # Returns
-    /// A Builder for configuring optional parameters
-    /// 
-    /// # Example
-    /// ```rust,ignore
-    /// let pb = Prebindgen::new(Path::new("/path/to/prebindgen/data"))
-    ///     .crate_name("my_crate")
-    ///     .edition("2024")
-    ///     .generate();
-    /// ```
-    pub fn new<P: AsRef<Path>>(input_dir: P) -> Builder {
-        Builder {
-            input_dir: input_dir.as_ref().to_path_buf(),
-            crate_name: None,
-            edition: None,
-            selected_groups: None,
-        }
-    }
-
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
     fn read_group_internal(&mut self, group: &str) {
         let pattern = format!("{}_", group);
@@ -446,6 +422,30 @@ impl Prebindgen {
 }
 
 impl Builder {
+    /// Create a new Builder for configuring Prebindgen with the specified input directory
+    /// 
+    /// # Parameters
+    /// - `input_dir`: Path to the directory containing prebindgen data files
+    /// 
+    /// # Returns
+    /// A Builder for configuring optional parameters
+    /// 
+    /// # Example
+    /// ```rust,ignore
+    /// let pb = Builder::new(Path::new("/path/to/prebindgen/data"))
+    ///     .crate_name("my_crate")
+    ///     .edition("2024")
+    ///     .generate();
+    /// ```
+    pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
+        Self {
+            input_dir: input_dir.as_ref().to_path_buf(),
+            crate_name: None,
+            edition: None,
+            selected_groups: None,
+        }
+    }
+
     /// Set the crate name for the Prebindgen context
     /// 
     /// This is used when generating function stubs to call the original functions.
