@@ -69,18 +69,19 @@
 //! use std::path::Path;
 //!
 //! fn main() {
-//!     // Create prebindgen context with path to generated data
-//!     let mut pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
+//!     // Create prebindgen context with selected groups
+//!     let pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
 //!         .crate_name("my_common_ffi")
 //!         .edition("2024")
+//!         .with_group("structs")
+//!         .with_group("functions")
 //!         .build();
 //!
-//!     // Read the prebindgen data by group
-//!     pb.read("structs");
-//!     pb.read("functions");
-//!     
-//!     // Or read all available groups at once
-//!     // pb.read_all();
+//!     // Or create with all groups (if no with_group calls)
+//!     // let pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
+//!     //     .crate_name("my_common_ffi")
+//!     //     .edition("2024")
+//!     //     .build();
 //!
 //!     // Generate Rust FFI code files
 //!     let structs_file = pb.create("ffi_structs.rs").append("structs");
@@ -120,13 +121,12 @@
 //!
 //! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
 //!   - [`Prebindgen::new()`]: Create a new PrebindgenBuilder with the input directory path
-//!   - [`Prebindgen::read()`]: Read exported definitions for a group
-//!   - [`Prebindgen::read_all()`]: Read exported definitions for all available groups
 //!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
 //! - [`PrebindgenBuilder`]: Builder for configuring Prebindgen with optional parameters
 //!   - [`PrebindgenBuilder::crate_name()`]: Set the source crate name (optional)
 //!   - [`PrebindgenBuilder::edition()`]: Set the Rust edition (optional, defaults to "2021")
-//!   - [`PrebindgenBuilder::build()`]: Build the configured Prebindgen instance
+//!   - [`PrebindgenBuilder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
+//!   - [`PrebindgenBuilder::build()`]: Build the configured Prebindgen instance with groups loaded
 //! - [`FileBuilder`]: Builder for appending groups to a file
 //!   - [`FileBuilder::append()`]: Append a specific group to the file
 //!   - [`FileBuilder::append_all()`]: Append all loaded groups to the file
@@ -275,6 +275,7 @@ pub struct PrebindgenBuilder {
     input_dir: std::path::PathBuf,
     crate_name: Option<String>,
     edition: Option<String>,
+    selected_groups: Option<std::collections::HashSet<String>>,
 }
 
 /// Builder for writing groups to files with append capability
@@ -304,11 +305,12 @@ impl Prebindgen {
             input_dir: input_dir.as_ref().to_path_buf(),
             crate_name: None,
             edition: None,
+            selected_groups: None,
         }
     }
 
-    /// Read all exported files matching the group name pattern `<group>_*`, panicking on error with detailed path info
-    pub fn read(&mut self, group: &str) {
+    /// Internal method to read all exported files matching the group name pattern `<group>_*`
+    fn read_group_internal(&mut self, group: &str) {
         let pattern = format!("{}_", group);
         let mut record_map = std::collections::HashMap::new();
         
@@ -351,11 +353,8 @@ impl Prebindgen {
         }
     }
 
-    /// Read all exported files for all available groups
-    /// 
-    /// This method automatically discovers all available groups by scanning for 
-    /// `.jsonl` files in the input directory and reads all of them.
-    pub fn read_all(&mut self) {
+    /// Internal method to read all exported files for all available groups
+    fn read_all_groups_internal(&mut self) {
         let mut groups = std::collections::HashSet::new();
         
         // Discover all available groups
@@ -376,7 +375,7 @@ impl Prebindgen {
         
         // Read all discovered groups
         for group in groups {
-            self.read(&group);
+            self.read_group_internal(&group);
         }
     }
 
@@ -471,18 +470,51 @@ impl PrebindgenBuilder {
         self
     }
 
+    /// Select a specific group to read when building the Prebindgen instance
+    /// 
+    /// This method can be called multiple times to select multiple groups.
+    /// If no groups are selected, all available groups will be read.
+    /// 
+    /// # Parameters
+    /// - `group_name`: The name of the group to read
+    pub fn with_group<S: Into<String>>(mut self, group_name: S) -> Self {
+        if self.selected_groups.is_none() {
+            self.selected_groups = Some(std::collections::HashSet::new());
+        }
+        if let Some(ref mut groups) = self.selected_groups {
+            groups.insert(group_name.into());
+        }
+        self
+    }
+
     /// Build the Prebindgen instance with the configured parameters
     /// 
+    /// This method automatically reads the selected groups (or all groups if none selected)
+    /// and returns a fully configured Prebindgen instance.
+    /// 
     /// # Returns
-    /// A configured Prebindgen instance ready for use
+    /// A configured Prebindgen instance with groups already loaded
     pub fn build(self) -> Prebindgen {
-        Prebindgen {
+        let mut pb = Prebindgen {
             records: std::collections::HashMap::new(),
             defined_types: std::collections::HashSet::new(),
             input_dir: self.input_dir,
             crate_name: self.crate_name.unwrap_or_else(|| "unknown_crate".to_string()),
             edition: self.edition.unwrap_or_else(|| "2021".to_string()),
+        };
+
+        // Read the groups based on selection
+        if let Some(selected_groups) = self.selected_groups {
+            // Read only selected groups
+            for group in selected_groups {
+                pb.read_group_internal(&group);
+            }
+        } else {
+            // Read all available groups
+            pb.read_all_groups_internal();
         }
+
+        pb
     }
 }
 
@@ -746,5 +778,40 @@ mod tests {
             .build();
         assert_eq!(pb.crate_name, "crate2");
         assert_eq!(pb.edition, "2024");
+    }
+
+    #[test]
+    fn test_builder_pattern_with_selected_groups() {
+        // Since we can't actually test file reading without setting up files,
+        // we just test that the builder pattern works correctly
+        let pb = Prebindgen::new("/tmp")
+            .crate_name("my_crate")
+            .with_group("structs")
+            .with_group("functions")
+            .build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
+        assert_eq!(pb.crate_name, "my_crate");
+        assert_eq!(pb.edition, "2021");
+    }
+
+    #[test]
+    fn test_builder_pattern_no_groups_selected() {
+        // Test that when no groups are selected, all groups are read
+        let pb = Prebindgen::new("/tmp")
+            .crate_name("my_crate")
+            .build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
+        assert_eq!(pb.crate_name, "my_crate");
+        assert_eq!(pb.edition, "2021");
+    }
+
+    #[test]
+    fn test_builder_pattern_select_group_chaining() {
+        let pb = Prebindgen::new("/tmp")
+            .with_group("group1")
+            .with_group("group2")
+            .with_group("group1") // Should not duplicate
+            .build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
     }
 }

@@ -2,13 +2,10 @@ use prebindgen::Prebindgen;
 use std::path::PathBuf;
 
 fn main() {
-    let mut pb = Prebindgen::new(example_ffi::PREBINDGEN_OUT_DIR)
+    let pb = Prebindgen::new(example_ffi::PREBINDGEN_OUT_DIR)
         .crate_name("example_ffi")
         .edition("2024")
         .build();
-    
-    // Read all available groups
-    pb.read_all();
 
     // Create a file and append all groups to it
     let bindings_file = pb
