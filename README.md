@@ -1,124 +1,112 @@
 # prebindgen
 
-A Rust proc-macro crate that provides the `#[prebindgen]` attribute macro for copying struct and enum definitions to a file during compilation, and `prebindgen_path!` for accessing the destination directory path.
+A Rust system for separating common FFI interface implementation from language-specific binding generation.
+
+## Problem
+
+When creating Rust libraries that need to expose FFI interfaces to multiple languages, you face a dilemma:
+
+- `#[no_mangle] extern "C"` functions can only be defined in `cdylib`/`staticlib` crates
+- If you need bindings for multiple languages, you must either:
+  - Generate all bindings from the same crate (tight coupling)
+  - Manually duplicate FFI functions in each language-specific crate (code duplication)
+
+## Solution
+
+`prebindgen` solves this by generating `#[no_mangle] extern "C"` source code from a common Rust library crate. Language-specific binding crates can then include this generated code and pass it to their respective binding generators (cbindgen, csbindgen, etc.).
 
 ## Features
 
-- Attribute macro that can be applied to structs and enums
-- Copies the complete definition to `prebindgen.rs` in the `OUT_DIR` when available
-- Falls back to a unique directory in the system temp directory when `OUT_DIR` is not available
-- Avoids duplicate definitions in the output file
-- Works in both build-time and development contexts
-- **NEW:** `prebindgen_path!` macro to generate string constants with the destination directory path
-- **NEW:** Global path management - destination path is generated once and reused
+- **Separation of Concerns**: Keep common FFI interface separate from language-specific bindings
+- **Code Reuse**: Generate FFI code once, use in multiple language bindings
+- **Flexible Grouping**: Organize FFI elements into groups for selective handling
+- **Cross-compilation Support**: Handle target-specific code generation correctly
+- **Modern Rust**: Supports Rust 2024 edition with `#[unsafe(no_mangle)]`
 
-## Usage
+## How to Use
 
-Add this to your `Cargo.toml`:
+### 1. In the Common FFI Library Crate
+
+Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
+
+```rust
+use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
+
+// Declare a public constant with the path to prebindgen data
+pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+
+#[prebindgen("structs")]
+#[repr(C)]
+pub struct Point {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[prebindgen("functions")]
+pub fn calculate_distance(p1: &Point, p2: &Point) -> f64 {
+    ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
+}
+```
+
+Call `init_prebindgen_out_dir()` in the crate's `build.rs`:
+
+```rust
+// build.rs
+fn main() {
+    prebindgen::init_prebindgen_out_dir();
+}
+```
+
+### 2. In Language-Specific FFI Binding Crates
+
+Add dependencies to `Cargo.toml`:
 
 ```toml
-[dependencies]
-prebindgen = "0.1.0"
+[build-dependencies]
+my_common_ffi = { path = "../my_common_ffi" }
+prebindgen = "0.1"
+cbindgen = "0.27" # for C bindings
 ```
 
-Then use the macro on your structs and enums:
+Generate bindings in `build.rs`:
 
 ```rust
-use prebindgen::{prebindgen, prebindgen_path};
-
-#[prebindgen]
-#[derive(Debug, Clone)]
-pub struct Person {
-    pub name: String,
-    pub age: u32,
-    pub email: Option<String>,
-}
-
-#[prebindgen]
-#[derive(Debug, PartialEq)]
-pub enum Status {
-    Active,
-    Inactive,
-    Pending { reason: String },
-}
-
-// Generate a constant with the prebindgen destination directory
-prebindgen_path!(PREBINDGEN_DIR);
-
-// Or use the default constant name
-prebindgen_path!(); // Creates PREBINDGEN_PATH
-
 fn main() {
-    println!("Prebindgen directory: {}", PREBINDGEN_DIR);
-    let file_path = format!("{}/prebindgen.rs", PREBINDGEN_DIR);
-    // Use the file_path as needed...
-}
-```
+    let pb = prebindgen::Builder::new(my_common_ffi::PREBINDGEN_OUT_DIR)
+        .edition("2024")
+        .build();
 
-## Accessing Generated Definitions
-
-### Using prebindgen_path! macro
-
-The `prebindgen_path!` macro generates a string constant containing the destination directory path:
-
-```rust
-use prebindgen::prebindgen_path;
-
-// Generate a constant with a custom name
-prebindgen_path!(MY_DEST_DIR);
-
-// Generate a constant with the default name (PREBINDGEN_PATH)
-prebindgen_path!();
-
-fn access_generated_file() {
-    let file_path = format!("{}/prebindgen.rs", MY_DEST_DIR);
-    // Now you can read the generated file, pass the path to other tools, etc.
-}
-```
-
-### During Build Time (with OUT_DIR)
-
-The generated definitions are written to `prebindgen.rs` in your crate's `OUT_DIR`. You can include them in your code using:
-
-```rust
-// Include the generated definitions
-include!(concat!(env!("OUT_DIR"), "/prebindgen.rs"));
-```
-
-### During Development (without OUT_DIR)
-
-When `OUT_DIR` is not available (e.g., during IDE analysis or development), the macro automatically falls back to creating a unique directory in the system temp directory. This ensures the macro works seamlessly in all contexts.
-
-Or in a build script (`build.rs`):
-
-```rust
-use std::env;
-use std::path::Path;
-
-fn main() {
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let prebindgen_path = Path::new(&out_dir).join("prebindgen.rs");
+    let bindings_file = pb.all().write_to_file("ffi_bindings.rs");
     
-    if prebindgen_path.exists() {
-        println!("cargo:rerun-if-changed={}", prebindgen_path.display());
-        // Process the generated file as needed
-    }
+    // Generate C headers with cbindgen
+    cbindgen::Builder::new()
+        .with_crate(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        .with_src(&bindings_file)
+        .generate()
+        .unwrap()
+        .write_to_file("include/bindings.h");
 }
 ```
 
-## How It Works
+Include the generated FFI code:
 
-1. When you apply `#[prebindgen]` to a struct or enum, the macro captures the complete definition
-2. During compilation (when `OUT_DIR` is available), it writes the definition to `prebindgen.rs`
-3. The macro ensures no duplicate definitions are written to the file
-4. The original code remains unchanged and continues to work normally
+```rust
+// In your lib.rs
+include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
+```
 
-## Use Cases
+## Examples
 
-- Code generation workflows
-- Creating copies of types for external tools
-- Build-time type introspection
-- Generating bindings or interfaces
+See the [examples](examples/) directory for complete working examples:
+
+- **example-ffi**: Common FFI library demonstrating prebindgen usage
+- **example-cbindgen**: Language-specific binding using cbindgen for C headers
+
+## Documentation
+
+- **API Reference**: See the [docs.rs documentation](https://docs.rs/prebindgen) for complete API details
+- **Getting Started**: Check [GETTING_STARTED.md](GETTING_STARTED.md) for a step-by-step tutorial
+- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
 
 ## Requirements
 

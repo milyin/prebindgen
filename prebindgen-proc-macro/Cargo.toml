@@ -2,8 +2,13 @@
 name = "prebindgen-proc-macro"
 version = "0.1.0"
 edition = "2024"
-description = "Proc-macro for prebindgen - copies struct and enum definitions to JSON files"
-license = "MIT OR Apache-2.0"
+description = "Procedural macros for prebindgen - export FFI definitions for binding generation"
+license = "MIT"
+authors = ["prebindgen contributors"]
+repository = "https://github.com/your-org/prebindgen"
+documentation = "https://docs.rs/prebindgen-proc-macro"
+keywords = ["ffi", "bindings", "proc-macro", "cbindgen", "csbindgen"]
+categories = ["development-tools", "external-ffi-bindings"]
 
 [lib]
 proc-macro = true

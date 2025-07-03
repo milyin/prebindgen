@@ -1,3 +1,14 @@
+//! # prebindgen-proc-macro
+//!
+//! Procedural macros for the prebindgen system.
+//!
+//! This crate provides the procedural macros used by the prebindgen system:
+//! - `#[prebindgen("group")]` - Attribute macro for marking FFI definitions
+//! - `prebindgen_out_dir!()` - Macro that returns the prebindgen output directory path
+//!
+//! These macros are typically imported from the main `prebindgen` crate rather than
+//! used directly from this crate.
+
 use prebindgen::{get_prebindgen_out_dir, trace, Record, RecordKind};
 use proc_macro::TokenStream;
 use quote::quote;
@@ -20,6 +31,24 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
     get_prebindgen_out_dir().join(format!("{}_{}_{}.jsonl", name, process_id, thread_id_num))
 }
 
+/// Proc macro that returns the prebindgen output directory path as a string literal.
+/// 
+/// This macro generates a string literal containing the full path to the prebindgen
+/// output directory. It should be used to create a public constant that can be
+/// consumed by language-specific binding crates.
+/// 
+/// # Returns
+/// 
+/// A string literal with the path to the prebindgen output directory.
+/// 
+/// # Example
+/// 
+/// ```rust,ignore
+/// use prebindgen_proc_macro::prebindgen_out_dir;
+/// 
+/// // Create a public constant for use by binding crates
+/// pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+/// ```
 #[proc_macro]
 pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
     let file_path = get_prebindgen_out_dir();
@@ -33,8 +62,33 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Attribute macro that copies the annotated item into `<group>.jsonl` in OUT_DIR.
-/// Requires a string literal group name: `#[prebindgen("group_name")]`.
+/// Attribute macro that exports FFI definitions for use in language-specific binding crates.
+/// 
+/// All types and functions marked with this attribute can be made available in dependent 
+/// crates as Rust source code for both binding generator processing (cbindgen, csbindgen, etc.) 
+/// and for including into projects to make the compiler generate `#[no_mangle]` FFI exports 
+/// for cdylib/staticlib targets.
+/// 
+/// # Usage
+/// 
+/// ```rust,ignore
+/// #[prebindgen("group_name")]
+/// #[repr(C)]
+/// pub struct Point {
+///     pub x: f64,
+///     pub y: f64,
+/// }
+/// 
+/// #[prebindgen("functions")]
+/// pub fn calculate_distance(p1: &Point, p2: &Point) -> f64 {
+///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
+/// }
+/// ```
+/// 
+/// # Requirements
+/// 
+/// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
+/// - Requires a string literal group name for organization
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();

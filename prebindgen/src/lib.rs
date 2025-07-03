@@ -65,6 +65,45 @@
 //! In the binding crate's `build.rs`:
 //!
 //! ```rust,ignore
+//! use std::path::PathBuf;
+//!
+//! fn main() {
+//!     // Create a prebindgen builder with the path from the common FFI crate
+//!     let pb = prebindgen::Builder::new(my_common_ffi::PREBINDGEN_OUT_DIR)
+//!         .edition("2024") // Use Rust 2024 edition features
+//!         .build();
+//!
+//!     // Generate all FFI functions and types
+//!     let bindings_file = pb.all().write_to_file("ffi_bindings.rs");
+//!
+//!     // Pass the generated file to cbindgen for C header generation
+//!     generate_c_headers(&bindings_file);
+//! }
+//! ```
+//!
+//! Include the generated Rust files in your project:
+//!
+//! ```rust,ignore
+//! // In your lib.rs or main.rs
+//! include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
+//! ```
+//!     init_prebindgen_out_dir();
+//! }
+//! ```
+//!
+//! ### 2. In Language-Specific FFI Binding Crates
+//!
+//! Add the common FFI library to build dependencies in `Cargo.toml`:
+//!
+//! ```toml
+//! [build-dependencies]
+//! my_common_ffi = { path = "../my_common_ffi" }
+//! prebindgen = "0.1"
+//! ```
+//!
+//! In the binding crate's `build.rs`:
+//!
+//! ```rust,ignore
 //! // TODO
 //! ```
 //!
@@ -81,6 +120,8 @@ use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 mod jsonl;
+/// **Internal API**: JSONL file utilities. Public only for proc-macro crate interaction.
+#[doc(hidden)]
 pub use jsonl::{read_jsonl_file, write_jsonl_file};
 
 /// File extension for data files
@@ -90,33 +131,44 @@ const PREBINDGEN_DIR: &str = "prebindgen";
 /// Name of the file storing the crate name
 const CRATE_NAME_FILE: &str = "crate_name.txt";
 
-/// Represents a record of a struct, enum, union, or function definition
+/// Represents a record of a struct, enum, union, or function definition.
+/// 
+/// **Internal API**: This type is public only for interaction with the proc-macro crate.
+/// It should not be used directly by end users.
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Record {
-    /// The kind of definition (struct, enum, or union)
+    /// The kind of definition (struct, enum, union, or function)
     pub kind: RecordKind,
-    /// The name of the type
+    /// The name of the type or function
     pub name: String,
     /// The full source code content of the definition
     pub content: String,
 }
 
-/// The kind of record (struct, enum, union, or function)
+/// The kind of record (struct, enum, union, or function).
+/// 
+/// **Internal API**: This type is public only for interaction with the proc-macro crate.
+/// It should not be used directly by end users.
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RecordKind {
-    /// A struct definition
+    /// A struct definition with named or unnamed fields
     Struct,
-    /// An enum definition
+    /// An enum definition with variants
     Enum,
-    /// A union definition
+    /// A union definition (C-style union)
     Union,
-    /// A function definition
+    /// A function definition (signature only, body is replaced)
     Function,
 }
 
 impl Record {
-    /// Create a new record
+    /// Create a new record with the specified kind, name, and content.
+    /// 
+    /// **Internal API**: This method is public only for interaction with the proc-macro crate.
+    #[doc(hidden)]
     pub fn new(kind: RecordKind, name: String, content: String) -> Self {
         Self {
             kind,
@@ -125,7 +177,10 @@ impl Record {
         }
     }
 
-    /// Serialize this record to a JSON-lines compatible string
+    /// Serialize this record to a JSON-lines compatible string.
+    /// 
+    /// **Internal API**: This method is public only for interaction with the proc-macro crate.
+    #[doc(hidden)]
     pub fn to_jsonl_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
@@ -142,6 +197,8 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
+/// **Internal API**: Macro for debug tracing. Public only for proc-macro crate interaction.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
@@ -154,7 +211,10 @@ macro_rules! trace {
     };
 }
 /// Get the full path to the prebindgen output directory in OUT_DIR.
-/// This directory contains generated data files with exported definitions.
+/// 
+/// **Internal API**: This function is public only for interaction with the proc-macro crate.
+/// User code should use the `prebindgen_out_dir!()` macro instead.
+#[doc(hidden)]
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
     let out_dir = std::env::var("OUT_DIR")
         .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
@@ -169,6 +229,30 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
+/// Initialize the prebindgen output directory for the current crate.
+/// 
+/// This function must be called in the `build.rs` file of any crate that uses
+/// the `#[prebindgen]` attribute macro. It performs the following operations:
+/// 
+/// 1. Creates the prebindgen output directory in `OUT_DIR`
+/// 2. Clears any existing files from the directory
+/// 3. Stores the current crate's name for later reference
+/// 
+/// # Panics
+/// 
+/// Panics if:
+/// - `CARGO_PKG_NAME` environment variable is not set
+/// - `OUT_DIR` environment variable is not set  
+/// - Directory creation or file operations fail
+/// 
+/// # Example
+/// 
+/// ```rust,ignore
+/// // build.rs
+/// fn main() {
+///     prebindgen::init_prebindgen_out_dir();
+/// }
+/// ```
 pub fn init_prebindgen_out_dir() {
     // Get the crate name from CARGO_PKG_NAME
     let crate_name = env::var("CARGO_PKG_NAME").expect(
@@ -208,7 +292,25 @@ pub fn init_prebindgen_out_dir() {
     });
 }
 
-/// Helper for reading exported records and generating Rust bindings per group
+/// Helper for reading exported records and generating Rust bindings per group.
+/// 
+/// This is the main interface for consuming prebindgen data in language-specific
+/// binding crates. It reads the exported FFI definitions and can generate
+/// `#[no_mangle] extern "C"` functions that call back to the original crate.
+/// 
+/// # Example
+/// 
+/// ```rust,ignore
+/// let pb = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR)
+///     .edition("2024")
+///     .build();
+/// 
+/// // Generate all groups
+/// let all_bindings = pb.all().write_to_file("all_ffi.rs");
+/// 
+/// // Or generate specific groups
+/// let structs_only = pb.group("structs").write_to_file("structs.rs");
+/// ```
 pub struct Prebindgen {
     records: std::collections::HashMap<String, Vec<Record>>,
     defined_types: std::collections::HashSet<String>,
@@ -217,7 +319,21 @@ pub struct Prebindgen {
     edition: String,
 }
 
-/// Builder for configuring Prebindgen with optional parameters
+/// Builder for configuring Prebindgen with optional parameters.
+/// 
+/// This builder allows you to configure how prebindgen reads and processes
+/// the exported FFI definitions before building the final `Prebindgen` instance.
+/// 
+/// # Example
+/// 
+/// ```rust,ignore
+/// let prebindgen = prebindgen::Builder::new("/path/to/prebindgen/data")
+///     .crate_name("my_custom_crate")
+///     .edition("2024")
+///     .select_group("structs")
+///     .select_group("functions") 
+///     .build();
+/// ```
 pub struct Builder {
     input_dir: std::path::PathBuf,
     crate_name: Option<String>,
@@ -225,7 +341,21 @@ pub struct Builder {
     selected_groups: Option<std::collections::HashSet<String>>,
 }
 
-/// Builder for writing groups to files with append capability
+/// Builder for writing groups to files with append capability.
+/// 
+/// This builder is returned by `Prebindgen::group()` and `Prebindgen::all()` methods
+/// and allows you to select multiple groups and write them to a single output file.
+/// 
+/// # Example
+/// 
+/// ```rust,ignore
+/// // Write multiple groups to one file
+/// let combined = prebindgen
+///     .group("structs")
+///     .group("enums")
+///     .group("functions")
+///     .write_to_file("combined_ffi.rs");
+/// ```
 pub struct FileBuilder<'a> {
     prebindgen: &'a Prebindgen,
     groups: Vec<String>,
@@ -305,6 +435,24 @@ impl Prebindgen {
         }
     }
 
+    /// Select a specific group for file generation.
+    /// 
+    /// Returns a `FileBuilder` that can be used to write the specified group
+    /// to a file, optionally combined with other groups.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `group_name` - Name of the group to select
+    /// 
+    /// # Returns
+    /// 
+    /// A `FileBuilder` configured to write the specified group.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let structs_file = prebindgen.group("structs").write_to_file("structs.rs");
+    /// ```
     pub fn group(&self, group_name: &str) -> FileBuilder<'_> {
         FileBuilder {
             prebindgen: self,
@@ -312,6 +460,20 @@ impl Prebindgen {
         }
     }
 
+    /// Select all available groups for file generation.
+    /// 
+    /// Returns a `FileBuilder` that can be used to write all available groups
+    /// to a file. This is equivalent to calling `group()` for each available group.
+    /// 
+    /// # Returns
+    /// 
+    /// A `FileBuilder` configured to write all available groups.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let all_file = prebindgen.all().write_to_file("all_bindings.rs");
+    /// ```
     pub fn all(&self) -> FileBuilder<'_> {
         FileBuilder {
             prebindgen: self,
@@ -349,6 +511,21 @@ impl Prebindgen {
 }
 
 impl Builder {
+    /// Create a new builder with the specified input directory.
+    /// 
+    /// The input directory should contain the prebindgen data files generated
+    /// by the common FFI crate. This is typically obtained from the
+    /// `PREBINDGEN_OUT_DIR` constant exported by the common FFI crate.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `input_dir` - Path to the directory containing prebindgen data files
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR);
+    /// ```
     pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
@@ -357,14 +534,66 @@ impl Builder {
             selected_groups: None,
         }
     }
+    
+    /// Override the source crate name used in generated extern "C" functions.
+    /// 
+    /// By default, the crate name is read from the prebindgen data files.
+    /// This method allows you to override it, which can be useful when
+    /// the crate has been renamed or when you want to use a different
+    /// module path in the generated calls.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `crate_name` - The crate name to use in generated function calls
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .crate_name("my_renamed_crate");
+    /// ```
     pub fn crate_name<S: Into<String>>(mut self, crate_name: S) -> Self {
         self.crate_name = Some(crate_name.into());
         self
     }
+    
+    /// Set the Rust edition to use for generated code.
+    /// 
+    /// This affects how the `#[no_mangle]` attribute is generated:
+    /// - For edition "2024": `#[unsafe(no_mangle)]`
+    /// - For other editions: `#[no_mangle]`
+    /// 
+    /// # Arguments
+    /// 
+    /// * `edition` - The Rust edition ("2021", "2024", etc.)
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .edition("2024");
+    /// ```
     pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
         self.edition = Some(edition.into());
         self
     }
+    
+    /// Select a specific group to include in the final Prebindgen instance.
+    /// 
+    /// This method can be called multiple times to select multiple groups.
+    /// If no groups are selected, all available groups will be included.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `group_name` - Name of the group to include
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .select_group("structs")
+    ///     .select_group("core_functions");
+    /// ```
     pub fn select_group<S: Into<String>>(mut self, group_name: S) -> Self {
         if self.selected_groups.is_none() {
             self.selected_groups = Some(std::collections::HashSet::new());
@@ -374,6 +603,28 @@ impl Builder {
         }
         self
     }
+    
+    /// Build the configured Prebindgen instance.
+    /// 
+    /// This method reads the prebindgen data files from the input directory
+    /// and creates a `Prebindgen` instance ready for generating FFI bindings.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if the input directory was not properly initialized with
+    /// `init_prebindgen_out_dir()` in the source crate's build.rs.
+    /// 
+    /// # Returns
+    /// 
+    /// A configured `Prebindgen` instance ready for use.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let prebindgen = prebindgen::Builder::new(path)
+    ///     .edition("2024")
+    ///     .build();
+    /// ```
     pub fn build(self) -> Prebindgen {
         // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
         let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
@@ -409,11 +660,62 @@ impl Builder {
 }
 
 impl<'a> FileBuilder<'a> {
+    /// Add another group to the selection.
+    /// 
+    /// This allows you to combine multiple groups into a single output file.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `group_name` - Name of the additional group to include
+    /// 
+    /// # Returns
+    /// 
+    /// The same `FileBuilder` with the additional group added.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let combined = prebindgen
+    ///     .group("structs")
+    ///     .group("enums")
+    ///     .group("functions")
+    ///     .write_to_file("combined.rs");
+    /// ```
     pub fn group<S: Into<String>>(mut self, group_name: S) -> Self {
         self.groups.push(group_name.into());
         self
     }
 
+    /// Write the selected groups to a file.
+    /// 
+    /// Generates the Rust source code for all selected groups and writes it
+    /// to the specified file. For functions, this generates `#[no_mangle] extern "C"`
+    /// wrapper functions that call the original functions from the source crate.
+    /// For types (structs, enums, unions), this copies the original definitions.
+    /// 
+    /// If the file path is relative, it will be created relative to `OUT_DIR`.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `file_name` - Path where the generated code should be written
+    /// 
+    /// # Returns
+    /// 
+    /// The absolute path to the generated file.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if:
+    /// - `OUT_DIR` environment variable is not set
+    /// - File creation fails
+    /// - Writing to the file fails
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let output_file = prebindgen.all().write_to_file("ffi_bindings.rs");
+    /// println!("Generated FFI bindings at: {}", output_file.display());
+    /// ```
     pub fn write_to_file<P: AsRef<Path>>(self, file_name: P) -> std::path::PathBuf {
         // Prepend with OUT_DIR if file_name is relative
         let file_name = if file_name.as_ref().is_relative() {

@@ -2,8 +2,14 @@
 name = "prebindgen"
 version = "0.1.0"
 edition = "2024"
-description = "Split FFI definitions and actual FFI export to static/cdylib to separate crates"
+description = "Separate FFI implementation and language-specific binding into different crates"
 license = "MIT OR Apache-2.0"
+authors = ["Michael Ilyin <milyin@gmail.com>"]
+repository = "https://github.com/milyin/prebindgen"
+documentation = "https://docs.rs/prebindgen"
+readme = "../README.md"
+keywords = ["ffi", "bindings", "cbindgen", "csbindgen", "cross-platform"]
+categories = ["development-tools", "external-ffi-bindings"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
