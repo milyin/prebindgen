@@ -69,12 +69,11 @@
 //! use std::path::Path;
 //!
 //! fn main() {
-//!     // Create prebindgen context with path to generated data and crate name
-//!     let mut pb = Prebindgen::new(
-//!         Path::new(my_common_ffi::PREBINDGEN_OUT_DIR),
-//!         "my_common_ffi",  // String literals work due to Into<String>
-//!         2024.to_string()
-//!     );
+//!     // Create prebindgen context with path to generated data
+//!     let mut pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
+//!         .crate_name("my_common_ffi")
+//!         .edition("2024")
+//!         .build();
 //!
 //!     // Read the prebindgen data by group
 //!     pb.read("structs");
@@ -120,9 +119,14 @@
 //! ## Core API
 //!
 //! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
+//!   - [`Prebindgen::new()`]: Create a new PrebindgenBuilder with the input directory path
 //!   - [`Prebindgen::read()`]: Read exported definitions for a group
 //!   - [`Prebindgen::read_all()`]: Read exported definitions for all available groups
 //!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
+//! - [`PrebindgenBuilder`]: Builder for configuring Prebindgen with optional parameters
+//!   - [`PrebindgenBuilder::crate_name()`]: Set the source crate name (optional)
+//!   - [`PrebindgenBuilder::edition()`]: Set the Rust edition (optional, defaults to "2021")
+//!   - [`PrebindgenBuilder::build()`]: Build the configured Prebindgen instance
 //! - [`FileBuilder`]: Builder for appending groups to a file
 //!   - [`FileBuilder::append()`]: Append a specific group to the file
 //!   - [`FileBuilder::append_all()`]: Append all loaded groups to the file
@@ -266,6 +270,13 @@ pub struct Prebindgen {
     edition: String,
 }
 
+/// Builder for configuring Prebindgen with optional parameters
+pub struct PrebindgenBuilder {
+    input_dir: std::path::PathBuf,
+    crate_name: Option<String>,
+    edition: Option<String>,
+}
+
 /// Builder for writing groups to files with append capability
 pub struct FileBuilder<'a> {
     prebindgen: &'a Prebindgen,
@@ -273,14 +284,26 @@ pub struct FileBuilder<'a> {
 }
 
 impl Prebindgen {
-    /// Create a new Prebindgen context with specified directory, crate name, and edition
-    pub fn new<P: AsRef<Path>, S: Into<String>, E: Into<String>>(input_dir: P, crate_name: S, edition: E) -> Self {
-        Self {
-            records: std::collections::HashMap::new(),
-            defined_types: std::collections::HashSet::new(),
+    /// Create a new Prebindgen context with the specified input directory
+    /// 
+    /// # Parameters
+    /// - `input_dir`: Path to the directory containing prebindgen data files
+    /// 
+    /// # Returns
+    /// A PrebindgenBuilder for configuring optional parameters
+    /// 
+    /// # Example
+    /// ```rust,ignore
+    /// let pb = Prebindgen::new(Path::new("/path/to/prebindgen/data"))
+    ///     .crate_name("my_crate")
+    ///     .edition("2024")
+    ///     .build();
+    /// ```
+    pub fn new<P: AsRef<Path>>(input_dir: P) -> PrebindgenBuilder {
+        PrebindgenBuilder {
             input_dir: input_dir.as_ref().to_path_buf(),
-            crate_name: crate_name.into(),
-            edition: edition.into(),
+            crate_name: None,
+            edition: None,
         }
     }
 
@@ -420,6 +443,46 @@ impl Prebindgen {
         .unwrap_or_else(|e| {
             panic!("Failed to generate {}: {}", dest_path.display(), e);
         })
+    }
+}
+
+impl PrebindgenBuilder {
+    /// Set the crate name for the Prebindgen context
+    /// 
+    /// This is used when generating function stubs to call the original functions.
+    /// If not set, defaults to "unknown_crate".
+    /// 
+    /// # Parameters
+    /// - `crate_name`: The name of the source crate containing the original functions
+    pub fn crate_name<S: Into<String>>(mut self, crate_name: S) -> Self {
+        self.crate_name = Some(crate_name.into());
+        self
+    }
+
+    /// Set the Rust edition for the Prebindgen context
+    /// 
+    /// This affects how certain attributes are generated (e.g., #[unsafe(no_mangle)] for 2024 edition).
+    /// If not set, defaults to "2021".
+    /// 
+    /// # Parameters
+    /// - `edition`: The Rust edition as a string (e.g., "2021", "2024")
+    pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
+        self.edition = Some(edition.into());
+        self
+    }
+
+    /// Build the Prebindgen instance with the configured parameters
+    /// 
+    /// # Returns
+    /// A configured Prebindgen instance ready for use
+    pub fn build(self) -> Prebindgen {
+        Prebindgen {
+            records: std::collections::HashMap::new(),
+            defined_types: std::collections::HashSet::new(),
+            input_dir: self.input_dir,
+            crate_name: self.crate_name.unwrap_or_else(|| "unknown_crate".to_string()),
+            edition: self.edition.unwrap_or_else(|| "2021".to_string()),
+        }
     }
 }
 
@@ -626,4 +689,62 @@ fn transform_function_to_stub(
     );
 
     Ok(stub)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_builder_pattern_minimal() {
+        let pb = Prebindgen::new("/tmp").build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
+        assert_eq!(pb.crate_name, "unknown_crate");
+        assert_eq!(pb.edition, "2021");
+    }
+
+    #[test]
+    fn test_builder_pattern_with_crate_name() {
+        let pb = Prebindgen::new("/tmp")
+            .crate_name("my_crate")
+            .build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
+        assert_eq!(pb.crate_name, "my_crate");
+        assert_eq!(pb.edition, "2021");
+    }
+
+    #[test]
+    fn test_builder_pattern_full_config() {
+        let pb = Prebindgen::new("/tmp")
+            .crate_name("my_crate")
+            .edition("2024")
+            .build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
+        assert_eq!(pb.crate_name, "my_crate");
+        assert_eq!(pb.edition, "2024");
+    }
+
+    #[test]
+    fn test_builder_pattern_with_path_ref() {
+        let pb = Prebindgen::new(Path::new("/tmp"))
+            .crate_name("my_crate")
+            .edition("2021")
+            .build();
+        assert_eq!(pb.input_dir, Path::new("/tmp"));
+        assert_eq!(pb.crate_name, "my_crate");
+        assert_eq!(pb.edition, "2021");
+    }
+
+    #[test]
+    fn test_builder_pattern_chaining() {
+        let pb = Prebindgen::new("/tmp")
+            .crate_name("crate1")
+            .crate_name("crate2") // Should override
+            .edition("2018")
+            .edition("2024") // Should override
+            .build();
+        assert_eq!(pb.crate_name, "crate2");
+        assert_eq!(pb.edition, "2024");
+    }
 }
