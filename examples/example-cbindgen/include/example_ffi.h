@@ -29,12 +29,12 @@ typedef struct Foo {
 
 void copy_bar(struct Bar *_dst, const struct Bar *_src);
 
-bool another_test_function(void);
-
 void copy_foo(struct Foo *_dst, const struct Foo *_src);
 
-void void_function(int32_t _x);
+bool another_test_function(void);
 
 int32_t test_function(int32_t _a, double _b);
+
+void void_function(int32_t _x);
 
 #endif  /* EXAMPLE_FFI_H */

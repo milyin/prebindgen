@@ -3,13 +3,13 @@
 //! Procedural macros for the prebindgen system.
 //!
 //! This crate provides the procedural macros used by the prebindgen system:
-//! - `#[prebindgen("group")]` - Attribute macro for marking FFI definitions
+//! - `#[prebindgen]` or `#[prebindgen("group")]` - Attribute macro for marking FFI definitions
 //! - `prebindgen_out_dir!()` - Macro that returns the prebindgen output directory path
 //!
 //! These macros are typically imported from the main `prebindgen` crate rather than
 //! used directly from this crate.
 
-use prebindgen::{get_prebindgen_out_dir, trace, Record, RecordKind};
+use prebindgen::{get_prebindgen_out_dir, trace, Record, RecordKind, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::LitStr;
@@ -72,6 +72,7 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 /// # Usage
 /// 
 /// ```rust,ignore
+/// // Use with explicit group name
 /// #[prebindgen("group_name")]
 /// #[repr(C)]
 /// pub struct Point {
@@ -79,23 +80,36 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 ///     pub y: f64,
 /// }
 /// 
-/// #[prebindgen("functions")]
+/// // Use with default group name "default"
+/// #[prebindgen]
 /// pub fn calculate_distance(p1: &Point, p2: &Point) -> f64 {
 ///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
+/// }
+/// 
+/// // Or specify a group name
+/// #[prebindgen("functions")]
+/// pub fn another_function() -> i32 {
+///     42
 /// }
 /// ```
 /// 
 /// # Requirements
 /// 
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
-/// - Requires a string literal group name for organization
+/// - Optionally takes a string literal group name for organization (defaults to "default")
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
-    // Parse required JSON group name literal
-    let group_lit = syn::parse::<LitStr>(args)
-        .expect("`#[prebindgen]` requires a string literal group name");
-    let group = group_lit.value();
+    
+    // Parse optional group name literal - use default if not provided
+    let group = if args.is_empty() {
+        DEFAULT_GROUP_NAME.to_string()
+    } else {
+        let group_lit = syn::parse::<LitStr>(args)
+            .expect("`#[prebindgen]` group name must be a string literal");
+        group_lit.value()
+    };
+    
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
     let dest_path = Path::new(&file_path);

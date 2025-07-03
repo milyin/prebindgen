@@ -70,7 +70,6 @@
 //! fn main() {
 //!     // Create a prebindgen builder with the path from the common FFI crate
 //!     let pb = prebindgen::Builder::new(my_common_ffi::PREBINDGEN_OUT_DIR)
-//!         .edition("2024") // Use Rust 2024 edition features
 //!         .build();
 //!
 //!     // Generate all FFI functions and types
@@ -84,34 +83,10 @@
 //! Include the generated Rust files in your project:
 //!
 //! ```rust,ignore
-//! // In your lib.rs or main.rs
+//! // In your lib.rs
 //! include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 //! ```
-//!     init_prebindgen_out_dir();
-//! }
-//! ```
 //!
-//! ### 2. In Language-Specific FFI Binding Crates
-//!
-//! Add the common FFI library to build dependencies in `Cargo.toml`:
-//!
-//! ```toml
-//! [build-dependencies]
-//! my_common_ffi = { path = "../my_common_ffi" }
-//! prebindgen = "0.1"
-//! ```
-//!
-//! In the binding crate's `build.rs`:
-//!
-//! ```rust,ignore
-//! // TODO
-//! ```
-//!
-//! Include the generated Rust files in your project:
-//!
-//! ```rust,ignore
-//! // TODO
-//! ```
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -128,8 +103,10 @@ pub use jsonl::{read_jsonl_file, write_jsonl_file};
 const JSONL_EXTENSION: &str = ".jsonl";
 /// Name of the prebindgen output directory
 const PREBINDGEN_DIR: &str = "prebindgen";
-/// Name of the file storing the crate name
+/// File name for storing the crate name
 const CRATE_NAME_FILE: &str = "crate_name.txt";
+/// Default group name for prebindgen when no group is specified
+pub const DEFAULT_GROUP_NAME: &str = "default";
 
 /// Represents a record of a struct, enum, union, or function definition.
 /// 
@@ -292,17 +269,14 @@ pub fn init_prebindgen_out_dir() {
     });
 }
 
-/// Helper for reading exported records and generating Rust bindings per group.
-/// 
 /// This is the main interface for consuming prebindgen data in language-specific
-/// binding crates. It reads the exported FFI definitions and can generate
-/// `#[no_mangle] extern "C"` functions that call back to the original crate.
+/// binding crates. It reads the exported FFI definitions and generates
+/// `#[no_mangle] extern "C"` wrapper functions that call back to the original crate.
 /// 
 /// # Example
 /// 
 /// ```rust,ignore
 /// let pb = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR)
-///     .edition("2024")
 ///     .build();
 /// 
 /// // Generate all groups
@@ -567,11 +541,13 @@ impl Builder {
     /// 
     /// * `edition` - The Rust edition ("2021", "2024", etc.)
     /// 
+    /// Default is "2024" if not specified.
+    /// 
     /// # Example
     /// 
     /// ```rust,ignore
     /// let builder = prebindgen::Builder::new(path)
-    ///     .edition("2024");
+    ///     .edition("2021");
     /// ```
     pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
         self.edition = Some(edition.into());
@@ -622,7 +598,7 @@ impl Builder {
     /// 
     /// ```rust,ignore
     /// let prebindgen = prebindgen::Builder::new(path)
-    ///     .edition("2024")
+    ///     .edition("2021")
     ///     .build();
     /// ```
     pub fn build(self) -> Prebindgen {
@@ -641,7 +617,7 @@ impl Builder {
             defined_types: std::collections::HashSet::new(),
             input_dir: self.input_dir,
             crate_name,
-            edition: self.edition.unwrap_or_else(|| "2021".to_string()),
+            edition: self.edition.unwrap_or_else(|| "2024".to_string()),
         };
 
         // Read the groups based on selection

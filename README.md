@@ -35,14 +35,14 @@ use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 // Declare a public constant with the path to prebindgen data
 pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 
-#[prebindgen("structs")]
+#[prebindgen]
 #[repr(C)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
 }
 
-#[prebindgen("functions")]
+#[prebindgen]
 pub fn calculate_distance(p1: &Point, p2: &Point) -> f64 {
     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
 }
@@ -105,14 +105,3 @@ See the [examples](examples/) directory for complete working examples:
 ## Documentation
 
 - **API Reference**: See the [docs.rs documentation](https://docs.rs/prebindgen) for complete API details
-- **Getting Started**: Check [GETTING_STARTED.md](GETTING_STARTED.md) for a step-by-step tutorial
-- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
-
-## Requirements
-
-- Rust 2021 edition or later
-- Available during build time (requires `OUT_DIR` environment variable)
-
-## License
-
-This project is licensed under the MIT License.
