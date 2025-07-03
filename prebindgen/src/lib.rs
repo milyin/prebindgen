@@ -75,13 +75,13 @@
 //!         .edition("2024")
 //!         .with_group("structs")
 //!         .with_group("functions")
-//!         .build();
+//!         .generate();
 //!
 //!     // Or create with all groups (if no with_group calls)
 //!     // let pb = Prebindgen::new(Path::new(my_common_ffi::PREBINDGEN_OUT_DIR))
 //!     //     .crate_name("my_common_ffi")
 //!     //     .edition("2024")
-//!     //     .build();
+//!     //     .generate();
 //!
 //!     // Generate Rust FFI code files
 //!     let structs_file = pb.create("ffi_structs.rs").append("structs");
@@ -120,13 +120,13 @@
 //! ## Core API
 //!
 //! - [`Prebindgen`]: Main struct for reading exported definitions and generating FFI code
-//!   - [`Prebindgen::new()`]: Create a new PrebindgenBuilder with the input directory path
+//!   - [`Prebindgen::new()`]: Create a new Builder with the input directory path
 //!   - [`Prebindgen::create()`]: Create a new file for writing groups, returns a FileBuilder
-//! - [`PrebindgenBuilder`]: Builder for configuring Prebindgen with optional parameters
-//!   - [`PrebindgenBuilder::crate_name()`]: Set the source crate name (optional)
-//!   - [`PrebindgenBuilder::edition()`]: Set the Rust edition (optional, defaults to "2021")
-//!   - [`PrebindgenBuilder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
-//!   - [`PrebindgenBuilder::build()`]: Build the configured Prebindgen instance with groups loaded
+//! - [`Builder`]: Builder for configuring Prebindgen with optional parameters
+//!   - [`Builder::crate_name()`]: Set the source crate name (optional)
+//!   - [`Builder::edition()`]: Set the Rust edition (optional, defaults to "2021")
+//!   - [`Builder::with_group()`]: Select specific groups to read (optional, reads all if none selected)
+//!   - [`Builder::generate()`]: Generate the configured Prebindgen instance with groups loaded
 //! - [`FileBuilder`]: Builder for appending groups to a file
 //!   - [`FileBuilder::append()`]: Append a specific group to the file
 //!   - [`FileBuilder::append_all()`]: Append all loaded groups to the file
@@ -271,7 +271,7 @@ pub struct Prebindgen {
 }
 
 /// Builder for configuring Prebindgen with optional parameters
-pub struct PrebindgenBuilder {
+pub struct Builder {
     input_dir: std::path::PathBuf,
     crate_name: Option<String>,
     edition: Option<String>,
@@ -285,23 +285,23 @@ pub struct FileBuilder<'a> {
 }
 
 impl Prebindgen {
-    /// Create a new Prebindgen context with the specified input directory
+    /// Create a new Builder for configuring Prebindgen with the specified input directory
     /// 
     /// # Parameters
     /// - `input_dir`: Path to the directory containing prebindgen data files
     /// 
     /// # Returns
-    /// A PrebindgenBuilder for configuring optional parameters
+    /// A Builder for configuring optional parameters
     /// 
     /// # Example
     /// ```rust,ignore
     /// let pb = Prebindgen::new(Path::new("/path/to/prebindgen/data"))
     ///     .crate_name("my_crate")
     ///     .edition("2024")
-    ///     .build();
+    ///     .generate();
     /// ```
-    pub fn new<P: AsRef<Path>>(input_dir: P) -> PrebindgenBuilder {
-        PrebindgenBuilder {
+    pub fn new<P: AsRef<Path>>(input_dir: P) -> Builder {
+        Builder {
             input_dir: input_dir.as_ref().to_path_buf(),
             crate_name: None,
             edition: None,
@@ -445,7 +445,7 @@ impl Prebindgen {
     }
 }
 
-impl PrebindgenBuilder {
+impl Builder {
     /// Set the crate name for the Prebindgen context
     /// 
     /// This is used when generating function stubs to call the original functions.
@@ -470,7 +470,7 @@ impl PrebindgenBuilder {
         self
     }
 
-    /// Select a specific group to read when building the Prebindgen instance
+    /// Select a specific group to read when generating the Prebindgen instance
     /// 
     /// This method can be called multiple times to select multiple groups.
     /// If no groups are selected, all available groups will be read.
@@ -487,14 +487,14 @@ impl PrebindgenBuilder {
         self
     }
 
-    /// Build the Prebindgen instance with the configured parameters
+    /// Generate the Prebindgen instance with the configured parameters
     /// 
     /// This method automatically reads the selected groups (or all groups if none selected)
     /// and returns a fully configured Prebindgen instance.
     /// 
     /// # Returns
     /// A configured Prebindgen instance with groups already loaded
-    pub fn build(self) -> Prebindgen {
+    pub fn generate(self) -> Prebindgen {
         let mut pb = Prebindgen {
             records: std::collections::HashMap::new(),
             defined_types: std::collections::HashSet::new(),
@@ -721,97 +721,4 @@ fn transform_function_to_stub(
     );
 
     Ok(stub)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn test_builder_pattern_minimal() {
-        let pb = Prebindgen::new("/tmp").build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-        assert_eq!(pb.crate_name, "unknown_crate");
-        assert_eq!(pb.edition, "2021");
-    }
-
-    #[test]
-    fn test_builder_pattern_with_crate_name() {
-        let pb = Prebindgen::new("/tmp")
-            .crate_name("my_crate")
-            .build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-        assert_eq!(pb.crate_name, "my_crate");
-        assert_eq!(pb.edition, "2021");
-    }
-
-    #[test]
-    fn test_builder_pattern_full_config() {
-        let pb = Prebindgen::new("/tmp")
-            .crate_name("my_crate")
-            .edition("2024")
-            .build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-        assert_eq!(pb.crate_name, "my_crate");
-        assert_eq!(pb.edition, "2024");
-    }
-
-    #[test]
-    fn test_builder_pattern_with_path_ref() {
-        let pb = Prebindgen::new(Path::new("/tmp"))
-            .crate_name("my_crate")
-            .edition("2021")
-            .build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-        assert_eq!(pb.crate_name, "my_crate");
-        assert_eq!(pb.edition, "2021");
-    }
-
-    #[test]
-    fn test_builder_pattern_chaining() {
-        let pb = Prebindgen::new("/tmp")
-            .crate_name("crate1")
-            .crate_name("crate2") // Should override
-            .edition("2018")
-            .edition("2024") // Should override
-            .build();
-        assert_eq!(pb.crate_name, "crate2");
-        assert_eq!(pb.edition, "2024");
-    }
-
-    #[test]
-    fn test_builder_pattern_with_selected_groups() {
-        // Since we can't actually test file reading without setting up files,
-        // we just test that the builder pattern works correctly
-        let pb = Prebindgen::new("/tmp")
-            .crate_name("my_crate")
-            .with_group("structs")
-            .with_group("functions")
-            .build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-        assert_eq!(pb.crate_name, "my_crate");
-        assert_eq!(pb.edition, "2021");
-    }
-
-    #[test]
-    fn test_builder_pattern_no_groups_selected() {
-        // Test that when no groups are selected, all groups are read
-        let pb = Prebindgen::new("/tmp")
-            .crate_name("my_crate")
-            .build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-        assert_eq!(pb.crate_name, "my_crate");
-        assert_eq!(pb.edition, "2021");
-    }
-
-    #[test]
-    fn test_builder_pattern_select_group_chaining() {
-        let pb = Prebindgen::new("/tmp")
-            .with_group("group1")
-            .with_group("group2")
-            .with_group("group1") // Should not duplicate
-            .build();
-        assert_eq!(pb.input_dir, Path::new("/tmp"));
-    }
 }

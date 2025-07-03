@@ -5,7 +5,7 @@ fn main() {
     let pb = Prebindgen::new(example_ffi::PREBINDGEN_OUT_DIR)
         .crate_name("example_ffi")
         .edition("2024")
-        .build();
+        .generate();
 
     // Create a file and append all groups to it
     let bindings_file = pb
