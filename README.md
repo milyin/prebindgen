@@ -1,27 +1,19 @@
 # prebindgen
 
-A Rust system for separating common FFI interface implementation from language-specific binding generation.
+A Rust utility crate for separating common FFI interface implementation and language-specific binding generation into deifferent crates.
 
 ## Problem
 
-When creating Rust libraries that need to expose FFI interfaces to multiple languages, you face a dilemma:
+In the Rust `#[no_mangle] extern "C"` functions must be defined in `cdylib`/`staticlib` crate. The reexport of them from simple `lib` crate doesn't work. The issue [2771](https://github.com/rust-lang/rfcs/issues/2771) mentioning this problem is still open.
 
-- `#[no_mangle] extern "C"` functions can only be defined in `cdylib`/`staticlib` crates
-- If you need bindings for multiple languages, you must either:
-  - Generate all bindings from the same crate (tight coupling)
-  - Manually duplicate FFI functions in each language-specific crate (code duplication)
+So when creating Rust libraries that need to expose FFI interfaces to multiple languages, you face a dilemma:
+
+- Generate all bindings from the same crate (tight coupling)
+- Manually duplicate FFI functions in each language-specific crate (code duplication)
 
 ## Solution
 
 `prebindgen` solves this by generating `#[no_mangle] extern "C"` source code from a common Rust library crate. Language-specific binding crates can then include this generated code and pass it to their respective binding generators (cbindgen, csbindgen, etc.).
-
-## Features
-
-- **Separation of Concerns**: Keep common FFI interface separate from language-specific bindings
-- **Code Reuse**: Generate FFI code once, use in multiple language bindings
-- **Flexible Grouping**: Organize FFI elements into groups for selective handling
-- **Cross-compilation Support**: Handle target-specific code generation correctly
-- **Modern Rust**: Supports Rust 2024 edition with `#[unsafe(no_mangle)]`
 
 ## How to Use
 
