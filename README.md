@@ -19,6 +19,16 @@ So when creating Rust libraries that need to expose FFI interfaces to multiple l
 
 ### 1. In the Common FFI Library Crate
 
+Add dependencies to `Cargo.toml`:
+
+```toml
+[dependencies]
+prebindgen-proc-macro = "0.1"
+
+[build-dependencies]
+prebindgen = "0.1"
+```
+
 Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 
 ```rust
@@ -54,6 +64,9 @@ fn main() {
 Add dependencies to `Cargo.toml`:
 
 ```toml
+[dependencies]
+my_common_ffi = { path = "../my_common_ffi" }
+
 [build-dependencies]
 my_common_ffi = { path = "../my_common_ffi" }
 prebindgen = "0.1"
