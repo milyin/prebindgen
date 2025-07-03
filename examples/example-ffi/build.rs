@@ -19,9 +19,9 @@ fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let generate_for_target = |target: &str| {
         let bar = if target.contains("x86_64") {
-            "#[prebindgen(\"structs\")]\n#[repr(C)]\npub struct Bar { pub x86_64_field: u64 }".to_string()
+            "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub x86_64_field: u64 }".to_string()
         } else if target.contains("aarch64") {
-            "#[prebindgen(\"structs\")]\n#[repr(C)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
+            "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
         } else {
             panic!("Unsupported architecture: {}", target);
         };

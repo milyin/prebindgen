@@ -12,21 +12,23 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct Bar {
+  uint64_t aarch64_field;
+} Bar;
+
 typedef struct Foo {
   uint64_t x86_64_field;
   uint64_t aarch64_field;
 } Foo;
 
-typedef struct Bar {
-  uint64_t aarch64_field;
-} Bar;
+void copy_bar(struct Bar *_dst, const struct Bar *_src);
 
 bool another_test_function(void);
 
 void void_function(int32_t _x);
 
-int32_t test_function(int32_t _a, double _b);
-
 void copy_foo(struct Foo *_dst, const struct Foo *_src);
+
+int32_t test_function(int32_t _a, double _b);
 
 #endif  /* EXAMPLE_FFI_H */

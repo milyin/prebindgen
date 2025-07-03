@@ -29,6 +29,13 @@ pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) {
 }
 
 #[prebindgen("functions")]
+pub fn copy_bar(dst: &mut std::mem::MaybeUninit<Bar>, src: &Bar) {
+    unsafe {
+        dst.as_mut_ptr().write(*src);
+    }
+}
+
+#[prebindgen("functions")]
 pub fn test_function(a: i32, b: f64) -> i32 {
     // This implementation will be ignored, only the signature is stored
     a + b as i32
