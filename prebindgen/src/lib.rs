@@ -401,21 +401,6 @@ impl Prebindgen {
 }
 
 impl Builder {
-    /// Create a new Builder for configuring Prebindgen with the specified input directory
-    ///
-    /// # Parameters
-    /// - `input_dir`: Path to the directory containing prebindgen data files
-    ///
-    /// # Returns
-    /// A Builder for configuring optional parameters
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// let pb = Builder::new(Path::new("/path/to/prebindgen/data"))
-    ///     .crate_name("my_crate")
-    ///     .edition("2024")
-    ///     .build();
-    /// ```
     pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
@@ -424,40 +409,14 @@ impl Builder {
             selected_groups: None,
         }
     }
-
-    /// Set the crate name for the Prebindgen context
-    ///
-    /// This is used when generating function stubs to call the original functions.
-    /// If not set, it will try to read the crate name from the stored file (written by init_prebindgen_out_dir).
-    /// If the crate name file is not found, it will panic with a message indicating that the
-    /// directory was not properly initialized with init_prebindgen_out_dir().
-    ///
-    /// # Parameters
-    /// - `crate_name`: The name of the source crate containing the original functions
     pub fn crate_name<S: Into<String>>(mut self, crate_name: S) -> Self {
         self.crate_name = Some(crate_name.into());
         self
     }
-
-    /// Set the Rust edition for the Prebindgen context
-    ///
-    /// This affects how certain attributes are generated (e.g., #[unsafe(no_mangle)] for 2024 edition).
-    /// If not set, defaults to "2021".
-    ///
-    /// # Parameters
-    /// - `edition`: The Rust edition as a string (e.g., "2021", "2024")
     pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
         self.edition = Some(edition.into());
         self
     }
-
-    /// Select a specific group to read when generating the Prebindgen instance
-    ///
-    /// This method can be called multiple times to select multiple groups.
-    /// If no groups are selected, all available groups will be read.
-    ///
-    /// # Parameters
-    /// - `group_name`: The name of the group to read
     pub fn with_group<S: Into<String>>(mut self, group_name: S) -> Self {
         if self.selected_groups.is_none() {
             self.selected_groups = Some(std::collections::HashSet::new());
@@ -467,14 +426,6 @@ impl Builder {
         }
         self
     }
-
-    /// Generate the Prebindgen instance with the configured parameters
-    ///
-    /// This method automatically reads the selected groups (or all groups if none selected)
-    /// and returns a fully configured Prebindgen instance.
-    ///
-    /// # Returns
-    /// A configured Prebindgen instance with groups already loaded
     pub fn build(self) -> Prebindgen {
         // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
         let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
@@ -510,16 +461,6 @@ impl Builder {
 }
 
 impl<'a> FileBuilder<'a> {
-    /// Append records for a group to the file
-    ///
-    /// This method appends records from the specified group to the file
-    /// that was created by the `create` method.
-    ///
-    /// # Parameters
-    /// - `group`: The name of the group to append
-    ///
-    /// # Returns
-    /// Self for method chaining
     pub fn append(self, group: &str) -> Self {
         // Extract just the filename from the full path
         if let Some(file_name) = self.file_path.file_name() {
@@ -527,14 +468,6 @@ impl<'a> FileBuilder<'a> {
         }
         self
     }
-
-    /// Append all loaded groups to the file
-    ///
-    /// This method appends records from all groups that have been loaded
-    /// via `read()` or `read_all()` calls.
-    ///
-    /// # Returns
-    /// Self for method chaining
     pub fn append_all(self) -> Self {
         if let Some(file_name) = self.file_path.file_name() {
             for group_name in self.prebindgen.records.keys() {
@@ -543,19 +476,9 @@ impl<'a> FileBuilder<'a> {
         }
         self
     }
-
-    /// Get the absolute path to the generated file
-    ///
-    /// # Returns
-    /// The absolute path to the file that was created
     pub fn get_path(&self) -> &std::path::Path {
         &self.file_path
     }
-
-    /// Converts the FileBuilder to a string representation of the file path
-    ///
-    /// # Returns
-    /// A path object representing the file path
     pub fn into_path(self) -> std::path::PathBuf {
         self.file_path
     }
