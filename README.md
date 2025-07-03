@@ -57,7 +57,7 @@ Add dependencies to `Cargo.toml`:
 [build-dependencies]
 my_common_ffi = { path = "../my_common_ffi" }
 prebindgen = "0.1"
-cbindgen = "0.27" # for C bindings
+cbindgen = "0.29" # for C bindings
 ```
 
 Generate bindings in `build.rs`:
