@@ -16,14 +16,13 @@ use syn::LitStr;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
-use syn::{DeriveInput, ItemFn, ItemType};
+use syn::{DeriveInput, ItemFn, ItemType, ItemConst};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
 fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
     match item {
         Some(item) => {
             let item_type = match &item {
-                syn::Item::Const(_) => "Constants", 
                 syn::Item::Static(_) => "Static items",
                 syn::Item::Mod(_) => "Modules",
                 syn::Item::Trait(_) => "Traits",
@@ -129,6 +128,10 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 /// #[prebindgen]
 /// pub type example_result = i8;
 /// 
+/// // Constants are also supported
+/// #[prebindgen]
+/// pub const MAX_BUFFER_SIZE: usize = 1024;
+/// 
 /// // Or specify a group name
 /// #[prebindgen("functions")]
 /// pub fn another_function() -> i32 {
@@ -183,6 +186,14 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         let tokens = quote! { #parsed };
         (
             RecordKind::TypeAlias,
+            parsed.ident.to_string(),
+            tokens.to_string(),
+        )
+    } else if let Ok(parsed) = syn::parse::<ItemConst>(input.clone()) {
+        // Handle constant
+        let tokens = quote! { #parsed };
+        (
+            RecordKind::Const,
             parsed.ident.to_string(),
             tokens.to_string(),
         )

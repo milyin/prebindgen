@@ -141,6 +141,8 @@ pub enum RecordKind {
     Function,
     /// A type alias definition
     TypeAlias,
+    /// A constant definition
+    Const,
 }
 
 impl Record {
@@ -173,6 +175,7 @@ impl std::fmt::Display for RecordKind {
             RecordKind::Union => write!(f, "union"),
             RecordKind::Function => write!(f, "function"),
             RecordKind::TypeAlias => write!(f, "type"),
+            RecordKind::Const => write!(f, "const"),
         }
     }
 }
