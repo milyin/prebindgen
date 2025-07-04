@@ -18,6 +18,46 @@ use std::io::Write;
 use std::path::Path;
 use syn::{DeriveInput, ItemFn};
 
+/// Helper function to generate consistent error messages for unsupported or unparseable items.
+fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
+    match item {
+        Some(item) => {
+            let item_type = match &item {
+                syn::Item::Type(_) => "Type aliases",
+                syn::Item::Const(_) => "Constants", 
+                syn::Item::Static(_) => "Static items",
+                syn::Item::Mod(_) => "Modules",
+                syn::Item::Trait(_) => "Traits",
+                syn::Item::Impl(_) => "Impl blocks",
+                syn::Item::Use(_) => "Use statements",
+                syn::Item::ExternCrate(_) => "Extern crate declarations",
+                syn::Item::Macro(_) => "Macro definitions",
+                syn::Item::Verbatim(_) => "Verbatim items",
+                _ => "This item type",
+            };
+            
+            syn::Error::new_spanned(
+                item,
+                format!(
+                    "{} are not supported by #[prebindgen]",
+                    item_type
+                )
+            )
+            .to_compile_error()
+            .into()
+        }
+        None => {
+            // If we can't even parse it as an Item, return a generic error
+            syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "Invalid syntax for #[prebindgen]"
+            )
+            .to_compile_error()
+            .into()
+        }
+    }
+}
+
 /// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
 fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
     let thread_id = std::thread::current().id();
@@ -136,8 +176,9 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             tokens.to_string(),
         )
     } else {
-        // If we can't parse it, return the original input and skip processing
-        return input_clone;
+        // Try to parse as any item to provide better error messages
+        let item = syn::parse::<syn::Item>(input.clone()).ok();
+        return unsupported_item_error(item);
     };
 
     // Create the new record
