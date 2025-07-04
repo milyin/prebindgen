@@ -797,6 +797,76 @@ fn contains_exported_type(
     }
 }
 
+/// Helper function to validate that a type is either absolute (starting with ::) or defined in exported types
+fn validate_type_for_ffi(
+    ty: &syn::Type,
+    exported_types: &std::collections::HashSet<String>,
+    context: &str,
+) -> Result<(), String> {
+    match ty {
+        syn::Type::Path(type_path) => {
+            // Check if the path is absolute (starts with ::)
+            if type_path.path.leading_colon.is_some() {
+                return Ok(()); // Absolute path is valid
+            }
+            
+            // Check if it's a single identifier that's in exported types
+            if type_path.path.segments.len() == 1 {
+                if let Some(segment) = type_path.path.segments.first() {
+                    let type_name = segment.ident.to_string();
+                    if exported_types.contains(&type_name) {
+                        // Recursively validate generic arguments
+                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                            for arg in &args.args {
+                                if let syn::GenericArgument::Type(inner_ty) = arg {
+                                    validate_type_for_ffi(inner_ty, exported_types, &format!("{} (generic argument)", context))?;
+                                }
+                            }
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+            
+            // If we get here, it's a relative path that's not in exported types
+            Err(format!(
+                "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::') or defined in exported types",
+                quote::quote! { #ty }, context
+            ))
+        }
+        syn::Type::Reference(type_ref) => {
+            // Validate the referenced type
+            validate_type_for_ffi(&type_ref.elem, exported_types, &format!("{} (reference)", context))
+        }
+        syn::Type::Ptr(type_ptr) => {
+            // Validate the pointed-to type
+            validate_type_for_ffi(&type_ptr.elem, exported_types, &format!("{} (pointer)", context))
+        }
+        syn::Type::Slice(type_slice) => {
+            // Validate the slice element type
+            validate_type_for_ffi(&type_slice.elem, exported_types, &format!("{} (slice element)", context))
+        }
+        syn::Type::Array(type_array) => {
+            // Validate the array element type
+            validate_type_for_ffi(&type_array.elem, exported_types, &format!("{} (array element)", context))
+        }
+        syn::Type::Tuple(type_tuple) => {
+            // Validate all tuple element types
+            for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
+                validate_type_for_ffi(elem_ty, exported_types, &format!("{} (tuple element {})", context, i))?;
+            }
+            Ok(())
+        }
+        _ => {
+            // For other types, we'll be conservative and reject them
+            Err(format!(
+                "Unsupported type '{}' in {}: only path types, references, pointers, slices, arrays, and tuples are supported for FFI",
+                quote::quote! { #ty }, context
+            ))
+        }
+    }
+}
+
 /// Transform a function prototype to a no_mangle extern "C" function that calls the original function
 fn transform_function_to_stub(
     function_content: &str,
@@ -808,6 +878,26 @@ fn transform_function_to_stub(
     let needs_transmute = |ty: &syn::Type| -> bool { contains_exported_type(ty, exported_types) };
     // Parse the function using syn
     let parsed: syn::ItemFn = syn::parse_str(function_content)?;
+
+    // Validate parameter types
+    for (i, input) in parsed.sig.inputs.iter().enumerate() {
+        if let syn::FnArg::Typed(pat_type) = input {
+            validate_type_for_ffi(
+                &pat_type.ty,
+                exported_types,
+                &format!("parameter {} of function '{}'", i + 1, parsed.sig.ident),
+            ).map_err(|e| format!("Invalid FFI function parameter: {}", e))?;
+        }
+    }
+
+    // Validate return type
+    if let syn::ReturnType::Type(_, return_type) = &parsed.sig.output {
+        validate_type_for_ffi(
+            return_type,
+            exported_types,
+            &format!("return type of function '{}'", parsed.sig.ident),
+        ).map_err(|e| format!("Invalid FFI function return type: {}", e))?;
+    }
 
     // Extract function signature parts
     let fn_name = &parsed.sig.ident;

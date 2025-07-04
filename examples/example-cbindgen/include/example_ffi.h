@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef int8_t example_result;
+
 typedef struct Bar {
   uint64_t aarch64_field;
 } Bar;
@@ -27,14 +29,18 @@ typedef struct Foo {
   ;
 } Foo;
 
-void copy_bar(struct Bar *_dst, const struct Bar *_src);
+#define EXAMPLE_RESULT_ERROR -1
 
-void copy_foo(struct Foo *_dst, const struct Foo *_src);
+#define EXAMPLE_RESULT_OK 0
 
 bool another_test_function(void);
 
 int32_t test_function(int32_t _a, double _b);
 
+example_result copy_bar(struct Bar *_dst, const struct Bar *_src);
+
 void void_function(int32_t _x);
+
+example_result copy_foo(struct Foo *_dst, const struct Foo *_src);
 
 #endif  /* EXAMPLE_FFI_H */
