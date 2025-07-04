@@ -180,6 +180,19 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
+impl RecordKind {
+    /// Returns true if this record kind represents a type definition.
+    /// 
+    /// Type definitions include structs, enums, unions, and type aliases.
+    /// Functions and constants are not considered type definitions.
+    pub fn is_type(&self) -> bool {
+        matches!(
+            self,
+            RecordKind::Struct | RecordKind::Enum | RecordKind::Union | RecordKind::TypeAlias
+        )
+    }
+}
+
 /// **Internal API**: Macro for debug tracing. Public only for proc-macro crate interaction.
 #[doc(hidden)]
 #[macro_export]
@@ -293,7 +306,7 @@ pub fn init_prebindgen_out_dir() {
 /// ```
 pub struct Prebindgen {
     records: std::collections::HashMap<String, Vec<Record>>,
-    defined_types: std::collections::HashSet<String>,
+    exported_types: std::collections::HashSet<String>,
     input_dir: std::path::PathBuf,
     crate_name: String,
     edition: String,
@@ -378,13 +391,10 @@ impl Prebindgen {
         // Store the deduplicated records for this group
         self.records.insert(group.to_string(), all_records.clone());
 
-        // Update defined_types with all types from all groups
+        // Update exported_types with type names from all groups
         for record in &all_records {
-            if matches!(
-                record.kind,
-                RecordKind::Struct | RecordKind::Enum | RecordKind::Union
-            ) {
-                self.defined_types.insert(record.name.clone());
+            if record.kind.is_type() {
+                self.exported_types.insert(record.name.clone());
             }
         }
     }
@@ -474,7 +484,7 @@ impl Prebindgen {
                         let stub = transform_function_to_stub(
                             &record.content,
                             &self.crate_name,
-                            &self.defined_types,
+                            &self.exported_types,
                             &self.edition,
                         )?;
                         writeln!(dest, "{}", stub)?;
@@ -620,7 +630,7 @@ impl Builder {
 
         let mut pb = Prebindgen {
             records: std::collections::HashMap::new(),
-            defined_types: std::collections::HashSet::new(),
+            exported_types: std::collections::HashSet::new(),
             input_dir: self.input_dir,
             crate_name,
             edition: self.edition.unwrap_or_else(|| "2024".to_string()),
@@ -733,17 +743,17 @@ impl<'a> FileBuilder<'a> {
     }
 }
 
-/// Helper function to check if a type contains any of the defined types
-fn contains_defined_type(
+/// Helper function to check if a type contains any of the exported types
+fn contains_exported_type(
     ty: &syn::Type,
-    defined_types: &std::collections::HashSet<String>,
+    exported_types: &std::collections::HashSet<String>,
 ) -> bool {
     match ty {
         syn::Type::Path(type_path) => {
             // Check if the type itself is defined
             if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
-                if defined_types.contains(&type_name) {
+                if exported_types.contains(&type_name) {
                     return true;
                 }
 
@@ -751,7 +761,7 @@ fn contains_defined_type(
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                     for arg in &args.args {
                         if let syn::GenericArgument::Type(inner_ty) = arg {
-                            if contains_defined_type(inner_ty, defined_types) {
+                            if contains_exported_type(inner_ty, exported_types) {
                                 return true;
                             }
                         }
@@ -762,26 +772,26 @@ fn contains_defined_type(
         }
         syn::Type::Reference(type_ref) => {
             // Check the referenced type
-            contains_defined_type(&type_ref.elem, defined_types)
+            contains_exported_type(&type_ref.elem, exported_types)
         }
         syn::Type::Ptr(type_ptr) => {
             // Check the pointed-to type
-            contains_defined_type(&type_ptr.elem, defined_types)
+            contains_exported_type(&type_ptr.elem, exported_types)
         }
         syn::Type::Slice(type_slice) => {
             // Check the slice element type
-            contains_defined_type(&type_slice.elem, defined_types)
+            contains_exported_type(&type_slice.elem, exported_types)
         }
         syn::Type::Array(type_array) => {
             // Check the array element type
-            contains_defined_type(&type_array.elem, defined_types)
+            contains_exported_type(&type_array.elem, exported_types)
         }
         syn::Type::Tuple(type_tuple) => {
             // Check all tuple element types
             type_tuple
                 .elems
                 .iter()
-                .any(|elem_ty| contains_defined_type(elem_ty, defined_types))
+                .any(|elem_ty| contains_exported_type(elem_ty, exported_types))
         }
         _ => false,
     }
@@ -791,11 +801,11 @@ fn contains_defined_type(
 fn transform_function_to_stub(
     function_content: &str,
     source_crate: &str,
-    defined_types: &std::collections::HashSet<String>,
+    exported_types: &std::collections::HashSet<String>,
     edition: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Helper function to check if a type needs transmute
-    let needs_transmute = |ty: &syn::Type| -> bool { contains_defined_type(ty, defined_types) };
+    let needs_transmute = |ty: &syn::Type| -> bool { contains_exported_type(ty, exported_types) };
     // Parse the function using syn
     let parsed: syn::ItemFn = syn::parse_str(function_content)?;
 
