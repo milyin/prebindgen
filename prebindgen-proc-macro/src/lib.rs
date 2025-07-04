@@ -16,14 +16,13 @@ use syn::LitStr;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
-use syn::{DeriveInput, ItemFn};
+use syn::{DeriveInput, ItemFn, ItemType};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
 fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
     match item {
         Some(item) => {
             let item_type = match &item {
-                syn::Item::Type(_) => "Type aliases",
                 syn::Item::Const(_) => "Constants", 
                 syn::Item::Static(_) => "Static items",
                 syn::Item::Mod(_) => "Modules",
@@ -126,6 +125,10 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 ///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
 /// }
 /// 
+/// // Type aliases are also supported
+/// #[prebindgen]
+/// pub type example_result = i8;
+/// 
 /// // Or specify a group name
 /// #[prebindgen("functions")]
 /// pub fn another_function() -> i32 {
@@ -173,6 +176,14 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         (
             RecordKind::Function,
             parsed.sig.ident.to_string(),
+            tokens.to_string(),
+        )
+    } else if let Ok(parsed) = syn::parse::<ItemType>(input.clone()) {
+        // Handle type alias
+        let tokens = quote! { #parsed };
+        (
+            RecordKind::TypeAlias,
+            parsed.ident.to_string(),
             tokens.to_string(),
         )
     } else {
