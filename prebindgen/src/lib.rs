@@ -93,6 +93,7 @@
 //! ```
 //!
 use core::panic;
+use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
@@ -313,8 +314,8 @@ pub fn init_prebindgen_out_dir() {
 /// ```
 pub struct Prebindgen {
     builder: Builder,
-    records: std::collections::HashMap<String, Vec<Record>>,
-    exported_types: std::collections::HashSet<String>,
+    records: HashMap<String, Vec<Record>>,
+    exported_types: HashSet<String>,
 }
 
 /// Builder for configuring Prebindgen with optional parameters.
@@ -342,11 +343,11 @@ pub struct Builder {
     input_dir: std::path::PathBuf,
     crate_name: String, // Empty string by default, read from file if empty
     edition: String,
-    selected_groups: std::collections::HashSet<String>,
+    selected_groups: HashSet<String>,
     allowed_prefixes: Vec<syn::Path>,
-    disabled_features: std::collections::HashSet<String>,
-    enabled_features: std::collections::HashSet<String>,
-    feature_mappings: std::collections::HashMap<String, String>,
+    disabled_features: HashSet<String>,
+    enabled_features: HashSet<String>,
+    feature_mappings: HashMap<String, String>,
     transparent_wrappers: Vec<syn::Path>,
 }
 
@@ -374,7 +375,7 @@ impl Prebindgen {
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
     fn read_group_internal(&mut self, group: &str) {
         let pattern = format!("{}_", group);
-        let mut record_map = std::collections::HashMap::new();
+        let mut record_map = HashMap::new();
 
         // Read the directory and find all matching files
         if let Ok(entries) = fs::read_dir(&self.builder.input_dir) {
@@ -417,7 +418,7 @@ impl Prebindgen {
 
     /// Internal method to read all exported files for all available groups
     fn read_all_groups_internal(&mut self) {
-        let mut groups = std::collections::HashSet::new();
+        let mut groups = HashSet::new();
 
         // Discover all available groups
         if let Ok(entries) = fs::read_dir(&self.builder.input_dir) {
@@ -557,11 +558,11 @@ impl Builder {
             input_dir: input_dir.as_ref().to_path_buf(),
             crate_name: String::new(), // Empty string by default, read from file if empty
             edition: "2024".to_string(), // Default edition
-            selected_groups: std::collections::HashSet::new(),
+            selected_groups: HashSet::new(),
             allowed_prefixes,
-            disabled_features: std::collections::HashSet::new(),
-            enabled_features: std::collections::HashSet::new(),
-            feature_mappings: std::collections::HashMap::new(),
+            disabled_features: HashSet::new(),
+            enabled_features: HashSet::new(),
+            feature_mappings: HashMap::new(),
             transparent_wrappers: Vec::new(),
         }
     }
@@ -807,8 +808,8 @@ impl Builder {
 
         let mut pb = Prebindgen {
             builder: self,
-            records: std::collections::HashMap::new(),
-            exported_types: std::collections::HashSet::new(),
+            records: HashMap::new(),
+            exported_types: HashSet::new(),
         };
 
         // Read the groups based on selection

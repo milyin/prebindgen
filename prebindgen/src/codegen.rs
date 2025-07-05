@@ -141,7 +141,7 @@ pub(crate) fn contains_exported_type(
 }
 
 /// Validate if a type path is allowed for FFI use
-fn validate_type_path(type_path: &syn::TypePath, allowed_prefixes: &Vec<syn::Path>) -> bool {
+fn validate_type_path(type_path: &syn::TypePath, allowed_prefixes: &[syn::Path]) -> bool {
     // Check if the path is absolute (starts with ::)
     if type_path.path.leading_colon.is_some() {
         return true;
@@ -176,7 +176,7 @@ fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
 fn validate_generic_arguments(
     args: &syn::AngleBracketedGenericArguments,
     exported_types: &HashSet<String>,
-    allowed_prefixes: &Vec<syn::Path>,
+    allowed_prefixes: &[syn::Path],
     context: &str,
 ) -> Result<(), String> {
     for arg in &args.args {
@@ -196,7 +196,7 @@ fn validate_generic_arguments(
 pub(crate) fn validate_type_for_ffi(
     ty: &syn::Type,
     exported_types: &HashSet<String>,
-    allowed_prefixes: &Vec<syn::Path>,
+    allowed_prefixes: &[syn::Path],
     context: &str,
 ) -> Result<(), String> {
     match ty {
@@ -370,7 +370,7 @@ fn validate_function_parameters(
     inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
     function_name: &syn::Ident,
     exported_types: &HashSet<String>,
-    allowed_prefixes: &Vec<syn::Path>,
+    allowed_prefixes: &[syn::Path],
 ) -> Result<(), String> {
     for (i, input) in inputs.iter().enumerate() {
         if let syn::FnArg::Typed(pat_type) = input {
@@ -390,8 +390,8 @@ pub(crate) fn transform_function_to_stub(
     file: syn::File,
     source_crate: &str,
     exported_types: &HashSet<String>,
-    allowed_prefixes: &Vec<syn::Path>,
-    transparent_wrappers: &Vec<syn::Path>,
+    allowed_prefixes: &[syn::Path],
+    transparent_wrappers: &[syn::Path],
     edition: &str,
 ) -> Result<syn::File, String> {
     // Validate that the file contains exactly one function
