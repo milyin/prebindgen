@@ -494,6 +494,11 @@ impl Prebindgen {
         dest: &mut File,
         group: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::HashSet;
+        
+        // Collect assertion pairs across all functions in this group
+        let mut global_assertion_type_pairs: HashSet<(String, String)> = HashSet::new();
+        
         if let Some(group_records) = self.records.get(group) {
             for record in group_records {
                 // Parse the content as a syntax tree for feature processing
@@ -522,11 +527,25 @@ impl Prebindgen {
                         &self.builder.allowed_prefixes,
                         &self.builder.transparent_wrappers,
                         &self.builder.edition,
+                        &mut global_assertion_type_pairs,
                     )?
                 } else {
                     content
                 };
                 writeln!(dest, "{}", prettyplease::unparse(&content))?;
+            }
+            
+            // Generate all collected assertions at the end of the file
+            if !global_assertion_type_pairs.is_empty() {
+                let type_assertions = codegen::generate_type_assertions(&global_assertion_type_pairs);
+                for assertion in type_assertions {
+                    let assertion_file = syn::File {
+                        shebang: None,
+                        attrs: vec![],
+                        items: vec![assertion],
+                    };
+                    writeln!(dest, "{}", prettyplease::unparse(&assertion_file))?;
+                }
             }
         }
         dest.flush()?;
