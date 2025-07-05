@@ -524,12 +524,8 @@ impl Builder {
     /// let builder = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR);
     /// ```
     pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
-        // Always allow std library and common prefixes
-        let allowed_prefixes = vec![
-            syn::parse_str("std").unwrap(),
-            syn::parse_str("libc").unwrap(),
-            syn::parse_str("core").unwrap(),
-        ];
+        // Generate comprehensive allowed prefixes including standard prelude
+        let allowed_prefixes = generate_standard_allowed_prefixes();
 
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
@@ -614,12 +610,22 @@ impl Builder {
     /// Add an allowed type prefix for FFI validation.
     /// 
     /// This method allows you to specify additional type prefixes that should be
-    /// considered valid for FFI functions, beyond the default allowed prefixes
-    /// of "::" (absolute paths) and "std::" (standard library).
+    /// considered valid for FFI functions, beyond the comprehensive set of default 
+    /// allowed prefixes that includes the standard prelude, core library types,
+    /// primitive types, and common FFI types.
+    /// 
+    /// # Default Allowed Prefixes
+    /// 
+    /// The builder automatically includes prefixes for:
+    /// - Standard library modules (`std`, `core`, `alloc`)
+    /// - Standard prelude types (`Option`, `Result`, `Vec`, `String`, etc.)
+    /// - Core library modules (`core::mem`, `core::ptr`, etc.)
+    /// - Primitive types (`bool`, `i32`, `u64`, etc.)
+    /// - Common FFI types (`libc`, `c_char`, `c_int`, etc.)
     /// 
     /// # Arguments
     /// 
-    /// * `prefix` - The type prefix to allow (e.g., "libc", "core")
+    /// * `prefix` - The additional type prefix to allow
     /// 
     /// # Example
     /// 
@@ -786,6 +792,83 @@ impl<'a> FileBuilder<'a> {
     }
 }
 
+/// Generate allowed prefixes that include standard prelude types and modules
+fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
+    let prefix_strings = vec![
+        // Core standard library modules
+        "std",
+        "core",
+        "alloc",
+        
+        // Standard prelude types (these are implicitly imported)
+        // Note: These are typically available without prefix, but we include them for completeness
+        "Option",
+        "Result", 
+        "Some",
+        "None",
+        "Ok",
+        "Err",
+        "Vec",
+        "String",
+        "Box",
+        "Rc",
+        "Arc",
+        "Cell",
+        "RefCell",
+        "Mutex",
+        "RwLock",
+        "HashMap",
+        "HashSet",
+        "BTreeMap",
+        "BTreeSet",
+        
+        // Standard collections
+        "std::collections",
+        "std::vec",
+        "std::string",
+        "std::boxed",
+        "std::rc",
+        "std::sync",
+        "std::cell",
+        
+        // Core types and modules
+        "core::option",
+        "core::result",
+        "core::mem",
+        "core::ptr",
+        "core::slice",
+        "core::str",
+        "core::fmt",
+        "core::convert",
+        "core::ops",
+        "core::cmp",
+        "core::clone",
+        "core::marker",
+        
+        // Common external crates often used in FFI
+        "libc",
+        "c_char",
+        "c_int",
+        "c_uint",
+        "c_long",
+        "c_ulong",
+        "c_void",
+        
+        // Standard primitive types (though these don't need prefixes)
+        "bool",
+        "char",
+        "i8", "i16", "i32", "i64", "i128", "isize",
+        "u8", "u16", "u32", "u64", "u128", "usize", 
+        "f32", "f64",
+        "str",
+    ];
+    
+    prefix_strings
+        .into_iter()
+        .filter_map(|s| syn::parse_str(s).ok())
+        .collect()
+}
+
 /// Helper function to check if a type contains any of the exported types
 fn contains_exported_type(
     ty: &syn::Type,
@@ -840,19 +923,10 @@ fn contains_exported_type(
     }
 }
 
-/// Check if a type is a known Rust primitive type
-fn is_primitive_type(type_name: &str) -> bool {
-    matches!(type_name, 
-        "bool" | "char" |
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-        "f32" | "f64" |
-        "str" | "()"
-    )
-}
 
-/// Check if a type path has an allowed prefix
-fn has_allowed_prefix(type_path: &syn::TypePath, allowed_prefixes: &Vec<syn::Path>) -> bool {
+
+/// Validate if a type path is allowed for FFI use
+fn validate_type_path(type_path: &syn::TypePath, allowed_prefixes: &Vec<syn::Path>) -> bool {
     // Check if the path is absolute (starts with ::)
     if type_path.path.leading_colon.is_some() {
         return true;
@@ -903,30 +977,6 @@ fn validate_generic_arguments(
     Ok(())
 }
 
-/// Validate a single type identifier (primitive or exported)
-fn validate_single_type_identifier(
-    segment: &syn::PathSegment,
-    exported_types: &std::collections::HashSet<String>,
-    allowed_prefixes: &Vec<syn::Path>,
-    context: &str,
-) -> Result<(), String> {
-    let type_name = segment.ident.to_string();
-    
-    let is_valid = is_primitive_type(&type_name) || exported_types.contains(&type_name);
-    
-    if is_valid {
-        // Validate generic arguments if present
-        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-            validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
-        }
-        Ok(())
-    } else {
-        Err(format!(
-            "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, be a primitive type, or be defined in exported types",
-            type_name, context
-        ))
-    }
-}
 
 /// Helper function to validate that a type is either absolute (starting with ::) or defined in exported types
 fn validate_type_for_ffi(
@@ -937,13 +987,8 @@ fn validate_type_for_ffi(
 ) -> Result<(), String> {
     match ty {
         syn::Type::Path(type_path) => {
-            // Absolute paths are always valid
-            if type_path.path.leading_colon.is_some() {
-                return Ok(());
-            }
-            
-            // Check allowed prefixes
-            if has_allowed_prefix(type_path, allowed_prefixes) {
+            // Validate the type path (includes absolute paths, allowed prefixes, and exported types)
+            if validate_type_path(type_path, allowed_prefixes) {
                 if let Some(segment) = type_path.path.segments.last() {
                     if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                         validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
@@ -952,16 +997,22 @@ fn validate_type_for_ffi(
                 return Ok(());
             }
             
-            // Single identifier validation
+            // Check if it's a single identifier that's an exported type
             if type_path.path.segments.len() == 1 {
                 if let Some(segment) = type_path.path.segments.first() {
-                    return validate_single_type_identifier(segment, exported_types, allowed_prefixes, context);
+                    let type_name = segment.ident.to_string();
+                    if exported_types.contains(&type_name) {
+                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                            validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
+                        }
+                        return Ok(());
+                    }
                 }
             }
             
-            // Invalid relative path
+            // Invalid type path
             Err(format!(
-                "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, be a primitive type, or be defined in exported types",
+                "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
                 quote::quote! { #ty }, context
             ))
         }
