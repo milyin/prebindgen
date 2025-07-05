@@ -258,11 +258,6 @@ pub(crate) fn validate_type_for_ffi(
 }
 
 
-/// Create parameter names for extern "C" function (keeping original names)
-fn create_extern_parameters(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> Vec<syn::FnArg> {
-    inputs.iter().cloned().collect()
-}
-
 /// Generate call arguments with optional transmute for exported types
 fn generate_call_arguments(
     inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
@@ -371,7 +366,6 @@ pub(crate) fn transform_function_to_stub(
     }
 
     // Generate components
-    let extern_inputs = create_extern_parameters(&parsed_function.sig.inputs);
     let call_args = generate_call_arguments(&parsed_function.sig.inputs, exported_types);
     
     let source_crate_name = source_crate.replace('-', "_");
@@ -395,11 +389,11 @@ pub(crate) fn transform_function_to_stub(
 
     // Build the extern "C" function signature:
     // 1. Start with the original function signature
-    // 2. Update parameters with prefixed names
+    // 2. Use original parameter names (no modification needed)
     // 3. Add extern "C" ABI specifier
     // 4. Mark function as unsafe
     let mut extern_sig = parsed_function.sig.clone();
-    extern_sig.inputs = extern_inputs.into_iter().collect();
+    // extern_sig.inputs already contains the original parameters - no change needed
     extern_sig.abi = Some(syn::Abi {
         extern_token: syn::token::Extern::default(),
         name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
