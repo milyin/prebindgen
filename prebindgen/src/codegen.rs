@@ -258,26 +258,9 @@ pub(crate) fn validate_type_for_ffi(
 }
 
 
-/// Create parameter names with underscore prefix for extern "C" function
+/// Create parameter names for extern "C" function (keeping original names)
 fn create_extern_parameters(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> Vec<syn::FnArg> {
-    inputs.iter().map(|input| match input {
-        syn::FnArg::Typed(pat_type) => {
-            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                let prefixed_ident = syn::Ident::new(
-                    &format!("_{}", pat_ident.ident), 
-                    pat_ident.ident.span()
-                );
-                let mut new_pat_ident = pat_ident.clone();
-                new_pat_ident.ident = prefixed_ident;
-                let mut new_pat_type = pat_type.clone();
-                new_pat_type.pat = Box::new(syn::Pat::Ident(new_pat_ident));
-                syn::FnArg::Typed(new_pat_type)
-            } else {
-                input.clone()
-            }
-        }
-        _ => input.clone(),
-    }).collect()
+    inputs.iter().cloned().collect()
 }
 
 /// Generate call arguments with optional transmute for exported types
@@ -288,10 +271,7 @@ fn generate_call_arguments(
     inputs.iter().filter_map(|input| match input {
         syn::FnArg::Typed(pat_type) => {
             if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                let param_name = syn::Ident::new(
-                    &format!("_{}", pat_ident.ident), 
-                    pat_ident.ident.span()
-                );
+                let param_name = &pat_ident.ident;
                 
                 if contains_exported_type(&pat_type.ty, exported_types) {
                     Some(quote::quote! { unsafe { std::mem::transmute(#param_name) } })
@@ -751,9 +731,9 @@ pub fn example_function(x: i32, y: &str) -> i32 {
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
         assert!(result_str.contains("unsafe extern \"C\""));
-        // Should have prefixed parameter names
-        assert!(result_str.contains("_x"));
-        assert!(result_str.contains("_y"));
+        // Should have original parameter names (no underscore prefix)
+        assert!(result_str.contains("x"));
+        assert!(result_str.contains("y"));
         // Should call the original function from the source crate
         assert!(result_str.contains("my_crate::example_function"));
     }
