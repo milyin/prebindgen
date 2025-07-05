@@ -70,6 +70,8 @@
 //! fn main() {
 //!     // Create a prebindgen builder with the path from the common FFI crate
 //!     let pb = prebindgen::Builder::new(my_common_ffi::PREBINDGEN_OUT_DIR)
+//!         .allowed_prefix("libc::")  // Allow libc types
+//!         .allowed_prefix("core::")  // Allow core types
 //!         .build();
 //!
 //!     // Generate all FFI functions and types
@@ -310,6 +312,7 @@ pub struct Prebindgen {
     input_dir: std::path::PathBuf,
     crate_name: String,
     edition: String,
+    allowed_prefixes: std::collections::HashSet<String>,
 }
 
 /// Builder for configuring Prebindgen with optional parameters.
@@ -323,6 +326,8 @@ pub struct Prebindgen {
 /// let prebindgen = prebindgen::Builder::new("/path/to/prebindgen/data")
 ///     .crate_name("my_custom_crate")
 ///     .edition("2024")
+///     .allowed_prefix("libc::")
+///     .allowed_prefix("core::")
 ///     .select_group("structs")
 ///     .select_group("functions") 
 ///     .build();
@@ -332,6 +337,7 @@ pub struct Builder {
     crate_name: Option<String>,
     edition: Option<String>,
     selected_groups: Option<std::collections::HashSet<String>>,
+    allowed_prefixes: std::collections::HashSet<String>,
 }
 
 /// Builder for writing groups to files with append capability.
@@ -485,6 +491,7 @@ impl Prebindgen {
                             &record.content,
                             &self.crate_name,
                             &self.exported_types,
+                            &self.allowed_prefixes,
                             &self.edition,
                         )?;
                         writeln!(dest, "{}", stub)?;
@@ -517,11 +524,19 @@ impl Builder {
     /// let builder = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR);
     /// ```
     pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
+        let mut allowed_prefixes = std::collections::HashSet::new();
+        // Always allow absolute paths and std library
+        allowed_prefixes.insert("::".to_string());
+        allowed_prefixes.insert("std::".to_string());
+        allowed_prefixes.insert("libc::".to_string());
+        allowed_prefixes.insert("core::".to_string());
+
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
             crate_name: None,
             edition: None,
             selected_groups: None,
+            allowed_prefixes,
         }
     }
     
@@ -596,6 +611,28 @@ impl Builder {
         self
     }
     
+    /// Add an allowed type prefix for FFI validation.
+    /// 
+    /// This method allows you to specify additional type prefixes that should be
+    /// considered valid for FFI functions, beyond the default allowed prefixes
+    /// of "::" (absolute paths) and "std::" (standard library).
+    /// 
+    /// # Arguments
+    /// 
+    /// * `prefix` - The type prefix to allow (e.g., "libc::", "core::")
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .allowed_prefix("libc::")
+    ///     .allowed_prefix("core::");
+    /// ```
+    pub fn allowed_prefix<S: Into<String>>(mut self, prefix: S) -> Self {
+        self.allowed_prefixes.insert(prefix.into());
+        self
+    }
+    
     /// Build the configured Prebindgen instance.
     /// 
     /// This method reads the prebindgen data files from the input directory
@@ -634,6 +671,7 @@ impl Builder {
             input_dir: self.input_dir,
             crate_name,
             edition: self.edition.unwrap_or_else(|| "2024".to_string()),
+            allowed_prefixes: self.allowed_prefixes,
         };
 
         // Read the groups based on selection
@@ -801,6 +839,7 @@ fn contains_exported_type(
 fn validate_type_for_ffi(
     ty: &syn::Type,
     exported_types: &std::collections::HashSet<String>,
+    allowed_prefixes: &std::collections::HashSet<String>,
     context: &str,
 ) -> Result<(), String> {
     match ty {
@@ -810,16 +849,44 @@ fn validate_type_for_ffi(
                 return Ok(()); // Absolute path is valid
             }
             
-            // Check if it's a single identifier that's in exported types
+            // Check if the path starts with any allowed prefix
+            let path_str = quote::quote! { #type_path }.to_string();
+            for prefix in allowed_prefixes {
+                if path_str.starts_with(prefix) {
+                    // Recursively validate generic arguments for allowed prefix types
+                    if let Some(segment) = type_path.path.segments.last() {
+                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                            for arg in &args.args {
+                                if let syn::GenericArgument::Type(inner_ty) = arg {
+                                    validate_type_for_ffi(inner_ty, exported_types, allowed_prefixes, &format!("{} (generic argument)", context))?;
+                                }
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+            
+            // Check if it's a single identifier that's in exported types or is a primitive type
             if type_path.path.segments.len() == 1 {
                 if let Some(segment) = type_path.path.segments.first() {
                     let type_name = segment.ident.to_string();
-                    if exported_types.contains(&type_name) {
+                    
+                    // Check if it's a known primitive type
+                    let is_primitive = matches!(type_name.as_str(), 
+                        "bool" | "char" |
+                        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
+                        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+                        "f32" | "f64" |
+                        "str" | "()"
+                    );
+                    
+                    if exported_types.contains(&type_name) || is_primitive {
                         // Recursively validate generic arguments
                         if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                             for arg in &args.args {
                                 if let syn::GenericArgument::Type(inner_ty) = arg {
-                                    validate_type_for_ffi(inner_ty, exported_types, &format!("{} (generic argument)", context))?;
+                                    validate_type_for_ffi(inner_ty, exported_types, allowed_prefixes, &format!("{} (generic argument)", context))?;
                                 }
                             }
                         }
@@ -828,32 +895,32 @@ fn validate_type_for_ffi(
                 }
             }
             
-            // If we get here, it's a relative path that's not in exported types
+            // If we get here, it's a relative path that's not in exported types, allowed prefixes, or primitive types
             Err(format!(
-                "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::') or defined in exported types",
+                "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, be a primitive type, or be defined in exported types",
                 quote::quote! { #ty }, context
             ))
         }
         syn::Type::Reference(type_ref) => {
             // Validate the referenced type
-            validate_type_for_ffi(&type_ref.elem, exported_types, &format!("{} (reference)", context))
+            validate_type_for_ffi(&type_ref.elem, exported_types, allowed_prefixes, &format!("{} (reference)", context))
         }
         syn::Type::Ptr(type_ptr) => {
             // Validate the pointed-to type
-            validate_type_for_ffi(&type_ptr.elem, exported_types, &format!("{} (pointer)", context))
+            validate_type_for_ffi(&type_ptr.elem, exported_types, allowed_prefixes, &format!("{} (pointer)", context))
         }
         syn::Type::Slice(type_slice) => {
             // Validate the slice element type
-            validate_type_for_ffi(&type_slice.elem, exported_types, &format!("{} (slice element)", context))
+            validate_type_for_ffi(&type_slice.elem, exported_types, allowed_prefixes, &format!("{} (slice element)", context))
         }
         syn::Type::Array(type_array) => {
             // Validate the array element type
-            validate_type_for_ffi(&type_array.elem, exported_types, &format!("{} (array element)", context))
+            validate_type_for_ffi(&type_array.elem, exported_types, allowed_prefixes, &format!("{} (array element)", context))
         }
         syn::Type::Tuple(type_tuple) => {
             // Validate all tuple element types
             for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
-                validate_type_for_ffi(elem_ty, exported_types, &format!("{} (tuple element {})", context, i))?;
+                validate_type_for_ffi(elem_ty, exported_types, allowed_prefixes, &format!("{} (tuple element {})", context, i))?;
             }
             Ok(())
         }
@@ -872,6 +939,7 @@ fn transform_function_to_stub(
     function_content: &str,
     source_crate: &str,
     exported_types: &std::collections::HashSet<String>,
+    allowed_prefixes: &std::collections::HashSet<String>,
     edition: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Helper function to check if a type needs transmute
@@ -885,6 +953,7 @@ fn transform_function_to_stub(
             validate_type_for_ffi(
                 &pat_type.ty,
                 exported_types,
+                allowed_prefixes,
                 &format!("parameter {} of function '{}'", i + 1, parsed.sig.ident),
             ).map_err(|e| format!("Invalid FFI function parameter: {}", e))?;
         }
@@ -895,6 +964,7 @@ fn transform_function_to_stub(
         validate_type_for_ffi(
             return_type,
             exported_types,
+            allowed_prefixes,
             &format!("return type of function '{}'", parsed.sig.ident),
         ).map_err(|e| format!("Invalid FFI function return type: {}", e))?;
     }
