@@ -1,15 +1,15 @@
 use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 
-pub const PREBINDGEN_OUT_DIR : &str = prebindgen_out_dir!();
+pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 
 #[prebindgen]
 #[allow(non_camel_case_types)]
 pub type example_result = i8;
 
 #[prebindgen]
-pub const EXAMPLE_RESULT_OK : example_result = 0;
+pub const EXAMPLE_RESULT_OK: example_result = 0;
 #[prebindgen]
-pub const EXAMPLE_RESULT_ERROR : example_result = -1;
+pub const EXAMPLE_RESULT_ERROR: example_result = -1;
 
 // Simulate the situation when part of the ffi code is generated
 // on build.rs stage. This may cause the problem with cross-compilation,
@@ -31,7 +31,7 @@ pub struct Foo {
 }
 
 #[prebindgen("functions")]
-pub fn copy_foo(dst: &mut ::std::mem::MaybeUninit<Foo>, src: &Foo) -> example_result{
+pub fn copy_foo(dst: &mut ::std::mem::MaybeUninit<Foo>, src: &Foo) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
