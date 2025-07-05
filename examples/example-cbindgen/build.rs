@@ -36,9 +36,10 @@ fn main() {
 /// 3. The result is a clean separation between common FFI logic and C-specific bindings
 fn generate_c_headers(cleaned_bindings_file: &PathBuf) {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let out_dir = std::env::var("OUT_DIR").unwrap();
     let config = cbindgen::Config::from_root_or_default(&crate_dir);
 
-    let header_path = PathBuf::from(&crate_dir).join("include/example_ffi.h");
+    let header_path = PathBuf::from(&out_dir).join("example_ffi.h");
 
     // Use cbindgen to generate C headers from the prebindgen-generated Rust file
     // The key insight: we pass the generated Rust file as a source to cbindgen
