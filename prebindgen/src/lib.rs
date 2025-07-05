@@ -307,12 +307,9 @@ pub fn init_prebindgen_out_dir() {
 /// let structs_only = pb.group("structs").write_to_file("structs.rs");
 /// ```
 pub struct Prebindgen {
+    builder: Builder,
     records: std::collections::HashMap<String, Vec<Record>>,
     exported_types: std::collections::HashSet<String>,
-    input_dir: std::path::PathBuf,
-    crate_name: String,
-    edition: String,
-    allowed_prefixes: Vec<syn::Path>,
 }
 
 /// Builder for configuring Prebindgen with optional parameters.
@@ -334,9 +331,9 @@ pub struct Prebindgen {
 /// ```
 pub struct Builder {
     input_dir: std::path::PathBuf,
-    crate_name: Option<String>,
-    edition: Option<String>,
-    selected_groups: Option<std::collections::HashSet<String>>,
+    crate_name: String, // Empty string by default, read from file if empty
+    edition: String,
+    selected_groups: std::collections::HashSet<String>,
     allowed_prefixes: Vec<syn::Path>,
 }
 
@@ -367,7 +364,7 @@ impl Prebindgen {
         let mut record_map = std::collections::HashMap::new();
 
         // Read the directory and find all matching files
-        if let Ok(entries) = fs::read_dir(&self.input_dir) {
+        if let Ok(entries) = fs::read_dir(&self.builder.input_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
@@ -410,7 +407,7 @@ impl Prebindgen {
         let mut groups = std::collections::HashSet::new();
 
         // Discover all available groups
-        if let Ok(entries) = fs::read_dir(&self.input_dir) {
+        if let Ok(entries) = fs::read_dir(&self.builder.input_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
@@ -489,10 +486,10 @@ impl Prebindgen {
                     RecordKind::Function => {
                         let stub = transform_function_to_stub(
                             &record.content,
-                            &self.crate_name,
+                            &self.builder.crate_name,
                             &self.exported_types,
-                            &self.allowed_prefixes,
-                            &self.edition,
+                            &self.builder.allowed_prefixes,
+                            &self.builder.edition,
                         )?;
                         writeln!(dest, "{}", stub)?;
                     }
@@ -529,9 +526,9 @@ impl Builder {
 
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
-            crate_name: None,
-            edition: None,
-            selected_groups: None,
+            crate_name: String::new(), // Empty string by default, read from file if empty
+            edition: "2024".to_string(), // Default edition
+            selected_groups: std::collections::HashSet::new(),
             allowed_prefixes,
         }
     }
@@ -554,7 +551,7 @@ impl Builder {
     ///     .crate_name("my_renamed_crate");
     /// ```
     pub fn crate_name<S: Into<String>>(mut self, crate_name: S) -> Self {
-        self.crate_name = Some(crate_name.into());
+        self.crate_name = crate_name.into();
         self
     }
     
@@ -577,7 +574,7 @@ impl Builder {
     ///     .edition("2021");
     /// ```
     pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
-        self.edition = Some(edition.into());
+        self.edition = edition.into();
         self
     }
     
@@ -598,12 +595,7 @@ impl Builder {
     ///     .select_group("core_functions");
     /// ```
     pub fn select_group<S: Into<String>>(mut self, group_name: S) -> Self {
-        if self.selected_groups.is_none() {
-            self.selected_groups = Some(std::collections::HashSet::new());
-        }
-        if let Some(ref mut groups) = self.selected_groups {
-            groups.insert(group_name.into());
-        }
+        self.selected_groups.insert(group_name.into());
         self
     }
     
@@ -665,7 +657,7 @@ impl Builder {
     ///     .edition("2021")
     ///     .build();
     /// ```
-    pub fn build(self) -> Prebindgen {
+    pub fn build(mut self) -> Prebindgen {
         // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
         let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
             panic!(
@@ -674,30 +666,30 @@ impl Builder {
                 self.input_dir.display()
             )
         });
-        let crate_name = self.crate_name.unwrap_or(original_crate_name);
+        if self.crate_name.is_empty() {
+            self.crate_name = original_crate_name;
+        }
 
         let mut pb = Prebindgen {
+            builder: self,
             records: std::collections::HashMap::new(),
             exported_types: std::collections::HashSet::new(),
-            input_dir: self.input_dir,
-            crate_name,
-            edition: self.edition.unwrap_or_else(|| "2024".to_string()),
-            allowed_prefixes: self.allowed_prefixes,
         };
 
         // Read the groups based on selection
-        if let Some(selected_groups) = self.selected_groups {
-            // Read only selected groups
-            for group in selected_groups {
-                pb.read_group_internal(&group);
-            }
-        } else {
+        if pb.builder.selected_groups.is_empty() {
             // Read all available groups
             pb.read_all_groups_internal();
+        } else {
+            // Read only selected groups
+            for group in &pb.builder.selected_groups.clone() {
+                pb.read_group_internal(group);
+            }
         }
 
         pb
     }
+
 }
 
 impl<'a> FileBuilder<'a> {
