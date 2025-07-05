@@ -258,20 +258,70 @@ pub(crate) fn validate_type_for_ffi(
 }
 
 
-/// Generate call arguments with optional transmute for exported types
+/// Convert reference types to pointer types for FFI compatibility
+fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
+    match ty {
+        syn::Type::Reference(type_ref) => {
+            // Convert &T to *const T and &mut T to *mut T
+            let mutability = if type_ref.mutability.is_some() {
+                syn::token::Mut::default()
+            } else {
+                return syn::Type::Ptr(syn::TypePtr {
+                    star_token: syn::token::Star::default(),
+                    const_token: Some(syn::token::Const::default()),
+                    mutability: None,
+                    elem: type_ref.elem.clone(),
+                });
+            };
+            
+            syn::Type::Ptr(syn::TypePtr {
+                star_token: syn::token::Star::default(),
+                const_token: None,
+                mutability: Some(mutability),
+                elem: type_ref.elem.clone(),
+            })
+        }
+        _ => ty.clone(),
+    }
+}
+
+/// Generate call arguments with pointer-to-reference conversion and transmute for exported types
 fn generate_call_arguments(
-    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
+    original_inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
     exported_types: &HashSet<String>,
 ) -> Vec<proc_macro2::TokenStream> {
-    inputs.iter().filter_map(|input| match input {
+    original_inputs.iter().filter_map(|input| match input {
         syn::FnArg::Typed(pat_type) => {
             if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                 let param_name = &pat_ident.ident;
                 
-                if contains_exported_type(&pat_type.ty, exported_types) {
-                    Some(quote::quote! { unsafe { std::mem::transmute(#param_name) } })
-                } else {
-                    Some(quote::quote! { #param_name })
+                match &*pat_type.ty {
+                    syn::Type::Reference(type_ref) => {
+                        // For reference parameters, convert pointer back to reference
+                        if type_ref.mutability.is_some() {
+                            // &mut T parameter becomes *mut T in FFI, convert back with &mut *param_name
+                            if contains_exported_type(&type_ref.elem, exported_types) {
+                                Some(quote::quote! { unsafe { std::mem::transmute(&mut *#param_name) } })
+                            } else {
+                                Some(quote::quote! { &mut *#param_name })
+                            }
+                        } else {
+                            // &T parameter becomes *const T in FFI, convert back with &*param_name
+                            if contains_exported_type(&type_ref.elem, exported_types) {
+                                Some(quote::quote! { unsafe { std::mem::transmute(&*#param_name) } })
+                            } else {
+                                Some(quote::quote! { &*#param_name })
+                            }
+                        }
+                    }
+                    _ => {
+                        // For non-reference parameters, use as-is with optional transmute
+                        if contains_exported_type(&pat_type.ty, exported_types) {
+                            Some(quote::quote! { unsafe { std::mem::transmute(#param_name) } })
+                        } else {
+                            Some(quote::quote! { #param_name })
+                        }
+                    }
                 }
             } else {
                 None
@@ -389,11 +439,18 @@ pub(crate) fn transform_function_to_stub(
 
     // Build the extern "C" function signature:
     // 1. Start with the original function signature
-    // 2. Use original parameter names (no modification needed)
+    // 2. Convert references to pointers for FFI compatibility
     // 3. Add extern "C" ABI specifier
     // 4. Mark function as unsafe
     let mut extern_sig = parsed_function.sig.clone();
-    // extern_sig.inputs already contains the original parameters - no change needed
+    
+    // Convert reference parameters to pointer parameters
+    for input in extern_sig.inputs.iter_mut() {
+        if let syn::FnArg::Typed(pat_type) = input {
+            pat_type.ty = Box::new(convert_reference_to_pointer(&pat_type.ty));
+        }
+    }
+    
     extern_sig.abi = Some(syn::Abi {
         extern_token: syn::token::Extern::default(),
         name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
@@ -725,9 +782,13 @@ pub fn example_function(x: i32, y: &str) -> i32 {
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
         assert!(result_str.contains("unsafe extern \"C\""));
-        // Should have original parameter names (no underscore prefix)
+        // Should have original parameter names
         assert!(result_str.contains("x"));
         assert!(result_str.contains("y"));
+        // Should convert &str to *const str in signature
+        assert!(result_str.contains("*const str"));
+        // Should convert pointer back to reference in function call
+        assert!(result_str.contains("&*y"));
         // Should call the original function from the source crate
         assert!(result_str.contains("my_crate::example_function"));
     }
@@ -828,5 +889,67 @@ pub struct MyStruct {
             Err(error_msg) => assert!(error_msg.contains("Expected function item")),
             Ok(_) => panic!("Expected error but got success"),
         }
+    }
+
+    #[test]
+    fn test_transform_function_with_references() {
+        let function_content = r#"
+pub fn copy_bar(
+    dst: &mut std::mem::MaybeUninit<Bar>,
+    src: &Bar,
+) -> i32 {
+    42
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("Bar".to_string());
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            "2021",
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the no_mangle attribute
+        assert!(result_str.contains("no_mangle"));
+        // Should be an unsafe extern "C" function
+        assert!(result_str.contains("unsafe extern \"C\""));
+        // Should convert &mut T to *mut T
+        assert!(result_str.contains("*mut"));
+        // Should convert &T to *const T  
+        assert!(result_str.contains("*const"));
+        // Should convert pointers back to references in function call
+        assert!(result_str.contains("&mut *dst"));
+        assert!(result_str.contains("&*src"));
+        // Should call the original function from the source crate
+        assert!(result_str.contains("my_crate::copy_bar"));
+    }
+
+    #[test]
+    fn test_convert_reference_to_pointer() {
+        // Test mutable reference conversion
+        let mut_ref: syn::Type = syn::parse_quote! { &mut i32 };
+        let converted = convert_reference_to_pointer(&mut_ref);
+        let converted_str = quote::quote! { #converted }.to_string();
+        assert!(converted_str.contains("* mut i32"));
+
+        // Test immutable reference conversion
+        let ref_type: syn::Type = syn::parse_quote! { &str };
+        let converted = convert_reference_to_pointer(&ref_type);
+        let converted_str = quote::quote! { #converted }.to_string();
+        assert!(converted_str.contains("* const str"));
+
+        // Test non-reference type (should remain unchanged)
+        let regular_type: syn::Type = syn::parse_quote! { i32 };
+        let converted = convert_reference_to_pointer(&regular_type);
+        let converted_str = quote::quote! { #converted }.to_string();
+        assert_eq!(converted_str, "i32");
     }
 }
