@@ -312,7 +312,7 @@ pub struct Prebindgen {
     input_dir: std::path::PathBuf,
     crate_name: String,
     edition: String,
-    allowed_prefixes: std::collections::HashSet<String>,
+    allowed_prefixes: Vec<syn::Path>,
 }
 
 /// Builder for configuring Prebindgen with optional parameters.
@@ -326,8 +326,8 @@ pub struct Prebindgen {
 /// let prebindgen = prebindgen::Builder::new("/path/to/prebindgen/data")
 ///     .crate_name("my_custom_crate")
 ///     .edition("2024")
-///     .allowed_prefix("libc::")
-///     .allowed_prefix("core::")
+///     .allowed_prefix("libc")
+///     .allowed_prefix("core")
 ///     .select_group("structs")
 ///     .select_group("functions") 
 ///     .build();
@@ -337,7 +337,7 @@ pub struct Builder {
     crate_name: Option<String>,
     edition: Option<String>,
     selected_groups: Option<std::collections::HashSet<String>>,
-    allowed_prefixes: std::collections::HashSet<String>,
+    allowed_prefixes: Vec<syn::Path>,
 }
 
 /// Builder for writing groups to files with append capability.
@@ -524,12 +524,12 @@ impl Builder {
     /// let builder = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR);
     /// ```
     pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
-        let mut allowed_prefixes = std::collections::HashSet::new();
-        // Always allow absolute paths and std library
-        allowed_prefixes.insert("::".to_string());
-        allowed_prefixes.insert("std::".to_string());
-        allowed_prefixes.insert("libc::".to_string());
-        allowed_prefixes.insert("core::".to_string());
+        // Always allow std library and common prefixes
+        let allowed_prefixes = vec![
+            syn::parse_str("std").unwrap(),
+            syn::parse_str("libc").unwrap(),
+            syn::parse_str("core").unwrap(),
+        ];
 
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
@@ -619,17 +619,22 @@ impl Builder {
     /// 
     /// # Arguments
     /// 
-    /// * `prefix` - The type prefix to allow (e.g., "libc::", "core::")
+    /// * `prefix` - The type prefix to allow (e.g., "libc", "core")
     /// 
     /// # Example
     /// 
     /// ```rust,ignore
     /// let builder = prebindgen::Builder::new(path)
-    ///     .allowed_prefix("libc::")
-    ///     .allowed_prefix("core::");
+    ///     .allowed_prefix("libc")
+    ///     .allowed_prefix("core");
     /// ```
     pub fn allowed_prefix<S: Into<String>>(mut self, prefix: S) -> Self {
-        self.allowed_prefixes.insert(prefix.into());
+        let prefix_str = prefix.into();
+        if let Ok(path) = syn::parse_str::<syn::Path>(&prefix_str) {
+            self.allowed_prefixes.push(path);
+        } else {
+            panic!("Invalid path prefix: '{}'", prefix_str);
+        }
         self
     }
     
@@ -847,16 +852,42 @@ fn is_primitive_type(type_name: &str) -> bool {
 }
 
 /// Check if a type path has an allowed prefix
-fn has_allowed_prefix(type_path: &syn::TypePath, allowed_prefixes: &std::collections::HashSet<String>) -> bool {
-    let path_str = quote::quote! { #type_path }.to_string();
-    allowed_prefixes.iter().any(|prefix| path_str.starts_with(prefix))
+fn has_allowed_prefix(type_path: &syn::TypePath, allowed_prefixes: &Vec<syn::Path>) -> bool {
+    // Check if the path is absolute (starts with ::)
+    if type_path.path.leading_colon.is_some() {
+        return true;
+    }
+    
+    // Check if the path starts with any of the allowed prefixes
+    for allowed_prefix in allowed_prefixes {
+        if path_starts_with(&type_path.path, allowed_prefix) {
+            return true;
+        }
+    }
+    
+    false
+}
+
+/// Check if a path starts with a given prefix path
+fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
+    if prefix.segments.len() > path.segments.len() {
+        return false;
+    }
+    
+    for (path_segment, prefix_segment) in path.segments.iter().zip(prefix.segments.iter()) {
+        if path_segment.ident != prefix_segment.ident {
+            return false;
+        }
+    }
+    
+    true
 }
 
 /// Validate generic arguments recursively
 fn validate_generic_arguments(
     args: &syn::AngleBracketedGenericArguments,
     exported_types: &std::collections::HashSet<String>,
-    allowed_prefixes: &std::collections::HashSet<String>,
+    allowed_prefixes: &Vec<syn::Path>,
     context: &str,
 ) -> Result<(), String> {
     for arg in &args.args {
@@ -876,7 +907,7 @@ fn validate_generic_arguments(
 fn validate_single_type_identifier(
     segment: &syn::PathSegment,
     exported_types: &std::collections::HashSet<String>,
-    allowed_prefixes: &std::collections::HashSet<String>,
+    allowed_prefixes: &Vec<syn::Path>,
     context: &str,
 ) -> Result<(), String> {
     let type_name = segment.ident.to_string();
@@ -901,7 +932,7 @@ fn validate_single_type_identifier(
 fn validate_type_for_ffi(
     ty: &syn::Type,
     exported_types: &std::collections::HashSet<String>,
-    allowed_prefixes: &std::collections::HashSet<String>,
+    allowed_prefixes: &Vec<syn::Path>,
     context: &str,
 ) -> Result<(), String> {
     match ty {
@@ -1053,7 +1084,7 @@ fn validate_function_parameters(
     inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
     function_name: &syn::Ident,
     exported_types: &std::collections::HashSet<String>,
-    allowed_prefixes: &std::collections::HashSet<String>,
+    allowed_prefixes: &Vec<syn::Path>,
 ) -> Result<(), String> {
     for (i, input) in inputs.iter().enumerate() {
         if let syn::FnArg::Typed(pat_type) = input {
@@ -1073,7 +1104,7 @@ fn transform_function_to_stub(
     function_content: &str,
     source_crate: &str,
     exported_types: &std::collections::HashSet<String>,
-    allowed_prefixes: &std::collections::HashSet<String>,
+    allowed_prefixes: &Vec<syn::Path>,
     edition: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Parse the function using syn

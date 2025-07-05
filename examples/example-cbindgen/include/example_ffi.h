@@ -33,14 +33,14 @@ typedef struct Foo {
 
 #define EXAMPLE_RESULT_OK 0
 
-bool another_test_function(void);
-
-int32_t test_function(int32_t _a, double _b);
+void void_function(int32_t _x);
 
 example_result copy_bar(struct Bar *_dst, const struct Bar *_src);
 
-void void_function(int32_t _x);
-
 example_result copy_foo(struct Foo *_dst, const struct Foo *_src);
+
+int32_t test_function(int32_t _a, double _b);
+
+bool another_test_function(void);
 
 #endif  /* EXAMPLE_FFI_H */

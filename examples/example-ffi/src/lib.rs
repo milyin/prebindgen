@@ -31,7 +31,7 @@ pub struct Foo {
 }
 
 #[prebindgen("functions")]
-pub fn copy_foo(dst: &mut ::std::mem::MaybeUninit<Foo>, src: &Foo) -> example_result {
+pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
@@ -39,7 +39,7 @@ pub fn copy_foo(dst: &mut ::std::mem::MaybeUninit<Foo>, src: &Foo) -> example_re
 }
 
 #[prebindgen("functions")]
-pub fn copy_bar(dst: &mut ::std::mem::MaybeUninit<Bar>, src: &Bar) -> example_result {
+pub fn copy_bar(dst: &mut std::mem::MaybeUninit<Bar>, src: &Bar) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
