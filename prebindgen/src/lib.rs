@@ -835,6 +835,68 @@ fn contains_exported_type(
     }
 }
 
+/// Check if a type is a known Rust primitive type
+fn is_primitive_type(type_name: &str) -> bool {
+    matches!(type_name, 
+        "bool" | "char" |
+        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
+        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
+        "f32" | "f64" |
+        "str" | "()"
+    )
+}
+
+/// Check if a type path has an allowed prefix
+fn has_allowed_prefix(type_path: &syn::TypePath, allowed_prefixes: &std::collections::HashSet<String>) -> bool {
+    let path_str = quote::quote! { #type_path }.to_string();
+    allowed_prefixes.iter().any(|prefix| path_str.starts_with(prefix))
+}
+
+/// Validate generic arguments recursively
+fn validate_generic_arguments(
+    args: &syn::AngleBracketedGenericArguments,
+    exported_types: &std::collections::HashSet<String>,
+    allowed_prefixes: &std::collections::HashSet<String>,
+    context: &str,
+) -> Result<(), String> {
+    for arg in &args.args {
+        if let syn::GenericArgument::Type(inner_ty) = arg {
+            validate_type_for_ffi(
+                inner_ty, 
+                exported_types, 
+                allowed_prefixes, 
+                &format!("{} (generic argument)", context)
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// Validate a single type identifier (primitive or exported)
+fn validate_single_type_identifier(
+    segment: &syn::PathSegment,
+    exported_types: &std::collections::HashSet<String>,
+    allowed_prefixes: &std::collections::HashSet<String>,
+    context: &str,
+) -> Result<(), String> {
+    let type_name = segment.ident.to_string();
+    
+    let is_valid = is_primitive_type(&type_name) || exported_types.contains(&type_name);
+    
+    if is_valid {
+        // Validate generic arguments if present
+        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+            validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
+        }
+        Ok(())
+    } else {
+        Err(format!(
+            "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, be a primitive type, or be defined in exported types",
+            type_name, context
+        ))
+    }
+}
+
 /// Helper function to validate that a type is either absolute (starting with ::) or defined in exported types
 fn validate_type_for_ffi(
     ty: &syn::Type,
@@ -844,94 +906,166 @@ fn validate_type_for_ffi(
 ) -> Result<(), String> {
     match ty {
         syn::Type::Path(type_path) => {
-            // Check if the path is absolute (starts with ::)
+            // Absolute paths are always valid
             if type_path.path.leading_colon.is_some() {
-                return Ok(()); // Absolute path is valid
+                return Ok(());
             }
             
-            // Check if the path starts with any allowed prefix
-            let path_str = quote::quote! { #type_path }.to_string();
-            for prefix in allowed_prefixes {
-                if path_str.starts_with(prefix) {
-                    // Recursively validate generic arguments for allowed prefix types
-                    if let Some(segment) = type_path.path.segments.last() {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            for arg in &args.args {
-                                if let syn::GenericArgument::Type(inner_ty) = arg {
-                                    validate_type_for_ffi(inner_ty, exported_types, allowed_prefixes, &format!("{} (generic argument)", context))?;
-                                }
-                            }
-                        }
+            // Check allowed prefixes
+            if has_allowed_prefix(type_path, allowed_prefixes) {
+                if let Some(segment) = type_path.path.segments.last() {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
                     }
-                    return Ok(());
                 }
+                return Ok(());
             }
             
-            // Check if it's a single identifier that's in exported types or is a primitive type
+            // Single identifier validation
             if type_path.path.segments.len() == 1 {
                 if let Some(segment) = type_path.path.segments.first() {
-                    let type_name = segment.ident.to_string();
-                    
-                    // Check if it's a known primitive type
-                    let is_primitive = matches!(type_name.as_str(), 
-                        "bool" | "char" |
-                        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" |
-                        "u8" | "u16" | "u32" | "u64" | "u128" | "usize" |
-                        "f32" | "f64" |
-                        "str" | "()"
-                    );
-                    
-                    if exported_types.contains(&type_name) || is_primitive {
-                        // Recursively validate generic arguments
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            for arg in &args.args {
-                                if let syn::GenericArgument::Type(inner_ty) = arg {
-                                    validate_type_for_ffi(inner_ty, exported_types, allowed_prefixes, &format!("{} (generic argument)", context))?;
-                                }
-                            }
-                        }
-                        return Ok(());
-                    }
+                    return validate_single_type_identifier(segment, exported_types, allowed_prefixes, context);
                 }
             }
             
-            // If we get here, it's a relative path that's not in exported types, allowed prefixes, or primitive types
+            // Invalid relative path
             Err(format!(
                 "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, be a primitive type, or be defined in exported types",
                 quote::quote! { #ty }, context
             ))
         }
         syn::Type::Reference(type_ref) => {
-            // Validate the referenced type
             validate_type_for_ffi(&type_ref.elem, exported_types, allowed_prefixes, &format!("{} (reference)", context))
         }
         syn::Type::Ptr(type_ptr) => {
-            // Validate the pointed-to type
             validate_type_for_ffi(&type_ptr.elem, exported_types, allowed_prefixes, &format!("{} (pointer)", context))
         }
         syn::Type::Slice(type_slice) => {
-            // Validate the slice element type
             validate_type_for_ffi(&type_slice.elem, exported_types, allowed_prefixes, &format!("{} (slice element)", context))
         }
         syn::Type::Array(type_array) => {
-            // Validate the array element type
             validate_type_for_ffi(&type_array.elem, exported_types, allowed_prefixes, &format!("{} (array element)", context))
         }
         syn::Type::Tuple(type_tuple) => {
-            // Validate all tuple element types
             for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
                 validate_type_for_ffi(elem_ty, exported_types, allowed_prefixes, &format!("{} (tuple element {})", context, i))?;
             }
             Ok(())
         }
         _ => {
-            // For other types, we'll be conservative and reject them
             Err(format!(
                 "Unsupported type '{}' in {}: only path types, references, pointers, slices, arrays, and tuples are supported for FFI",
                 quote::quote! { #ty }, context
             ))
         }
     }
+}
+
+/// Generate the appropriate no_mangle attribute based on Rust edition
+fn generate_no_mangle_attribute(edition: &str) -> &'static str {
+    match edition {
+        "2024" => "#[unsafe(no_mangle)]",
+        _ => "#[no_mangle]",
+    }
+}
+
+/// Create parameter names with underscore prefix for extern "C" function
+fn create_extern_parameters(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> Vec<syn::FnArg> {
+    inputs.iter().map(|input| match input {
+        syn::FnArg::Typed(pat_type) => {
+            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                let prefixed_ident = syn::Ident::new(
+                    &format!("_{}", pat_ident.ident), 
+                    pat_ident.ident.span()
+                );
+                let mut new_pat_ident = pat_ident.clone();
+                new_pat_ident.ident = prefixed_ident;
+                let mut new_pat_type = pat_type.clone();
+                new_pat_type.pat = Box::new(syn::Pat::Ident(new_pat_ident));
+                syn::FnArg::Typed(new_pat_type)
+            } else {
+                input.clone()
+            }
+        }
+        _ => input.clone(),
+    }).collect()
+}
+
+/// Generate call arguments with optional transmute for exported types
+fn generate_call_arguments(
+    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
+    exported_types: &std::collections::HashSet<String>,
+) -> Vec<proc_macro2::TokenStream> {
+    inputs.iter().filter_map(|input| match input {
+        syn::FnArg::Typed(pat_type) => {
+            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                let param_name = syn::Ident::new(
+                    &format!("_{}", pat_ident.ident), 
+                    pat_ident.ident.span()
+                );
+                
+                if contains_exported_type(&pat_type.ty, exported_types) {
+                    Some(quote::quote! { unsafe { std::mem::transmute(#param_name) } })
+                } else {
+                    Some(quote::quote! { #param_name })
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }).collect()
+}
+
+/// Generate the function body that calls the original function
+fn generate_function_body(
+    return_type: &syn::ReturnType,
+    function_name: &syn::Ident,
+    source_crate_ident: &syn::Ident,
+    call_args: &[proc_macro2::TokenStream],
+    exported_types: &std::collections::HashSet<String>,
+) -> proc_macro2::TokenStream {
+    match return_type {
+        syn::ReturnType::Default => {
+            // Void function
+            quote::quote! {
+                #source_crate_ident::#function_name(#(#call_args),*);
+            }
+        }
+        syn::ReturnType::Type(_, return_ty) => {
+            // Function with return value
+            if contains_exported_type(return_ty, exported_types) {
+                quote::quote! {
+                    let result = #source_crate_ident::#function_name(#(#call_args),*);
+                    unsafe { std::mem::transmute(result) }
+                }
+            } else {
+                quote::quote! {
+                    #source_crate_ident::#function_name(#(#call_args),*)
+                }
+            }
+        }
+    }
+}
+
+/// Validate all function parameters for FFI compatibility
+fn validate_function_parameters(
+    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
+    function_name: &syn::Ident,
+    exported_types: &std::collections::HashSet<String>,
+    allowed_prefixes: &std::collections::HashSet<String>,
+) -> Result<(), String> {
+    for (i, input) in inputs.iter().enumerate() {
+        if let syn::FnArg::Typed(pat_type) = input {
+            validate_type_for_ffi(
+                &pat_type.ty,
+                exported_types,
+                allowed_prefixes,
+                &format!("parameter {} of function '{}'", i + 1, function_name),
+            ).map_err(|e| format!("Invalid FFI function parameter: {}", e))?;
+        }
+    }
+    Ok(())
 }
 
 /// Transform a function prototype to a no_mangle extern "C" function that calls the original function
@@ -942,118 +1076,56 @@ fn transform_function_to_stub(
     allowed_prefixes: &std::collections::HashSet<String>,
     edition: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Helper function to check if a type needs transmute
-    let needs_transmute = |ty: &syn::Type| -> bool { contains_exported_type(ty, exported_types) };
     // Parse the function using syn
     let parsed: syn::ItemFn = syn::parse_str(function_content)?;
+    let function_name = &parsed.sig.ident;
 
-    // Validate parameter types
-    for (i, input) in parsed.sig.inputs.iter().enumerate() {
-        if let syn::FnArg::Typed(pat_type) = input {
-            validate_type_for_ffi(
-                &pat_type.ty,
-                exported_types,
-                allowed_prefixes,
-                &format!("parameter {} of function '{}'", i + 1, parsed.sig.ident),
-            ).map_err(|e| format!("Invalid FFI function parameter: {}", e))?;
-        }
-    }
-
+    // Validate function signature
+    validate_function_parameters(&parsed.sig.inputs, function_name, exported_types, allowed_prefixes)?;
+    
     // Validate return type
     if let syn::ReturnType::Type(_, return_type) = &parsed.sig.output {
         validate_type_for_ffi(
             return_type,
             exported_types,
             allowed_prefixes,
-            &format!("return type of function '{}'", parsed.sig.ident),
+            &format!("return type of function '{}'", function_name),
         ).map_err(|e| format!("Invalid FFI function return type: {}", e))?;
     }
 
-    // Extract function signature parts
-    let fn_name = &parsed.sig.ident;
-    let output = &parsed.sig.output;
-    let vis = &parsed.vis;
-
-    // Create parameter names for the extern "C" function (with underscore prefix)
-    let extern_inputs = parsed.sig.inputs.iter().map(|input| match input {
-        syn::FnArg::Typed(pat_type) => {
-            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                let new_ident =
-                    syn::Ident::new(&format!("_{}", pat_ident.ident), pat_ident.ident.span());
-                let mut new_pat_ident = pat_ident.clone();
-                new_pat_ident.ident = new_ident;
-                let mut new_pat_type = pat_type.clone();
-                new_pat_type.pat = Box::new(syn::Pat::Ident(new_pat_ident));
-                syn::FnArg::Typed(new_pat_type)
-            } else {
-                input.clone()
-            }
-        }
-        _ => input.clone(),
-    });
-
-    // Extract parameter names for calling the original function
-    let call_args = parsed.sig.inputs.iter().filter_map(|input| match input {
-        syn::FnArg::Typed(pat_type) => {
-            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                let param_name =
-                    syn::Ident::new(&format!("_{}", pat_ident.ident), pat_ident.ident.span());
-                if needs_transmute(&pat_type.ty) {
-                    Some(quote::quote! { unsafe { std::mem::transmute(#param_name) } })
-                } else {
-                    Some(quote::quote! { #param_name })
-                }
-            } else {
-                None
-            }
-        }
-        _ => None,
-    });
-
-    // Create the source crate identifier (convert hyphens to underscores for valid identifier)
+    // Generate components
+    let extern_inputs = create_extern_parameters(&parsed.sig.inputs);
+    let call_args = generate_call_arguments(&parsed.sig.inputs, exported_types);
+    
     let source_crate_name = source_crate.replace('-', "_");
     let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
+    
+    let function_body = generate_function_body(
+        &parsed.sig.output,
+        function_name,
+        &source_crate_ident,
+        &call_args,
+        exported_types,
+    );
 
-    // Generate the function body that calls the original function
-    let function_body = match &parsed.sig.output {
-        syn::ReturnType::Default => {
-            // Void function
-            quote::quote! {
-                #source_crate_ident::#fn_name(#(#call_args),*);
-            }
-        }
-        syn::ReturnType::Type(_, return_type) => {
-            // Function with return value
-            if needs_transmute(return_type) {
-                quote::quote! {
-                    let result = #source_crate_ident::#fn_name(#(#call_args),*);
-                    unsafe { std::mem::transmute(result) }
-                }
-            } else {
-                quote::quote! {
-                    #source_crate_ident::#fn_name(#(#call_args),*)
-                }
-            }
-        }
-    };
+    // Build the final function string
+    let no_mangle_attr = generate_no_mangle_attribute(edition);
+    let visibility = &parsed.vis;
+    let return_type = &parsed.sig.output;
+    
+    let extern_params_str = extern_inputs
+        .iter()
+        .map(|arg| quote::quote! { #arg }.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
 
-    // Determine the correct no_mangle attribute depending on the Rust edition
-    let no_mangle_attr = match edition {
-        "2024" => "#[unsafe(no_mangle)]",
-        _ => "#[no_mangle]",
-    };
-
-    // Build the no_mangle extern "C" function
     let stub = format!(
         "{}\n{} unsafe extern \"C\" fn {}({}) {} {{\n{}\n}}",
         no_mangle_attr,
-        quote::quote! { #vis },
-        fn_name,
-        extern_inputs
-            .map(|arg| quote::quote! { #arg }.to_string())
-            .collect::<Vec<_>>()
-            .join(", "),
-        quote::quote! { #output },
+        quote::quote! { #visibility },
+        function_name,
+        extern_params_str,
+        quote::quote! { #return_type },
         function_body.to_string().trim()
     );
 
