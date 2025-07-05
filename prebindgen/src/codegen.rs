@@ -259,9 +259,12 @@ pub(crate) fn validate_type_for_ffi(
 
 
 /// Convert reference types to pointer types for FFI compatibility
-fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
+fn convert_reference_to_pointer(ty: &syn::Type, transparent_wrappers: &[syn::Path]) -> syn::Type {
     match ty {
         syn::Type::Reference(type_ref) => {
+            // Strip transparent wrappers from the referenced type
+            let inner_type = strip_transparent_wrappers(&type_ref.elem, transparent_wrappers);
+            
             // Convert &T to *const T and &mut T to *mut T
             let mutability = if type_ref.mutability.is_some() {
                 syn::token::Mut::default()
@@ -270,7 +273,7 @@ fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
                     star_token: syn::token::Star::default(),
                     const_token: Some(syn::token::Const::default()),
                     mutability: None,
-                    elem: type_ref.elem.clone(),
+                    elem: Box::new(inner_type),
                 });
             };
             
@@ -278,7 +281,7 @@ fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
                 star_token: syn::token::Star::default(),
                 const_token: None,
                 mutability: Some(mutability),
-                elem: type_ref.elem.clone(),
+                elem: Box::new(inner_type),
             })
         }
         _ => ty.clone(),
@@ -388,6 +391,7 @@ pub(crate) fn transform_function_to_stub(
     source_crate: &str,
     exported_types: &HashSet<String>,
     allowed_prefixes: &Vec<syn::Path>,
+    transparent_wrappers: &Vec<syn::Path>,
     edition: &str,
 ) -> Result<syn::File, String> {
     // Validate that the file contains exactly one function
@@ -447,7 +451,7 @@ pub(crate) fn transform_function_to_stub(
     // Convert reference parameters to pointer parameters
     for input in extern_sig.inputs.iter_mut() {
         if let syn::FnArg::Typed(pat_type) = input {
-            pat_type.ty = Box::new(convert_reference_to_pointer(&pat_type.ty));
+            pat_type.ty = Box::new(convert_reference_to_pointer(&pat_type.ty, transparent_wrappers));
         }
     }
     
@@ -605,7 +609,56 @@ fn extract_feature_from_cfg(cfg_expr: &CfgExpr) -> Option<String> {
     }
 }
 
+/// Strip transparent wrapper types from a type
+/// 
+/// If the type is a path that matches one of the transparent wrappers,
+/// extract the inner type from the wrapper's generic arguments.
+fn strip_transparent_wrappers(ty: &syn::Type, transparent_wrappers: &[syn::Path]) -> syn::Type {
+    match ty {
+        syn::Type::Path(type_path) => {
+            // Check if this type path matches any transparent wrapper
+            for wrapper in transparent_wrappers {
+                if paths_equal(&type_path.path, wrapper) {
+                    // Extract the first generic argument if present
+                    if let Some(last_segment) = type_path.path.segments.last() {
+                        if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
+                            if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                                // Recursively strip wrappers from the inner type
+                                return strip_transparent_wrappers(inner_ty, transparent_wrappers);
+                            }
+                        }
+                    }
+                }
+            }
+            // No wrapper found, return as-is
+            ty.clone()
+        }
+        _ => ty.clone(),
+    }
+}
 
+/// Check if two syn::Path values are equal
+fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
+    // Compare leading colons
+    if path1.leading_colon.is_some() != path2.leading_colon.is_some() {
+        return false;
+    }
+    
+    // Compare segments
+    if path1.segments.len() != path2.segments.len() {
+        return false;
+    }
+    
+    for (seg1, seg2) in path1.segments.iter().zip(path2.segments.iter()) {
+        if seg1.ident != seg2.ident {
+            return false;
+        }
+        // For transparent wrapper detection, we only care about the path name,
+        // not the generic arguments
+    }
+    
+    true
+}
 
 #[cfg(test)]
 mod tests {
@@ -699,8 +752,6 @@ pub struct RegularStruct {
         assert!(result_str.contains("RegularStruct"));
     }
 
-
-
     #[test]
     fn test_process_features_complex_syn_parsing() {
         let content = r#"
@@ -766,6 +817,7 @@ pub fn example_function(x: i32, y: &str) -> i32 {
 
         let exported_types = HashSet::new();
         let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
 
         let input_file = syn::parse_file(function_content).unwrap();
         let result = transform_function_to_stub(
@@ -773,6 +825,7 @@ pub fn example_function(x: i32, y: &str) -> i32 {
             "my-crate",
             &exported_types,
             &allowed_prefixes,
+            &transparent_wrappers,
             "2021",
         ).unwrap();
 
@@ -803,6 +856,7 @@ pub fn example_function() -> i32 {
 
         let exported_types = HashSet::new();
         let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
 
         let input_file = syn::parse_file(function_content).unwrap();
         let result = transform_function_to_stub(
@@ -810,6 +864,7 @@ pub fn example_function() -> i32 {
             "my-crate",
             &exported_types,
             &allowed_prefixes,
+            &transparent_wrappers,
             "2024",
         ).unwrap();
 
@@ -830,12 +885,14 @@ pub fn example_function() -> i32 {
         
         let exported_types = HashSet::new();
         let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
         
         let result = transform_function_to_stub(
             empty_file,
             "my-crate",
             &exported_types,
             &allowed_prefixes,
+            &transparent_wrappers,
             "2021",
         );
         
@@ -856,6 +913,7 @@ pub fn second_function() -> i32 { 24 }
             "my-crate",
             &exported_types,
             &allowed_prefixes,
+            &transparent_wrappers,
             "2021",
         );
         
@@ -875,6 +933,7 @@ pub struct MyStruct {
         
         let exported_types = HashSet::new();
         let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
         
         let struct_file = syn::parse_file(struct_content).unwrap();
         let result = transform_function_to_stub(
@@ -882,6 +941,7 @@ pub struct MyStruct {
             "my-crate",
             &exported_types,
             &allowed_prefixes,
+            &transparent_wrappers,
             "2021",
         );
         
@@ -905,6 +965,7 @@ pub fn copy_bar(
         let mut exported_types = HashSet::new();
         exported_types.insert("Bar".to_string());
         let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
 
         let input_file = syn::parse_file(function_content).unwrap();
         let result = transform_function_to_stub(
@@ -912,6 +973,7 @@ pub fn copy_bar(
             "my-crate",
             &exported_types,
             &allowed_prefixes,
+            &transparent_wrappers,
             "2021",
         ).unwrap();
 
@@ -934,22 +996,88 @@ pub fn copy_bar(
 
     #[test]
     fn test_convert_reference_to_pointer() {
+        let transparent_wrappers = Vec::new();
+        
         // Test mutable reference conversion
         let mut_ref: syn::Type = syn::parse_quote! { &mut i32 };
-        let converted = convert_reference_to_pointer(&mut_ref);
+        let converted = convert_reference_to_pointer(&mut_ref, &transparent_wrappers);
         let converted_str = quote::quote! { #converted }.to_string();
         assert!(converted_str.contains("* mut i32"));
 
         // Test immutable reference conversion
         let ref_type: syn::Type = syn::parse_quote! { &str };
-        let converted = convert_reference_to_pointer(&ref_type);
+        let converted = convert_reference_to_pointer(&ref_type, &transparent_wrappers);
         let converted_str = quote::quote! { #converted }.to_string();
         assert!(converted_str.contains("* const str"));
 
         // Test non-reference type (should remain unchanged)
         let regular_type: syn::Type = syn::parse_quote! { i32 };
-        let converted = convert_reference_to_pointer(&regular_type);
+        let converted = convert_reference_to_pointer(&regular_type, &transparent_wrappers);
         let converted_str = quote::quote! { #converted }.to_string();
         assert_eq!(converted_str, "i32");
+    }
+
+    #[test]
+    fn test_strip_transparent_wrapper() {
+        let mut transparent_wrappers = Vec::new();
+        let maybe_uninit_path: syn::Path = syn::parse_quote! { std::mem::MaybeUninit };
+        transparent_wrappers.push(maybe_uninit_path);
+
+        let function_content = r#"
+pub fn copy_bar(
+    dst: &mut std::mem::MaybeUninit<Bar>,
+    src: &Bar,
+) -> i32 {
+    42
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("Bar".to_string());
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the no_mangle attribute
+        assert!(result_str.contains("no_mangle"));
+        // Should be an unsafe extern "C" function
+        assert!(result_str.contains("unsafe extern \"C\""));
+        // Should strip MaybeUninit wrapper and convert &mut MaybeUninit<Bar> to *mut Bar
+        assert!(result_str.contains("*mut Bar"));
+        // Should convert &Bar to *const Bar
+        assert!(result_str.contains("*const Bar"));
+        // Should NOT contain MaybeUninit in the FFI signature
+        assert!(!result_str.contains("MaybeUninit"));
+        // Should call the original function from the source crate
+        assert!(result_str.contains("my_crate::copy_bar"));
+    }
+
+    #[test]
+    fn test_strip_transparent_wrappers_nested() {
+        let transparent_wrappers = vec![
+            syn::parse_quote! { std::mem::MaybeUninit },
+            syn::parse_quote! { std::mem::ManuallyDrop },
+        ];
+
+        // Test nested transparent wrappers: MaybeUninit<ManuallyDrop<T>>
+        let nested_type: syn::Type = syn::parse_quote! { 
+            std::mem::MaybeUninit<std::mem::ManuallyDrop<i32>> 
+        };
+        
+        let stripped = strip_transparent_wrappers(&nested_type, &transparent_wrappers);
+        let stripped_str = quote::quote! { #stripped }.to_string();
+        
+        // Should strip both wrappers and leave just i32
+        assert_eq!(stripped_str, "i32");
     }
 }

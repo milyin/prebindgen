@@ -330,11 +330,12 @@ pub struct Prebindgen {
 ///     .edition("2024")
 ///     .allowed_prefix("libc")
 ///     .allowed_prefix("core")
+///     .strip_transparent_wrapper("std::mem::MaybeUninit")
 ///     .select_group("structs")
 ///     .select_group("functions")
 ///     .disable_feature("experimental")
 ///     .enable_feature("std")
-///     .match_feature("unstable", "stable")
+///     .match_feature("unstable", "unstable")
 ///     .build();
 /// ```
 pub struct Builder {
@@ -346,6 +347,7 @@ pub struct Builder {
     disabled_features: std::collections::HashSet<String>,
     enabled_features: std::collections::HashSet<String>,
     feature_mappings: std::collections::HashMap<String, String>,
+    transparent_wrappers: Vec<syn::Path>,
 }
 
 /// Builder for writing groups to files with append capability.
@@ -517,6 +519,7 @@ impl Prebindgen {
                         &self.builder.crate_name,
                         &self.exported_types,
                         &self.builder.allowed_prefixes,
+                        &self.builder.transparent_wrappers,
                         &self.builder.edition,
                     )?
                 } else {
@@ -559,6 +562,7 @@ impl Builder {
             disabled_features: std::collections::HashSet::new(),
             enabled_features: std::collections::HashSet::new(),
             feature_mappings: std::collections::HashMap::new(),
+            transparent_wrappers: Vec::new(),
         }
     }
 
@@ -661,6 +665,38 @@ impl Builder {
             self.allowed_prefixes.push(path);
         } else {
             panic!("Invalid path prefix: '{}'", prefix_str);
+        }
+        self
+    }
+
+    /// Add a transparent wrapper type to be stripped from FFI function parameters.
+    ///
+    /// Transparent wrappers are types that wrap other types but have the same
+    /// memory layout (like `std::mem::MaybeUninit<T>`). When generating FFI stubs,
+    /// these wrappers will be stripped from parameter types to create simpler
+    /// C-compatible function signatures.
+    ///
+    /// For example, if you add `std::mem::MaybeUninit` as a transparent wrapper:
+    /// - `&mut std::mem::MaybeUninit<Foo>` becomes `*mut Foo` in the FFI signature
+    /// - `&std::mem::MaybeUninit<Bar>` becomes `*const Bar` in the FFI signature
+    ///
+    /// # Arguments
+    ///
+    /// * `wrapper_type` - The transparent wrapper type to strip (e.g., "std::mem::MaybeUninit")
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
+    ///     .strip_transparent_wrapper("std::mem::ManuallyDrop");
+    /// ```
+    pub fn strip_transparent_wrapper<S: Into<String>>(mut self, wrapper_type: S) -> Self {
+        let wrapper_str = wrapper_type.into();
+        if let Ok(path) = syn::parse_str::<syn::Path>(&wrapper_str) {
+            self.transparent_wrappers.push(path);
+        } else {
+            panic!("Invalid transparent wrapper type: '{}'", wrapper_str);
         }
         self
     }
@@ -934,5 +970,22 @@ mod tests {
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Failed to parse content for InvalidStruct"));
+    }
+
+    #[test]
+    fn test_builder_strip_transparent_wrapper() {
+        let builder = Builder::new("/tmp")
+            .strip_transparent_wrapper("std::mem::MaybeUninit")
+            .strip_transparent_wrapper("std::mem::ManuallyDrop");
+
+        assert_eq!(builder.transparent_wrappers.len(), 2);
+        
+        // Check that the paths were parsed correctly by comparing their string representation
+        assert!(builder.transparent_wrappers.iter().any(|p| {
+            format!("{}", quote::quote! { #p }) == "std :: mem :: MaybeUninit"
+        }));
+        assert!(builder.transparent_wrappers.iter().any(|p| {
+            format!("{}", quote::quote! { #p }) == "std :: mem :: ManuallyDrop"
+        }));
     }
 }
