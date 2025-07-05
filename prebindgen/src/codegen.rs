@@ -258,12 +258,17 @@ pub(crate) fn validate_type_for_ffi(
 }
 
 
-/// Convert reference types to pointer types for FFI compatibility
-fn convert_reference_to_pointer(ty: &syn::Type, transparent_wrappers: &[syn::Path]) -> syn::Type {
+
+/// Convert reference types to pointer types for FFI compatibility and collect transparent wrapper type pairs
+fn convert_reference_to_pointer_with_collection(
+    ty: &syn::Type, 
+    transparent_wrappers: &[syn::Path],
+    wrapper_type_pairs: &mut HashSet<(String, String)>
+) -> syn::Type {
     match ty {
         syn::Type::Reference(type_ref) => {
-            // Strip transparent wrappers from the referenced type
-            let inner_type = strip_transparent_wrappers(&type_ref.elem, transparent_wrappers);
+            // Strip transparent wrappers from the referenced type and collect pairs
+            let inner_type = strip_transparent_wrappers(&type_ref.elem, transparent_wrappers, wrapper_type_pairs);
             
             // Convert &T to *const T and &mut T to *mut T
             let mutability = if type_ref.mutability.is_some() {
@@ -284,7 +289,11 @@ fn convert_reference_to_pointer(ty: &syn::Type, transparent_wrappers: &[syn::Pat
                 elem: Box::new(inner_type),
             })
         }
-        _ => ty.clone(),
+        _ => {
+            // For non-reference types, still collect wrapper pairs
+            strip_transparent_wrappers(ty, transparent_wrappers, wrapper_type_pairs);
+            ty.clone()
+        }
     }
 }
 
@@ -394,6 +403,8 @@ pub(crate) fn transform_function_to_stub(
     transparent_wrappers: &[syn::Path],
     edition: &str,
 ) -> Result<syn::File, String> {
+    // Collect type pairs for transparent wrapper assertions
+    let mut wrapper_type_pairs: HashSet<(String, String)> = HashSet::new();
     // Validate that the file contains exactly one function
     if file.items.len() != 1 {
         return Err(format!("Expected exactly one item in file, found {}", file.items.len()));
@@ -417,6 +428,9 @@ pub(crate) fn transform_function_to_stub(
             allowed_prefixes,
             &format!("return type of function '{}'", function_name),
         ).map_err(|e| format!("Invalid FFI function return type: {}", e))?;
+        
+        // Also collect wrapper pairs from return type
+        strip_transparent_wrappers(return_type, transparent_wrappers, &mut wrapper_type_pairs);
     }
 
     // Generate components
@@ -448,10 +462,10 @@ pub(crate) fn transform_function_to_stub(
     // 4. Mark function as unsafe
     let mut extern_sig = parsed_function.sig.clone();
     
-    // Convert reference parameters to pointer parameters
+    // Convert reference parameters to pointer parameters and collect wrapper type pairs
     for input in extern_sig.inputs.iter_mut() {
         if let syn::FnArg::Typed(pat_type) = input {
-            pat_type.ty = Box::new(convert_reference_to_pointer(&pat_type.ty, transparent_wrappers));
+            pat_type.ty = Box::new(convert_reference_to_pointer_with_collection(&pat_type.ty, transparent_wrappers, &mut wrapper_type_pairs));
         }
     }
     
@@ -479,11 +493,19 @@ pub(crate) fn transform_function_to_stub(
         block: Box::new(body),
     };
 
-    // Return a syn::File containing the stub function
+    // Generate compile-time assertions for transparent wrapper type pairs
+    let wrapper_assertions = generate_wrapper_assertions(&wrapper_type_pairs);
+
+    // Return a syn::File containing the stub function and assertions
     Ok(syn::File {
         shebang: file.shebang,
         attrs: file.attrs,
-        items: vec![syn::Item::Fn(extern_function)],
+        items: {
+            // Combine the extern function with the assertions
+            let mut items = vec![syn::Item::Fn(extern_function)];
+            items.extend(wrapper_assertions);
+            items
+        },
     })
 }
 
@@ -609,11 +631,17 @@ fn extract_feature_from_cfg(cfg_expr: &CfgExpr) -> Option<String> {
     }
 }
 
-/// Strip transparent wrapper types from a type
+
+
+/// Strip transparent wrapper types from a type and collect type pairs for assertions
 /// 
 /// If the type is a path that matches one of the transparent wrappers,
-/// extract the inner type from the wrapper's generic arguments.
-fn strip_transparent_wrappers(ty: &syn::Type, transparent_wrappers: &[syn::Path]) -> syn::Type {
+/// extract the inner type from the wrapper's generic arguments and collect the pair.
+fn strip_transparent_wrappers(
+    ty: &syn::Type, 
+    transparent_wrappers: &[syn::Path],
+    wrapper_type_pairs: &mut HashSet<(String, String)>
+) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
             // Check if this type path matches any transparent wrapper
@@ -623,8 +651,12 @@ fn strip_transparent_wrappers(ty: &syn::Type, transparent_wrappers: &[syn::Path]
                     if let Some(last_segment) = type_path.path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                // Recursively strip wrappers from the inner type
-                                return strip_transparent_wrappers(inner_ty, transparent_wrappers);
+                                // Collect the type pair (original wrapper type, stripped inner type)
+                                let stripped_inner = strip_transparent_wrappers(inner_ty, transparent_wrappers, wrapper_type_pairs);
+                                let original_type_str = quote::quote! { #ty }.to_string();
+                                let stripped_type_str = quote::quote! { #stripped_inner }.to_string();
+                                wrapper_type_pairs.insert((original_type_str, stripped_type_str));
+                                return stripped_inner;
                             }
                         }
                     }
@@ -658,6 +690,39 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
     }
     
     true
+}
+
+/// Generate compile-time assertions for transparent wrapper type pairs
+fn generate_wrapper_assertions(wrapper_type_pairs: &HashSet<(String, String)>) -> Vec<syn::Item> {
+    let mut assertions = Vec::new();
+    
+    for (original_type_str, stripped_type_str) in wrapper_type_pairs {
+        // Parse the type strings back into syn::Type for proper code generation
+        if let (Ok(original_type), Ok(stripped_type)) = (
+            syn::parse_str::<syn::Type>(original_type_str),
+            syn::parse_str::<syn::Type>(stripped_type_str)
+        ) {
+            // Generate size assertion
+            let size_assertion: syn::Item = syn::parse_quote! {
+                const _: () = assert!(
+                    std::mem::size_of::<#original_type>() == std::mem::size_of::<#stripped_type>(),
+                    "Size mismatch between transparent wrapper and inner type"
+                );
+            };
+            assertions.push(size_assertion);
+            
+            // Generate alignment assertion
+            let align_assertion: syn::Item = syn::parse_quote! {
+                const _: () = assert!(
+                    std::mem::align_of::<#original_type>() == std::mem::align_of::<#stripped_type>(),
+                    "Alignment mismatch between transparent wrapper and inner type"
+                );
+            };
+            assertions.push(align_assertion);
+        }
+    }
+    
+    assertions
 }
 
 #[cfg(test)]
@@ -995,24 +1060,70 @@ pub fn copy_bar(
     }
 
     #[test]
+    fn test_transform_function_with_transparent_wrapper_assertions() {
+        let function_content = r#"
+pub fn copy_bar(
+    dst: &mut std::mem::MaybeUninit<Bar>,
+    src: &Bar,
+) -> std::mem::MaybeUninit<i32> {
+    std::mem::MaybeUninit::new(42)
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("Bar".to_string());
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        
+        let mut transparent_wrappers = Vec::new();
+        let maybe_uninit_path: syn::Path = syn::parse_quote! { std::mem::MaybeUninit };
+        transparent_wrappers.push(maybe_uninit_path);
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the extern function
+        assert!(result_str.contains("no_mangle"));
+        assert!(result_str.contains("unsafe extern \"C\""));
+        
+        // Should contain compile-time assertions for size and alignment
+        assert!(result_str.contains("std::mem::size_of"));
+        assert!(result_str.contains("std::mem::align_of"));
+        assert!(result_str.contains("Size mismatch between transparent wrapper and inner type"));
+        assert!(result_str.contains("Alignment mismatch between transparent wrapper and inner type"));
+        
+        // Should have assertions for the stripped types (MaybeUninit only in this test)
+        assert!(result_str.contains("MaybeUninit"));
+    }
+
+    #[test]
     fn test_convert_reference_to_pointer() {
         let transparent_wrappers = Vec::new();
+        let mut wrapper_type_pairs = HashSet::new();
         
         // Test mutable reference conversion
         let mut_ref: syn::Type = syn::parse_quote! { &mut i32 };
-        let converted = convert_reference_to_pointer(&mut_ref, &transparent_wrappers);
+        let converted = convert_reference_to_pointer_with_collection(&mut_ref, &transparent_wrappers, &mut wrapper_type_pairs);
         let converted_str = quote::quote! { #converted }.to_string();
         assert!(converted_str.contains("* mut i32"));
 
         // Test immutable reference conversion
         let ref_type: syn::Type = syn::parse_quote! { &str };
-        let converted = convert_reference_to_pointer(&ref_type, &transparent_wrappers);
+        let converted = convert_reference_to_pointer_with_collection(&ref_type, &transparent_wrappers, &mut wrapper_type_pairs);
         let converted_str = quote::quote! { #converted }.to_string();
         assert!(converted_str.contains("* const str"));
 
         // Test non-reference type (should remain unchanged)
         let regular_type: syn::Type = syn::parse_quote! { i32 };
-        let converted = convert_reference_to_pointer(&regular_type, &transparent_wrappers);
+        let converted = convert_reference_to_pointer_with_collection(&regular_type, &transparent_wrappers, &mut wrapper_type_pairs);
         let converted_str = quote::quote! { #converted }.to_string();
         assert_eq!(converted_str, "i32");
     }
@@ -1056,8 +1167,15 @@ pub fn copy_bar(
         assert!(result_str.contains("*mut Bar"));
         // Should convert &Bar to *const Bar
         assert!(result_str.contains("*const Bar"));
-        // Should NOT contain MaybeUninit in the FFI signature
-        assert!(!result_str.contains("MaybeUninit"));
+        // The function signature should NOT contain MaybeUninit (but assertions might)
+        // Let's split the check - function signature vs assertions
+        let lines: Vec<&str> = result_str.lines().collect();
+        let function_lines: Vec<&str> = lines.iter()
+            .take_while(|line| !line.contains("const _"))
+            .cloned()
+            .collect();
+        let function_code = function_lines.join("\n");
+        assert!(!function_code.contains("MaybeUninit"));
         // Should call the original function from the source crate
         assert!(result_str.contains("my_crate::copy_bar"));
     }
@@ -1068,16 +1186,57 @@ pub fn copy_bar(
             syn::parse_quote! { std::mem::MaybeUninit },
             syn::parse_quote! { std::mem::ManuallyDrop },
         ];
+        let mut wrapper_type_pairs = HashSet::new();
 
         // Test nested transparent wrappers: MaybeUninit<ManuallyDrop<T>>
         let nested_type: syn::Type = syn::parse_quote! { 
             std::mem::MaybeUninit<std::mem::ManuallyDrop<i32>> 
         };
         
-        let stripped = strip_transparent_wrappers(&nested_type, &transparent_wrappers);
+        let stripped = strip_transparent_wrappers(&nested_type, &transparent_wrappers, &mut wrapper_type_pairs);
         let stripped_str = quote::quote! { #stripped }.to_string();
         
         // Should strip both wrappers and leave just i32
         assert_eq!(stripped_str, "i32");
+        
+        // Should have collected the wrapper pairs
+        assert!(!wrapper_type_pairs.is_empty());
+    }
+
+    #[test]
+    fn test_wrapper_assertions_generation() {
+        // Test the assertion generation function directly
+        let mut wrapper_type_pairs = HashSet::new();
+        wrapper_type_pairs.insert((
+            "std::mem::MaybeUninit<i32>".to_string(),
+            "i32".to_string()
+        ));
+        wrapper_type_pairs.insert((
+            "std::mem::ManuallyDrop<String>".to_string(),
+            "String".to_string()
+        ));
+
+        let assertions = generate_wrapper_assertions(&wrapper_type_pairs);
+        assert_eq!(assertions.len(), 4); // 2 types × 2 assertions each (size + alignment)
+
+        let assertions_str = assertions.iter()
+            .map(|item| {
+                let file = syn::File {
+                    shebang: None,
+                    attrs: vec![],
+                    items: vec![item.clone()],
+                };
+                prettyplease::unparse(&file)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Should contain size and alignment checks
+        assert!(assertions_str.contains("std::mem::size_of"));
+        assert!(assertions_str.contains("std::mem::align_of"));
+        assert!(assertions_str.contains("MaybeUninit"));
+        assert!(assertions_str.contains("ManuallyDrop"));
+        assert!(assertions_str.contains("Size mismatch"));
+        assert!(assertions_str.contains("Alignment mismatch"));
     }
 }
