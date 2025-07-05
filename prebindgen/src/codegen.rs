@@ -5,8 +5,9 @@
 //! - Generating `#[no_mangle] extern "C"` wrapper functions
 //! - Handling type transformations and validations
 //! - Creating appropriate parameter names and call arguments
+//! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Generate allowed prefixes that include standard prelude types and modules
 pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
@@ -256,13 +257,6 @@ pub(crate) fn validate_type_for_ffi(
     }
 }
 
-/// Generate the appropriate no_mangle attribute based on Rust edition
-fn generate_no_mangle_attribute(edition: &str) -> &'static str {
-    match edition {
-        "2024" => "#[unsafe(no_mangle)]",
-        _ => "#[no_mangle]",
-    }
-}
 
 /// Create parameter names with underscore prefix for extern "C" function
 fn create_extern_parameters(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> Vec<syn::FnArg> {
@@ -365,21 +359,29 @@ fn validate_function_parameters(
 
 /// Transform a function prototype to a no_mangle extern "C" function that calls the original function
 pub(crate) fn transform_function_to_stub(
-    function_content: &str,
+    file: syn::File,
     source_crate: &str,
     exported_types: &HashSet<String>,
     allowed_prefixes: &Vec<syn::Path>,
     edition: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    // Parse the function using syn
-    let parsed: syn::ItemFn = syn::parse_str(function_content)?;
-    let function_name = &parsed.sig.ident;
+) -> Result<syn::File, String> {
+    // Validate that the file contains exactly one function
+    if file.items.len() != 1 {
+        return Err(format!("Expected exactly one item in file, found {}", file.items.len()));
+    }
+    
+    let parsed_function = match &file.items[0] {
+        syn::Item::Fn(item_fn) => item_fn,
+        item => return Err(format!("Expected function item, found {:?}", std::mem::discriminant(item))),
+    };
+    
+    let function_name = &parsed_function.sig.ident;
 
     // Validate function signature
-    validate_function_parameters(&parsed.sig.inputs, function_name, exported_types, allowed_prefixes)?;
+    validate_function_parameters(&parsed_function.sig.inputs, function_name, exported_types, allowed_prefixes)?;
     
     // Validate return type
-    if let syn::ReturnType::Type(_, return_type) = &parsed.sig.output {
+    if let syn::ReturnType::Type(_, return_type) = &parsed_function.sig.output {
         validate_type_for_ffi(
             return_type,
             exported_types,
@@ -389,40 +391,468 @@ pub(crate) fn transform_function_to_stub(
     }
 
     // Generate components
-    let extern_inputs = create_extern_parameters(&parsed.sig.inputs);
-    let call_args = generate_call_arguments(&parsed.sig.inputs, exported_types);
+    let extern_inputs = create_extern_parameters(&parsed_function.sig.inputs);
+    let call_args = generate_call_arguments(&parsed_function.sig.inputs, exported_types);
     
     let source_crate_name = source_crate.replace('-', "_");
     let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
     
     let function_body = generate_function_body(
-        &parsed.sig.output,
+        &parsed_function.sig.output,
         function_name,
         &source_crate_ident,
         &call_args,
         exported_types,
     );
 
-    // Build the final function string
-    let no_mangle_attr = generate_no_mangle_attribute(edition);
-    let visibility = &parsed.vis;
-    let return_type = &parsed.sig.output;
+    // Determine the appropriate no_mangle attribute based on Rust edition
+    // Edition 2024 uses #[unsafe(no_mangle)], while older editions use #[no_mangle]
+    let no_mangle_attr: syn::Attribute = if edition == "2024" {
+        syn::parse_quote! { #[unsafe(no_mangle)] }
+    } else {
+        syn::parse_quote! { #[no_mangle] }
+    };
+
+    // Build the extern "C" function signature:
+    // 1. Start with the original function signature
+    // 2. Update parameters with prefixed names
+    // 3. Add extern "C" ABI specifier
+    // 4. Mark function as unsafe
+    let mut extern_sig = parsed_function.sig.clone();
+    extern_sig.inputs = extern_inputs.into_iter().collect();
+    extern_sig.abi = Some(syn::Abi {
+        extern_token: syn::token::Extern::default(),
+        name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
+    });
+    extern_sig.unsafety = Some(syn::token::Unsafe::default());
+
+    // Create the function body that will call the original implementation
+    let body = syn::parse_quote! {
+        {
+            #function_body
+        }
+    };
+
+    // Build the complete extern function
+    let mut attrs = vec![no_mangle_attr];
+    attrs.extend(parsed_function.attrs.clone());
+
+    let extern_function = syn::ItemFn {
+        attrs,
+        vis: parsed_function.vis.clone(),
+        sig: extern_sig,
+        block: Box::new(body),
+    };
+
+    // Return a syn::File containing the stub function
+    Ok(syn::File {
+        shebang: file.shebang,
+        attrs: file.attrs,
+        items: vec![syn::Item::Fn(extern_function)],
+    })
+}
+
+/// Process code content to handle feature flags according to builder configuration.
+/// 
+/// This function analyzes code for `#[cfg(feature="...")]` attributes using syn syntax parsing and:
+/// - Removes code blocks guarded by disabled features
+/// - Removes cfg attributes for enabled features (including the code)
+/// - Replaces feature names according to the mapping (keeping the cfg attribute)
+pub(crate) fn process_features(
+    mut file: syn::File,
+    disabled_features: &HashSet<String>,
+    enabled_features: &HashSet<String>,
+    feature_mappings: &HashMap<String, String>,
+) -> syn::File {
+    // Process items in the file
+    file.items.retain_mut(|item| {
+        process_item_features(item, disabled_features, enabled_features, feature_mappings)
+    });
     
-    let extern_params_str = extern_inputs
-        .iter()
-        .map(|arg| quote::quote! { #arg }.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
+    file
+}
 
-    let stub = format!(
-        "{}\n{} unsafe extern \"C\" fn {}({}) {} {{\n{}\n}}",
-        no_mangle_attr,
-        quote::quote! { #visibility },
-        function_name,
-        extern_params_str,
-        quote::quote! { #return_type },
-        function_body.to_string().trim()
-    );
+/// Process a single item (struct, enum, function, etc.) for feature flags
+fn process_item_features(
+    item: &mut syn::Item,
+    disabled_features: &HashSet<String>,
+    enabled_features: &HashSet<String>,
+    feature_mappings: &HashMap<String, String>,
+) -> bool {
+    // Extract and process cfg attributes
+    let mut keep_item = true;
+    let mut remove_attrs = Vec::new();
+    
+    let attrs = match item {
+        syn::Item::Fn(f) => &mut f.attrs,
+        syn::Item::Struct(s) => &mut s.attrs,
+        syn::Item::Enum(e) => &mut e.attrs,
+        syn::Item::Union(u) => &mut u.attrs,
+        syn::Item::Type(t) => &mut t.attrs,
+        syn::Item::Const(c) => &mut c.attrs,
+        syn::Item::Static(s) => &mut s.attrs,
+        syn::Item::Mod(m) => &mut m.attrs,
+        syn::Item::Use(u) => &mut u.attrs,
+        syn::Item::Impl(i) => &mut i.attrs,
+        syn::Item::Trait(t) => &mut t.attrs,
+        _ => return true, // Keep other items as-is
+    };
+    
+    for (i, attr) in attrs.iter_mut().enumerate() {
+        // Check if this is a cfg attribute
+        if attr.path().is_ident("cfg") {
+            // Parse the meta to extract feature information
+            if let syn::Meta::List(meta_list) = &attr.meta {
+                if let Ok(cfg_expr) = syn::parse2::<CfgExpr>(meta_list.tokens.clone()) {
+                    if let Some(feature_name) = extract_feature_from_cfg(&cfg_expr) {
+                        // Check if feature should be disabled
+                        if disabled_features.contains(&feature_name) {
+                            keep_item = false;
+                            break;
+                        }
+                        
+                        // Check if feature should be enabled (remove cfg)
+                        if enabled_features.contains(&feature_name) {
+                            remove_attrs.push(i);
+                            break;
+                        }
+                        
+                        // Check if feature should be mapped
+                        if let Some(new_feature) = feature_mappings.get(&feature_name) {
+                            // Update the attribute with the new feature name
+                            let new_meta = syn::parse_quote! {
+                                cfg(feature = #new_feature)
+                            };
+                            attr.meta = new_meta;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Remove attributes that should be removed (in reverse order to maintain indices)
+    for &i in remove_attrs.iter().rev() {
+        attrs.remove(i);
+    }
+    
+    keep_item
+}
 
-    Ok(stub)
+/// Simple cfg expression to handle basic feature checks
+#[derive(Debug, Clone)]
+enum CfgExpr {
+    Feature(String),
+    Other,
+}
+
+impl syn::parse::Parse for CfgExpr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Parse the entire content as tokens and look for feature patterns
+        let tokens = input.parse::<proc_macro2::TokenStream>()?;
+        let token_string = tokens.to_string();
+        
+        // Use regex to extract feature name from the token stream
+        use regex::Regex;
+        let feature_regex = Regex::new(r#"feature\s*=\s*"([^"]+)""#).unwrap();
+        
+        if let Some(captures) = feature_regex.captures(&token_string) {
+            let feature_name = captures[1].to_string();
+            Ok(CfgExpr::Feature(feature_name))
+        } else {
+            Ok(CfgExpr::Other)
+        }
+    }
+}
+
+/// Extract feature name from a cfg expression
+fn extract_feature_from_cfg(cfg_expr: &CfgExpr) -> Option<String> {
+    match cfg_expr {
+        CfgExpr::Feature(name) => Some(name.clone()),
+        CfgExpr::Other => None,
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn test_process_features_disable() {
+        let content = r#"
+#[cfg(feature = "experimental")]
+pub struct ExperimentalStruct {
+    pub field: i32,
+}
+
+pub struct RegularStruct {
+    pub field: i32,
+}
+"#;
+
+        let mut disabled_features = HashSet::new();
+        disabled_features.insert("experimental".to_string());
+        let enabled_features = HashSet::new();
+        let feature_mappings = HashMap::new();
+
+        let file = syn::parse_file(content).unwrap();
+        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should not contain the experimental struct
+        assert!(!result_str.contains("ExperimentalStruct"));
+        // Should still contain the regular struct
+        assert!(result_str.contains("RegularStruct"));
+    }
+
+    #[test]
+    fn test_process_features_enable() {
+        let content = r#"
+#[cfg(feature = "std")]
+pub struct StdStruct {
+    pub field: i32,
+}
+
+pub struct RegularStruct {
+    pub field: i32,
+}
+"#;
+
+        let disabled_features = HashSet::new();
+        let mut enabled_features = HashSet::new();
+        enabled_features.insert("std".to_string());
+        let feature_mappings = HashMap::new();
+
+        let file = syn::parse_file(content).unwrap();
+        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the std struct without cfg attribute
+        assert!(result_str.contains("StdStruct"));
+        assert!(!result_str.contains(r#"cfg(feature = "std")"#));
+        // Should still contain the regular struct
+        assert!(result_str.contains("RegularStruct"));
+    }
+
+    #[test]
+    fn test_process_features_mapping() {
+        let content = r#"
+#[cfg(feature = "unstable")]
+pub struct UnstableStruct {
+    pub field: i32,
+}
+
+pub struct RegularStruct {
+    pub field: i32,
+}
+"#;
+
+        let disabled_features = HashSet::new();
+        let enabled_features = HashSet::new();
+        let mut feature_mappings = HashMap::new();
+        feature_mappings.insert("unstable".to_string(), "stable".to_string());
+
+        let file = syn::parse_file(content).unwrap();
+        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the struct with mapped feature name
+        assert!(result_str.contains("UnstableStruct"));
+        assert!(result_str.contains(r#"cfg(feature = "stable")"#));
+        assert!(!result_str.contains(r#"cfg(feature = "unstable")"#));
+        // Should still contain the regular struct
+        assert!(result_str.contains("RegularStruct"));
+    }
+
+
+
+    #[test]
+    fn test_process_features_complex_syn_parsing() {
+        let content = r#"
+#[cfg(feature = "async")]
+pub struct AsyncStruct {
+    pub field: i32,
+}
+
+#[cfg(feature = "sync")]
+impl AsyncStruct {
+    pub fn new() -> Self {
+        Self { field: 0 }
+    }
+}
+
+#[cfg(feature = "deprecated")]
+pub fn old_function() {
+    // deprecated function
+}
+
+pub enum RegularEnum {
+    A,
+    B,
+}
+"#;
+
+        let mut disabled_features = HashSet::new();
+        disabled_features.insert("deprecated".to_string());
+        
+        let mut enabled_features = HashSet::new();
+        enabled_features.insert("async".to_string());
+        
+        let mut feature_mappings = HashMap::new();
+        feature_mappings.insert("sync".to_string(), "synchronous".to_string());
+
+        let file = syn::parse_file(content).unwrap();
+        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should not contain the deprecated function
+        assert!(!result_str.contains("old_function"));
+        
+        // Should contain AsyncStruct without cfg attribute
+        assert!(result_str.contains("AsyncStruct"));
+        assert!(!result_str.contains(r#"cfg(feature = "async")"#));
+        
+        // Should contain the impl block with mapped feature name
+        assert!(result_str.contains("impl AsyncStruct"));
+        assert!(result_str.contains(r#"cfg(feature = "synchronous")"#));
+        assert!(!result_str.contains(r#"cfg(feature = "sync")"#));
+        
+        // Should still contain the regular enum
+        assert!(result_str.contains("RegularEnum"));
+    }
+
+    #[test]
+    fn test_transform_function_to_stub() {
+        let function_content = r#"
+pub fn example_function(x: i32, y: &str) -> i32 {
+    42
+}
+"#;
+
+        let exported_types = HashSet::new();
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            "2021",
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the no_mangle attribute
+        assert!(result_str.contains("no_mangle"));
+        // Should be an unsafe extern "C" function
+        assert!(result_str.contains("unsafe extern \"C\""));
+        // Should have prefixed parameter names
+        assert!(result_str.contains("_x"));
+        assert!(result_str.contains("_y"));
+        // Should call the original function from the source crate
+        assert!(result_str.contains("my_crate::example_function"));
+    }
+
+    #[test]
+    fn test_transform_function_to_stub_edition_2024() {
+        let function_content = r#"
+pub fn example_function() -> i32 {
+    42
+}
+"#;
+
+        let exported_types = HashSet::new();
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            "2024",
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the unsafe no_mangle attribute for 2024 edition
+        assert!(result_str.contains("#[unsafe(no_mangle)]"));
+    }
+
+    #[test]
+    fn test_transform_function_to_stub_wrong_item_count() {
+        // Test with empty file
+        let empty_file = syn::File {
+            shebang: None,
+            attrs: vec![],
+            items: vec![],
+        };
+        
+        let exported_types = HashSet::new();
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        
+        let result = transform_function_to_stub(
+            empty_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            "2021",
+        );
+        
+        match result {
+            Err(error_msg) => assert!(error_msg.contains("Expected exactly one item")),
+            Ok(_) => panic!("Expected error but got success"),
+        }
+        
+        // Test with multiple items
+        let function_content = r#"
+pub fn first_function() -> i32 { 42 }
+pub fn second_function() -> i32 { 24 }
+"#;
+        
+        let multi_item_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            multi_item_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            "2021",
+        );
+        
+        match result {
+            Err(error_msg) => assert!(error_msg.contains("Expected exactly one item")),
+            Ok(_) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[test]
+    fn test_transform_function_to_stub_wrong_item_type() {
+        let struct_content = r#"
+pub struct MyStruct {
+    field: i32,
+}
+"#;
+        
+        let exported_types = HashSet::new();
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        
+        let struct_file = syn::parse_file(struct_content).unwrap();
+        let result = transform_function_to_stub(
+            struct_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            "2021",
+        );
+        
+        match result {
+            Err(error_msg) => assert!(error_msg.contains("Expected function item")),
+            Ok(_) => panic!("Expected error but got success"),
+        }
+    }
 }
