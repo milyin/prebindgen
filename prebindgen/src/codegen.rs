@@ -279,7 +279,7 @@ fn convert_to_local_type(
     
     // Strip transparent wrappers from the core type
     let mut has_wrapper = false;
-    let local_core_type = strip_transparent_wrappers_for_assertion(core_type, transparent_wrappers, &mut has_wrapper);
+    let local_core_type = strip_transparent_wrappers(core_type, transparent_wrappers, &mut has_wrapper);
     
     // Check if we should generate an assertion for this type
     let should_convert = has_wrapper || contains_exported_type(&local_core_type, exported_types);
@@ -738,7 +738,7 @@ pub(crate) fn generate_type_assertions(assertion_type_pairs: &HashSet<(String, S
 
 
 /// Strip transparent wrappers and track if any were stripped
-fn strip_transparent_wrappers_for_assertion(
+fn strip_transparent_wrappers(
     ty: &syn::Type, 
     transparent_wrappers: &[syn::Path],
     has_wrapper: &mut bool
@@ -753,7 +753,7 @@ fn strip_transparent_wrappers_for_assertion(
                     if let Some(last_segment) = type_path.path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                return strip_transparent_wrappers_for_assertion(inner_ty, transparent_wrappers, has_wrapper);
+                                return strip_transparent_wrappers(inner_ty, transparent_wrappers, has_wrapper);
                             }
                         }
                     }
@@ -1305,7 +1305,7 @@ pub fn copy_bar(
         };
         
         let mut has_wrapper = false;
-        let stripped = strip_transparent_wrappers_for_assertion(&nested_type, &transparent_wrappers, &mut has_wrapper);
+        let stripped = strip_transparent_wrappers(&nested_type, &transparent_wrappers, &mut has_wrapper);
         let stripped_str = quote::quote! { #stripped }.to_string();
         
         // Should strip both wrappers and leave just i32
