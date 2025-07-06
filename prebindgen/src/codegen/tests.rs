@@ -51,6 +51,7 @@ pub struct RegularStruct {
         &disabled_features,
         &enabled_features,
         &feature_mappings,
+        None,
     );
     let result_str = prettyplease::unparse(&result);
 
@@ -84,6 +85,7 @@ pub struct RegularStruct {
         &disabled_features,
         &enabled_features,
         &feature_mappings,
+        None,
     );
     let result_str = prettyplease::unparse(&result);
 
@@ -118,6 +120,7 @@ pub struct RegularStruct {
         &disabled_features,
         &enabled_features,
         &feature_mappings,
+        None,
     );
     let result_str = prettyplease::unparse(&result);
 
@@ -170,6 +173,7 @@ pub enum RegularEnum {
         &disabled_features,
         &enabled_features,
         &feature_mappings,
+        None,
     );
     let result_str = prettyplease::unparse(&result);
 

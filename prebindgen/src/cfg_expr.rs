@@ -157,6 +157,7 @@ impl CfgExpr {
         enabled_features: &HashSet<String>,
         disabled_features: &HashSet<String>,
         feature_mappings: &std::collections::HashMap<String, String>,
+        source_location: Option<&crate::SourceLocation>,
     ) -> Option<Self> {
         match self {
             CfgExpr::Feature(name) => {
@@ -170,15 +171,19 @@ impl CfgExpr {
                     // Feature should be mapped
                     Some(CfgExpr::Feature(new_name.clone()))
                 } else {
-                    // Unmapped feature - panic
-                    panic!("unmapped feature: {name}");
+                    // Unmapped feature - panic with source location information
+                    if let Some(loc) = source_location {
+                        panic!("unmapped feature: {name} (at {}:{}:{})", loc.file, loc.line, loc.column);
+                    } else {
+                        panic!("unmapped feature: {name}");
+                    }
                 }
             }
             CfgExpr::TargetArch(_) => Some(self.clone()),
             CfgExpr::All(exprs) => {
                 let mut processed_exprs = Vec::new();
                 for expr in exprs {
-                    match expr.process_features_strict(enabled_features, disabled_features, feature_mappings) {
+                    match expr.process_features_strict(enabled_features, disabled_features, feature_mappings, source_location) {
                         Some(CfgExpr::False) => {
                             // If any expression in All is false, the whole All is false
                             return Some(CfgExpr::False);
@@ -199,7 +204,7 @@ impl CfgExpr {
                 let mut processed_exprs = Vec::new();
                 let mut has_true = false;
                 for expr in exprs {
-                    match expr.process_features_strict(enabled_features, disabled_features, feature_mappings) {
+                    match expr.process_features_strict(enabled_features, disabled_features, feature_mappings, source_location) {
                         Some(CfgExpr::False) => {
                             // False expressions in Any can be omitted
                         }
@@ -221,7 +226,7 @@ impl CfgExpr {
                 }
             }
             CfgExpr::Not(expr) => {
-                match expr.process_features_strict(enabled_features, disabled_features, feature_mappings) {
+                match expr.process_features_strict(enabled_features, disabled_features, feature_mappings, source_location) {
                     Some(CfgExpr::False) => None, // not(false) = true
                     Some(processed) => Some(CfgExpr::Not(Box::new(processed))),
                     None => Some(CfgExpr::False), // not(true) = false
@@ -551,31 +556,31 @@ mod tests {
 
         // Test enabled feature - should be removed (None = always true)
         let expr = CfgExpr::Feature("feature1".to_string());
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), None);
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), None);
 
         // Test disabled feature - should become False
         let expr = CfgExpr::Feature("feature2".to_string());
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), Some(CfgExpr::False));
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), Some(CfgExpr::False));
 
         // Test mapped feature - should be renamed
         let expr = CfgExpr::Feature("old_feature".to_string());
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), Some(CfgExpr::Feature("new_feature".to_string())));
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), Some(CfgExpr::Feature("new_feature".to_string())));
 
         // Test any() with enabled feature - should be removed (None = always true)
         let expr = CfgExpr::Any(vec![CfgExpr::Feature("feature1".to_string()), CfgExpr::Feature("feature2".to_string())]);
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), None);
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), None);
 
         // Test all() with disabled feature - should become False
         let expr = CfgExpr::All(vec![CfgExpr::Feature("feature1".to_string()), CfgExpr::Feature("feature2".to_string())]);
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), Some(CfgExpr::False));
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), Some(CfgExpr::False));
 
         // Test not() with disabled feature - should be removed (not(false) = true)
         let expr = CfgExpr::Not(Box::new(CfgExpr::Feature("feature2".to_string())));
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), None);
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), None);
 
         // Test not() with enabled feature - should become False (not(true) = false)
         let expr = CfgExpr::Not(Box::new(CfgExpr::Feature("feature1".to_string())));
-        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings), Some(CfgExpr::False));
+        assert_eq!(expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None), Some(CfgExpr::False));
     }
 
     #[test]
@@ -589,7 +594,7 @@ mod tests {
 
         // Test unmapped feature - should panic
         let expr = CfgExpr::Feature("unknown".to_string());
-        expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings);
+        expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None);
     }
 
     #[test]
@@ -605,6 +610,6 @@ mod tests {
 
         // Test unmapped feature in any() - should panic
         let expr = CfgExpr::Any(vec![CfgExpr::Feature("feature1".to_string()), CfgExpr::Feature("unknown".to_string())]);
-        expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings);
+        expr.process_features_strict(&enabled_features, &disabled_features, &feature_mappings, None);
     }
 }

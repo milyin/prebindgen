@@ -542,6 +542,7 @@ impl Prebindgen {
                     &self.builder.disabled_features,
                     &self.builder.enabled_features,
                     &self.builder.feature_mappings,
+                    Some(&record.source_location),
                 );
 
                 // Skip if content is empty after feature processing
