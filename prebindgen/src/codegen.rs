@@ -9,7 +9,6 @@
 
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
-use std::env;
 
 /// Codegen structure containing common parameters for code generation
 ///
@@ -791,14 +790,10 @@ fn process_attributes(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
 ) -> bool {
-    use crate::cfg_expr::{CfgExpr, CfgEvalResult};
+    use crate::cfg_expr::CfgExpr;
     
     let mut keep_item = true;
     let mut remove_attrs = Vec::new();
-
-    // Get the current target architecture from the environment
-    let current_target_arch = env::var("CARGO_CFG_TARGET_ARCH")
-        .unwrap_or_else(|_| std::env::consts::ARCH.to_string());
 
     for (i, attr) in attrs.iter_mut().enumerate() {
         // Check if this is a cfg attribute
@@ -808,41 +803,26 @@ fn process_attributes(
                 // Parse the cfg expression using our advanced parser
                 match CfgExpr::parse_from_tokens(&meta_list.tokens) {
                     Ok(cfg_expr) => {
-                        // Apply feature mappings first
-                        let mapped_expr = cfg_expr.apply_feature_mappings(feature_mappings);
-                        
-                        // Evaluate the expression (treat unknown features as disabled for deterministic FFI)
-                        let eval_result = mapped_expr.evaluate_with_unknown_handling(enabled_features, disabled_features, &current_target_arch, false);
-                        
-                        match eval_result {
-                            CfgEvalResult::False => {
-                                // Expression is false, exclude this item unless it has feature mappings
-                                if mapped_expr != cfg_expr {
-                                    // Keep the item but update the cfg attribute with mapped features
-                                    let new_tokens = mapped_expr.to_tokens();
-                                    let new_meta = syn::parse_quote! {
-                                        cfg(#new_tokens)
-                                    };
-                                    attr.meta = new_meta;
-                                } else {
+                        // Apply strict feature processing
+                        match cfg_expr.process_features_strict(enabled_features, disabled_features, feature_mappings) {
+                            Some(processed_expr) => {
+                                // Check if the processed expression is CfgExpr::False
+                                if matches!(processed_expr, CfgExpr::False) {
+                                    // Expression evaluates to false, exclude this item
                                     keep_item = false;
                                     break;
-                                }
-                            }
-                            CfgEvalResult::True => {
-                                // Expression is true, remove the cfg attribute
-                                remove_attrs.push(i);
-                            }
-                            CfgEvalResult::Unknown => {
-                                // Expression can't be determined, keep the cfg attribute
-                                // but update it if mappings were applied
-                                if mapped_expr != cfg_expr {
-                                    let new_tokens = mapped_expr.to_tokens();
+                                } else {
+                                    // Expression still exists after processing, update the cfg attribute
+                                    let new_tokens = processed_expr.to_tokens();
                                     let new_meta = syn::parse_quote! {
                                         cfg(#new_tokens)
                                     };
                                     attr.meta = new_meta;
                                 }
+                            }
+                            None => {
+                                // Expression evaluates to true, remove the cfg attribute
+                                remove_attrs.push(i);
                             }
                         }
                     }
