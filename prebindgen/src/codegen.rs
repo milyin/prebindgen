@@ -80,31 +80,8 @@ impl<'a> Codegen<'a> {
 
         let function_name = &parsed_function.sig.ident;
 
-        // Validate function signature
-        validate_function_parameters(
-            &parsed_function.sig.inputs,
-            function_name,
-            self.exported_types,
-            self.allowed_prefixes,
-            source_location,
-        )?;
-
         // Prepare source crate name for type collection
         let source_crate_name = self.crate_name.replace('-', "_");
-
-        // Validate return type
-        if let syn::ReturnType::Type(_, return_type) = &parsed_function.sig.output {
-            validate_type_for_ffi(
-                return_type,
-                self.exported_types,
-                self.allowed_prefixes,
-                &format!("return type of function '{function_name}'"),
-            )
-            .map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
-        }
-
-        // Generate components and build call arguments inline
-        let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
 
         // Build the extern "C" function signature:
         // 1. Start with the original function signature
@@ -113,17 +90,25 @@ impl<'a> Codegen<'a> {
         // 4. Mark function as unsafe
         let mut extern_sig = parsed_function.sig.clone();
 
+        // Generate components and build call arguments inline
+        let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
+
         // Convert return type and collect type assertion pairs
         let mut result_type_changed = false;
         if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
+            let return_validation_ctx = ValidationContext {
+                exported_types: self.exported_types,
+                allowed_prefixes: self.allowed_prefixes,
+                transparent_wrappers: self.transparent_wrappers,
+                source_crate_ident: &source_crate_ident,
+                context: &format!("return type of function '{function_name}'"),
+            };
             let local_return_type = convert_to_local_type(
                 return_type,
-                self.exported_types,
-                self.transparent_wrappers,
-                &source_crate_ident,
+                &return_validation_ctx,
                 assertion_type_pairs,
                 &mut result_type_changed,
-            );
+            ).map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
             extern_sig.output = syn::ReturnType::Type(*arrow, Box::new(local_return_type));
         }
 
@@ -139,14 +124,19 @@ impl<'a> Codegen<'a> {
             };
             // Convert type and collect assertion pairs (handles both reference and non-reference types)
             let mut type_changed = false;
+            let param_validation_ctx = ValidationContext {
+                exported_types: self.exported_types,
+                allowed_prefixes: self.allowed_prefixes,
+                transparent_wrappers: self.transparent_wrappers,
+                source_crate_ident: &source_crate_ident,
+                context: &format!("parameter of function '{function_name}'"),
+            };
             let local_type = convert_to_local_type(
                 &pat_type.ty,
-                self.exported_types,
-                self.transparent_wrappers,
-                &source_crate_ident,
+                &param_validation_ctx,
                 assertion_type_pairs,
                 &mut type_changed,
-            );
+            ).map_err(|e| format!("Invalid FFI function parameter: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
 
             // Generate call argument based on the original type and conversion status
             if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
@@ -240,6 +230,20 @@ impl<'a> Codegen<'a> {
             items: vec![syn::Item::Fn(extern_function)],
         })
     }
+}
+
+/// Context for type validation and conversion
+pub(crate) struct ValidationContext<'a> {
+    /// Set of exported type names
+    exported_types: &'a HashSet<String>,
+    /// List of allowed path prefixes for type validation
+    allowed_prefixes: &'a [syn::Path],
+    /// List of transparent wrapper paths to strip
+    transparent_wrappers: &'a [syn::Path],
+    /// Source crate identifier for prefixing
+    source_crate_ident: &'a syn::Ident,
+    /// Context string for error reporting
+    context: &'a str,
 }
 
 /// Generate allowed prefixes that include standard prelude types and modules
@@ -441,7 +445,7 @@ fn validate_generic_arguments(
 ) -> Result<(), String> {
     for arg in &args.args {
         if let syn::GenericArgument::Type(inner_ty) = arg {
-            validate_type_for_ffi(
+            validate_type_for_ffi_impl(
                 inner_ty,
                 exported_types,
                 allowed_prefixes,
@@ -452,7 +456,7 @@ fn validate_generic_arguments(
     Ok(())
 }
 
-/// Validate that a type is suitable for FFI use
+/// Validate that a type is suitable for FFI use (internal implementation)
 ///
 /// This function checks if a type can be safely used in FFI by verifying it's either:
 /// - An absolute path (starting with `::`)
@@ -460,7 +464,7 @@ fn validate_generic_arguments(
 /// - A type defined in the exported types set
 /// - A supported container type (reference, pointer, slice, array, tuple) with valid element types
 #[roxygen]
-pub(crate) fn validate_type_for_ffi(
+fn validate_type_for_ffi_impl(
     /// The type to validate for FFI compatibility
     ty: &syn::Type,
     /// Set of exported type names that are considered valid
@@ -512,25 +516,25 @@ pub(crate) fn validate_type_for_ffi(
                 context
             ))
         }
-        syn::Type::Reference(type_ref) => validate_type_for_ffi(
+        syn::Type::Reference(type_ref) => validate_type_for_ffi_impl(
             &type_ref.elem,
             exported_types,
             allowed_prefixes,
             &format!("{context} (reference)"),
         ),
-        syn::Type::Ptr(type_ptr) => validate_type_for_ffi(
+        syn::Type::Ptr(type_ptr) => validate_type_for_ffi_impl(
             &type_ptr.elem,
             exported_types,
             allowed_prefixes,
             &format!("{context} (pointer)"),
         ),
-        syn::Type::Slice(type_slice) => validate_type_for_ffi(
+        syn::Type::Slice(type_slice) => validate_type_for_ffi_impl(
             &type_slice.elem,
             exported_types,
             allowed_prefixes,
             &format!("{context} (slice element)"),
         ),
-        syn::Type::Array(type_array) => validate_type_for_ffi(
+        syn::Type::Array(type_array) => validate_type_for_ffi_impl(
             &type_array.elem,
             exported_types,
             allowed_prefixes,
@@ -538,7 +542,7 @@ pub(crate) fn validate_type_for_ffi(
         ),
         syn::Type::Tuple(type_tuple) => {
             for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
-                validate_type_for_ffi(
+                validate_type_for_ffi_impl(
                     elem_ty,
                     exported_types,
                     allowed_prefixes,
@@ -555,28 +559,28 @@ pub(crate) fn validate_type_for_ffi(
     }
 }
 
-/// Convert a remote type to its local equivalent and collect assertion pairs
+/// Convert a remote type to its local equivalent, validate FFI compatibility, and collect assertion pairs
 ///
 /// This function:
+/// - Validates that the type is suitable for FFI use
 /// - Strips transparent wrappers from the type
 /// - Converts references to pointers for FFI compatibility
 /// - Collects type assertion pairs when conversion is needed
 /// - Sets the `was_converted` flag to indicate if the type was modified
 #[roxygen]
 pub(crate) fn convert_to_local_type(
-    /// The original type to convert
+    /// The original type to convert and validate
     original_type: &syn::Type,
-    /// Set of exported type names
-    exported_types: &HashSet<String>,
-    /// List of transparent wrapper paths to strip
-    transparent_wrappers: &[syn::Path],
-    /// Source crate identifier for prefixing
-    source_crate_ident: &syn::Ident,
+    /// Validation context containing all necessary parameters
+    validation_ctx: &ValidationContext,
     /// Mutable set to collect assertion pairs
     assertion_type_pairs: &mut HashSet<(String, String)>,
     /// Mutable boolean flag set to true if type was changed and needs transmute
     type_changed: &mut bool,
-) -> syn::Type {
+) -> Result<syn::Type, String> {
+    // First validate the type for FFI compatibility
+    validate_type_for_ffi_impl(original_type, validation_ctx.exported_types, validation_ctx.allowed_prefixes, validation_ctx.context)?;
+
     // Extract the core type to process (for references, this is the referenced type)
     let (core_type, is_reference, ref_info) = match original_type {
         syn::Type::Reference(type_ref) => (
@@ -594,15 +598,15 @@ pub(crate) fn convert_to_local_type(
     // Strip transparent wrappers from the core type
     let mut has_wrapper = false;
     let local_core_type =
-        strip_transparent_wrappers(core_type, transparent_wrappers, &mut has_wrapper);
+        strip_transparent_wrappers(core_type, validation_ctx.transparent_wrappers, &mut has_wrapper);
 
     // Check if we should generate an assertion for this type
-    *type_changed = has_wrapper || contains_exported_type(&local_core_type, exported_types);
+    *type_changed = has_wrapper || contains_exported_type(&local_core_type, validation_ctx.exported_types);
 
     if *type_changed {
         // Create the original core type with proper crate prefixing
         let prefixed_original_core =
-            prefix_exported_types_in_type(core_type, source_crate_ident, exported_types);
+            prefix_exported_types_in_type(core_type, validation_ctx.source_crate_ident, validation_ctx.exported_types);
 
         // Store the assertion pair
         let local_core_str = quote::quote! { #local_core_type }.to_string();
@@ -611,7 +615,7 @@ pub(crate) fn convert_to_local_type(
     }
 
     // Build the final type based on whether the original was a reference
-    if is_reference {
+    let result = if is_reference {
         let (and_token, lifetime, mutability) = ref_info.unwrap();
         // Create a reference to the local type, then convert to pointer
         let local_ref = syn::Type::Reference(syn::TypeReference {
@@ -630,7 +634,9 @@ pub(crate) fn convert_to_local_type(
     } else {
         // No conversion needed, return original type
         original_type.clone()
-    }
+    };
+
+    Ok(result)
 }
 
 /// Convert reference types to pointer types for FFI compatibility
@@ -659,37 +665,6 @@ pub(crate) fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
             ty.clone()
         }
     }
-}
-
-/// Validate function parameters for FFI compatibility
-///
-/// Checks each typed parameter in a function signature to ensure it can be safely
-/// used in FFI contexts according to the validation rules.
-#[roxygen]
-fn validate_function_parameters(
-    /// The function parameters to validate
-    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
-    /// The function name for error reporting
-    function_name: &syn::Ident,
-    /// Set of exported type names that are considered valid
-    exported_types: &HashSet<String>,
-    /// List of allowed path prefixes for type validation
-    allowed_prefixes: &[syn::Path],
-    /// Source location information for error reporting
-    source_location: &crate::SourceLocation,
-) -> Result<(), String> {
-    for (i, input) in inputs.iter().enumerate() {
-        if let syn::FnArg::Typed(pat_type) = input {
-            validate_type_for_ffi(
-                &pat_type.ty,
-                exported_types,
-                allowed_prefixes,
-                &format!("parameter {} of function '{}'", i + 1, function_name),
-            )
-            .map_err(|e| format!("Invalid FFI function parameter: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
-        }
-    }
-    Ok(())
 }
 
 /// Process code content to handle feature flags according to builder configuration

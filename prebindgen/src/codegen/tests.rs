@@ -679,19 +679,25 @@ fn test_convert_to_local_type_function() {
 
     let transparent_wrappers = vec![syn::parse_quote! { std::mem::MaybeUninit }];
     let source_crate_ident = syn::Ident::new("test_crate", proc_macro2::Span::call_site());
+    let allowed_prefixes = crate::codegen::generate_standard_allowed_prefixes();
 
     // Test with transparent wrapper + exported type
     let wrapped_type: syn::Type = syn::parse_quote! { std::mem::MaybeUninit<ExportedType> };
     let mut assertion_pairs = HashSet::new();
     let mut was_converted = false;
+    let validation_ctx = crate::codegen::ValidationContext {
+        exported_types: &exported_types,
+        allowed_prefixes: &allowed_prefixes,
+        transparent_wrappers: &transparent_wrappers,
+        source_crate_ident: &source_crate_ident,
+        context: "test context",
+    };
     let result = convert_to_local_type(
         &wrapped_type,
-        &exported_types,
-        &transparent_wrappers,
-        &source_crate_ident,
+        &validation_ctx,
         &mut assertion_pairs,
         &mut was_converted,
-    );
+    ).unwrap();
 
     let local_str = quote::quote! { #result }.to_string();
     assert_eq!(local_str, "ExportedType"); // Stripped of wrapper
@@ -709,14 +715,19 @@ fn test_convert_to_local_type_function() {
     let regular_type: syn::Type = syn::parse_quote! { i32 };
     let mut assertion_pairs = HashSet::new();
     let mut was_converted = false;
+    let validation_ctx = crate::codegen::ValidationContext {
+        exported_types: &exported_types,
+        allowed_prefixes: &allowed_prefixes,
+        transparent_wrappers: &transparent_wrappers,
+        source_crate_ident: &source_crate_ident,
+        context: "test context",
+    };
     let result = convert_to_local_type(
         &regular_type,
-        &exported_types,
-        &transparent_wrappers,
-        &source_crate_ident,
+        &validation_ctx,
         &mut assertion_pairs,
         &mut was_converted,
-    );
+    ).unwrap();
 
     let result_str = quote::quote! { #result }.to_string();
     assert_eq!(result_str, "i32"); // No change
@@ -727,14 +738,19 @@ fn test_convert_to_local_type_function() {
     let exported_only: syn::Type = syn::parse_quote! { ExportedType };
     let mut assertion_pairs = HashSet::new();
     let mut was_converted = false;
+    let validation_ctx = crate::codegen::ValidationContext {
+        exported_types: &exported_types,
+        allowed_prefixes: &allowed_prefixes,
+        transparent_wrappers: &transparent_wrappers,
+        source_crate_ident: &source_crate_ident,
+        context: "test context",
+    };
     let result = convert_to_local_type(
         &exported_only,
-        &exported_types,
-        &transparent_wrappers,
-        &source_crate_ident,
+        &validation_ctx,
         &mut assertion_pairs,
         &mut was_converted,
-    );
+    ).unwrap();
 
     let local_str = quote::quote! { #result }.to_string();
     assert_eq!(local_str, "ExportedType"); // No change since no wrapper
