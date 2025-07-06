@@ -701,15 +701,23 @@ fn process_item_features(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
 ) -> bool {
-    // Extract and process cfg attributes
-    let mut keep_item = true;
-    let mut remove_attrs = Vec::new();
-
     let attrs = match item {
         syn::Item::Fn(f) => &mut f.attrs,
-        syn::Item::Struct(s) => &mut s.attrs,
-        syn::Item::Enum(e) => &mut e.attrs,
-        syn::Item::Union(u) => &mut u.attrs,
+        syn::Item::Struct(s) => {
+            // Process struct fields recursively
+            process_struct_fields(&mut s.fields, disabled_features, enabled_features, feature_mappings);
+            &mut s.attrs
+        },
+        syn::Item::Enum(e) => {
+            // Process enum variants recursively
+            process_enum_variants(&mut e.variants, disabled_features, enabled_features, feature_mappings);
+            &mut e.attrs
+        },
+        syn::Item::Union(u) => {
+            // Process union fields recursively
+            process_union_fields(&mut u.fields, disabled_features, enabled_features, feature_mappings);
+            &mut u.attrs
+        },
         syn::Item::Type(t) => &mut t.attrs,
         syn::Item::Const(c) => &mut c.attrs,
         syn::Item::Static(s) => &mut s.attrs,
@@ -719,6 +727,97 @@ fn process_item_features(
         syn::Item::Trait(t) => &mut t.attrs,
         _ => return true, // Keep other items as-is
     };
+
+    // Use the centralized attribute processing function
+    process_attributes(attrs, disabled_features, enabled_features, feature_mappings)
+}
+
+/// Process struct fields for feature flags
+fn process_struct_fields(
+    fields: &mut syn::Fields,
+    disabled_features: &HashSet<String>,
+    enabled_features: &HashSet<String>,
+    feature_mappings: &HashMap<String, String>,
+) {
+    match fields {
+        syn::Fields::Named(fields_named) => {
+            // Manual filtering since Punctuated doesn't have retain_mut
+            let mut new_fields = syn::punctuated::Punctuated::new();
+            for field in fields_named.named.pairs() {
+                let mut field = field.into_value().clone();
+                if process_attributes(&mut field.attrs, disabled_features, enabled_features, feature_mappings) {
+                    new_fields.push(field);
+                }
+            }
+            fields_named.named = new_fields;
+        }
+        syn::Fields::Unnamed(fields_unnamed) => {
+            // Manual filtering since Punctuated doesn't have retain_mut
+            let mut new_fields = syn::punctuated::Punctuated::new();
+            for field in fields_unnamed.unnamed.pairs() {
+                let mut field = field.into_value().clone();
+                if process_attributes(&mut field.attrs, disabled_features, enabled_features, feature_mappings) {
+                    new_fields.push(field);
+                }
+            }
+            fields_unnamed.unnamed = new_fields;
+        }
+        syn::Fields::Unit => {
+            // No fields to process
+        }
+    }
+}
+
+/// Process enum variants for feature flags
+fn process_enum_variants(
+    variants: &mut syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
+    disabled_features: &HashSet<String>,
+    enabled_features: &HashSet<String>,
+    feature_mappings: &HashMap<String, String>,
+) {
+    // Manual filtering since Punctuated doesn't have retain_mut
+    let mut new_variants = syn::punctuated::Punctuated::new();
+    for variant_pair in variants.pairs() {
+        let mut variant = variant_pair.into_value().clone();
+        // Process variant attributes
+        let keep_variant = process_attributes(&mut variant.attrs, disabled_features, enabled_features, feature_mappings);
+        
+        if keep_variant {
+            // Process variant fields if it's kept
+            process_struct_fields(&mut variant.fields, disabled_features, enabled_features, feature_mappings);
+            new_variants.push(variant);
+        }
+    }
+    *variants = new_variants;
+}
+
+/// Process union fields for feature flags
+fn process_union_fields(
+    fields: &mut syn::FieldsNamed,
+    disabled_features: &HashSet<String>,
+    enabled_features: &HashSet<String>,
+    feature_mappings: &HashMap<String, String>,
+) {
+    // Manual filtering since Punctuated doesn't have retain_mut
+    let mut new_fields = syn::punctuated::Punctuated::new();
+    for field_pair in fields.named.pairs() {
+        let mut field = field_pair.into_value().clone();
+        if process_attributes(&mut field.attrs, disabled_features, enabled_features, feature_mappings) {
+            new_fields.push(field);
+        }
+    }
+    fields.named = new_fields;
+}
+
+/// Process attributes for feature flags and return whether the item should be kept
+fn process_attributes(
+    attrs: &mut Vec<syn::Attribute>,
+    disabled_features: &HashSet<String>,
+    enabled_features: &HashSet<String>,
+    feature_mappings: &HashMap<String, String>,
+) -> bool {
+    let mut keep_item = true;
+    let mut remove_attrs = Vec::new();
 
     for (i, attr) in attrs.iter_mut().enumerate() {
         // Check if this is a cfg attribute
@@ -968,7 +1067,6 @@ fn prefix_exported_types_in_type(
 }
 
 #[cfg(test)]
-#[path = "codegen_tests.rs"]
 mod tests;
 
 
