@@ -28,6 +28,8 @@ pub struct Foo {
     pub x86_64_field: u64,
     #[cfg(target_arch = "aarch64")]
     pub aarch64_field: u64,
+    #[cfg(feature = "unstable")]
+    pub unstable_field: u64,
 }
 
 #[prebindgen("functions")]
@@ -36,6 +38,13 @@ pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) -> example_resu
         dst.as_mut_ptr().write(*src);
     }
     EXAMPLE_RESULT_OK
+}
+
+#[prebindgen("functions")]
+#[cfg(feature = "unstable")]
+pub fn get_unstable_field(input: &Foo) -> u64 {
+    // Return the unstable field if it exists
+    return input.unstable_field;
 }
 
 #[prebindgen("functions")]
@@ -59,7 +68,7 @@ pub fn another_test_function() -> bool {
 
 #[prebindgen("functions")]
 pub fn void_function(x: i32) {
-    println!("Called void_function with x = {}", x);
+    println!("Called void_function with x = {x}");
 }
 
 #[prebindgen("functions")]

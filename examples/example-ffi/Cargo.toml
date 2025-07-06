@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 build = "build.rs"
 
+[features]
+unstable = []
+
 [dependencies]
 prebindgen = { workspace = true }
 prebindgen-proc-macro = { workspace = true }

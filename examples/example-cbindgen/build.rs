@@ -12,6 +12,7 @@ fn main() {
     let pb = prebindgen::Builder::new(example_ffi::PREBINDGEN_OUT_DIR)
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
+        .disable_feature("unstable") // Disable unstable features for this build
         .build();
 
     // Generate FFI bindings for all groups (structs, functions, etc.)
@@ -60,7 +61,7 @@ fn generate_c_headers(cleaned_bindings_file: &PathBuf) {
             );
         }
         Err(e) => {
-            println!("cargo:warning=Failed to generate C headers: {:?}", e);
+            println!("cargo:warning=Failed to generate C headers: {e:?}");
         }
     }
 }

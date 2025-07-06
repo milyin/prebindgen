@@ -213,7 +213,7 @@ fn validate_generic_arguments(
                 inner_ty,
                 exported_types,
                 allowed_prefixes,
-                &format!("{} (generic argument)", context),
+                &format!("{context} (generic argument)"),
             )?;
         }
     }
@@ -284,25 +284,25 @@ pub(crate) fn validate_type_for_ffi(
             &type_ref.elem,
             exported_types,
             allowed_prefixes,
-            &format!("{} (reference)", context),
+            &format!("{context} (reference)"),
         ),
         syn::Type::Ptr(type_ptr) => validate_type_for_ffi(
             &type_ptr.elem,
             exported_types,
             allowed_prefixes,
-            &format!("{} (pointer)", context),
+            &format!("{context} (pointer)"),
         ),
         syn::Type::Slice(type_slice) => validate_type_for_ffi(
             &type_slice.elem,
             exported_types,
             allowed_prefixes,
-            &format!("{} (slice element)", context),
+            &format!("{context} (slice element)"),
         ),
         syn::Type::Array(type_array) => validate_type_for_ffi(
             &type_array.elem,
             exported_types,
             allowed_prefixes,
-            &format!("{} (array element)", context),
+            &format!("{context} (array element)"),
         ),
         syn::Type::Tuple(type_tuple) => {
             for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
@@ -310,7 +310,7 @@ pub(crate) fn validate_type_for_ffi(
                     elem_ty,
                     exported_types,
                     allowed_prefixes,
-                    &format!("{} (tuple element {})", context, i),
+                    &format!("{context} (tuple element {i})"),
                 )?;
             }
             Ok(())
@@ -523,7 +523,7 @@ pub(crate) fn transform_function_to_stub(
             return_type,
             exported_types,
             allowed_prefixes,
-            &format!("return type of function '{}'", function_name),
+            &format!("return type of function '{function_name}'"),
         )
         .map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
     }
