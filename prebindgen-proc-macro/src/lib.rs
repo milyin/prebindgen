@@ -9,14 +9,17 @@
 //! These macros are typically imported from the main `prebindgen` crate rather than
 //! used directly from this crate.
 
-use prebindgen::{get_prebindgen_out_dir, trace, Record, RecordKind, DEFAULT_GROUP_NAME};
+use prebindgen::{
+    DEFAULT_GROUP_NAME, Record, RecordKind, SourceLocation, get_prebindgen_out_dir, trace,
+};
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::LitStr;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
-use syn::{DeriveInput, ItemFn, ItemType, ItemConst};
+use syn::LitStr;
+use syn::spanned::Spanned;
+use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
 fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
@@ -33,13 +36,10 @@ fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
                 syn::Item::Verbatim(_) => "Verbatim items",
                 _ => "This item type",
             };
-            
+
             syn::Error::new_spanned(
                 item,
-                format!(
-                    "{} are not supported by #[prebindgen]",
-                    item_type
-                )
+                format!("{item_type} are not supported by #[prebindgen]"),
             )
             .to_compile_error()
             .into()
@@ -48,7 +48,7 @@ fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
             // If we can't even parse it as an Item, return a generic error
             syn::Error::new(
                 proc_macro2::Span::call_site(),
-                "Invalid syntax for #[prebindgen]"
+                "Invalid syntax for #[prebindgen]",
             )
             .to_compile_error()
             .into()
@@ -61,29 +61,29 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
     let thread_id = std::thread::current().id();
     let process_id = std::process::id();
     // Extract numeric thread ID from ThreadId debug representation
-    let thread_id_str = format!("{:?}", thread_id);
+    let thread_id_str = format!("{thread_id:?}");
     let thread_id_num = thread_id_str
         .strip_prefix("ThreadId(")
         .and_then(|s| s.strip_suffix(")"))
         .unwrap_or("0");
-    get_prebindgen_out_dir().join(format!("{}_{}_{}.jsonl", name, process_id, thread_id_num))
+    get_prebindgen_out_dir().join(format!("{name}_{process_id}_{thread_id_num}.jsonl"))
 }
 
 /// Proc macro that returns the prebindgen output directory path as a string literal.
-/// 
+///
 /// This macro generates a string literal containing the full path to the prebindgen
 /// output directory. It should be used to create a public constant that can be
 /// consumed by language-specific binding crates.
-/// 
+///
 /// # Returns
-/// 
+///
 /// A string literal with the path to the prebindgen output directory.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust,ignore
 /// use prebindgen_proc_macro::prebindgen_out_dir;
-/// 
+///
 /// // Create a public constant for use by binding crates
 /// pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 /// ```
@@ -101,14 +101,14 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
-/// 
-/// All types and functions marked with this attribute can be made available in dependent 
-/// crates as Rust source code for both binding generator processing (cbindgen, csbindgen, etc.) 
-/// and for including into projects to make the compiler generate `#[no_mangle]` FFI exports 
+///
+/// All types and functions marked with this attribute can be made available in dependent
+/// crates as Rust source code for both binding generator processing (cbindgen, csbindgen, etc.)
+/// and for including into projects to make the compiler generate `#[no_mangle]` FFI exports
 /// for cdylib/staticlib targets.
-/// 
+///
 /// # Usage
-/// 
+///
 /// ```rust,ignore
 /// // Use with explicit group name
 /// #[prebindgen("group_name")]
@@ -117,36 +117,36 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 ///     pub x: f64,
 ///     pub y: f64,
 /// }
-/// 
+///
 /// // Use with default group name "default"
 /// #[prebindgen]
 /// pub fn calculate_distance(p1: &Point, p2: &Point) -> f64 {
 ///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
 /// }
-/// 
+///
 /// // Type aliases are also supported
 /// #[prebindgen]
 /// pub type example_result = i8;
-/// 
+///
 /// // Constants are also supported
 /// #[prebindgen]
 /// pub const MAX_BUFFER_SIZE: usize = 1024;
-/// 
+///
 /// // Or specify a group name
 /// #[prebindgen("functions")]
 /// pub fn another_function() -> i32 {
 ///     42
 /// }
 /// ```
-/// 
+///
 /// # Requirements
-/// 
+///
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
 /// - Optionally takes a string literal group name for organization (defaults to "default")
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
-    
+
     // Parse optional group name literal - use default if not provided
     let group = if args.is_empty() {
         DEFAULT_GROUP_NAME.to_string()
@@ -155,13 +155,13 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             .expect("`#[prebindgen]` group name must be a string literal");
         group_lit.value()
     };
-    
+
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
     let dest_path = Path::new(&file_path);
 
     // Try to parse as different item types
-    let (kind, name, content) = if let Ok(parsed) = syn::parse::<DeriveInput>(input.clone()) {
+    let (kind, name, content, span) = if let Ok(parsed) = syn::parse::<DeriveInput>(input.clone()) {
         // Handle struct, enum, union
         let kind = match &parsed.data {
             syn::Data::Struct(_) => RecordKind::Struct,
@@ -169,7 +169,12 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             syn::Data::Union(_) => RecordKind::Union,
         };
         let tokens = quote! { #parsed };
-        (kind, parsed.ident.to_string(), tokens.to_string())
+        (
+            kind,
+            parsed.ident.to_string(),
+            tokens.to_string(),
+            parsed.span(),
+        )
     } else if let Ok(parsed) = syn::parse::<ItemFn>(input.clone()) {
         // Handle function
         // For functions, we want to store only the signature without the body
@@ -180,6 +185,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             RecordKind::Function,
             parsed.sig.ident.to_string(),
             tokens.to_string(),
+            parsed.sig.span(),
         )
     } else if let Ok(parsed) = syn::parse::<ItemType>(input.clone()) {
         // Handle type alias
@@ -188,6 +194,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             RecordKind::TypeAlias,
             parsed.ident.to_string(),
             tokens.to_string(),
+            parsed.ident.span(),
         )
     } else if let Ok(parsed) = syn::parse::<ItemConst>(input.clone()) {
         // Handle constant
@@ -196,6 +203,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             RecordKind::Const,
             parsed.ident.to_string(),
             tokens.to_string(),
+            parsed.ident.span(),
         )
     } else {
         // Try to parse as any item to provide better error messages
@@ -203,8 +211,16 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         return unsupported_item_error(item);
     };
 
+    // Extract basic source location information available during compilation
+    // Convert proc_macro2::Span to proc_macro::Span to access file() method
+    let source_location = SourceLocation {
+        file: span.unwrap().file(),
+        line: span.unwrap().line(),
+        column: span.unwrap().column(),
+    };
+
     // Create the new record
-    let new_record = Record::new(kind, name, content);
+    let new_record = Record::new(kind, name, content, source_location);
 
     // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {
@@ -216,9 +232,9 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
                 // Create new JSONL file
                 trace!("Creating jsonl file: {}", dest_path.display());
             }
-            
+
             // Write the record as a single line (JSON-lines format)
-            let _ = writeln!(file, "{}", json_content);
+            let _ = writeln!(file, "{json_content}");
             let _ = file.flush();
         }
     }

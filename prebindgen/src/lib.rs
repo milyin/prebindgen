@@ -122,7 +122,7 @@ pub const DEFAULT_GROUP_NAME: &str = "default";
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.
 /// It should not be used directly by end users.
 #[doc(hidden)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Record {
     /// The kind of definition (struct, enum, union, or function)
     pub kind: RecordKind,
@@ -130,6 +130,20 @@ pub struct Record {
     pub name: String,
     /// The full source code content of the definition
     pub content: String,
+    /// Source location information
+    pub source_location: SourceLocation,
+}
+
+/// Source location information for tracking where code originated
+#[doc(hidden)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SourceLocation {
+    /// The source file path
+    pub file: String,
+    /// The line number where the item starts (1-based)
+    pub line: usize,
+    /// The column number where the item starts (1-based)
+    pub column: usize,
 }
 
 /// The kind of record (struct, enum, union, or function).
@@ -137,9 +151,12 @@ pub struct Record {
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.
 /// It should not be used directly by end users.
 #[doc(hidden)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum RecordKind {
+    /// Unknown or unrecognized record type
+    #[default]
+    Unknown,
     /// A struct definition with named or unnamed fields
     Struct,
     /// An enum definition with variants
@@ -155,15 +172,16 @@ pub enum RecordKind {
 }
 
 impl Record {
-    /// Create a new record with the specified kind, name, and content.
+    /// Create a new record with the specified kind, name, content, and source location.
     ///
     /// **Internal API**: This method is public only for interaction with the proc-macro crate.
     #[doc(hidden)]
-    pub fn new(kind: RecordKind, name: String, content: String) -> Self {
+    pub fn new(kind: RecordKind, name: String, content: String, source_location: SourceLocation) -> Self {
         Self {
             kind,
             name,
             content,
+            source_location,
         }
     }
 
@@ -179,6 +197,7 @@ impl Record {
 impl std::fmt::Display for RecordKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            RecordKind::Unknown => write!(f, "unknown"),
             RecordKind::Struct => write!(f, "struct"),
             RecordKind::Enum => write!(f, "enum"),
             RecordKind::Union => write!(f, "union"),
@@ -193,7 +212,7 @@ impl RecordKind {
     /// Returns true if this record kind represents a type definition.
     ///
     /// Type definitions include structs, enums, unions, and type aliases.
-    /// Functions and constants are not considered type definitions.
+    /// Functions, constants, and unknown types are not considered type definitions.
     pub fn is_type(&self) -> bool {
         matches!(
             self,
@@ -375,7 +394,7 @@ pub struct FileBuilder<'a> {
 impl Prebindgen {
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
     fn read_group_internal(&mut self, group: &str) {
-        let pattern = format!("{}_", group);
+        let pattern = format!("{group}_");
         let mut record_map = HashMap::new();
 
         // Read the directory and find all matching files
@@ -530,6 +549,7 @@ impl Prebindgen {
                         &self.builder.transparent_wrappers,
                         &self.builder.edition,
                         &mut global_assertion_type_pairs,
+                        &record.source_location,
                     )?
                 } else {
                     content
@@ -979,11 +999,12 @@ mod tests {
         std::fs::write(prebindgen_dir.join("crate_name.txt"), "test_crate").unwrap();
 
         // Create a JSONL file with invalid Rust syntax
-        let invalid_record = Record::new(
-            RecordKind::Struct,
-            "InvalidStruct".to_string(),
-            "invalid rust syntax {{{ broken".to_string(), // This is not valid Rust syntax
-        );
+        let invalid_record = Record {
+            kind: RecordKind::Struct,
+            name: "InvalidStruct".to_string(),
+            content: "invalid rust syntax {{{ broken".to_string(), // This is not valid Rust syntax
+            source_location: Default::default(),
+        };
 
         let jsonl_content = format!("{}\n", invalid_record.to_jsonl_string().unwrap());
         std::fs::write(prebindgen_dir.join("structs_test.jsonl"), jsonl_content).unwrap();
@@ -1016,5 +1037,83 @@ mod tests {
         assert!(builder.transparent_wrappers.iter().any(|p| {
             format!("{}", quote::quote! { #p }) == "std :: mem :: ManuallyDrop"
         }));
+    }
+
+    #[test]
+    fn test_error_reporting_with_source_location() {
+        use std::collections::HashSet;
+        
+    // Parse a function with invalid FFI types - using a custom type that's not in allowed prefixes
+    let function_content = r#"
+pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherType {
+    Default::default()
+}
+"#;
+        
+        let file = syn::parse_file(function_content).unwrap();
+        let exported_types = HashSet::new();
+        let allowed_prefixes = codegen::generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
+        let mut assertion_type_pairs = HashSet::new();
+        
+        let source_location = SourceLocation {
+            file: "test_file.rs".to_string(),
+            line: 42,  // Example line number
+            column: 5, // Example column number
+        };
+        
+        // This should trigger an FFI validation error with source location
+        match codegen::transform_function_to_stub(
+            file,
+            "test-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+            &mut assertion_type_pairs,
+            &source_location,
+        ) {
+            Ok(_) => std::panic!("Expected error but got success"),
+            Err(error) => {
+                println!("Error with location info: {error}");
+                // Check that the error includes source location information
+                assert!(error.contains("test_file.rs"));
+                assert!(error.contains("42"));
+                assert!(error.contains("5"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_default_implementations() {
+        // Test that SourceLocation has sensible defaults
+        let default_location: SourceLocation = Default::default();
+        assert_eq!(default_location.file, "");
+        assert_eq!(default_location.line, 0);
+        assert_eq!(default_location.column, 0);
+
+        // Test that Record has sensible defaults
+        let default_record: Record = Default::default();
+        assert_eq!(default_record.kind, RecordKind::Unknown); // Should be the #[default] variant
+        assert_eq!(default_record.name, "");
+        assert_eq!(default_record.content, "");
+        assert_eq!(default_record.source_location, default_location);
+
+        // Test that RecordKind has sensible default
+        let default_kind: RecordKind = Default::default();
+        assert_eq!(default_kind, RecordKind::Unknown);
+    }
+
+    #[test]
+    fn test_unknown_record_kind() {
+        // Test that Unknown is not considered a type
+        assert!(!RecordKind::Unknown.is_type());
+        
+        // Test that Unknown displays correctly
+        assert_eq!(format!("{}", RecordKind::Unknown), "unknown");
+        
+        // Test that Unknown is the default
+        let default_kind: RecordKind = Default::default();
+        assert_eq!(default_kind, RecordKind::Unknown);
     }
 }

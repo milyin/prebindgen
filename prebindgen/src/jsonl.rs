@@ -13,7 +13,7 @@ pub fn write_jsonl_file<P: AsRef<Path>>(
     let mut file = fs::File::create(&file_path)?;
     for record in records {
         let json_line = record.to_jsonl_string()?;
-        writeln!(file, "{}", json_line)?;
+        writeln!(file, "{json_line}")?;
     }
     file.flush()?;
     Ok(())
@@ -53,9 +53,24 @@ mod tests {
     fn test_jsonl_round_trip() {
         // Create some test records
         let records = vec![
-            Record::new(RecordKind::Struct, "TestStruct".to_string(), "pub struct TestStruct { }".to_string()),
-            Record::new(RecordKind::Function, "test_func".to_string(), "pub fn test_func() { }".to_string()),
-            Record::new(RecordKind::Enum, "TestEnum".to_string(), "pub enum TestEnum { A, B }".to_string()),
+            Record {
+                kind: RecordKind::Struct,
+                name: "TestStruct".to_string(),
+                content: "pub struct TestStruct { }".to_string(),
+                source_location: Default::default(),
+            },
+            Record {
+                kind: RecordKind::Function,
+                name: "test_func".to_string(),
+                content: "pub fn test_func() { }".to_string(),
+                source_location: Default::default(),
+            },
+            Record {
+                kind: RecordKind::Enum,
+                name: "TestEnum".to_string(),
+                content: "pub enum TestEnum { A, B }".to_string(),
+                source_location: Default::default(),
+            },
         ];
 
         // Create a temporary file
@@ -63,10 +78,10 @@ mod tests {
         let temp_path = temp_file.path();
 
         // Write records to JSONL file
-        write_jsonl_file(&temp_path, &records).unwrap();
+        write_jsonl_file(temp_path, &records).unwrap();
 
         // Read records back
-        let loaded_records = read_jsonl_file(&temp_path).unwrap();
+        let loaded_records = read_jsonl_file(temp_path).unwrap();
 
         // Verify they match
         assert_eq!(records.len(), loaded_records.len());
@@ -80,17 +95,22 @@ mod tests {
     #[test]
     fn test_jsonl_file_format() {
         // Create a test record
-        let record = Record::new(RecordKind::Struct, "Test".to_string(), "pub struct Test { }".to_string());
+        let record = Record {
+            kind: RecordKind::Struct,
+            name: "Test".to_string(),
+            content: "pub struct Test { }".to_string(),
+            source_location: Default::default(),
+        };
         
         // Create a temporary file
         let temp_file = NamedTempFile::new().unwrap();
         let temp_path = temp_file.path();
 
         // Write record to JSONL file
-        write_jsonl_file(&temp_path, &[record]).unwrap();
+        write_jsonl_file(temp_path, &[record]).unwrap();
 
         // Read raw content and verify format
-        let content = fs::read_to_string(&temp_path).unwrap();
+        let content = fs::read_to_string(temp_path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
         
         // Should have exactly one line
@@ -100,5 +120,37 @@ mod tests {
         let parsed: Record = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(parsed.name, "Test");
         assert_eq!(parsed.kind, RecordKind::Struct);
+    }
+
+    #[test]
+    fn test_unknown_record_kind_serialization() {
+        // Create a record with Unknown kind
+        let unknown_record = Record {
+            kind: RecordKind::Unknown,
+            name: "UnknownItem".to_string(),
+            content: "// unknown content".to_string(),
+            source_location: Default::default(),
+        };
+        
+        // Create a temporary file
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+
+        // Write record to JSONL file
+        write_jsonl_file(temp_path, &[unknown_record.clone()]).unwrap();
+
+        // Read records back
+        let loaded_records = read_jsonl_file(temp_path).unwrap();
+
+        // Verify it round-trips correctly
+        assert_eq!(loaded_records.len(), 1);
+        let loaded_record = &loaded_records[0];
+        assert_eq!(loaded_record.kind, RecordKind::Unknown);
+        assert_eq!(loaded_record.name, "UnknownItem");
+        assert_eq!(loaded_record.content, "// unknown content");
+        
+        // Verify the JSON contains "unknown" for the kind field
+        let content = fs::read_to_string(temp_path).unwrap();
+        assert!(content.contains("\"kind\":\"unknown\""));
     }
 }
