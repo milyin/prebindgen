@@ -521,6 +521,15 @@ impl Prebindgen {
         let mut global_assertion_type_pairs: HashSet<(String, String)> = HashSet::new();
         
         if let Some(group_records) = self.records.get(group) {
+            // Create context for code generation
+            let context = codegen::Context::new(
+                &self.builder.crate_name,
+                &self.exported_types,
+                &self.builder.allowed_prefixes,
+                &self.builder.transparent_wrappers,
+                &self.builder.edition,
+            );
+
             for record in group_records {
                 // Parse the content as a syntax tree for feature processing
                 let content = syn::parse_file(&record.content)
@@ -543,11 +552,7 @@ impl Prebindgen {
                 let content = if record.kind == RecordKind::Function {
                     codegen::transform_function_to_stub(
                         content,
-                        &self.builder.crate_name,
-                        &self.exported_types,
-                        &self.builder.allowed_prefixes,
-                        &self.builder.transparent_wrappers,
-                        &self.builder.edition,
+                        &context,
                         &mut global_assertion_type_pairs,
                         &record.source_location,
                     )?
@@ -1062,14 +1067,19 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
             column: 5, // Example column number
         };
         
-        // This should trigger an FFI validation error with source location
-        match codegen::transform_function_to_stub(
-            file,
+        // Create context for the test
+        let context = codegen::Context::new(
             "test-crate",
             &exported_types,
             &allowed_prefixes,
             &transparent_wrappers,
             "2021",
+        );
+        
+        // This should trigger an FFI validation error with source location
+        match codegen::transform_function_to_stub(
+            file,
+            &context,
             &mut assertion_type_pairs,
             &source_location,
         ) {

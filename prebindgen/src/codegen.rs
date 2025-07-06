@@ -10,6 +10,43 @@
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
+/// Context structure containing common parameters for code generation
+///
+/// This structure holds all the configuration and state needed for processing
+/// features and transforming functions to FFI stubs. It centralizes the parameters
+/// that were previously passed individually to multiple functions.
+pub(crate) struct Context<'a> {
+    /// The name of the source crate (with dashes converted to underscores)
+    pub crate_name: &'a str,
+    /// Set of exported type names that are valid for FFI
+    pub exported_types: &'a HashSet<String>,
+    /// List of allowed path prefixes for type validation
+    pub allowed_prefixes: &'a [syn::Path],
+    /// List of transparent wrapper types to strip during conversion
+    pub transparent_wrappers: &'a [syn::Path],
+    /// Rust edition string (e.g., "2021", "2024") for proper attribute generation
+    pub edition: &'a str,
+}
+
+impl<'a> Context<'a> {
+    /// Create a new Context with the specified parameters
+    pub fn new(
+        crate_name: &'a str,
+        exported_types: &'a HashSet<String>,
+        allowed_prefixes: &'a [syn::Path],
+        transparent_wrappers: &'a [syn::Path],
+        edition: &'a str,
+    ) -> Self {
+        Self {
+            crate_name,
+            exported_types,
+            allowed_prefixes,
+            transparent_wrappers,
+            edition,
+        }
+    }
+}
+
 /// Generate allowed prefixes that include standard prelude types and modules
 ///
 /// Creates a list of syn::Path values representing standard library prefixes that are
@@ -470,16 +507,8 @@ fn validate_function_parameters(
 pub(crate) fn transform_function_to_stub(
     /// The parsed file containing exactly one function definition
     file: syn::File,
-    /// The name of the source crate (with dashes converted to underscores)
-    source_crate: &str,
-    /// Set of exported type names that are valid for FFI
-    exported_types: &HashSet<String>,
-    /// List of allowed path prefixes for type validation
-    allowed_prefixes: &[syn::Path],
-    /// List of transparent wrapper types to strip during conversion
-    transparent_wrappers: &[syn::Path],
-    /// Rust edition string (e.g., "2021", "2024") for proper attribute generation
-    edition: &str,
+    /// Context containing common parameters for code generation
+    context: &Context,
     /// Mutable set to collect type assertion pairs for compile-time validation
     assertion_type_pairs: &mut HashSet<(String, String)>,
     /// Source location information for error reporting
@@ -509,20 +538,20 @@ pub(crate) fn transform_function_to_stub(
     validate_function_parameters(
         &parsed_function.sig.inputs,
         function_name,
-        exported_types,
-        allowed_prefixes,
+        context.exported_types,
+        context.allowed_prefixes,
         source_location,
     )?;
 
     // Prepare source crate name for type collection
-    let source_crate_name = source_crate.replace('-', "_");
+    let source_crate_name = context.crate_name.replace('-', "_");
 
     // Validate return type
     if let syn::ReturnType::Type(_, return_type) = &parsed_function.sig.output {
         validate_type_for_ffi(
             return_type,
-            exported_types,
-            allowed_prefixes,
+            context.exported_types,
+            context.allowed_prefixes,
             &format!("return type of function '{function_name}'"),
         )
         .map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
@@ -543,8 +572,8 @@ pub(crate) fn transform_function_to_stub(
     if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
         let local_return_type = convert_to_local_type(
             return_type,
-            exported_types,
-            transparent_wrappers,
+            context.exported_types,
+            context.transparent_wrappers,
             &source_crate_ident,
             assertion_type_pairs,
             &mut result_type_changed,
@@ -566,8 +595,8 @@ pub(crate) fn transform_function_to_stub(
         let mut type_changed = false;
         let local_type = convert_to_local_type(
             &pat_type.ty,
-            exported_types,
-            transparent_wrappers,
+            context.exported_types,
+            context.transparent_wrappers,
             &source_crate_ident,
             assertion_type_pairs,
             &mut type_changed,
@@ -637,7 +666,7 @@ pub(crate) fn transform_function_to_stub(
 
     // Determine the appropriate no_mangle attribute based on Rust edition
     // Edition 2024 uses #[unsafe(no_mangle)], while older editions use #[no_mangle]
-    let no_mangle_attr: syn::Attribute = if edition == "2024" {
+    let no_mangle_attr: syn::Attribute = if context.edition == "2024" {
         syn::parse_quote! { #[unsafe(no_mangle)] }
     } else {
         syn::parse_quote! { #[no_mangle] }

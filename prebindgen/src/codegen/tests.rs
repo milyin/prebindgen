@@ -16,6 +16,17 @@ fn default_test_source_location() -> crate::SourceLocation {
     }
 }
 
+// Helper function to create a default context for tests
+fn default_test_context<'a>(
+    crate_name: &'a str,
+    exported_types: &'a HashSet<String>,
+    allowed_prefixes: &'a [syn::Path],
+    transparent_wrappers: &'a [syn::Path],
+    edition: &'a str,
+) -> Context<'a> {
+    Context::new(crate_name, exported_types, allowed_prefixes, transparent_wrappers, edition)
+}
+
 #[test]
 fn test_process_features_disable() {
     let content = r#"
@@ -190,16 +201,14 @@ pub fn example_function(x: i32, y: &str) -> i32 {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let _context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
     let source_location = default_test_source_location();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &source_location,
     )
@@ -234,19 +243,15 @@ pub fn example_function() -> i32 {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2024");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2024",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
-    )
-    .unwrap();
+    ).unwrap();
 
     let result_str = prettyplease::unparse(&result);
 
@@ -267,14 +272,11 @@ fn test_transform_function_to_stub_wrong_item_count() {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let result = transform_function_to_stub(
         empty_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     );
@@ -292,13 +294,10 @@ pub fn second_function() -> i32 { 24 }
 
     let multi_item_file = syn::parse_file(function_content).unwrap();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
     let result = transform_function_to_stub(
         multi_item_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     );
@@ -321,15 +320,12 @@ pub struct MyStruct {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let struct_file = syn::parse_file(struct_content).unwrap();
     let result = transform_function_to_stub(
         struct_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     );
@@ -356,15 +352,12 @@ pub fn copy_bar(
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -406,15 +399,12 @@ pub fn copy_bar(
     let maybe_uninit_path: syn::Path = syn::parse_quote! { std::mem::MaybeUninit };
     transparent_wrappers.push(maybe_uninit_path);
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -486,15 +476,12 @@ pub fn copy_bar(
     exported_types.insert("Bar".to_string());
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -606,15 +593,12 @@ pub fn process_data(
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-source-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-source-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -664,15 +648,12 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
     let maybe_uninit_path: syn::Path = syn::parse_quote! { std::mem::MaybeUninit };
     transparent_wrappers.push(maybe_uninit_path);
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("source-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "source_crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -837,18 +818,15 @@ impl MyStruct {
             let allowed_prefixes = generate_standard_allowed_prefixes();
             let transparent_wrappers = Vec::new();
             let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
             // This should panic because the method has a receiver argument (&self)
             let _result = transform_function_to_stub(
-                method_file,
-                "my-crate",
-                &exported_types,
-                &allowed_prefixes,
-                &transparent_wrappers,
-                "2021",
-                &mut assertion_type_pairs,
-                &default_test_source_location(),
-            );
+        method_file,
+        &context,
+        &mut assertion_type_pairs,
+        &default_test_source_location(),
+    );
         }
     }
 }
@@ -868,15 +846,12 @@ pub fn get_primitive_field(input: &ExportedStruct) -> &u64 {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("test-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "test-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -929,15 +904,12 @@ pub fn get_exported_field(input: &Wrapper) -> &ExportedType {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "test-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -974,15 +946,12 @@ pub fn get_field(input: &ExportedStruct) -> &u64 {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
@@ -1017,15 +986,12 @@ pub fn get_exported_field(input: &ExportedStruct) -> &ExportedType {
     let allowed_prefixes = generate_standard_allowed_prefixes();
     let transparent_wrappers = Vec::new();
     let mut assertion_type_pairs = HashSet::new();
+    let context = default_test_context("my-crate", &exported_types, &allowed_prefixes, &transparent_wrappers, "2021");
 
     let input_file = syn::parse_file(function_content).unwrap();
     let result = transform_function_to_stub(
         input_file,
-        "my-crate",
-        &exported_types,
-        &allowed_prefixes,
-        &transparent_wrappers,
-        "2021",
+        &context,
         &mut assertion_type_pairs,
         &default_test_source_location(),
     )
