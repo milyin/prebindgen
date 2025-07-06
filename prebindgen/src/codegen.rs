@@ -267,53 +267,47 @@ fn convert_to_local_type(
     source_crate_name: &str,
     assertion_type_pairs: &mut HashSet<(String, String)>
 ) -> syn::Type {
-    // Handle references specially - we need to convert the referenced type, not the reference itself
-    if let syn::Type::Reference(type_ref) = original_type {
-        // Strip transparent wrappers from the referenced type and check for conversion needs
-        let mut has_wrapper = false;
-        let local_elem_type = strip_transparent_wrappers_for_assertion(&type_ref.elem, transparent_wrappers, &mut has_wrapper);
-        
-        // Check if we should generate an assertion for the referenced type
-        let should_convert = has_wrapper || contains_exported_type(&local_elem_type, exported_types);
-        
-        if should_convert {
-            // Create the original referenced type with proper crate prefixing
-            let prefixed_original_elem = prefix_exported_types_in_type(&type_ref.elem, source_crate_name, exported_types);
-            
-            // Store the assertion pair for the referenced type
-            let local_elem_str = quote::quote! { #local_elem_type }.to_string();
-            let prefixed_original_elem_str = quote::quote! { #prefixed_original_elem }.to_string();
-            assertion_type_pairs.insert((local_elem_str, prefixed_original_elem_str));
-        }
-        
-        // Create a reference to the local type, then convert to pointer
-        let local_ref = syn::Type::Reference(syn::TypeReference {
-            and_token: type_ref.and_token,
-            lifetime: type_ref.lifetime.clone(),
-            mutability: type_ref.mutability,
-            elem: Box::new(local_elem_type),
-        });
-        return convert_reference_to_pointer(&local_ref);
-    }
+    // Extract the core type to process (for references, this is the referenced type)
+    let (core_type, is_reference, ref_info) = match original_type {
+        syn::Type::Reference(type_ref) => (
+            &*type_ref.elem, 
+            true, 
+            Some((type_ref.and_token, type_ref.lifetime.clone(), type_ref.mutability))
+        ),
+        _ => (original_type, false, None)
+    };
     
-    // Non-reference type processing
-    // Strip transparent wrappers to get the type that will be used in the stub
+    // Strip transparent wrappers from the core type
     let mut has_wrapper = false;
-    let local_type = strip_transparent_wrappers_for_assertion(original_type, transparent_wrappers, &mut has_wrapper);
+    let local_core_type = strip_transparent_wrappers_for_assertion(core_type, transparent_wrappers, &mut has_wrapper);
     
     // Check if we should generate an assertion for this type
-    let should_convert = has_wrapper || contains_exported_type(&local_type, exported_types);
+    let should_convert = has_wrapper || contains_exported_type(&local_core_type, exported_types);
     
     if should_convert {
-        // Create the original type with proper crate prefixing
-        let prefixed_original_type = prefix_exported_types_in_type(original_type, source_crate_name, exported_types);
+        // Create the original core type with proper crate prefixing
+        let prefixed_original_core = prefix_exported_types_in_type(core_type, source_crate_name, exported_types);
         
         // Store the assertion pair
-        let local_type_str = quote::quote! { #local_type }.to_string();
-        let prefixed_original_type_str = quote::quote! { #prefixed_original_type }.to_string();
-        assertion_type_pairs.insert((local_type_str, prefixed_original_type_str));
-        
-        local_type
+        let local_core_str = quote::quote! { #local_core_type }.to_string();
+        let prefixed_original_core_str = quote::quote! { #prefixed_original_core }.to_string();
+        assertion_type_pairs.insert((local_core_str, prefixed_original_core_str));
+    }
+    
+    // Build the final type based on whether the original was a reference
+    if is_reference {
+        let (and_token, lifetime, mutability) = ref_info.unwrap();
+        // Create a reference to the local type, then convert to pointer
+        let local_ref = syn::Type::Reference(syn::TypeReference {
+            and_token,
+            lifetime,
+            mutability,
+            elem: Box::new(local_core_type),
+        });
+        convert_reference_to_pointer(&local_ref)
+    } else if should_convert {
+        // Non-reference type that needed conversion
+        local_core_type
     } else {
         // No conversion needed, return original type
         original_type.clone()
