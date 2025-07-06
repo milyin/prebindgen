@@ -258,7 +258,10 @@ pub(crate) fn validate_type_for_ffi(
 }
 
 /// Convert a remote type to its local equivalent and collect assertion pairs
-/// Returns the local type used in the stub (stripped of wrappers and crate prefixes, with references converted to pointers)
+/// Returns a tuple of (local_type, was_converted) where:
+/// - local_type is the type used in the stub (stripped of wrappers and crate prefixes, with references converted to pointers)
+/// - was_converted indicates if the local type differs from the original (wrapper stripped or type replaced)
+///
 /// If type needs conversion (has transparent wrappers or exported types), stores the assertion pair
 fn convert_to_local_type(
     original_type: &syn::Type,
@@ -266,7 +269,7 @@ fn convert_to_local_type(
     transparent_wrappers: &[syn::Path],
     source_crate_ident: &syn::Ident,
     assertion_type_pairs: &mut HashSet<(String, String)>
-) -> syn::Type {
+) -> (syn::Type, bool) {
     // Extract the core type to process (for references, this is the referenced type)
     let (core_type, is_reference, ref_info) = match original_type {
         syn::Type::Reference(type_ref) => (
@@ -304,13 +307,13 @@ fn convert_to_local_type(
             mutability,
             elem: Box::new(local_core_type),
         });
-        convert_reference_to_pointer(&local_ref)
+        (convert_reference_to_pointer(&local_ref), true) // Always converted for references
     } else if should_convert {
         // Non-reference type that needed conversion
-        local_core_type
+        (local_core_type, true)
     } else {
         // No conversion needed, return original type
-        original_type.clone()
+        (original_type.clone(), false)
     }
 }
 
@@ -340,52 +343,6 @@ fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
             ty.clone()
         }
     }
-}
-
-/// Generate call arguments with pointer-to-reference conversion and transmute for exported types
-fn generate_call_arguments(
-    original_inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
-    exported_types: &HashSet<String>,
-) -> Vec<proc_macro2::TokenStream> {
-    original_inputs.iter().filter_map(|input| match input {
-        syn::FnArg::Typed(pat_type) => {
-            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                let param_name = &pat_ident.ident;
-                
-                match &*pat_type.ty {
-                    syn::Type::Reference(type_ref) => {
-                        // For reference parameters, convert pointer back to reference
-                        if type_ref.mutability.is_some() {
-                            // &mut T parameter becomes *mut T in FFI, convert back with &mut *param_name
-                            if contains_exported_type(&type_ref.elem, exported_types) {
-                                Some(quote::quote! { unsafe { std::mem::transmute(&mut *#param_name) } })
-                            } else {
-                                Some(quote::quote! { &mut *#param_name })
-                            }
-                        } else {
-                            // &T parameter becomes *const T in FFI, convert back with &*param_name
-                            if contains_exported_type(&type_ref.elem, exported_types) {
-                                Some(quote::quote! { unsafe { std::mem::transmute(&*#param_name) } })
-                            } else {
-                                Some(quote::quote! { &*#param_name })
-                            }
-                        }
-                    }
-                    _ => {
-                        // For non-reference parameters, use as-is with optional transmute
-                        if contains_exported_type(&pat_type.ty, exported_types) {
-                            Some(quote::quote! { unsafe { std::mem::transmute(#param_name) } })
-                        } else {
-                            Some(quote::quote! { #param_name })
-                        }
-                    }
-                }
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }).collect()
 }
 
 /// Generate the function body that calls the original function
@@ -478,9 +435,7 @@ pub(crate) fn transform_function_to_stub(
         ).map_err(|e| format!("Invalid FFI function return type: {}", e))?;
     }
 
-    // Generate components
-    let call_args = generate_call_arguments(&parsed_function.sig.inputs, exported_types);
-    
+    // Generate components and build call arguments inline
     let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
 
     // Build the extern "C" function signature:
@@ -492,19 +447,55 @@ pub(crate) fn transform_function_to_stub(
     
     // Convert return type and collect type assertion pairs
     if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
-        let local_return_type = convert_to_local_type(return_type, exported_types, transparent_wrappers, &source_crate_ident, assertion_type_pairs);
+        let (local_return_type, _) = convert_to_local_type(return_type, exported_types, transparent_wrappers, &source_crate_ident, assertion_type_pairs);
         extern_sig.output = syn::ReturnType::Type(*arrow, Box::new(local_return_type));
     }
     
     // Convert reference parameters to pointer parameters and collect type assertion pairs
+    // Also build call arguments with appropriate transmute/conversion logic
+    let mut call_args = Vec::new();
     for input in extern_sig.inputs.iter_mut() {
-        if let syn::FnArg::Typed(pat_type) = input {
-            // Convert type and collect assertion pairs (handles both reference and non-reference types)
-            let local_type = convert_to_local_type(&pat_type.ty, exported_types, transparent_wrappers, &source_crate_ident, assertion_type_pairs);
-            
-            // Use the local type
-            pat_type.ty = Box::new(local_type);
+        let syn::FnArg::Typed(pat_type) = input else {
+            panic!(
+                "FFI functions cannot have receiver arguments (like 'self'). \
+                 All parameters must be typed arguments for C compatibility."
+            );
+        };
+        // Convert type and collect assertion pairs (handles both reference and non-reference types)
+        let (local_type, was_converted) = convert_to_local_type(&pat_type.ty, exported_types, transparent_wrappers, &source_crate_ident, assertion_type_pairs);
+        
+        // Generate call argument based on the original type and conversion status
+        if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+            let param_name = &pat_ident.ident;
+            // Build the call argument based on the original type and conversion status
+            let base_arg = match &*pat_type.ty {
+                syn::Type::Reference(type_ref) => {
+                    if type_ref.mutability.is_some() {
+                        // &mut T parameter => *mut T in FFI, convert back with &mut *param
+                        quote::quote! { &mut *#param_name }
+                    } else {
+                        // &T parameter => *const T in FFI, convert back with &*param
+                        quote::quote! { &*#param_name }
+                    }
+                }
+                _ => {
+                    // Non-reference parameters are passed through
+                    quote::quote! { #param_name }
+                }
+            };
+
+            if was_converted {
+                // If the type was converted (wrapper stripped or exported type), transmute it
+                call_args.push(quote::quote! {
+                    unsafe { std::mem::transmute(#base_arg) }
+                });
+            } else {
+                call_args.push(base_arg);
+            }
         }
+        
+        // Use the local type in the signature
+        pat_type.ty = Box::new(local_type);
     }
     
     extern_sig.abi = Some(syn::Abi {
@@ -1486,10 +1477,11 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
         // Test with transparent wrapper + exported type
         let wrapped_type: syn::Type = syn::parse_quote! { std::mem::MaybeUninit<ExportedType> };
         let mut assertion_pairs = HashSet::new();
-        let result = convert_to_local_type(&wrapped_type, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs);
+        let (result, was_converted) = convert_to_local_type(&wrapped_type, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs);
         
         let local_str = quote::quote! { #result }.to_string();
         assert_eq!(local_str, "ExportedType"); // Stripped of wrapper
+        assert!(was_converted); // Should be converted
         
         // Should have collected an assertion pair
         assert_eq!(assertion_pairs.len(), 1);
@@ -1500,24 +1492,72 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
         // Test with regular type that doesn't need conversion
         let regular_type: syn::Type = syn::parse_quote! { i32 };
         let mut assertion_pairs = HashSet::new();
-        let result = convert_to_local_type(&regular_type, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs);
+        let (result, was_converted) = convert_to_local_type(&regular_type, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs);
         
         let result_str = quote::quote! { #result }.to_string();
         assert_eq!(result_str, "i32"); // No change
+        assert!(!was_converted); // Should not be converted
         assert_eq!(assertion_pairs.len(), 0); // No assertion pairs collected
         
         // Test with exported type but no wrapper
         let exported_only: syn::Type = syn::parse_quote! { ExportedType };
         let mut assertion_pairs = HashSet::new();
-        let result = convert_to_local_type(&exported_only, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs);
+        let (result, was_converted) = convert_to_local_type(&exported_only, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs);
         
         let local_str = quote::quote! { #result }.to_string();
         assert_eq!(local_str, "ExportedType"); // No change since no wrapper
+        assert!(was_converted); // Should be converted due to exported type
         
         // Should have collected an assertion pair
         assert_eq!(assertion_pairs.len(), 1);
         let (local_type_str, original_type_str) = assertion_pairs.iter().next().unwrap();
         assert_eq!(local_type_str, "ExportedType");
         assert_eq!(original_type_str, "test_crate :: ExportedType");
+    }
+
+    #[test]
+    #[should_panic(expected = "FFI functions cannot have receiver arguments")]
+    fn test_transform_function_with_receiver_argument() {
+        let method_content = r#"
+impl MyStruct {
+    pub fn method(&self, x: i32) -> i32 {
+        42
+    }
+}
+"#;
+        
+        // Parse the impl block to extract the method
+        let file = syn::parse_file(method_content).unwrap();
+        if let syn::Item::Impl(impl_block) = &file.items[0] {
+            if let syn::ImplItem::Fn(method) = &impl_block.items[0] {
+                // Create a file with just the method function
+                let method_file = syn::File {
+                    shebang: None,
+                    attrs: vec![],
+                    items: vec![syn::Item::Fn(syn::ItemFn {
+                        attrs: method.attrs.clone(),
+                        vis: method.vis.clone(),
+                        sig: method.sig.clone(),
+                        block: Box::new(method.block.clone()),
+                    })],
+                };
+                
+                let exported_types = HashSet::new();
+                let allowed_prefixes = generate_standard_allowed_prefixes();
+                let transparent_wrappers = Vec::new();
+                let mut assertion_type_pairs = HashSet::new();
+                
+                // This should panic because the method has a receiver argument (&self)
+                let _result = transform_function_to_stub(
+                    method_file,
+                    "my-crate",
+                    &exported_types,
+                    &allowed_prefixes,
+                    &transparent_wrappers,
+                    "2021",
+                    &mut assertion_type_pairs,
+                );
+            }
+        }
     }
 }
