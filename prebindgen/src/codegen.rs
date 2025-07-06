@@ -257,30 +257,31 @@ pub(crate) fn validate_type_for_ffi(
     }
 }
 
-/// Collect type assertion pairs and return the stripped type in one operation
-/// This ensures consistency between what assertions are generated and what type is used in FFI
-fn collect_type_assertion_pairs_and_return_stripped(
+/// Split a type into source (stripped, locally defined) and destination (original with crate prefixes) types
+/// Returns None if the type doesn't need to be split (no transparent wrappers or exported types)
+/// Returns Some((source_type, destination_type)) where:
+/// - source_type: stripped type used in the stub (locally defined)
+/// - destination_type: original type with proper crate prefixing
+fn split_type(
     ty: &syn::Type,
     exported_types: &HashSet<String>,
     transparent_wrappers: &[syn::Path],
     source_crate_name: &str,
-    assertion_type_pairs: &mut HashSet<(String, String)>
-) -> syn::Type {
+) -> Option<(syn::Type, syn::Type)> {
     // Strip transparent wrappers to get the type that will be used in the stub
     let mut has_wrapper = false;
     let stripped_type = strip_transparent_wrappers_for_assertion(ty, transparent_wrappers, &mut has_wrapper);
     
     // Check if we should generate an assertion for this type
-    let should_assert = has_wrapper || contains_exported_type(&stripped_type, exported_types);
+    let should_split = has_wrapper || contains_exported_type(&stripped_type, exported_types);
     
-    if should_assert {
-        let stripped_type_str = quote::quote! { #stripped_type }.to_string();
-        // Create the original type string with proper crate prefixing
-        let original_type_str = create_source_crate_type_string(ty, source_crate_name, exported_types);
-        assertion_type_pairs.insert((stripped_type_str, original_type_str));
+    if should_split {
+        // Create the original type with proper crate prefixing
+        let original_type = prefix_exported_types_in_type(ty, source_crate_name, exported_types);
+        Some((stripped_type, original_type))
+    } else {
+        None
     }
-    
-    stripped_type
 }
 
 /// Convert reference types to pointer types for FFI compatibility and collect type assertion pairs
@@ -293,14 +294,22 @@ fn convert_reference_to_pointer_with_collection(
 ) -> syn::Type {
     match ty {
         syn::Type::Reference(type_ref) => {
-            // Collect assertion pairs from the referenced type and get the stripped type
-            let stripped_type = collect_type_assertion_pairs_and_return_stripped(
+            // Split the referenced type and collect assertion pairs if needed
+            let stripped_type = if let Some((source_type, dest_type)) = split_type(
                 &type_ref.elem, 
                 exported_types, 
                 transparent_wrappers, 
-                source_crate_name, 
-                assertion_type_pairs
-            );
+                source_crate_name
+            ) {
+                // Add to assertion pairs
+                let source_type_str = quote::quote! { #source_type }.to_string();
+                let dest_type_str = quote::quote! { #dest_type }.to_string();
+                assertion_type_pairs.insert((source_type_str, dest_type_str));
+                source_type
+            } else {
+                // No split needed, use original type
+                (*type_ref.elem).clone()
+            };
             
             // Convert &T to *const T and &mut T to *mut T using the stripped type
             let mutability = if type_ref.mutability.is_some() {
@@ -322,14 +331,22 @@ fn convert_reference_to_pointer_with_collection(
             })
         }
         _ => {
-            // For non-reference types, collect assertion pairs and return stripped type
-            collect_type_assertion_pairs_and_return_stripped(
+            // For non-reference types, split and collect assertion pairs if needed
+            if let Some((source_type, dest_type)) = split_type(
                 ty, 
                 exported_types, 
                 transparent_wrappers, 
-                source_crate_name, 
-                assertion_type_pairs
-            )
+                source_crate_name
+            ) {
+                // Add to assertion pairs
+                let source_type_str = quote::quote! { #source_type }.to_string();
+                let dest_type_str = quote::quote! { #dest_type }.to_string();
+                assertion_type_pairs.insert((source_type_str, dest_type_str));
+                source_type
+            } else {
+                // No split needed, use original type
+                ty.clone()
+            }
         }
     }
 }
@@ -730,18 +747,10 @@ fn collect_type_assertion_pairs(
     source_crate_name: &str,
     assertion_type_pairs: &mut HashSet<(String, String)>
 ) {
-    // Strip transparent wrappers to get the type that will be used in the stub
-    let mut has_wrapper = false;
-    let stripped_type = strip_transparent_wrappers_for_assertion(ty, transparent_wrappers, &mut has_wrapper);
-    
-    // Check if we should generate an assertion for this type
-    let should_assert = has_wrapper || contains_exported_type(&stripped_type, exported_types);
-    
-    if should_assert {
-        let stripped_type_str = quote::quote! { #stripped_type }.to_string();
-        // Create the original type string with proper crate prefixing
-        let original_type_str = create_source_crate_type_string(ty, source_crate_name, exported_types);
-        assertion_type_pairs.insert((stripped_type_str, original_type_str));
+    if let Some((source_type, dest_type)) = split_type(ty, exported_types, transparent_wrappers, source_crate_name) {
+        let source_type_str = quote::quote! { #source_type }.to_string();
+        let dest_type_str = quote::quote! { #dest_type }.to_string();
+        assertion_type_pairs.insert((source_type_str, dest_type_str));
     }
 }
 
@@ -772,13 +781,6 @@ fn strip_transparent_wrappers_for_assertion(
         }
         _ => ty.clone(),
     }
-}
-
-/// Create a string representation of the type as it appears in the source crate
-/// Only prefix exported types with the crate name, leave other types as-is
-fn create_source_crate_type_string(ty: &syn::Type, source_crate_name: &str, exported_types: &HashSet<String>) -> String {
-    let prefixed_type = prefix_exported_types_in_type(ty, source_crate_name, exported_types);
-    quote::quote! { #prefixed_type }.to_string()
 }
 
 /// Recursively prefix exported types in a type with the source crate name
@@ -1492,5 +1494,47 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
         // Should have stripped the wrapper in the FFI signature (parameter should be *const ExportedType, not *const MaybeUninit<ExportedType>)
         assert!(result_str.contains("*const ExportedType"));
         assert!(!result_str.contains("*const std :: mem :: MaybeUninit"));
+    }
+
+    #[test]
+    fn test_split_type_function() {
+        let mut exported_types = HashSet::new();
+        exported_types.insert("ExportedType".to_string());
+        
+        let transparent_wrappers = vec![
+            syn::parse_quote! { std::mem::MaybeUninit },
+        ];
+        let source_crate_name = "test_crate";
+
+        // Test with transparent wrapper + exported type
+        let wrapped_type: syn::Type = syn::parse_quote! { std::mem::MaybeUninit<ExportedType> };
+        let result = split_type(&wrapped_type, &exported_types, &transparent_wrappers, source_crate_name);
+        
+        assert!(result.is_some());
+        let (source_type, dest_type) = result.unwrap();
+        
+        let source_str = quote::quote! { #source_type }.to_string();
+        let dest_str = quote::quote! { #dest_type }.to_string();
+        
+        assert_eq!(source_str, "ExportedType"); // Stripped of wrapper
+        assert!(dest_str.contains("std :: mem :: MaybeUninit < test_crate :: ExportedType >")); // With crate prefix
+        
+        // Test with regular type that doesn't need splitting
+        let regular_type: syn::Type = syn::parse_quote! { i32 };
+        let result = split_type(&regular_type, &exported_types, &transparent_wrappers, source_crate_name);
+        assert!(result.is_none());
+        
+        // Test with exported type but no wrapper
+        let exported_only: syn::Type = syn::parse_quote! { ExportedType };
+        let result = split_type(&exported_only, &exported_types, &transparent_wrappers, source_crate_name);
+        
+        assert!(result.is_some());
+        let (source_type, dest_type) = result.unwrap();
+        
+        let source_str = quote::quote! { #source_type }.to_string();
+        let dest_str = quote::quote! { #dest_type }.to_string();
+        
+        assert_eq!(source_str, "ExportedType"); // No change since no wrapper
+        assert_eq!(dest_str, "test_crate :: ExportedType"); // With crate prefix
     }
 }
