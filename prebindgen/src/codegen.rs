@@ -784,21 +784,6 @@ fn process_union_fields(
     fields.named = new_fields;
 }
 
-/// Check if a cfg expression contains any features that would be mapped
-fn cfg_expr_has_mapped_features(expr: &crate::cfg_expr::CfgExpr, feature_mappings: &HashMap<String, String>) -> bool {
-    use crate::cfg_expr::CfgExpr;
-    
-    match expr {
-        CfgExpr::Feature(name) => feature_mappings.contains_key(name),
-        CfgExpr::TargetArch(_) => false,
-        CfgExpr::All(exprs) | CfgExpr::Any(exprs) => {
-            exprs.iter().any(|e| cfg_expr_has_mapped_features(e, feature_mappings))
-        }
-        CfgExpr::Not(inner) => cfg_expr_has_mapped_features(inner, feature_mappings),
-        CfgExpr::Other(_) => false,
-    }
-}
-
 /// Process attributes for feature flags and return whether the item should be kept
 fn process_attributes(
     attrs: &mut Vec<syn::Attribute>,
@@ -823,9 +808,6 @@ fn process_attributes(
                 // Parse the cfg expression using our advanced parser
                 match CfgExpr::parse_from_tokens(&meta_list.tokens) {
                     Ok(cfg_expr) => {
-                        // Check if this expression involves any mapped features
-                        let has_feature_mappings = cfg_expr_has_mapped_features(&cfg_expr, feature_mappings);
-                        
                         // Apply feature mappings first
                         let mapped_expr = cfg_expr.apply_feature_mappings(feature_mappings);
                         
@@ -835,7 +817,7 @@ fn process_attributes(
                         match eval_result {
                             CfgEvalResult::False => {
                                 // Expression is false, exclude this item unless it has feature mappings
-                                if has_feature_mappings {
+                                if mapped_expr != cfg_expr {
                                     // Keep the item but update the cfg attribute with mapped features
                                     let new_tokens = mapped_expr.to_tokens();
                                     let new_meta = syn::parse_quote! {
