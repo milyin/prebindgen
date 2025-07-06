@@ -50,15 +50,14 @@ impl<'a> Codegen<'a> {
     ///
     /// This method takes a parsed Rust function and transforms it into a `#[no_mangle] extern "C"`
     /// wrapper function that calls the original function from the source crate.
-    ///
-    /// # Parameters
-    /// - `file`: The parsed file containing exactly one function definition
-    /// - `assertion_type_pairs`: Mutable set to collect type assertion pairs for compile-time validation
-    /// - `source_location`: Source location information for error reporting
+    #[roxygen]
     pub(crate) fn transform_function_to_stub(
         &self,
+        /// The parsed file containing exactly one function definition
         file: syn::File,
+        /// Mutable set to collect type assertion pairs for compile-time validation
         assertion_type_pairs: &mut HashSet<(String, String)>,
+        /// Source location information for error reporting
         source_location: &crate::SourceLocation,
     ) -> Result<syn::File, String> {
         // Validate that the file contains exactly one function
