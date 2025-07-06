@@ -61,3 +61,12 @@ pub fn another_test_function() -> bool {
 pub fn void_function(x: i32) {
     println!("Called void_function with x = {}", x);
 }
+
+#[prebindgen("functions")]
+pub fn get_foo_field(input: &Foo) -> &u64 {
+    // Return reference to the architecture-specific field
+    #[cfg(target_arch = "x86_64")]
+    return &input.x86_64_field;
+    #[cfg(target_arch = "aarch64")]
+    return &input.aarch64_field;
+}

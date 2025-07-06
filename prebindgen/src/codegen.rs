@@ -319,7 +319,10 @@ fn convert_to_local_type(
             mutability,
             elem: Box::new(local_core_type),
         });
-        *was_converted = true; // Always converted for references
+        // Mark as converted only if the referenced type needed conversion
+        // Reference-to-pointer conversion is always done for FFI, but transmute is only needed
+        // if the referenced type itself is converted (wrapper stripped or exported type)
+        *was_converted = should_convert;
         convert_reference_to_pointer(&local_ref)
     } else if should_convert {
         // Non-reference type that needed conversion
@@ -1562,5 +1565,187 @@ impl MyStruct {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_reference_return_type_no_unnecessary_transmute() {
+        // Test case: function that returns reference to primitive type should not transmute return value
+        let function_content = r#"
+pub fn get_primitive_field(input: &ExportedStruct) -> &u64 {
+    &input.field
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("ExportedStruct".to_string());
+        
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
+        let mut assertion_type_pairs = HashSet::new();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "test-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+            &mut assertion_type_pairs,
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the extern function
+        assert!(result_str.contains("no_mangle"));
+        assert!(result_str.contains("unsafe extern \"C\""));
+        
+        // Parameter should convert &ExportedStruct to *const ExportedStruct with transmute
+        assert!(result_str.contains("*const ExportedStruct"));
+        assert!(result_str.contains("std::mem::transmute(&*input)"));
+        
+        // Return type should convert &u64 to *const u64 but WITHOUT transmute of return value
+        assert!(result_str.contains("*const u64"));
+        
+        // Should NOT have transmute for the return value since u64 is primitive
+        assert!(!result_str.contains("let result ="));
+        assert!(!result_str.contains("unsafe { std::mem::transmute(result) }"));
+        
+        // Should directly return the function call
+        assert!(result_str.contains("test_crate::get_primitive_field"));
+        
+        // Function body should be a simple call without transmute wrapping
+        let lines: Vec<&str> = result_str.lines().collect();
+        let function_lines: Vec<&str> = lines.iter()
+            .take_while(|line| !line.contains("const _"))
+            .cloned()
+            .collect();
+        let function_code = function_lines.join("\n");
+        assert!(!function_code.contains("MaybeUninit"));
+    }
+
+    #[test]
+    fn test_reference_return_type_with_exported_type() {
+        // Test case: function that returns reference to exported type should transmute return value
+        let function_content = r#"
+pub fn get_exported_field(input: &Wrapper) -> &ExportedType {
+    &input.exported_field
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("Wrapper".to_string());
+        exported_types.insert("ExportedType".to_string());
+        
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
+        let mut assertion_type_pairs = HashSet::new();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "test-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+            &mut assertion_type_pairs,
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the extern function
+        assert!(result_str.contains("no_mangle"));
+        assert!(result_str.contains("unsafe extern \"C\""));
+        
+        // Parameter should convert &Wrapper to *const Wrapper with transmute
+        assert!(result_str.contains("*const Wrapper"));
+        assert!(result_str.contains("std::mem::transmute(&*input)"));
+        
+        // Return type should convert &ExportedType to *const ExportedType with transmute
+        assert!(result_str.contains("*const ExportedType"));
+        
+        // Should have transmute for the return value since ExportedType is exported
+        assert!(result_str.contains("let result ="));
+        assert!(result_str.contains("unsafe { std::mem::transmute(result) }"));
+    }
+
+    #[test]
+    fn test_reference_to_primitive_no_transmute() {
+        let function_content = r#"
+pub fn get_field(input: &ExportedStruct) -> &u64 {
+    &input.field
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("ExportedStruct".to_string());
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
+        let mut assertion_type_pairs = HashSet::new();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+            &mut assertion_type_pairs,
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the no_mangle attribute
+        assert!(result_str.contains("no_mangle"));
+        // Should be an unsafe extern "C" function
+        assert!(result_str.contains("unsafe extern \"C\""));
+        // Parameter should be transmuted (it's a reference to exported type)
+        assert!(result_str.contains("transmute(&*input)"));
+        // Return value should NOT be transmuted (it's a reference to primitive)
+        assert!(!result_str.contains("let result = my_crate::get_field"));
+        assert!(!result_str.contains("transmute(result)"));
+        // Should call the function directly without storing result
+        assert!(result_str.contains("my_crate::get_field("));
+    }
+
+    #[test]
+    fn test_reference_to_exported_type_with_transmute() {
+        let function_content = r#"
+pub fn get_exported_field(input: &ExportedStruct) -> &ExportedType {
+    &input.exported_field
+}
+"#;
+
+        let mut exported_types = HashSet::new();
+        exported_types.insert("ExportedStruct".to_string());
+        exported_types.insert("ExportedType".to_string());
+        let allowed_prefixes = generate_standard_allowed_prefixes();
+        let transparent_wrappers = Vec::new();
+        let mut assertion_type_pairs = HashSet::new();
+
+        let input_file = syn::parse_file(function_content).unwrap();
+        let result = transform_function_to_stub(
+            input_file,
+            "my-crate",
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            "2021",
+            &mut assertion_type_pairs,
+        ).unwrap();
+
+        let result_str = prettyplease::unparse(&result);
+        
+        // Should contain the no_mangle attribute
+        assert!(result_str.contains("no_mangle"));
+        // Should be an unsafe extern "C" function
+        assert!(result_str.contains("unsafe extern \"C\""));
+        // Parameter should be transmuted (it's a reference to exported type)
+        assert!(result_str.contains("transmute(&*input)"));
+        // Return value SHOULD be transmuted (it's a reference to exported type)
+        assert!(result_str.contains("let result = my_crate::get_exported_field"));
+        assert!(result_str.contains("transmute(result)"));
     }
 }
