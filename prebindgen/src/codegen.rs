@@ -284,69 +284,30 @@ fn split_type(
     }
 }
 
-/// Convert reference types to pointer types for FFI compatibility and collect type assertion pairs
-fn convert_reference_to_pointer_with_collection(
-    ty: &syn::Type, 
-    exported_types: &HashSet<String>,
-    transparent_wrappers: &[syn::Path],
-    source_crate_name: &str,
-    assertion_type_pairs: &mut HashSet<(String, String)>
-) -> syn::Type {
+/// Convert reference types to pointer types for FFI compatibility
+fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
     match ty {
         syn::Type::Reference(type_ref) => {
-            // Split the referenced type and collect assertion pairs if needed
-            let stripped_type = if let Some((source_type, dest_type)) = split_type(
-                &type_ref.elem, 
-                exported_types, 
-                transparent_wrappers, 
-                source_crate_name
-            ) {
-                // Add to assertion pairs
-                let source_type_str = quote::quote! { #source_type }.to_string();
-                let dest_type_str = quote::quote! { #dest_type }.to_string();
-                assertion_type_pairs.insert((source_type_str, dest_type_str));
-                source_type
+            // Convert &T to *const T and &mut T to *mut T
+            if type_ref.mutability.is_some() {
+                syn::Type::Ptr(syn::TypePtr {
+                    star_token: syn::token::Star::default(),
+                    const_token: None,
+                    mutability: Some(syn::token::Mut::default()),
+                    elem: type_ref.elem.clone(),
+                })
             } else {
-                // No split needed, use original type
-                (*type_ref.elem).clone()
-            };
-            
-            // Convert &T to *const T and &mut T to *mut T using the stripped type
-            let mutability = if type_ref.mutability.is_some() {
-                syn::token::Mut::default()
-            } else {
-                return syn::Type::Ptr(syn::TypePtr {
+                syn::Type::Ptr(syn::TypePtr {
                     star_token: syn::token::Star::default(),
                     const_token: Some(syn::token::Const::default()),
                     mutability: None,
-                    elem: Box::new(stripped_type),
-                });
-            };
-            
-            syn::Type::Ptr(syn::TypePtr {
-                star_token: syn::token::Star::default(),
-                const_token: None,
-                mutability: Some(mutability),
-                elem: Box::new(stripped_type),
-            })
+                    elem: type_ref.elem.clone(),
+                })
+            }
         }
         _ => {
-            // For non-reference types, split and collect assertion pairs if needed
-            if let Some((source_type, dest_type)) = split_type(
-                ty, 
-                exported_types, 
-                transparent_wrappers, 
-                source_crate_name
-            ) {
-                // Add to assertion pairs
-                let source_type_str = quote::quote! { #source_type }.to_string();
-                let dest_type_str = quote::quote! { #dest_type }.to_string();
-                assertion_type_pairs.insert((source_type_str, dest_type_str));
-                source_type
-            } else {
-                // No split needed, use original type
-                ty.clone()
-            }
+            // For non-reference types, return as-is
+            ty.clone()
         }
     }
 }
@@ -521,7 +482,40 @@ pub(crate) fn transform_function_to_stub(
     // Convert reference parameters to pointer parameters and collect type assertion pairs
     for input in extern_sig.inputs.iter_mut() {
         if let syn::FnArg::Typed(pat_type) = input {
-            pat_type.ty = Box::new(convert_reference_to_pointer_with_collection(&pat_type.ty, exported_types, transparent_wrappers, &source_crate_name, assertion_type_pairs));
+            // Handle references specially - we need to split the referenced type, not the reference itself
+            if let syn::Type::Reference(type_ref) = &*pat_type.ty {
+                // Check if the referenced type needs splitting
+                if let Some((source_type, dest_type)) = split_type(&type_ref.elem, exported_types, transparent_wrappers, &source_crate_name) {
+                    let source_type_str = quote::quote! { #source_type }.to_string();
+                    let dest_type_str = quote::quote! { #dest_type }.to_string();
+                    assertion_type_pairs.insert((source_type_str, dest_type_str));
+                    
+                    // Create a reference to the stripped type, then convert to pointer
+                    let stripped_ref = syn::Type::Reference(syn::TypeReference {
+                        and_token: type_ref.and_token,
+                        lifetime: type_ref.lifetime.clone(),
+                        mutability: type_ref.mutability,
+                        elem: Box::new(source_type),
+                    });
+                    pat_type.ty = Box::new(convert_reference_to_pointer(&stripped_ref));
+                } else {
+                    // No split needed for referenced type, convert the original reference
+                    pat_type.ty = Box::new(convert_reference_to_pointer(&pat_type.ty));
+                }
+            } else {
+                // Non-reference type - check if it needs splitting
+                if let Some((source_type, dest_type)) = split_type(&pat_type.ty, exported_types, transparent_wrappers, &source_crate_name) {
+                    let source_type_str = quote::quote! { #source_type }.to_string();
+                    let dest_type_str = quote::quote! { #dest_type }.to_string();
+                    assertion_type_pairs.insert((source_type_str, dest_type_str));
+                    
+                    // Use the stripped type
+                    pat_type.ty = Box::new(source_type);
+                } else {
+                    // No split needed, use original type
+                    // (no change needed)
+                }
+            }
         }
     }
     
@@ -1236,26 +1230,21 @@ pub fn copy_bar(
 
     #[test]
     fn test_convert_reference_to_pointer() {
-        let transparent_wrappers = Vec::new();
-        let exported_types = HashSet::new();
-        let source_crate_name = "test_crate";
-        let mut assertion_type_pairs = HashSet::new();
-        
         // Test mutable reference conversion
         let mut_ref: syn::Type = syn::parse_quote! { &mut i32 };
-        let converted = convert_reference_to_pointer_with_collection(&mut_ref, &exported_types, &transparent_wrappers, source_crate_name, &mut assertion_type_pairs);
+        let converted = convert_reference_to_pointer(&mut_ref);
         let converted_str = quote::quote! { #converted }.to_string();
         assert!(converted_str.contains("* mut i32"));
 
         // Test immutable reference conversion
         let ref_type: syn::Type = syn::parse_quote! { &str };
-        let converted = convert_reference_to_pointer_with_collection(&ref_type, &exported_types, &transparent_wrappers, source_crate_name, &mut assertion_type_pairs);
+        let converted = convert_reference_to_pointer(&ref_type);
         let converted_str = quote::quote! { #converted }.to_string();
         assert!(converted_str.contains("* const str"));
 
         // Test non-reference type (should remain unchanged)
         let regular_type: syn::Type = syn::parse_quote! { i32 };
-        let converted = convert_reference_to_pointer_with_collection(&regular_type, &exported_types, &transparent_wrappers, source_crate_name, &mut assertion_type_pairs);
+        let converted = convert_reference_to_pointer(&regular_type);
         let converted_str = quote::quote! { #converted }.to_string();
         assert_eq!(converted_str, "i32");
     }
