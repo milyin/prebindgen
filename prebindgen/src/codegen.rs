@@ -9,6 +9,7 @@
 
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
+use std::env;
 
 /// Codegen structure containing common parameters for code generation
 ///
@@ -783,6 +784,21 @@ fn process_union_fields(
     fields.named = new_fields;
 }
 
+/// Check if a cfg expression contains any features that would be mapped
+fn cfg_expr_has_mapped_features(expr: &crate::cfg_expr::CfgExpr, feature_mappings: &HashMap<String, String>) -> bool {
+    use crate::cfg_expr::CfgExpr;
+    
+    match expr {
+        CfgExpr::Feature(name) => feature_mappings.contains_key(name),
+        CfgExpr::TargetArch(_) => false,
+        CfgExpr::All(exprs) | CfgExpr::Any(exprs) => {
+            exprs.iter().any(|e| cfg_expr_has_mapped_features(e, feature_mappings))
+        }
+        CfgExpr::Not(inner) => cfg_expr_has_mapped_features(inner, feature_mappings),
+        CfgExpr::Other(_) => false,
+    }
+}
+
 /// Process attributes for feature flags and return whether the item should be kept
 fn process_attributes(
     attrs: &mut Vec<syn::Attribute>,
@@ -790,37 +806,67 @@ fn process_attributes(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
 ) -> bool {
+    use crate::cfg_expr::{CfgExpr, CfgEvalResult};
+    
     let mut keep_item = true;
     let mut remove_attrs = Vec::new();
+
+    // Get the current target architecture from the environment
+    let current_target_arch = env::var("CARGO_CFG_TARGET_ARCH")
+        .unwrap_or_else(|_| std::env::consts::ARCH.to_string());
 
     for (i, attr) in attrs.iter_mut().enumerate() {
         // Check if this is a cfg attribute
         if attr.path().is_ident("cfg") {
-            // Parse the meta to extract feature information
+            // Parse the meta to extract cfg information
             if let syn::Meta::List(meta_list) = &attr.meta {
-                if let Ok(cfg_expr) = syn::parse2::<CfgExpr>(meta_list.tokens.clone()) {
-                    if let Some(feature_name) = extract_feature_from_cfg(&cfg_expr) {
-                        // Check if feature should be disabled
-                        if disabled_features.contains(&feature_name) {
-                            keep_item = false;
-                            break;
+                // Parse the cfg expression using our advanced parser
+                match CfgExpr::parse_from_tokens(&meta_list.tokens) {
+                    Ok(cfg_expr) => {
+                        // Check if this expression involves any mapped features
+                        let has_feature_mappings = cfg_expr_has_mapped_features(&cfg_expr, feature_mappings);
+                        
+                        // Apply feature mappings first
+                        let mapped_expr = cfg_expr.apply_feature_mappings(feature_mappings);
+                        
+                        // Evaluate the expression (treat unknown features as disabled for deterministic FFI)
+                        let eval_result = mapped_expr.evaluate_with_unknown_handling(enabled_features, disabled_features, &current_target_arch, false);
+                        
+                        match eval_result {
+                            CfgEvalResult::False => {
+                                // Expression is false, exclude this item unless it has feature mappings
+                                if has_feature_mappings {
+                                    // Keep the item but update the cfg attribute with mapped features
+                                    let new_tokens = mapped_expr.to_tokens();
+                                    let new_meta = syn::parse_quote! {
+                                        cfg(#new_tokens)
+                                    };
+                                    attr.meta = new_meta;
+                                } else {
+                                    keep_item = false;
+                                    break;
+                                }
+                            }
+                            CfgEvalResult::True => {
+                                // Expression is true, remove the cfg attribute
+                                remove_attrs.push(i);
+                            }
+                            CfgEvalResult::Unknown => {
+                                // Expression can't be determined, keep the cfg attribute
+                                // but update it if mappings were applied
+                                if mapped_expr != cfg_expr {
+                                    let new_tokens = mapped_expr.to_tokens();
+                                    let new_meta = syn::parse_quote! {
+                                        cfg(#new_tokens)
+                                    };
+                                    attr.meta = new_meta;
+                                }
+                            }
                         }
-
-                        // Check if feature should be enabled (remove cfg)
-                        if enabled_features.contains(&feature_name) {
-                            remove_attrs.push(i);
-                            break;
-                        }
-
-                        // Check if feature should be mapped
-                        if let Some(new_feature) = feature_mappings.get(&feature_name) {
-                            // Update the attribute with the new feature name
-                            let new_meta = syn::parse_quote! {
-                                cfg(feature = #new_feature)
-                            };
-                            attr.meta = new_meta;
-                            break;
-                        }
+                    }
+                    Err(_) => {
+                        // If we can't parse the cfg expression, leave it as-is
+                        // This preserves the original behavior for unsupported expressions
                     }
                 }
             }
@@ -833,40 +879,6 @@ fn process_attributes(
     }
 
     keep_item
-}
-
-/// Simple cfg expression to handle basic feature checks
-#[derive(Debug, Clone)]
-enum CfgExpr {
-    Feature(String),
-    Other,
-}
-
-impl syn::parse::Parse for CfgExpr {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Parse the entire content as tokens and look for feature patterns
-        let tokens = input.parse::<proc_macro2::TokenStream>()?;
-        let token_string = tokens.to_string();
-
-        // Use regex to extract feature name from the token stream
-        use regex::Regex;
-        let feature_regex = Regex::new(r#"feature\s*=\s*"([^"]+)""#).unwrap();
-
-        if let Some(captures) = feature_regex.captures(&token_string) {
-            let feature_name = captures[1].to_string();
-            Ok(CfgExpr::Feature(feature_name))
-        } else {
-            Ok(CfgExpr::Other)
-        }
-    }
-}
-
-/// Extract feature name from a cfg expression
-fn extract_feature_from_cfg(cfg_expr: &CfgExpr) -> Option<String> {
-    match cfg_expr {
-        CfgExpr::Feature(name) => Some(name.clone()),
-        CfgExpr::Other => None,
-    }
 }
 
 /// Check if two syn::Path values are equal

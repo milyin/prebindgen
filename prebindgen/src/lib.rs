@@ -103,6 +103,7 @@ use roxygen::roxygen;
 
 pub(crate) mod codegen;
 mod jsonl;
+pub mod cfg_expr;
 
 /// **Internal API**: JSONL file utilities. Public only for proc-macro crate interaction.
 #[doc(hidden)]

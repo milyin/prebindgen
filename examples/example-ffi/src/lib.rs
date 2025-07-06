@@ -30,6 +30,12 @@ pub struct Foo {
     pub aarch64_field: u64,
     #[cfg(feature = "unstable")]
     pub unstable_field: u64,
+    #[cfg(not(feature = "unstable"))]
+    pub stable_field: u64,
+    #[cfg(any(feature = "unstable", feature = "internal"))]
+    pub unstable_or_internal_field: u64,
+    #[cfg(all(feature = "unstable", feature = "internal"))]
+    pub unstable_and_internal_field: u64,
 }
 
 #[prebindgen("functions")]
@@ -44,7 +50,14 @@ pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) -> example_resu
 #[cfg(feature = "unstable")]
 pub fn get_unstable_field(input: &Foo) -> u64 {
     // Return the unstable field if it exists
-    return input.unstable_field;
+    input.unstable_field
+}
+
+#[prebindgen("functions")]
+#[cfg(not(feature = "unstable"))]
+pub fn get_unstable_field(input: &Foo) -> u64 {
+    // Return the unstable field if it exists
+    input.stable_field
 }
 
 #[prebindgen("functions")]

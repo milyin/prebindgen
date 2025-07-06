@@ -29,13 +29,14 @@ mod tests {
                 x86_64_field: 12345,
                 #[cfg(target_arch = "aarch64")]
                 aarch64_field: 12345,
+                stable_field: 54321,
             };
 
             // Test get_foo_field function
             let foo_field_ptr = get_foo_field(&test_foo as *const Foo);
             assert!(!foo_field_ptr.is_null());
             let foo_field_value = *foo_field_ptr;
-            println!("get_foo_field returned field value: {}", foo_field_value);
+            println!("get_foo_field returned field value: {foo_field_value}");
             assert_eq!(foo_field_value, 12345);
 
             // Test copy_foo function
@@ -49,7 +50,7 @@ mod tests {
             #[cfg(target_arch = "aarch64")]
             assert_eq!(copied_foo.aarch64_field, test_foo.aarch64_field);
             
-            println!("copy_foo completed successfully, result: {}", result);
+            println!("copy_foo completed successfully, result: {result}");
 
             // Create test Bar struct
             let test_bar = Bar {
@@ -70,13 +71,12 @@ mod tests {
             #[cfg(target_arch = "aarch64")]
             assert_eq!(copied_bar.aarch64_field, test_bar.aarch64_field);
             
-            println!("copy_bar completed successfully, result: {}", result);
+            println!("copy_bar completed successfully, result: {result}");
 
             // Test constants
             assert_eq!(EXAMPLE_RESULT_OK, 0);
             assert_eq!(EXAMPLE_RESULT_ERROR, -1);
-            println!("Constants verified: EXAMPLE_RESULT_OK = {}, EXAMPLE_RESULT_ERROR = {}", 
-                     EXAMPLE_RESULT_OK, EXAMPLE_RESULT_ERROR);
+            println!("Constants verified: EXAMPLE_RESULT_OK = {EXAMPLE_RESULT_OK}, EXAMPLE_RESULT_ERROR = {EXAMPLE_RESULT_ERROR}"); 
         }
     }
 
@@ -105,6 +105,7 @@ mod tests {
                 x86_64_field: 999,
                 #[cfg(target_arch = "aarch64")]
                 aarch64_field: 999,
+                stable_field: 777,
             };
 
             let mut dst_foo = MaybeUninit::<Foo>::uninit();
