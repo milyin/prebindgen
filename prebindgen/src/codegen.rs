@@ -16,8 +16,8 @@ use std::collections::{HashMap, HashSet};
 /// features and transforming functions to FFI stubs. It centralizes the parameters
 /// that were previously passed individually to multiple functions.
 pub(crate) struct Codegen<'a> {
-    /// The name of the source crate (with dashes converted to underscores)
-    pub crate_name: &'a str,
+    /// The source crate identifier (crate name with dashes converted to underscores)
+    pub source_crate_ident: syn::Ident,
     /// Set of exported type names that are valid for FFI
     pub exported_types: &'a HashSet<String>,
     /// List of allowed path prefixes for type validation
@@ -37,8 +37,12 @@ impl<'a> Codegen<'a> {
         transparent_wrappers: &'a [syn::Path],
         edition: &'a str,
     ) -> Self {
+        // Convert crate name to identifier (replace dashes with underscores)
+        let source_crate_name = crate_name.replace('-', "_");
+        let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
+        
         Self {
-            crate_name,
+            source_crate_ident,
             exported_types,
             allowed_prefixes,
             transparent_wrappers,
@@ -80,18 +84,12 @@ impl<'a> Codegen<'a> {
 
         let function_name = &parsed_function.sig.ident;
 
-        // Prepare source crate name for type collection
-        let source_crate_name = self.crate_name.replace('-', "_");
-
         // Build the extern "C" function signature:
         // 1. Start with the original function signature
         // 2. Convert references to pointers for FFI compatibility
         // 3. Add extern "C" ABI specifier
         // 4. Mark function as unsafe
         let mut extern_sig = parsed_function.sig.clone();
-
-        // Generate components and build call arguments inline
-        let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
 
         // Convert return type and collect type assertion pairs
         let mut result_type_changed = false;
@@ -100,7 +98,7 @@ impl<'a> Codegen<'a> {
                 exported_types: self.exported_types,
                 allowed_prefixes: self.allowed_prefixes,
                 transparent_wrappers: self.transparent_wrappers,
-                source_crate_ident: &source_crate_ident,
+                source_crate_ident: &self.source_crate_ident,
                 context: &format!("return type of function '{function_name}'"),
             };
             let local_return_type = convert_to_local_type(
@@ -128,7 +126,7 @@ impl<'a> Codegen<'a> {
                 exported_types: self.exported_types,
                 allowed_prefixes: self.allowed_prefixes,
                 transparent_wrappers: self.transparent_wrappers,
-                source_crate_ident: &source_crate_ident,
+                source_crate_ident: &self.source_crate_ident,
                 context: &format!("parameter of function '{function_name}'"),
             };
             let local_type = convert_to_local_type(
@@ -179,6 +177,7 @@ impl<'a> Codegen<'a> {
         });
 
         // Generate the function body
+        let source_crate_ident = &self.source_crate_ident;
         let function_body = if result_type_changed {
             // If return type was converted, wrap the result in transmute
             quote::quote! {
