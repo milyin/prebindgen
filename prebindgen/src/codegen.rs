@@ -8,8 +8,15 @@
 //! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
 
 use std::collections::{HashMap, HashSet};
+use roxygen::roxygen;
 
 /// Generate allowed prefixes that include standard prelude types and modules
+/// 
+/// Creates a list of syn::Path values representing standard library prefixes that are
+/// considered safe for FFI use. This includes core library modules, standard collections,
+/// primitive types, and common external crates like libc.
+/// 
+/// Returns a vector of parsed paths that can be used for type validation.
 pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
     let prefix_strings = vec![
         // Core standard library modules
@@ -86,9 +93,16 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
         .collect()
 }
 
-/// Helper function to check if a type contains any of the exported types
+/// Check if a type contains any of the exported types
+/// 
+/// Recursively searches through a type and its generic arguments to determine
+/// if it contains any types that are in the exported types set. This is used
+/// to decide whether type assertions are needed.
+#[roxygen]
 pub(crate) fn contains_exported_type(
+    /// The type to check for exported type usage
     ty: &syn::Type,
+    /// Set of exported type names to search for
     exported_types: &HashSet<String>,
 ) -> bool {
     match ty {
@@ -172,11 +186,19 @@ fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
     true
 }
 
-/// Validate generic arguments recursively
+/// Validate generic arguments recursively for FFI compatibility
+/// 
+/// Checks all type arguments within angle brackets (e.g., `Vec<T>`, `HashMap<K, V>`)
+/// to ensure they are valid for FFI use.
+#[roxygen]
 fn validate_generic_arguments(
+    /// The generic arguments to validate
     args: &syn::AngleBracketedGenericArguments,
+    /// Set of exported type names that are considered valid
     exported_types: &HashSet<String>,
+    /// List of allowed path prefixes for type validation
     allowed_prefixes: &[syn::Path],
+    /// Context string for error reporting
     context: &str,
 ) -> Result<(), String> {
     for arg in &args.args {
@@ -192,11 +214,22 @@ fn validate_generic_arguments(
     Ok(())
 }
 
-/// Helper function to validate that a type is either absolute (starting with ::) or defined in exported types
+/// Validate that a type is suitable for FFI use
+/// 
+/// This function checks if a type can be safely used in FFI by verifying it's either:
+/// - An absolute path (starting with `::`)
+/// - A path starting with an allowed prefix 
+/// - A type defined in the exported types set
+/// - A supported container type (reference, pointer, slice, array, tuple) with valid element types
+#[roxygen]
 pub(crate) fn validate_type_for_ffi(
+    /// The type to validate for FFI compatibility
     ty: &syn::Type,
+    /// Set of exported type names that are considered valid
     exported_types: &HashSet<String>,
+    /// List of allowed path prefixes (e.g., std::, core::, etc.)
     allowed_prefixes: &[syn::Path],
+    /// Context string for error reporting (e.g., "parameter 1 of function 'foo'")
     context: &str,
 ) -> Result<(), String> {
     match ty {
@@ -264,22 +297,19 @@ pub(crate) fn validate_type_for_ffi(
 /// - Converts references to pointers for FFI compatibility
 /// - Collects type assertion pairs when conversion is needed
 /// - Sets the `was_converted` flag to indicate if the type was modified
-///
-/// Parameters:
-/// - `original_type`: The original type to convert
-/// - `exported_types`: Set of exported type names
-/// - `transparent_wrappers`: List of transparent wrapper paths to strip
-/// - `source_crate_ident`: Source crate identifier for prefixing
-/// - `assertion_type_pairs`: Mutable set to collect assertion pairs
-/// - `was_converted`: Mutable boolean flag set to true if type was converted
-///
-/// Returns: The converted local type
+#[roxygen]
 fn convert_to_local_type(
+    /// The original type to convert
     original_type: &syn::Type,
+    /// Set of exported type names
     exported_types: &HashSet<String>,
+    /// List of transparent wrapper paths to strip
     transparent_wrappers: &[syn::Path],
+    /// Source crate identifier for prefixing
     source_crate_ident: &syn::Ident,
+    /// Mutable set to collect assertion pairs
     assertion_type_pairs: &mut HashSet<(String, String)>,
+    /// Mutable boolean flag set to true if type was converted
     was_converted: &mut bool
 ) -> syn::Type {
     // Extract the core type to process (for references, this is the referenced type)
@@ -363,11 +393,19 @@ fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
     }
 }
 
-/// Validate all function parameters for FFI compatibility
+/// Validate function parameters for FFI compatibility
+/// 
+/// Checks each typed parameter in a function signature to ensure it can be safely
+/// used in FFI contexts according to the validation rules.
+#[roxygen]
 fn validate_function_parameters(
+    /// The function parameters to validate
     inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
+    /// The function name for error reporting
     function_name: &syn::Ident,
+    /// Set of exported type names that are considered valid
     exported_types: &HashSet<String>,
+    /// List of allowed path prefixes for type validation
     allowed_prefixes: &[syn::Path],
 ) -> Result<(), String> {
     for (i, input) in inputs.iter().enumerate() {
@@ -384,14 +422,26 @@ fn validate_function_parameters(
 }
 
 /// Transform a function prototype to a no_mangle extern "C" function and collect assertion pairs
-/// Returns the stub function and the collected assertion pairs separately for later deduplication
+/// 
+/// This function takes a Rust function definition and transforms it into an FFI-compatible
+/// `extern "C"` function with proper type conversions and validation.
+/// 
+/// Returns the stub function and collects assertion pairs separately for later deduplication.
+#[roxygen]
 pub(crate) fn transform_function_to_stub(
+    /// The parsed file containing exactly one function definition
     file: syn::File,
+    /// The name of the source crate (with dashes converted to underscores)
     source_crate: &str,
+    /// Set of exported type names that are valid for FFI
     exported_types: &HashSet<String>,
+    /// List of allowed path prefixes for type validation
     allowed_prefixes: &[syn::Path],
+    /// List of transparent wrapper types to strip during conversion
     transparent_wrappers: &[syn::Path],
+    /// Rust edition string (e.g., "2021", "2024") for proper attribute generation
     edition: &str,
+    /// Mutable set to collect type assertion pairs for compile-time validation
     assertion_type_pairs: &mut HashSet<(String, String)>
 ) -> Result<syn::File, String> {
     // Validate that the file contains exactly one function
@@ -549,16 +599,21 @@ pub(crate) fn transform_function_to_stub(
     })
 }
 
-/// Process code content to handle feature flags according to builder configuration.
+/// Process code content to handle feature flags according to builder configuration
 /// 
 /// This function analyzes code for `#[cfg(feature="...")]` attributes using syn syntax parsing and:
 /// - Removes code blocks guarded by disabled features
-/// - Removes cfg attributes for enabled features (including the code)
+/// - Removes cfg attributes for enabled features (keeping the code)
 /// - Replaces feature names according to the mapping (keeping the cfg attribute)
+#[roxygen]
 pub(crate) fn process_features(
+    /// The parsed file to process for feature flags
     mut file: syn::File,
+    /// Set of feature names that should cause code removal
     disabled_features: &HashSet<String>,
+    /// Set of feature names that should have their cfg attributes removed
     enabled_features: &HashSet<String>,
+    /// Mapping from old feature names to new feature names
     feature_mappings: &HashMap<String, String>,
 ) -> syn::File {
     // Process items in the file
@@ -697,7 +752,15 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
 }
 
 /// Generate compile-time assertions for type pairs
-pub(crate) fn generate_type_assertions(assertion_type_pairs: &HashSet<(String, String)>) -> Vec<syn::Item> {
+/// 
+/// Creates size and alignment assertions to ensure that stripped types (used in FFI stubs)
+/// are compatible with their original types (from the source crate). This provides
+/// compile-time safety for type transmutations performed during FFI calls.
+#[roxygen]
+pub(crate) fn generate_type_assertions(
+    /// Set of (local_type, source_type) string pairs to create assertions for
+    assertion_type_pairs: &HashSet<(String, String)>
+) -> Vec<syn::Item> {
     let mut assertions = Vec::new();
     
     for (stripped_type_str, source_type_str) in assertion_type_pairs {
@@ -731,10 +794,18 @@ pub(crate) fn generate_type_assertions(assertion_type_pairs: &HashSet<(String, S
 
 
 
-/// Strip transparent wrappers and track if any were stripped
+/// Strip transparent wrappers from a type and track if any were removed
+/// 
+/// Recursively removes transparent wrapper types (like `MaybeUninit<T>`) from a type,
+/// returning the inner type. Sets the `has_wrapper` flag to indicate if any wrappers
+/// were found and stripped.
+#[roxygen] 
 fn strip_transparent_wrappers(
+    /// The type to strip wrappers from
     ty: &syn::Type, 
+    /// List of transparent wrapper paths to recognize and strip
     transparent_wrappers: &[syn::Path],
+    /// Flag set to true if any wrappers were found and stripped
     has_wrapper: &mut bool
 ) -> syn::Type {
     match ty {

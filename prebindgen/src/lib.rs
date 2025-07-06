@@ -99,6 +99,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
+use roxygen::roxygen;
 
 mod codegen;
 mod jsonl;
@@ -233,7 +234,7 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
-/// Initialize the prebindgen output directory for the current crate.
+/// Initialize the prebindgen output directory for the current crate
 ///
 /// This function must be called in the `build.rs` file of any crate that uses
 /// the `#[prebindgen]` attribute macro. It performs the following operations:
@@ -442,14 +443,10 @@ impl Prebindgen {
         }
     }
 
-    /// Select a specific group for file generation.
+    /// Select a specific group for file generation
     ///
     /// Returns a `FileBuilder` that can be used to write the specified group
     /// to a file, optionally combined with other groups.
-    ///
-    /// # Arguments
-    ///
-    /// * `group_name` - Name of the group to select
     ///
     /// # Returns
     ///
@@ -460,7 +457,12 @@ impl Prebindgen {
     /// ```rust,ignore
     /// let structs_file = prebindgen.group("structs").write_to_file("structs.rs");
     /// ```
-    pub fn group(&self, group_name: &str) -> FileBuilder<'_> {
+    #[roxygen]
+    pub fn group(
+        &self, 
+        /// Name of the group to select
+        group_name: &str
+    ) -> FileBuilder<'_> {
         FileBuilder {
             prebindgen: self,
             groups: vec![group_name.to_string()],
@@ -554,22 +556,22 @@ impl Prebindgen {
 }
 
 impl Builder {
-    /// Create a new builder with the specified input directory.
+    /// Create a new builder with the specified input directory
     ///
     /// The input directory should contain the prebindgen data files generated
     /// by the common FFI crate. This is typically obtained from the
     /// `PREBINDGEN_OUT_DIR` constant exported by the common FFI crate.
-    ///
-    /// # Arguments
-    ///
-    /// * `input_dir` - Path to the directory containing prebindgen data files
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// let builder = prebindgen::Builder::new(common_ffi::PREBINDGEN_OUT_DIR);
     /// ```
-    pub fn new<P: AsRef<Path>>(input_dir: P) -> Self {
+    #[roxygen]
+    pub fn new<P: AsRef<Path>>(
+        /// Path to the directory containing prebindgen data files
+        input_dir: P
+    ) -> Self {
         // Generate comprehensive allowed prefixes including standard prelude
         let allowed_prefixes = codegen::generate_standard_allowed_prefixes();
 
@@ -586,16 +588,12 @@ impl Builder {
         }
     }
 
-    /// Override the source crate name used in generated extern "C" functions.
+    /// Override the source crate name used in generated extern "C" functions
     ///
     /// By default, the crate name is read from the prebindgen data files.
     /// This method allows you to override it, which can be useful when
     /// the crate has been renamed or when you want to use a different
     /// module path in the generated calls.
-    ///
-    /// # Arguments
-    ///
-    /// * `crate_name` - The crate name to use in generated function calls
     ///
     /// # Example
     ///
@@ -603,20 +601,21 @@ impl Builder {
     /// let builder = prebindgen::Builder::new(path)
     ///     .crate_name("my_renamed_crate");
     /// ```
-    pub fn crate_name<S: Into<String>>(mut self, crate_name: S) -> Self {
+    #[roxygen]
+    pub fn crate_name<S: Into<String>>(
+        mut self, 
+        /// The crate name to use in generated function calls
+        crate_name: S
+    ) -> Self {
         self.crate_name = crate_name.into();
         self
     }
 
-    /// Set the Rust edition to use for generated code.
+    /// Set the Rust edition to use for generated code
     ///
     /// This affects how the `#[no_mangle]` attribute is generated:
     /// - For edition "2024": `#[unsafe(no_mangle)]`
     /// - For other editions: `#[no_mangle]`
-    ///
-    /// # Arguments
-    ///
-    /// * `edition` - The Rust edition ("2021", "2024", etc.)
     ///
     /// Default is "2024" if not specified.
     ///
@@ -626,19 +625,20 @@ impl Builder {
     /// let builder = prebindgen::Builder::new(path)
     ///     .edition("2021");
     /// ```
-    pub fn edition<E: Into<String>>(mut self, edition: E) -> Self {
+    #[roxygen]
+    pub fn edition<E: Into<String>>(
+        mut self, 
+        /// The Rust edition ("2021", "2024", etc.)
+        edition: E
+    ) -> Self {
         self.edition = edition.into();
         self
     }
 
-    /// Select a specific group to include in the final Prebindgen instance.
+    /// Select a specific group to include in the final Prebindgen instance
     ///
     /// This method can be called multiple times to select multiple groups.
     /// If no groups are selected, all available groups will be included.
-    ///
-    /// # Arguments
-    ///
-    /// * `group_name` - Name of the group to include
     ///
     /// # Example
     ///
@@ -647,12 +647,17 @@ impl Builder {
     ///     .select_group("structs")
     ///     .select_group("core_functions");
     /// ```
-    pub fn select_group<S: Into<String>>(mut self, group_name: S) -> Self {
+    #[roxygen]
+    pub fn select_group<S: Into<String>>(
+        mut self, 
+        /// Name of the group to include
+        group_name: S
+    ) -> Self {
         self.selected_groups.insert(group_name.into());
         self
     }
 
-    /// Add an allowed type prefix for FFI validation.
+    /// Add an allowed type prefix for FFI validation
     ///
     /// This method allows you to specify additional type prefixes that should be
     /// considered valid for FFI functions, beyond the comprehensive set of default
@@ -668,10 +673,6 @@ impl Builder {
     /// - Primitive types (`bool`, `i32`, `u64`, etc.)
     /// - Common FFI types (`libc`, `c_char`, `c_int`, etc.)
     ///
-    /// # Arguments
-    ///
-    /// * `prefix` - The additional type prefix to allow
-    ///
     /// # Example
     ///
     /// ```rust,ignore
@@ -679,7 +680,12 @@ impl Builder {
     ///     .allowed_prefix("libc")
     ///     .allowed_prefix("core");
     /// ```
-    pub fn allowed_prefix<S: Into<String>>(mut self, prefix: S) -> Self {
+    #[roxygen]
+    pub fn allowed_prefix<S: Into<String>>(
+        mut self, 
+        /// The additional type prefix to allow
+        prefix: S
+    ) -> Self {
         let prefix_str = prefix.into();
         if let Ok(path) = syn::parse_str::<syn::Path>(&prefix_str) {
             self.allowed_prefixes.push(path);
@@ -689,7 +695,7 @@ impl Builder {
         self
     }
 
-    /// Add a transparent wrapper type to be stripped from FFI function parameters.
+    /// Add a transparent wrapper type to be stripped from FFI function parameters
     ///
     /// Transparent wrappers are types that wrap other types but have the same
     /// memory layout (like `std::mem::MaybeUninit<T>`). When generating FFI stubs,
@@ -700,10 +706,6 @@ impl Builder {
     /// - `&mut std::mem::MaybeUninit<Foo>` becomes `*mut Foo` in the FFI signature
     /// - `&std::mem::MaybeUninit<Bar>` becomes `*const Bar` in the FFI signature
     ///
-    /// # Arguments
-    ///
-    /// * `wrapper_type` - The transparent wrapper type to strip (e.g., "std::mem::MaybeUninit")
-    ///
     /// # Example
     ///
     /// ```rust,ignore
@@ -711,7 +713,12 @@ impl Builder {
     ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
     ///     .strip_transparent_wrapper("std::mem::ManuallyDrop");
     /// ```
-    pub fn strip_transparent_wrapper<S: Into<String>>(mut self, wrapper_type: S) -> Self {
+    #[roxygen]
+    pub fn strip_transparent_wrapper<S: Into<String>>(
+        mut self, 
+        /// The transparent wrapper type to strip (e.g., "std::mem::MaybeUninit")
+        wrapper_type: S
+    ) -> Self {
         let wrapper_str = wrapper_type.into();
         if let Ok(path) = syn::parse_str::<syn::Path>(&wrapper_str) {
             self.transparent_wrappers.push(path);
@@ -721,14 +728,10 @@ impl Builder {
         self
     }
 
-    /// Disable a feature in the generated code.
+    /// Disable a feature in the generated code
     ///
     /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
     /// guarded by disabled features will be completely skipped in the output.
-    ///
-    /// # Arguments
-    ///
-    /// * `feature_name` - The name of the feature to disable
     ///
     /// # Example
     ///
@@ -737,20 +740,21 @@ impl Builder {
     ///     .disable_feature("experimental")
     ///     .disable_feature("deprecated");
     /// ```
-    pub fn disable_feature<S: Into<String>>(mut self, feature_name: S) -> Self {
+    #[roxygen]
+    pub fn disable_feature<S: Into<String>>(
+        mut self, 
+        /// The name of the feature to disable
+        feature_name: S
+    ) -> Self {
         self.disabled_features.insert(feature_name.into());
         self
     }
 
-    /// Enable a feature in the generated code.
+    /// Enable a feature in the generated code
     ///
     /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
     /// guarded by enabled features will be included in the output with the
     /// `#[cfg(...)]` attribute removed.
-    ///
-    /// # Arguments
-    ///
-    /// * `feature_name` - The name of the feature to enable
     ///
     /// # Example
     ///
@@ -758,21 +762,21 @@ impl Builder {
     /// let builder = prebindgen::Builder::new(path)
     ///     .enable_feature("experimental");
     /// ```
-    pub fn enable_feature<S: Into<String>>(mut self, feature_name: S) -> Self {
+    #[roxygen]
+    pub fn enable_feature<S: Into<String>>(
+        mut self, 
+        /// The name of the feature to enable
+        feature_name: S
+    ) -> Self {
         self.enabled_features.insert(feature_name.into());
         self
     }
 
-    /// Map a feature name to a different name in the generated code.
+    /// Map a feature name to a different name in the generated code
     ///
     /// When processing code with `#[cfg(feature="...")]` attributes, features
     /// that match the mapping will have their names replaced with the target
     /// feature name in the output.
-    ///
-    /// # Arguments
-    ///
-    /// * `from_feature` - The original feature name to match
-    /// * `to_feature` - The new feature name to use in the output
     ///
     /// # Example
     ///
@@ -781,9 +785,12 @@ impl Builder {
     ///     .match_feature("unstable", "unstable")
     ///     .match_feature("internal", "unstable");
     /// ```
+    #[roxygen]
     pub fn match_feature<S1: Into<String>, S2: Into<String>>(
         mut self,
+        /// The original feature name to match
         from_feature: S1,
+        /// The new feature name to use in the output
         to_feature: S2,
     ) -> Self {
         self.feature_mappings
@@ -847,13 +854,9 @@ impl Builder {
 }
 
 impl<'a> FileBuilder<'a> {
-    /// Add another group to the selection.
+    /// Add another group to the selection
     ///
     /// This allows you to combine multiple groups into a single output file.
-    ///
-    /// # Arguments
-    ///
-    /// * `group_name` - Name of the additional group to include
     ///
     /// # Returns
     ///
@@ -868,12 +871,17 @@ impl<'a> FileBuilder<'a> {
     ///     .group("functions")
     ///     .write_to_file("combined.rs");
     /// ```
-    pub fn group<S: Into<String>>(mut self, group_name: S) -> Self {
+    #[roxygen]
+    pub fn group<S: Into<String>>(
+        mut self, 
+        /// Name of the additional group to include
+        group_name: S
+    ) -> Self {
         self.groups.push(group_name.into());
         self
     }
 
-    /// Write the selected groups to a file.
+    /// Write the selected groups to a file
     ///
     /// Generates the Rust source code for all selected groups and writes it
     /// to the specified file. For functions, this generates `#[no_mangle] extern "C"`
@@ -881,10 +889,6 @@ impl<'a> FileBuilder<'a> {
     /// For types (structs, enums, unions), this copies the original definitions.
     ///
     /// If the file path is relative, it will be created relative to `OUT_DIR`.
-    ///
-    /// # Arguments
-    ///
-    /// * `file_name` - Path where the generated code should be written
     ///
     /// # Returns
     ///
@@ -903,7 +907,12 @@ impl<'a> FileBuilder<'a> {
     /// let output_file = prebindgen.all().write_to_file("ffi_bindings.rs");
     /// println!("Generated FFI bindings at: {}", output_file.display());
     /// ```
-    pub fn write_to_file<P: AsRef<Path>>(self, file_name: P) -> std::path::PathBuf {
+    #[roxygen]
+    pub fn write_to_file<P: AsRef<Path>>(
+        self, 
+        /// Path where the generated code should be written
+        file_name: P
+    ) -> std::path::PathBuf {
         // Prepend with OUT_DIR if file_name is relative
         let file_name = if file_name.as_ref().is_relative() {
             let out_dir = env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
