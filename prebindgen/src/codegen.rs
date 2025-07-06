@@ -94,18 +94,11 @@ impl<'a> Codegen<'a> {
         // Convert return type and collect type assertion pairs
         let mut result_type_changed = false;
         if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
-            let return_validation_ctx = ValidationContext {
-                exported_types: self.exported_types,
-                allowed_prefixes: self.allowed_prefixes,
-                transparent_wrappers: self.transparent_wrappers,
-                source_crate_ident: &self.source_crate_ident,
-                context: &format!("return type of function '{function_name}'"),
-            };
-            let local_return_type = convert_to_local_type(
+            let local_return_type = self.convert_to_local_type(
                 return_type,
-                &return_validation_ctx,
                 assertion_type_pairs,
                 &mut result_type_changed,
+                &format!("return type of function '{function_name}'"),
             ).map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
             extern_sig.output = syn::ReturnType::Type(*arrow, Box::new(local_return_type));
         }
@@ -122,18 +115,11 @@ impl<'a> Codegen<'a> {
             };
             // Convert type and collect assertion pairs (handles both reference and non-reference types)
             let mut type_changed = false;
-            let param_validation_ctx = ValidationContext {
-                exported_types: self.exported_types,
-                allowed_prefixes: self.allowed_prefixes,
-                transparent_wrappers: self.transparent_wrappers,
-                source_crate_ident: &self.source_crate_ident,
-                context: &format!("parameter of function '{function_name}'"),
-            };
-            let local_type = convert_to_local_type(
+            let local_type = self.convert_to_local_type(
                 &pat_type.ty,
-                &param_validation_ctx,
                 assertion_type_pairs,
                 &mut type_changed,
+                &format!("parameter of function '{function_name}'"),
             ).map_err(|e| format!("Invalid FFI function parameter: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
 
             // Generate call argument based on the original type and conversion status
@@ -229,21 +215,90 @@ impl<'a> Codegen<'a> {
             items: vec![syn::Item::Fn(extern_function)],
         })
     }
+
+    /// Convert a remote type to its local equivalent, validate FFI compatibility, and collect assertion pairs
+    ///
+    /// This method:
+    /// - Validates that the type is suitable for FFI use
+    /// - Strips transparent wrappers from the type
+    /// - Converts references to pointers for FFI compatibility
+    /// - Collects type assertion pairs when conversion is needed
+    /// - Sets the `was_converted` flag to indicate if the type was modified
+    #[roxygen]
+    pub(crate) fn convert_to_local_type(
+        &self,
+        /// The original type to convert and validate
+        original_type: &syn::Type,
+        /// Mutable set to collect assertion pairs
+        assertion_type_pairs: &mut HashSet<(String, String)>,
+        /// Mutable boolean flag set to true if type was changed and needs transmute
+        type_changed: &mut bool,
+        /// Context string for error reporting (e.g., "parameter 1 of function 'foo'")
+        context: &str,
+    ) -> Result<syn::Type, String> {
+        // First validate the type for FFI compatibility
+        validate_type_for_ffi_impl(original_type, self.exported_types, self.allowed_prefixes, context)?;
+
+        // Extract the core type to process (for references, this is the referenced type)
+        let (core_type, is_reference, ref_info) = match original_type {
+            syn::Type::Reference(type_ref) => (
+                &*type_ref.elem,
+                true,
+                Some((
+                    type_ref.and_token,
+                    type_ref.lifetime.clone(),
+                    type_ref.mutability,
+                )),
+            ),
+            _ => (original_type, false, None),
+        };
+
+        // Strip transparent wrappers from the core type
+        let mut has_wrapper = false;
+        let local_core_type =
+            strip_transparent_wrappers(core_type, self.transparent_wrappers, &mut has_wrapper);
+
+        // Check if we should generate an assertion for this type
+        *type_changed = has_wrapper || contains_exported_type(&local_core_type, self.exported_types);
+
+        if *type_changed {
+            // Create the original core type with proper crate prefixing
+            let prefixed_original_core =
+                prefix_exported_types_in_type(core_type, &self.source_crate_ident, self.exported_types);
+
+            // Store the assertion pair
+            let local_core_str = quote::quote! { #local_core_type }.to_string();
+            let prefixed_original_core_str = quote::quote! { #prefixed_original_core }.to_string();
+            assertion_type_pairs.insert((local_core_str, prefixed_original_core_str));
+        }
+
+        // Build the final type based on whether the original was a reference
+        let result = if is_reference {
+            let (and_token, lifetime, mutability) = ref_info.unwrap();
+            // Create a reference to the local type, then convert to pointer
+            let local_ref = syn::Type::Reference(syn::TypeReference {
+                and_token,
+                lifetime,
+                mutability,
+                elem: Box::new(local_core_type),
+            });
+            // Mark as converted only if the referenced type needed conversion
+            // Reference-to-pointer conversion is always done for FFI, but transmute is only needed
+            // if the referenced type itself is converted (wrapper stripped or exported type)
+            convert_reference_to_pointer(&local_ref)
+        } else if *type_changed {
+            // Non-reference type that needed conversion
+            local_core_type
+        } else {
+            // No conversion needed, return original type
+            original_type.clone()
+        };
+
+        Ok(result)
+    }
 }
 
-/// Context for type validation and conversion
-pub(crate) struct ValidationContext<'a> {
-    /// Set of exported type names
-    exported_types: &'a HashSet<String>,
-    /// List of allowed path prefixes for type validation
-    allowed_prefixes: &'a [syn::Path],
-    /// List of transparent wrapper paths to strip
-    transparent_wrappers: &'a [syn::Path],
-    /// Source crate identifier for prefixing
-    source_crate_ident: &'a syn::Ident,
-    /// Context string for error reporting
-    context: &'a str,
-}
+
 
 /// Generate allowed prefixes that include standard prelude types and modules
 ///
@@ -558,85 +613,7 @@ fn validate_type_for_ffi_impl(
     }
 }
 
-/// Convert a remote type to its local equivalent, validate FFI compatibility, and collect assertion pairs
-///
-/// This function:
-/// - Validates that the type is suitable for FFI use
-/// - Strips transparent wrappers from the type
-/// - Converts references to pointers for FFI compatibility
-/// - Collects type assertion pairs when conversion is needed
-/// - Sets the `was_converted` flag to indicate if the type was modified
-#[roxygen]
-pub(crate) fn convert_to_local_type(
-    /// The original type to convert and validate
-    original_type: &syn::Type,
-    /// Validation context containing all necessary parameters
-    validation_ctx: &ValidationContext,
-    /// Mutable set to collect assertion pairs
-    assertion_type_pairs: &mut HashSet<(String, String)>,
-    /// Mutable boolean flag set to true if type was changed and needs transmute
-    type_changed: &mut bool,
-) -> Result<syn::Type, String> {
-    // First validate the type for FFI compatibility
-    validate_type_for_ffi_impl(original_type, validation_ctx.exported_types, validation_ctx.allowed_prefixes, validation_ctx.context)?;
 
-    // Extract the core type to process (for references, this is the referenced type)
-    let (core_type, is_reference, ref_info) = match original_type {
-        syn::Type::Reference(type_ref) => (
-            &*type_ref.elem,
-            true,
-            Some((
-                type_ref.and_token,
-                type_ref.lifetime.clone(),
-                type_ref.mutability,
-            )),
-        ),
-        _ => (original_type, false, None),
-    };
-
-    // Strip transparent wrappers from the core type
-    let mut has_wrapper = false;
-    let local_core_type =
-        strip_transparent_wrappers(core_type, validation_ctx.transparent_wrappers, &mut has_wrapper);
-
-    // Check if we should generate an assertion for this type
-    *type_changed = has_wrapper || contains_exported_type(&local_core_type, validation_ctx.exported_types);
-
-    if *type_changed {
-        // Create the original core type with proper crate prefixing
-        let prefixed_original_core =
-            prefix_exported_types_in_type(core_type, validation_ctx.source_crate_ident, validation_ctx.exported_types);
-
-        // Store the assertion pair
-        let local_core_str = quote::quote! { #local_core_type }.to_string();
-        let prefixed_original_core_str = quote::quote! { #prefixed_original_core }.to_string();
-        assertion_type_pairs.insert((local_core_str, prefixed_original_core_str));
-    }
-
-    // Build the final type based on whether the original was a reference
-    let result = if is_reference {
-        let (and_token, lifetime, mutability) = ref_info.unwrap();
-        // Create a reference to the local type, then convert to pointer
-        let local_ref = syn::Type::Reference(syn::TypeReference {
-            and_token,
-            lifetime,
-            mutability,
-            elem: Box::new(local_core_type),
-        });
-        // Mark as converted only if the referenced type needed conversion
-        // Reference-to-pointer conversion is always done for FFI, but transmute is only needed
-        // if the referenced type itself is converted (wrapper stripped or exported type)
-        convert_reference_to_pointer(&local_ref)
-    } else if *type_changed {
-        // Non-reference type that needed conversion
-        local_core_type
-    } else {
-        // No conversion needed, return original type
-        original_type.clone()
-    };
-
-    Ok(result)
-}
 
 /// Convert reference types to pointer types for FFI compatibility
 pub(crate) fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {

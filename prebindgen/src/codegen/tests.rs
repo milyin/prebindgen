@@ -678,25 +678,26 @@ fn test_convert_to_local_type_function() {
     exported_types.insert("ExportedType".to_string());
 
     let transparent_wrappers = vec![syn::parse_quote! { std::mem::MaybeUninit }];
-    let source_crate_ident = syn::Ident::new("test_crate", proc_macro2::Span::call_site());
     let allowed_prefixes = crate::codegen::generate_standard_allowed_prefixes();
+
+    // Create a Codegen instance to use the method
+    let codegen = crate::codegen::Codegen::new(
+        "test_crate",
+        &exported_types,
+        &allowed_prefixes,
+        &transparent_wrappers,
+        "2021",
+    );
 
     // Test with transparent wrapper + exported type
     let wrapped_type: syn::Type = syn::parse_quote! { std::mem::MaybeUninit<ExportedType> };
     let mut assertion_pairs = HashSet::new();
     let mut was_converted = false;
-    let validation_ctx = crate::codegen::ValidationContext {
-        exported_types: &exported_types,
-        allowed_prefixes: &allowed_prefixes,
-        transparent_wrappers: &transparent_wrappers,
-        source_crate_ident: &source_crate_ident,
-        context: "test context",
-    };
-    let result = convert_to_local_type(
+    let result = codegen.convert_to_local_type(
         &wrapped_type,
-        &validation_ctx,
         &mut assertion_pairs,
         &mut was_converted,
+        "test context",
     ).unwrap();
 
     let local_str = quote::quote! { #result }.to_string();
@@ -715,18 +716,11 @@ fn test_convert_to_local_type_function() {
     let regular_type: syn::Type = syn::parse_quote! { i32 };
     let mut assertion_pairs = HashSet::new();
     let mut was_converted = false;
-    let validation_ctx = crate::codegen::ValidationContext {
-        exported_types: &exported_types,
-        allowed_prefixes: &allowed_prefixes,
-        transparent_wrappers: &transparent_wrappers,
-        source_crate_ident: &source_crate_ident,
-        context: "test context",
-    };
-    let result = convert_to_local_type(
+    let result = codegen.convert_to_local_type(
         &regular_type,
-        &validation_ctx,
         &mut assertion_pairs,
         &mut was_converted,
+        "test context",
     ).unwrap();
 
     let result_str = quote::quote! { #result }.to_string();
@@ -738,18 +732,11 @@ fn test_convert_to_local_type_function() {
     let exported_only: syn::Type = syn::parse_quote! { ExportedType };
     let mut assertion_pairs = HashSet::new();
     let mut was_converted = false;
-    let validation_ctx = crate::codegen::ValidationContext {
-        exported_types: &exported_types,
-        allowed_prefixes: &allowed_prefixes,
-        transparent_wrappers: &transparent_wrappers,
-        source_crate_ident: &source_crate_ident,
-        context: "test context",
-    };
-    let result = convert_to_local_type(
+    let result = codegen.convert_to_local_type(
         &exported_only,
-        &validation_ctx,
         &mut assertion_pairs,
         &mut was_converted,
+        "test context",
     ).unwrap();
 
     let local_str = quote::quote! { #result }.to_string();
