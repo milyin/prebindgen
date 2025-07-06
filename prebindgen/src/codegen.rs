@@ -7,15 +7,15 @@
 //! - Creating appropriate parameter names and call arguments
 //! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
 
-use std::collections::{HashMap, HashSet};
 use roxygen::roxygen;
+use std::collections::{HashMap, HashSet};
 
 /// Generate allowed prefixes that include standard prelude types and modules
-/// 
+///
 /// Creates a list of syn::Path values representing standard library prefixes that are
 /// considered safe for FFI use. This includes core library modules, standard collections,
 /// primitive types, and common external crates like libc.
-/// 
+///
 /// Returns a vector of parsed paths that can be used for type validation.
 pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
     let prefix_strings = vec![
@@ -23,11 +23,10 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
         "std",
         "core",
         "alloc",
-        
         // Standard prelude types (these are implicitly imported)
         // Note: These are typically available without prefix, but we include them for completeness
         "Option",
-        "Result", 
+        "Result",
         "Some",
         "None",
         "Ok",
@@ -45,7 +44,6 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
         "HashSet",
         "BTreeMap",
         "BTreeSet",
-        
         // Standard collections
         "std::collections",
         "std::vec",
@@ -54,7 +52,6 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
         "std::rc",
         "std::sync",
         "std::cell",
-        
         // Core types and modules
         "core::option",
         "core::result",
@@ -68,7 +65,6 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
         "core::cmp",
         "core::clone",
         "core::marker",
-        
         // Common external crates often used in FFI
         "libc",
         "c_char",
@@ -77,16 +73,26 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
         "c_long",
         "c_ulong",
         "c_void",
-        
         // Standard primitive types (though these don't need prefixes)
         "bool",
         "char",
-        "i8", "i16", "i32", "i64", "i128", "isize",
-        "u8", "u16", "u32", "u64", "u128", "usize", 
-        "f32", "f64",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "i128",
+        "isize",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "u128",
+        "usize",
+        "f32",
+        "f64",
         "str",
     ];
-    
+
     prefix_strings
         .into_iter()
         .filter_map(|s| syn::parse_str(s).ok())
@@ -94,7 +100,7 @@ pub(crate) fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
 }
 
 /// Check if a type contains any of the exported types
-/// 
+///
 /// Recursively searches through a type and its generic arguments to determine
 /// if it contains any types that are in the exported types set. This is used
 /// to decide whether type assertions are needed.
@@ -160,14 +166,14 @@ fn validate_type_path(type_path: &syn::TypePath, allowed_prefixes: &[syn::Path])
     if type_path.path.leading_colon.is_some() {
         return true;
     }
-    
+
     // Check if the path starts with any of the allowed prefixes
     for allowed_prefix in allowed_prefixes {
         if path_starts_with(&type_path.path, allowed_prefix) {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -176,18 +182,18 @@ fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
     if prefix.segments.len() > path.segments.len() {
         return false;
     }
-    
+
     for (path_segment, prefix_segment) in path.segments.iter().zip(prefix.segments.iter()) {
         if path_segment.ident != prefix_segment.ident {
             return false;
         }
     }
-    
+
     true
 }
 
 /// Validate generic arguments recursively for FFI compatibility
-/// 
+///
 /// Checks all type arguments within angle brackets (e.g., `Vec<T>`, `HashMap<K, V>`)
 /// to ensure they are valid for FFI use.
 #[roxygen]
@@ -204,10 +210,10 @@ fn validate_generic_arguments(
     for arg in &args.args {
         if let syn::GenericArgument::Type(inner_ty) = arg {
             validate_type_for_ffi(
-                inner_ty, 
-                exported_types, 
-                allowed_prefixes, 
-                &format!("{} (generic argument)", context)
+                inner_ty,
+                exported_types,
+                allowed_prefixes,
+                &format!("{} (generic argument)", context),
             )?;
         }
     }
@@ -215,10 +221,10 @@ fn validate_generic_arguments(
 }
 
 /// Validate that a type is suitable for FFI use
-/// 
+///
 /// This function checks if a type can be safely used in FFI by verifying it's either:
 /// - An absolute path (starting with `::`)
-/// - A path starting with an allowed prefix 
+/// - A path starting with an allowed prefix
 /// - A type defined in the exported types set
 /// - A supported container type (reference, pointer, slice, array, tuple) with valid element types
 #[roxygen]
@@ -238,60 +244,87 @@ pub(crate) fn validate_type_for_ffi(
             if validate_type_path(type_path, allowed_prefixes) {
                 if let Some(segment) = type_path.path.segments.last() {
                     if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                        validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
+                        validate_generic_arguments(
+                            args,
+                            exported_types,
+                            allowed_prefixes,
+                            context,
+                        )?;
                     }
                 }
                 return Ok(());
             }
-            
+
             // Check if it's a single identifier that's an exported type
             if type_path.path.segments.len() == 1 {
                 if let Some(segment) = type_path.path.segments.first() {
                     let type_name = segment.ident.to_string();
                     if exported_types.contains(&type_name) {
                         if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            validate_generic_arguments(args, exported_types, allowed_prefixes, context)?;
+                            validate_generic_arguments(
+                                args,
+                                exported_types,
+                                allowed_prefixes,
+                                context,
+                            )?;
                         }
                         return Ok(());
                     }
                 }
             }
-            
+
             // Invalid type path
             Err(format!(
                 "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
-                quote::quote! { #ty }, context
+                quote::quote! { #ty },
+                context
             ))
         }
-        syn::Type::Reference(type_ref) => {
-            validate_type_for_ffi(&type_ref.elem, exported_types, allowed_prefixes, &format!("{} (reference)", context))
-        }
-        syn::Type::Ptr(type_ptr) => {
-            validate_type_for_ffi(&type_ptr.elem, exported_types, allowed_prefixes, &format!("{} (pointer)", context))
-        }
-        syn::Type::Slice(type_slice) => {
-            validate_type_for_ffi(&type_slice.elem, exported_types, allowed_prefixes, &format!("{} (slice element)", context))
-        }
-        syn::Type::Array(type_array) => {
-            validate_type_for_ffi(&type_array.elem, exported_types, allowed_prefixes, &format!("{} (array element)", context))
-        }
+        syn::Type::Reference(type_ref) => validate_type_for_ffi(
+            &type_ref.elem,
+            exported_types,
+            allowed_prefixes,
+            &format!("{} (reference)", context),
+        ),
+        syn::Type::Ptr(type_ptr) => validate_type_for_ffi(
+            &type_ptr.elem,
+            exported_types,
+            allowed_prefixes,
+            &format!("{} (pointer)", context),
+        ),
+        syn::Type::Slice(type_slice) => validate_type_for_ffi(
+            &type_slice.elem,
+            exported_types,
+            allowed_prefixes,
+            &format!("{} (slice element)", context),
+        ),
+        syn::Type::Array(type_array) => validate_type_for_ffi(
+            &type_array.elem,
+            exported_types,
+            allowed_prefixes,
+            &format!("{} (array element)", context),
+        ),
         syn::Type::Tuple(type_tuple) => {
             for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
-                validate_type_for_ffi(elem_ty, exported_types, allowed_prefixes, &format!("{} (tuple element {})", context, i))?;
+                validate_type_for_ffi(
+                    elem_ty,
+                    exported_types,
+                    allowed_prefixes,
+                    &format!("{} (tuple element {})", context, i),
+                )?;
             }
             Ok(())
         }
-        _ => {
-            Err(format!(
-                "Unsupported type '{}' in {}: only path types, references, pointers, slices, arrays, and tuples are supported for FFI",
-                quote::quote! { #ty }, context
-            ))
-        }
+        _ => Err(format!(
+            "Unsupported type '{}' in {}: only path types, references, pointers, slices, arrays, and tuples are supported for FFI",
+            quote::quote! { #ty },
+            context
+        )),
     }
 }
 
 /// Convert a remote type to its local equivalent and collect assertion pairs
-/// 
+///
 /// This function:
 /// - Strips transparent wrappers from the type
 /// - Converts references to pointers for FFI compatibility
@@ -309,36 +342,42 @@ fn convert_to_local_type(
     source_crate_ident: &syn::Ident,
     /// Mutable set to collect assertion pairs
     assertion_type_pairs: &mut HashSet<(String, String)>,
-    /// Mutable boolean flag set to true if type was converted
-    was_converted: &mut bool
+    /// Mutable boolean flag set to true if type was changed and needs transmute
+    type_changed: &mut bool,
 ) -> syn::Type {
     // Extract the core type to process (for references, this is the referenced type)
     let (core_type, is_reference, ref_info) = match original_type {
         syn::Type::Reference(type_ref) => (
-            &*type_ref.elem, 
-            true, 
-            Some((type_ref.and_token, type_ref.lifetime.clone(), type_ref.mutability))
+            &*type_ref.elem,
+            true,
+            Some((
+                type_ref.and_token,
+                type_ref.lifetime.clone(),
+                type_ref.mutability,
+            )),
         ),
-        _ => (original_type, false, None)
+        _ => (original_type, false, None),
     };
-    
+
     // Strip transparent wrappers from the core type
     let mut has_wrapper = false;
-    let local_core_type = strip_transparent_wrappers(core_type, transparent_wrappers, &mut has_wrapper);
-    
+    let local_core_type =
+        strip_transparent_wrappers(core_type, transparent_wrappers, &mut has_wrapper);
+
     // Check if we should generate an assertion for this type
-    let should_convert = has_wrapper || contains_exported_type(&local_core_type, exported_types);
-    
-    if should_convert {
+    *type_changed = has_wrapper || contains_exported_type(&local_core_type, exported_types);
+
+    if *type_changed {
         // Create the original core type with proper crate prefixing
-        let prefixed_original_core = prefix_exported_types_in_type(core_type, source_crate_ident, exported_types);
-        
+        let prefixed_original_core =
+            prefix_exported_types_in_type(core_type, source_crate_ident, exported_types);
+
         // Store the assertion pair
         let local_core_str = quote::quote! { #local_core_type }.to_string();
         let prefixed_original_core_str = quote::quote! { #prefixed_original_core }.to_string();
         assertion_type_pairs.insert((local_core_str, prefixed_original_core_str));
     }
-    
+
     // Build the final type based on whether the original was a reference
     if is_reference {
         let (and_token, lifetime, mutability) = ref_info.unwrap();
@@ -352,15 +391,12 @@ fn convert_to_local_type(
         // Mark as converted only if the referenced type needed conversion
         // Reference-to-pointer conversion is always done for FFI, but transmute is only needed
         // if the referenced type itself is converted (wrapper stripped or exported type)
-        *was_converted = should_convert;
         convert_reference_to_pointer(&local_ref)
-    } else if should_convert {
+    } else if *type_changed {
         // Non-reference type that needed conversion
-        *was_converted = true;
         local_core_type
     } else {
         // No conversion needed, return original type
-        *was_converted = false;
         original_type.clone()
     }
 }
@@ -394,7 +430,7 @@ fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
 }
 
 /// Validate function parameters for FFI compatibility
-/// 
+///
 /// Checks each typed parameter in a function signature to ensure it can be safely
 /// used in FFI contexts according to the validation rules.
 #[roxygen]
@@ -415,17 +451,18 @@ fn validate_function_parameters(
                 exported_types,
                 allowed_prefixes,
                 &format!("parameter {} of function '{}'", i + 1, function_name),
-            ).map_err(|e| format!("Invalid FFI function parameter: {}", e))?;
+            )
+            .map_err(|e| format!("Invalid FFI function parameter: {}", e))?;
         }
     }
     Ok(())
 }
 
 /// Transform a function prototype to a no_mangle extern "C" function and collect assertion pairs
-/// 
+///
 /// This function takes a Rust function definition and transforms it into an FFI-compatible
 /// `extern "C"` function with proper type conversions and validation.
-/// 
+///
 /// Returns the stub function and collects assertion pairs separately for later deduplication.
 #[roxygen]
 pub(crate) fn transform_function_to_stub(
@@ -442,26 +479,39 @@ pub(crate) fn transform_function_to_stub(
     /// Rust edition string (e.g., "2021", "2024") for proper attribute generation
     edition: &str,
     /// Mutable set to collect type assertion pairs for compile-time validation
-    assertion_type_pairs: &mut HashSet<(String, String)>
+    assertion_type_pairs: &mut HashSet<(String, String)>,
 ) -> Result<syn::File, String> {
     // Validate that the file contains exactly one function
     if file.items.len() != 1 {
-        return Err(format!("Expected exactly one item in file, found {}", file.items.len()));
+        return Err(format!(
+            "Expected exactly one item in file, found {}",
+            file.items.len()
+        ));
     }
-    
+
     let parsed_function = match &file.items[0] {
         syn::Item::Fn(item_fn) => item_fn,
-        item => return Err(format!("Expected function item, found {:?}", std::mem::discriminant(item))),
+        item => {
+            return Err(format!(
+                "Expected function item, found {:?}",
+                std::mem::discriminant(item)
+            ));
+        }
     };
-    
+
     let function_name = &parsed_function.sig.ident;
 
     // Validate function signature
-    validate_function_parameters(&parsed_function.sig.inputs, function_name, exported_types, allowed_prefixes)?;
-    
+    validate_function_parameters(
+        &parsed_function.sig.inputs,
+        function_name,
+        exported_types,
+        allowed_prefixes,
+    )?;
+
     // Prepare source crate name for type collection
     let source_crate_name = source_crate.replace('-', "_");
-    
+
     // Validate return type
     if let syn::ReturnType::Type(_, return_type) = &parsed_function.sig.output {
         validate_type_for_ffi(
@@ -469,7 +519,8 @@ pub(crate) fn transform_function_to_stub(
             exported_types,
             allowed_prefixes,
             &format!("return type of function '{}'", function_name),
-        ).map_err(|e| format!("Invalid FFI function return type: {}", e))?;
+        )
+        .map_err(|e| format!("Invalid FFI function return type: {}", e))?;
     }
 
     // Generate components and build call arguments inline
@@ -481,14 +532,21 @@ pub(crate) fn transform_function_to_stub(
     // 3. Add extern "C" ABI specifier
     // 4. Mark function as unsafe
     let mut extern_sig = parsed_function.sig.clone();
-    
+
     // Convert return type and collect type assertion pairs
-    let mut was_result_converted = false;
+    let mut result_type_changed = false;
     if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
-        let local_return_type = convert_to_local_type(return_type, exported_types, transparent_wrappers, &source_crate_ident, assertion_type_pairs, &mut was_result_converted);
+        let local_return_type = convert_to_local_type(
+            return_type,
+            exported_types,
+            transparent_wrappers,
+            &source_crate_ident,
+            assertion_type_pairs,
+            &mut result_type_changed,
+        );
         extern_sig.output = syn::ReturnType::Type(*arrow, Box::new(local_return_type));
     }
-    
+
     // Convert reference parameters to pointer parameters and collect type assertion pairs
     // Also build call arguments with appropriate transmute/conversion logic
     let mut call_args = Vec::new();
@@ -500,9 +558,16 @@ pub(crate) fn transform_function_to_stub(
             );
         };
         // Convert type and collect assertion pairs (handles both reference and non-reference types)
-        let mut was_converted = false;
-        let local_type = convert_to_local_type(&pat_type.ty, exported_types, transparent_wrappers, &source_crate_ident, assertion_type_pairs, &mut was_converted);
-        
+        let mut type_changed = false;
+        let local_type = convert_to_local_type(
+            &pat_type.ty,
+            exported_types,
+            transparent_wrappers,
+            &source_crate_ident,
+            assertion_type_pairs,
+            &mut type_changed,
+        );
+
         // Generate call argument based on the original type and conversion status
         if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
             let param_name = &pat_ident.ident;
@@ -523,7 +588,7 @@ pub(crate) fn transform_function_to_stub(
                 }
             };
 
-            if was_converted {
+            if type_changed {
                 // If the type was converted (wrapper stripped or exported type), transmute it
                 call_args.push(quote::quote! {
                     unsafe { std::mem::transmute(#base_arg) }
@@ -532,11 +597,11 @@ pub(crate) fn transform_function_to_stub(
                 call_args.push(base_arg);
             }
         }
-        
+
         // Use the local type in the signature
         pat_type.ty = Box::new(local_type);
     }
-    
+
     extern_sig.abi = Some(syn::Abi {
         extern_token: syn::token::Extern::default(),
         name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
@@ -552,7 +617,7 @@ pub(crate) fn transform_function_to_stub(
         }
         syn::ReturnType::Type(_, _) => {
             // Function with return value
-            if was_result_converted {
+            if result_type_changed {
                 quote::quote! {
                     let result = #source_crate_ident::#function_name(#(#call_args),*);
                     unsafe { std::mem::transmute(result) }
@@ -600,7 +665,7 @@ pub(crate) fn transform_function_to_stub(
 }
 
 /// Process code content to handle feature flags according to builder configuration
-/// 
+///
 /// This function analyzes code for `#[cfg(feature="...")]` attributes using syn syntax parsing and:
 /// - Removes code blocks guarded by disabled features
 /// - Removes cfg attributes for enabled features (keeping the code)
@@ -620,7 +685,7 @@ pub(crate) fn process_features(
     file.items.retain_mut(|item| {
         process_item_features(item, disabled_features, enabled_features, feature_mappings)
     });
-    
+
     file
 }
 
@@ -634,7 +699,7 @@ fn process_item_features(
     // Extract and process cfg attributes
     let mut keep_item = true;
     let mut remove_attrs = Vec::new();
-    
+
     let attrs = match item {
         syn::Item::Fn(f) => &mut f.attrs,
         syn::Item::Struct(s) => &mut s.attrs,
@@ -649,7 +714,7 @@ fn process_item_features(
         syn::Item::Trait(t) => &mut t.attrs,
         _ => return true, // Keep other items as-is
     };
-    
+
     for (i, attr) in attrs.iter_mut().enumerate() {
         // Check if this is a cfg attribute
         if attr.path().is_ident("cfg") {
@@ -662,13 +727,13 @@ fn process_item_features(
                             keep_item = false;
                             break;
                         }
-                        
+
                         // Check if feature should be enabled (remove cfg)
                         if enabled_features.contains(&feature_name) {
                             remove_attrs.push(i);
                             break;
                         }
-                        
+
                         // Check if feature should be mapped
                         if let Some(new_feature) = feature_mappings.get(&feature_name) {
                             // Update the attribute with the new feature name
@@ -683,12 +748,12 @@ fn process_item_features(
             }
         }
     }
-    
+
     // Remove attributes that should be removed (in reverse order to maintain indices)
     for &i in remove_attrs.iter().rev() {
         attrs.remove(i);
     }
-    
+
     keep_item
 }
 
@@ -704,11 +769,11 @@ impl syn::parse::Parse for CfgExpr {
         // Parse the entire content as tokens and look for feature patterns
         let tokens = input.parse::<proc_macro2::TokenStream>()?;
         let token_string = tokens.to_string();
-        
+
         // Use regex to extract feature name from the token stream
         use regex::Regex;
         let feature_regex = Regex::new(r#"feature\s*=\s*"([^"]+)""#).unwrap();
-        
+
         if let Some(captures) = feature_regex.captures(&token_string) {
             let feature_name = captures[1].to_string();
             Ok(CfgExpr::Feature(feature_name))
@@ -726,20 +791,18 @@ fn extract_feature_from_cfg(cfg_expr: &CfgExpr) -> Option<String> {
     }
 }
 
-
-
 /// Check if two syn::Path values are equal
 fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
     // Compare leading colons
     if path1.leading_colon.is_some() != path2.leading_colon.is_some() {
         return false;
     }
-    
+
     // Compare segments
     if path1.segments.len() != path2.segments.len() {
         return false;
     }
-    
+
     for (seg1, seg2) in path1.segments.iter().zip(path2.segments.iter()) {
         if seg1.ident != seg2.ident {
             return false;
@@ -747,27 +810,27 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
         // For transparent wrapper detection, we only care about the path name,
         // not the generic arguments
     }
-    
+
     true
 }
 
 /// Generate compile-time assertions for type pairs
-/// 
+///
 /// Creates size and alignment assertions to ensure that stripped types (used in FFI stubs)
 /// are compatible with their original types (from the source crate). This provides
 /// compile-time safety for type transmutations performed during FFI calls.
 #[roxygen]
 pub(crate) fn generate_type_assertions(
     /// Set of (local_type, source_type) string pairs to create assertions for
-    assertion_type_pairs: &HashSet<(String, String)>
+    assertion_type_pairs: &HashSet<(String, String)>,
 ) -> Vec<syn::Item> {
     let mut assertions = Vec::new();
-    
+
     for (stripped_type_str, source_type_str) in assertion_type_pairs {
         // Parse the type strings back into syn::Type for proper code generation
         if let (Ok(stripped_type), Ok(source_type)) = (
             syn::parse_str::<syn::Type>(stripped_type_str),
-            syn::parse_str::<syn::Type>(source_type_str)
+            syn::parse_str::<syn::Type>(source_type_str),
         ) {
             // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
             let size_assertion: syn::Item = syn::parse_quote! {
@@ -777,7 +840,7 @@ pub(crate) fn generate_type_assertions(
                 );
             };
             assertions.push(size_assertion);
-            
+
             // Generate alignment assertion: stripped type (stub parameter) vs source crate type (original)
             let align_assertion: syn::Item = syn::parse_quote! {
                 const _: () = assert!(
@@ -788,25 +851,23 @@ pub(crate) fn generate_type_assertions(
             assertions.push(align_assertion);
         }
     }
-    
+
     assertions
 }
 
-
-
 /// Strip transparent wrappers from a type and track if any were removed
-/// 
+///
 /// Recursively removes transparent wrapper types (like `MaybeUninit<T>`) from a type,
 /// returning the inner type. Sets the `has_wrapper` flag to indicate if any wrappers
 /// were found and stripped.
-#[roxygen] 
+#[roxygen]
 fn strip_transparent_wrappers(
     /// The type to strip wrappers from
-    ty: &syn::Type, 
+    ty: &syn::Type,
     /// List of transparent wrapper paths to recognize and strip
     transparent_wrappers: &[syn::Path],
     /// Flag set to true if any wrappers were found and stripped
-    has_wrapper: &mut bool
+    has_wrapper: &mut bool,
 ) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
@@ -818,7 +879,11 @@ fn strip_transparent_wrappers(
                     if let Some(last_segment) = type_path.path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                return strip_transparent_wrappers(inner_ty, transparent_wrappers, has_wrapper);
+                                return strip_transparent_wrappers(
+                                    inner_ty,
+                                    transparent_wrappers,
+                                    has_wrapper,
+                                );
                             }
                         }
                     }
@@ -832,25 +897,35 @@ fn strip_transparent_wrappers(
 }
 
 /// Recursively prefix exported types in a type with the source crate name
-fn prefix_exported_types_in_type(ty: &syn::Type, source_crate_ident: &syn::Ident, exported_types: &HashSet<String>) -> syn::Type {
+fn prefix_exported_types_in_type(
+    ty: &syn::Type,
+    source_crate_ident: &syn::Ident,
+    exported_types: &HashSet<String>,
+) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
             if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
-                
+
                 // Only prefix if this is an exported type
                 if exported_types.contains(&type_name) && type_path.path.segments.len() == 1 {
                     return syn::parse_quote! { #source_crate_ident::#type_path };
                 }
-                
+
                 // Handle generic arguments recursively
                 if let syn::PathArguments::AngleBracketed(_args) = &segment.arguments {
                     let mut new_path = type_path.path.clone();
                     if let Some(last_segment) = new_path.segments.last_mut() {
-                        if let syn::PathArguments::AngleBracketed(ref mut args) = last_segment.arguments {
+                        if let syn::PathArguments::AngleBracketed(ref mut args) =
+                            last_segment.arguments
+                        {
                             for arg in &mut args.args {
                                 if let syn::GenericArgument::Type(inner_ty) = arg {
-                                    *inner_ty = prefix_exported_types_in_type(inner_ty, source_crate_ident, exported_types);
+                                    *inner_ty = prefix_exported_types_in_type(
+                                        inner_ty,
+                                        source_crate_ident,
+                                        exported_types,
+                                    );
                                 }
                             }
                         }
@@ -863,22 +938,26 @@ fn prefix_exported_types_in_type(ty: &syn::Type, source_crate_ident: &syn::Ident
             }
             ty.clone()
         }
-        syn::Type::Reference(type_ref) => {
-            syn::Type::Reference(syn::TypeReference {
-                and_token: type_ref.and_token,
-                lifetime: type_ref.lifetime.clone(),
-                mutability: type_ref.mutability,
-                elem: Box::new(prefix_exported_types_in_type(&type_ref.elem, source_crate_ident, exported_types)),
-            })
-        }
-        syn::Type::Ptr(type_ptr) => {
-            syn::Type::Ptr(syn::TypePtr {
-                star_token: type_ptr.star_token,
-                const_token: type_ptr.const_token,
-                mutability: type_ptr.mutability,
-                elem: Box::new(prefix_exported_types_in_type(&type_ptr.elem, source_crate_ident, exported_types)),
-            })
-        }
+        syn::Type::Reference(type_ref) => syn::Type::Reference(syn::TypeReference {
+            and_token: type_ref.and_token,
+            lifetime: type_ref.lifetime.clone(),
+            mutability: type_ref.mutability,
+            elem: Box::new(prefix_exported_types_in_type(
+                &type_ref.elem,
+                source_crate_ident,
+                exported_types,
+            )),
+        }),
+        syn::Type::Ptr(type_ptr) => syn::Type::Ptr(syn::TypePtr {
+            star_token: type_ptr.star_token,
+            const_token: type_ptr.const_token,
+            mutability: type_ptr.mutability,
+            elem: Box::new(prefix_exported_types_in_type(
+                &type_ptr.elem,
+                source_crate_ident,
+                exported_types,
+            )),
+        }),
         _ => ty.clone(),
     }
 }
@@ -907,9 +986,14 @@ pub struct RegularStruct {
         let feature_mappings = HashMap::new();
 
         let file = syn::parse_file(content).unwrap();
-        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result = process_features(
+            file,
+            &disabled_features,
+            &enabled_features,
+            &feature_mappings,
+        );
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should not contain the experimental struct
         assert!(!result_str.contains("ExperimentalStruct"));
         // Should still contain the regular struct
@@ -935,9 +1019,14 @@ pub struct RegularStruct {
         let feature_mappings = HashMap::new();
 
         let file = syn::parse_file(content).unwrap();
-        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result = process_features(
+            file,
+            &disabled_features,
+            &enabled_features,
+            &feature_mappings,
+        );
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the std struct without cfg attribute
         assert!(result_str.contains("StdStruct"));
         assert!(!result_str.contains(r#"cfg(feature = "std")"#));
@@ -964,9 +1053,14 @@ pub struct RegularStruct {
         feature_mappings.insert("unstable".to_string(), "stable".to_string());
 
         let file = syn::parse_file(content).unwrap();
-        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result = process_features(
+            file,
+            &disabled_features,
+            &enabled_features,
+            &feature_mappings,
+        );
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the struct with mapped feature name
         assert!(result_str.contains("UnstableStruct"));
         assert!(result_str.contains(r#"cfg(feature = "stable")"#));
@@ -1003,29 +1097,34 @@ pub enum RegularEnum {
 
         let mut disabled_features = HashSet::new();
         disabled_features.insert("deprecated".to_string());
-        
+
         let mut enabled_features = HashSet::new();
         enabled_features.insert("async".to_string());
-        
+
         let mut feature_mappings = HashMap::new();
         feature_mappings.insert("sync".to_string(), "synchronous".to_string());
 
         let file = syn::parse_file(content).unwrap();
-        let result = process_features(file, &disabled_features, &enabled_features, &feature_mappings);
+        let result = process_features(
+            file,
+            &disabled_features,
+            &enabled_features,
+            &feature_mappings,
+        );
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should not contain the deprecated function
         assert!(!result_str.contains("old_function"));
-        
+
         // Should contain AsyncStruct without cfg attribute
         assert!(result_str.contains("AsyncStruct"));
         assert!(!result_str.contains(r#"cfg(feature = "async")"#));
-        
+
         // Should contain the impl block with mapped feature name
         assert!(result_str.contains("impl AsyncStruct"));
         assert!(result_str.contains(r#"cfg(feature = "synchronous")"#));
         assert!(!result_str.contains(r#"cfg(feature = "sync")"#));
-        
+
         // Should still contain the regular enum
         assert!(result_str.contains("RegularEnum"));
     }
@@ -1052,10 +1151,11 @@ pub fn example_function(x: i32, y: &str) -> i32 {
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the no_mangle attribute
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
@@ -1093,10 +1193,11 @@ pub fn example_function() -> i32 {
             &transparent_wrappers,
             "2024",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the unsafe no_mangle attribute for 2024 edition
         assert!(result_str.contains("#[unsafe(no_mangle)]"));
     }
@@ -1109,12 +1210,12 @@ pub fn example_function() -> i32 {
             attrs: vec![],
             items: vec![],
         };
-        
+
         let exported_types = HashSet::new();
         let allowed_prefixes = generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         let mut assertion_type_pairs = HashSet::new();
-        
+
         let result = transform_function_to_stub(
             empty_file,
             "my-crate",
@@ -1124,18 +1225,18 @@ pub fn example_function() -> i32 {
             "2021",
             &mut assertion_type_pairs,
         );
-        
+
         match result {
             Err(error_msg) => assert!(error_msg.contains("Expected exactly one item")),
             Ok(_) => panic!("Expected error but got success"),
         }
-        
+
         // Test with multiple items
         let function_content = r#"
 pub fn first_function() -> i32 { 42 }
 pub fn second_function() -> i32 { 24 }
 "#;
-        
+
         let multi_item_file = syn::parse_file(function_content).unwrap();
         let mut assertion_type_pairs = HashSet::new();
         let result = transform_function_to_stub(
@@ -1147,7 +1248,7 @@ pub fn second_function() -> i32 { 24 }
             "2021",
             &mut assertion_type_pairs,
         );
-        
+
         match result {
             Err(error_msg) => assert!(error_msg.contains("Expected exactly one item")),
             Ok(_) => panic!("Expected error but got success"),
@@ -1161,12 +1262,12 @@ pub struct MyStruct {
     field: i32,
 }
 "#;
-        
+
         let exported_types = HashSet::new();
         let allowed_prefixes = generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         let mut assertion_type_pairs = HashSet::new();
-        
+
         let struct_file = syn::parse_file(struct_content).unwrap();
         let result = transform_function_to_stub(
             struct_file,
@@ -1177,7 +1278,7 @@ pub struct MyStruct {
             "2021",
             &mut assertion_type_pairs,
         );
-        
+
         match result {
             Err(error_msg) => assert!(error_msg.contains("Expected function item")),
             Ok(_) => panic!("Expected error but got success"),
@@ -1210,17 +1311,18 @@ pub fn copy_bar(
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the no_mangle attribute
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
         assert!(result_str.contains("unsafe extern \"C\""));
         // Should convert &mut T to *mut T
         assert!(result_str.contains("*mut"));
-        // Should convert &T to *const T  
+        // Should convert &T to *const T
         assert!(result_str.contains("*const"));
         // Should convert pointers back to references in function call
         assert!(result_str.contains("&mut *dst"));
@@ -1243,7 +1345,7 @@ pub fn copy_bar(
         let mut exported_types = HashSet::new();
         exported_types.insert("Bar".to_string());
         let allowed_prefixes = generate_standard_allowed_prefixes();
-        
+
         let mut transparent_wrappers = Vec::new();
         let maybe_uninit_path: syn::Path = syn::parse_quote! { std::mem::MaybeUninit };
         transparent_wrappers.push(maybe_uninit_path);
@@ -1258,25 +1360,31 @@ pub fn copy_bar(
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Generate assertions from collected pairs and append to result
         let assertions = generate_type_assertions(&assertion_type_pairs);
         let mut complete_result = result;
         complete_result.items.extend(assertions);
-        
+
         let result_str = prettyplease::unparse(&complete_result);
-        
+
         // Should contain the extern function
         assert!(result_str.contains("no_mangle"));
         assert!(result_str.contains("unsafe extern \"C\""));
-        
+
         // Should contain compile-time assertions for size and alignment
         assert!(result_str.contains("std::mem::size_of"));
         assert!(result_str.contains("std::mem::align_of"));
-        assert!(result_str.contains("Size mismatch between stub parameter type and source crate type"));
-        assert!(result_str.contains("Alignment mismatch between stub parameter type and source crate type"));
-        
+        assert!(
+            result_str.contains("Size mismatch between stub parameter type and source crate type")
+        );
+        assert!(
+            result_str
+                .contains("Alignment mismatch between stub parameter type and source crate type")
+        );
+
         // Should have assertions for the stripped types (MaybeUninit only in this test)
         assert!(result_str.contains("MaybeUninit"));
     }
@@ -1331,10 +1439,11 @@ pub fn copy_bar(
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the no_mangle attribute
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
@@ -1346,7 +1455,8 @@ pub fn copy_bar(
         // The function signature should NOT contain MaybeUninit (but assertions might)
         // Let's split the check - function signature vs assertions
         let lines: Vec<&str> = result_str.lines().collect();
-        let function_lines: Vec<&str> = lines.iter()
+        let function_lines: Vec<&str> = lines
+            .iter()
             .take_while(|line| !line.contains("const _"))
             .cloned()
             .collect();
@@ -1364,17 +1474,18 @@ pub fn copy_bar(
         ];
 
         // Test nested transparent wrappers: MaybeUninit<ManuallyDrop<T>>
-        let nested_type: syn::Type = syn::parse_quote! { 
-            std::mem::MaybeUninit<std::mem::ManuallyDrop<i32>> 
+        let nested_type: syn::Type = syn::parse_quote! {
+            std::mem::MaybeUninit<std::mem::ManuallyDrop<i32>>
         };
-        
+
         let mut has_wrapper = false;
-        let stripped = strip_transparent_wrappers(&nested_type, &transparent_wrappers, &mut has_wrapper);
+        let stripped =
+            strip_transparent_wrappers(&nested_type, &transparent_wrappers, &mut has_wrapper);
         let stripped_str = quote::quote! { #stripped }.to_string();
-        
+
         // Should strip both wrappers and leave just i32
         assert_eq!(stripped_str, "i32");
-        
+
         // Should have detected wrappers
         assert!(has_wrapper);
     }
@@ -1385,17 +1496,15 @@ pub fn copy_bar(
         let mut assertion_type_pairs = HashSet::new();
         assertion_type_pairs.insert((
             "std::mem::MaybeUninit<i32>".to_string(),
-            "my_crate::i32".to_string()
+            "my_crate::i32".to_string(),
         ));
-        assertion_type_pairs.insert((
-            "String".to_string(),
-            "my_crate::String".to_string()
-        ));
+        assertion_type_pairs.insert(("String".to_string(), "my_crate::String".to_string()));
 
         let assertions = generate_type_assertions(&assertion_type_pairs);
         assert_eq!(assertions.len(), 4); // 2 types × 2 assertions each (size + alignment)
 
-        let assertions_str = assertions.iter()
+        let assertions_str = assertions
+            .iter()
             .map(|item| {
                 let file = syn::File {
                     shebang: None,
@@ -1410,8 +1519,14 @@ pub fn copy_bar(
         // Should contain size and alignment checks
         assert!(assertions_str.contains("std::mem::size_of"));
         assert!(assertions_str.contains("std::mem::align_of"));
-        assert!(assertions_str.contains("Size mismatch between stub parameter type and source crate type"));
-        assert!(assertions_str.contains("Alignment mismatch between stub parameter type and source crate type"));
+        assert!(
+            assertions_str
+                .contains("Size mismatch between stub parameter type and source crate type")
+        );
+        assert!(
+            assertions_str
+                .contains("Alignment mismatch between stub parameter type and source crate type")
+        );
     }
 
     #[test]
@@ -1429,7 +1544,7 @@ pub fn process_data(
         exported_types.insert("MyExportedStruct".to_string());
         exported_types.insert("AnotherExportedType".to_string());
         exported_types.insert("ExportedEnum".to_string());
-        
+
         let allowed_prefixes = generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         let mut assertion_type_pairs = HashSet::new();
@@ -1443,7 +1558,8 @@ pub fn process_data(
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Generate assertions from collected pairs and append to result
         let assertions = generate_type_assertions(&assertion_type_pairs);
@@ -1451,19 +1567,24 @@ pub fn process_data(
         complete_result.items.extend(assertions);
 
         let result_str = prettyplease::unparse(&complete_result);
-        
+
         // Should contain the extern function
         assert!(result_str.contains("no_mangle"));
         assert!(result_str.contains("unsafe extern \"C\""));
-        
+
         // Should contain compile-time assertions for exported types
         assert!(result_str.contains("std::mem::size_of"));
         assert!(result_str.contains("std::mem::align_of"));
-        
+
         // Should have assertions comparing local types vs source crate types
         assert!(result_str.contains("my_source_crate::"));
-        assert!(result_str.contains("Size mismatch between stub parameter type and source crate type"));
-        assert!(result_str.contains("Alignment mismatch between stub parameter type and source crate type"));
+        assert!(
+            result_str.contains("Size mismatch between stub parameter type and source crate type")
+        );
+        assert!(
+            result_str
+                .contains("Alignment mismatch between stub parameter type and source crate type")
+        );
     }
 
     #[test]
@@ -1477,9 +1598,9 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
 
         let mut exported_types = HashSet::new();
         exported_types.insert("ExportedType".to_string());
-        
+
         let allowed_prefixes = generate_standard_allowed_prefixes();
-        
+
         let mut transparent_wrappers = Vec::new();
         let maybe_uninit_path: syn::Path = syn::parse_quote! { std::mem::MaybeUninit };
         transparent_wrappers.push(maybe_uninit_path);
@@ -1494,7 +1615,8 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Generate assertions from collected pairs and append to result
         let assertions = generate_type_assertions(&assertion_type_pairs);
@@ -1502,37 +1624,48 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
         complete_result.items.extend(assertions);
 
         let result_str = prettyplease::unparse(&complete_result);
-        
+
         println!("Generated code:\n{}", result_str);
-        
+
         // Should contain the extern function
         assert!(result_str.contains("no_mangle"));
         assert!(result_str.contains("unsafe extern \"C\""));
-        
+
         // Should contain compile-time assertions
         assert!(result_str.contains("const _:"));
         assert!(result_str.contains("std::mem::size_of"));
         assert!(result_str.contains("std::mem::align_of"));
-        
+
         // Should have the correct assertion message
-        assert!(result_str.contains("Size mismatch between stub parameter type and source crate type"));
-        assert!(result_str.contains("Alignment mismatch between stub parameter type and source crate type"));
-        
+        assert!(
+            result_str.contains("Size mismatch between stub parameter type and source crate type")
+        );
+        assert!(
+            result_str
+                .contains("Alignment mismatch between stub parameter type and source crate type")
+        );
+
         // Should have assertions for:
         // 1. Parameter: Stripped type (ExportedType) vs original type (std::mem::MaybeUninit<source_crate::ExportedType>)
         // 2. Return type: ExportedType vs source_crate::ExportedType
         assert!(result_str.contains("source_crate::ExportedType"));
         assert!(result_str.contains("MaybeUninit < source_crate::ExportedType"));
-        
+
         // Should NOT generate duplicate assertions - count occurrences
         let size_assert_count = result_str.matches("std::mem::size_of").count();
         let align_assert_count = result_str.matches("std::mem::align_of").count();
-        
+
         // We expect exactly 2 assertions: one for parameter, one for return type
         // Each assertion has both size and alignment checks, so 4 total checks
-        assert_eq!(size_assert_count, 4, "Expected exactly 4 size assertions (2 pairs)");
-        assert_eq!(align_assert_count, 4, "Expected exactly 4 alignment assertions (2 pairs)");
-        
+        assert_eq!(
+            size_assert_count, 4,
+            "Expected exactly 4 size assertions (2 pairs)"
+        );
+        assert_eq!(
+            align_assert_count, 4,
+            "Expected exactly 4 alignment assertions (2 pairs)"
+        );
+
         // Should have stripped the wrapper in the FFI signature (parameter should be *const ExportedType, not *const MaybeUninit<ExportedType>)
         assert!(result_str.contains("*const ExportedType"));
         assert!(!result_str.contains("*const std :: mem :: MaybeUninit"));
@@ -1542,49 +1675,70 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
     fn test_convert_to_local_type_function() {
         let mut exported_types = HashSet::new();
         exported_types.insert("ExportedType".to_string());
-        
-        let transparent_wrappers = vec![
-            syn::parse_quote! { std::mem::MaybeUninit },
-        ];
+
+        let transparent_wrappers = vec![syn::parse_quote! { std::mem::MaybeUninit }];
         let source_crate_ident = syn::Ident::new("test_crate", proc_macro2::Span::call_site());
 
         // Test with transparent wrapper + exported type
         let wrapped_type: syn::Type = syn::parse_quote! { std::mem::MaybeUninit<ExportedType> };
         let mut assertion_pairs = HashSet::new();
         let mut was_converted = false;
-        let result = convert_to_local_type(&wrapped_type, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs, &mut was_converted);
-        
+        let result = convert_to_local_type(
+            &wrapped_type,
+            &exported_types,
+            &transparent_wrappers,
+            &source_crate_ident,
+            &mut assertion_pairs,
+            &mut was_converted,
+        );
+
         let local_str = quote::quote! { #result }.to_string();
         assert_eq!(local_str, "ExportedType"); // Stripped of wrapper
         assert!(was_converted); // Should be converted
-        
+
         // Should have collected an assertion pair
         assert_eq!(assertion_pairs.len(), 1);
         let (local_type_str, original_type_str) = assertion_pairs.iter().next().unwrap();
         assert_eq!(local_type_str, "ExportedType");
-        assert!(original_type_str.contains("std :: mem :: MaybeUninit < test_crate :: ExportedType >"));
-        
+        assert!(
+            original_type_str.contains("std :: mem :: MaybeUninit < test_crate :: ExportedType >")
+        );
+
         // Test with regular type that doesn't need conversion
         let regular_type: syn::Type = syn::parse_quote! { i32 };
         let mut assertion_pairs = HashSet::new();
         let mut was_converted = false;
-        let result = convert_to_local_type(&regular_type, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs, &mut was_converted);
-        
+        let result = convert_to_local_type(
+            &regular_type,
+            &exported_types,
+            &transparent_wrappers,
+            &source_crate_ident,
+            &mut assertion_pairs,
+            &mut was_converted,
+        );
+
         let result_str = quote::quote! { #result }.to_string();
         assert_eq!(result_str, "i32"); // No change
         assert!(!was_converted); // Should not be converted
         assert_eq!(assertion_pairs.len(), 0); // No assertion pairs collected
-        
+
         // Test with exported type but no wrapper
         let exported_only: syn::Type = syn::parse_quote! { ExportedType };
         let mut assertion_pairs = HashSet::new();
         let mut was_converted = false;
-        let result = convert_to_local_type(&exported_only, &exported_types, &transparent_wrappers, &source_crate_ident, &mut assertion_pairs, &mut was_converted);
-        
+        let result = convert_to_local_type(
+            &exported_only,
+            &exported_types,
+            &transparent_wrappers,
+            &source_crate_ident,
+            &mut assertion_pairs,
+            &mut was_converted,
+        );
+
         let local_str = quote::quote! { #result }.to_string();
         assert_eq!(local_str, "ExportedType"); // No change since no wrapper
         assert!(was_converted); // Should be converted due to exported type
-        
+
         // Should have collected an assertion pair
         assert_eq!(assertion_pairs.len(), 1);
         let (local_type_str, original_type_str) = assertion_pairs.iter().next().unwrap();
@@ -1602,7 +1756,7 @@ impl MyStruct {
     }
 }
 "#;
-        
+
         // Parse the impl block to extract the method
         let file = syn::parse_file(method_content).unwrap();
         if let syn::Item::Impl(impl_block) = &file.items[0] {
@@ -1618,12 +1772,12 @@ impl MyStruct {
                         block: Box::new(method.block.clone()),
                     })],
                 };
-                
+
                 let exported_types = HashSet::new();
                 let allowed_prefixes = generate_standard_allowed_prefixes();
                 let transparent_wrappers = Vec::new();
                 let mut assertion_type_pairs = HashSet::new();
-                
+
                 // This should panic because the method has a receiver argument (&self)
                 let _result = transform_function_to_stub(
                     method_file,
@@ -1649,7 +1803,7 @@ pub fn get_primitive_field(input: &ExportedStruct) -> &u64 {
 
         let mut exported_types = HashSet::new();
         exported_types.insert("ExportedStruct".to_string());
-        
+
         let allowed_prefixes = generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         let mut assertion_type_pairs = HashSet::new();
@@ -1663,31 +1817,33 @@ pub fn get_primitive_field(input: &ExportedStruct) -> &u64 {
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the extern function
         assert!(result_str.contains("no_mangle"));
         assert!(result_str.contains("unsafe extern \"C\""));
-        
+
         // Parameter should convert &ExportedStruct to *const ExportedStruct with transmute
         assert!(result_str.contains("*const ExportedStruct"));
         assert!(result_str.contains("std::mem::transmute(&*input)"));
-        
+
         // Return type should convert &u64 to *const u64 but WITHOUT transmute of return value
         assert!(result_str.contains("*const u64"));
-        
+
         // Should NOT have transmute for the return value since u64 is primitive
         assert!(!result_str.contains("let result ="));
         assert!(!result_str.contains("unsafe { std::mem::transmute(result) }"));
-        
+
         // Should directly return the function call
         assert!(result_str.contains("test_crate::get_primitive_field"));
-        
+
         // Function body should be a simple call without transmute wrapping
         let lines: Vec<&str> = result_str.lines().collect();
-        let function_lines: Vec<&str> = lines.iter()
+        let function_lines: Vec<&str> = lines
+            .iter()
             .take_while(|line| !line.contains("const _"))
             .cloned()
             .collect();
@@ -1707,7 +1863,7 @@ pub fn get_exported_field(input: &Wrapper) -> &ExportedType {
         let mut exported_types = HashSet::new();
         exported_types.insert("Wrapper".to_string());
         exported_types.insert("ExportedType".to_string());
-        
+
         let allowed_prefixes = generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         let mut assertion_type_pairs = HashSet::new();
@@ -1721,21 +1877,22 @@ pub fn get_exported_field(input: &Wrapper) -> &ExportedType {
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the extern function
         assert!(result_str.contains("no_mangle"));
         assert!(result_str.contains("unsafe extern \"C\""));
-        
+
         // Parameter should convert &Wrapper to *const Wrapper with transmute
         assert!(result_str.contains("*const Wrapper"));
         assert!(result_str.contains("std::mem::transmute(&*input)"));
-        
+
         // Return type should convert &ExportedType to *const ExportedType with transmute
         assert!(result_str.contains("*const ExportedType"));
-        
+
         // Should have transmute for the return value since ExportedType is exported
         assert!(result_str.contains("let result ="));
         assert!(result_str.contains("unsafe { std::mem::transmute(result) }"));
@@ -1764,10 +1921,11 @@ pub fn get_field(input: &ExportedStruct) -> &u64 {
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the no_mangle attribute
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
@@ -1805,10 +1963,11 @@ pub fn get_exported_field(input: &ExportedStruct) -> &ExportedType {
             &transparent_wrappers,
             "2021",
             &mut assertion_type_pairs,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result_str = prettyplease::unparse(&result);
-        
+
         // Should contain the no_mangle attribute
         assert!(result_str.contains("no_mangle"));
         // Should be an unsafe extern "C" function
