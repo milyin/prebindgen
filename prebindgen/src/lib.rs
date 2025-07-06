@@ -101,7 +101,7 @@ use std::path::{Path, PathBuf};
 use std::{env, fs};
 use roxygen::roxygen;
 
-mod codegen;
+pub(crate) mod codegen;
 mod jsonl;
 
 /// **Internal API**: JSONL file utilities. Public only for proc-macro crate interaction.
