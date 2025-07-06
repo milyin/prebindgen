@@ -10,12 +10,12 @@
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
-/// Context structure containing common parameters for code generation
+/// Codegen structure containing common parameters for code generation
 ///
 /// This structure holds all the configuration and state needed for processing
 /// features and transforming functions to FFI stubs. It centralizes the parameters
 /// that were previously passed individually to multiple functions.
-pub(crate) struct Context<'a> {
+pub(crate) struct Codegen<'a> {
     /// The name of the source crate (with dashes converted to underscores)
     pub crate_name: &'a str,
     /// Set of exported type names that are valid for FFI
@@ -28,8 +28,8 @@ pub(crate) struct Context<'a> {
     pub edition: &'a str,
 }
 
-impl<'a> Context<'a> {
-    /// Create a new Context with the specified parameters
+impl<'a> Codegen<'a> {
+    /// Create a new Codegen with the specified parameters
     pub fn new(
         crate_name: &'a str,
         exported_types: &'a HashSet<String>,
@@ -44,6 +44,202 @@ impl<'a> Context<'a> {
             transparent_wrappers,
             edition,
         }
+    }
+
+    /// Transform a function definition into an FFI stub
+    ///
+    /// This method takes a parsed Rust function and transforms it into a `#[no_mangle] extern "C"`
+    /// wrapper function that calls the original function from the source crate.
+    ///
+    /// # Parameters
+    /// - `file`: The parsed file containing exactly one function definition
+    /// - `assertion_type_pairs`: Mutable set to collect type assertion pairs for compile-time validation
+    /// - `source_location`: Source location information for error reporting
+    pub(crate) fn transform_function_to_stub(
+        &self,
+        file: syn::File,
+        assertion_type_pairs: &mut HashSet<(String, String)>,
+        source_location: &crate::SourceLocation,
+    ) -> Result<syn::File, String> {
+        // Validate that the file contains exactly one function
+        if file.items.len() != 1 {
+            return Err(format!(
+                "Expected exactly one item in file, found {}",
+                file.items.len()
+            ));
+        }
+
+        let parsed_function = match &file.items[0] {
+            syn::Item::Fn(item_fn) => item_fn,
+            item => {
+                return Err(format!(
+                    "Expected function item, found {:?}",
+                    std::mem::discriminant(item)
+                ));
+            }
+        };
+
+        let function_name = &parsed_function.sig.ident;
+
+        // Validate function signature
+        validate_function_parameters(
+            &parsed_function.sig.inputs,
+            function_name,
+            self.exported_types,
+            self.allowed_prefixes,
+            source_location,
+        )?;
+
+        // Prepare source crate name for type collection
+        let source_crate_name = self.crate_name.replace('-', "_");
+
+        // Validate return type
+        if let syn::ReturnType::Type(_, return_type) = &parsed_function.sig.output {
+            validate_type_for_ffi(
+                return_type,
+                self.exported_types,
+                self.allowed_prefixes,
+                &format!("return type of function '{function_name}'"),
+            )
+            .map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
+        }
+
+        // Generate components and build call arguments inline
+        let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
+
+        // Build the extern "C" function signature:
+        // 1. Start with the original function signature
+        // 2. Convert references to pointers for FFI compatibility
+        // 3. Add extern "C" ABI specifier
+        // 4. Mark function as unsafe
+        let mut extern_sig = parsed_function.sig.clone();
+
+        // Convert return type and collect type assertion pairs
+        let mut result_type_changed = false;
+        if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
+            let local_return_type = convert_to_local_type(
+                return_type,
+                self.exported_types,
+                self.transparent_wrappers,
+                &source_crate_ident,
+                assertion_type_pairs,
+                &mut result_type_changed,
+            );
+            extern_sig.output = syn::ReturnType::Type(*arrow, Box::new(local_return_type));
+        }
+
+        // Convert reference parameters to pointer parameters and collect type assertion pairs
+        // Also build call arguments with appropriate transmute/conversion logic
+        let mut call_args = Vec::new();
+        for input in extern_sig.inputs.iter_mut() {
+            let syn::FnArg::Typed(pat_type) = input else {
+                panic!(
+                    "FFI functions cannot have receiver arguments (like 'self'). \
+                     All parameters must be typed arguments for C compatibility."
+                );
+            };
+            // Convert type and collect assertion pairs (handles both reference and non-reference types)
+            let mut type_changed = false;
+            let local_type = convert_to_local_type(
+                &pat_type.ty,
+                self.exported_types,
+                self.transparent_wrappers,
+                &source_crate_ident,
+                assertion_type_pairs,
+                &mut type_changed,
+            );
+
+            // Generate call argument based on the original type and conversion status
+            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                let param_name = &pat_ident.ident;
+                // Build the call argument based on the original type and conversion status
+                let base_arg = match &*pat_type.ty {
+                    syn::Type::Reference(type_ref) => {
+                        if type_ref.mutability.is_some() {
+                            // &mut T parameter => *mut T in FFI, convert back with &mut *param
+                            quote::quote! { &mut *#param_name }
+                        } else {
+                            // &T parameter => *const T in FFI, convert back with &*param
+                            quote::quote! { &*#param_name }
+                        }
+                    }
+                    _ => {
+                        // Non-reference parameters are passed through
+                        quote::quote! { #param_name }
+                    }
+                };
+
+                // Wrap with transmute if the type was changed due to exported type conversion
+                let final_arg = if type_changed {
+                    quote::quote! { unsafe { std::mem::transmute(#base_arg) } }
+                } else {
+                    base_arg
+                };
+                call_args.push(final_arg);
+            }
+
+            // Update the parameter type in the signature to the local type
+            pat_type.ty = Box::new(local_type);
+        }
+
+        // Mark function as unsafe and use C ABI
+        extern_sig.unsafety = Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
+        extern_sig.abi = Some(syn::Abi {
+            extern_token: syn::Token![extern](proc_macro2::Span::call_site()),
+            name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
+        });
+
+        // Generate the function body
+        let function_body = if result_type_changed {
+            // If return type was converted, wrap the result in transmute
+            quote::quote! {
+                let result = #source_crate_ident::#function_name(#(#call_args),*);
+                unsafe { std::mem::transmute(result) }
+            }
+        } else {
+            // Direct call without transmute
+            match &extern_sig.output {
+                syn::ReturnType::Default => {
+                    quote::quote! {
+                        #source_crate_ident::#function_name(#(#call_args),*)
+                    }
+                }
+                syn::ReturnType::Type(_, _) => {
+                    quote::quote! {
+                        #source_crate_ident::#function_name(#(#call_args),*)
+                    }
+                }
+            }
+        };
+
+        // Determine the appropriate no_mangle attribute based on Rust edition
+        // Edition 2024 uses #[unsafe(no_mangle)], while older editions use #[no_mangle]
+        let no_mangle_attr: syn::Attribute = if self.edition == "2024" {
+            syn::parse_quote! { #[unsafe(no_mangle)] }
+        } else {
+            syn::parse_quote! { #[no_mangle] }
+        };
+
+        // Create the function body that will call the original implementation
+        let body = syn::parse_quote! {
+            {
+                #function_body
+            }
+        };
+
+        // Build the final extern function
+        let extern_function = syn::ItemFn {
+            attrs: vec![no_mangle_attr],
+            vis: syn::Visibility::Public(syn::Token![pub](proc_macro2::Span::call_site())),
+            sig: extern_sig,
+            block: Box::new(body),
+        };
+
+        Ok(syn::File {
+            shebang: file.shebang,
+            attrs: file.attrs,
+            items: vec![syn::Item::Fn(extern_function)],
+        })
     }
 }
 
@@ -495,207 +691,6 @@ fn validate_function_parameters(
         }
     }
     Ok(())
-}
-
-/// Transform a function prototype to a no_mangle extern "C" function and collect assertion pairs
-///
-/// This function takes a Rust function definition and transforms it into an FFI-compatible
-/// `extern "C"` function with proper type conversions and validation.
-///
-/// Returns the stub function and collects assertion pairs separately for later deduplication.
-#[roxygen]
-pub(crate) fn transform_function_to_stub(
-    /// The parsed file containing exactly one function definition
-    file: syn::File,
-    /// Context containing common parameters for code generation
-    context: &Context,
-    /// Mutable set to collect type assertion pairs for compile-time validation
-    assertion_type_pairs: &mut HashSet<(String, String)>,
-    /// Source location information for error reporting
-    source_location: &crate::SourceLocation,
-) -> Result<syn::File, String> {
-    // Validate that the file contains exactly one function
-    if file.items.len() != 1 {
-        return Err(format!(
-            "Expected exactly one item in file, found {}",
-            file.items.len()
-        ));
-    }
-
-    let parsed_function = match &file.items[0] {
-        syn::Item::Fn(item_fn) => item_fn,
-        item => {
-            return Err(format!(
-                "Expected function item, found {:?}",
-                std::mem::discriminant(item)
-            ));
-        }
-    };
-
-    let function_name = &parsed_function.sig.ident;
-
-    // Validate function signature
-    validate_function_parameters(
-        &parsed_function.sig.inputs,
-        function_name,
-        context.exported_types,
-        context.allowed_prefixes,
-        source_location,
-    )?;
-
-    // Prepare source crate name for type collection
-    let source_crate_name = context.crate_name.replace('-', "_");
-
-    // Validate return type
-    if let syn::ReturnType::Type(_, return_type) = &parsed_function.sig.output {
-        validate_type_for_ffi(
-            return_type,
-            context.exported_types,
-            context.allowed_prefixes,
-            &format!("return type of function '{function_name}'"),
-        )
-        .map_err(|e| format!("Invalid FFI function return type: {} (at {}:{}:{})", e, source_location.file, source_location.line, source_location.column))?;
-    }
-
-    // Generate components and build call arguments inline
-    let source_crate_ident = syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
-
-    // Build the extern "C" function signature:
-    // 1. Start with the original function signature
-    // 2. Convert references to pointers for FFI compatibility
-    // 3. Add extern "C" ABI specifier
-    // 4. Mark function as unsafe
-    let mut extern_sig = parsed_function.sig.clone();
-
-    // Convert return type and collect type assertion pairs
-    let mut result_type_changed = false;
-    if let syn::ReturnType::Type(arrow, return_type) = &extern_sig.output {
-        let local_return_type = convert_to_local_type(
-            return_type,
-            context.exported_types,
-            context.transparent_wrappers,
-            &source_crate_ident,
-            assertion_type_pairs,
-            &mut result_type_changed,
-        );
-        extern_sig.output = syn::ReturnType::Type(*arrow, Box::new(local_return_type));
-    }
-
-    // Convert reference parameters to pointer parameters and collect type assertion pairs
-    // Also build call arguments with appropriate transmute/conversion logic
-    let mut call_args = Vec::new();
-    for input in extern_sig.inputs.iter_mut() {
-        let syn::FnArg::Typed(pat_type) = input else {
-            panic!(
-                "FFI functions cannot have receiver arguments (like 'self'). \
-                 All parameters must be typed arguments for C compatibility."
-            );
-        };
-        // Convert type and collect assertion pairs (handles both reference and non-reference types)
-        let mut type_changed = false;
-        let local_type = convert_to_local_type(
-            &pat_type.ty,
-            context.exported_types,
-            context.transparent_wrappers,
-            &source_crate_ident,
-            assertion_type_pairs,
-            &mut type_changed,
-        );
-
-        // Generate call argument based on the original type and conversion status
-        if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-            let param_name = &pat_ident.ident;
-            // Build the call argument based on the original type and conversion status
-            let base_arg = match &*pat_type.ty {
-                syn::Type::Reference(type_ref) => {
-                    if type_ref.mutability.is_some() {
-                        // &mut T parameter => *mut T in FFI, convert back with &mut *param
-                        quote::quote! { &mut *#param_name }
-                    } else {
-                        // &T parameter => *const T in FFI, convert back with &*param
-                        quote::quote! { &*#param_name }
-                    }
-                }
-                _ => {
-                    // Non-reference parameters are passed through
-                    quote::quote! { #param_name }
-                }
-            };
-
-            if type_changed {
-                // If the type was converted (wrapper stripped or exported type), transmute it
-                call_args.push(quote::quote! {
-                    unsafe { std::mem::transmute(#base_arg) }
-                });
-            } else {
-                call_args.push(base_arg);
-            }
-        }
-
-        // Use the local type in the signature
-        pat_type.ty = Box::new(local_type);
-    }
-
-    extern_sig.abi = Some(syn::Abi {
-        extern_token: syn::token::Extern::default(),
-        name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
-    });
-    extern_sig.unsafety = Some(syn::token::Unsafe::default());
-
-    let function_body = match &parsed_function.sig.output {
-        syn::ReturnType::Default => {
-            // Void function
-            quote::quote! {
-                #source_crate_ident::#function_name(#(#call_args),*);
-            }
-        }
-        syn::ReturnType::Type(_, _) => {
-            // Function with return value
-            if result_type_changed {
-                quote::quote! {
-                    let result = #source_crate_ident::#function_name(#(#call_args),*);
-                    unsafe { std::mem::transmute(result) }
-                }
-            } else {
-                quote::quote! {
-                    #source_crate_ident::#function_name(#(#call_args),*)
-                }
-            }
-        }
-    };
-
-    // Determine the appropriate no_mangle attribute based on Rust edition
-    // Edition 2024 uses #[unsafe(no_mangle)], while older editions use #[no_mangle]
-    let no_mangle_attr: syn::Attribute = if context.edition == "2024" {
-        syn::parse_quote! { #[unsafe(no_mangle)] }
-    } else {
-        syn::parse_quote! { #[no_mangle] }
-    };
-
-    // Create the function body that will call the original implementation
-    let body = syn::parse_quote! {
-        {
-            #function_body
-        }
-    };
-
-    // Build the complete extern function
-    let mut attrs = vec![no_mangle_attr];
-    attrs.extend(parsed_function.attrs.clone());
-
-    let extern_function = syn::ItemFn {
-        attrs,
-        vis: parsed_function.vis.clone(),
-        sig: extern_sig,
-        block: Box::new(body),
-    };
-
-    // Return a syn::File containing only the stub function (no assertions)
-    Ok(syn::File {
-        shebang: file.shebang,
-        attrs: file.attrs,
-        items: vec![syn::Item::Fn(extern_function)],
-    })
 }
 
 /// Process code content to handle feature flags according to builder configuration

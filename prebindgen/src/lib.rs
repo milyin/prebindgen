@@ -521,8 +521,8 @@ impl Prebindgen {
         let mut global_assertion_type_pairs: HashSet<(String, String)> = HashSet::new();
         
         if let Some(group_records) = self.records.get(group) {
-            // Create context for code generation
-            let context = codegen::Context::new(
+            // Create codegen instance for code generation
+            let codegen = codegen::Codegen::new(
                 &self.builder.crate_name,
                 &self.exported_types,
                 &self.builder.allowed_prefixes,
@@ -550,9 +550,8 @@ impl Prebindgen {
 
                 // Generate FFI stub for function
                 let content = if record.kind == RecordKind::Function {
-                    codegen::transform_function_to_stub(
+                    codegen.transform_function_to_stub(
                         content,
-                        &context,
                         &mut global_assertion_type_pairs,
                         &record.source_location,
                     )?
@@ -1067,8 +1066,8 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
             column: 5, // Example column number
         };
         
-        // Create context for the test
-        let context = codegen::Context::new(
+        // Create codegen instance for the test
+        let codegen = codegen::Codegen::new(
             "test-crate",
             &exported_types,
             &allowed_prefixes,
@@ -1077,9 +1076,8 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
         );
         
         // This should trigger an FFI validation error with source location
-        match codegen::transform_function_to_stub(
+        match codegen.transform_function_to_stub(
             file,
-            &context,
             &mut assertion_type_pairs,
             &source_location,
         ) {
