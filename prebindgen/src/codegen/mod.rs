@@ -15,7 +15,7 @@ pub mod process_features;
 pub mod replace_types;
 
 // Re-export the main functions
-pub use transform_function::transform_function_to_stub;
+pub use transform_function::{trim_implementation, create_stub_implementation};
 pub use process_features::process_features;
 pub use replace_types::replace_types;
 
