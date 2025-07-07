@@ -3,7 +3,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
-use crate::{record::*, JSONL_EXTENSION};
+use crate::record::ParseConfig;
+use crate::{JSONL_EXTENSION, record::*};
 use crate::{jsonl, trace};
 
 /// Builder for configuring Prebindgen with optional parameters.
@@ -339,129 +340,6 @@ impl Builder {
         self
     }
 
-    fn parse_record(
-        &self,
-        record: Record,
-        crate_name: &str,
-        exported_types: &HashSet<String>,
-    ) -> Result<RecordSyn, String> {
-        // Destructure record fields
-        let Record {
-            kind,
-            name,
-            content: record_content,
-            source_location,
-        } = record;
-        // Parse the raw content into a syntax tree
-        let parsed = syn::parse_file(&record_content).map_err(|e| e.to_string())?;
-        // Apply feature processing
-        let processed = crate::codegen::process_features(
-            parsed,
-            &self.disabled_features,
-            &self.enabled_features,
-            &self.feature_mappings,
-            Some(&source_location),
-        );
-        // Skip records that become empty
-        if processed.items.is_empty() {
-            return Err(format!(
-                "Record {name} of kind {kind} became empty after feature processing"
-            ));
-        }
-
-        // Transform functions to FFI stubs and collect type replacements
-        let (final_item, type_replacements) = if kind == RecordKind::Function {
-            // Extract the function from the processed file
-            if processed.items.len() != 1 {
-                return Err(format!(
-                    "Expected exactly one item in file, found {}",
-                    processed.items.len()
-                ));
-            }
-
-            let function_item = match &processed.items[0] {
-                syn::Item::Fn(item_fn) => item_fn.clone(),
-                item => {
-                    return Err(format!(
-                        "Expected function item, found {:?}",
-                        std::mem::discriminant(item)
-                    ));
-                }
-            };
-
-            // Step 1: Strip function body using trim_implementation
-            let trimmed_function = crate::codegen::trim_implementation(function_item);
-
-            // Step 2: Replace types in stripped function with replace_types
-            let trimmed_file = syn::File {
-                shebang: processed.shebang.clone(),
-                attrs: processed.attrs.clone(),
-                items: vec![syn::Item::Fn(trimmed_function)],
-            };
-
-            let (processed_file, type_replacements) = crate::codegen::replace_types(
-                trimmed_file,
-                crate_name,
-                exported_types,
-                &self.allowed_prefixes,
-                &self.transparent_wrappers,
-            );
-
-            // Extract the processed function again
-            let processed_function = match &processed_file.items[0] {
-                syn::Item::Fn(item_fn) => item_fn.clone(),
-                _ => return Err("Expected function item after type replacement".to_string()),
-            };
-
-            // Step 3: Generate new body with create_stub_implementation
-            let source_crate_name = crate_name.replace('-', "_");
-            let source_crate_ident =
-                syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
-
-            let final_function = crate::codegen::create_stub_implementation(
-                processed_function,
-                &source_crate_ident,
-            )?;
-
-            // Determine the appropriate no_mangle attribute based on Rust edition
-            let no_mangle_attr: syn::Attribute = if self.edition == "2024" {
-                syn::parse_quote! { #[unsafe(no_mangle)] }
-            } else {
-                syn::parse_quote! { #[no_mangle] }
-            };
-
-            // Add the no_mangle attribute and make it extern "C"
-            let mut extern_function = final_function;
-            extern_function.attrs.insert(0, no_mangle_attr);
-            extern_function.sig.unsafety =
-                Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
-            extern_function.sig.abi = Some(syn::Abi {
-                extern_token: syn::Token![extern](proc_macro2::Span::call_site()),
-                name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
-            });
-            extern_function.vis =
-                syn::Visibility::Public(syn::Token![pub](proc_macro2::Span::call_site()));
-
-            (syn::Item::Fn(extern_function), type_replacements)
-        } else {
-            // For non-function items, extract the first (and should be only) item
-            if processed.items.len() != 1 {
-                return Err(format!(
-                    "Expected exactly one item in file, found {}",
-                    processed.items.len()
-                ));
-            }
-            (processed.items.into_iter().next().unwrap(), HashSet::new())
-        };
-        // Construct the RecordSyn with type replacements
-        Ok(RecordSyn::new(
-            name.clone(),
-            final_item,
-            source_location.clone(),
-            type_replacements,
-        ))
-    }
-
     /// Build the configured Prebindgen instance.
     ///
     /// This method reads the prebindgen data files from the input directory
@@ -526,9 +404,20 @@ impl Builder {
         // Process all raw records
         let mut records = HashMap::new();
         for (group_name, raw_records) in raw_records_map {
+            let config = ParseConfig {
+                crate_name: &crate_name,
+                exported_types: &exported_types,
+                disabled_features: &self.disabled_features,
+                enabled_features: &self.enabled_features,
+                feature_mappings: &self.feature_mappings,
+                allowed_prefixes: &self.allowed_prefixes,
+                transparent_wrappers: &self.transparent_wrappers,
+                edition: &self.edition,
+            };
+
             let processed_records: Result<Vec<RecordSyn>, String> = raw_records
                 .into_iter()
-                .map(|record| self.parse_record(record, &crate_name, &exported_types))
+                .map(|record| RecordSyn::from_record(record, &config))
                 .collect();
 
             let processed_records = processed_records.unwrap_or_else(|e| {

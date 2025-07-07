@@ -28,7 +28,7 @@ pub fn process_features(
     /// Mapping from old feature names to new feature names
     feature_mappings: &HashMap<String, String>,
     /// Source location information for error reporting
-    source_location: Option<&crate::SourceLocation>,
+    source_location: &crate::SourceLocation,
 ) -> syn::File {
     // Process items in the file
     file.items.retain_mut(|item| {
@@ -44,7 +44,7 @@ fn process_item_features(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: Option<&crate::SourceLocation>,
+    source_location: &crate::SourceLocation,
 ) -> bool {
     let attrs = match item {
         syn::Item::Fn(f) => &mut f.attrs,
@@ -83,7 +83,7 @@ fn process_struct_fields(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: Option<&crate::SourceLocation>,
+    source_location: &crate::SourceLocation,
 ) {
     match fields {
         syn::Fields::Named(fields_named) => {
@@ -120,7 +120,7 @@ fn process_enum_variants(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: Option<&crate::SourceLocation>,
+    source_location: &crate::SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
     let mut new_variants = syn::punctuated::Punctuated::new();
@@ -144,7 +144,7 @@ fn process_union_fields(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: Option<&crate::SourceLocation>,
+    source_location: &crate::SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
     let mut new_fields = syn::punctuated::Punctuated::new();
@@ -163,7 +163,7 @@ fn process_attributes(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: Option<&crate::SourceLocation>,
+    source_location: &crate::SourceLocation,
 ) -> bool {
     let mut keep_item = true;
     let mut remove_attrs = Vec::new();
