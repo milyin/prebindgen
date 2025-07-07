@@ -224,6 +224,8 @@ pub(crate) struct RecordSyn {
     pub content: syn::File,
     /// Source location information
     pub source_location: SourceLocation,
+    /// Type replacement pairs for this record only (local_type, origin_type)
+    pub _type_replacements: HashSet<(String, String)>,
 }
 
 impl std::fmt::Debug for RecordSyn {
@@ -244,12 +246,14 @@ impl RecordSyn {
         name: String,
         content: syn::File,
         source_location: SourceLocation,
+        type_replacements: HashSet<(String, String)>,
     ) -> Self {
         Self {
             kind,
             name,
             content,
             source_location,
+            _type_replacements: type_replacements,
         }
     }
 }
@@ -378,9 +382,7 @@ pub fn init_prebindgen_out_dir() {
 /// let structs_only = pb.group("structs").write_to_file("structs.rs");
 /// ```
 pub struct Prebindgen {
-    builder: Builder,
     records: HashMap<String, Vec<RecordSyn>>,
-    exported_types: HashSet<String>,
 }
 
 /// Builder for configuring Prebindgen with optional parameters.
@@ -437,63 +439,6 @@ pub struct FileBuilder<'a> {
 }
 
 impl Prebindgen {
-    /// Internal method to read all exported files matching the group name pattern `<group>_*`
-    fn read_group_internal(&self, group: &str) -> Vec<Record> {
-        let pattern = format!("{group}_");
-        let mut record_map = HashMap::new();
-
-        // Read the directory and find all matching files
-        if let Ok(entries) = fs::read_dir(&self.builder.input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
-                        trace!("Reading exported file: {}", path.display());
-                        let path_clone = path.clone();
-
-                        match jsonl::read_jsonl_file(&path) {
-                            Ok(records) => {
-                                for record in records {
-                                    // Use HashMap to deduplicate records by name
-                                    record_map.insert(record.name.clone(), record);
-                                }
-                            }
-                            Err(e) => {
-                                panic!("Failed to read {}: {}", path_clone.display(), e);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Return deduplicated records for this group
-        record_map.into_values().collect::<Vec<_>>()
-    }
-
-    /// Internal method to discover all available groups from the directory
-    fn discover_generated_groups(&self) -> HashSet<String> {
-        let mut groups = HashSet::new();
-
-        // Discover all available groups
-        if let Ok(entries) = fs::read_dir(&self.builder.input_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.ends_with(JSONL_EXTENSION) {
-                        // Extract group name from filename (everything before the first underscore)
-                        if let Some(underscore_pos) = file_name.find('_') {
-                            let group_name = &file_name[..underscore_pos];
-                            groups.insert(group_name.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        groups
-    }
-
     /// Select a specific group for file generation
     ///
     /// Returns a `FileBuilder` that can be used to write the specified group
@@ -555,114 +500,6 @@ impl Prebindgen {
         dest.flush()?;
         Ok(())
     }
-
-    /// Process all raw records and update exported types
-    fn process_all_records(&mut self, raw_records_map: HashMap<String, Vec<Record>>) {
-        // Update exported_types with type names from all groups
-        for records in raw_records_map.values() {
-            for record in records {
-                if record.kind.is_type() {
-                    self.exported_types.insert(record.name.clone());
-                }
-            }
-        }
-
-        // Create codegen instance for processing with complete exported types
-        let codegen = codegen::Codegen::new(
-            &self.builder.crate_name,
-            &self.exported_types,
-            &self.builder.allowed_prefixes,
-            &self.builder.transparent_wrappers,
-            &self.builder.edition,
-        );
-
-        // Process each group's raw records
-        for (group_name, raw_records) in &raw_records_map {
-            let mut global_assertion_type_pairs: HashSet<(String, String)> = HashSet::new();
-
-            let processed_records: Result<Vec<RecordSyn>, String> = raw_records
-                .iter()
-                .filter_map(|record| self.parse_record(record, &codegen, &mut global_assertion_type_pairs))
-                .collect();
-            
-            let mut processed_records = processed_records.unwrap_or_else(|e| {
-                panic!("Failed to parse records for group {}: {}", group_name, e);
-            });
-
-            // Generate type assertions for this group and add them as special records
-            if !global_assertion_type_pairs.is_empty() {
-                let type_assertions = codegen::generate_type_assertions(&global_assertion_type_pairs);
-                for assertion in type_assertions {
-                    let assertion_file = syn::File {
-                        shebang: None,
-                        attrs: vec![],
-                        items: vec![assertion],
-                    };
-                    // Add assertion as a special record with a unique name
-                    let assertion_record = RecordSyn::new(
-                        RecordKind::Const, // Use Const as a marker for assertions
-                        format!("__assertion_{}", processed_records.len()),
-                        assertion_file,
-                        SourceLocation::default(),
-                    );
-                    processed_records.push(assertion_record);
-                }
-            }
-
-            // Store the processed records for this group
-            self.records.insert(group_name.clone(), processed_records);
-        }
-    }
-
-    /// Parse a raw `Record` into a `RecordSyn`, applying feature processing and stub generation.
-    /// Returns `None` if the record should be skipped (empty after feature processing),
-    /// or `Some(Err(...))` if an error occurred, or `Some(Ok(...))` on success.
-    fn parse_record<'a>(
-        &self,
-        record: &Record,
-        codegen: &codegen::Codegen<'a>,
-        global_assertion_type_pairs: &mut HashSet<(String, String)>,
-    ) -> Option<Result<RecordSyn, String>> {
-        // Destructure record fields
-        let Record { kind, name, content: record_content, source_location } = record;
-        // Parse the raw content into a syntax tree
-        let parsed = match syn::parse_file(record_content) {
-            Ok(content) => content,
-            Err(e) => return Some(Err(format!("Failed to parse content for {}: {}", name, e))),
-        };
-        // Apply feature processing
-        let processed = crate::codegen::process_features(
-            parsed,
-            &self.builder.disabled_features,
-            &self.builder.enabled_features,
-            &self.builder.feature_mappings,
-            Some(source_location),
-        );
-        // Skip records that become empty
-        if processed.items.is_empty() {
-            return None;
-        }
-        // Transform functions to FFI stubs
-        let final_content = if *kind == RecordKind::Function {
-            match codegen.transform_function_to_stub(
-                processed,
-                global_assertion_type_pairs,
-                source_location,
-            ) {
-                Ok(c) => c,
-                Err(e) => return Some(Err(e.to_string())),
-            }
-        } else {
-            processed
-        };
-        // Construct the RecordSyn
-        Some(Ok(RecordSyn::new(
-            kind.clone(),
-            name.clone(),
-            final_content,
-            source_location.clone(),
-        )))
-    }
 }
 
 impl Builder {
@@ -696,6 +533,63 @@ impl Builder {
             feature_mappings: HashMap::new(),
             transparent_wrappers: Vec::new(),
         }
+    }
+
+    /// Internal method to read all exported files matching the group name pattern `<group>_*`
+    fn read_group_internal(&self, group: &str) -> Vec<Record> {
+        let pattern = format!("{group}_");
+        let mut record_map = HashMap::new();
+
+        // Read the directory and find all matching files
+        if let Ok(entries) = fs::read_dir(&self.input_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
+                        trace!("Reading exported file: {}", path.display());
+                        let path_clone = path.clone();
+
+                        match jsonl::read_jsonl_file(&path) {
+                            Ok(records) => {
+                                for record in records {
+                                    // Use HashMap to deduplicate records by name
+                                    record_map.insert(record.name.clone(), record);
+                                }
+                            }
+                            Err(e) => {
+                                panic!("Failed to read {}: {}", path_clone.display(), e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Return deduplicated records for this group
+        record_map.into_values().collect::<Vec<_>>()
+    }
+
+    /// Internal method to discover all available groups from the directory
+    fn discover_generated_groups(&self) -> HashSet<String> {
+        let mut groups = HashSet::new();
+
+        // Discover all available groups
+        if let Ok(entries) = fs::read_dir(&self.input_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if file_name.ends_with(JSONL_EXTENSION) {
+                        // Extract group name from filename (everything before the first underscore)
+                        if let Some(underscore_pos) = file_name.find('_') {
+                            let group_name = &file_name[..underscore_pos];
+                            groups.insert(group_name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        groups
     }
 
     /// Override the source crate name used in generated extern "C" functions
@@ -908,6 +802,57 @@ impl Builder {
         self
     }
 
+    /// Parse a raw `Record` into a `RecordSyn`, applying feature processing and stub generation.
+    /// Returns `None` if the record should be skipped (empty after feature processing),
+    /// or `Some(Err(...))` if an error occurred, or `Some(Ok(...))` on success.
+    fn parse_record<'a>(
+        &self,
+        record: Record,
+        codegen: &codegen::Codegen<'a>,
+    ) -> Option<Result<RecordSyn, String>> {
+        // Destructure record fields
+        let Record { kind, name, content: record_content, source_location } = record;
+        // Parse the raw content into a syntax tree
+        let parsed = match syn::parse_file(&record_content) {
+            Ok(content) => content,
+            Err(e) => return Some(Err(format!("Failed to parse content for {name}: {e}"))),
+        };
+        // Apply feature processing
+        let processed = crate::codegen::process_features(
+            parsed,
+            &self.disabled_features,
+            &self.enabled_features,
+            &self.feature_mappings,
+            Some(&source_location),
+        );
+        // Skip records that become empty
+        if processed.items.is_empty() {
+            return None;
+        }
+        // Transform functions to FFI stubs and collect type replacements
+        let (final_content, type_replacements) = if kind == RecordKind::Function {
+            let mut local_assertion_type_pairs = HashSet::new();
+            match codegen.transform_function_to_stub(
+                processed,
+                &mut local_assertion_type_pairs,
+                &source_location,
+            ) {
+                Ok(c) => (c, local_assertion_type_pairs),
+                Err(e) => return Some(Err(e.to_string())),
+            }
+        } else {
+            (processed, HashSet::new())
+        };
+        // Construct the RecordSyn with type replacements
+        Some(Ok(RecordSyn::new(
+            kind.clone(),
+            name.clone(),
+            final_content,
+            source_location.clone(),
+            type_replacements,
+        )))
+    }
+
     /// Build the configured Prebindgen instance.
     ///
     /// This method reads the prebindgen data files from the input directory
@@ -929,7 +874,7 @@ impl Builder {
     ///     .edition("2021")
     ///     .build();
     /// ```
-    pub fn build(mut self) -> Prebindgen {
+    pub fn build(self) -> Prebindgen {
         // Determine the crate name: use provided one, or read from stored file, or panic if not initialized
         let original_crate_name = read_stored_crate_name(&self.input_dir).unwrap_or_else(|| {
             panic!(
@@ -938,35 +883,69 @@ impl Builder {
                 self.input_dir.display()
             )
         });
-        if self.crate_name.is_empty() {
-            self.crate_name = original_crate_name;
-        }
-
-        let mut pb = Prebindgen {
-            builder: self,
-            records: HashMap::new(),
-            exported_types: HashSet::new(),
+        let crate_name = if self.crate_name.is_empty() {
+            original_crate_name
+        } else {
+            self.crate_name.clone()
         };
 
         // Read the groups based on selection
-        let groups = if pb.builder.selected_groups.is_empty() {
-            pb.discover_generated_groups()
+        let groups = if self.selected_groups.is_empty() {
+            self.discover_generated_groups()
         } else {
-            pb.builder.selected_groups.clone()
+            self.selected_groups.clone()
         };
 
         let raw_records_map: HashMap<String, Vec<Record>> = groups
             .into_iter()
             .map(|group| {
-                let records = pb.read_group_internal(&group);
+                let records = self.read_group_internal(&group);
                 (group, records)
             })
             .collect();
 
-        // Process all raw records
-        pb.process_all_records(raw_records_map);
+        let mut exported_types = HashSet::new();
+        // Update exported_types with type names from all groups
+        for records in raw_records_map.values() {
+            for record in records {
+                if record.kind.is_type() {
+                    exported_types.insert(record.name.clone());
+                }
+            }
+        }
 
-        pb
+        // Create codegen instance for processing with complete exported types
+        let allowed_prefixes = self.allowed_prefixes.clone();
+        let transparent_wrappers = self.transparent_wrappers.clone();
+        let edition = self.edition.clone();
+        
+        let codegen = codegen::Codegen::new(
+            &crate_name,
+            &exported_types,
+            &allowed_prefixes,
+            &transparent_wrappers,
+            &edition,
+        );
+
+        // Process all raw records
+        let mut records = HashMap::new();
+        for (group_name, raw_records) in raw_records_map {
+            let processed_records: Result<Vec<RecordSyn>, String> = raw_records
+                .into_iter()
+                .filter_map(|record| self.parse_record(record, &codegen))
+                .collect();
+            
+            let processed_records = processed_records.unwrap_or_else(|e| {
+                panic!("Failed to parse records for group {}: {}", group_name, e);
+            });
+
+            // Store the processed records for this group
+            records.insert(group_name, processed_records);
+        }
+
+        Prebindgen {
+            records,
+        }
     }
 }
 

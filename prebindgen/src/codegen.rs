@@ -879,7 +879,7 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
 /// are compatible with their original types (from the source crate). This provides
 /// compile-time safety for type transmutations performed during FFI calls.
 #[roxygen]
-pub(crate) fn generate_type_assertions(
+pub(crate) fn _generate_type_assertions(
     /// Set of (local_type, source_type) string pairs to create assertions for
     assertion_type_pairs: &HashSet<(String, String)>,
 ) -> Vec<syn::Item> {

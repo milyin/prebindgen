@@ -387,7 +387,7 @@ pub fn copy_bar(
     .unwrap();
 
     // Generate assertions from collected pairs and append to result
-    let assertions = generate_type_assertions(&assertion_type_pairs);
+    let assertions = _generate_type_assertions(&assertion_type_pairs);
     let mut complete_result = result;
     complete_result.items.extend(assertions);
 
@@ -517,7 +517,7 @@ fn test_type_assertions_generation() {
     ));
     assertion_type_pairs.insert(("String".to_string(), "my_crate::String".to_string()));
 
-    let assertions = generate_type_assertions(&assertion_type_pairs);
+    let assertions = _generate_type_assertions(&assertion_type_pairs);
     assert_eq!(assertions.len(), 4); // 2 types × 2 assertions each (size + alignment)
 
     let assertions_str = assertions
@@ -573,7 +573,7 @@ pub fn process_data(
     .unwrap();
 
     // Generate assertions from collected pairs and append to result
-    let assertions = generate_type_assertions(&assertion_type_pairs);
+    let assertions = _generate_type_assertions(&assertion_type_pairs);
     let mut complete_result = result;
     complete_result.items.extend(assertions);
 
@@ -624,7 +624,7 @@ pub fn test_func(wrapper: &std::mem::MaybeUninit<ExportedType>) -> ExportedType 
     .unwrap();
 
     // Generate assertions from collected pairs and append to result
-    let assertions = generate_type_assertions(&assertion_type_pairs);
+    let assertions = _generate_type_assertions(&assertion_type_pairs);
     let mut complete_result = result;
     complete_result.items.extend(assertions);
 
