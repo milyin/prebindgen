@@ -18,7 +18,7 @@ use crate::codegen::cfg_expr::CfgExpr;
 /// - Removes cfg attributes for enabled features (keeping the code)
 /// - Replaces feature names according to the mapping (keeping the cfg attribute)
 #[roxygen]
-pub fn process_features(
+pub(crate) fn process_features(
     /// The parsed file to process for feature flags
     mut file: syn::File,
     /// Set of feature names that should cause code removal

@@ -7,12 +7,15 @@
 //! - Creating appropriate parameter names and call arguments
 //! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
 
-pub mod transform_function;
-pub mod process_features;
-pub mod replace_types;
-pub mod cfg_expr;
+mod cfg_expr;
+mod process_features;
+mod replace_types;
 
 // Re-export the main functions
-pub use transform_function::{trim_implementation, create_stub_implementation};
-pub use process_features::process_features;
-pub use replace_types::{replace_types, generate_standard_allowed_prefixes};
+pub(crate) use process_features::process_features;
+#[allow(unused_imports)]
+pub(crate) use replace_types::replace_types_in_file;
+pub(crate) use replace_types::{
+    convert_to_stub, generate_standard_allowed_prefixes, replace_types_in_item,
+    replace_types_in_signature,
+};

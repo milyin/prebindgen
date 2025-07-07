@@ -383,6 +383,8 @@ mod tests {
     #[test]
     fn test_error_reporting_with_source_location() {
         use std::collections::HashSet;
+        use std::collections::HashMap;
+        use crate::record::ParseConfig;
         
     // Parse a function with invalid FFI types - using a custom type that's not in allowed prefixes
     let function_content = r#"
@@ -391,18 +393,25 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
 }
 "#;
         
-        let file = syn::parse_file(function_content).unwrap();
+        let mut file = syn::parse_file(function_content).unwrap();
         let exported_types = HashSet::new();
+        let disabled_features = HashSet::new();
+        let enabled_features = HashSet::new();
+        let feature_mappings = HashMap::new();
         let allowed_prefixes = codegen::generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         
-        let _source_location = SourceLocation {
-            file: "test_file.rs".to_string(),
-            line: 42,  // Example line number
-            column: 5, // Example column number
+        let config = ParseConfig {
+            crate_name: "test-crate",
+            exported_types: &exported_types,
+            disabled_features: &disabled_features,
+            enabled_features: &enabled_features,
+            feature_mappings: &feature_mappings,
+            allowed_prefixes: &allowed_prefixes,
+            transparent_wrappers: &transparent_wrappers,
+            edition: "2021",
         };
         
-        // Create codegen instance for the test
         let _source_location = SourceLocation {
             file: "test_file.rs".to_string(),
             line: 42,  // Example line number
@@ -411,12 +420,11 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
         
         // This should trigger an FFI validation error with source location
         // We'll try to use replace_types which should validate FFI compatibility
-        let (_, _) = codegen::replace_types(
-            file,
-            "test-crate",
-            &exported_types,
-            &allowed_prefixes,
-            &transparent_wrappers,
+        let mut type_replacements = HashSet::new();
+        codegen::replace_types_in_file(
+            &mut file,
+            &config,
+            &mut type_replacements,
         );
         {
             // replace_types doesn't do FFI validation, so we need to manually check

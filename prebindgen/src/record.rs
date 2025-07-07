@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+};
 
 /// Default group name for prebindgen when no group is specified
 pub const DEFAULT_GROUP_NAME: &str = "default";
@@ -92,7 +94,7 @@ pub(crate) struct RecordSyn {
     /// Source location information
     pub source_location: SourceLocation,
     /// Type replacement pairs for this record only (local_type, origin_type)
-    pub _type_replacements: HashSet<(String, String)>,
+    pub type_replacements: HashSet<(String, String)>,
 }
 
 impl Default for RecordSyn {
@@ -101,7 +103,7 @@ impl Default for RecordSyn {
             name: String::new(),
             content: syn::Item::Verbatim(proc_macro2::TokenStream::new()),
             source_location: SourceLocation::default(),
-            _type_replacements: HashSet::new(),
+            type_replacements: HashSet::new(),
         }
     }
 }
@@ -157,6 +159,14 @@ pub(crate) struct ParseConfig<'a> {
     pub edition: &'a str,
 }
 
+impl<'a> ParseConfig<'a> {
+    pub fn crate_ident(&self) -> syn::Ident {
+        // Convert crate name to identifier (replace dashes with underscores)
+        let source_crate_name = self.crate_name.replace('-', "_");
+        syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site())
+    }
+}
+
 impl RecordSyn {
     /// Create a new RecordSyn with the given components
     pub(crate) fn new(
@@ -169,136 +179,61 @@ impl RecordSyn {
             name,
             content,
             source_location,
-            _type_replacements: type_replacements,
+            type_replacements,
+        }
+    }
+
+    /// Process the features in the content according to the provided configuration.
+    /// Returns true if the content is not empty after processing.
+    fn process_features(&mut self, config: &ParseConfig<'_>) -> bool {
+        let processed = crate::codegen::process_features(
+            syn::File {
+                shebang: None,
+                attrs: vec![],
+                items: vec![self.content.clone()],
+            },
+            config.disabled_features,
+            config.enabled_features,
+            config.feature_mappings,
+            &self.source_location,
+        );
+        // Update the content and kind with processed items
+        if let Some(content) = processed.items.into_iter().next() {
+            self.content = content;
+            true
+        } else {
+            self.content = syn::Item::Verbatim(proc_macro2::TokenStream::new());
+            false
         }
     }
 
     /// Parse a Record into a RecordSyn with feature processing and FFI transformation
     pub(crate) fn parse_record(record: Record, config: &ParseConfig<'_>) -> Result<Self, String> {
-        // Destructure record fields
-        let Record {
-            kind,
-            name,
-            content: record_content,
-            source_location,
-        } = record;
-
-        // Parse the raw content into a syntax tree
-        let parsed = syn::parse_file(&record_content).map_err(|e| format!(
-            "Failed to parse record content at {source_location}: {e}"
-        ))?;
+        let mut record_syn = Self::try_from(record)?;
 
         // Apply feature processing
-        let processed = crate::codegen::process_features(
-            parsed,
-            config.disabled_features,
-            config.enabled_features,
-            config.feature_mappings,
-            &source_location,
-        );
-
-        // Skip records that become empty
-        if processed.items.is_empty() {
-            // return empty record
-            return Ok(RecordSyn::default())
+        if !record_syn.process_features(config) {
+            // If processing results in no content, return an empty RecordSyn
+            return Ok(record_syn);
         }
 
-        // Transform functions to FFI stubs and collect type replacements
-        let (final_item, type_replacements) = if kind == RecordKind::Function {
-            // Extract the function from the processed file
-            if processed.items.len() != 1 {
-                return Err(format!(
-                    "Expected exactly one item, found {len} at {source_location}",
-                    len = processed.items.len(),
-                ));
-            }
-
-            let function_item = match &processed.items[0] {
-                syn::Item::Fn(item_fn) => item_fn.clone(),
-                item => {
-                    return Err(format!(
-                        "Expected function item, found {:?} at {source_location}",
-                        std::mem::discriminant(item)
-                    ));
-                }
-            };
-
-            // Step 1: Strip function body using trim_implementation
-            let trimmed_function = crate::codegen::trim_implementation(function_item);
-
-            // Step 2: Replace types in stripped function with replace_types
-            let trimmed_file = syn::File {
-                shebang: processed.shebang.clone(),
-                attrs: processed.attrs.clone(),
-                items: vec![syn::Item::Fn(trimmed_function)],
-            };
-
-            let (processed_file, type_replacements) = crate::codegen::replace_types(
-                trimmed_file,
-                config.crate_name,
-                config.exported_types,
-                config.allowed_prefixes,
-                config.transparent_wrappers,
+        if let syn::Item::Fn(function) = &mut record_syn.content {
+            // Transform functions to FFI stubs and collect type replacements
+            crate::codegen::replace_types_in_signature(
+                &mut function.sig,
+                config,
+                &mut record_syn.type_replacements,
             );
-
-            // Extract the processed function again
-            let processed_function = match &processed_file.items[0] {
-                syn::Item::Fn(item_fn) => item_fn.clone(),
-                _ => {
-                    return Err(format!(
-                        "Expected function item after type replacement at {source_location}",
-                    ));
-                }
-            };
-
-            // Step 3: Generate new body with create_stub_implementation
-            let source_crate_name = config.crate_name.replace('-', "_");
-            let source_crate_ident =
-                syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site());
-
-            let final_function = crate::codegen::create_stub_implementation(
-                processed_function,
-                &source_crate_ident,
-            )?;
-
-            // Determine the appropriate no_mangle attribute based on Rust edition
-            let no_mangle_attr: syn::Attribute = if config.edition == "2024" {
-                syn::parse_quote! { #[unsafe(no_mangle)] }
-            } else {
-                syn::parse_quote! { #[no_mangle] }
-            };
-
-            // Add the no_mangle attribute and make it extern "C"
-            let mut extern_function = final_function;
-            extern_function.attrs.insert(0, no_mangle_attr);
-            extern_function.sig.unsafety =
-                Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
-            extern_function.sig.abi = Some(syn::Abi {
-                extern_token: syn::Token![extern](proc_macro2::Span::call_site()),
-                name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
-            });
-            extern_function.vis =
-                syn::Visibility::Public(syn::Token![pub](proc_macro2::Span::call_site()));
-
-            (syn::Item::Fn(extern_function), type_replacements)
+            crate::codegen::convert_to_stub(function, config)?;
         } else {
-            // For non-function items, extract the first (and should be only) item
-            if processed.items.len() != 1 {
-                return Err(format!(
-                    "Expected exactly one item in file, found {} at {source_location}",
-                    processed.items.len()
-                ));
-            }
-            (processed.items.into_iter().next().unwrap(), HashSet::new())
-        };
-
-        // Construct the RecordSyn with type replacements
-        Ok(RecordSyn::new(
-            name.clone(),
-            final_item,
-            source_location.clone(),
-            type_replacements,
-        ))
+            // Replace types in non-function items and collect type replacements
+            crate::codegen::replace_types_in_item(
+                &mut record_syn.content,
+                config,
+                &mut record_syn.type_replacements,
+            );
+        }
+        Ok(record_syn)
     }
 
     /// Derive the record kind from the syn::Item content
@@ -325,5 +260,55 @@ impl RecordKind {
             self,
             RecordKind::Struct | RecordKind::Enum | RecordKind::Union | RecordKind::TypeAlias
         )
+    }
+}
+
+impl TryFrom<Record> for RecordSyn {
+    type Error = String;
+
+    fn try_from(record: Record) -> Result<Self, Self::Error> {
+        // Parse the raw content into a syntax tree
+        let parsed = syn::parse_file(&record.content).map_err(|e| {
+            format!(
+                "Failed to parse record content at {}: {}",
+                record.source_location, e
+            )
+        })?;
+
+        // Check that we have exactly one item
+        let mut items = parsed.items.into_iter();
+        let item = items.next().ok_or_else(|| {
+            format!(
+                "Expected exactly one item in record, found 0 at {}",
+                record.source_location
+            )
+        })?;
+
+        if items.next().is_some() {
+            return Err(format!(
+                "Expected exactly one item in record, found more than 1 at {}",
+                record.source_location
+            ));
+        }
+
+        // Create RecordSyn first
+        let record_syn = RecordSyn::new(
+            record.name,
+            item,
+            record.source_location.clone(),
+            HashSet::new(),
+        );
+
+        // Check that the item type matches the record kind
+        if record_syn.kind() != record.kind {
+            return Err(format!(
+                "Record kind mismatch at {}: expected {}, found {}",
+                record.source_location,
+                record.kind,
+                record_syn.kind()
+            ));
+        }
+
+        Ok(record_syn)
     }
 }
