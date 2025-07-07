@@ -13,6 +13,7 @@ use std::collections::HashSet;
 pub mod transform_function;
 pub mod process_features;
 pub mod replace_types;
+pub mod cfg_expr;
 
 // Re-export the main functions
 pub use transform_function::{trim_implementation, create_stub_implementation};

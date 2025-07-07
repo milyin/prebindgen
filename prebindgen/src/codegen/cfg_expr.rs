@@ -66,87 +66,6 @@ impl CfgExpr {
         Ok(CfgExpr::Other(input.to_string()))
     }
 
-    /// Evaluate the cfg expression against enabled/disabled features and current target
-    /// In FFI contexts, unknown features are treated as disabled for deterministic behavior
-    pub fn evaluate(
-        &self,
-        enabled_features: &HashSet<String>,
-        disabled_features: &HashSet<String>,
-        current_target_arch: &str,
-    ) -> CfgEvalResult {
-        self.evaluate_with_unknown_handling(enabled_features, disabled_features, current_target_arch, false)
-    }
-
-    /// Evaluate with explicit handling of unknown features
-    /// If treat_unknown_as_enabled is true, unknown features are treated as enabled
-    /// If false, unknown features are treated as disabled
-    pub fn evaluate_with_unknown_handling(
-        &self,
-        enabled_features: &HashSet<String>,
-        disabled_features: &HashSet<String>,
-        current_target_arch: &str,
-        treat_unknown_as_enabled: bool,
-    ) -> CfgEvalResult {
-        match self {
-            CfgExpr::Feature(name) => {
-                if disabled_features.contains(name) {
-                    CfgEvalResult::False
-                } else if enabled_features.contains(name) {
-                    CfgEvalResult::True
-                } else {
-                    // Feature is neither explicitly enabled nor disabled
-                    if treat_unknown_as_enabled {
-                        CfgEvalResult::True
-                    } else {
-                        CfgEvalResult::False
-                    }
-                }
-            }
-            CfgExpr::TargetArch(arch) => {
-                if arch == current_target_arch {
-                    CfgEvalResult::True
-                } else {
-                    CfgEvalResult::False
-                }
-            }
-            CfgExpr::All(exprs) => {
-                for expr in exprs {
-                    match expr.evaluate_with_unknown_handling(enabled_features, disabled_features, current_target_arch, treat_unknown_as_enabled) {
-                        CfgEvalResult::False => return CfgEvalResult::False,
-                        CfgEvalResult::True => {}
-                        CfgEvalResult::Unknown => return CfgEvalResult::Unknown,
-                    }
-                }
-                CfgEvalResult::True
-            }
-            CfgExpr::Any(exprs) => {
-                for expr in exprs {
-                    match expr.evaluate_with_unknown_handling(enabled_features, disabled_features, current_target_arch, treat_unknown_as_enabled) {
-                        CfgEvalResult::True => return CfgEvalResult::True,
-                        CfgEvalResult::False => {}
-                        CfgEvalResult::Unknown => return CfgEvalResult::Unknown,
-                    }
-                }
-                CfgEvalResult::False
-            }
-            CfgExpr::Not(expr) => {
-                match expr.evaluate_with_unknown_handling(enabled_features, disabled_features, current_target_arch, treat_unknown_as_enabled) {
-                    CfgEvalResult::True => CfgEvalResult::False,
-                    CfgEvalResult::False => CfgEvalResult::True,
-                    CfgEvalResult::Unknown => CfgEvalResult::Unknown,
-                }
-            }
-            CfgExpr::Other(_) => {
-                if treat_unknown_as_enabled {
-                    CfgEvalResult::True
-                } else {
-                    CfgEvalResult::False
-                }
-            }
-            CfgExpr::False => CfgEvalResult::False,
-        }
-    }
-
     /// Process features according to strict rules:
     /// - Features in enabled list: replaced with true and removed from expression
     /// - Features in disabled list: replaced with false and removed from expression  
@@ -237,32 +156,6 @@ impl CfgExpr {
         }
     }
 
-    /// Apply feature mappings to this expression, returning a new expression
-    /// This is the old method, kept for backward compatibility
-    pub fn apply_feature_mappings(&self, feature_mappings: &std::collections::HashMap<String, String>) -> Self {
-        match self {
-            CfgExpr::Feature(name) => {
-                if let Some(new_name) = feature_mappings.get(name) {
-                    CfgExpr::Feature(new_name.clone())
-                } else {
-                    self.clone()
-                }
-            }
-            CfgExpr::TargetArch(_) => self.clone(),
-            CfgExpr::All(exprs) => {
-                CfgExpr::All(exprs.iter().map(|e| e.apply_feature_mappings(feature_mappings)).collect())
-            }
-            CfgExpr::Any(exprs) => {
-                CfgExpr::Any(exprs.iter().map(|e| e.apply_feature_mappings(feature_mappings)).collect())
-            }
-            CfgExpr::Not(expr) => {
-                CfgExpr::Not(Box::new(expr.apply_feature_mappings(feature_mappings)))
-            }
-            CfgExpr::Other(_) => self.clone(),
-            CfgExpr::False => CfgExpr::False,
-        }
-    }
-
     /// Convert back to a token stream for syn attributes
     pub fn to_tokens(&self) -> proc_macro2::TokenStream {
         match self {
@@ -300,17 +193,6 @@ impl CfgExpr {
             }
         }
     }
-}
-
-/// Result of evaluating a cfg expression
-#[derive(Debug, Clone, PartialEq)]
-pub enum CfgEvalResult {
-    /// Expression evaluates to true
-    True,
-    /// Expression evaluates to false
-    False,
-    /// Expression cannot be determined (contains unknown features)
-    Unknown,
 }
 
 /// Extract a simple feature name from expressions like `feature = "name"`
@@ -457,87 +339,6 @@ mod tests {
                 assert_eq!(exprs[1], CfgExpr::Feature("b".to_string()));
             }
             _ => panic!("Expected All expression"),
-        }
-    }
-
-    #[test]
-    fn test_evaluation() {
-        let mut enabled = HashSet::new();
-        enabled.insert("feature1".to_string());
-        
-        let mut disabled = HashSet::new();
-        disabled.insert("feature2".to_string());
-
-        // Test simple feature
-        let expr = CfgExpr::Feature("feature1".to_string());
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::True);
-        
-        let expr = CfgExpr::Feature("feature2".to_string());
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::False);
-        
-        let expr = CfgExpr::Feature("unknown".to_string());
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", true), CfgEvalResult::True);
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::False);
-
-        // Test target_arch
-        let expr = CfgExpr::TargetArch("x86_64".to_string());
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::True);
-        
-        let expr = CfgExpr::TargetArch("aarch64".to_string());
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::False);
-
-        // Test not
-        let expr = CfgExpr::Not(Box::new(CfgExpr::Feature("feature2".to_string())));
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::True);
-
-        // Test any - should be true if any is true
-        let expr = CfgExpr::Any(vec![
-            CfgExpr::Feature("feature1".to_string()), // true
-            CfgExpr::Feature("feature2".to_string()), // false
-        ]);
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::True);
-
-        // Test all - should be false if any is false
-        let expr = CfgExpr::All(vec![
-            CfgExpr::Feature("feature1".to_string()), // true
-            CfgExpr::Feature("feature2".to_string()), // false
-        ]);
-        assert_eq!(expr.evaluate_with_unknown_handling(&enabled, &disabled, "x86_64", false), CfgEvalResult::False);
-    }
-
-    #[test]
-    fn test_foo_struct_scenario() {
-        // Test the exact scenario from the Foo struct
-        let mut disabled_features = HashSet::new();
-        disabled_features.insert("unstable".to_string());
-        
-        let enabled_features = HashSet::new();
-        let current_target_arch = "aarch64";
-        
-        let test_cases = vec![
-            ("target_arch = \"x86_64\"", false),
-            ("target_arch = \"aarch64\"", true),
-            ("feature = \"unstable\"", false),
-            ("not(feature = \"unstable\")", true),
-            ("any(feature = \"unstable\", feature = \"internal\")", false),
-            ("all(feature = \"unstable\", feature = \"internal\")", false),
-        ];
-        
-        for (expr_str, expected) in test_cases {
-            println!("Testing: {expr_str}");
-            match CfgExpr::parse_from_string(expr_str) {
-                Ok(expr) => {
-                    println!("  Parsed: {expr:?}");
-                    let result = expr.evaluate_with_unknown_handling(&enabled_features, &disabled_features, current_target_arch, false);
-                    println!("  Evaluation result: {result:?}");
-                    let actual = matches!(result, CfgEvalResult::True);
-                    println!("  Expected: {expected}, Actual: {actual}");
-                    assert_eq!(expected, actual, "Mismatch for expression: {expr_str}");
-                }
-                Err(e) => {
-                    panic!("Parse error for '{expr_str}': {e}");
-                }
-            }
         }
     }
 

@@ -9,6 +9,8 @@
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
+use crate::codegen::cfg_expr::CfgExpr;
+
 /// Process code content to handle feature flags according to builder configuration
 ///
 /// This function analyzes code for `#[cfg(feature="...")]` attributes using syn syntax parsing and:
@@ -163,8 +165,6 @@ fn process_attributes(
     feature_mappings: &HashMap<String, String>,
     source_location: Option<&crate::SourceLocation>,
 ) -> bool {
-    use crate::cfg_expr::CfgExpr;
-    
     let mut keep_item = true;
     let mut remove_attrs = Vec::new();
 
