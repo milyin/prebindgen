@@ -827,17 +827,17 @@ impl Builder {
             ));
         }
 
-        if kind == RecordKind::Function {
-            let trimmed = codegen::transform_function::trim_implementation(
-                processed.clone(),
-            );
+        // if kind == RecordKind::Function {
+        //     let trimmed = codegen::transform_function::trim_implementation(
+        //         processed.clone(),
+        //     );
 
-        }
+        // }
 
 
         // Transform functions to FFI stubs and collect type replacements
         let (final_content, type_replacements) = if kind == RecordKind::Function {
-            match crate::codegen::transform_function_to_stub(
+            crate::codegen::transform_function_to_stub(
                 processed,
                 crate_name,
                 exported_types,
@@ -845,21 +845,18 @@ impl Builder {
                 &self.transparent_wrappers,
                 &self.edition,
                 &source_location,
-            ) {
-                Ok((content, replacements)) => (content, replacements),
-                Err(e) => return Some(Err(e.to_string())),
-            }
+            )?
         } else {
             (processed, HashSet::new())
         };
         // Construct the RecordSyn with type replacements
-        Some(Ok(RecordSyn::new(
+        Ok(RecordSyn::new(
             kind.clone(),
             name.clone(),
             final_content,
             source_location.clone(),
             type_replacements,
-        )))
+        ))
     }
 
     /// Build the configured Prebindgen instance.
@@ -928,7 +925,7 @@ impl Builder {
         for (group_name, raw_records) in raw_records_map {
             let processed_records: Result<Vec<RecordSyn>, String> = raw_records
                 .into_iter()
-                .filter_map(|record| self.parse_record(record, &crate_name, &exported_types))
+                .map(|record| self.parse_record(record, &crate_name, &exported_types))
                 .collect();
             
             let processed_records = processed_records.unwrap_or_else(|e| {
