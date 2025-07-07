@@ -417,7 +417,7 @@ impl Builder {
 
             let processed_records: Result<Vec<RecordSyn>, String> = raw_records
                 .into_iter()
-                .map(|record| RecordSyn::from_record(record, &config))
+                .map(|record| RecordSyn::parse_record(record, &config))
                 .collect();
 
             let processed_records = processed_records.unwrap_or_else(|e| {

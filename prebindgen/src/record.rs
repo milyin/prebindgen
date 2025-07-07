@@ -95,6 +95,17 @@ pub(crate) struct RecordSyn {
     pub _type_replacements: HashSet<(String, String)>,
 }
 
+impl Default for RecordSyn {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            content: syn::Item::Verbatim(proc_macro2::TokenStream::new()),
+            source_location: SourceLocation::default(),
+            _type_replacements: HashSet::new(),
+        }
+    }
+}
+
 impl Record {
     /// Create a new record with the specified kind, name, content, and source location.
     ///
@@ -163,10 +174,7 @@ impl RecordSyn {
     }
 
     /// Parse a Record into a RecordSyn with feature processing and FFI transformation
-    pub(crate) fn from_record(
-        record: Record,
-        config: &ParseConfig<'_>,
-    ) -> Result<Self, String> {
+    pub(crate) fn parse_record(record: Record, config: &ParseConfig<'_>) -> Result<Self, String> {
         // Destructure record fields
         let Record {
             kind,
@@ -176,7 +184,9 @@ impl RecordSyn {
         } = record;
 
         // Parse the raw content into a syntax tree
-        let parsed = syn::parse_file(&record_content).map_err(|e| e.to_string())?;
+        let parsed = syn::parse_file(&record_content).map_err(|e| format!(
+            "Failed to parse record content at {source_location}: {e}"
+        ))?;
 
         // Apply feature processing
         let processed = crate::codegen::process_features(
@@ -189,9 +199,8 @@ impl RecordSyn {
 
         // Skip records that become empty
         if processed.items.is_empty() {
-            return Err(format!(
-                "Record {name} of kind {kind} became empty after feature processing"
-            ));
+            // return empty record
+            return Ok(RecordSyn::default())
         }
 
         // Transform functions to FFI stubs and collect type replacements
@@ -199,8 +208,8 @@ impl RecordSyn {
             // Extract the function from the processed file
             if processed.items.len() != 1 {
                 return Err(format!(
-                    "Expected exactly one item in file, found {}",
-                    processed.items.len()
+                    "Expected exactly one item, found {len} at {source_location}",
+                    len = processed.items.len(),
                 ));
             }
 
@@ -208,7 +217,7 @@ impl RecordSyn {
                 syn::Item::Fn(item_fn) => item_fn.clone(),
                 item => {
                     return Err(format!(
-                        "Expected function item, found {:?}",
+                        "Expected function item, found {:?} at {source_location}",
                         std::mem::discriminant(item)
                     ));
                 }
@@ -235,7 +244,11 @@ impl RecordSyn {
             // Extract the processed function again
             let processed_function = match &processed_file.items[0] {
                 syn::Item::Fn(item_fn) => item_fn.clone(),
-                _ => return Err("Expected function item after type replacement".to_string()),
+                _ => {
+                    return Err(format!(
+                        "Expected function item after type replacement at {source_location}",
+                    ));
+                }
             };
 
             // Step 3: Generate new body with create_stub_implementation
@@ -272,7 +285,7 @@ impl RecordSyn {
             // For non-function items, extract the first (and should be only) item
             if processed.items.len() != 1 {
                 return Err(format!(
-                    "Expected exactly one item in file, found {}",
+                    "Expected exactly one item in file, found {} at {source_location}",
                     processed.items.len()
                 ));
             }
