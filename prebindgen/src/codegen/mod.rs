@@ -7,9 +7,6 @@
 //! - Creating appropriate parameter names and call arguments
 //! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
 
-use roxygen::roxygen;
-use std::collections::HashSet;
-
 pub mod transform_function;
 pub mod process_features;
 pub mod replace_types;

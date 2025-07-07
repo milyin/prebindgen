@@ -1,0 +1,163 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+/// Default group name for prebindgen when no group is specified
+pub const DEFAULT_GROUP_NAME: &str = "default";
+
+/// Represents a record of a struct, enum, union, or function definition.
+///
+/// **Internal API**: This type is public only for interaction with the proc-macro crate.
+/// It should not be used directly by end users.
+#[doc(hidden)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct Record {
+    /// The kind of definition (struct, enum, union, or function)
+    pub kind: RecordKind,
+    /// The name of the type or function
+    pub name: String,
+    /// The full source code content of the definition
+    pub content: String,
+    /// Source location information
+    pub source_location: SourceLocation,
+}
+
+/// Source location information for tracking where code originated
+#[doc(hidden)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SourceLocation {
+    /// The source file path
+    pub file: String,
+    /// The line number where the item starts (1-based)
+    pub line: usize,
+    /// The column number where the item starts (1-based)
+    pub column: usize,
+}
+
+/// The kind of record (struct, enum, union, or function).
+///
+/// **Internal API**: This type is public only for interaction with the proc-macro crate.
+/// It should not be used directly by end users.
+#[doc(hidden)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RecordKind {
+    /// Unknown or unrecognized record type
+    #[default]
+    Unknown,
+    /// A struct definition with named or unnamed fields
+    Struct,
+    /// An enum definition with variants
+    Enum,
+    /// A union definition (C-style union)
+    Union,
+    /// A function definition (signature only, body is replaced)
+    Function,
+    /// A type alias definition
+    TypeAlias,
+    /// A constant definition
+    Const,
+}
+
+/// Represents a record with parsed syntax tree content.
+///
+/// This is the internal representation used by Prebindgen after deduplication
+/// and initial parsing. Unlike `Record`, this stores the parsed `syn::File`
+/// instead of raw string content for more efficient processing.
+#[derive(Clone)]
+pub(crate) struct RecordSyn {
+    /// The kind of definition (struct, enum, union, or function)
+    pub kind: RecordKind,
+    /// The name of the type or function
+    pub name: String,
+    /// The parsed syntax tree content of the definition (after feature processing and stub generation)
+    pub content: syn::File,
+    /// Source location information
+    pub source_location: SourceLocation,
+    /// Type replacement pairs for this record only (local_type, origin_type)
+    pub _type_replacements: HashSet<(String, String)>,
+}
+
+impl Record {
+    /// Create a new record with the specified kind, name, content, and source location.
+    ///
+    /// **Internal API**: This method is public only for interaction with the proc-macro crate.
+    #[doc(hidden)]
+    pub fn new(
+        kind: RecordKind,
+        name: String,
+        content: String,
+        source_location: SourceLocation,
+    ) -> Self {
+        Self {
+            kind,
+            name,
+            content,
+            source_location,
+        }
+    }
+
+    /// Serialize this record to a JSON-lines compatible string.
+    ///
+    /// **Internal API**: This method is public only for interaction with the proc-macro crate.
+    #[doc(hidden)]
+    pub fn to_jsonl_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+}
+
+impl std::fmt::Display for RecordKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RecordKind::Unknown => write!(f, "unknown"),
+            RecordKind::Struct => write!(f, "struct"),
+            RecordKind::Enum => write!(f, "enum"),
+            RecordKind::Union => write!(f, "union"),
+            RecordKind::Function => write!(f, "function"),
+            RecordKind::TypeAlias => write!(f, "type"),
+            RecordKind::Const => write!(f, "const"),
+        }
+    }
+}
+
+impl std::fmt::Debug for RecordSyn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecordSyn")
+            .field("kind", &self.kind)
+            .field("name", &self.name)
+            .field("content", &"<syn::File>")
+            .field("source_location", &self.source_location)
+            .finish()
+    }
+}
+
+impl RecordSyn {
+    /// Create a new RecordSyn with the given components
+    pub(crate) fn new(
+        kind: RecordKind,
+        name: String,
+        content: syn::File,
+        source_location: SourceLocation,
+        type_replacements: HashSet<(String, String)>,
+    ) -> Self {
+        Self {
+            kind,
+            name,
+            content,
+            source_location,
+            _type_replacements: type_replacements,
+        }
+    }
+}
+
+impl RecordKind {
+    /// Returns true if this record kind represents a type definition.
+    ///
+    /// Type definitions include structs, enums, unions, and type aliases.
+    /// Functions, constants, and unknown types are not considered type definitions.
+    pub fn is_type(&self) -> bool {
+        matches!(
+            self,
+            RecordKind::Struct | RecordKind::Enum | RecordKind::Union | RecordKind::TypeAlias
+        )
+    }
+}
