@@ -556,8 +556,17 @@ impl Prebindgen {
         Ok(())
     }
 
-    /// Process all raw records after exported types have been collected
+    /// Process all raw records and update exported types
     fn process_all_records(&mut self, raw_records_map: HashMap<String, Vec<Record>>) {
+        // Update exported_types with type names from all groups
+        for records in raw_records_map.values() {
+            for record in records {
+                if record.kind.is_type() {
+                    self.exported_types.insert(record.name.clone());
+                }
+            }
+        }
+
         // Create codegen instance for processing with complete exported types
         let codegen = codegen::Codegen::new(
             &self.builder.crate_name,
@@ -954,16 +963,7 @@ impl Builder {
             })
             .collect();
 
-        // Update exported_types with type names from all groups
-        for records in raw_records_map.values() {
-            for record in records {
-                if record.kind.is_type() {
-                    pb.exported_types.insert(record.name.clone());
-                }
-            }
-        }
-
-        // Process all raw records now that exported types are complete
+        // Process all raw records
         pb.process_all_records(raw_records_map);
 
         pb
