@@ -1192,23 +1192,22 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
         
         // This should trigger an FFI validation error with source location
         // We'll try to use replace_types which should validate FFI compatibility
-        match codegen::replace_types(
+        let (_, _) = codegen::replace_types(
             file,
             "test-crate",
             &exported_types,
             &allowed_prefixes,
             &transparent_wrappers,
-        ) {
-            (_, _) => {
-                // replace_types doesn't do FFI validation, so we need to manually check
-                // This test verifies that the error reporting infrastructure exists
-                let error = "Invalid FFI function parameter: type not allowed for FFI (at test_file.rs:42:5)";
-                println!("Error with location info: {error}");
-                // Check that the error includes source location information
-                assert!(error.contains("test_file.rs"));
-                assert!(error.contains("42"));
-                assert!(error.contains("5"));
-            }
+        );
+        {
+            // replace_types doesn't do FFI validation, so we need to manually check
+            // This test verifies that the error reporting infrastructure exists
+            let error = "Invalid FFI function parameter: type not allowed for FFI (at test_file.rs:42:5)";
+            println!("Error with location info: {error}");
+            // Check that the error includes source location information
+            assert!(error.contains("test_file.rs"));
+            assert!(error.contains("42"));
+            assert!(error.contains("5"));
         }
     }
 
