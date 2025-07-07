@@ -113,9 +113,7 @@ impl<'a> ReplaceTypes<'a> {
                 mutability,
                 elem: Box::new(local_core_type),
             });
-            // Mark as converted only if the referenced type needed conversion
-            // Reference-to-pointer conversion is always done for FFI, but transmute is only needed
-            // if the referenced type itself is converted (wrapper stripped or exported type)
+            // Reference-to-pointer conversion is always done for FFI
             super::convert_reference_to_pointer(&local_ref)
         } else if *type_changed {
             // Non-reference type that needed conversion
@@ -249,7 +247,9 @@ fn replace_types_in_type_with_context(ty: &mut syn::Type, replacer: &ReplaceType
     let mut type_changed = false;
     match replacer.convert_to_local_type(ty, assertion_type_pairs, &mut type_changed, context) {
         Ok(converted_type) => {
-            if type_changed {
+            // Apply conversion if type was changed OR if it's a reference (which should always become a pointer for FFI)
+            let is_reference = matches!(ty, syn::Type::Reference(_));
+            if type_changed || is_reference {
                 *ty = converted_type;
             }
         }
