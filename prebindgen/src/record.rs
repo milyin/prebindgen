@@ -33,6 +33,12 @@ pub struct SourceLocation {
     pub column: usize,
 }
 
+impl std::fmt::Display for SourceLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}:{}", self.file, self.line, self.column)
+    }
+}
+
 /// The kind of record (struct, enum, union, or function).
 ///
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.
@@ -56,6 +62,20 @@ pub enum RecordKind {
     TypeAlias,
     /// A constant definition
     Const,
+}
+
+impl std::fmt::Display for RecordKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RecordKind::Unknown => write!(f, "unknown"),
+            RecordKind::Struct => write!(f, "struct"),
+            RecordKind::Enum => write!(f, "enum"),
+            RecordKind::Union => write!(f, "union"),
+            RecordKind::Function => write!(f, "function"),
+            RecordKind::TypeAlias => write!(f, "type"),
+            RecordKind::Const => write!(f, "const"),
+        }
+    }
 }
 
 /// Represents a record with parsed syntax tree content.
@@ -100,20 +120,6 @@ impl Record {
     #[doc(hidden)]
     pub fn to_jsonl_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
-    }
-}
-
-impl std::fmt::Display for RecordKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RecordKind::Unknown => write!(f, "unknown"),
-            RecordKind::Struct => write!(f, "struct"),
-            RecordKind::Enum => write!(f, "enum"),
-            RecordKind::Union => write!(f, "union"),
-            RecordKind::Function => write!(f, "function"),
-            RecordKind::TypeAlias => write!(f, "type"),
-            RecordKind::Const => write!(f, "const"),
-        }
     }
 }
 
@@ -168,10 +174,10 @@ impl RecordSyn {
             content: record_content,
             source_location,
         } = record;
-        
+
         // Parse the raw content into a syntax tree
         let parsed = syn::parse_file(&record_content).map_err(|e| e.to_string())?;
-        
+
         // Apply feature processing
         let processed = crate::codegen::process_features(
             parsed,
@@ -180,7 +186,7 @@ impl RecordSyn {
             config.feature_mappings,
             &source_location,
         );
-        
+
         // Skip records that become empty
         if processed.items.is_empty() {
             return Err(format!(
@@ -272,7 +278,7 @@ impl RecordSyn {
             }
             (processed.items.into_iter().next().unwrap(), HashSet::new())
         };
-        
+
         // Construct the RecordSyn with type replacements
         Ok(RecordSyn::new(
             name.clone(),

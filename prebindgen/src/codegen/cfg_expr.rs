@@ -92,8 +92,7 @@ impl CfgExpr {
                 } else {
                     // Unmapped feature - panic with source location information
                     panic!(
-                        "unmapped feature: {name} (at {}:{}:{})",
-                        source_location.file, source_location.line, source_location.column
+                        "unmapped feature: {name} (at {source_location})"
                     );
                 }
             }
