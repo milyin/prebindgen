@@ -33,10 +33,10 @@ pub struct Builder {
     edition: String,
     selected_groups: HashSet<String>,
     allowed_prefixes: Vec<syn::Path>,
-    disabled_features: HashSet<String>,
-    enabled_features: HashSet<String>,
-    feature_mappings: HashMap<String, String>,
-    transparent_wrappers: Vec<syn::Path>,
+    pub(crate) disabled_features: HashSet<String>,
+    pub(crate) enabled_features: HashSet<String>,
+    pub(crate) feature_mappings: HashMap<String, String>,
+    pub(crate) transparent_wrappers: Vec<syn::Path>,
 }
 
 impl Builder {
@@ -370,7 +370,7 @@ impl Builder {
         }
 
         // Transform functions to FFI stubs and collect type replacements
-        let (final_content, type_replacements) = if kind == RecordKind::Function {
+        let (final_item, type_replacements) = if kind == RecordKind::Function {
             // Extract the function from the processed file
             if processed.items.len() != 1 {
                 return Err(format!(
@@ -442,21 +442,21 @@ impl Builder {
             extern_function.vis =
                 syn::Visibility::Public(syn::Token![pub](proc_macro2::Span::call_site()));
 
-            let final_file = syn::File {
-                shebang: processed.shebang,
-                attrs: processed.attrs,
-                items: vec![syn::Item::Fn(extern_function)],
-            };
-
-            (final_file, type_replacements)
+            (syn::Item::Fn(extern_function), type_replacements)
         } else {
-            (processed, HashSet::new())
+            // For non-function items, extract the first (and should be only) item
+            if processed.items.len() != 1 {
+                return Err(format!(
+                    "Expected exactly one item in file, found {}",
+                    processed.items.len()
+                ));
+            }
+            (processed.items.into_iter().next().unwrap(), HashSet::new())
         };
         // Construct the RecordSyn with type replacements
         Ok(RecordSyn::new(
-            kind.clone(),
             name.clone(),
-            final_content,
+            final_item,
             source_location.clone(),
             type_replacements,
         ))

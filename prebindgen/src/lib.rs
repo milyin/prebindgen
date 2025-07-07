@@ -296,7 +296,13 @@ impl Prebindgen {
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(group_records) = self.records.get(group) {
             for record in group_records {
-                writeln!(dest, "{}", prettyplease::unparse(&record.content))?;
+                // Create a temporary file with just the item to unparse it properly
+                let temp_file = syn::File {
+                    shebang: None,
+                    attrs: vec![],
+                    items: vec![record.content.clone()],
+                };
+                writeln!(dest, "{}", prettyplease::unparse(&temp_file))?;
             }
         }
         dest.flush()?;

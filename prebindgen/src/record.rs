@@ -61,16 +61,14 @@ pub enum RecordKind {
 /// Represents a record with parsed syntax tree content.
 ///
 /// This is the internal representation used by Prebindgen after deduplication
-/// and initial parsing. Unlike `Record`, this stores the parsed `syn::File`
+/// and initial parsing. Unlike `Record`, this stores the parsed `syn::Item`
 /// instead of raw string content for more efficient processing.
 #[derive(Clone)]
 pub(crate) struct RecordSyn {
-    /// The kind of definition (struct, enum, union, or function)
-    pub kind: RecordKind,
     /// The name of the type or function
     pub name: String,
     /// The parsed syntax tree content of the definition (after feature processing and stub generation)
-    pub content: syn::File,
+    pub content: syn::Item,
     /// Source location information
     pub source_location: SourceLocation,
     /// Type replacement pairs for this record only (local_type, origin_type)
@@ -122,9 +120,9 @@ impl std::fmt::Display for RecordKind {
 impl std::fmt::Debug for RecordSyn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RecordSyn")
-            .field("kind", &self.kind)
+            .field("kind", &self.kind())
             .field("name", &self.name)
-            .field("content", &"<syn::File>")
+            .field("content", &"<syn::Item>")
             .field("source_location", &self.source_location)
             .finish()
     }
@@ -133,18 +131,29 @@ impl std::fmt::Debug for RecordSyn {
 impl RecordSyn {
     /// Create a new RecordSyn with the given components
     pub(crate) fn new(
-        kind: RecordKind,
         name: String,
-        content: syn::File,
+        content: syn::Item,
         source_location: SourceLocation,
         type_replacements: HashSet<(String, String)>,
     ) -> Self {
         Self {
-            kind,
             name,
             content,
             source_location,
             _type_replacements: type_replacements,
+        }
+    }
+
+    /// Derive the record kind from the syn::Item content
+    pub(crate) fn kind(&self) -> RecordKind {
+        match &self.content {
+            syn::Item::Struct(_) => RecordKind::Struct,
+            syn::Item::Enum(_) => RecordKind::Enum,
+            syn::Item::Union(_) => RecordKind::Union,
+            syn::Item::Fn(_) => RecordKind::Function,
+            syn::Item::Type(_) => RecordKind::TypeAlias,
+            syn::Item::Const(_) => RecordKind::Const,
+            _ => RecordKind::Unknown,
         }
     }
 }
