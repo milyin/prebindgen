@@ -573,48 +573,7 @@ impl Prebindgen {
 
             let processed_records: Result<Vec<RecordSyn>, String> = raw_records
                 .iter()
-                .filter_map(|record| {
-                    // Parse the content
-                    let content = match syn::parse_file(&record.content) {
-                        Ok(content) => content,
-                        Err(e) => return Some(Err(format!("Failed to parse content for {}: {}", record.name, e))),
-                    };
-
-                    // Apply feature processing to the syntax tree
-                    let content = codegen::process_features(
-                        content,
-                        &self.builder.disabled_features,
-                        &self.builder.enabled_features,
-                        &self.builder.feature_mappings,
-                        Some(&record.source_location),
-                    );
-
-                    // Skip if content is empty after feature processing
-                    if content.items.is_empty() {
-                        return None;
-                    }
-
-                    // Generate FFI stub for function or keep content as-is for other types
-                    let content = if record.kind == RecordKind::Function {
-                        match codegen.transform_function_to_stub(
-                            content,
-                            &mut global_assertion_type_pairs,
-                            &record.source_location,
-                        ) {
-                            Ok(content) => content,
-                            Err(e) => return Some(Err(e.to_string())),
-                        }
-                    } else {
-                        content
-                    };
-
-                    Some(Ok(RecordSyn::new(
-                        record.kind.clone(),
-                        record.name.clone(),
-                        content,
-                        record.source_location.clone(),
-                    )))
-                })
+                .filter_map(|record| self.parse_record(record, &codegen, &mut global_assertion_type_pairs))
                 .collect();
             
             let mut processed_records = processed_records.unwrap_or_else(|e| {
@@ -644,6 +603,56 @@ impl Prebindgen {
             // Store the processed records for this group
             self.records.insert(group_name.clone(), processed_records);
         }
+    }
+
+    /// Parse a raw `Record` into a `RecordSyn`, applying feature processing and stub generation.
+    /// Returns `None` if the record should be skipped (empty after feature processing),
+    /// or `Some(Err(...))` if an error occurred, or `Some(Ok(...))` on success.
+    fn parse_record<'a>(
+        &self,
+        record: &Record,
+        codegen: &codegen::Codegen<'a>,
+        global_assertion_type_pairs: &mut HashSet<(String, String)>,
+    ) -> Option<Result<RecordSyn, String>> {
+        // Destructure record fields
+        let Record { kind, name, content: record_content, source_location } = record;
+        // Parse the raw content into a syntax tree
+        let parsed = match syn::parse_file(record_content) {
+            Ok(content) => content,
+            Err(e) => return Some(Err(format!("Failed to parse content for {}: {}", name, e))),
+        };
+        // Apply feature processing
+        let processed = crate::codegen::process_features(
+            parsed,
+            &self.builder.disabled_features,
+            &self.builder.enabled_features,
+            &self.builder.feature_mappings,
+            Some(source_location),
+        );
+        // Skip records that become empty
+        if processed.items.is_empty() {
+            return None;
+        }
+        // Transform functions to FFI stubs
+        let final_content = if *kind == RecordKind::Function {
+            match codegen.transform_function_to_stub(
+                processed,
+                global_assertion_type_pairs,
+                source_location,
+            ) {
+                Ok(c) => c,
+                Err(e) => return Some(Err(e.to_string())),
+            }
+        } else {
+            processed
+        };
+        // Construct the RecordSyn
+        Some(Ok(RecordSyn::new(
+            kind.clone(),
+            name.clone(),
+            final_content,
+            source_location.clone(),
+        )))
     }
 }
 
