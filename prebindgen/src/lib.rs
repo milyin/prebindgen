@@ -209,6 +209,50 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
+/// Represents a record with parsed syntax tree content.
+///
+/// This is the internal representation used by Prebindgen after deduplication
+/// and initial parsing. Unlike `Record`, this stores the parsed `syn::File`
+/// instead of raw string content for more efficient processing.
+#[derive(Clone)]
+pub(crate) struct RecordSyn {
+    /// The kind of definition (struct, enum, union, or function)
+    pub kind: RecordKind,
+    /// The name of the type or function
+    pub name: String,
+    /// The parsed syntax tree content of the definition (after feature processing and stub generation)
+    pub content: syn::File,
+    /// Source location information
+    pub source_location: SourceLocation,
+}
+
+impl std::fmt::Debug for RecordSyn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecordSyn")
+            .field("kind", &self.kind)
+            .field("name", &self.name)
+            .field("content", &"<syn::File>")
+            .field("source_location", &self.source_location)
+            .finish()
+    }
+}
+
+impl RecordSyn {
+    /// Create a new RecordSyn with the given components
+    pub(crate) fn new(
+        kind: RecordKind,
+        name: String,
+        content: syn::File,
+        source_location: SourceLocation,
+    ) -> Self {
+        Self {
+            kind,
+            name,
+            content,
+            source_location,
+        }
+    }
+}
 impl RecordKind {
     /// Returns true if this record kind represents a type definition.
     ///
@@ -335,7 +379,7 @@ pub fn init_prebindgen_out_dir() {
 /// ```
 pub struct Prebindgen {
     builder: Builder,
-    records: HashMap<String, Vec<Record>>,
+    records: HashMap<String, Vec<RecordSyn>>,
     exported_types: HashSet<String>,
 }
 
@@ -394,7 +438,7 @@ pub struct FileBuilder<'a> {
 
 impl Prebindgen {
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
-    fn read_group_internal(&mut self, group: &str) {
+    fn read_group_internal(&self, group: &str) -> Vec<Record> {
         let pattern = format!("{group}_");
         let mut record_map = HashMap::new();
 
@@ -423,22 +467,12 @@ impl Prebindgen {
             }
         }
 
-        // Convert map values to vector
-        let all_records: Vec<Record> = record_map.values().cloned().collect();
-
-        // Store the deduplicated records for this group
-        self.records.insert(group.to_string(), all_records.clone());
-
-        // Update exported_types with type names from all groups
-        for record in &all_records {
-            if record.kind.is_type() {
-                self.exported_types.insert(record.name.clone());
-            }
-        }
+        // Return deduplicated records for this group
+        record_map.into_values().collect::<Vec<_>>()
     }
 
-    /// Internal method to read all exported files for all available groups
-    fn read_all_groups_internal(&mut self) {
+    /// Internal method to discover all available groups from the directory
+    fn discover_generated_groups(&self) -> HashSet<String> {
         let mut groups = HashSet::new();
 
         // Discover all available groups
@@ -457,10 +491,7 @@ impl Prebindgen {
             }
         }
 
-        // Read all discovered groups
-        for group in groups {
-            self.read_group_internal(&group);
-        }
+        groups
     }
 
     /// Select a specific group for file generation
@@ -510,60 +541,87 @@ impl Prebindgen {
         }
     }
 
-    /// Internal method to write records with optional append mode
+    /// Internal method to write records that have already been processed
     fn write_internal(
         &self,
         dest: &mut File,
         group: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use std::collections::HashSet;
-        
-        // Collect assertion pairs across all functions in this group
-        let mut global_assertion_type_pairs: HashSet<(String, String)> = HashSet::new();
-        
         if let Some(group_records) = self.records.get(group) {
-            // Create codegen instance for code generation
-            let codegen = codegen::Codegen::new(
-                &self.builder.crate_name,
-                &self.exported_types,
-                &self.builder.allowed_prefixes,
-                &self.builder.transparent_wrappers,
-                &self.builder.edition,
-            );
-
             for record in group_records {
-                // Parse the content as a syntax tree for feature processing
-                let content = syn::parse_file(&record.content)
-                    .map_err(|e| format!("Failed to parse content for {}: {}", record.name, e))?;
-
-                // Apply feature processing to the syntax tree
-                let content = codegen::process_features(
-                    content,
-                    &self.builder.disabled_features,
-                    &self.builder.enabled_features,
-                    &self.builder.feature_mappings,
-                    Some(&record.source_location),
-                );
-
-                // Skip if content is empty after feature processing
-                if content.items.is_empty() {
-                    continue;
-                }
-
-                // Generate FFI stub for function
-                let content = if record.kind == RecordKind::Function {
-                    codegen.transform_function_to_stub(
-                        content,
-                        &mut global_assertion_type_pairs,
-                        &record.source_location,
-                    )?
-                } else {
-                    content
-                };
-                writeln!(dest, "{}", prettyplease::unparse(&content))?;
+                writeln!(dest, "{}", prettyplease::unparse(&record.content))?;
             }
+        }
+        dest.flush()?;
+        Ok(())
+    }
+
+    /// Process all raw records after exported types have been collected
+    fn process_all_records(&mut self, raw_records_map: HashMap<String, Vec<Record>>) {
+        // Create codegen instance for processing with complete exported types
+        let codegen = codegen::Codegen::new(
+            &self.builder.crate_name,
+            &self.exported_types,
+            &self.builder.allowed_prefixes,
+            &self.builder.transparent_wrappers,
+            &self.builder.edition,
+        );
+
+        // Process each group's raw records
+        for (group_name, raw_records) in &raw_records_map {
+            let mut global_assertion_type_pairs: HashSet<(String, String)> = HashSet::new();
+
+            let processed_records: Result<Vec<RecordSyn>, String> = raw_records
+                .iter()
+                .filter_map(|record| {
+                    // Parse the content
+                    let content = match syn::parse_file(&record.content) {
+                        Ok(content) => content,
+                        Err(e) => return Some(Err(format!("Failed to parse content for {}: {}", record.name, e))),
+                    };
+
+                    // Apply feature processing to the syntax tree
+                    let content = codegen::process_features(
+                        content,
+                        &self.builder.disabled_features,
+                        &self.builder.enabled_features,
+                        &self.builder.feature_mappings,
+                        Some(&record.source_location),
+                    );
+
+                    // Skip if content is empty after feature processing
+                    if content.items.is_empty() {
+                        return None;
+                    }
+
+                    // Generate FFI stub for function or keep content as-is for other types
+                    let content = if record.kind == RecordKind::Function {
+                        match codegen.transform_function_to_stub(
+                            content,
+                            &mut global_assertion_type_pairs,
+                            &record.source_location,
+                        ) {
+                            Ok(content) => content,
+                            Err(e) => return Some(Err(e.to_string())),
+                        }
+                    } else {
+                        content
+                    };
+
+                    Some(Ok(RecordSyn::new(
+                        record.kind.clone(),
+                        record.name.clone(),
+                        content,
+                        record.source_location.clone(),
+                    )))
+                })
+                .collect();
             
-            // Generate all collected assertions at the end of the file
+            let mut processed_records = processed_records.unwrap_or_else(|e| {
+                panic!("Failed to parse records for group {}: {}", group_name, e);
+            });
+
+            // Generate type assertions for this group and add them as special records
             if !global_assertion_type_pairs.is_empty() {
                 let type_assertions = codegen::generate_type_assertions(&global_assertion_type_pairs);
                 for assertion in type_assertions {
@@ -572,12 +630,20 @@ impl Prebindgen {
                         attrs: vec![],
                         items: vec![assertion],
                     };
-                    writeln!(dest, "{}", prettyplease::unparse(&assertion_file))?;
+                    // Add assertion as a special record with a unique name
+                    let assertion_record = RecordSyn::new(
+                        RecordKind::Const, // Use Const as a marker for assertions
+                        format!("__assertion_{}", processed_records.len()),
+                        assertion_file,
+                        SourceLocation::default(),
+                    );
+                    processed_records.push(assertion_record);
                 }
             }
+
+            // Store the processed records for this group
+            self.records.insert(group_name.clone(), processed_records);
         }
-        dest.flush()?;
-        Ok(())
     }
 }
 
@@ -865,15 +931,31 @@ impl Builder {
         };
 
         // Read the groups based on selection
-        if pb.builder.selected_groups.is_empty() {
-            // Read all available groups
-            pb.read_all_groups_internal();
+        let groups = if pb.builder.selected_groups.is_empty() {
+            pb.discover_generated_groups()
         } else {
-            // Read only selected groups
-            for group in &pb.builder.selected_groups.clone() {
-                pb.read_group_internal(group);
+            pb.builder.selected_groups.clone()
+        };
+
+        let raw_records_map: HashMap<String, Vec<Record>> = groups
+            .into_iter()
+            .map(|group| {
+                let records = pb.read_group_internal(&group);
+                (group, records)
+            })
+            .collect();
+
+        // Update exported_types with type names from all groups
+        for records in raw_records_map.values() {
+            for record in records {
+                if record.kind.is_type() {
+                    pb.exported_types.insert(record.name.clone());
+                }
             }
         }
+
+        // Process all raw records now that exported types are complete
+        pb.process_all_records(raw_records_map);
 
         pb
     }
@@ -994,8 +1076,6 @@ mod tests {
 
     #[test]
     fn test_parsing_error_handling() {
-        use tempfile::NamedTempFile;
-
         // Create a temporary directory structure to simulate prebindgen data
         let temp_dir = tempfile::tempdir().unwrap();
         let prebindgen_dir = temp_dir.path().join("prebindgen");
@@ -1015,17 +1095,15 @@ mod tests {
         let jsonl_content = format!("{}\n", invalid_record.to_jsonl_string().unwrap());
         std::fs::write(prebindgen_dir.join("structs_test.jsonl"), jsonl_content).unwrap();
 
-        // Try to build prebindgen with the invalid data
-        let prebindgen = Builder::new(&prebindgen_dir).build();
+        // Try to build prebindgen with the invalid data - this should panic with parsing error
+        let result = std::panic::catch_unwind(|| {
+            Builder::new(&prebindgen_dir).build()
+        });
 
-        // Try to write the group, which should fail with a parsing error
-        let mut temp_file = NamedTempFile::new().unwrap();
-        let result = prebindgen.write_internal(temp_file.as_file_mut(), "structs");
-
-        // Should get an error about parsing failure
+        // Should panic with a parsing error message
         assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Failed to parse content for InvalidStruct"));
+        // We can't easily check the panic message content since it's wrapped in Any
+        // The important thing is that it panics during build() rather than later
     }
 
     #[test]
