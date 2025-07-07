@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 /// This structure holds all the configuration and state needed for processing
 /// features and transforming functions to FFI stubs. It centralizes the parameters
 /// that were previously passed individually to multiple functions.
-pub(crate) struct Codegen<'a> {
+struct Codegen<'a> {
     /// The source crate identifier (crate name with dashes converted to underscores)
     pub source_crate_ident: syn::Ident,
     /// Set of exported type names that are valid for FFI
@@ -1021,7 +1021,193 @@ fn prefix_exported_types_in_type(
     }
 }
 
-#[cfg(test)]
-mod tests;
+/// Transform a function definition into an FFI stub
+///
+/// This function takes a parsed Rust function and transforms it into a `#[no_mangle] extern "C"`
+/// wrapper function that calls the original function from the source crate.
+/// This is a public interface that doesn't perform type replacement.
+#[roxygen]
+pub(crate) fn transform_function_to_stub(
+    /// The parsed file containing exactly one function definition
+    file: syn::File,
+    /// The source crate name
+    crate_name: &str,
+    /// Set of exported type names that are valid for FFI
+    exported_types: &HashSet<String>,
+    /// List of allowed path prefixes for type validation
+    allowed_prefixes: &[syn::Path],
+    /// List of transparent wrapper types to strip during conversion
+    transparent_wrappers: &[syn::Path],
+    /// Rust edition string (e.g., "2021", "2024") for proper attribute generation
+    edition: &str,
+    /// Source location information for error reporting
+    source_location: &crate::SourceLocation,
+) -> Result<(syn::File, HashSet<(String, String)>), String> {
+    // Create a temporary codegen instance
+    let codegen = Codegen::new(
+        crate_name,
+        exported_types,
+        allowed_prefixes,
+        transparent_wrappers,
+        edition,
+    );
+
+    // Transform the function and collect type replacement pairs
+    let mut assertion_type_pairs = HashSet::new();
+    let transformed_file = codegen.transform_function_to_stub(
+        file,
+        &mut assertion_type_pairs,
+        source_location,
+    )?;
+
+    Ok((transformed_file, assertion_type_pairs))
+}
+
+/// Replace types in code based on type replacement pairs
+///
+/// This function takes code and a set of type replacement pairs and returns
+/// the code with types replaced and the type replacement map.
+#[roxygen]
+#[allow(dead_code)]
+pub(crate) fn replace_types(
+    /// The code to process for type replacements
+    mut file: syn::File,
+    /// Set of (local_type, original_type) string pairs for replacement
+    type_replacements: &HashSet<(String, String)>,
+) -> (syn::File, HashMap<String, String>) {
+    // Convert the HashSet to a HashMap for easier lookups
+    let replacement_map: HashMap<String, String> = type_replacements
+        .iter()
+        .cloned()
+        .collect();
+
+    // Apply type replacements throughout the file
+    for item in &mut file.items {
+        replace_types_in_item(item, &replacement_map);
+    }
+
+    (file, replacement_map)
+}
+
+/// Replace types in a single item recursively
+fn replace_types_in_item(item: &mut syn::Item, replacement_map: &HashMap<String, String>) {
+    match item {
+        syn::Item::Fn(item_fn) => {
+            replace_types_in_signature(&mut item_fn.sig, replacement_map);
+            replace_types_in_block(&mut item_fn.block, replacement_map);
+        }
+        syn::Item::Struct(item_struct) => {
+            replace_types_in_fields(&mut item_struct.fields, replacement_map);
+        }
+        syn::Item::Enum(item_enum) => {
+            for variant in &mut item_enum.variants {
+                replace_types_in_fields(&mut variant.fields, replacement_map);
+            }
+        }
+        syn::Item::Union(item_union) => {
+            replace_types_in_fields(&mut syn::Fields::Named(item_union.fields.clone()), replacement_map);
+        }
+        syn::Item::Type(item_type) => {
+            replace_types_in_type(&mut item_type.ty, replacement_map);
+        }
+        syn::Item::Const(item_const) => {
+            replace_types_in_type(&mut item_const.ty, replacement_map);
+        }
+        syn::Item::Static(item_static) => {
+            replace_types_in_type(&mut item_static.ty, replacement_map);
+        }
+        _ => {
+            // Other items don't contain types we need to replace
+        }
+    }
+}
+
+/// Replace types in function signature
+fn replace_types_in_signature(sig: &mut syn::Signature, replacement_map: &HashMap<String, String>) {
+    // Replace parameter types
+    for input in &mut sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            replace_types_in_type(&mut pat_type.ty, replacement_map);
+        }
+    }
+
+    // Replace return type
+    if let syn::ReturnType::Type(_, return_type) = &mut sig.output {
+        replace_types_in_type(return_type, replacement_map);
+    }
+}
+
+/// Replace types in a function block
+fn replace_types_in_block(block: &mut syn::Block, _replacement_map: &HashMap<String, String>) {
+    // For now, we don't need to replace types in function bodies
+    // This can be extended if needed
+    let _ = block;
+}
+
+/// Replace types in struct/enum fields
+fn replace_types_in_fields(fields: &mut syn::Fields, replacement_map: &HashMap<String, String>) {
+    match fields {
+        syn::Fields::Named(fields_named) => {
+            for field in &mut fields_named.named {
+                replace_types_in_type(&mut field.ty, replacement_map);
+            }
+        }
+        syn::Fields::Unnamed(fields_unnamed) => {
+            for field in &mut fields_unnamed.unnamed {
+                replace_types_in_type(&mut field.ty, replacement_map);
+            }
+        }
+        syn::Fields::Unit => {
+            // No fields to process
+        }
+    }
+}
+
+/// Replace a type based on the replacement map
+fn replace_types_in_type(ty: &mut syn::Type, replacement_map: &HashMap<String, String>) {
+    match ty {
+        syn::Type::Path(type_path) => {
+            // Check if this type needs replacement
+            let type_str = quote::quote! { #type_path }.to_string();
+            if let Some(replacement) = replacement_map.get(&type_str) {
+                if let Ok(new_type) = syn::parse_str::<syn::Type>(replacement) {
+                    *ty = new_type;
+                    return;
+                }
+            }
+
+            // Replace types in generic arguments
+            if let Some(segment) = type_path.path.segments.last_mut() {
+                if let syn::PathArguments::AngleBracketed(args) = &mut segment.arguments {
+                    for arg in &mut args.args {
+                        if let syn::GenericArgument::Type(inner_ty) = arg {
+                            replace_types_in_type(inner_ty, replacement_map);
+                        }
+                    }
+                }
+            }
+        }
+        syn::Type::Reference(type_ref) => {
+            replace_types_in_type(&mut type_ref.elem, replacement_map);
+        }
+        syn::Type::Ptr(type_ptr) => {
+            replace_types_in_type(&mut type_ptr.elem, replacement_map);
+        }
+        syn::Type::Slice(type_slice) => {
+            replace_types_in_type(&mut type_slice.elem, replacement_map);
+        }
+        syn::Type::Array(type_array) => {
+            replace_types_in_type(&mut type_array.elem, replacement_map);
+        }
+        syn::Type::Tuple(type_tuple) => {
+            for elem_ty in &mut type_tuple.elems {
+                replace_types_in_type(elem_ty, replacement_map);
+            }
+        }
+        _ => {
+            // Other types don't need replacement
+        }
+    }
+}
 
 

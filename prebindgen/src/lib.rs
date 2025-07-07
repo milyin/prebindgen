@@ -805,10 +805,11 @@ impl Builder {
     /// Parse a raw `Record` into a `RecordSyn`, applying feature processing and stub generation.
     /// Returns `None` if the record should be skipped (empty after feature processing),
     /// or `Some(Err(...))` if an error occurred, or `Some(Ok(...))` on success.
-    fn parse_record<'a>(
+    fn parse_record(
         &self,
         record: Record,
-        codegen: &codegen::Codegen<'a>,
+        crate_name: &str,
+        exported_types: &HashSet<String>,
     ) -> Option<Result<RecordSyn, String>> {
         // Destructure record fields
         let Record { kind, name, content: record_content, source_location } = record;
@@ -831,13 +832,16 @@ impl Builder {
         }
         // Transform functions to FFI stubs and collect type replacements
         let (final_content, type_replacements) = if kind == RecordKind::Function {
-            let mut local_assertion_type_pairs = HashSet::new();
-            match codegen.transform_function_to_stub(
+            match crate::codegen::transform_function_to_stub(
                 processed,
-                &mut local_assertion_type_pairs,
+                crate_name,
+                exported_types,
+                &self.allowed_prefixes,
+                &self.transparent_wrappers,
+                &self.edition,
                 &source_location,
             ) {
-                Ok(c) => (c, local_assertion_type_pairs),
+                Ok((content, replacements)) => (content, replacements),
                 Err(e) => return Some(Err(e.to_string())),
             }
         } else {
@@ -914,25 +918,12 @@ impl Builder {
             }
         }
 
-        // Create codegen instance for processing with complete exported types
-        let allowed_prefixes = self.allowed_prefixes.clone();
-        let transparent_wrappers = self.transparent_wrappers.clone();
-        let edition = self.edition.clone();
-        
-        let codegen = codegen::Codegen::new(
-            &crate_name,
-            &exported_types,
-            &allowed_prefixes,
-            &transparent_wrappers,
-            &edition,
-        );
-
         // Process all raw records
         let mut records = HashMap::new();
         for (group_name, raw_records) in raw_records_map {
             let processed_records: Result<Vec<RecordSyn>, String> = raw_records
                 .into_iter()
-                .filter_map(|record| self.parse_record(record, &codegen))
+                .filter_map(|record| self.parse_record(record, &crate_name, &exported_types))
                 .collect();
             
             let processed_records = processed_records.unwrap_or_else(|e| {
@@ -1126,27 +1117,28 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
         let exported_types = HashSet::new();
         let allowed_prefixes = codegen::generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
-        let mut assertion_type_pairs = HashSet::new();
         
-        let source_location = SourceLocation {
+        let _source_location = SourceLocation {
             file: "test_file.rs".to_string(),
             line: 42,  // Example line number
             column: 5, // Example column number
         };
         
         // Create codegen instance for the test
-        let codegen = codegen::Codegen::new(
+        let source_location = SourceLocation {
+            file: "test_file.rs".to_string(),
+            line: 42,  // Example line number
+            column: 5, // Example column number
+        };
+        
+        // This should trigger an FFI validation error with source location
+        match codegen::transform_function_to_stub(
+            file,
             "test-crate",
             &exported_types,
             &allowed_prefixes,
             &transparent_wrappers,
             "2021",
-        );
-        
-        // This should trigger an FFI validation error with source location
-        match codegen.transform_function_to_stub(
-            file,
-            &mut assertion_type_pairs,
             &source_location,
         ) {
             Ok(_) => std::panic!("Expected error but got success"),
