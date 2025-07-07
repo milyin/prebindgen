@@ -802,22 +802,16 @@ impl Builder {
         self
     }
 
-    /// Parse a raw `Record` into a `RecordSyn`, applying feature processing and stub generation.
-    /// Returns `None` if the record should be skipped (empty after feature processing),
-    /// or `Some(Err(...))` if an error occurred, or `Some(Ok(...))` on success.
     fn parse_record(
         &self,
         record: Record,
         crate_name: &str,
         exported_types: &HashSet<String>,
-    ) -> Option<Result<RecordSyn, String>> {
+    ) -> Result<RecordSyn, String> {
         // Destructure record fields
         let Record { kind, name, content: record_content, source_location } = record;
         // Parse the raw content into a syntax tree
-        let parsed = match syn::parse_file(&record_content) {
-            Ok(content) => content,
-            Err(e) => return Some(Err(format!("Failed to parse content for {name}: {e}"))),
-        };
+        let parsed = syn::parse_file(&record_content).map_err(|e| e.to_string())?;
         // Apply feature processing
         let processed = crate::codegen::process_features(
             parsed,
@@ -828,8 +822,19 @@ impl Builder {
         );
         // Skip records that become empty
         if processed.items.is_empty() {
-            return None;
+            return Err(format!(
+                "Record {name} of kind {kind} became empty after feature processing"
+            ));
         }
+
+        if kind == RecordKind::Function {
+            let trimmed = codegen::transform_function::trim_implementation(
+                processed.clone(),
+            );
+
+        }
+
+
         // Transform functions to FFI stubs and collect type replacements
         let (final_content, type_replacements) = if kind == RecordKind::Function {
             match crate::codegen::transform_function_to_stub(

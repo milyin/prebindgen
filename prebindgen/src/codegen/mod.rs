@@ -10,14 +10,13 @@
 use roxygen::roxygen;
 use std::collections::HashSet;
 
-pub mod transform_function_to_stub;
+pub mod transform_function;
 pub mod process_features;
 pub mod replace_types;
 
 // Re-export the main functions
-pub use transform_function_to_stub::transform_function_to_stub;
+pub use transform_function::transform_function_to_stub;
 pub use process_features::process_features;
-#[allow(unused_imports)]
 pub use replace_types::replace_types;
 
 /// Generate allowed prefixes that include standard prelude types and modules
