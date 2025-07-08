@@ -874,8 +874,7 @@ pub(crate) fn convert_to_stub(
     let source_crate_ident = &config.crate_ident();
     let function_body = match (has_return_type, return_needs_transmute) {
         (true, true) => quote::quote! {
-            let result = #source_crate_ident::#function_name(#(#call_args),*);
-            unsafe { std::mem::transmute(result) }
+            unsafe { std::mem::transmute(#source_crate_ident::#function_name(#(#call_args),*)) }
         },
         (true, false) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
         (false, _) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },

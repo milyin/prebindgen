@@ -92,3 +92,9 @@ pub fn get_foo_field(input: &Foo) -> &u64 {
     #[cfg(target_arch = "aarch64")]
     return &input.aarch64_field;
 }
+
+#[prebindgen("functions")]
+pub fn get_foo_reference(input: &Foo) -> &Foo {
+    // Return reference to the Foo struct
+    input
+}
