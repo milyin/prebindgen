@@ -308,6 +308,24 @@ impl Prebindgen {
         dest.flush()?;
         Ok(())
     }
+
+    /// Collect type replacements from a specific group
+    ///
+    /// Adds all type replacement pairs from the specified group to the provided HashSet.
+    /// This is useful for gathering type replacements that need assertions without 
+    /// duplicating the logic.
+    ///
+    /// # Parameters
+    ///
+    /// * `group` - The name of the group to collect type replacements from
+    /// * `type_replacements` - Mutable reference to the HashSet to add replacements to
+    pub(crate) fn collect_type_replacements(&self, group: &str, type_replacements: &mut std::collections::HashSet<(String, String)>) {
+        if let Some(group_records) = self.records.get(group) {
+            for record in group_records {
+                record.collect_type_replacements(type_replacements);
+            }
+        }
+    }
 }
 
 

@@ -248,6 +248,18 @@ impl RecordSyn {
             _ => RecordKind::Unknown,
         }
     }
+
+    /// Collect type replacements from this record
+    ///
+    /// Adds all type replacement pairs from this record to the provided HashSet.
+    /// This is useful for gathering type replacements that need assertions.
+    ///
+    /// # Parameters
+    ///
+    /// * `type_replacements` - Mutable reference to the HashSet to add replacements to
+    pub(crate) fn collect_type_replacements(&self, type_replacements: &mut HashSet<(String, String)>) {
+        type_replacements.extend(self.type_replacements.iter().cloned());
+    }
 }
 
 impl RecordKind {

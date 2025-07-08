@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
@@ -97,8 +98,15 @@ impl<'a> FileBuilder<'a> {
         let mut dest = fs::File::create(&dest_path).unwrap_or_else(|e| {
             panic!("Failed to create {}: {}", dest_path.display(), e);
         });
+
+        // Collect type replacements and write records in a single pass
+        let mut all_type_replacements = std::collections::HashSet::new();
         for group in &self.groups {
-            // Write the records for each group
+            // Collect type replacements from this group
+            self.prebindgen
+                .collect_type_replacements(group, &mut all_type_replacements);
+
+            // Write the records for this group (without assertions)
             self.prebindgen
                 .write_internal(&mut dest, group)
                 .unwrap_or_else(|e| {
@@ -110,6 +118,20 @@ impl<'a> FileBuilder<'a> {
                     )
                 });
         }
+
+        // Generate and append type equivalence assertions once at the end
+        let assertions_file = crate::codegen::generate_type_assertions(&all_type_replacements);
+        writeln!(dest, "{}", prettyplease::unparse(&assertions_file)).unwrap_or_else(|e| {
+            panic!(
+                "Failed to write type assertions to {}: {}",
+                dest_path.display(),
+                e
+            );
+        });
+        dest.flush().unwrap_or_else(|e| {
+            panic!("Failed to flush file {}: {}", dest_path.display(), e);
+        });
+
         trace!(
             "Generated bindings for groups [{}] written to: {}",
             self.groups.join(", "),
