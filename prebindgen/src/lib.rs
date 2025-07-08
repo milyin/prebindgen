@@ -457,37 +457,4 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
             assert!(error.contains("5"));
         }
     }
-
-    #[test]
-    fn test_default_implementations() {
-        // Test that SourceLocation has sensible defaults
-        let default_location: SourceLocation = Default::default();
-        assert_eq!(default_location.file, "");
-        assert_eq!(default_location.line, 0);
-        assert_eq!(default_location.column, 0);
-
-        // Test that Record has sensible defaults
-        let default_record: Record = Default::default();
-        assert_eq!(default_record.kind, RecordKind::Unknown); // Should be the #[default] variant
-        assert_eq!(default_record.name, "");
-        assert_eq!(default_record.content, "");
-        assert_eq!(default_record.source_location, default_location);
-
-        // Test that RecordKind has sensible default
-        let default_kind: RecordKind = Default::default();
-        assert_eq!(default_kind, RecordKind::Unknown);
-    }
-
-    #[test]
-    fn test_unknown_record_kind() {
-        // Test that Unknown is not considered a type
-        assert!(!RecordKind::Unknown.is_type());
-        
-        // Test that Unknown displays correctly
-        assert_eq!(format!("{}", RecordKind::Unknown), "unknown");
-        
-        // Test that Unknown is the default
-        let default_kind: RecordKind = Default::default();
-        assert_eq!(default_kind, RecordKind::Unknown);
-    }
 }

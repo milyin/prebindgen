@@ -13,7 +13,7 @@ pub const DEFAULT_GROUP_NAME: &str = "default";
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.
 /// It should not be used directly by end users.
 #[doc(hidden)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Record {
     /// The kind of definition (struct, enum, union, or function)
     pub kind: RecordKind,
@@ -48,12 +48,9 @@ impl std::fmt::Display for SourceLocation {
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.
 /// It should not be used directly by end users.
 #[doc(hidden)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RecordKind {
-    /// Unknown or unrecognized record type
-    #[default]
-    Unknown,
     /// A struct definition with named or unnamed fields
     Struct,
     /// An enum definition with variants
@@ -67,11 +64,23 @@ pub enum RecordKind {
     /// A constant definition
     Const,
 }
+impl RecordKind {
+    /// Returns true if this record kind represents a type definition.
+    ///
+    /// Type definitions include structs, enums, unions, and type aliases.
+    /// Functions, constants, and unknown types are not considered type definitions.
+    pub fn is_type(&self) -> bool {
+        matches!(
+            self,
+            RecordKind::Struct | RecordKind::Enum | RecordKind::Union | RecordKind::TypeAlias
+        )
+    }
+}
+
 
 impl std::fmt::Display for RecordKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RecordKind::Unknown => write!(f, "unknown"),
             RecordKind::Struct => write!(f, "struct"),
             RecordKind::Enum => write!(f, "enum"),
             RecordKind::Union => write!(f, "union"),
@@ -138,37 +147,6 @@ impl Record {
     }
 }
 
-impl std::fmt::Debug for RecordSyn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RecordSyn")
-            .field("kind", &self.kind())
-            .field("name", &self.name)
-            .field("content", &"<syn::Item>")
-            .field("source_location", &self.source_location)
-            .finish()
-    }
-}
-
-/// Configuration parameters for parsing records
-pub(crate) struct ParseConfig<'a> {
-    pub crate_name: &'a str,
-    pub exported_types: &'a HashSet<String>,
-    pub disabled_features: &'a HashSet<String>,
-    pub enabled_features: &'a HashSet<String>,
-    pub feature_mappings: &'a HashMap<String, String>,
-    pub allowed_prefixes: &'a [syn::Path],
-    pub transparent_wrappers: &'a [syn::Path],
-    pub edition: &'a str,
-}
-
-impl<'a> ParseConfig<'a> {
-    pub fn crate_ident(&self) -> syn::Ident {
-        // Convert crate name to identifier (replace dashes with underscores)
-        let source_crate_name = self.crate_name.replace('-', "_");
-        syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site())
-    }
-}
-
 impl RecordSyn {
     /// Create a new RecordSyn with the given components
     pub(crate) fn new(
@@ -182,6 +160,23 @@ impl RecordSyn {
             content,
             source_location,
             type_replacements,
+        }
+    }
+
+    /// Get the identifier from the parsed syntax tree item
+    pub(crate) fn ident(&self) -> Result<&syn::Ident, String> {
+        match &self.content {
+            syn::Item::Struct(item) => Ok(&item.ident),
+            syn::Item::Enum(item) => Ok(&item.ident),
+            syn::Item::Union(item) => Ok(&item.ident),
+            syn::Item::Fn(item) => Ok(&item.sig.ident),
+            syn::Item::Type(item) => Ok(&item.ident),
+            syn::Item::Const(item) => Ok(&item.ident),
+            _ => Err(format!(
+                "unexpected item type '{}' at {} (RecordSyn::ident)",
+                std::any::type_name::<&syn::Item>(),
+                self.source_location
+            )),
         }
     }
 
@@ -234,15 +229,15 @@ impl RecordSyn {
     }
 
     /// Derive the record kind from the syn::Item content
-    pub(crate) fn kind(&self) -> RecordKind {
+    pub(crate) fn kind(&self) -> Result<RecordKind, String> {
         match &self.content {
-            syn::Item::Struct(_) => RecordKind::Struct,
-            syn::Item::Enum(_) => RecordKind::Enum,
-            syn::Item::Union(_) => RecordKind::Union,
-            syn::Item::Fn(_) => RecordKind::Function,
-            syn::Item::Type(_) => RecordKind::TypeAlias,
-            syn::Item::Const(_) => RecordKind::Const,
-            _ => RecordKind::Unknown,
+            syn::Item::Struct(_) => Ok(RecordKind::Struct),
+            syn::Item::Enum(_) => Ok(RecordKind::Enum),
+            syn::Item::Union(_) => Ok(RecordKind::Union),
+            syn::Item::Fn(_) => Ok(RecordKind::Function),
+            syn::Item::Type(_) => Ok(RecordKind::TypeAlias),
+            syn::Item::Const(_) => Ok(RecordKind::Const),
+            _ => Err("Unknown syn::Item variant for RecordSyn::kind".to_string()),
         }
     }
 
@@ -259,16 +254,34 @@ impl RecordSyn {
     }
 }
 
-impl RecordKind {
-    /// Returns true if this record kind represents a type definition.
-    ///
-    /// Type definitions include structs, enums, unions, and type aliases.
-    /// Functions, constants, and unknown types are not considered type definitions.
-    pub fn is_type(&self) -> bool {
-        matches!(
-            self,
-            RecordKind::Struct | RecordKind::Enum | RecordKind::Union | RecordKind::TypeAlias
-        )
+impl std::fmt::Debug for RecordSyn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecordSyn")
+            .field("kind", &self.kind().as_ref().map(|k| k.to_string()).unwrap_or_else(|e| e.clone()))
+            .field("name", &self.name)
+            .field("content", &"<syn::Item>")
+            .field("source_location", &self.source_location)
+            .finish()
+    }
+}
+
+/// Configuration parameters for parsing records
+pub(crate) struct ParseConfig<'a> {
+    pub crate_name: &'a str,
+    pub exported_types: &'a HashSet<String>,
+    pub disabled_features: &'a HashSet<String>,
+    pub enabled_features: &'a HashSet<String>,
+    pub feature_mappings: &'a HashMap<String, String>,
+    pub allowed_prefixes: &'a [syn::Path],
+    pub transparent_wrappers: &'a [syn::Path],
+    pub edition: &'a str,
+}
+
+impl<'a> ParseConfig<'a> {
+    pub fn crate_ident(&self) -> syn::Ident {
+        // Convert crate name to identifier (replace dashes with underscores)
+        let source_crate_name = self.crate_name.replace('-', "_");
+        syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site())
     }
 }
 
@@ -309,12 +322,13 @@ impl TryFrom<Record> for RecordSyn {
         );
 
         // Check that the item type matches the record kind
-        if record_syn.kind() != record.kind {
+        let actual_kind = record_syn.kind()?;
+        if actual_kind != record.kind {
             return Err(format!(
                 "Record kind mismatch at {}: expected {}, found {}",
                 record.source_location,
                 record.kind,
-                record_syn.kind()
+                actual_kind
             ));
         }
 

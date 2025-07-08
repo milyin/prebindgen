@@ -121,36 +121,4 @@ mod tests {
         assert_eq!(parsed.name, "Test");
         assert_eq!(parsed.kind, RecordKind::Struct);
     }
-
-    #[test]
-    fn test_unknown_record_kind_serialization() {
-        // Create a record with Unknown kind
-        let unknown_record = Record {
-            kind: RecordKind::Unknown,
-            name: "UnknownItem".to_string(),
-            content: "// unknown content".to_string(),
-            source_location: Default::default(),
-        };
-        
-        // Create a temporary file
-        let temp_file = NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path();
-
-        // Write record to JSONL file
-        write_jsonl_file(temp_path, &[unknown_record.clone()]).unwrap();
-
-        // Read records back
-        let loaded_records = read_jsonl_file(temp_path).unwrap();
-
-        // Verify it round-trips correctly
-        assert_eq!(loaded_records.len(), 1);
-        let loaded_record = &loaded_records[0];
-        assert_eq!(loaded_record.kind, RecordKind::Unknown);
-        assert_eq!(loaded_record.name, "UnknownItem");
-        assert_eq!(loaded_record.content, "// unknown content");
-        
-        // Verify the JSON contains "unknown" for the kind field
-        let content = fs::read_to_string(temp_path).unwrap();
-        assert!(content.contains("\"kind\":\"unknown\""));
-    }
 }
