@@ -161,7 +161,7 @@ pub(crate) fn convert_to_local_type(
         config.allowed_prefixes,
         &mut is_exported_type,
     )
-    .map_err(|e| format!("{} : {}", context, e))?;
+    .map_err(|e| format!("{context} : {e}"))?;
 
     // Check if we should generate an assertion for this type
     *core_type_changed = has_wrapper || is_exported_type;
@@ -399,6 +399,36 @@ fn strip_transparent_wrappers(
             }
             // No wrapper found, return as-is
             ty.clone()
+        }
+        syn::Type::Reference(type_ref) => {
+            // Recursively strip wrappers from the referenced type
+            let stripped_elem = strip_transparent_wrappers(&type_ref.elem, transparent_wrappers, has_wrapper);
+            syn::Type::Reference(syn::TypeReference {
+                and_token: type_ref.and_token,
+                lifetime: type_ref.lifetime.clone(),
+                mutability: type_ref.mutability,
+                elem: Box::new(stripped_elem),
+            })
+        }
+        syn::Type::Ptr(type_ptr) => {
+            // Recursively strip wrappers from the pointed-to type
+            let stripped_elem = strip_transparent_wrappers(&type_ptr.elem, transparent_wrappers, has_wrapper);
+            syn::Type::Ptr(syn::TypePtr {
+                star_token: type_ptr.star_token,
+                const_token: type_ptr.const_token,
+                mutability: type_ptr.mutability,
+                elem: Box::new(stripped_elem),
+            })
+        }
+        syn::Type::Array(type_array) => {
+            // Recursively strip wrappers from the array element type
+            let stripped_elem = strip_transparent_wrappers(&type_array.elem, transparent_wrappers, has_wrapper);
+            syn::Type::Array(syn::TypeArray {
+                bracket_token: type_array.bracket_token,
+                elem: Box::new(stripped_elem),
+                semi_token: type_array.semi_token,
+                len: type_array.len.clone(),
+            })
         }
         _ => ty.clone(),
     }
@@ -780,7 +810,15 @@ pub(crate) fn convert_to_stub(
     // Generate function body
     let function_name = &function.sig.ident;
     let source_crate_ident = &config.crate_ident();
-    let function_body = match (has_return_type, return_needs_transmute) {
+    
+    // Check if the original return type was a reference that got converted to a pointer
+    let is_converted_return_reference = if let Some(original_ret) = &original_return_type {
+        matches!(original_ret, syn::Type::Reference(_)) && matches!(&function.sig.output, syn::ReturnType::Type(_, ret_ty) if matches!(**ret_ty, syn::Type::Ptr(_)))
+    } else {
+        false
+    };
+    
+    let function_body = match (has_return_type, return_needs_transmute || is_converted_return_reference) {
         (true, true) => quote::quote! {
             unsafe { std::mem::transmute(#source_crate_ident::#function_name(#(#call_args),*)) }
         },
