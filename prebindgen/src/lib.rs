@@ -363,6 +363,7 @@ impl Prebindgen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quote::ToTokens;
 
     #[test]
     fn test_builder_feature_methods() {
@@ -432,19 +433,15 @@ mod tests {
         if let syn::Item::Struct(s) = item {
             s.attrs.iter().find_map(|attr| {
                 if attr.path().is_ident("repr") {
-                    attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
-                        if let syn::Meta::List(list) = meta {
-                            let tokens_str = list.tokens.to_string();
-                            if tokens_str.contains("align") {
-                                tokens_str.split("align")
-                                    .nth(1)?
-                                    .trim_start_matches('(')
-                                    .trim_end_matches(')')
-                                    .trim()
-                                    .parse().ok()
-                            } else { None }
-                        } else { None }
-                    })
+                    let tokens_str = attr.meta.to_token_stream().to_string();
+                    if let Some(align_pos) = tokens_str.find("align") {
+                        let after_align = &tokens_str[align_pos + 5..];
+                        let start = after_align.find('(')?;
+                        let end = after_align.find(')')?;
+                        after_align[start + 1..end]
+                            .trim()
+                            .parse().ok()
+                    } else { None }
                 } else { None }
             })
         } else { None }
