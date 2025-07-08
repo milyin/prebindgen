@@ -813,125 +813,90 @@ pub(crate) fn convert_to_stub(
     config: &ParseConfig,
     type_replacements: &mut HashSet<TypeTransmutePair>,
 ) -> Result<(), String> {
-    // Clone the function name to avoid borrow checker issues
-    let function_name = function.sig.ident.clone();
-
-    // Clone the signature inputs and output to avoid borrow checker issues
-    let sig_inputs = function.sig.inputs.clone();
-    let sig_output = function.sig.output.clone();
-
-    // Collect the original parameter types and return type before any transformation
-    let original_param_types: Vec<syn::Type> = sig_inputs.iter()
-        .filter_map(|input| {
-            if let syn::FnArg::Typed(pat_type) = input {
-                Some((*pat_type.ty).clone())
-            } else {
-                None
+    // Extract original types before transformation
+    let mut original_param_types = Vec::new();
+    for input in &function.sig.inputs {
+        match input {
+            syn::FnArg::Typed(pat_type) => {
+                original_param_types.push((*pat_type.ty).clone());
             }
+            syn::FnArg::Receiver(_) => {
+                return Err("FFI functions cannot have receiver arguments (like 'self')".to_string());
+            }
+        }
+    }
+    
+    let original_return_type = match &function.sig.output {
+        syn::ReturnType::Type(_, return_type) => Some((**return_type).clone()),
+        syn::ReturnType::Default => None,
+    };
+
+    // Apply type replacements to the function signature
+    let mut sig_type_replacements: HashSet<TypeTransmutePair> = type_replacements.clone();
+    replace_types_in_signature(&mut function.sig, config, &mut sig_type_replacements);
+
+    // Helper to check if a type needs transmutation
+    let needs_transmute = |original_type: &syn::Type| {
+        let type_str = quote::quote! { #original_type }.to_string();
+        sig_type_replacements.iter().any(|pair| pair.origin_type == type_str)
+    };
+
+    // Build call arguments with conditional transmutes
+    let call_args: Vec<_> = function.sig.inputs.iter().enumerate()
+        .filter_map(|(i, input)| {
+            if let syn::FnArg::Typed(pat_type) = input {
+                if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
+                    let param_name = &pat_ident.ident;
+                    let original_param_type = &original_param_types[i];
+                    
+                    let is_converted_reference = matches!(&*pat_type.ty, syn::Type::Ptr(_)) 
+                        && matches!(original_param_type, syn::Type::Reference(_));
+                    
+                    let arg = if needs_transmute(original_param_type) || is_converted_reference {
+                        quote::quote! { unsafe { std::mem::transmute(#param_name) } }
+                    } else {
+                        quote::quote! { #param_name }
+                    };
+                    return Some(arg);
+                }
+            }
+            None
         })
         .collect();
-    
-    let original_return_type = if let syn::ReturnType::Type(_, return_type) = &sig_output {
-        Some((**return_type).clone())
-    } else {
-        None
-    };
 
-    // Check that we don't have receiver arguments
-    for input in &sig_inputs {
-        if matches!(input, syn::FnArg::Receiver(_)) {
-            return Err("FFI functions cannot have receiver arguments (like 'self')".to_string());
-        }
-    }
-
-    // Now apply type replacements to the function signature and collect type pairs
-    replace_types_in_signature(&mut function.sig, config, type_replacements);
-
-    // Build call arguments with transmutes only for types that were replaced
-    let mut call_args = Vec::new();
-    for (i, input) in function.sig.inputs.iter().enumerate() {
-        let syn::FnArg::Typed(pat_type) = input else {
-            return Err("FFI functions cannot have receiver arguments (like 'self')".to_string());
-        };
-
-        if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-            let param_name = &pat_ident.ident;
-            
-            // Get the original parameter type for this position
-            let original_param_type = &original_param_types[i];
-            let original_param_type_str = quote::quote! { #original_param_type }.to_string();
-            
-            // Check if this original parameter type appears as origin_type in any type pair
-            let needs_transmute = type_replacements.iter()
-                .any(|pair| pair.origin_type == original_param_type_str);
-            
-            // Also check if this was a reference converted to pointer (always needs transmute)
-            let is_converted_reference = matches!(&*pat_type.ty, syn::Type::Ptr(_)) 
-                && matches!(original_param_type, syn::Type::Reference(_));
-            
-            if needs_transmute || is_converted_reference {
-                call_args.push(quote::quote! { unsafe { std::mem::transmute(#param_name) } });
-            } else {
-                call_args.push(quote::quote! { #param_name });
-            }
-        }
-    }
-
-    // Check if the return type needs transmute
-    let return_needs_transmute = if let Some(original_ret_type) = &original_return_type {
-        let original_return_type_str = quote::quote! { #original_ret_type }.to_string();
-        type_replacements.iter()
-            .any(|pair| pair.origin_type == original_return_type_str)
-    } else {
-        false
-    };
-
+    // Determine if return type needs transmutation
     let has_return_type = !matches!(&function.sig.output, syn::ReturnType::Default);
+    let return_needs_transmute = has_return_type && original_return_type.as_ref()
+        .is_some_and(needs_transmute);
 
-    // Generate the function body
+    // Generate function body
+    let function_name = &function.sig.ident;
     let source_crate_ident = &config.crate_ident();
-    let function_body = if has_return_type && return_needs_transmute {
-        quote::quote! {
+    let function_body = match (has_return_type, return_needs_transmute) {
+        (true, true) => quote::quote! {
             let result = #source_crate_ident::#function_name(#(#call_args),*);
             unsafe { std::mem::transmute(result) }
-        }
-    } else if has_return_type {
-        // Return type exists but doesn't need transmute
-        quote::quote! {
-            #source_crate_ident::#function_name(#(#call_args),*)
-        }
-    } else {
-        // No return type
-        quote::quote! {
-            #source_crate_ident::#function_name(#(#call_args),*)
-        }
+        },
+        (true, false) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
+        (false, _) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
     };
 
-    // Create the function body block
-    let body: syn::Block = syn::parse_quote! {
-        {
-            #function_body
-        }
-    };
-
-    // Update function body and return the modified function
-    function.block = Box::new(body);
-
-    // Determine the appropriate no_mangle attribute based on Rust edition
-    let no_mangle_attr: syn::Attribute = if config.edition == "2024" {
+    // Update function with new body and FFI attributes
+    function.block = Box::new(syn::parse_quote! { { #function_body } });
+    
+    let no_mangle_attr = if config.edition == "2024" {
         syn::parse_quote! { #[unsafe(no_mangle)] }
     } else {
         syn::parse_quote! { #[no_mangle] }
     };
-
-    // Add the no_mangle attribute and make it extern "C"
+    
     function.attrs.insert(0, no_mangle_attr);
     function.sig.unsafety = Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
-    function.sig.abi = Some(syn::Abi {
-        extern_token: syn::Token![extern](proc_macro2::Span::call_site()),
-        name: Some(syn::LitStr::new("C", proc_macro2::Span::call_site())),
-    });
-    function.vis = syn::Visibility::Public(syn::Token![pub](proc_macro2::Span::call_site()));
+    function.sig.abi = Some(syn::parse_quote! { extern "C" });
+    function.vis = syn::parse_quote! { pub };
+
+    // Add the type replacements to the global set for assertion generation
+    type_replacements.extend(sig_type_replacements);
 
     Ok(())
 }
