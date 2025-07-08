@@ -339,14 +339,16 @@ impl Prebindgen {
     /// # Returns
     ///
     /// The return value of the closure if a matching record is found, None otherwise
-    pub fn query<T, F>(&self, ident: &syn::Ident, f: F) -> Option<T>
+    pub fn syn_query<T, F, I>(&self, ident: I, f: F) -> Option<T>
     where
         F: FnOnce(&syn::Item) -> T,
+        I: Into<syn::Ident>,
     {
+        let ident = ident.into();
         for group_records in self.records.values() {
             for record in group_records {
                 if let Ok(record_ident) = record.ident() {
-                    if record_ident == ident {
+                    if record_ident == &ident {
                         return Some(f(&record.content));
                     }
                 }
@@ -424,6 +426,50 @@ mod tests {
         assert!(builder.transparent_wrappers.iter().any(|p| {
             format!("{}", quote::quote! { #p }) == "std :: mem :: ManuallyDrop"
         }));
+    }
+
+    #[test]
+    fn test_syn_query_struct_alignment() {
+        use crate::record::{RecordSyn, SourceLocation};
+        use std::collections::HashSet;
+        
+        // Create a struct with alignment attribute
+        let struct_content = syn::parse_str::<syn::Item>(r#"
+            #[repr(C, align(16))]
+            pub struct AlignedStruct {
+                pub field: u64,
+            }
+        "#).unwrap();
+        
+        let record = RecordSyn::new(
+            struct_content,
+            SourceLocation::default(),
+            HashSet::new(),
+        );
+        
+        let mut records = HashMap::new();
+        records.insert("test".to_string(), vec![record]);
+        
+        let prebindgen = Prebindgen { records };
+        
+        // Query for alignment modifier
+        let alignment = prebindgen.syn_query("AlignedStruct", |item| {
+            if let syn::Item::Struct(s) = item {
+                s.attrs.iter().find_map(|attr| {
+                    if attr.path().is_ident("repr") {
+                        attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
+                            if let syn::Meta::List(list) = meta {
+                                list.tokens.to_string().contains("align")
+                                    .then_some(list.tokens.to_string())
+                            } else { None }
+                        })
+                    } else { None }
+                })
+            } else { None }
+        });
+        
+        assert!(alignment.is_some());
+        assert!(alignment.unwrap().contains("align"));
     }
 
     #[test]
