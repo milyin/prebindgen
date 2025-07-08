@@ -104,6 +104,7 @@ mod jsonl;
 mod record;
 mod builder;
 mod file_builder;
+pub mod query;
 
 /// File extension for data files
 pub(crate) const JSONL_EXTENSION: &str = ".jsonl";
@@ -429,24 +430,6 @@ mod tests {
         }));
     }
 
-    fn alignment(item: &syn::Item) -> Option<u32> {
-        if let syn::Item::Struct(s) = item {
-            s.attrs.iter().find_map(|attr| {
-                if attr.path().is_ident("repr") {
-                    let tokens_str = attr.meta.to_token_stream().to_string();
-                    if let Some(align_pos) = tokens_str.find("align") {
-                        let after_align = &tokens_str[align_pos + 5..];
-                        let start = after_align.find('(')?;
-                        let end = after_align.find(')')?;
-                        after_align[start + 1..end]
-                            .trim()
-                            .parse().ok()
-                    } else { None }
-                } else { None }
-            })
-        } else { None }
-    }
-
     #[test]
     fn test_syn_query_struct_alignment() {
         use crate::record::{RecordSyn, SourceLocation};
@@ -472,7 +455,7 @@ mod tests {
         let prebindgen = Prebindgen { records };
         
         // Query for alignment modifier
-        let alignment = prebindgen.query("AlignedStruct", alignment);
+        let alignment = prebindgen.query("AlignedStruct", crate::query::struct_align);
         
         assert!(alignment.is_some());
         let align_value = alignment.unwrap().unwrap();
