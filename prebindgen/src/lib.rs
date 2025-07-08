@@ -328,6 +328,32 @@ impl Prebindgen {
             }
         }
     }
+
+    /// Search through all records for the first record with matching ident and apply closure
+    ///
+    /// # Parameters
+    ///
+    /// * `ident` - The identifier to search for
+    /// * `f` - Closure that accepts syn::Item and returns a value
+    ///
+    /// # Returns
+    ///
+    /// The return value of the closure if a matching record is found, None otherwise
+    pub fn query<T, F>(&self, ident: &syn::Ident, f: F) -> Option<T>
+    where
+        F: FnOnce(&syn::Item) -> T,
+    {
+        for group_records in self.records.values() {
+            for record in group_records {
+                if let Ok(record_ident) = record.ident() {
+                    if record_ident == ident {
+                        return Some(f(&record.content));
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 
