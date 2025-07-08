@@ -339,16 +339,16 @@ impl Prebindgen {
     /// # Returns
     ///
     /// The return value of the closure if a matching record is found, None otherwise
-    pub fn syn_query<T, F, I>(&self, ident: I, f: F) -> Option<T>
+    pub fn query<T, F, I>(&self, ident: I, f: F) -> Option<T>
     where
         F: FnOnce(&syn::Item) -> T,
-        I: Into<syn::Ident>,
+        I: Into<String>,
     {
-        let ident = ident.into();
+        let ident_str = ident.into();
         for group_records in self.records.values() {
             for record in group_records {
                 if let Ok(record_ident) = record.ident() {
-                    if record_ident == &ident {
+                    if record_ident.to_string() == ident_str {
                         return Some(f(&record.content));
                     }
                 }
@@ -428,6 +428,28 @@ mod tests {
         }));
     }
 
+    fn alignment(item: &syn::Item) -> Option<u32> {
+        if let syn::Item::Struct(s) = item {
+            s.attrs.iter().find_map(|attr| {
+                if attr.path().is_ident("repr") {
+                    attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
+                        if let syn::Meta::List(list) = meta {
+                            let tokens_str = list.tokens.to_string();
+                            if tokens_str.contains("align") {
+                                tokens_str.split("align")
+                                    .nth(1)?
+                                    .trim_start_matches('(')
+                                    .trim_end_matches(')')
+                                    .trim()
+                                    .parse().ok()
+                            } else { None }
+                        } else { None }
+                    })
+                } else { None }
+            })
+        } else { None }
+    }
+
     #[test]
     fn test_syn_query_struct_alignment() {
         use crate::record::{RecordSyn, SourceLocation};
@@ -453,23 +475,11 @@ mod tests {
         let prebindgen = Prebindgen { records };
         
         // Query for alignment modifier
-        let alignment = prebindgen.syn_query("AlignedStruct", |item| {
-            if let syn::Item::Struct(s) = item {
-                s.attrs.iter().find_map(|attr| {
-                    if attr.path().is_ident("repr") {
-                        attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
-                            if let syn::Meta::List(list) = meta {
-                                list.tokens.to_string().contains("align")
-                                    .then_some(list.tokens.to_string())
-                            } else { None }
-                        })
-                    } else { None }
-                })
-            } else { None }
-        });
+        let alignment = prebindgen.query("AlignedStruct", alignment);
         
         assert!(alignment.is_some());
-        assert!(alignment.unwrap().contains("align"));
+        let align_value = alignment.unwrap().unwrap();
+        assert_eq!(align_value, 16);
     }
 
     #[test]
