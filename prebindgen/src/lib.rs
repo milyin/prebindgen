@@ -349,7 +349,7 @@ impl Prebindgen {
         for group_records in self.records.values() {
             for record in group_records {
                 if let Ok(record_ident) = record.ident() {
-                    if record_ident.to_string() == ident_str {
+                    if *record_ident == ident_str {
                         return Some(f(&record.content));
                     }
                 }
@@ -364,7 +364,6 @@ impl Prebindgen {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quote::ToTokens;
 
     #[test]
     fn test_builder_feature_methods() {
