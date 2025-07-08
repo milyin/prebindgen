@@ -13,6 +13,28 @@ use std::collections::HashSet;
 
 use crate::record::ParseConfig;
 
+/// Represents a type assertion pair for compile-time validation
+///
+/// This structure holds the local (stub) type and the corresponding source crate type
+/// to ensure they are compatible for transmutation during FFI calls.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeTransmutePair {
+    /// The local type used in the stub (e.g., stripped of transparent wrappers)
+    pub local_type: String,
+    /// The original type from the source crate (with proper crate prefixing)
+    pub origin_type: String,
+}
+
+impl TypeTransmutePair {
+    /// Create a new type assertion pair
+    pub fn new(local_type: String, origin_type: String) -> Self {
+        Self {
+            local_type,
+            origin_type,
+        }
+    }
+}
+
 /// Generate allowed prefixes that include standard prelude types and modules
 ///
 /// Creates a list of syn::Path values representing standard library prefixes that are
@@ -116,7 +138,7 @@ pub(crate) fn convert_to_local_type(
     /// The original type to convert and validate
     original_type: &syn::Type,
     /// Mutable set to collect assertion pairs
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
     /// Mutable boolean flag set to true if type was changed and needs transmute
     type_changed: &mut bool,
     /// Context string for error reporting (e.g., "parameter 1 of function 'foo'")
@@ -160,7 +182,7 @@ pub(crate) fn convert_to_local_type(
         // Store the assertion pair
         let local_core_str = quote::quote! { #local_core_type }.to_string();
         let prefixed_original_core_str = quote::quote! { #prefixed_original_core }.to_string();
-        assertion_type_pairs.insert((local_core_str, prefixed_original_core_str));
+        assertion_type_pairs.insert(TypeTransmutePair::new(local_core_str, prefixed_original_core_str));
     }
 
     // Build the final type based on whether the original was a reference
@@ -190,7 +212,7 @@ pub(crate) fn convert_to_local_type(
 pub(crate) fn replace_types_in_file(
     file: &mut syn::File,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     // Apply type replacements throughout the file
     for item in &mut file.items {
@@ -203,7 +225,7 @@ pub(crate) fn replace_types_in_file(
 pub(crate) fn replace_types_in_item(
     item: &mut syn::Item,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     match item {
         syn::Item::Fn(item_fn) => {
@@ -244,7 +266,7 @@ pub(crate) fn replace_types_in_item(
 pub(crate) fn replace_types_in_signature(
     sig: &mut syn::Signature,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     // Replace parameter types
     for (i, input) in sig.inputs.iter_mut().enumerate() {
@@ -273,7 +295,7 @@ pub(crate) fn replace_types_in_signature(
 fn replace_types_in_block(
     block: &mut syn::Block,
     _config: &ParseConfig,
-    _assertion_type_pairs: &mut HashSet<(String, String)>,
+    _assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     // For now, we don't need to replace types in function bodies
     // This can be extended if needed
@@ -284,7 +306,7 @@ fn replace_types_in_block(
 fn replace_types_in_fields(
     fields: &mut syn::Fields,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     match fields {
         syn::Fields::Named(fields_named) => {
@@ -322,7 +344,7 @@ fn replace_types_in_fields(
 fn replace_types_in_type_with_context(
     ty: &mut syn::Type,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
     context: &str,
 ) {
     // Try to convert the type using the same logic as FFI stub generation
@@ -346,7 +368,7 @@ fn replace_types_in_type_with_context(
 fn replace_types_in_type(
     ty: &mut syn::Type,
     replacer: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<(String, String)>,
+    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     replace_types_in_type_with_context(ty, replacer, assertion_type_pairs, "type");
 }
@@ -450,16 +472,16 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
 /// compile-time safety for type transmutations performed during FFI calls.
 #[roxygen]
 pub(crate) fn generate_type_assertions(
-    /// Set of (local_type, source_type) string pairs to create assertions for
-    assertion_type_pairs: &HashSet<(String, String)>,
+    /// Set of TypeAssertionPair objects to create assertions for
+    assertion_type_pairs: &HashSet<TypeTransmutePair>,
 ) -> syn::File {
     let mut assertions = Vec::new();
 
-    for (stripped_type_str, source_type_str) in assertion_type_pairs {
+    for assertion_pair in assertion_type_pairs {
         // Parse the type strings back into syn::Type for proper code generation
         if let (Ok(stripped_type), Ok(source_type)) = (
-            syn::parse_str::<syn::Type>(stripped_type_str),
-            syn::parse_str::<syn::Type>(source_type_str),
+            syn::parse_str::<syn::Type>(&assertion_pair.local_type),
+            syn::parse_str::<syn::Type>(&assertion_pair.origin_type),
         ) {
             // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
             let size_assertion: syn::Item = syn::parse_quote! {
@@ -780,39 +802,106 @@ fn contains_exported_type(
 
 /// Create a stub implementation for a function with transmutes applied
 ///
-/// This function takes a function signature and a replacement map, then creates
-/// a new function body that applies transmutes to types specified in the map.
-/// The replacement map maps from local type strings to target type strings.
+/// This function takes the original function signature, applies type replacements,
+/// and creates a new function body that applies transmutes only to types that were
+/// actually replaced. The decision to transmute is based on whether the original
+/// parameter type appears as an origin_type in the type pairs.
+/// 
+/// The collected type replacement pairs for assertion generation are added to the provided set.
 pub(crate) fn convert_to_stub(
     function: &mut syn::ItemFn,
     config: &ParseConfig,
+    type_replacements: &mut HashSet<TypeTransmutePair>,
 ) -> Result<(), String> {
-    let function_name = &function.sig.ident;
+    // Clone the function name to avoid borrow checker issues
+    let function_name = function.sig.ident.clone();
 
-    // Build call arguments with transmutes where needed
+    // Clone the signature inputs and output to avoid borrow checker issues
+    let sig_inputs = function.sig.inputs.clone();
+    let sig_output = function.sig.output.clone();
+
+    // Collect the original parameter types and return type before any transformation
+    let original_param_types: Vec<syn::Type> = sig_inputs.iter()
+        .filter_map(|input| {
+            if let syn::FnArg::Typed(pat_type) = input {
+                Some((*pat_type.ty).clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    let original_return_type = if let syn::ReturnType::Type(_, return_type) = &sig_output {
+        Some((**return_type).clone())
+    } else {
+        None
+    };
+
+    // Check that we don't have receiver arguments
+    for input in &sig_inputs {
+        if matches!(input, syn::FnArg::Receiver(_)) {
+            return Err("FFI functions cannot have receiver arguments (like 'self')".to_string());
+        }
+    }
+
+    // Now apply type replacements to the function signature and collect type pairs
+    replace_types_in_signature(&mut function.sig, config, type_replacements);
+
+    // Build call arguments with transmutes only for types that were replaced
     let mut call_args = Vec::new();
-    for input in &function.sig.inputs {
+    for (i, input) in function.sig.inputs.iter().enumerate() {
         let syn::FnArg::Typed(pat_type) = input else {
             return Err("FFI functions cannot have receiver arguments (like 'self')".to_string());
         };
 
         if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
             let param_name = &pat_ident.ident;
-            call_args.push(quote::quote! { unsafe { std::mem::transmute(#param_name) } });
+            
+            // Get the original parameter type for this position
+            let original_param_type = &original_param_types[i];
+            let original_param_type_str = quote::quote! { #original_param_type }.to_string();
+            
+            // Check if this original parameter type appears as origin_type in any type pair
+            let needs_transmute = type_replacements.iter()
+                .any(|pair| pair.origin_type == original_param_type_str);
+            
+            // Also check if this was a reference converted to pointer (always needs transmute)
+            let is_converted_reference = matches!(&*pat_type.ty, syn::Type::Ptr(_)) 
+                && matches!(original_param_type, syn::Type::Reference(_));
+            
+            if needs_transmute || is_converted_reference {
+                call_args.push(quote::quote! { unsafe { std::mem::transmute(#param_name) } });
+            } else {
+                call_args.push(quote::quote! { #param_name });
+            }
         }
     }
+
+    // Check if the return type needs transmute
+    let return_needs_transmute = if let Some(original_ret_type) = &original_return_type {
+        let original_return_type_str = quote::quote! { #original_ret_type }.to_string();
+        type_replacements.iter()
+            .any(|pair| pair.origin_type == original_return_type_str)
+    } else {
+        false
+    };
 
     let has_return_type = !matches!(&function.sig.output, syn::ReturnType::Default);
 
     // Generate the function body
     let source_crate_ident = &config.crate_ident();
-    let function_body = if has_return_type {
+    let function_body = if has_return_type && return_needs_transmute {
         quote::quote! {
             let result = #source_crate_ident::#function_name(#(#call_args),*);
             unsafe { std::mem::transmute(result) }
         }
+    } else if has_return_type {
+        // Return type exists but doesn't need transmute
+        quote::quote! {
+            #source_crate_ident::#function_name(#(#call_args),*)
+        }
     } else {
-        // Direct call without transmute
+        // No return type
         quote::quote! {
             #source_crate_ident::#function_name(#(#call_args),*)
         }

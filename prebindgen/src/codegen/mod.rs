@@ -17,5 +17,5 @@ pub(crate) use process_features::process_features;
 pub(crate) use replace_types::replace_types_in_file;
 pub(crate) use replace_types::{
     convert_to_stub, generate_standard_allowed_prefixes, replace_types_in_item,
-    replace_types_in_signature, generate_type_assertions,
+    generate_type_assertions, TypeTransmutePair,
 };

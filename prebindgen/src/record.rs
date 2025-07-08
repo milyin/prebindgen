@@ -3,6 +3,8 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
+use crate::codegen::TypeTransmutePair;
+
 /// Default group name for prebindgen when no group is specified
 pub const DEFAULT_GROUP_NAME: &str = "default";
 
@@ -94,7 +96,7 @@ pub(crate) struct RecordSyn {
     /// Source location information
     pub source_location: SourceLocation,
     /// Type replacement pairs for this record only (local_type, origin_type)
-    pub type_replacements: HashSet<(String, String)>,
+    pub type_replacements: HashSet<TypeTransmutePair>,
 }
 
 impl Default for RecordSyn {
@@ -173,7 +175,7 @@ impl RecordSyn {
         name: String,
         content: syn::Item,
         source_location: SourceLocation,
-        type_replacements: HashSet<(String, String)>,
+        type_replacements: HashSet<TypeTransmutePair>,
     ) -> Self {
         Self {
             name,
@@ -218,13 +220,8 @@ impl RecordSyn {
         }
 
         if let syn::Item::Fn(function) = &mut record_syn.content {
-            // Transform functions to FFI stubs and collect type replacements
-            crate::codegen::replace_types_in_signature(
-                &mut function.sig,
-                config,
-                &mut record_syn.type_replacements,
-            );
-            crate::codegen::convert_to_stub(function, config)?;
+            // Transform functions to FFI stubs (including type replacement and collection)
+            crate::codegen::convert_to_stub(function, config, &mut record_syn.type_replacements)?;
         } else {
             // Replace types in non-function items and collect type replacements
             crate::codegen::replace_types_in_item(
@@ -257,7 +254,7 @@ impl RecordSyn {
     /// # Parameters
     ///
     /// * `type_replacements` - Mutable reference to the HashSet to add replacements to
-    pub(crate) fn collect_type_replacements(&self, type_replacements: &mut HashSet<(String, String)>) {
+    pub(crate) fn collect_type_replacements(&self, type_replacements: &mut HashSet<TypeTransmutePair>) {
         type_replacements.extend(self.type_replacements.iter().cloned());
     }
 }

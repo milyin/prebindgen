@@ -92,7 +92,7 @@
 //! include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 //! ```
 //!
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -122,6 +122,8 @@ pub use file_builder::FileBuilder;
 
 // Re-export internal types for crate use
 pub(crate) use record::RecordSyn;
+
+use crate::codegen::TypeTransmutePair;
 
 /// **Internal API**: Macro for debug tracing. Public only for proc-macro crate interaction.
 #[doc(hidden)]
@@ -319,7 +321,7 @@ impl Prebindgen {
     ///
     /// * `group` - The name of the group to collect type replacements from
     /// * `type_replacements` - Mutable reference to the HashSet to add replacements to
-    pub(crate) fn collect_type_replacements(&self, group: &str, type_replacements: &mut std::collections::HashSet<(String, String)>) {
+    pub(crate) fn collect_type_replacements(&self, group: &str, type_replacements: &mut HashSet<TypeTransmutePair>) {
         if let Some(group_records) = self.records.get(group) {
             for record in group_records {
                 record.collect_type_replacements(type_replacements);

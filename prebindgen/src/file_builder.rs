@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
@@ -100,7 +101,7 @@ impl<'a> FileBuilder<'a> {
         });
 
         // Collect type replacements and write records in a single pass
-        let mut all_type_replacements = std::collections::HashSet::new();
+        let mut all_type_replacements = HashSet::new();
         for group in &self.groups {
             // Collect type replacements from this group
             self.prebindgen
