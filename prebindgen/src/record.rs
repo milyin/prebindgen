@@ -98,8 +98,6 @@ impl std::fmt::Display for RecordKind {
 /// instead of raw string content for more efficient processing.
 #[derive(Clone)]
 pub(crate) struct RecordSyn {
-    /// The name of the type or function
-    pub name: String,
     /// The parsed syntax tree content of the definition (after feature processing and stub generation)
     pub content: syn::Item,
     /// Source location information
@@ -111,7 +109,6 @@ pub(crate) struct RecordSyn {
 impl Default for RecordSyn {
     fn default() -> Self {
         Self {
-            name: String::new(),
             content: syn::Item::Verbatim(proc_macro2::TokenStream::new()),
             source_location: SourceLocation::default(),
             type_replacements: HashSet::new(),
@@ -150,13 +147,11 @@ impl Record {
 impl RecordSyn {
     /// Create a new RecordSyn with the given components
     pub(crate) fn new(
-        name: String,
         content: syn::Item,
         source_location: SourceLocation,
         type_replacements: HashSet<TypeTransmutePair>,
     ) -> Self {
         Self {
-            name,
             content,
             source_location,
             type_replacements,
@@ -258,7 +253,7 @@ impl std::fmt::Debug for RecordSyn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RecordSyn")
             .field("kind", &self.kind().as_ref().map(|k| k.to_string()).unwrap_or_else(|e| e.clone()))
-            .field("name", &self.name)
+            .field("ident", &self.ident().map(|id| id.to_string()).unwrap_or_else(|e| e.clone()))
             .field("content", &"<syn::Item>")
             .field("source_location", &self.source_location)
             .finish()
@@ -315,7 +310,6 @@ impl TryFrom<Record> for RecordSyn {
 
         // Create RecordSyn first
         let record_syn = RecordSyn::new(
-            record.name,
             item,
             record.source_location.clone(),
             HashSet::new(),
