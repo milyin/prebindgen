@@ -139,65 +139,57 @@ pub(crate) fn convert_to_local_type(
     original_type: &syn::Type,
     /// Mutable set to collect assertion pairs
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-    /// Mutable boolean flag set to true if type was changed and needs transmute
-    type_changed: &mut bool,
+    /// Mutable boolean flag set to true if core type was changed and needs transmute
+    core_type_changed: &mut bool,
     /// Context string for error reporting (e.g., "parameter 1 of function 'foo'")
     context: &str,
 ) -> Result<syn::Type, String> {
-    // First validate the type for FFI compatibility
-    validate_type_for_ffi_impl(
+    // Strip transparent wrappers from the type
+    let mut has_wrapper = false;
+    let local_type = strip_transparent_wrappers(
         original_type,
+        config.transparent_wrappers,
+        &mut has_wrapper,
+    );
+
+    // Validate the type for FFI compatibility and strip * and & references
+    let mut is_exported_type = false;
+    let (local_core_type, stripped_types) = strip_references_and_pointers(local_type);
+    validate_core_type_for_ffi(
+        &local_core_type,
         config.exported_types,
         config.allowed_prefixes,
-        context,
-    )?;
-
-    // Extract the core type to process (for references, this is the referenced type)
-    let (core_type, is_reference, ref_info) = match original_type {
-        syn::Type::Reference(type_ref) => (
-            &*type_ref.elem,
-            true,
-            Some((
-                type_ref.and_token,
-                type_ref.lifetime.clone(),
-                type_ref.mutability,
-            )),
-        ),
-        _ => (original_type, false, None),
-    };
-
-    // Strip transparent wrappers from the core type
-    let mut has_wrapper = false;
-    let local_core_type =
-        strip_transparent_wrappers(core_type, config.transparent_wrappers, &mut has_wrapper);
+        &mut is_exported_type,
+    )
+    .map_err(|e| format!("{} : {}", context, e))?;
 
     // Check if we should generate an assertion for this type
-    *type_changed = has_wrapper || contains_exported_type(&local_core_type, config.exported_types);
+    *core_type_changed = has_wrapper || is_exported_type;
 
-    if *type_changed {
+    if *core_type_changed {
         // Create the original core type with proper crate prefixing
-        let prefixed_original_core =
-            prefix_exported_types_in_type(core_type, &config.crate_ident(), config.exported_types);
+        let prefixed_original_type = prefix_exported_types_in_type(
+            original_type,
+            &config.crate_ident(),
+            config.exported_types,
+        );
+        let (prefixed_original_core_type, _) =
+            strip_references_and_pointers(prefixed_original_type.clone());
 
         // Store the assertion pair
         let local_core_str = quote::quote! { #local_core_type }.to_string();
-        let prefixed_original_core_str = quote::quote! { #prefixed_original_core }.to_string();
-        assertion_type_pairs.insert(TypeTransmutePair::new(local_core_str, prefixed_original_core_str));
+        let prefixed_original_core_str = quote::quote! { #prefixed_original_core_type }.to_string();
+        assertion_type_pairs.insert(TypeTransmutePair::new(
+            local_core_str,
+            prefixed_original_core_str,
+        ));
     }
 
     // Build the final type based on whether the original was a reference
-    let result = if is_reference {
-        let (and_token, lifetime, mutability) = ref_info.unwrap();
-        // Create a reference to the local type, then convert to pointer
-        let local_ref = syn::Type::Reference(syn::TypeReference {
-            and_token,
-            lifetime,
-            mutability,
-            elem: Box::new(local_core_type),
-        });
-        // Reference-to-pointer conversion is always done for FFI
-        convert_reference_to_pointer(&local_ref)
-    } else if *type_changed {
+    let result = if !stripped_types.is_empty() {
+        restore_stripped_references_as_pointers(local_core_type, stripped_types)
+            .map_err(|e| format!("{context} : {e}"))?
+    } else if *core_type_changed {
         // Non-reference type that needed conversion
         local_core_type
     } else {
@@ -207,7 +199,6 @@ pub(crate) fn convert_to_local_type(
 
     Ok(result)
 }
-
 
 pub(crate) fn replace_types_in_file(
     file: &mut syn::File,
@@ -219,7 +210,6 @@ pub(crate) fn replace_types_in_file(
         replace_types_in_item(item, config, assertion_type_pairs);
     }
 }
-
 
 /// Replace types in a single item recursively
 pub(crate) fn replace_types_in_item(
@@ -371,34 +361,6 @@ fn replace_types_in_type(
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
 ) {
     replace_types_in_type_with_context(ty, replacer, assertion_type_pairs, "type");
-}
-
-/// Convert reference types to pointer types for FFI compatibility
-fn convert_reference_to_pointer(ty: &syn::Type) -> syn::Type {
-    match ty {
-        syn::Type::Reference(type_ref) => {
-            // Convert &T to *const T and &mut T to *mut T
-            if type_ref.mutability.is_some() {
-                syn::Type::Ptr(syn::TypePtr {
-                    star_token: syn::token::Star::default(),
-                    const_token: None,
-                    mutability: Some(syn::token::Mut::default()),
-                    elem: type_ref.elem.clone(),
-                })
-            } else {
-                syn::Type::Ptr(syn::TypePtr {
-                    star_token: syn::token::Star::default(),
-                    const_token: Some(syn::token::Const::default()),
-                    mutability: None,
-                    elem: type_ref.elem.clone(),
-                })
-            }
-        }
-        _ => {
-            // For non-reference types, return as-is
-            ty.clone()
-        }
-    }
 }
 
 /// Strip transparent wrappers from a type and track if any were removed
@@ -576,139 +538,127 @@ fn prefix_exported_types_in_type(
     }
 }
 
-/// Validate that a type is suitable for FFI use (internal implementation)
+/// removes references, pointers and arrays from a type, returns
+/// the core type and a vector of stripped types, each with "!" (bang) type inside
+fn strip_references_and_pointers(mut ty: syn::Type) -> (syn::Type, Vec<syn::Type>) {
+    let mut stripped = vec![];
+    loop {
+        let mut elem = Box::new(syn::Type::Never(syn::TypeNever {
+            bang_token: syn::token::Not::default(),
+        }));
+        if let syn::Type::Reference(type_ref) = &mut ty {
+            std::mem::swap(&mut type_ref.elem, &mut elem);
+        } else if let syn::Type::Ptr(type_ptr) = &mut ty {
+            std::mem::swap(&mut type_ptr.elem, &mut elem);
+        } else if let syn::Type::Array(type_array) = &mut ty {
+            std::mem::swap(&mut type_array.elem, &mut elem);
+        } else {
+            // Not a reference, pointer, or array: return the core type
+            return (ty, stripped);
+        }
+        stripped.push(ty);
+        ty = *elem;
+    }
+}
+
+/// convert references to pointers for FFI compatibility
+fn restore_stripped_references_as_pointers(
+    ty: syn::Type,
+    stripped: Vec<syn::Type>,
+) -> Result<syn::Type, String> {
+    let mut result = ty;
+    for stripped_type in stripped.into_iter().rev() {
+        match stripped_type {
+            syn::Type::Reference(syn::TypeReference { mutability, .. }) => {
+                result = syn::Type::Ptr(syn::TypePtr {
+                    star_token: syn::token::Star::default(),
+                    const_token: mutability.is_none().then(syn::token::Const::default),
+                    mutability: mutability.is_some().then(syn::token::Mut::default),
+                    elem: Box::new(result),
+                });
+            }
+            syn::Type::Array(type_array @ syn::TypeArray { .. }) => {
+                result = syn::Type::Array(syn::TypeArray {
+                    elem: Box::new(result),
+                    ..type_array
+                });
+            }
+            syn::Type::Ptr(type_ptr @ syn::TypePtr { .. }) => {
+                result = syn::Type::Ptr(syn::TypePtr {
+                    elem: Box::new(result),
+                    ..type_ptr
+                });
+            }
+            _ => {
+                return Err(format!(
+                    "Unsupported stripped type for FFI conversion: {}",
+                    quote::quote! { #stripped_type }
+                ));
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// Checks if type is exported type or prefix matches allowed prefixes
 ///
 /// This function checks if a type can be safely used in FFI by verifying it's either:
 /// - An absolute path (starting with `::`)
 /// - A path starting with an allowed prefix
 /// - A type defined in the exported types set
-/// - A supported container type (reference, pointer, slice, array, tuple) with valid element types
 #[roxygen]
-fn validate_type_for_ffi_impl(
+fn validate_core_type_for_ffi(
     /// The type to validate for FFI compatibility
     ty: &syn::Type,
     /// Set of exported type names that are considered valid
     exported_types: &HashSet<String>,
     /// List of allowed path prefixes (e.g., std::, core::, etc.)
     allowed_prefixes: &[syn::Path],
-    /// Context string for error reporting (e.g., "parameter 1 of function 'foo'")
-    context: &str,
+    /// Flag indicating if the type is an exported type
+    is_exported_type: &mut bool,
 ) -> Result<(), String> {
-    match ty {
-        syn::Type::Path(type_path) => {
-            // Validate the type path (includes absolute paths, allowed prefixes, and exported types)
-            if validate_type_path(type_path, allowed_prefixes) {
-                if let Some(segment) = type_path.path.segments.last() {
-                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                        validate_generic_arguments(
-                            args,
-                            exported_types,
-                            allowed_prefixes,
-                            context,
-                        )?;
-                    }
-                }
-                return Ok(());
-            }
-
-            // Check if it's a single identifier that's an exported type
-            if type_path.path.segments.len() == 1 {
-                if let Some(segment) = type_path.path.segments.first() {
-                    let type_name = segment.ident.to_string();
-                    if exported_types.contains(&type_name) {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            validate_generic_arguments(
-                                args,
-                                exported_types,
-                                allowed_prefixes,
-                                context,
-                            )?;
-                        }
-                        return Ok(());
-                    }
-                }
-            }
-
-            // Invalid type path
-            Err(format!(
-                "Type '{}' in {} is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
+    if let syn::Type::Path(type_path) = ty {
+        // Validate the type path (includes absolute paths, allowed prefixes, and exported types)
+        if !validate_type_path(
+            type_path,
+            allowed_prefixes,
+            exported_types,
+            is_exported_type,
+        ) {
+            return Err(format!(
+                "Type '{}' is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
                 quote::quote! { #ty },
-                context
-            ))
+            ));
         }
-        syn::Type::Reference(type_ref) => validate_type_for_ffi_impl(
-            &type_ref.elem,
-            exported_types,
-            allowed_prefixes,
-            &format!("{context} (reference)"),
-        ),
-        syn::Type::Ptr(type_ptr) => validate_type_for_ffi_impl(
-            &type_ptr.elem,
-            exported_types,
-            allowed_prefixes,
-            &format!("{context} (pointer)"),
-        ),
-        syn::Type::Slice(type_slice) => validate_type_for_ffi_impl(
-            &type_slice.elem,
-            exported_types,
-            allowed_prefixes,
-            &format!("{context} (slice element)"),
-        ),
-        syn::Type::Array(type_array) => validate_type_for_ffi_impl(
-            &type_array.elem,
-            exported_types,
-            allowed_prefixes,
-            &format!("{context} (array element)"),
-        ),
-        syn::Type::Tuple(type_tuple) => {
-            for (i, elem_ty) in type_tuple.elems.iter().enumerate() {
-                validate_type_for_ffi_impl(
-                    elem_ty,
-                    exported_types,
-                    allowed_prefixes,
-                    &format!("{context} (tuple element {i})"),
-                )?;
-            }
-            Ok(())
+        let Some(segment) = type_path.path.segments.last() else {
+            return Err(format!(
+                "Type '{}' is not valid for FFI: must have at least one segment",
+                quote::quote! { #ty },
+            ));
+        };
+        if let syn::PathArguments::AngleBracketed(_) = &segment.arguments {
+            return Err(format!(
+                "Type '{}' is not valid for FFI: generic arguments are not supported",
+                quote::quote! { #ty },
+            ));
         }
-        _ => Err(format!(
-            "Unsupported type '{}' in {}: only path types, references, pointers, slices, arrays, and tuples are supported for FFI",
+        Ok(())
+    } else {
+        Err(format!(
+            "Unsupported type '{}': only path types are supported as core types for FFI",
             quote::quote! { #ty },
-            context
-        )),
+        ))
     }
-}
-
-/// Validate generic arguments recursively for FFI compatibility
-///
-/// Checks all type arguments within angle brackets (e.g., `Vec<T>`, `HashMap<K, V>`)
-/// to ensure they are valid for FFI use.
-#[roxygen]
-fn validate_generic_arguments(
-    /// The generic arguments to validate
-    args: &syn::AngleBracketedGenericArguments,
-    /// Set of exported type names that are considered valid
-    exported_types: &HashSet<String>,
-    /// List of allowed path prefixes for type validation
-    allowed_prefixes: &[syn::Path],
-    /// Context string for error reporting
-    context: &str,
-) -> Result<(), String> {
-    for arg in &args.args {
-        if let syn::GenericArgument::Type(inner_ty) = arg {
-            validate_type_for_ffi_impl(
-                inner_ty,
-                exported_types,
-                allowed_prefixes,
-                &format!("{context} (generic argument)"),
-            )?;
-        }
-    }
-    Ok(())
 }
 
 /// Validate if a type path is allowed for FFI use
-fn validate_type_path(type_path: &syn::TypePath, allowed_prefixes: &[syn::Path]) -> bool {
+fn validate_type_path(
+    type_path: &syn::TypePath,
+    allowed_prefixes: &[syn::Path],
+    exported_types: &HashSet<String>,
+    is_exported_type: &mut bool,
+) -> bool {
+    *is_exported_type = false;
     // Check if the path is absolute (starts with ::)
     if type_path.path.leading_colon.is_some() {
         return true;
@@ -718,6 +668,17 @@ fn validate_type_path(type_path: &syn::TypePath, allowed_prefixes: &[syn::Path])
     for allowed_prefix in allowed_prefixes {
         if path_starts_with(&type_path.path, allowed_prefix) {
             return true;
+        }
+    }
+
+    // Check if it's a single identifier that's an exported type
+    if type_path.path.segments.len() == 1 {
+        if let Some(segment) = type_path.path.segments.first() {
+            let type_name = segment.ident.to_string();
+            if exported_types.contains(&type_name) {
+                *is_exported_type = true;
+                return true;
+            }
         }
     }
 
@@ -739,74 +700,13 @@ fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
     true
 }
 
-/// Check if a type contains any of the exported types
-///
-/// Recursively searches through a type and its generic arguments to determine
-/// if it contains any types that are in the exported types set. This is used
-/// to decide whether type assertions are needed.
-#[roxygen]
-fn contains_exported_type(
-    /// The type to check for exported type usage
-    ty: &syn::Type,
-    /// Set of exported type names to search for
-    exported_types: &HashSet<String>,
-) -> bool {
-    match ty {
-        syn::Type::Path(type_path) => {
-            // Check if the type itself is defined
-            if let Some(segment) = type_path.path.segments.last() {
-                let type_name = segment.ident.to_string();
-                if exported_types.contains(&type_name) {
-                    return true;
-                }
-
-                // Check generic arguments recursively
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    for arg in &args.args {
-                        if let syn::GenericArgument::Type(inner_ty) = arg {
-                            if contains_exported_type(inner_ty, exported_types) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-            false
-        }
-        syn::Type::Reference(type_ref) => {
-            // Check the referenced type
-            contains_exported_type(&type_ref.elem, exported_types)
-        }
-        syn::Type::Ptr(type_ptr) => {
-            // Check the pointed-to type
-            contains_exported_type(&type_ptr.elem, exported_types)
-        }
-        syn::Type::Slice(type_slice) => {
-            // Check the slice element type
-            contains_exported_type(&type_slice.elem, exported_types)
-        }
-        syn::Type::Array(type_array) => {
-            // Check the array element type
-            contains_exported_type(&type_array.elem, exported_types)
-        }
-        syn::Type::Tuple(type_tuple) => {
-            // Check all tuple element types
-            type_tuple
-                .elems
-                .iter()
-                .any(|elem_ty| contains_exported_type(elem_ty, exported_types))
-        }
-        _ => false,
-    }
-}
-
 /// Create a stub implementation for a function with transmutes applied
 ///
 /// This function takes the original function signature, applies type replacements,
 /// and creates a new function body that applies transmutes only to types that were
 /// actually replaced. The decision to transmute is based on whether the original
 /// parameter type appears as an origin_type in the type pairs.
-/// 
+///
 /// The collected type replacement pairs for assertion generation are added to the provided set.
 pub(crate) fn convert_to_stub(
     function: &mut syn::ItemFn,
@@ -821,11 +721,13 @@ pub(crate) fn convert_to_stub(
                 original_param_types.push((*pat_type.ty).clone());
             }
             syn::FnArg::Receiver(_) => {
-                return Err("FFI functions cannot have receiver arguments (like 'self')".to_string());
+                return Err(
+                    "FFI functions cannot have receiver arguments (like 'self')".to_string()
+                );
             }
         }
     }
-    
+
     let original_return_type = match &function.sig.output {
         syn::ReturnType::Type(_, return_type) => Some((**return_type).clone()),
         syn::ReturnType::Default => None,
@@ -838,20 +740,26 @@ pub(crate) fn convert_to_stub(
     // Helper to check if a type needs transmutation
     let needs_transmute = |original_type: &syn::Type| {
         let type_str = quote::quote! { #original_type }.to_string();
-        sig_type_replacements.iter().any(|pair| pair.origin_type == type_str)
+        sig_type_replacements
+            .iter()
+            .any(|pair| pair.origin_type == type_str)
     };
 
     // Build call arguments with conditional transmutes
-    let call_args: Vec<_> = function.sig.inputs.iter().enumerate()
+    let call_args: Vec<_> = function
+        .sig
+        .inputs
+        .iter()
+        .enumerate()
         .filter_map(|(i, input)| {
             if let syn::FnArg::Typed(pat_type) = input {
                 if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                     let param_name = &pat_ident.ident;
                     let original_param_type = &original_param_types[i];
-                    
-                    let is_converted_reference = matches!(&*pat_type.ty, syn::Type::Ptr(_)) 
+
+                    let is_converted_reference = matches!(&*pat_type.ty, syn::Type::Ptr(_))
                         && matches!(original_param_type, syn::Type::Reference(_));
-                    
+
                     let arg = if needs_transmute(original_param_type) || is_converted_reference {
                         quote::quote! { unsafe { std::mem::transmute(#param_name) } }
                     } else {
@@ -866,8 +774,8 @@ pub(crate) fn convert_to_stub(
 
     // Determine if return type needs transmutation
     let has_return_type = !matches!(&function.sig.output, syn::ReturnType::Default);
-    let return_needs_transmute = has_return_type && original_return_type.as_ref()
-        .is_some_and(needs_transmute);
+    let return_needs_transmute =
+        has_return_type && original_return_type.as_ref().is_some_and(needs_transmute);
 
     // Generate function body
     let function_name = &function.sig.ident;
@@ -882,13 +790,13 @@ pub(crate) fn convert_to_stub(
 
     // Update function with new body and FFI attributes
     function.block = Box::new(syn::parse_quote! { { #function_body } });
-    
+
     let no_mangle_attr = if config.edition == "2024" {
         syn::parse_quote! { #[unsafe(no_mangle)] }
     } else {
         syn::parse_quote! { #[no_mangle] }
     };
-    
+
     function.attrs.insert(0, no_mangle_attr);
     function.sig.unsafety = Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
     function.sig.abi = Some(syn::parse_quote! { extern "C" });
