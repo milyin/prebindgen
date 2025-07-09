@@ -144,7 +144,7 @@ pub(crate) fn replace_types_in_type(
 ) -> Result<bool, String> {
     // Strip transparent wrappers from the type
     let mut has_wrapper = false;
-    let local_type = strip_transparent_wrappers(&ty, config.transparent_wrappers, &mut has_wrapper);
+    let local_type = strip_transparent_wrappers(ty, config.transparent_wrappers, &mut has_wrapper);
 
     // Validate the type for FFI compatibility and strip * and & references
     let mut is_exported_type = false;
@@ -171,7 +171,7 @@ pub(crate) fn replace_types_in_type(
         // Generate assertion pair by stripping both types to same level
         if core_type_changed {
             let prefixed_original_type =
-                prefix_exported_types_in_type(&ty, &config.crate_ident(), config.exported_types);
+                prefix_exported_types_in_type(ty, &config.crate_ident(), config.exported_types);
             
             // Strip both types to the same level until first path type
             let (local_stripped, original_stripped) = strip_to_same_level(final_type.clone(), prefixed_original_type);
