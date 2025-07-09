@@ -1,25 +1,25 @@
 [package]
 name = "prebindgen-proc-macro"
-version = "0.1.0"
-edition = "2024"
+version = { workspace = true }
+edition = { workspace = true }
 description = "Procedural macros for prebindgen - export FFI definitions for binding generation"
-license = "MIT OR Apache-2.0"
-authors = ["Michael Ilyin <milyin@gmail.com>"]
-repository = "https://github.com/milyin/prebindgen"
-documentation = "https://docs.rs/prebindgen-proc-macro"
-keywords = ["ffi", "bindings", "proc-macro", "cbindgen", "csbindgen"]
-categories = ["development-tools", "external-ffi-bindings"]
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+documentation = { workspace = true }
+keywords = { workspace = true }
+categories = {workspace = true }
 
 [lib]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "2.0", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-prebindgen = { path = "../prebindgen", version = "0.1.0" }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+prebindgen = { workspace = true }
 
 [dev-dependencies]
-serde_json = "1.0"
+serde_json = { workspace = true }

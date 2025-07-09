@@ -6,7 +6,25 @@ members = [
     "examples/example-ffi",
 ]
 resolver = "2"
+package.version = "0.2.0"
+package.edition = "2024"
+package.license = "MIT OR Apache-2.0"
+package.authors = ["Michael Ilyin <milyin@gmail.com>"]
+package.repository = "https://github.com/milyin/prebindgen"
+package.documentation = "https://docs.rs/prebindgen"
+package.readme = "README.md"
+package.keywords = ["ffi", "bindings", "cbindgen", "csbindgen", "cross-platform"]
+package.categories = ["development-tools", "external-ffi-bindings"] 
 
 [workspace.dependencies]
 prebindgen = { path = "prebindgen" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+regex = "1.0"
+prettyplease = "0.2"
+roxygen = "1.0.4"
+tempfile = "3.0"

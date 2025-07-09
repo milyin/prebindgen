@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "example-ffi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "prebindgen",
  "prebindgen-proc-macro",
@@ -249,7 +249,7 @@ checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 
 [[package]]
 name = "prebindgen"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "prettyplease",
  "proc-macro2",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "prebindgen-proc-macro"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "prebindgen",
  "proc-macro2",
