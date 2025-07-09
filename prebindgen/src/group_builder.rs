@@ -7,6 +7,42 @@ use roxygen::roxygen;
 
 use crate::{Prebindgen, trace};
 
+/// Represents a single item from the prebindgen data
+///
+/// This struct provides access to individual items (structs, functions, etc.)
+/// and allows querying their properties.
+pub struct Item<'a> {
+    pub(crate) record: &'a crate::record::RecordSyn,
+}
+
+impl<'a> Item<'a> {
+    /// Query the item using a closure
+    ///
+    /// Applies the provided closure to the underlying syn::Item and returns the result.
+    ///
+    /// # Parameters
+    ///
+    /// * `f` - Closure that accepts syn::Item and returns a value
+    ///
+    /// # Returns
+    ///
+    /// The return value of the closure
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// if let Some(item) = prebindgen.group("structs").item("MyStruct") {
+    ///     let alignment = item.query(crate::query::struct_align);
+    /// }
+    /// ```
+    pub fn query<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce(&syn::Item) -> T,
+    {
+        f(&self.record.content)
+    }
+}
+
 /// Builder for writing groups to files with append capability.
 ///
 /// This builder is returned by `Prebindgen::group()` and `Prebindgen::all()` methods
@@ -22,19 +58,19 @@ use crate::{Prebindgen, trace};
 ///     .group("functions")
 ///     .write_to_file("combined_ffi.rs");
 /// ```
-pub struct FileBuilder<'a> {
+pub struct GroupBuilder<'a> {
     pub(crate) prebindgen: &'a Prebindgen,
     pub(crate) groups: Vec<String>,
 }
 
-impl<'a> FileBuilder<'a> {
+impl<'a> GroupBuilder<'a> {
     /// Add another group to the selection
     ///
     /// This allows you to combine multiple groups into a single output file.
     ///
     /// # Returns
     ///
-    /// The same `FileBuilder` with the additional group added.
+    /// The same `GroupBuilder` with the additional group added.
     ///
     /// # Example
     ///
@@ -53,6 +89,46 @@ impl<'a> FileBuilder<'a> {
     ) -> Self {
         self.groups.push(group_name.into());
         self
+    }
+
+    /// Get an item by name from the selected groups
+    ///
+    /// Searches through all selected groups for an item with the specified name
+    /// and returns it wrapped in an `Item` if found.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Item)` if an item with the given name is found, `None` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let item = prebindgen.group("structs").item("MyStruct");
+    /// if let Some(item) = item {
+    ///     // Use the item
+    /// }
+    /// ```
+    #[roxygen]
+    pub fn item<S: Into<String>>(
+        &self,
+        /// Name of the item to find
+        name: S,
+    ) -> Option<Item<'_>> {
+        let name_str = name.into();
+        for group in &self.groups {
+            if let Some(group_records) = self.prebindgen.records.get(group) {
+                for record in group_records {
+                    if let Ok(record_ident) = record.ident() {
+                        if *record_ident == name_str {
+                            return Some(Item {
+                                record,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     /// Write the selected groups to a file

@@ -103,7 +103,7 @@ pub(crate) mod codegen;
 mod jsonl;
 mod record;
 mod builder;
-mod file_builder;
+mod group_builder;
 pub mod query;
 
 /// File extension for data files
@@ -119,7 +119,7 @@ pub use jsonl::{read_jsonl_file, write_jsonl_file};
 // Re-export public types
 pub use record::{Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 pub use builder::Builder;
-pub use file_builder::FileBuilder;
+pub use group_builder::{GroupBuilder, Item};
 
 // Re-export internal types for crate use
 pub(crate) use record::RecordSyn;
@@ -246,12 +246,12 @@ pub struct Prebindgen {
 impl Prebindgen {
     /// Select a specific group for file generation
     ///
-    /// Returns a `FileBuilder` that can be used to write the specified group
+    /// Returns a `GroupBuilder` that can be used to write the specified group
     /// to a file, optionally combined with other groups.
     ///
     /// # Returns
     ///
-    /// A `FileBuilder` configured to write the specified group.
+    /// A `GroupBuilder` configured to write the specified group.
     ///
     /// # Example
     ///
@@ -263,8 +263,8 @@ impl Prebindgen {
         &self, 
         /// Name of the group to select
         group_name: &str
-    ) -> FileBuilder<'_> {
-        FileBuilder {
+    ) -> GroupBuilder<'_> {
+        GroupBuilder {
             prebindgen: self,
             groups: vec![group_name.to_string()],
         }
@@ -272,20 +272,20 @@ impl Prebindgen {
 
     /// Select all available groups for file generation.
     ///
-    /// Returns a `FileBuilder` that can be used to write all available groups
+    /// Returns a `GroupBuilder` that can be used to write all available groups
     /// to a file. This is equivalent to calling `group()` for each available group.
     ///
     /// # Returns
     ///
-    /// A `FileBuilder` configured to write all available groups.
+    /// A `GroupBuilder` configured to write all available groups.
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// let all_file = prebindgen.all().write_to_file("all_bindings.rs");
     /// ```
-    pub fn all(&self) -> FileBuilder<'_> {
-        FileBuilder {
+    pub fn all(&self) -> GroupBuilder<'_> {
+        GroupBuilder {
             prebindgen: self,
             groups: self.records.keys().cloned().collect(),
         }
@@ -330,33 +330,7 @@ impl Prebindgen {
         }
     }
 
-    /// Search through all records for the first record with matching ident and apply closure
-    ///
-    /// # Parameters
-    ///
-    /// * `ident` - The identifier to search for
-    /// * `f` - Closure that accepts syn::Item and returns a value
-    ///
-    /// # Returns
-    ///
-    /// The return value of the closure if a matching record is found, None otherwise
-    pub fn query<T, F, I>(&self, ident: I, f: F) -> Option<T>
-    where
-        F: FnOnce(&syn::Item) -> T,
-        I: Into<String>,
-    {
-        let ident_str = ident.into();
-        for group_records in self.records.values() {
-            for record in group_records {
-                if let Ok(record_ident) = record.ident() {
-                    if *record_ident == ident_str {
-                        return Some(f(&record.content));
-                    }
-                }
-            }
-        }
-        None
-    }
+
 }
 
 
@@ -453,11 +427,14 @@ mod tests {
         
         let prebindgen = Prebindgen { records };
         
-        // Query for alignment modifier
-        let alignment = prebindgen.query("AlignedStruct", crate::query::struct_align);
+        // Query for alignment modifier using new Item API
+        let group_builder = prebindgen.all();
+        let item = group_builder.item("AlignedStruct");
+        assert!(item.is_some());
         
+        let alignment = item.unwrap().query(crate::query::struct_align);
         assert!(alignment.is_some());
-        let align_value = alignment.unwrap().unwrap();
+        let align_value = alignment.unwrap();
         assert_eq!(align_value, 16);
     }
 
