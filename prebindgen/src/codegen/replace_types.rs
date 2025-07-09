@@ -258,23 +258,20 @@ pub(crate) fn replace_types_in_signature(
     let mut parameters_changed = Vec::new();
     for input in sig.inputs.iter_mut() {
         if let syn::FnArg::Typed(pat_type) = input {
-            parameters_changed.push(convert_to_local_type(
+            parameters_changed.push(replace_types_in_type(
                 &mut pat_type.ty,
                 config,
                 assertion_type_pairs,
             )?);
         } else {
-            return Err(format!(
-                "Expected function argument to be a typed pattern, found: {:?}",
-                input
-            ));
+            return Err("self parameters are not supported in FFI stubs".into());
         }
     }
 
     // Replace return type
     let mut return_type_changed = false;
     if let syn::ReturnType::Type(_, return_type) = &mut sig.output {
-        return_type_changed = convert_to_local_type(return_type, config, assertion_type_pairs)?;
+        return_type_changed = replace_types_in_type(return_type, config, assertion_type_pairs)?;
     };
     Ok((parameters_changed, return_type_changed))
 }
@@ -722,6 +719,10 @@ pub(crate) fn convert_to_stub(
     let (params_changed, return_changed) =
         replace_types_in_signature(&mut function.sig, config, &mut sig_type_replacements)?;
 
+    // Determine if we need unsafe block
+    let need_unsafe_block = function.sig.unsafety.is_some()
+        || params_changed.iter().any(|&changed| changed)
+        || return_changed;
 
     // Build call arguments with conditional transmutes
     let call_args: Vec<_> = function
@@ -733,9 +734,9 @@ pub(crate) fn convert_to_stub(
             if let syn::FnArg::Typed(pat_type) = input {
                 if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                     let param_name = &pat_ident.ident;
-                    let original_param_type = &original_param_types[i];
+                    let param_changed = params_changed.get(i).copied().unwrap_or(false);
 
-                    let arg = if needs_transmute(original_param_type) {
+                    let arg = if param_changed {
                         quote::quote! { std::mem::transmute(#param_name) }
                     } else {
                         quote::quote! { #param_name }
@@ -749,8 +750,7 @@ pub(crate) fn convert_to_stub(
 
     // Determine if return type needs transmutation
     let has_return_type = !matches!(&function.sig.output, syn::ReturnType::Default);
-    let return_needs_transmute =
-        has_return_type && original_return_type.as_ref().is_some_and(needs_transmute);
+    let return_needs_transmute = has_return_type && return_changed;
 
     // Generate function body
     let function_name = &function.sig.ident;
