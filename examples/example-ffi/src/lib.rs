@@ -98,3 +98,18 @@ pub fn get_foo_reference(input: &Foo) -> &Foo {
     // Return reference to the Foo struct
     input
 }
+
+#[prebindgen("functions")]
+pub fn reference_to_array(input: &mut [u8; 4]) -> &[u8; 4] {
+    input
+}
+
+#[prebindgen("functions")]
+pub fn array_of_references(_: [&'static u8; 4]) -> [&'static u8; 4] {
+    todo!("array_of_references is not implemented yet")
+}
+
+#[prebindgen("functions")]
+pub fn array_of_arrays(input: &'static [[u8; 4]; 2]) -> &'static [[u8; 4]; 2] {
+    input
+}

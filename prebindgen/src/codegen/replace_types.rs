@@ -724,6 +724,15 @@ pub(crate) fn convert_to_stub(
         || params_changed.iter().any(|&changed| changed)
         || return_changed;
 
+    // Check for unsupported parameter patterns first
+    for input in &function.sig.inputs {
+        if let syn::FnArg::Typed(pat_type) = input {
+            if matches!(&*pat_type.pat, syn::Pat::Wild(_)) {
+                return Err("Wildcard parameters ('_') are not supported in FFI functions".to_string());
+            }
+        }
+    }
+
     // Build call arguments with conditional transmutes
     let call_args: Vec<_> = function
         .sig
