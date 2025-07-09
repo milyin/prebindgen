@@ -163,21 +163,24 @@ pub(crate) fn replace_types_in_type(
     
     if conversion_needed {
         let final_type = if references_replaced {
-            restore_stripped_references_as_pointers(local_core_type, stripped_types)?
+            restore_stripped_references_as_pointers(local_core_type.clone(), stripped_types)?
         } else {
-            local_core_type
+            local_core_type.clone()
         };
         
-        // Generate assertion pair using the final converted type
+        // Generate assertion pair by stripping both types to same level
         if core_type_changed {
             let prefixed_original_type =
                 prefix_exported_types_in_type(&ty, &config.crate_ident(), config.exported_types);
             
-            let final_type_str = quote::quote! { #final_type }.to_string();
-            let prefixed_original_str = quote::quote! { #prefixed_original_type }.to_string();
+            // Strip both types to the same level until first path type
+            let (local_stripped, original_stripped) = strip_to_same_level(final_type.clone(), prefixed_original_type);
+            
+            let local_str = quote::quote! { #local_stripped }.to_string();
+            let original_str = quote::quote! { #original_stripped }.to_string();
             assertion_type_pairs.insert(TypeTransmutePair::new(
-                final_type_str,
-                prefixed_original_str,
+                local_str,
+                original_str,
             ));
         }
         
@@ -515,6 +518,42 @@ fn prefix_exported_types_in_type(
             )),
         }),
         _ => ty.clone(),
+    }
+}
+
+/// Strip both types to the same level until first path type is reached
+/// This ensures meaningful comparisons by stripping references/pointers equally
+fn strip_to_same_level(mut local_type: syn::Type, mut original_type: syn::Type) -> (syn::Type, syn::Type) {
+    loop {
+        let local_is_path = matches!(local_type, syn::Type::Path(_));
+        let original_is_path = matches!(original_type, syn::Type::Path(_));
+        
+        // Stop if either type is a path type
+        if local_is_path || original_is_path {
+            return (local_type, original_type);
+        }
+        
+        // Strip one level from both types if possible
+        let local_stripped = match &local_type {
+            syn::Type::Reference(type_ref) => Some((*type_ref.elem).clone()),
+            syn::Type::Ptr(type_ptr) => Some((*type_ptr.elem).clone()),
+            _ => None,
+        };
+        
+        let original_stripped = match &original_type {
+            syn::Type::Reference(type_ref) => Some((*type_ref.elem).clone()),
+            syn::Type::Ptr(type_ptr) => Some((*type_ptr.elem).clone()),
+            _ => None,
+        };
+        
+        // If both can be stripped, continue; otherwise stop
+        match (local_stripped, original_stripped) {
+            (Some(local), Some(original)) => {
+                local_type = local;
+                original_type = original;
+            }
+            _ => return (local_type, original_type),
+        }
     }
 }
 
