@@ -125,6 +125,7 @@ pub fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
 }
 
 /// Convert a remote type to its local equivalent, validate FFI compatibility, and collect assertion pairs
+/// Returns true if transmute is needed, false otherwise
 ///
 /// This method:
 /// - Validates that the type is suitable for FFI use
@@ -134,23 +135,17 @@ pub fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
 /// - Sets the `was_converted` flag to indicate if the type was modified
 #[roxygen]
 pub(crate) fn convert_to_local_type(
+    /// Destination type for the converted type
+    ty: &mut syn::Type,
+    /// Configuration containing parsing and validation options
     config: &ParseConfig,
-    /// The original type to convert and validate
-    original_type: &syn::Type,
     /// Mutable set to collect assertion pairs
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-    /// Mutable boolean flag set to true if core type was changed and needs transmute
-    core_type_changed: &mut bool,
-    /// Context string for error reporting (e.g., "parameter 1 of function 'foo'")
-    context: &str,
-) -> Result<syn::Type, String> {
+) -> Result<bool, String> {
     // Strip transparent wrappers from the type
     let mut has_wrapper = false;
-    let local_type = strip_transparent_wrappers(
-        original_type,
-        config.transparent_wrappers,
-        &mut has_wrapper,
-    );
+    let local_type =
+        strip_transparent_wrappers(&ty, config.transparent_wrappers, &mut has_wrapper);
 
     // Validate the type for FFI compatibility and strip * and & references
     let mut is_exported_type = false;
@@ -160,16 +155,15 @@ pub(crate) fn convert_to_local_type(
         config.exported_types,
         config.allowed_prefixes,
         &mut is_exported_type,
-    )
-    .map_err(|e| format!("{context} : {e}"))?;
+    )?;
 
     // Check if we should generate an assertion for this type
-    *core_type_changed = has_wrapper || is_exported_type;
+    let core_type_changed = has_wrapper || is_exported_type;
 
-    if *core_type_changed {
+    if core_type_changed {
         // Create the original core type with proper crate prefixing
         let prefixed_original_type = prefix_exported_types_in_type(
-            original_type,
+            &ty,
             &config.crate_ident(),
             config.exported_types,
         );
@@ -186,18 +180,18 @@ pub(crate) fn convert_to_local_type(
     }
 
     // Build the final type based on whether the original was a reference
-    let result = if !stripped_types.is_empty() {
-        restore_stripped_references_as_pointers(local_core_type, stripped_types)
-            .map_err(|e| format!("{context} : {e}"))?
-    } else if *core_type_changed {
+    let references_replaced = !stripped_types.is_empty();
+    if references_replaced {
+        *ty = restore_stripped_references_as_pointers(local_core_type, stripped_types)?;
+        Ok(true)
+    } else if core_type_changed {
         // Non-reference type that needed conversion
-        local_core_type
+        *ty = local_core_type;
+        Ok(true)
     } else {
-        // No conversion needed, return original type
-        original_type.clone()
-    };
-
-    Ok(result)
+        // No conversion needed, keep original type
+        Ok(false)
+    }
 }
 
 pub(crate) fn replace_types_in_file(
@@ -257,28 +251,29 @@ pub(crate) fn replace_types_in_signature(
     sig: &mut syn::Signature,
     config: &ParseConfig,
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) {
+) -> Result<(Vec<bool>,bool), String> {
     // Replace parameter types
+    let mut parameters_changed = Vec::new();
     for (i, input) in sig.inputs.iter_mut().enumerate() {
         if let syn::FnArg::Typed(pat_type) = input {
-            replace_types_in_type_with_context(
+            parameters_changed.push( convert_to_local_type(
                 &mut pat_type.ty,
                 config,
                 assertion_type_pairs,
-                &format!("parameter {}", i + 1),
-            );
+            )?);
         }
     }
 
     // Replace return type
+    let mut return_type_changed = false;
     if let syn::ReturnType::Type(_, return_type) = &mut sig.output {
-        replace_types_in_type_with_context(
+        return_type_changed = convert_to_local_type(
             return_type,
             config,
             assertion_type_pairs,
-            "return type",
-        );
-    }
+        )?;
+    };
+    Ok((parameters_changed, return_type_changed))
 }
 
 /// Replace types in a function block
@@ -326,30 +321,6 @@ fn replace_types_in_fields(
         }
         syn::Fields::Unit => {
             // No fields to process
-        }
-    }
-}
-
-/// Replace a type based on the replacement logic with context
-fn replace_types_in_type_with_context(
-    ty: &mut syn::Type,
-    config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-    context: &str,
-) {
-    // Try to convert the type using the same logic as FFI stub generation
-    let mut type_changed = false;
-    match convert_to_local_type(config, ty, assertion_type_pairs, &mut type_changed, context) {
-        Ok(converted_type) => {
-            // Apply conversion if type was changed OR if it's a reference (which should always become a pointer for FFI)
-            let is_reference = matches!(ty, syn::Type::Reference(_));
-            if type_changed || is_reference {
-                *ty = converted_type;
-            }
-        }
-        Err(_) => {
-            // If conversion fails, leave the type as-is
-            // This preserves the original behavior for unsupported types
         }
     }
 }
@@ -402,7 +373,8 @@ fn strip_transparent_wrappers(
         }
         syn::Type::Reference(type_ref) => {
             // Recursively strip wrappers from the referenced type
-            let stripped_elem = strip_transparent_wrappers(&type_ref.elem, transparent_wrappers, has_wrapper);
+            let stripped_elem =
+                strip_transparent_wrappers(&type_ref.elem, transparent_wrappers, has_wrapper);
             syn::Type::Reference(syn::TypeReference {
                 and_token: type_ref.and_token,
                 lifetime: type_ref.lifetime.clone(),
@@ -412,7 +384,8 @@ fn strip_transparent_wrappers(
         }
         syn::Type::Ptr(type_ptr) => {
             // Recursively strip wrappers from the pointed-to type
-            let stripped_elem = strip_transparent_wrappers(&type_ptr.elem, transparent_wrappers, has_wrapper);
+            let stripped_elem =
+                strip_transparent_wrappers(&type_ptr.elem, transparent_wrappers, has_wrapper);
             syn::Type::Ptr(syn::TypePtr {
                 star_token: type_ptr.star_token,
                 const_token: type_ptr.const_token,
@@ -422,7 +395,8 @@ fn strip_transparent_wrappers(
         }
         syn::Type::Array(type_array) => {
             // Recursively strip wrappers from the array element type
-            let stripped_elem = strip_transparent_wrappers(&type_array.elem, transparent_wrappers, has_wrapper);
+            let stripped_elem =
+                strip_transparent_wrappers(&type_array.elem, transparent_wrappers, has_wrapper);
             syn::Type::Array(syn::TypeArray {
                 bracket_token: type_array.bracket_token,
                 elem: Box::new(stripped_elem),
@@ -768,11 +742,15 @@ pub(crate) fn convert_to_stub(
     replace_types_in_signature(&mut function.sig, config, &mut sig_type_replacements);
 
     // Helper to check if a type needs transmutation
+    let mut need_unsafe_block = function.sig.unsafety.is_some();
     let needs_transmute = |original_type: &syn::Type| {
-        let type_str = quote::quote! { #original_type }.to_string();
-        sig_type_replacements
+        let (core_type, _) = strip_references_and_pointers(original_type.clone());
+        let type_str = quote::quote! { #core_type }.to_string();
+        let need_replacement = sig_type_replacements
             .iter()
-            .any(|pair| pair.origin_type == type_str)
+            .any(|pair| pair.origin_type == type_str);
+        need_unsafe_block |= need_replacement;
+        need_replacement
     };
 
     // Build call arguments with conditional transmutes
@@ -787,11 +765,8 @@ pub(crate) fn convert_to_stub(
                     let param_name = &pat_ident.ident;
                     let original_param_type = &original_param_types[i];
 
-                    let is_converted_reference = matches!(&*pat_type.ty, syn::Type::Ptr(_))
-                        && matches!(original_param_type, syn::Type::Reference(_));
-
-                    let arg = if needs_transmute(original_param_type) || is_converted_reference {
-                        quote::quote! { unsafe { std::mem::transmute(#param_name) } }
+                    let arg = if needs_transmute(original_param_type) {
+                        quote::quote! { std::mem::transmute(#param_name) }
                     } else {
                         quote::quote! { #param_name }
                     };
@@ -810,20 +785,30 @@ pub(crate) fn convert_to_stub(
     // Generate function body
     let function_name = &function.sig.ident;
     let source_crate_ident = &config.crate_ident();
-    
+
     // Check if the original return type was a reference that got converted to a pointer
     let is_converted_return_reference = if let Some(original_ret) = &original_return_type {
-        matches!(original_ret, syn::Type::Reference(_)) && matches!(&function.sig.output, syn::ReturnType::Type(_, ret_ty) if matches!(**ret_ty, syn::Type::Ptr(_)))
+        matches!(original_ret, syn::Type::Reference(_))
+            && matches!(&function.sig.output, syn::ReturnType::Type(_, ret_ty) if matches!(**ret_ty, syn::Type::Ptr(_)))
     } else {
         false
     };
-    
-    let function_body = match (has_return_type, return_needs_transmute || is_converted_return_reference) {
+
+    let function_body = match (
+        has_return_type,
+        return_needs_transmute || is_converted_return_reference,
+    ) {
         (true, true) => quote::quote! {
-            unsafe { std::mem::transmute(#source_crate_ident::#function_name(#(#call_args),*)) }
+            std::mem::transmute(#source_crate_ident::#function_name(#(#call_args),*))
         },
         (true, false) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
         (false, _) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
+    };
+
+    let function_body = if need_unsafe_block {
+        quote::quote! { unsafe { #function_body } }
+    } else {
+        function_body
     };
 
     // Update function with new body and FFI attributes
