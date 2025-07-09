@@ -214,11 +214,11 @@ impl RecordSyn {
             crate::codegen::convert_to_stub(function, config, &mut record_syn.type_replacements)?;
         } else {
             // Replace types in non-function items and collect type replacements
-            crate::codegen::replace_types_in_item(
+            let _ = crate::codegen::replace_types_in_item(
                 &mut record_syn.content,
                 config,
                 &mut record_syn.type_replacements,
-            );
+            )?;
         }
         Ok(record_syn)
     }

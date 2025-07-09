@@ -502,7 +502,7 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
         // This should trigger an FFI validation error with source location
         // We'll try to use replace_types which should validate FFI compatibility
         let mut type_replacements = HashSet::new();
-        codegen::replace_types_in_file(
+        let _result = codegen::replace_types_in_file(
             &mut file,
             &config,
             &mut type_replacements,

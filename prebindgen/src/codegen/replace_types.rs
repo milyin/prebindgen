@@ -134,7 +134,7 @@ pub fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
 /// - Collects type assertion pairs when conversion is needed
 /// - Sets the `was_converted` flag to indicate if the type was modified
 #[roxygen]
-pub(crate) fn convert_to_local_type(
+pub(crate) fn replace_types_in_type(
     /// Destination type for the converted type
     ty: &mut syn::Type,
     /// Configuration containing parsing and validation options
@@ -144,8 +144,7 @@ pub(crate) fn convert_to_local_type(
 ) -> Result<bool, String> {
     // Strip transparent wrappers from the type
     let mut has_wrapper = false;
-    let local_type =
-        strip_transparent_wrappers(&ty, config.transparent_wrappers, &mut has_wrapper);
+    let local_type = strip_transparent_wrappers(&ty, config.transparent_wrappers, &mut has_wrapper);
 
     // Validate the type for FFI compatibility and strip * and & references
     let mut is_exported_type = false;
@@ -162,11 +161,8 @@ pub(crate) fn convert_to_local_type(
 
     if core_type_changed {
         // Create the original core type with proper crate prefixing
-        let prefixed_original_type = prefix_exported_types_in_type(
-            &ty,
-            &config.crate_ident(),
-            config.exported_types,
-        );
+        let prefixed_original_type =
+            prefix_exported_types_in_type(&ty, &config.crate_ident(), config.exported_types);
         let (prefixed_original_core_type, _) =
             strip_references_and_pointers(prefixed_original_type.clone());
 
@@ -198,11 +194,12 @@ pub(crate) fn replace_types_in_file(
     file: &mut syn::File,
     config: &ParseConfig,
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) {
-    // Apply type replacements throughout the file
+) -> Result<bool, String> {
+    let mut any_changed = false;
     for item in &mut file.items {
-        replace_types_in_item(item, config, assertion_type_pairs);
+        any_changed |= replace_types_in_item(item, config, assertion_type_pairs)?;
     }
+    Ok(any_changed)
 }
 
 /// Replace types in a single item recursively
@@ -210,39 +207,44 @@ pub(crate) fn replace_types_in_item(
     item: &mut syn::Item,
     config: &ParseConfig,
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) {
+) -> Result<bool, String> {
     match item {
         syn::Item::Fn(item_fn) => {
-            replace_types_in_signature(&mut item_fn.sig, config, assertion_type_pairs);
-            replace_types_in_block(&mut item_fn.block, config, assertion_type_pairs);
+            let (_, sig_changed) =
+                replace_types_in_signature(&mut item_fn.sig, config, assertion_type_pairs)?;
+            let block_changed =
+                replace_types_in_block(&mut item_fn.block, config, assertion_type_pairs)?;
+            Ok(sig_changed || block_changed)
         }
         syn::Item::Struct(item_struct) => {
-            replace_types_in_fields(&mut item_struct.fields, config, assertion_type_pairs);
+            replace_types_in_fields(&mut item_struct.fields, config, assertion_type_pairs)
         }
         syn::Item::Enum(item_enum) => {
+            let mut any_changed = false;
             for variant in &mut item_enum.variants {
-                replace_types_in_fields(&mut variant.fields, config, assertion_type_pairs);
+                any_changed |=
+                    replace_types_in_fields(&mut variant.fields, config, assertion_type_pairs)?;
             }
+            Ok(any_changed)
         }
         syn::Item::Union(item_union) => {
-            replace_types_in_fields(
-                &mut syn::Fields::Named(item_union.fields.clone()),
-                config,
-                assertion_type_pairs,
-            );
+            let mut fields = syn::Fields::Named(item_union.fields.clone());
+            let changed = replace_types_in_fields(&mut fields, config, assertion_type_pairs)?;
+            if let syn::Fields::Named(fields_named) = fields {
+                item_union.fields = fields_named;
+            }
+            Ok(changed)
         }
         syn::Item::Type(item_type) => {
-            replace_types_in_type(&mut item_type.ty, config, assertion_type_pairs);
+            replace_types_in_type(&mut item_type.ty, config, assertion_type_pairs)
         }
         syn::Item::Const(item_const) => {
-            replace_types_in_type(&mut item_const.ty, config, assertion_type_pairs);
+            replace_types_in_type(&mut item_const.ty, config, assertion_type_pairs)
         }
         syn::Item::Static(item_static) => {
-            replace_types_in_type(&mut item_static.ty, config, assertion_type_pairs);
+            replace_types_in_type(&mut item_static.ty, config, assertion_type_pairs)
         }
-        _ => {
-            // Other items don't contain types we need to replace
-        }
+        _ => Ok(false),
     }
 }
 
@@ -251,40 +253,40 @@ pub(crate) fn replace_types_in_signature(
     sig: &mut syn::Signature,
     config: &ParseConfig,
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) -> Result<(Vec<bool>,bool), String> {
+) -> Result<(Vec<bool>, bool), String> {
     // Replace parameter types
     let mut parameters_changed = Vec::new();
-    for (i, input) in sig.inputs.iter_mut().enumerate() {
+    for input in sig.inputs.iter_mut() {
         if let syn::FnArg::Typed(pat_type) = input {
-            parameters_changed.push( convert_to_local_type(
+            parameters_changed.push(convert_to_local_type(
                 &mut pat_type.ty,
                 config,
                 assertion_type_pairs,
             )?);
+        } else {
+            return Err(format!(
+                "Expected function argument to be a typed pattern, found: {:?}",
+                input
+            ));
         }
     }
 
     // Replace return type
     let mut return_type_changed = false;
     if let syn::ReturnType::Type(_, return_type) = &mut sig.output {
-        return_type_changed = convert_to_local_type(
-            return_type,
-            config,
-            assertion_type_pairs,
-        )?;
+        return_type_changed = convert_to_local_type(return_type, config, assertion_type_pairs)?;
     };
     Ok((parameters_changed, return_type_changed))
 }
 
 /// Replace types in a function block
 fn replace_types_in_block(
-    block: &mut syn::Block,
+    _block: &mut syn::Block,
     _config: &ParseConfig,
     _assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) {
+) -> Result<bool, String> {
     // For now, we don't need to replace types in function bodies
-    // This can be extended if needed
-    let _ = block;
+    Ok(false)
 }
 
 /// Replace types in struct/enum fields
@@ -292,46 +294,24 @@ fn replace_types_in_fields(
     fields: &mut syn::Fields,
     config: &ParseConfig,
     assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) {
+) -> Result<bool, String> {
+    let mut any_changed = false;
     match fields {
         syn::Fields::Named(fields_named) => {
-            for (i, field) in fields_named.named.iter_mut().enumerate() {
-                let context = if let Some(field_name) = &field.ident {
-                    format!("field '{field_name}'")
-                } else {
-                    format!("field {i}")
-                };
-                replace_types_in_type_with_context(
-                    &mut field.ty,
-                    config,
-                    assertion_type_pairs,
-                    &context,
-                );
+            for field in fields_named.named.iter_mut() {
+                any_changed |= replace_types_in_type(&mut field.ty, config, assertion_type_pairs)?;
             }
         }
         syn::Fields::Unnamed(fields_unnamed) => {
-            for (i, field) in fields_unnamed.unnamed.iter_mut().enumerate() {
-                replace_types_in_type_with_context(
-                    &mut field.ty,
-                    config,
-                    assertion_type_pairs,
-                    &format!("field {i}"),
-                );
+            for field in fields_unnamed.unnamed.iter_mut() {
+                any_changed |= replace_types_in_type(&mut field.ty, config, assertion_type_pairs)?;
             }
         }
         syn::Fields::Unit => {
             // No fields to process
         }
     }
-}
-
-/// Replace a type based on the replacement logic
-fn replace_types_in_type(
-    ty: &mut syn::Type,
-    replacer: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) {
-    replace_types_in_type_with_context(ty, replacer, assertion_type_pairs, "type");
+    Ok(any_changed)
 }
 
 /// Strip transparent wrappers from a type and track if any were removed
@@ -739,19 +719,9 @@ pub(crate) fn convert_to_stub(
 
     // Apply type replacements to the function signature
     let mut sig_type_replacements: HashSet<TypeTransmutePair> = type_replacements.clone();
-    replace_types_in_signature(&mut function.sig, config, &mut sig_type_replacements);
+    let (params_changed, return_changed) =
+        replace_types_in_signature(&mut function.sig, config, &mut sig_type_replacements)?;
 
-    // Helper to check if a type needs transmutation
-    let mut need_unsafe_block = function.sig.unsafety.is_some();
-    let needs_transmute = |original_type: &syn::Type| {
-        let (core_type, _) = strip_references_and_pointers(original_type.clone());
-        let type_str = quote::quote! { #core_type }.to_string();
-        let need_replacement = sig_type_replacements
-            .iter()
-            .any(|pair| pair.origin_type == type_str);
-        need_unsafe_block |= need_replacement;
-        need_replacement
-    };
 
     // Build call arguments with conditional transmutes
     let call_args: Vec<_> = function
