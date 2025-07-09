@@ -211,7 +211,8 @@ impl RecordSyn {
 
         if let syn::Item::Fn(function) = &mut record_syn.content {
             // Transform functions to FFI stubs (including type replacement and collection)
-            crate::codegen::convert_to_stub(function, config, &mut record_syn.type_replacements)?;
+            crate::codegen::convert_to_stub(function, config, &mut record_syn.type_replacements)
+                .map_err(|e| format!("{} at {}", e, record_syn.source_location))?;
         } else {
             // Replace types in non-function items and collect type replacements
             let _ = crate::codegen::replace_types_in_item(
