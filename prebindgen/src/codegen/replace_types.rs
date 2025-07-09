@@ -178,7 +178,32 @@ pub(crate) fn replace_types_in_type(
     // Build the final type based on whether the original was a reference
     let references_replaced = !stripped_types.is_empty();
     if references_replaced {
-        *ty = restore_stripped_references_as_pointers(local_core_type, stripped_types)?;
+        let final_type = restore_stripped_references_as_pointers(local_core_type.clone(), stripped_types)?;
+        
+        // Update assertion pairs to use the final converted type instead of core type
+        if core_type_changed {
+            let prefixed_original_type =
+                prefix_exported_types_in_type(&ty, &config.crate_ident(), config.exported_types);
+            
+            // Remove the old assertion pair with core type
+            let local_core_str = quote::quote! { #local_core_type }.to_string();
+            let prefixed_original_core_type = strip_references_and_pointers(prefixed_original_type.clone()).0;
+            let prefixed_original_core_str = quote::quote! { #prefixed_original_core_type }.to_string();
+            assertion_type_pairs.remove(&TypeTransmutePair::new(
+                local_core_str,
+                prefixed_original_core_str,
+            ));
+            
+            // Add the correct assertion pair with final converted type
+            let final_type_str = quote::quote! { #final_type }.to_string();
+            let prefixed_original_str = quote::quote! { #prefixed_original_type }.to_string();
+            assertion_type_pairs.insert(TypeTransmutePair::new(
+                final_type_str,
+                prefixed_original_str,
+            ));
+        }
+        
+        *ty = final_type;
         Ok(true)
     } else if core_type_changed {
         // Non-reference type that needed conversion

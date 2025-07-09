@@ -113,3 +113,8 @@ pub fn array_of_references<'a,'b>(input: &'a[&'b u8; 4]) -> &'a[&'b u8; 4] {
 pub fn array_of_arrays(input: &'static [[u8; 4]; 2]) -> &'static [[u8; 4]; 2] {
     input
 }
+
+#[prebindgen("functions")]
+pub fn option_to_reference(input: Option<&u8>) -> Option<&u8> {
+    input
+}

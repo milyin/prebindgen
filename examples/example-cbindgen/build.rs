@@ -12,6 +12,7 @@ fn main() {
     let pb = prebindgen::Builder::new(example_ffi::PREBINDGEN_OUT_DIR)
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
+        .strip_transparent_wrapper("Option") // Strip Option wrapper
         .disable_feature("unstable") // Disable unstable features for this build
         .disable_feature("internal") // Disable internal features for this build
         .build();

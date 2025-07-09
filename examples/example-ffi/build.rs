@@ -23,10 +23,10 @@ fn main() {
         } else if target.contains("aarch64") {
             "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
         } else {
-            panic!("Unsupported architecture: {}", target);
+            panic!("Unsupported architecture: {target}");
         };
         // write with append
-        let bar_rs = format!("{}/bar.rs", out_dir);
+        let bar_rs = format!("{out_dir}/bar.rs");
         prebindgen::trace!("Generating {bar_rs} for target: {target}");
         std::fs::write(bar_rs, bar).unwrap();
     };
