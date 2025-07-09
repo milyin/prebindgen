@@ -34,7 +34,7 @@ pub fn read_jsonl_file<P: AsRef<Path>>(
         }
         
         let record: Record = serde_json::from_str(line)
-            .map_err(|e| format!("Line {}: {}", line_num + 1, e))?;
+            .map_err(|e| format!("{}:{}: {}", file_path.as_ref().display(), line_num + 1, e))?;
         
         records.push(record);
     }

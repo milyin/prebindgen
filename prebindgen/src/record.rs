@@ -219,7 +219,7 @@ impl RecordSyn {
                 &mut record_syn.content,
                 config,
                 &mut record_syn.type_replacements,
-            )?;
+            ).map_err(|e| format!("{} at {}", e, record_syn.source_location))?;
         }
         Ok(record_syn)
     }
@@ -233,7 +233,7 @@ impl RecordSyn {
             syn::Item::Fn(_) => Ok(RecordKind::Function),
             syn::Item::Type(_) => Ok(RecordKind::TypeAlias),
             syn::Item::Const(_) => Ok(RecordKind::Const),
-            _ => Err("Unknown syn::Item variant for RecordSyn::kind".to_string()),
+            _ => Err(format!("Unknown syn::Item variant for RecordSyn::kind at {}", self.source_location)),
         }
     }
 
@@ -317,7 +317,7 @@ impl TryFrom<Record> for RecordSyn {
         );
 
         // Check that the item type matches the record kind
-        let actual_kind = record_syn.kind()?;
+        let actual_kind = record_syn.kind().map_err(|e| format!("{} at {}", e, record.source_location))?;
         if actual_kind != record.kind {
             return Err(format!(
                 "Record kind mismatch at {}: expected {}, found {}",
