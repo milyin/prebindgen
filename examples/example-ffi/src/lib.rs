@@ -105,8 +105,8 @@ pub fn reference_to_array(input: &mut [u8; 4]) -> &[u8; 4] {
 }
 
 #[prebindgen("functions")]
-pub fn array_of_references(_: [&'static u8; 4]) -> [&'static u8; 4] {
-    todo!("array_of_references is not implemented yet")
+pub fn array_of_references<'a,'b>(input: &'a[&'b u8; 4]) -> &'a[&'b u8; 4] {
+    input
 }
 
 #[prebindgen("functions")]
