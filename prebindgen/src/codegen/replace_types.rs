@@ -156,45 +156,23 @@ pub(crate) fn replace_types_in_type(
         &mut is_exported_type,
     )?;
 
-    // Check if we should generate an assertion for this type
-    let core_type_changed = has_wrapper || is_exported_type;
-
-    if core_type_changed {
-        // Create the original core type with proper crate prefixing
-        let prefixed_original_type =
-            prefix_exported_types_in_type(&ty, &config.crate_ident(), config.exported_types);
-        let (prefixed_original_core_type, _) =
-            strip_references_and_pointers(prefixed_original_type.clone());
-
-        // Store the assertion pair
-        let local_core_str = quote::quote! { #local_core_type }.to_string();
-        let prefixed_original_core_str = quote::quote! { #prefixed_original_core_type }.to_string();
-        assertion_type_pairs.insert(TypeTransmutePair::new(
-            local_core_str,
-            prefixed_original_core_str,
-        ));
-    }
-
-    // Build the final type based on whether the original was a reference
+    // Build the final type and determine if conversion is needed
     let references_replaced = !stripped_types.is_empty();
-    if references_replaced {
-        let final_type = restore_stripped_references_as_pointers(local_core_type.clone(), stripped_types)?;
+    let core_type_changed = has_wrapper || is_exported_type;
+    let conversion_needed = references_replaced || core_type_changed;
+    
+    if conversion_needed {
+        let final_type = if references_replaced {
+            restore_stripped_references_as_pointers(local_core_type, stripped_types)?
+        } else {
+            local_core_type
+        };
         
-        // Update assertion pairs to use the final converted type instead of core type
+        // Generate assertion pair using the final converted type
         if core_type_changed {
             let prefixed_original_type =
                 prefix_exported_types_in_type(&ty, &config.crate_ident(), config.exported_types);
             
-            // Remove the old assertion pair with core type
-            let local_core_str = quote::quote! { #local_core_type }.to_string();
-            let prefixed_original_core_type = strip_references_and_pointers(prefixed_original_type.clone()).0;
-            let prefixed_original_core_str = quote::quote! { #prefixed_original_core_type }.to_string();
-            assertion_type_pairs.remove(&TypeTransmutePair::new(
-                local_core_str,
-                prefixed_original_core_str,
-            ));
-            
-            // Add the correct assertion pair with final converted type
             let final_type_str = quote::quote! { #final_type }.to_string();
             let prefixed_original_str = quote::quote! { #prefixed_original_type }.to_string();
             assertion_type_pairs.insert(TypeTransmutePair::new(
@@ -204,10 +182,6 @@ pub(crate) fn replace_types_in_type(
         }
         
         *ty = final_type;
-        Ok(true)
-    } else if core_type_changed {
-        // Non-reference type that needed conversion
-        *ty = local_core_type;
         Ok(true)
     } else {
         // No conversion needed, keep original type
