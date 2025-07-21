@@ -89,7 +89,10 @@ impl RustFfi {
     }
 
     /// Convert to closure compatible with batching
-    pub fn into_closure(mut self) -> impl FnMut(&mut dyn Iterator<Item = syn::Item>) -> Option<syn::Item> {
+    pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<syn::Item>
+    where
+        I: Iterator<Item = syn::Item>,
+    {
         move |iter| self.call(iter)
     }
 }
