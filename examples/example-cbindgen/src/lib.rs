@@ -11,11 +11,11 @@ mod tests {
         unsafe {
             // Test simple functions without parameters
             let bool_result = another_test_function();
-            println!("another_test_function() returned: {}", bool_result);
+            println!("another_test_function() returned: {bool_result}");
 
             // Test function with basic parameters
             let int_result = test_function(42, 42.42);
-            println!("test_function(42, 42.42) returned: {}", int_result);
+            println!("test_function(42, 42.42) returned: {int_result}");
 
             // Test void function
             void_function(123);
