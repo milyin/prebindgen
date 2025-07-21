@@ -67,6 +67,7 @@ impl Builder {
             builder: self,
             type_replacements: HashSet::new(),
             processed_items: Vec::new(),
+            exported_types: HashSet::new(),
             finished: false,
         }
     }
@@ -83,6 +84,7 @@ pub struct RustFfi {
     pub(crate) builder: Builder,
     type_replacements: HashSet<crate::codegen::TypeTransmutePair>,
     processed_items: Vec<syn::Item>,
+    exported_types: HashSet<String>,
     finished: bool,
 }
 
@@ -98,30 +100,29 @@ impl RustFfi {
 
         if let Some(mut item) = iter.next() {
             // Process features
-            let file = syn::File {
-                shebang: None,
-                attrs: vec![],
-                items: vec![item.clone()],
-            };
-            let processed_file = crate::codegen::process_features(
-                file,
+            if !crate::codegen::process_features::process_item_features(
+                &mut item,
                 &self.builder.disabled_features,
                 &self.builder.enabled_features,
                 &self.builder.feature_mappings,
                 &crate::record::SourceLocation::default(),
-            );
-            
-            if let Some(processed_item) = processed_file.items.into_iter().next() {
-                item = processed_item;
-            } else {
-                return self.call(iter); // Skip empty items
+            ) {
+                return self.call(iter); // Skip filtered items
+            }
+
+            // Update exported_types for type items
+            match &item {
+                syn::Item::Struct(s) => { self.exported_types.insert(s.ident.to_string()); }
+                syn::Item::Enum(e) => { self.exported_types.insert(e.ident.to_string()); }
+                syn::Item::Union(u) => { self.exported_types.insert(u.ident.to_string()); }
+                syn::Item::Type(t) => { self.exported_types.insert(t.ident.to_string()); }
+                _ => {}
             }
 
             // Create parse config
-            let exported_types = HashSet::new();
             let config = crate::record::ParseConfig {
                 crate_name: "unknown",
-                exported_types: &exported_types,
+                exported_types: &self.exported_types,
                 disabled_features: &self.builder.disabled_features,
                 enabled_features: &self.builder.enabled_features,
                 feature_mappings: &self.builder.feature_mappings,
