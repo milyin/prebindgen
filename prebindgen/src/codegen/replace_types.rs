@@ -410,6 +410,43 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
     true
 }
 
+/// Generate compile-time assertions for a single type transmute pair
+///
+/// Creates size and alignment assertions to ensure that stripped types (used in FFI stubs)
+/// are compatible with their original types (from the source crate). Returns a pair of
+/// syn::Item objects for size and alignment assertions.
+#[roxygen]
+pub(crate) fn generate_type_transmute_pair_assertions(
+    /// Single TypeTransmutePair to create assertions for
+    assertion_pair: &TypeTransmutePair,
+) -> Option<(syn::Item, syn::Item)> {
+    // Parse the type strings back into syn::Type for proper code generation
+    if let (Ok(stripped_type), Ok(source_type)) = (
+        syn::parse_str::<syn::Type>(&assertion_pair.local_type),
+        syn::parse_str::<syn::Type>(&assertion_pair.origin_type),
+    ) {
+        // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
+        let size_assertion: syn::Item = syn::parse_quote! {
+            const _: () = assert!(
+                std::mem::size_of::<#stripped_type>() == std::mem::size_of::<#source_type>(),
+                "Size mismatch between stub parameter type and source crate type"
+            );
+        };
+
+        // Generate alignment assertion: stripped type (stub parameter) vs source crate type (original)
+        let align_assertion: syn::Item = syn::parse_quote! {
+            const _: () = assert!(
+                std::mem::align_of::<#stripped_type>() == std::mem::align_of::<#source_type>(),
+                "Alignment mismatch between stub parameter type and source crate type"
+            );
+        };
+
+        Some((size_assertion, align_assertion))
+    } else {
+        None
+    }
+}
+
 /// Generate compile-time assertions for type pairs
 ///
 /// Creates size and alignment assertions to ensure that stripped types (used in FFI stubs)
@@ -423,27 +460,8 @@ pub(crate) fn generate_type_assertions(
     let mut assertions = Vec::new();
 
     for assertion_pair in assertion_type_pairs {
-        // Parse the type strings back into syn::Type for proper code generation
-        if let (Ok(stripped_type), Ok(source_type)) = (
-            syn::parse_str::<syn::Type>(&assertion_pair.local_type),
-            syn::parse_str::<syn::Type>(&assertion_pair.origin_type),
-        ) {
-            // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
-            let size_assertion: syn::Item = syn::parse_quote! {
-                const _: () = assert!(
-                    std::mem::size_of::<#stripped_type>() == std::mem::size_of::<#source_type>(),
-                    "Size mismatch between stub parameter type and source crate type"
-                );
-            };
+        if let Some((size_assertion, align_assertion)) = generate_type_transmute_pair_assertions(assertion_pair) {
             assertions.push(size_assertion);
-
-            // Generate alignment assertion: stripped type (stub parameter) vs source crate type (original)
-            let align_assertion: syn::Item = syn::parse_quote! {
-                const _: () = assert!(
-                    std::mem::align_of::<#stripped_type>() == std::mem::align_of::<#source_type>(),
-                    "Alignment mismatch between stub parameter type and source crate type"
-                );
-            };
             assertions.push(align_assertion);
         }
     }
