@@ -104,6 +104,7 @@ mod jsonl;
 mod record;
 mod builder;
 mod group_builder;
+mod rust_file;
 pub mod query;
 
 /// File extension for data files
@@ -120,6 +121,7 @@ pub use jsonl::{read_jsonl_file, write_jsonl_file};
 pub use record::{Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 pub use builder::Builder;
 pub use group_builder::{GroupBuilder, Item};
+pub use rust_file::RustFile;
 
 // Re-export internal types for crate use
 pub(crate) use record::RecordSyn;

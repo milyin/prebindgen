@@ -131,6 +131,30 @@ impl<'a> GroupBuilder<'a> {
         None
     }
 
+    /// Returns a consuming iterator over syn::Item values from selected groups
+    ///
+    /// This method consumes the GroupBuilder and returns an iterator that yields
+    /// syn::Item values from all selected groups.
+    ///
+    /// # Returns
+    ///
+    /// An iterator over syn::Item values
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// for item in prebindgen.group("structs").items() {
+    ///     // Process each syn::Item
+    /// }
+    /// ```
+    pub fn items(self) -> impl Iterator<Item = syn::Item> {
+        self.groups
+            .into_iter()
+            .filter_map(|group| self.prebindgen.records.get(&group))
+            .flat_map(|records| records.iter())
+            .map(|record| record.content.clone())
+    }
+
     /// Write the selected groups to a file
     ///
     /// Generates the Rust source code for all selected groups and writes it
