@@ -77,3 +77,19 @@ impl Default for Builder {
 pub struct RustFfi {
     pub(crate) builder: Builder,
 }
+
+impl RustFfi {
+    /// Call method for use with batching - wrap in closure: |iter| rust_ffi.call(iter)
+    pub fn call<I>(&mut self, iter: &mut I) -> Option<syn::Item>
+    where
+        I: Iterator<Item = syn::Item>,
+    {
+        let _iter = iter;
+        todo!()
+    }
+
+    /// Convert to closure compatible with batching
+    pub fn into_closure(mut self) -> impl FnMut(&mut dyn Iterator<Item = syn::Item>) -> Option<syn::Item> {
+        move |iter| self.call(iter)
+    }
+}
