@@ -98,7 +98,19 @@ impl RustFfi {
             return None;
         }
 
-        if let Some(mut item) = iter.next() {
+        loop {
+            let Some(mut item) = iter.next() else {
+                // Iterator ended, generate type assertions
+                self.finished = true;
+                if !self.type_replacements.is_empty() {
+                    let assertions_file = crate::codegen::generate_type_assertions(&self.type_replacements);
+                    if let Some(assertion_item) = assertions_file.items.into_iter().next() {
+                        return Some(assertion_item);
+                    }
+                }
+                return None;
+            };
+
             // Process features
             if !crate::codegen::process_features::process_item_features(
                 &mut item,
@@ -107,7 +119,7 @@ impl RustFfi {
                 &self.builder.feature_mappings,
                 &crate::record::SourceLocation::default(),
             ) {
-                return self.call(iter); // Skip filtered items
+                continue; // Skip filtered items
             }
 
             // Update exported_types for type items
@@ -146,17 +158,7 @@ impl RustFfi {
             }
 
             self.processed_items.push(item.clone());
-            Some(item)
-        } else {
-            // Iterator ended, generate type assertions
-            self.finished = true;
-            if !self.type_replacements.is_empty() {
-                let assertions_file = crate::codegen::generate_type_assertions(&self.type_replacements);
-                if let Some(assertion_item) = assertions_file.items.into_iter().next() {
-                    return Some(assertion_item);
-                }
-            }
-            None
+            return Some(item);
         }
     }
 
