@@ -63,7 +63,12 @@ impl Builder {
 
     /// Build the RustFfi instance
     pub fn build(self) -> RustFfi {
-        RustFfi { builder: self }
+        RustFfi {
+            builder: self,
+            type_replacements: HashSet::new(),
+            processed_items: Vec::new(),
+            finished: false,
+        }
     }
 }
 
@@ -76,6 +81,9 @@ impl Default for Builder {
 /// RustFfi structure that mirrors Prebindgen functionality without file operations
 pub struct RustFfi {
     pub(crate) builder: Builder,
+    type_replacements: HashSet<crate::codegen::TypeTransmutePair>,
+    processed_items: Vec<syn::Item>,
+    finished: bool,
 }
 
 impl RustFfi {
@@ -84,8 +92,71 @@ impl RustFfi {
     where
         I: Iterator<Item = syn::Item>,
     {
-        let _iter = iter;
-        todo!()
+        if self.finished {
+            return None;
+        }
+
+        if let Some(mut item) = iter.next() {
+            // Process features
+            let file = syn::File {
+                shebang: None,
+                attrs: vec![],
+                items: vec![item.clone()],
+            };
+            let processed_file = crate::codegen::process_features(
+                file,
+                &self.builder.disabled_features,
+                &self.builder.enabled_features,
+                &self.builder.feature_mappings,
+                &crate::record::SourceLocation::default(),
+            );
+            
+            if let Some(processed_item) = processed_file.items.into_iter().next() {
+                item = processed_item;
+            } else {
+                return self.call(iter); // Skip empty items
+            }
+
+            // Create parse config
+            let exported_types = HashSet::new();
+            let config = crate::record::ParseConfig {
+                crate_name: "unknown",
+                exported_types: &exported_types,
+                disabled_features: &self.builder.disabled_features,
+                enabled_features: &self.builder.enabled_features,
+                feature_mappings: &self.builder.feature_mappings,
+                allowed_prefixes: &self.builder.allowed_prefixes,
+                transparent_wrappers: &self.builder.transparent_wrappers,
+                edition: &self.builder.edition,
+            };
+
+            // Process based on item type
+            match &mut item {
+                syn::Item::Fn(function) => {
+                    // Convert function to FFI stub
+                    if let Err(_) = crate::codegen::convert_to_stub(function, &config, &mut self.type_replacements) {
+                        return self.call(iter); // Skip on error
+                    }
+                }
+                _ => {
+                    // Replace types in non-function items
+                    let _ = crate::codegen::replace_types_in_item(&mut item, &config, &mut self.type_replacements);
+                }
+            }
+
+            self.processed_items.push(item.clone());
+            Some(item)
+        } else {
+            // Iterator ended, generate type assertions
+            self.finished = true;
+            if !self.type_replacements.is_empty() {
+                let assertions_file = crate::codegen::generate_type_assertions(&self.type_replacements);
+                if let Some(assertion_item) = assertions_file.items.into_iter().next() {
+                    return Some(assertion_item);
+                }
+            }
+            None
+        }
     }
 
     /// Convert to closure compatible with batching
