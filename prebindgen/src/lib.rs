@@ -105,6 +105,7 @@ mod record;
 mod builder;
 mod group_builder;
 mod rust_file;
+pub mod rust_ffi;
 pub mod query;
 
 /// File extension for data files
