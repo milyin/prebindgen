@@ -88,22 +88,22 @@ pub struct RustFfi {
 
 impl RustFfi {
     /// Call method for use with batching - wrap in closure: |iter| rust_ffi.call(iter)
-    pub fn call<I>(&mut self, iter: &mut I) -> Option<syn::Item>
+    pub fn call<I>(&mut self, iter: &mut I) -> Option<(syn::Item, Option<crate::record::SourceLocation>)>
     where
-        I: Iterator<Item = syn::Item>,
+        I: Iterator<Item = (syn::Item, Option<crate::record::SourceLocation>)>,
     {
         if self.finished {
             return None;
         }
 
         loop {
-            let Some(mut item) = iter.next() else {
+            let Some((mut item, source_location)) = iter.next() else {
                 // Iterator ended, generate type assertions
                 self.finished = true;
                 if !self.type_replacements.is_empty() {
                     let assertions_file = crate::codegen::generate_type_assertions(&self.type_replacements);
                     if let Some(assertion_item) = assertions_file.items.into_iter().next() {
-                        return Some(assertion_item);
+                        return Some((assertion_item, None));
                     }
                 }
                 return None;
@@ -115,7 +115,7 @@ impl RustFfi {
                 &self.builder.disabled_features,
                 &self.builder.enabled_features,
                 &self.builder.feature_mappings,
-                &crate::record::SourceLocation::default(),
+                &source_location.unwrap_or_default(),
             ) {
                 continue; // Skip filtered items
             }
@@ -145,8 +145,9 @@ impl RustFfi {
             match &mut item {
                 syn::Item::Fn(function) => {
                     // Convert function to FFI stub
-                    if let Err(_) = crate::codegen::convert_to_stub(function, &config, &mut self.type_replacements) {
-                        return self.call(iter); // Skip on error
+                    if let Err(e) = crate::codegen::convert_to_stub(function, &config, &mut self.type_replacements) {
+                        let location = source_location.as_ref().map(|l| format!(" at {}", l)).unwrap_or_default();
+                        panic!("Failed to convert function {}{}: {}", function.sig.ident, location, e);
                     }
                 }
                 _ => {
@@ -155,14 +156,14 @@ impl RustFfi {
                 }
             }
 
-            return Some(item);
+            return Some((item, source_location));
         }
     }
 
     /// Convert to closure compatible with batching
-    pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<syn::Item>
+    pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<(syn::Item, Option<crate::record::SourceLocation>)>
     where
-        I: Iterator<Item = syn::Item>,
+        I: Iterator<Item = (syn::Item, Option<crate::record::SourceLocation>)>,
     {
         move |iter| self.call(iter)
     }
