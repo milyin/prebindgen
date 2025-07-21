@@ -66,7 +66,6 @@ impl Builder {
         RustFfi {
             builder: self,
             type_replacements: HashSet::new(),
-            processed_items: Vec::new(),
             exported_types: HashSet::new(),
             finished: false,
         }
@@ -83,7 +82,6 @@ impl Default for Builder {
 pub struct RustFfi {
     pub(crate) builder: Builder,
     type_replacements: HashSet<crate::codegen::TypeTransmutePair>,
-    processed_items: Vec<syn::Item>,
     exported_types: HashSet<String>,
     finished: bool,
 }
@@ -157,7 +155,6 @@ impl RustFfi {
                 }
             }
 
-            self.processed_items.push(item.clone());
             return Some(item);
         }
     }

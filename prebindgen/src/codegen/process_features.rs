@@ -39,7 +39,7 @@ pub(crate) fn process_features(
 }
 
 /// Process a single item (struct, enum, function, etc.) for feature flags
-fn process_item_features(
+pub(crate) fn process_item_features(
     item: &mut syn::Item,
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,

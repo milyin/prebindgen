@@ -8,7 +8,7 @@
 //! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
 
 mod cfg_expr;
-mod process_features;
+pub(crate) mod process_features;
 mod replace_types;
 
 // Re-export the main functions
