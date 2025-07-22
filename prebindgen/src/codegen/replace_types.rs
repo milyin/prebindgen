@@ -195,11 +195,11 @@ pub(crate) fn replace_types_in_type(
 pub(crate) fn replace_types_in_file(
     file: &mut syn::File,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    type_replacements: &mut HashSet<TypeTransmutePair>,
 ) -> Result<bool, String> {
     let mut any_changed = false;
     for item in &mut file.items {
-        any_changed |= replace_types_in_item(item, config, assertion_type_pairs)?;
+        any_changed |= replace_types_in_item(item, config, type_replacements)?;
     }
     Ok(any_changed)
 }
@@ -208,43 +208,43 @@ pub(crate) fn replace_types_in_file(
 pub(crate) fn replace_types_in_item(
     item: &mut syn::Item,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    type_replacements: &mut HashSet<TypeTransmutePair>,
 ) -> Result<bool, String> {
     match item {
         syn::Item::Fn(item_fn) => {
             let (_, sig_changed) =
-                replace_types_in_signature(&mut item_fn.sig, config, assertion_type_pairs)?;
+                replace_types_in_signature(&mut item_fn.sig, config, type_replacements)?;
             let block_changed =
-                replace_types_in_block(&mut item_fn.block, config, assertion_type_pairs)?;
+                replace_types_in_block(&mut item_fn.block, config, type_replacements)?;
             Ok(sig_changed || block_changed)
         }
         syn::Item::Struct(item_struct) => {
-            replace_types_in_fields(&mut item_struct.fields, config, assertion_type_pairs)
+            replace_types_in_fields(&mut item_struct.fields, config, type_replacements)
         }
         syn::Item::Enum(item_enum) => {
             let mut any_changed = false;
             for variant in &mut item_enum.variants {
                 any_changed |=
-                    replace_types_in_fields(&mut variant.fields, config, assertion_type_pairs)?;
+                    replace_types_in_fields(&mut variant.fields, config, type_replacements)?;
             }
             Ok(any_changed)
         }
         syn::Item::Union(item_union) => {
             let mut fields = syn::Fields::Named(item_union.fields.clone());
-            let changed = replace_types_in_fields(&mut fields, config, assertion_type_pairs)?;
+            let changed = replace_types_in_fields(&mut fields, config, type_replacements)?;
             if let syn::Fields::Named(fields_named) = fields {
                 item_union.fields = fields_named;
             }
             Ok(changed)
         }
         syn::Item::Type(item_type) => {
-            replace_types_in_type(&mut item_type.ty, config, assertion_type_pairs)
+            replace_types_in_type(&mut item_type.ty, config, type_replacements)
         }
         syn::Item::Const(item_const) => {
-            replace_types_in_type(&mut item_const.ty, config, assertion_type_pairs)
+            replace_types_in_type(&mut item_const.ty, config, type_replacements)
         }
         syn::Item::Static(item_static) => {
-            replace_types_in_type(&mut item_static.ty, config, assertion_type_pairs)
+            replace_types_in_type(&mut item_static.ty, config, type_replacements)
         }
         _ => Ok(false),
     }
