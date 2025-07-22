@@ -30,7 +30,7 @@ use crate::{jsonl, trace};
 /// ```
 pub struct Builder {
     input_dir: std::path::PathBuf,
-    crate_name: String, // Empty string by default, read from file if empty
+    source_crate_name: String, // Empty string by default, read from file if empty
     edition: String,
     selected_groups: HashSet<String>,
     allowed_prefixes: Vec<syn::Path>,
@@ -62,7 +62,7 @@ impl Builder {
 
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
-            crate_name: String::new(), // Empty string by default, read from file if empty
+            source_crate_name: String::new(), // Empty string by default, read from file if empty
             edition: "2024".to_string(), // Default edition
             selected_groups: HashSet::new(),
             allowed_prefixes,
@@ -149,7 +149,7 @@ impl Builder {
         /// The crate name to use in generated function calls
         crate_name: S,
     ) -> Self {
-        self.crate_name = crate_name.into();
+        self.source_crate_name = crate_name.into();
         self
     }
 
@@ -370,10 +370,10 @@ impl Builder {
                 self.input_dir.display()
             )
         });
-        let crate_name = if self.crate_name.is_empty() {
+        let crate_name = if self.source_crate_name.is_empty() {
             original_crate_name
         } else {
-            self.crate_name.clone()
+            self.source_crate_name.clone()
         };
 
         // Read the groups based on selection

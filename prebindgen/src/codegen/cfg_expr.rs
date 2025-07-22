@@ -76,7 +76,7 @@ impl CfgExpr {
         enabled_features: &HashSet<String>,
         disabled_features: &HashSet<String>,
         feature_mappings: &std::collections::HashMap<String, String>,
-        source_location: &crate::SourceLocation,
+        source_location: Option<&crate::SourceLocation>,
     ) -> Option<Self> {
         match self {
             CfgExpr::Feature(name) => {
@@ -92,7 +92,12 @@ impl CfgExpr {
                 } else {
                     // Unmapped feature - panic with source location information
                     panic!(
-                        "unmapped feature: {name} (at {source_location})"
+                        "unmapped feature: {name} (at {source_location})",
+                        source_location = if let Some(loc) = source_location {
+                            loc.to_string()
+                        } else {
+                            "unknown location".to_string()
+                        }
                     );
                 }
             }
@@ -308,8 +313,6 @@ fn parse_comma_separated(input: &str) -> Result<Vec<CfgExpr>, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::SourceLocation;
-
     use super::*;
 
     #[test]
@@ -381,7 +384,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             None
         );
@@ -393,7 +396,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             Some(CfgExpr::False)
         );
@@ -405,7 +408,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             Some(CfgExpr::Feature("new_feature".to_string()))
         );
@@ -420,7 +423,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             None
         );
@@ -435,7 +438,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             Some(CfgExpr::False)
         );
@@ -447,7 +450,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             None
         );
@@ -459,7 +462,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                &SourceLocation::default()
+                None
             ),
             Some(CfgExpr::False)
         );
@@ -480,7 +483,7 @@ mod tests {
             &enabled_features,
             &disabled_features,
             &feature_mappings,
-            &SourceLocation::default(),
+            None,
         );
     }
 
@@ -504,7 +507,7 @@ mod tests {
             &enabled_features,
             &disabled_features,
             &feature_mappings,
-            &SourceLocation::default(),
+            None,
         );
     }
 }

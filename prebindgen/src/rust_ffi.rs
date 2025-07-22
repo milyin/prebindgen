@@ -91,12 +91,6 @@ impl Builder {
     }
 }
 
-impl Default for Builder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 enum RustFfiGenerationStage {
     /// First stage: go through all items in the iterator and collect all type names.
     /// These types will be copied to the destination file and transmuted to the original crate types when
@@ -125,51 +119,48 @@ pub struct RustFfi {
 }
 
 impl RustFfi {
-    fn collect_item<I>(
+    fn collect_item(
         &mut self,
         item: syn::Item,
         source_location: Option<crate::record::SourceLocation>,
     ) {
         // Process features
-            if !crate::codegen::process_features::process_item_features(
-                &mut item.clone(),
-                &self.builder.disabled_features,
-                &self.builder.enabled_features,
-                &self.builder.feature_mappings,
-                &source_location.unwrap_or_default(),
-            ) {
-                return;
-            }
-
-            // Update exported_types for type items
-            match &item {
-                syn::Item::Struct(s) => {
-                    self.exported_types.insert(s.ident.to_string());
-                }
-                syn::Item::Enum(e) => {
-                    self.exported_types.insert(e.ident.to_string());
-                }
-                syn::Item::Union(u) => {
-                    self.exported_types.insert(u.ident.to_string());
-                }
-                syn::Item::Type(t) => {
-                    self.exported_types.insert(t.ident.to_string());
-                }
-                _ => {}
-            }
-
-            // Store the item and its source location
-            self.source_items.push((item, source_location));
-
+        if !crate::codegen::process_features::process_item_features(
+            &mut item.clone(),
+            &self.builder.disabled_features,
+            &self.builder.enabled_features,
+            &self.builder.feature_mappings,
+            source_location.as_ref(),
+        ) {
+            return;
         }
 
+        // Update exported_types for type items
+        match &item {
+            syn::Item::Struct(s) => {
+                self.exported_types.insert(s.ident.to_string());
+            }
+            syn::Item::Enum(e) => {
+                self.exported_types.insert(e.ident.to_string());
+            }
+            syn::Item::Union(u) => {
+                self.exported_types.insert(u.ident.to_string());
+            }
+            syn::Item::Type(t) => {
+                self.exported_types.insert(t.ident.to_string());
+            }
+            _ => {}
+        }
+
+        // Store the item and its source location
+        self.source_items.push((item, source_location));
     }
 
     fn convert(&mut self) -> Option<(syn::Item, Option<crate::record::SourceLocation>)> {
-        if let Some((item, source_location)) = self.source_items.pop() {
+        if let Some((mut item, source_location)) = self.source_items.pop() {
             // Create parse config
             let config = crate::record::ParseConfig {
-                crate_name: &self.source_crate_name,
+                crate_name: &self.builder.source_crate_name,
                 exported_types: &self.exported_types,
                 disabled_features: &self.builder.disabled_features,
                 enabled_features: &self.builder.enabled_features,
@@ -180,8 +171,8 @@ impl RustFfi {
             };
 
             // Process based on item type
-            match &mut item {
-                syn::Item::Fn(function) => {
+            match item {
+                syn::Item::Fn(ref mut function) => {
                     // Convert function to FFI stub
                     if let Err(e) = crate::codegen::convert_to_stub(
                         function,
@@ -189,8 +180,11 @@ impl RustFfi {
                         &mut self.type_replacements,
                     ) {
                         panic!(
-                            "Failed to convert function {}{}: {}",
-                            function.sig.ident, source_location, e
+                            "Failed to convert function {function}{source_location}: {e}",
+                            function = function.sig.ident,
+                            source_location = source_location
+                                .map(|loc| format!(" at {loc}"))
+                                .unwrap_or_default(),
                         );
                     }
                 }
@@ -210,9 +204,7 @@ impl RustFfi {
         None
     }
 
-    fn generate_assertions(
-        &mut self,
-    ) -> Option<(syn::Item, Option<crate::record::SourceLocation>)> {
+    fn generate_assertions(&mut self) {
         // Generate assertions for type transmute correctness
         for replacement in &self.type_replacements {
             if let Some((size_assertion, align_assertion)) =

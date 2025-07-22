@@ -187,7 +187,7 @@ impl RecordSyn {
             config.disabled_features,
             config.enabled_features,
             config.feature_mappings,
-            &self.source_location,
+            Some(&self.source_location),
         );
         // Update the content and kind with processed items
         if let Some(content) = processed.items.into_iter().next() {
