@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 
 /// Builder for configuring RustFfi without file operations
 pub struct Builder {
+    pub(crate) source_crate_name: String,
     pub(crate) allowed_prefixes: Vec<syn::Path>,
     pub(crate) disabled_features: HashSet<String>,
     pub(crate) enabled_features: HashSet<String>,
@@ -27,8 +28,9 @@ pub struct Builder {
 
 impl Builder {
     /// Create a new RustFfi builder
-    pub fn new() -> Self {
+    pub fn new(source_crate_name: impl Into<String>) -> Self {
         Self {
+            source_crate_name: source_crate_name.into(),
             allowed_prefixes: Vec::new(),
             disabled_features: HashSet::new(),
             enabled_features: HashSet::new(),
@@ -167,7 +169,7 @@ impl RustFfi {
         if let Some((item, source_location)) = self.source_items.pop() {
             // Create parse config
             let config = crate::record::ParseConfig {
-                crate_name: "unknown",
+                crate_name: &self.source_crate_name,
                 exported_types: &self.exported_types,
                 disabled_features: &self.builder.disabled_features,
                 enabled_features: &self.builder.enabled_features,
