@@ -68,6 +68,7 @@ impl Builder {
             type_replacements: HashSet::new(),
             exported_types: HashSet::new(),
             finished: false,
+            pending_items: Vec::new(),
         }
     }
 }
@@ -84,6 +85,7 @@ pub struct RustFfi {
     type_replacements: HashSet<crate::codegen::TypeTransmutePair>,
     exported_types: HashSet<String>,
     finished: bool,
+    pending_items: Vec<syn::Item>,
 }
 
 impl RustFfi {
@@ -92,72 +94,86 @@ impl RustFfi {
     where
         I: Iterator<Item = (syn::Item, Option<crate::record::SourceLocation>)>,
     {
-        if self.finished {
-            return None;
+        // Return pending items first
+        if let Some(pending_item) = self.pending_items.pop() {
+            return Some((pending_item, None));
         }
 
-        loop {
-            let Some((mut item, source_location)) = iter.next() else {
-                // Iterator ended, generate type assertions
-                self.finished = true;
-                if !self.type_replacements.is_empty() {
-                    let assertions_file = crate::codegen::generate_type_assertions(&self.type_replacements);
-                    if let Some(assertion_item) = assertions_file.items.into_iter().next() {
-                        return Some((assertion_item, None));
+        if !self.finished {
+            loop {
+                let Some((mut item, source_location)) = iter.next() else {
+                    self.finished = true;
+                    break;
+                };
+
+                // Process features
+                if !crate::codegen::process_features::process_item_features(
+                    &mut item,
+                    &self.builder.disabled_features,
+                    &self.builder.enabled_features,
+                    &self.builder.feature_mappings,
+                    &source_location.unwrap_or_default(),
+                ) {
+                    continue; // Skip filtered items
+                }
+
+                // Update exported_types for type items
+                match &item {
+                    syn::Item::Struct(s) => { self.exported_types.insert(s.ident.to_string()); }
+                    syn::Item::Enum(e) => { self.exported_types.insert(e.ident.to_string()); }
+                    syn::Item::Union(u) => { self.exported_types.insert(u.ident.to_string()); }
+                    syn::Item::Type(t) => { self.exported_types.insert(t.ident.to_string()); }
+                    _ => {}
+                }
+
+                // Create parse config
+                let config = crate::record::ParseConfig {
+                    crate_name: "unknown",
+                    exported_types: &self.exported_types,
+                    disabled_features: &self.builder.disabled_features,
+                    enabled_features: &self.builder.enabled_features,
+                    feature_mappings: &self.builder.feature_mappings,
+                    allowed_prefixes: &self.builder.allowed_prefixes,
+                    transparent_wrappers: &self.builder.transparent_wrappers,
+                    edition: &self.builder.edition,
+                };
+
+                let mut new_type_replacements = HashSet::new();
+
+                // Process based on item type
+                match &mut item {
+                    syn::Item::Fn(function) => {
+                        // Convert function to FFI stub
+                        if let Err(e) = crate::codegen::convert_to_stub(function, &config, &mut new_type_replacements) {
+                            let location = source_location.as_ref().map(|l| format!(" at {}", l)).unwrap_or_default();
+                            panic!("Failed to convert function {}{}: {}", function.sig.ident, location, e);
+                        }
+                    }
+                    _ => {
+                        // Replace types in non-function items
+                        let _ = crate::codegen::replace_types_in_item(&mut item, &config, &mut new_type_replacements);
                     }
                 }
-                return None;
-            };
 
-            // Process features
-            if !crate::codegen::process_features::process_item_features(
-                &mut item,
-                &self.builder.disabled_features,
-                &self.builder.enabled_features,
-                &self.builder.feature_mappings,
-                &source_location.unwrap_or_default(),
-            ) {
-                continue; // Skip filtered items
-            }
-
-            // Update exported_types for type items
-            match &item {
-                syn::Item::Struct(s) => { self.exported_types.insert(s.ident.to_string()); }
-                syn::Item::Enum(e) => { self.exported_types.insert(e.ident.to_string()); }
-                syn::Item::Union(u) => { self.exported_types.insert(u.ident.to_string()); }
-                syn::Item::Type(t) => { self.exported_types.insert(t.ident.to_string()); }
-                _ => {}
-            }
-
-            // Create parse config
-            let config = crate::record::ParseConfig {
-                crate_name: "unknown",
-                exported_types: &self.exported_types,
-                disabled_features: &self.builder.disabled_features,
-                enabled_features: &self.builder.enabled_features,
-                feature_mappings: &self.builder.feature_mappings,
-                allowed_prefixes: &self.builder.allowed_prefixes,
-                transparent_wrappers: &self.builder.transparent_wrappers,
-                edition: &self.builder.edition,
-            };
-
-            // Process based on item type
-            match &mut item {
-                syn::Item::Fn(function) => {
-                    // Convert function to FFI stub
-                    if let Err(e) = crate::codegen::convert_to_stub(function, &config, &mut self.type_replacements) {
-                        let location = source_location.as_ref().map(|l| format!(" at {}", l)).unwrap_or_default();
-                        panic!("Failed to convert function {}{}: {}", function.sig.ident, location, e);
+                // Check for new type replacements and add assertions
+                for new_replacement in new_type_replacements {
+                    if !self.type_replacements.contains(&new_replacement) {
+                        self.type_replacements.insert(new_replacement.clone());
+                        let assertions_file = crate::codegen::generate_type_assertions(&[new_replacement].iter().cloned().collect());
+                        self.pending_items.extend(assertions_file.items);
                     }
                 }
-                _ => {
-                    // Replace types in non-function items
-                    let _ = crate::codegen::replace_types_in_item(&mut item, &config, &mut self.type_replacements);
-                }
-            }
 
-            return Some((item, source_location));
+                return Some((item, source_location));
+            }
         }
+
+        // Return remaining pending items
+        if let Some(pending_item) = self.pending_items.pop() {
+            return Some((pending_item, None));
+        }
+
+        None
     }
 
     /// Convert to closure compatible with batching
