@@ -12,7 +12,6 @@ pub(crate) mod process_features;
 mod replace_types;
 
 // Re-export the main functions
-pub(crate) use process_features::process_features;
 #[allow(unused_imports)]
 pub(crate) use replace_types::replace_types_in_file;
 pub(crate) use replace_types::{

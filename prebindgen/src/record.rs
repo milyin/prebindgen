@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-};
+use std::collections::HashSet;
 
 use crate::codegen::TypeTransmutePair;
 
@@ -175,55 +173,6 @@ impl RecordSyn {
         }
     }
 
-    /// Process the features in the content according to the provided configuration.
-    /// Returns true if the content is not empty after processing.
-    fn process_features(&mut self, config: &ParseConfig<'_>) -> bool {
-        let processed = crate::codegen::process_features(
-            syn::File {
-                shebang: None,
-                attrs: vec![],
-                items: vec![self.content.clone()],
-            },
-            config.disabled_features,
-            config.enabled_features,
-            config.feature_mappings,
-            Some(&self.source_location),
-        );
-        // Update the content and kind with processed items
-        if let Some(content) = processed.items.into_iter().next() {
-            self.content = content;
-            true
-        } else {
-            self.content = syn::Item::Verbatim(proc_macro2::TokenStream::new());
-            false
-        }
-    }
-
-    /// Parse a Record into a RecordSyn with feature processing and FFI transformation
-    pub(crate) fn parse_record(record: Record, config: &ParseConfig<'_>) -> Result<Self, String> {
-        let mut record_syn = Self::try_from(record)?;
-
-        // Apply feature processing
-        if !record_syn.process_features(config) {
-            // If processing results in no content, return an empty RecordSyn
-            return Ok(record_syn);
-        }
-
-        if let syn::Item::Fn(function) = &mut record_syn.content {
-            // Transform functions to FFI stubs (including type replacement and collection)
-            crate::codegen::convert_to_stub(function, config, &mut record_syn.type_replacements)
-                .map_err(|e| format!("{} at {}", e, record_syn.source_location))?;
-        } else {
-            // Replace types in non-function items and collect type replacements
-            let _ = crate::codegen::replace_types_in_item(
-                &mut record_syn.content,
-                config,
-                &mut record_syn.type_replacements,
-            ).map_err(|e| format!("{} at {}", e, record_syn.source_location))?;
-        }
-        Ok(record_syn)
-    }
-
     /// Derive the record kind from the syn::Item content
     pub(crate) fn kind(&self) -> Result<RecordKind, String> {
         match &self.content {
@@ -265,9 +214,6 @@ impl std::fmt::Debug for RecordSyn {
 pub(crate) struct ParseConfig<'a> {
     pub crate_name: &'a str,
     pub exported_types: &'a HashSet<String>,
-    pub disabled_features: &'a HashSet<String>,
-    pub enabled_features: &'a HashSet<String>,
-    pub feature_mappings: &'a HashMap<String, String>,
     pub allowed_prefixes: &'a [syn::Path],
     pub transparent_wrappers: &'a [syn::Path],
     pub edition: &'a str,

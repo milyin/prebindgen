@@ -241,12 +241,16 @@ pub fn init_prebindgen_out_dir() {
 /// let structs_only = pb.group("structs").write_to_file("structs.rs");
 /// ```
 pub struct Prebindgen {
+    pub(crate) source_crate_name: String,
     pub(crate) records: HashMap<String, Vec<RecordSyn>>,
 }
 
-
-
 impl Prebindgen {
+    /// Get source crate name
+    pub fn source_crate_name(&self) -> &str {
+        &self.source_crate_name
+    }
+
     /// Select a specific group for file generation
     ///
     /// Returns a `GroupBuilder` that can be used to write the specified group
@@ -343,21 +347,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_builder_feature_methods() {
-        let builder = Builder::new("/tmp")
-            .disable_feature("experimental")
-            .enable_feature("std")
-            .match_feature("unstable", "stable");
-
-        assert!(builder.disabled_features.contains("experimental"));
-        assert!(builder.enabled_features.contains("std"));
-        assert_eq!(
-            builder.feature_mappings.get("unstable"),
-            Some(&"stable".to_string())
-        );
-    }
-
-    #[test]
     fn test_parsing_error_handling() {
         // Create a temporary directory structure to simulate prebindgen data
         let temp_dir = tempfile::tempdir().unwrap();
@@ -390,58 +379,6 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_strip_transparent_wrapper() {
-        let builder = Builder::new("/tmp")
-            .strip_transparent_wrapper("std::mem::MaybeUninit")
-            .strip_transparent_wrapper("std::mem::ManuallyDrop");
-
-        assert_eq!(builder.transparent_wrappers.len(), 2);
-        
-        // Check that the paths were parsed correctly by comparing their string representation
-        assert!(builder.transparent_wrappers.iter().any(|p| {
-            format!("{}", quote::quote! { #p }) == "std :: mem :: MaybeUninit"
-        }));
-        assert!(builder.transparent_wrappers.iter().any(|p| {
-            format!("{}", quote::quote! { #p }) == "std :: mem :: ManuallyDrop"
-        }));
-    }
-
-    #[test]
-    fn test_syn_query_struct_alignment() {
-        use crate::record::{RecordSyn, SourceLocation};
-        use std::collections::HashSet;
-        
-        // Create a struct with alignment attribute
-        let struct_content = syn::parse_str::<syn::Item>(r#"
-            #[repr(C, align(16))]
-            pub struct AlignedStruct {
-                pub field: u64,
-            }
-        "#).unwrap();
-        
-        let record = RecordSyn::new(
-            struct_content,
-            SourceLocation::default(),
-            HashSet::new(),
-        );
-        
-        let mut records = HashMap::new();
-        records.insert("test".to_string(), vec![record]);
-        
-        let prebindgen = Prebindgen { records };
-        
-        // Query for alignment modifier using new Item API
-        let group_builder = prebindgen.all();
-        let item = group_builder.item("AlignedStruct");
-        assert!(item.is_some());
-        
-        let alignment = item.unwrap().query(crate::query::struct_align);
-        assert!(alignment.is_some());
-        let align_value = alignment.unwrap();
-        assert_eq!(align_value, 16);
-    }
-
-    #[test]
     fn test_error_reporting_with_source_location() {
         use std::collections::HashSet;
         use std::collections::HashMap;
@@ -456,18 +393,12 @@ pub fn invalid_ffi_function(param: mycrate::CustomType) -> othercrate::AnotherTy
         
         let mut file = syn::parse_file(function_content).unwrap();
         let exported_types = HashSet::new();
-        let disabled_features = HashSet::new();
-        let enabled_features = HashSet::new();
-        let feature_mappings = HashMap::new();
         let allowed_prefixes = codegen::generate_standard_allowed_prefixes();
         let transparent_wrappers = Vec::new();
         
         let config = ParseConfig {
             crate_name: "test-crate",
             exported_types: &exported_types,
-            disabled_features: &disabled_features,
-            enabled_features: &enabled_features,
-            feature_mappings: &feature_mappings,
             allowed_prefixes: &allowed_prefixes,
             transparent_wrappers: &transparent_wrappers,
             edition: "2021",

@@ -13,6 +13,7 @@
 //! - have a single ffi implementation and reuse it for different language bindings without squashing all to single crate
 //! - adapt the ffi source to specificity of different binding generators
 
+use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
 /// Builder for configuring RustFfi without file operations
@@ -29,9 +30,10 @@ pub struct Builder {
 impl Builder {
     /// Create a new RustFfi builder
     pub fn new(source_crate_name: impl Into<String>) -> Self {
+        // Generate comprehensive allowed prefixes including standard prelude
         Self {
             source_crate_name: source_crate_name.into(),
-            allowed_prefixes: Vec::new(),
+            allowed_prefixes: crate::codegen::generate_standard_allowed_prefixes(),
             disabled_features: HashSet::new(),
             enabled_features: HashSet::new(),
             feature_mappings: HashMap::new(),
@@ -40,40 +42,157 @@ impl Builder {
         }
     }
 
-    /// Add an allowed type prefix for FFI compatibility
-    pub fn allowed_prefix<S: AsRef<str>>(mut self, prefix: S) -> Self {
+    /// Add an allowed type prefix for FFI validation
+    ///
+    /// This method allows you to specify additional type prefixes that should be
+    /// considered valid for FFI functions, beyond the comprehensive set of default
+    /// allowed prefixes that includes the standard prelude, core library types,
+    /// primitive types, and common FFI types.
+    ///
+    /// # Default Allowed Prefixes
+    ///
+    /// The builder automatically includes prefixes for:
+    /// - Standard library modules (`std`, `core`, `alloc`)
+    /// - Standard prelude types (`Option`, `Result`, `Vec`, `String`, etc.)
+    /// - Core library modules (`core::mem`, `core::ptr`, etc.)
+    /// - Primitive types (`bool`, `i32`, `u64`, etc.)
+    /// - Common FFI types (`libc`, `c_char`, `c_int`, etc.)
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .allowed_prefix("libc")
+    ///     .allowed_prefix("core");
+    /// ```
+    #[roxygen]
+    pub fn allowed_prefix<S: AsRef<str>>(
+        mut self,
+        /// The additional type prefix to allow
+        prefix: S,
+    ) -> Self {
         let path: syn::Path = syn::parse_str(prefix.as_ref()).unwrap();
         self.allowed_prefixes.push(path);
         self
     }
 
-    /// Disable a feature (items with this feature will be excluded)
-    pub fn disable_feature<S: Into<String>>(mut self, feature: S) -> Self {
+    /// Disable a feature in the generated code
+    ///
+    /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
+    /// guarded by disabled features will be completely skipped in the output.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .disable_feature("experimental")
+    ///     .disable_feature("deprecated");
+    /// ```
+    #[roxygen]
+    pub fn disable_feature<S: Into<String>>(
+        mut self,
+        /// The name of the feature to disable
+        feature: S,
+    ) -> Self {
         self.disabled_features.insert(feature.into());
         self
     }
 
-    /// Enable a feature (cfg attributes for this feature will be removed)
-    pub fn enable_feature<S: Into<String>>(mut self, feature: S) -> Self {
+    /// Enable a feature in the generated code
+    ///
+    /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
+    /// guarded by enabled features will be included in the output with the
+    /// `#[cfg(...)]` attribute removed.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .enable_feature("experimental");
+    /// ```
+    #[roxygen]
+    pub fn enable_feature<S: Into<String>>(
+        mut self,
+        /// The name of the feature to enable
+        feature: S,
+    ) -> Self {
         self.enabled_features.insert(feature.into());
         self
     }
-
-    /// Map one feature name to another
-    pub fn match_feature<S1: Into<String>, S2: Into<String>>(mut self, from: S1, to: S2) -> Self {
+    /// Map a feature name to a different name in the generated code
+    ///
+    /// When processing code with `#[cfg(feature="...")]` attributes, features
+    /// that match the mapping will have their names replaced with the target
+    /// feature name in the output.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .match_feature("unstable", "unstable")
+    ///     .match_feature("internal", "unstable");
+    /// ```
+    #[roxygen]
+    pub fn match_feature<S1: Into<String>, S2: Into<String>>(
+        mut self,
+        /// The original feature name to match
+        from: S1,
+        /// The new feature name to use in the output
+        to: S2,
+    ) -> Self {
         self.feature_mappings.insert(from.into(), to.into());
         self
     }
 
-    /// Add a transparent wrapper type to be stripped
-    pub fn strip_transparent_wrapper<S: AsRef<str>>(mut self, wrapper: S) -> Self {
+    /// Add a transparent wrapper type to be stripped from FFI function parameters
+    ///
+    /// Transparent wrappers are types that wrap other types but have the same
+    /// memory layout (like `std::mem::MaybeUninit<T>`). When generating FFI stubs,
+    /// these wrappers will be stripped from parameter types to create simpler
+    /// C-compatible function signatures.
+    ///
+    /// For example, if you add `std::mem::MaybeUninit` as a transparent wrapper:
+    /// - `&mut std::mem::MaybeUninit<Foo>` becomes `*mut Foo` in the FFI signature
+    /// - `&std::mem::MaybeUninit<Bar>` becomes `*const Bar` in the FFI signature
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
+    ///     .strip_transparent_wrapper("std::mem::ManuallyDrop");
+    /// ```
+    #[roxygen]
+    pub fn strip_transparent_wrapper<S: AsRef<str>>(
+        mut self,
+        /// The transparent wrapper type to strip (e.g., "std::mem::MaybeUninit")
+        wrapper: S,
+    ) -> Self {
         let path: syn::Path = syn::parse_str(wrapper.as_ref()).unwrap();
         self.transparent_wrappers.push(path);
         self
     }
 
-    /// Set the Rust edition
-    pub fn edition<S: Into<String>>(mut self, edition: S) -> Self {
+    /// Set the Rust edition to use for generated code
+    ///
+    /// This affects how the `#[no_mangle]` attribute is generated:
+    /// - For edition "2024": `#[unsafe(no_mangle)]`
+    /// - For other editions: `#[no_mangle]`
+    ///
+    /// Default is "2024" if not specified.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let builder = prebindgen::Builder::new(path)
+    ///     .edition("2021");
+    /// ```
+    #[roxygen]
+    pub fn edition<S: Into<String>>(
+        mut self,
+        /// The Rust edition ("2021", "2024", etc.)
+        edition: S,
+    ) -> Self {
         self.edition = edition.into();
         self
     }
@@ -162,9 +281,6 @@ impl RustFfi {
             let config = crate::record::ParseConfig {
                 crate_name: &self.builder.source_crate_name,
                 exported_types: &self.exported_types,
-                disabled_features: &self.builder.disabled_features,
-                enabled_features: &self.builder.enabled_features,
-                feature_mappings: &self.builder.feature_mappings,
                 allowed_prefixes: &self.builder.allowed_prefixes,
                 transparent_wrappers: &self.builder.transparent_wrappers,
                 edition: &self.builder.edition,
