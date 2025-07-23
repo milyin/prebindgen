@@ -104,7 +104,7 @@ mod jsonl;
 mod record;
 mod builder;
 mod group_builder;
-mod rust_file;
+pub mod rust_file;
 pub mod rust_ffi;
 pub mod query;
 
@@ -381,7 +381,6 @@ mod tests {
     #[test]
     fn test_error_reporting_with_source_location() {
         use std::collections::HashSet;
-        use std::collections::HashMap;
         use crate::record::ParseConfig;
         
     // Parse a function with invalid FFI types - using a custom type that's not in allowed prefixes

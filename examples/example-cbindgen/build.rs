@@ -5,11 +5,15 @@
 
 use std::path::PathBuf;
 
+use itertools::Itertools;
+
 fn main() {
     // Create a prebindgen builder using the output directory from the common FFI crate
     // The PREBINDGEN_OUT_DIR constant is exported by example_ffi and contains the path
     // to the prebindgen data files generated during example_ffi's build
-    let pb = prebindgen::Builder::new(example_ffi::PREBINDGEN_OUT_DIR)
+    let pb = prebindgen::Builder::new(example_ffi::PREBINDGEN_OUT_DIR).build();
+
+    let rust_ffi = prebindgen::rust_ffi::Builder::new(pb.source_crate_name())
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
         .strip_transparent_wrapper("Option") // Strip Option wrapper
@@ -19,7 +23,12 @@ fn main() {
 
     // Generate FFI bindings for all groups (structs, functions, etc.)
     // This creates extern "C" wrapper functions that call back to the original crate
-    let bindings_file = pb.all().write_to_file("example_ffi.rs");
+    let bindings_file = pb
+        .all()
+        .items()
+        .batching(rust_ffi.into_closure())
+        .collect::<prebindgen::rust_file::RustFile>()
+        .write("exampe_ffi.rs");
 
     println!(
         "cargo:warning=Generated bindings at: {}",
