@@ -126,9 +126,6 @@ pub use builder::Builder;
 pub use group_builder::{GroupBuilder, Item};
 pub use rust_file::RustFile;
 
-// Re-export internal types for crate use
-pub(crate) use record::RecordSyn;
-
 use crate::codegen::TypeTransmutePair;
 
 /// **Internal API**: Macro for debug tracing. Public only for proc-macro crate interaction.
