@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-use crate::codegen::TypeTransmutePair;
-
 /// Default group name for prebindgen when no group is specified
 pub const DEFAULT_GROUP_NAME: &str = "default";
 
@@ -75,6 +73,19 @@ impl RecordKind {
     }
 }
 
+impl From<&(syn::Item,SourceLocation)> for RecordKind {
+    fn from((item, source_location): &(syn::Item, SourceLocation)) -> Self {
+        match item {
+            syn::Item::Struct(_) => RecordKind::Struct,
+            syn::Item::Enum(_) => RecordKind::Enum,
+            syn::Item::Union(_) => RecordKind::Union,
+            syn::Item::Fn(_) => RecordKind::Function,
+            syn::Item::Type(_) => RecordKind::TypeAlias,
+            syn::Item::Const(_) => RecordKind::Const,
+            _ => panic!("Unknown syn::Item variant for RecordKind at {source_location}"),
+        }
+    }
+}
 
 impl std::fmt::Display for RecordKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -89,30 +100,6 @@ impl std::fmt::Display for RecordKind {
     }
 }
 
-/// Represents a record with parsed syntax tree content.
-///
-/// This is the internal representation used by Prebindgen after deduplication
-/// and initial parsing. Unlike `Record`, this stores the parsed `syn::Item`
-/// instead of raw string content for more efficient processing.
-#[derive(Clone)]
-pub(crate) struct RecordSyn {
-    /// The parsed syntax tree content of the definition (after feature processing and stub generation)
-    pub content: syn::Item,
-    /// Source location information
-    pub source_location: SourceLocation,
-    /// Type replacement pairs for this record only (local_type, origin_type)
-    pub type_replacements: HashSet<TypeTransmutePair>,
-}
-
-impl Default for RecordSyn {
-    fn default() -> Self {
-        Self {
-            content: syn::Item::Verbatim(proc_macro2::TokenStream::new()),
-            source_location: SourceLocation::default(),
-            type_replacements: HashSet::new(),
-        }
-    }
-}
 
 impl Record {
     /// Create a new record with the specified kind, name, content, and source location.
@@ -140,73 +127,44 @@ impl Record {
     pub fn to_jsonl_string(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string(self)
     }
-}
 
-impl RecordSyn {
-    /// Create a new RecordSyn with the given components
-    pub(crate) fn new(
-        content: syn::Item,
-        source_location: SourceLocation,
-        type_replacements: HashSet<TypeTransmutePair>,
-    ) -> Self {
-        Self {
-            content,
-            source_location,
-            type_replacements,
-        }
-    }
+    pub(crate) fn parse(self: &Record) -> (syn::Item, SourceLocation) {
+        // Parse the raw content into a syntax tree
+        let parsed = syn::parse_file(&self.content).map_err(|e| {
+            panic!(
+                "Failed to parse record content at {}: {}",
+                self.source_location, e
+            )
+        }).unwrap();
 
-    /// Get the identifier from the parsed syntax tree item
-    pub(crate) fn ident(&self) -> Result<&syn::Ident, String> {
-        match &self.content {
-            syn::Item::Struct(item) => Ok(&item.ident),
-            syn::Item::Enum(item) => Ok(&item.ident),
-            syn::Item::Union(item) => Ok(&item.ident),
-            syn::Item::Fn(item) => Ok(&item.sig.ident),
-            syn::Item::Type(item) => Ok(&item.ident),
-            syn::Item::Const(item) => Ok(&item.ident),
-            _ => Err(format!(
-                "unexpected item type '{}' at {} (RecordSyn::ident)",
-                std::any::type_name::<&syn::Item>(),
+        // Check that we have exactly one item
+        let mut items = parsed.items.into_iter();
+        let item = items.next().unwrap_or_else(|| {
+            panic!(
+                "Expected exactly one item in record, found 0 at {}",
                 self.source_location
-            )),
+            )
+        });
+
+        if items.next().is_some() {
+            panic!(
+                "Expected exactly one item in record, found more than 1 at {}",
+                self.source_location
+            );
         }
-    }
 
-    /// Derive the record kind from the syn::Item content
-    pub(crate) fn kind(&self) -> Result<RecordKind, String> {
-        match &self.content {
-            syn::Item::Struct(_) => Ok(RecordKind::Struct),
-            syn::Item::Enum(_) => Ok(RecordKind::Enum),
-            syn::Item::Union(_) => Ok(RecordKind::Union),
-            syn::Item::Fn(_) => Ok(RecordKind::Function),
-            syn::Item::Type(_) => Ok(RecordKind::TypeAlias),
-            syn::Item::Const(_) => Ok(RecordKind::Const),
-            _ => Err(format!("Unknown syn::Item variant for RecordSyn::kind at {}", self.source_location)),
+        // Create RecordSyn first
+        let record_syn = (item, self.source_location.clone());
+
+        // Check that the item type matches the record kind
+        let actual_kind: RecordKind = (&record_syn).into();
+        if actual_kind != self.kind {
+            panic!(
+                "Record kind mismatch at {}: expected {}, found {}",
+                self.source_location, self.kind, actual_kind
+            );
         }
-    }
-
-    /// Collect type replacements from this record
-    ///
-    /// Adds all type replacement pairs from this record to the provided HashSet.
-    /// This is useful for gathering type replacements that need assertions.
-    ///
-    /// # Parameters
-    ///
-    /// * `type_replacements` - Mutable reference to the HashSet to add replacements to
-    pub(crate) fn collect_type_replacements(&self, type_replacements: &mut HashSet<TypeTransmutePair>) {
-        type_replacements.extend(self.type_replacements.iter().cloned());
-    }
-}
-
-impl std::fmt::Debug for RecordSyn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RecordSyn")
-            .field("kind", &self.kind().as_ref().map(|k| k.to_string()).unwrap_or_else(|e| e.clone()))
-            .field("ident", &self.ident().map(|id| id.to_string()).unwrap_or_else(|e| e.clone()))
-            .field("content", &"<syn::Item>")
-            .field("source_location", &self.source_location)
-            .finish()
+        record_syn
     }
 }
 
@@ -224,55 +182,5 @@ impl<'a> ParseConfig<'a> {
         // Convert crate name to identifier (replace dashes with underscores)
         let source_crate_name = self.crate_name.replace('-', "_");
         syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site())
-    }
-}
-
-impl TryFrom<Record> for RecordSyn {
-    type Error = String;
-
-    fn try_from(record: Record) -> Result<Self, Self::Error> {
-        // Parse the raw content into a syntax tree
-        let parsed = syn::parse_file(&record.content).map_err(|e| {
-            format!(
-                "Failed to parse record content at {}: {}",
-                record.source_location, e
-            )
-        })?;
-
-        // Check that we have exactly one item
-        let mut items = parsed.items.into_iter();
-        let item = items.next().ok_or_else(|| {
-            format!(
-                "Expected exactly one item in record, found 0 at {}",
-                record.source_location
-            )
-        })?;
-
-        if items.next().is_some() {
-            return Err(format!(
-                "Expected exactly one item in record, found more than 1 at {}",
-                record.source_location
-            ));
-        }
-
-        // Create RecordSyn first
-        let record_syn = RecordSyn::new(
-            item,
-            record.source_location.clone(),
-            HashSet::new(),
-        );
-
-        // Check that the item type matches the record kind
-        let actual_kind = record_syn.kind().map_err(|e| format!("{} at {}", e, record.source_location))?;
-        if actual_kind != record.kind {
-            return Err(format!(
-                "Record kind mismatch at {}: expected {}, found {}",
-                record.source_location,
-                record.kind,
-                actual_kind
-            ));
-        }
-
-        Ok(record_syn)
     }
 }

@@ -91,46 +91,6 @@ impl<'a> GroupBuilder<'a> {
         self
     }
 
-    /// Get an item by name from the selected groups
-    ///
-    /// Searches through all selected groups for an item with the specified name
-    /// and returns it wrapped in an `Item` if found.
-    ///
-    /// # Returns
-    ///
-    /// `Some(Item)` if an item with the given name is found, `None` otherwise.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let item = prebindgen.group("structs").item("MyStruct");
-    /// if let Some(item) = item {
-    ///     // Use the item
-    /// }
-    /// ```
-    #[roxygen]
-    pub fn item<S: Into<String>>(
-        &self,
-        /// Name of the item to find
-        name: S,
-    ) -> Option<Item<'_>> {
-        let name_str = name.into();
-        for group in &self.groups {
-            if let Some(group_records) = self.prebindgen.records.get(group) {
-                for record in group_records {
-                    if let Ok(record_ident) = record.ident() {
-                        if *record_ident == name_str {
-                            return Some(Item {
-                                record,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
     /// Returns a consuming iterator over syn::Item values from selected groups
     ///
     /// This method consumes the GroupBuilder and returns an iterator that yields

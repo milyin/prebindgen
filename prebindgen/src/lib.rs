@@ -108,8 +108,10 @@ pub mod rust_file;
 pub mod rust_ffi;
 pub mod query;
 
-/// File extension for data files
-pub(crate) const JSONL_EXTENSION: &str = ".jsonl";
+mod source;
+
+pub use source::Source;
+
 /// Name of the prebindgen output directory
 const PREBINDGEN_DIR: &str = "prebindgen";
 /// File name for storing the crate name
