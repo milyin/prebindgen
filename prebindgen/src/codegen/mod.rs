@@ -1,20 +1,4 @@
-//! Code generation utilities for transforming Rust function definitions into FFI stubs.
-//!
-//! This module contains all the logic for:
-//! - Parsing and validating function signatures for FFI compatibility
-//! - Generating `#[no_mangle] extern "C"` wrapper functions
-//! - Handling type transformations and validations
-//! - Creating appropriate parameter names and call arguments
-//! - Processing feature flags (`#[cfg(feature="...")]`) in generated code
-
-mod cfg_expr;
+//! Utility funcitons related to code generation and transformation
+pub(crate) mod cfg_expr;
 pub(crate) mod process_features;
-mod replace_types;
-
-// Re-export the main functions
-#[allow(unused_imports)]
-pub(crate) use replace_types::replace_types_in_file;
-pub(crate) use replace_types::{
-    convert_to_stub, generate_standard_allowed_prefixes, replace_types_in_item,
-    generate_type_assertions, generate_type_transmute_pair_assertions, TypeTransmutePair,
-};
+pub(crate) mod replace_types;

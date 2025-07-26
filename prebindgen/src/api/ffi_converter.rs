@@ -1,13 +1,14 @@
 //! The core functionality of Prebinding library: generation of FFI rust source from items marked with
 //! `#[prebindgen]` attribute.
 //!
-//! The concept is following:
-//! There are two crates:
+//! The concept is following: to make FFI interface to the some rust library, you need to create two crates:
+//!
 //! -- library_ffi crate which exports set of repr-C structures and set of functions with `#[prebindgen]` attribute.
-//! The important moment is that these functions are not `extern "C"`
-//! -- library_binding crate (e.g. for library_c or library_cs)
-//! This crate includes single (or multiple if necessary) source file which contains copies of the structures above
-//! and `#[no_mangle] extern "C"` functions which call the original functions from library_ffi crate.
+//! Important:  these functions are not `extern "C"`, they are just regular Rust functions
+//! -- library_binding crate (e.g. library_c or library_cs)
+//! This crate uses `include!` macro to include source file which
+//! contains copies of the structures above and `#[no_mangle] extern "C"` proxy functions which call the
+//! original functions from library_ffi crate.
 //!
 //! This allows to
 //! - have a single ffi implementation and reuse it for different language bindings without squashing all to single crate
@@ -16,13 +17,16 @@
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
+use crate::{
+    codegen::replace_types::{
+        convert_to_stub, generate_standard_allowed_prefixes, generate_type_transmute_pair_assertions, replace_types_in_item, ParseConfig, TypeTransmutePair
+    }, SourceLocation
+};
+
 /// Builder for configuring RustFfi without file operations
 pub struct Builder {
     pub(crate) source_crate_name: String,
     pub(crate) allowed_prefixes: Vec<syn::Path>,
-    pub(crate) disabled_features: HashSet<String>,
-    pub(crate) enabled_features: HashSet<String>,
-    pub(crate) feature_mappings: HashMap<String, String>,
     pub(crate) transparent_wrappers: Vec<syn::Path>,
     pub(crate) edition: String,
 }
@@ -33,10 +37,7 @@ impl Builder {
         // Generate comprehensive allowed prefixes including standard prelude
         Self {
             source_crate_name: source_crate_name.into(),
-            allowed_prefixes: crate::codegen::generate_standard_allowed_prefixes(),
-            disabled_features: HashSet::new(),
-            enabled_features: HashSet::new(),
-            feature_mappings: HashMap::new(),
+            allowed_prefixes: generate_standard_allowed_prefixes(),
             transparent_wrappers: Vec::new(),
             edition: "2021".to_string(),
         }
@@ -73,74 +74,6 @@ impl Builder {
     ) -> Self {
         let path: syn::Path = syn::parse_str(prefix.as_ref()).unwrap();
         self.allowed_prefixes.push(path);
-        self
-    }
-
-    /// Disable a feature in the generated code
-    ///
-    /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
-    /// guarded by disabled features will be completely skipped in the output.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
-    ///     .disable_feature("experimental")
-    ///     .disable_feature("deprecated");
-    /// ```
-    #[roxygen]
-    pub fn disable_feature<S: Into<String>>(
-        mut self,
-        /// The name of the feature to disable
-        feature: S,
-    ) -> Self {
-        self.disabled_features.insert(feature.into());
-        self
-    }
-
-    /// Enable a feature in the generated code
-    ///
-    /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
-    /// guarded by enabled features will be included in the output with the
-    /// `#[cfg(...)]` attribute removed.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
-    ///     .enable_feature("experimental");
-    /// ```
-    #[roxygen]
-    pub fn enable_feature<S: Into<String>>(
-        mut self,
-        /// The name of the feature to enable
-        feature: S,
-    ) -> Self {
-        self.enabled_features.insert(feature.into());
-        self
-    }
-    /// Map a feature name to a different name in the generated code
-    ///
-    /// When processing code with `#[cfg(feature="...")]` attributes, features
-    /// that match the mapping will have their names replaced with the target
-    /// feature name in the output.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
-    ///     .match_feature("unstable", "unstable")
-    ///     .match_feature("internal", "unstable");
-    /// ```
-    #[roxygen]
-    pub fn match_feature<S1: Into<String>, S2: Into<String>>(
-        mut self,
-        /// The original feature name to match
-        from: S1,
-        /// The new feature name to use in the output
-        to: S2,
-    ) -> Self {
-        self.feature_mappings.insert(from.into(), to.into());
         self
     }
 
@@ -197,20 +130,20 @@ impl Builder {
         self
     }
 
-    /// Build the RustFfi instance
-    pub fn build(self) -> RustFfi {
-        RustFfi {
+    /// Build the FfiConverter instance
+    pub fn build(self) -> FfiConverter {
+        FfiConverter {
             builder: self,
-            stage: RustFfiGenerationStage::Collect,
+            stage: GenerationStage::Collect,
             source_items: Vec::new(),
-            type_replacements: HashSet::new(),
+            type_replacements: HashMap::new(),
             exported_types: HashSet::new(),
             followup_items: Vec::new(),
         }
     }
 }
 
-enum RustFfiGenerationStage {
+enum GenerationStage {
     /// First stage: go through all items in the iterator and collect all type names.
     /// These types will be copied to the destination file and transmuted to the original crate types when
     /// performing the ffi calls
@@ -222,38 +155,23 @@ enum RustFfiGenerationStage {
     Followup,
 }
 
-/// RustFfi structure that mirrors Prebindgen functionality without file operations
-pub struct RustFfi {
+/// Ffi structure that mirrors Prebindgen functionality without file operations
+pub struct FfiConverter {
     pub(crate) builder: Builder,
     /// Current generation stage
-    stage: RustFfiGenerationStage,
+    stage: GenerationStage,
     /// Items read from the source iterator
-    source_items: Vec<(syn::Item, Option<crate::record::SourceLocation>)>,
+    source_items: Vec<(syn::Item, SourceLocation)>,
     /// Copied types which needs transmute operations - filled on `Collect` stage and used on `Convert` stage
     exported_types: HashSet<String>,
     /// Type replacements made - filled on `Convert` stage and used to prepare assertion items for `Followup` stage
-    type_replacements: HashSet<crate::codegen::TypeTransmutePair>,
+    type_replacements: HashMap<TypeTransmutePair, SourceLocation>,
     /// Items which are output in the end
-    followup_items: Vec<(syn::Item, Option<crate::record::SourceLocation>)>,
+    followup_items: Vec<(syn::Item, SourceLocation)>,
 }
 
-impl RustFfi {
-    fn collect_item(
-        &mut self,
-        item: syn::Item,
-        source_location: Option<crate::record::SourceLocation>,
-    ) {
-        // Process features
-        if !crate::codegen::process_features::process_item_features(
-            &mut item.clone(),
-            &self.builder.disabled_features,
-            &self.builder.enabled_features,
-            &self.builder.feature_mappings,
-            source_location.as_ref(),
-        ) {
-            return;
-        }
-
+impl FfiConverter {
+    fn collect_item(&mut self, item: syn::Item, source_location: SourceLocation) {
         // Update exported_types for type items
         match &item {
             syn::Item::Struct(s) => {
@@ -275,10 +193,10 @@ impl RustFfi {
         self.source_items.push((item, source_location));
     }
 
-    fn convert(&mut self) -> Option<(syn::Item, Option<crate::record::SourceLocation>)> {
+    fn convert(&mut self) -> Option<(syn::Item, SourceLocation)> {
         if let Some((mut item, source_location)) = self.source_items.pop() {
             // Create parse config
-            let config = crate::record::ParseConfig {
+            let config = ParseConfig {
                 crate_name: &self.builder.source_crate_name,
                 exported_types: &self.exported_types,
                 allowed_prefixes: &self.builder.allowed_prefixes,
@@ -290,26 +208,25 @@ impl RustFfi {
             match item {
                 syn::Item::Fn(ref mut function) => {
                     // Convert function to FFI stub
-                    if let Err(e) = crate::codegen::convert_to_stub(
+                    if let Err(e) = convert_to_stub(
                         function,
                         &config,
                         &mut self.type_replacements,
+                        &source_location,
                     ) {
                         panic!(
                             "Failed to convert function {function}{source_location}: {e}",
                             function = function.sig.ident,
-                            source_location = source_location
-                                .map(|loc| format!(" at {loc}"))
-                                .unwrap_or_default(),
                         );
                     }
                 }
                 _ => {
                     // Replace types in non-function items
-                    let _ = crate::codegen::replace_types_in_item(
+                    let _ = replace_types_in_item(
                         &mut item,
                         &config,
                         &mut self.type_replacements,
+                        &source_location,
                     );
                 }
             }
@@ -322,46 +239,44 @@ impl RustFfi {
 
     fn generate_assertions(&mut self) {
         // Generate assertions for type transmute correctness
-        for replacement in &self.type_replacements {
+        for (replacement, source_location) in &self.type_replacements {
             if let Some((size_assertion, align_assertion)) =
-                crate::codegen::generate_type_transmute_pair_assertions(replacement)
+                generate_type_transmute_pair_assertions(replacement)
             {
-                self.followup_items.push((size_assertion, None));
-                self.followup_items.push((align_assertion, None));
+                self.followup_items
+                    .push((size_assertion, source_location.clone()));
+                self.followup_items.push((align_assertion, source_location.clone()));
             }
         }
     }
 
     /// Call method for use with batching - wrap in closure: |iter| rust_ffi.call(iter)
-    pub fn call<I>(
-        &mut self,
-        iter: &mut I,
-    ) -> Option<(syn::Item, Option<crate::record::SourceLocation>)>
+    pub fn call<I>(&mut self, iter: &mut I) -> Option<(syn::Item, SourceLocation)>
     where
-        I: Iterator<Item = (syn::Item, Option<crate::record::SourceLocation>)>,
+        I: Iterator<Item = (syn::Item, SourceLocation)>,
     {
         loop {
             match self.stage {
-                RustFfiGenerationStage::Collect => {
+                GenerationStage::Collect => {
                     // Collect stage: collect type names and prepare for conversion
                     // Consumes the iterator until the end and swtitches to Convert stage
                     if let Some((item, source_location)) = iter.next() {
                         self.collect_item(item, source_location);
                     } else {
-                        self.stage = RustFfiGenerationStage::Convert;
+                        self.stage = GenerationStage::Convert;
                     }
                 }
-                RustFfiGenerationStage::Convert => {
+                GenerationStage::Convert => {
                     // Convert stage: process items harvested on the Collect stage one by one.
                     // If all items are processed, generate assertions and switch to Followup stage
                     if let Some((item, source_location)) = self.convert() {
                         return Some((item, source_location));
                     } else {
                         self.generate_assertions();
-                        self.stage = RustFfiGenerationStage::Followup;
+                        self.stage = GenerationStage::Followup;
                     }
                 }
-                RustFfiGenerationStage::Followup => {
+                GenerationStage::Followup => {
                     // Followup stage: return items generated in the previous stages
                     if let Some((item, source_location)) = self.followup_items.pop() {
                         return Some((item, source_location));
@@ -376,9 +291,9 @@ impl RustFfi {
     /// Convert to closure compatible with batching
     pub fn into_closure<I>(
         mut self,
-    ) -> impl FnMut(&mut I) -> Option<(syn::Item, Option<crate::record::SourceLocation>)>
+    ) -> impl FnMut(&mut I) -> Option<(syn::Item, SourceLocation)>
     where
-        I: Iterator<Item = (syn::Item, Option<crate::record::SourceLocation>)>,
+        I: Iterator<Item = (syn::Item, SourceLocation)>,
     {
         move |iter| self.call(iter)
     }

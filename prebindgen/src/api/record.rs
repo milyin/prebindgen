@@ -1,8 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-
-/// Default group name for prebindgen when no group is specified
-pub const DEFAULT_GROUP_NAME: &str = "default";
 
 /// Represents a record of a struct, enum, union, or function definition.
 ///
@@ -165,22 +161,5 @@ impl Record {
             );
         }
         record_syn
-    }
-}
-
-/// Configuration parameters for parsing records
-pub(crate) struct ParseConfig<'a> {
-    pub crate_name: &'a str,
-    pub exported_types: &'a HashSet<String>,
-    pub allowed_prefixes: &'a [syn::Path],
-    pub transparent_wrappers: &'a [syn::Path],
-    pub edition: &'a str,
-}
-
-impl<'a> ParseConfig<'a> {
-    pub fn crate_ident(&self) -> syn::Ident {
-        // Convert crate name to identifier (replace dashes with underscores)
-        let source_crate_name = self.crate_name.replace('-', "_");
-        syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site())
     }
 }

@@ -1,4 +1,8 @@
+use std::collections::{HashMap, HashSet};
+
 use roxygen::roxygen;
+
+use crate::{api::record::SourceLocation, codegen::process_features::process_item_features};
 
 pub struct Builder {
     pub(crate) disabled_features: HashSet<String>,
@@ -84,26 +88,32 @@ impl Builder {
     }
 
     /// Build the Features instance
-    pub fn build(self) -> Features {
-        Features { builder: self }
+    pub fn build(self) -> FeatureFilter {
+        FeatureFilter { builder: self }
     }
 }
 
-pub struct Features {
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct FeatureFilter {
     builder: Builder,
 }
 
-impl Features {
+impl FeatureFilter {
     // Call method to use with `filter_map` function
     pub fn call(&self, item: (syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
         // Check if the item is affected by any feature flags
         let (mut item, source_location) = item;
-        if crate::codegen::process_features::process_item_features(
+        if process_item_features(
             &mut item,
             &self.builder.disabled_features,
             &self.builder.enabled_features,
             &self.builder.feature_mappings,
-            source_location.as_ref(),
+            &source_location,
         ) {
             Some((item, source_location))
         } else {
@@ -113,7 +123,7 @@ impl Features {
 
     /// Convert to closure
     pub fn into_closure(
-        mut self,
+        self,
     ) -> impl FnMut((syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
         move |item| self.call(item)
     }

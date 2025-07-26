@@ -6,7 +6,7 @@ use std::{
 
 use roxygen::roxygen;
 
-use crate::{Record, SourceLocation, jsonl, trace};
+use crate::{api::record::Record, trace, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE};
 
 /// File extension for data files
 const JSONL_EXTENSION: &str = ".jsonl";
@@ -29,7 +29,7 @@ impl Source {
                 input_dir.display()
             );
         }
-        let crate_name = crate::read_stored_crate_name(&input_dir).unwrap_or_else(|| {
+        let crate_name = read_stored_crate_name(&input_dir).unwrap_or_else(|| {
             panic!(
                 "The directory {} was not initialized with init_prebindgen_out_dir(). \
                 Please ensure that init_prebindgen_out_dir() is called in the build.rs of the source crate.",
@@ -59,15 +59,13 @@ impl Source {
         groups
             .iter()
             .filter_map(|group| self.items.get(*group))
-            .flat_map(|records| records.iter())
-            .map(|record| record.clone())
+            .flat_map(|records| records.iter()).cloned()
     }
 
     pub fn items_all(&self) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
         self.items
             .iter()
-            .flat_map(|(_, records)| records.iter())
-            .map(|record| record.clone())
+            .flat_map(|(_, records)| records.iter()).cloned()
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
@@ -84,7 +82,7 @@ impl Source {
                         trace!("Reading exported file: {}", path.display());
                         let path_clone = path.clone();
 
-                        match jsonl::read_jsonl_file(&path) {
+                        match read_jsonl_file(&path) {
                             Ok(records) => {
                                 for record in records {
                                     // Use HashMap to deduplicate records by name
@@ -126,4 +124,12 @@ impl Source {
 
         groups
     }
+}
+
+/// Read the crate name from the stored file
+fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
+    let crate_name_path = input_dir.join(CRATE_NAME_FILE);
+    fs::read_to_string(&crate_name_path)
+        .ok()
+        .map(|s| s.trim().to_string())
 }

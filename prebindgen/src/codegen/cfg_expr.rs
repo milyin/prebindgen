@@ -6,6 +6,8 @@
 
 use std::collections::HashSet;
 
+use crate::SourceLocation;
+
 /// Represents a cfg expression that can be evaluated against a set of enabled/disabled features
 #[derive(Debug, Clone, PartialEq)]
 pub enum CfgExpr {
@@ -76,7 +78,7 @@ impl CfgExpr {
         enabled_features: &HashSet<String>,
         disabled_features: &HashSet<String>,
         feature_mappings: &std::collections::HashMap<String, String>,
-        source_location: Option<&crate::SourceLocation>,
+        source_location: &SourceLocation,
     ) -> Option<Self> {
         match self {
             CfgExpr::Feature(name) => {
@@ -91,14 +93,7 @@ impl CfgExpr {
                     Some(CfgExpr::Feature(new_name.clone()))
                 } else {
                     // Unmapped feature - panic with source location information
-                    panic!(
-                        "unmapped feature: {name} (at {source_location})",
-                        source_location = if let Some(loc) = source_location {
-                            loc.to_string()
-                        } else {
-                            "unknown location".to_string()
-                        }
-                    );
+                    panic!("unmapped feature: {name} (at {source_location})",);
                 }
             }
             CfgExpr::TargetArch(_) => Some(self.clone()),
@@ -384,7 +379,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             None
         );
@@ -396,7 +391,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             Some(CfgExpr::False)
         );
@@ -408,7 +403,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             Some(CfgExpr::Feature("new_feature".to_string()))
         );
@@ -423,7 +418,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             None
         );
@@ -438,7 +433,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             Some(CfgExpr::False)
         );
@@ -450,7 +445,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             None
         );
@@ -462,7 +457,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
-                None
+                &SourceLocation::default()
             ),
             Some(CfgExpr::False)
         );
@@ -483,7 +478,7 @@ mod tests {
             &enabled_features,
             &disabled_features,
             &feature_mappings,
-            None,
+            &SourceLocation::default(),
         );
     }
 
@@ -507,7 +502,7 @@ mod tests {
             &enabled_features,
             &disabled_features,
             &feature_mappings,
-            None,
+            &SourceLocation::default(),
         );
     }
 }
