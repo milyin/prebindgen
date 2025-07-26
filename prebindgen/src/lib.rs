@@ -96,6 +96,9 @@
 /// File name for storing the crate name
 const CRATE_NAME_FILE: &str = "crate_name.txt";
 
+/// Default group name for items without explicit group name
+pub const DEFAULT_GROUP_NAME: &str = "default";
+
 pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
