@@ -6,6 +6,8 @@
 
 use std::collections::HashSet;
 
+use crate::SourceLocation;
+
 /// Represents a cfg expression that can be evaluated against a set of enabled/disabled features
 #[derive(Debug, Clone, PartialEq)]
 pub enum CfgExpr {
@@ -76,7 +78,7 @@ impl CfgExpr {
         enabled_features: &HashSet<String>,
         disabled_features: &HashSet<String>,
         feature_mappings: &std::collections::HashMap<String, String>,
-        source_location: &crate::SourceLocation,
+        source_location: &SourceLocation,
     ) -> Option<Self> {
         match self {
             CfgExpr::Feature(name) => {
@@ -91,9 +93,7 @@ impl CfgExpr {
                     Some(CfgExpr::Feature(new_name.clone()))
                 } else {
                     // Unmapped feature - panic with source location information
-                    panic!(
-                        "unmapped feature: {name} (at {source_location})"
-                    );
+                    panic!("unmapped feature: {name} (at {source_location})",);
                 }
             }
             CfgExpr::TargetArch(_) => Some(self.clone()),
@@ -308,8 +308,6 @@ fn parse_comma_separated(input: &str) -> Result<Vec<CfgExpr>, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::SourceLocation;
-
     use super::*;
 
     #[test]

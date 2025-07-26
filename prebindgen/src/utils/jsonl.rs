@@ -1,11 +1,13 @@
 //! Serialization utilities for reading and writing records.
 
-use crate::Record;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use crate::api::record::Record;
+
 /// Write a collection of records to a file in JSON-lines format
+#[allow(dead_code)]
 pub fn write_jsonl_file<P: AsRef<Path>>(
     file_path: P,
     records: &[Record],
@@ -44,8 +46,9 @@ pub fn read_jsonl_file<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
+    use crate::api::record::RecordKind;
+
     use super::*;
-    use crate::{Record, RecordKind};
     use std::fs;
     use tempfile::NamedTempFile;
 

@@ -9,42 +9,26 @@
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
-use crate::codegen::cfg_expr::CfgExpr;
+use crate::{codegen::cfg_expr::CfgExpr, SourceLocation};
 
-/// Process code content to handle feature flags according to builder configuration
+/// Process a single item (struct, enum, function, etc.) for feature flags
 ///
 /// This function analyzes code for `#[cfg(feature="...")]` attributes using syn syntax parsing and:
 /// - Removes code blocks guarded by disabled features
 /// - Removes cfg attributes for enabled features (keeping the code)
 /// - Replaces feature names according to the mapping (keeping the cfg attribute)
 #[roxygen]
-pub(crate) fn process_features(
-    /// The parsed file to process for feature flags
-    mut file: syn::File,
-    /// Set of feature names that should cause code removal
-    disabled_features: &HashSet<String>,
+pub(crate) fn process_item_features(
+    /// The item to process for feature flags
+    item: &mut syn::Item,
     /// Set of feature names that should have their cfg attributes removed
+    disabled_features: &HashSet<String>,
+    /// Mapping from old feature names to new feature names
     enabled_features: &HashSet<String>,
     /// Mapping from old feature names to new feature names
     feature_mappings: &HashMap<String, String>,
     /// Source location information for error reporting
-    source_location: &crate::SourceLocation,
-) -> syn::File {
-    // Process items in the file
-    file.items.retain_mut(|item| {
-        process_item_features(item, disabled_features, enabled_features, feature_mappings, source_location)
-    });
-
-    file
-}
-
-/// Process a single item (struct, enum, function, etc.) for feature flags
-fn process_item_features(
-    item: &mut syn::Item,
-    disabled_features: &HashSet<String>,
-    enabled_features: &HashSet<String>,
-    feature_mappings: &HashMap<String, String>,
-    source_location: &crate::SourceLocation,
+    source_location: &SourceLocation,
 ) -> bool {
     let attrs = match item {
         syn::Item::Fn(f) => &mut f.attrs,
@@ -83,7 +67,7 @@ fn process_struct_fields(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: &crate::SourceLocation,
+    source_location: &SourceLocation,
 ) {
     match fields {
         syn::Fields::Named(fields_named) => {
@@ -120,7 +104,7 @@ fn process_enum_variants(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: &crate::SourceLocation,
+    source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
     let mut new_variants = syn::punctuated::Punctuated::new();
@@ -144,7 +128,7 @@ fn process_union_fields(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: &crate::SourceLocation,
+    source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
     let mut new_fields = syn::punctuated::Punctuated::new();
@@ -163,7 +147,7 @@ fn process_attributes(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
-    source_location: &crate::SourceLocation,
+    source_location: &SourceLocation,
 ) -> bool {
     let mut keep_item = true;
     let mut remove_attrs = Vec::new();

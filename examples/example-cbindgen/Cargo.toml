@@ -16,3 +16,4 @@ prebindgen = { workspace = true }
 example-ffi = { path = "../example-ffi" }
 serde_json = { workspace = true }
 cbindgen = "0.29.0"
+itertools = { workspace = true }

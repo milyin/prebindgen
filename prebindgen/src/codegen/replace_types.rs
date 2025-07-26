@@ -6,12 +6,27 @@
 //! - Processing exported types with proper crate prefixing
 //! - Generating type assertion pairs for compile-time validation
 
-#![allow(dead_code)]
-
 use roxygen::roxygen;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::record::ParseConfig;
+use crate::SourceLocation;
+
+/// Configuration parameters for parsing records
+pub(crate) struct ParseConfig<'a> {
+    pub crate_name: &'a str,
+    pub exported_types: &'a HashSet<String>,
+    pub allowed_prefixes: &'a [syn::Path],
+    pub transparent_wrappers: &'a [syn::Path],
+    pub edition: &'a str,
+}
+
+impl<'a> ParseConfig<'a> {
+    pub fn crate_ident(&self) -> syn::Ident {
+        // Convert crate name to identifier (replace dashes with underscores)
+        let source_crate_name = self.crate_name.replace('-', "_");
+        syn::Ident::new(&source_crate_name, proc_macro2::Span::call_site())
+    }
+}
 
 /// Represents a type assertion pair for compile-time validation
 ///
@@ -140,7 +155,9 @@ pub(crate) fn replace_types_in_type(
     /// Configuration containing parsing and validation options
     config: &ParseConfig,
     /// Mutable set to collect assertion pairs
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    /// Source location for error reporting
+    source_location: &SourceLocation,
 ) -> Result<bool, String> {
     // Strip transparent wrappers from the type
     let mut has_wrapper = false;
@@ -160,30 +177,32 @@ pub(crate) fn replace_types_in_type(
     let references_replaced = !stripped_types.is_empty();
     let core_type_changed = has_wrapper || is_exported_type;
     let conversion_needed = references_replaced || core_type_changed;
-    
+
     if conversion_needed {
         let final_type = if references_replaced {
             restore_stripped_references_as_pointers(local_core_type.clone(), stripped_types)?
         } else {
             local_core_type.clone()
         };
-        
+
         // Generate assertion pair by stripping both types to same level
         if core_type_changed {
             let prefixed_original_type =
                 prefix_exported_types_in_type(ty, &config.crate_ident(), config.exported_types);
-            
+
             // Strip both types to the same level until first path type
-            let (local_stripped, original_stripped) = strip_to_same_level(final_type.clone(), prefixed_original_type);
-            
+            let (local_stripped, original_stripped) =
+                strip_to_same_level(final_type.clone(), prefixed_original_type);
+
             let local_str = quote::quote! { #local_stripped }.to_string();
             let original_str = quote::quote! { #original_stripped }.to_string();
-            assertion_type_pairs.insert(TypeTransmutePair::new(
-                local_str,
-                original_str,
-            ));
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                assertion_type_pairs.entry(TypeTransmutePair::new(local_str, original_str))
+            {
+                e.insert(source_location.clone());
+            }
         }
-        
+
         *ty = final_type;
         Ok(true)
     } else {
@@ -192,60 +211,74 @@ pub(crate) fn replace_types_in_type(
     }
 }
 
-pub(crate) fn replace_types_in_file(
-    file: &mut syn::File,
-    config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
-) -> Result<bool, String> {
-    let mut any_changed = false;
-    for item in &mut file.items {
-        any_changed |= replace_types_in_item(item, config, assertion_type_pairs)?;
-    }
-    Ok(any_changed)
-}
-
 /// Replace types in a single item recursively
 pub(crate) fn replace_types_in_item(
     item: &mut syn::Item,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    type_replacements: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    source_location: &SourceLocation,
 ) -> Result<bool, String> {
     match item {
         syn::Item::Fn(item_fn) => {
-            let (_, sig_changed) =
-                replace_types_in_signature(&mut item_fn.sig, config, assertion_type_pairs)?;
-            let block_changed =
-                replace_types_in_block(&mut item_fn.block, config, assertion_type_pairs)?;
+            let (_, sig_changed) = replace_types_in_signature(
+                &mut item_fn.sig,
+                config,
+                type_replacements,
+                source_location,
+            )?;
+            let block_changed = replace_types_in_block(
+                &mut item_fn.block,
+                config,
+                type_replacements,
+                source_location,
+            )?;
             Ok(sig_changed || block_changed)
         }
-        syn::Item::Struct(item_struct) => {
-            replace_types_in_fields(&mut item_struct.fields, config, assertion_type_pairs)
-        }
+        syn::Item::Struct(item_struct) => replace_types_in_fields(
+            &mut item_struct.fields,
+            config,
+            type_replacements,
+            source_location,
+        ),
         syn::Item::Enum(item_enum) => {
             let mut any_changed = false;
             for variant in &mut item_enum.variants {
-                any_changed |=
-                    replace_types_in_fields(&mut variant.fields, config, assertion_type_pairs)?;
+                any_changed |= replace_types_in_fields(
+                    &mut variant.fields,
+                    config,
+                    type_replacements,
+                    source_location,
+                )?;
             }
             Ok(any_changed)
         }
         syn::Item::Union(item_union) => {
             let mut fields = syn::Fields::Named(item_union.fields.clone());
-            let changed = replace_types_in_fields(&mut fields, config, assertion_type_pairs)?;
+            let changed =
+                replace_types_in_fields(&mut fields, config, type_replacements, source_location)?;
             if let syn::Fields::Named(fields_named) = fields {
                 item_union.fields = fields_named;
             }
             Ok(changed)
         }
-        syn::Item::Type(item_type) => {
-            replace_types_in_type(&mut item_type.ty, config, assertion_type_pairs)
-        }
-        syn::Item::Const(item_const) => {
-            replace_types_in_type(&mut item_const.ty, config, assertion_type_pairs)
-        }
-        syn::Item::Static(item_static) => {
-            replace_types_in_type(&mut item_static.ty, config, assertion_type_pairs)
-        }
+        syn::Item::Type(item_type) => replace_types_in_type(
+            &mut item_type.ty,
+            config,
+            type_replacements,
+            source_location,
+        ),
+        syn::Item::Const(item_const) => replace_types_in_type(
+            &mut item_const.ty,
+            config,
+            type_replacements,
+            source_location,
+        ),
+        syn::Item::Static(item_static) => replace_types_in_type(
+            &mut item_static.ty,
+            config,
+            type_replacements,
+            source_location,
+        ),
         _ => Ok(false),
     }
 }
@@ -254,7 +287,8 @@ pub(crate) fn replace_types_in_item(
 pub(crate) fn replace_types_in_signature(
     sig: &mut syn::Signature,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    source_location: &SourceLocation,
 ) -> Result<(Vec<bool>, bool), String> {
     // Replace parameter types
     let mut parameters_changed = Vec::new();
@@ -264,6 +298,7 @@ pub(crate) fn replace_types_in_signature(
                 &mut pat_type.ty,
                 config,
                 assertion_type_pairs,
+                source_location,
             )?);
         } else {
             return Err("self parameters are not supported in FFI stubs".into());
@@ -273,7 +308,8 @@ pub(crate) fn replace_types_in_signature(
     // Replace return type
     let mut return_type_changed = false;
     if let syn::ReturnType::Type(_, return_type) = &mut sig.output {
-        return_type_changed = replace_types_in_type(return_type, config, assertion_type_pairs)?;
+        return_type_changed =
+            replace_types_in_type(return_type, config, assertion_type_pairs, source_location)?;
     };
     Ok((parameters_changed, return_type_changed))
 }
@@ -282,7 +318,8 @@ pub(crate) fn replace_types_in_signature(
 fn replace_types_in_block(
     _block: &mut syn::Block,
     _config: &ParseConfig,
-    _assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    _assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    _source_location: &SourceLocation,
 ) -> Result<bool, String> {
     // For now, we don't need to replace types in function bodies
     Ok(false)
@@ -292,18 +329,29 @@ fn replace_types_in_block(
 fn replace_types_in_fields(
     fields: &mut syn::Fields,
     config: &ParseConfig,
-    assertion_type_pairs: &mut HashSet<TypeTransmutePair>,
+    assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    source_location: &SourceLocation,
 ) -> Result<bool, String> {
     let mut any_changed = false;
     match fields {
         syn::Fields::Named(fields_named) => {
             for field in fields_named.named.iter_mut() {
-                any_changed |= replace_types_in_type(&mut field.ty, config, assertion_type_pairs)?;
+                any_changed |= replace_types_in_type(
+                    &mut field.ty,
+                    config,
+                    assertion_type_pairs,
+                    source_location,
+                )?;
             }
         }
         syn::Fields::Unnamed(fields_unnamed) => {
             for field in fields_unnamed.unnamed.iter_mut() {
-                any_changed |= replace_types_in_type(&mut field.ty, config, assertion_type_pairs)?;
+                any_changed |= replace_types_in_type(
+                    &mut field.ty,
+                    config,
+                    assertion_type_pairs,
+                    source_location,
+                )?;
             }
         }
         syn::Fields::Unit => {
@@ -410,48 +458,40 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
     true
 }
 
-/// Generate compile-time assertions for type pairs
+/// Generate compile-time assertions for a single type transmute pair
 ///
 /// Creates size and alignment assertions to ensure that stripped types (used in FFI stubs)
-/// are compatible with their original types (from the source crate). This provides
-/// compile-time safety for type transmutations performed during FFI calls.
+/// are compatible with their original types (from the source crate). Returns a pair of
+/// syn::Item objects for size and alignment assertions.
 #[roxygen]
-pub(crate) fn generate_type_assertions(
-    /// Set of TypeAssertionPair objects to create assertions for
-    assertion_type_pairs: &HashSet<TypeTransmutePair>,
-) -> syn::File {
-    let mut assertions = Vec::new();
+pub(crate) fn generate_type_transmute_pair_assertions(
+    /// Single TypeTransmutePair to create assertions for
+    assertion_pair: &TypeTransmutePair,
+) -> Option<(syn::Item, syn::Item)> {
+    // Parse the type strings back into syn::Type for proper code generation
+    if let (Ok(stripped_type), Ok(source_type)) = (
+        syn::parse_str::<syn::Type>(&assertion_pair.local_type),
+        syn::parse_str::<syn::Type>(&assertion_pair.origin_type),
+    ) {
+        // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
+        let size_assertion: syn::Item = syn::parse_quote! {
+            const _: () = assert!(
+                std::mem::size_of::<#stripped_type>() == std::mem::size_of::<#source_type>(),
+                "Size mismatch between stub parameter type and source crate type"
+            );
+        };
 
-    for assertion_pair in assertion_type_pairs {
-        // Parse the type strings back into syn::Type for proper code generation
-        if let (Ok(stripped_type), Ok(source_type)) = (
-            syn::parse_str::<syn::Type>(&assertion_pair.local_type),
-            syn::parse_str::<syn::Type>(&assertion_pair.origin_type),
-        ) {
-            // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
-            let size_assertion: syn::Item = syn::parse_quote! {
-                const _: () = assert!(
-                    std::mem::size_of::<#stripped_type>() == std::mem::size_of::<#source_type>(),
-                    "Size mismatch between stub parameter type and source crate type"
-                );
-            };
-            assertions.push(size_assertion);
+        // Generate alignment assertion: stripped type (stub parameter) vs source crate type (original)
+        let align_assertion: syn::Item = syn::parse_quote! {
+            const _: () = assert!(
+                std::mem::align_of::<#stripped_type>() == std::mem::align_of::<#source_type>(),
+                "Alignment mismatch between stub parameter type and source crate type"
+            );
+        };
 
-            // Generate alignment assertion: stripped type (stub parameter) vs source crate type (original)
-            let align_assertion: syn::Item = syn::parse_quote! {
-                const _: () = assert!(
-                    std::mem::align_of::<#stripped_type>() == std::mem::align_of::<#source_type>(),
-                    "Alignment mismatch between stub parameter type and source crate type"
-                );
-            };
-            assertions.push(align_assertion);
-        }
-    }
-
-    syn::File {
-        shebang: None,
-        attrs: vec![],
-        items: assertions,
+        Some((size_assertion, align_assertion))
+    } else {
+        None
     }
 }
 
@@ -523,29 +563,32 @@ fn prefix_exported_types_in_type(
 
 /// Strip both types to the same level until first path type is reached
 /// This ensures meaningful comparisons by stripping references/pointers equally
-fn strip_to_same_level(mut local_type: syn::Type, mut original_type: syn::Type) -> (syn::Type, syn::Type) {
+fn strip_to_same_level(
+    mut local_type: syn::Type,
+    mut original_type: syn::Type,
+) -> (syn::Type, syn::Type) {
     loop {
         let local_is_path = matches!(local_type, syn::Type::Path(_));
         let original_is_path = matches!(original_type, syn::Type::Path(_));
-        
+
         // Stop if either type is a path type
         if local_is_path || original_is_path {
             return (local_type, original_type);
         }
-        
+
         // Strip one level from both types if possible
         let local_stripped = match &local_type {
             syn::Type::Reference(type_ref) => Some((*type_ref.elem).clone()),
             syn::Type::Ptr(type_ptr) => Some((*type_ptr.elem).clone()),
             _ => None,
         };
-        
+
         let original_stripped = match &original_type {
             syn::Type::Reference(type_ref) => Some((*type_ref.elem).clone()),
             syn::Type::Ptr(type_ptr) => Some((*type_ptr.elem).clone()),
             _ => None,
         };
-        
+
         // If both can be stripped, continue; otherwise stop
         match (local_stripped, original_stripped) {
             (Some(local), Some(original)) => {
@@ -730,7 +773,8 @@ fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
 pub(crate) fn convert_to_stub(
     function: &mut syn::ItemFn,
     config: &ParseConfig,
-    type_replacements: &mut HashSet<TypeTransmutePair>,
+    type_replacements: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    source_location: &SourceLocation,
 ) -> Result<(), String> {
     // Extract original types before transformation
     let mut original_param_types = Vec::new();
@@ -753,9 +797,13 @@ pub(crate) fn convert_to_stub(
     };
 
     // Apply type replacements to the function signature
-    let mut sig_type_replacements: HashSet<TypeTransmutePair> = type_replacements.clone();
-    let (params_changed, return_changed) =
-        replace_types_in_signature(&mut function.sig, config, &mut sig_type_replacements)?;
+    let mut sig_type_replacements= type_replacements.clone();
+    let (params_changed, return_changed) = replace_types_in_signature(
+        &mut function.sig,
+        config,
+        &mut sig_type_replacements,
+        source_location,
+    )?;
 
     // Determine if we need unsafe block
     let need_unsafe_block = function.sig.unsafety.is_some()
@@ -766,7 +814,9 @@ pub(crate) fn convert_to_stub(
     for input in &function.sig.inputs {
         if let syn::FnArg::Typed(pat_type) = input {
             if matches!(&*pat_type.pat, syn::Pat::Wild(_)) {
-                return Err("Wildcard parameters ('_') are not supported in FFI functions".to_string());
+                return Err(
+                    "Wildcard parameters ('_') are not supported in FFI functions".to_string(),
+                );
             }
         }
     }
