@@ -22,6 +22,9 @@ regex = { workspace = true }
 prettyplease = { workspace = true }
 roxygen = { workspace = true }
 
+[features]
+debug = []
+
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }

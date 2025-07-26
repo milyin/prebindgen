@@ -22,5 +22,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 prebindgen = { workspace = true }
 
+[features]
+debug = ["prebindgen/debug"]
+
 [dev-dependencies]
 serde_json = { workspace = true }

@@ -6,7 +6,7 @@ use std::{
 
 use roxygen::roxygen;
 
-use crate::{api::record::Record, trace, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE};
+use crate::{api::record::Record, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE};
 
 /// File extension for data files
 const JSONL_EXTENSION: &str = ".jsonl";
@@ -79,7 +79,8 @@ impl Source {
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                     if file_name.starts_with(&pattern) && file_name.ends_with(JSONL_EXTENSION) {
-                        trace!("Reading exported file: {}", path.display());
+                        #[cfg(feature = "debug")]
+                        println!("Reading exported file: {}", path.display());
                         let path_clone = path.clone();
 
                         match read_jsonl_file(&path) {

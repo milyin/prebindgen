@@ -9,9 +9,7 @@
 //! These macros are typically imported from the main `prebindgen` crate rather than
 //! used directly from this crate.
 
-use prebindgen::{
-    DEFAULT_GROUP_NAME, Record, RecordKind, SourceLocation, get_prebindgen_out_dir, trace,
-};
+use prebindgen::{DEFAULT_GROUP_NAME, Record, RecordKind, SourceLocation, get_prebindgen_out_dir};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::fs::{OpenOptions, metadata};
@@ -229,8 +227,8 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
             let is_empty = metadata(dest_path).map(|m| m.len() == 0).unwrap_or(true);
 
             if is_empty {
-                // Create new JSONL file
-                trace!("Creating jsonl file: {}", dest_path.display());
+                #[cfg(feature = "debug")]
+                println!("Creating jsonl file: {}", dest_path.display());
             }
 
             // Write the record as a single line (JSON-lines format)
