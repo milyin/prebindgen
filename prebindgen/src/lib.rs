@@ -121,3 +121,7 @@ pub use crate::api::ffi_converter::FfiConverter;
 pub mod ffi_converter {
     pub use crate::api::ffi_converter::Builder;
 }
+
+pub mod query {
+    pub use crate::api::query::struct_align;
+}
