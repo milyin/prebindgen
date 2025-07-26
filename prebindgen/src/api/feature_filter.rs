@@ -104,6 +104,10 @@ pub struct FeatureFilter {
 }
 
 impl FeatureFilter {
+    /// Create a builder for creating a feature filter instance
+    pub fn builder() -> Builder {
+        Builder::new()
+    }
     // Call method to use with `filter_map` function
     pub fn call(&self, item: (syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
         // Check if the item is affected by any feature flags

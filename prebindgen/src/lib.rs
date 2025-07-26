@@ -103,10 +103,11 @@ pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
 
-pub use api::source::Source;
-pub use api::record::SourceLocation;
-pub use api::record::Record;
-pub use api::record::RecordKind;
+pub use crate::api::source::Source;
+pub use crate::api::record::SourceLocation;
+pub use crate::api::record::Record;
+pub use crate::api::record::RecordKind;
+pub use crate::api::destination::Destination;
 
 pub use crate::api::buildrs::get_prebindgen_out_dir;
 pub use crate::api::buildrs::init_prebindgen_out_dir;

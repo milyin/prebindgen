@@ -1,12 +1,14 @@
 use std::path::Path;
 use std::{env, fs};
 
+use crate::SourceLocation;
+
 /// Wrapper over syn::File for generating Rust source code
-pub struct RustFile {
+pub struct Destination {
     file: syn::File,
 }
 
-impl FromIterator<syn::Item> for RustFile {
+impl FromIterator<syn::Item> for Destination {
     fn from_iter<T: IntoIterator<Item = syn::Item>>(iter: T) -> Self {
         Self {
             file: syn::File {
@@ -18,7 +20,19 @@ impl FromIterator<syn::Item> for RustFile {
     }
 }
 
-impl RustFile {
+impl FromIterator<(syn::Item, SourceLocation)> for Destination {
+    fn from_iter<T: IntoIterator<Item = (syn::Item, SourceLocation)>>(iter: T) -> Self {
+        Self {
+            file: syn::File {
+                shebang: None,
+                attrs: vec![],
+                items: iter.into_iter().map(|(item, _)| item).collect(),
+            },
+        }
+    }
+}
+
+impl Destination {
     /// Write the Rust file to the specified path
     pub fn write<P: AsRef<Path>>(self, filename: P) -> std::path::PathBuf {
         let file_path = if filename.as_ref().is_relative() {

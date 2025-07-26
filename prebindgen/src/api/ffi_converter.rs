@@ -171,6 +171,11 @@ pub struct FfiConverter {
 }
 
 impl FfiConverter {
+    /// Create a builder for creating an FFI converter instance
+    pub fn builder(source_crate_name: impl Into<String>) -> Builder {
+        Builder::new(source_crate_name)
+    }
+
     fn collect_item(&mut self, item: syn::Item, source_location: SourceLocation) {
         // Update exported_types for type items
         match &item {
