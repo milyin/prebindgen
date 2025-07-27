@@ -123,3 +123,14 @@ pub fn array_of_arrays(input: &'static [[u8; 4]; 2]) -> &'static [[u8; 4]; 2] {
 pub fn option_to_reference(input: Option<&u8>) -> Option<&u8> {
     input
 }
+
+#[prebindgen("functions")]
+pub fn function_parameter(pfoo: &foo::Foo, f: Option<extern "C" fn(Option<&foo::Foo>) -> i32>) {
+    if let Some(func) = f {
+        // Call the function with the Foo reference
+        let result = func(Some(pfoo));
+        println!("Function returned: {result}");
+    } else {
+        println!("No function provided");
+    }
+}
