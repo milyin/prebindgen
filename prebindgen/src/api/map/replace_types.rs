@@ -69,12 +69,20 @@ struct TypeReplacer<'a> {
 impl<'a> VisitMut for TypeReplacer<'a> {
     fn visit_type_mut(&mut self, ty: &mut Type) {
         if let Type::Path(TypePath { path, .. }) = ty {
-            if let Some(segment) = path.segments.first() {
-                let type_name = segment.ident.to_string();
-                if let Some(replacement) = self.replacements.get(&type_name) {
-                    if let Ok(new_type) = syn::parse_str::<Type>(replacement) {
-                        *ty = new_type;
-                        return;
+            if path.segments.len() == 1 {
+                if let Some(first_segment) = path.segments.first() {
+                    let type_name = first_segment.ident.to_string();
+                    if let Some(replacement) = self.replacements.get(&type_name) {
+                        if let Ok(Type::Path(TypePath { path: new_path, .. })) = syn::parse_str::<Type>(replacement) {
+                            // Preserve the generic arguments from the original segment
+                            let original_args = &first_segment.arguments;
+                            let mut new_segments = new_path.segments;
+                            if let Some(last_segment) = new_segments.last_mut() {
+                                last_segment.arguments = original_args.clone();
+                            }
+                            path.segments = new_segments;
+                            return;
+                        }
                     }
                 }
             }

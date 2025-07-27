@@ -28,13 +28,19 @@ fn generate_ffi_bindings() -> PathBuf {
         .disable_feature("internal") // Disable internal features
         .build();
 
+    // Create replacer for types without full paths
+    let type_replacer = prebindgen::map::replace_types::Builder::new()
+        .replace_type("Option", "std::option::Option")
+        .replace_type("MaybeUninit", "std::mem::MaybeUninit")
+        .build();
+
     // Create converter from the source items to FFI proxy items. It needs original crate name
     // for generating proxy functions. This name can be taken from source or passed explicitly if
     // source crate is imported with renaming
     let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
+        .strip_transparent_wrapper("std::option::Option") // Strip Option wrapper
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
-        .strip_transparent_wrapper("Option") // Strip Option wrapper
         .strip_type_prefix("foo")
         .build();
 
@@ -42,6 +48,7 @@ fn generate_ffi_bindings() -> PathBuf {
     // filters and dtore to destination rust file
     let bindings_file = source
         .items_all()
+        .map(type_replacer.into_closure())
         .filter_map(feature_filter.into_closure())
         .batching(converter.into_closure())
         .collect::<prebindgen::collect::Destination>()

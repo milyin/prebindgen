@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 
 pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
@@ -44,7 +46,7 @@ pub mod foo {
 }
 
 #[prebindgen("functions")]
-pub fn copy_foo(dst: &mut std::mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example_result {
+pub fn copy_foo(dst: &mut MaybeUninit<foo::Foo>, src: &foo::Foo) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
