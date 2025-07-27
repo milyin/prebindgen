@@ -405,11 +405,7 @@ fn strip_type(
                 if path_starts_with(&type_path.path, prefix) {
                     *stripped = true;
                     // Remove the prefix segments from the path
-                    let iter = type_path
-                        .path
-                        .segments
-                        .iter()
-                        .skip(prefix.segments.len());
+                    let iter = type_path.path.segments.iter().skip(prefix.segments.len());
                     break Cow::Owned(syn::Path {
                         leading_colon: type_path.path.leading_colon,
                         segments: iter.cloned().collect(),
@@ -422,21 +418,36 @@ fn strip_type(
                 if paths_equal(path.as_ref(), wrapper) {
                     *stripped = true;
                     // Extract the first generic argument if present
-                    if let Some(last_segment) = type_path.path.segments.last() {
+                    if let Some(last_segment) = path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                return strip_type(inner_ty, wrappers, prefixes, stripped, source_location);
+                                return strip_type(
+                                    inner_ty,
+                                    wrappers,
+                                    prefixes,
+                                    stripped,
+                                    source_location,
+                                );
                             }
                         }
                     }
                 }
             }
-            // No wrapper found, return as-is
-            ty.clone()
+
+            syn::Type::Path(syn::TypePath {
+                qself: type_path.qself.clone(),
+                path: path.into_owned(),
+            })
         }
         syn::Type::Reference(type_ref) => {
             // Recursively strip wrappers from the referenced type
-            let stripped_elem = strip_type(&type_ref.elem, wrappers, prefixes, stripped, source_location);
+            let stripped_elem = strip_type(
+                &type_ref.elem,
+                wrappers,
+                prefixes,
+                stripped,
+                source_location,
+            );
             syn::Type::Reference(syn::TypeReference {
                 and_token: type_ref.and_token,
                 lifetime: type_ref.lifetime.clone(),
@@ -446,7 +457,13 @@ fn strip_type(
         }
         syn::Type::Ptr(type_ptr) => {
             // Recursively strip wrappers from the pointed-to type
-            let stripped_elem = strip_type(&type_ptr.elem, wrappers, prefixes, stripped, source_location);
+            let stripped_elem = strip_type(
+                &type_ptr.elem,
+                wrappers,
+                prefixes,
+                stripped,
+                source_location,
+            );
             syn::Type::Ptr(syn::TypePtr {
                 star_token: type_ptr.star_token,
                 const_token: type_ptr.const_token,
@@ -456,7 +473,13 @@ fn strip_type(
         }
         syn::Type::Array(type_array) => {
             // Recursively strip wrappers from the array element type
-            let stripped_elem = strip_type(&type_array.elem, wrappers, prefixes, stripped, source_location);
+            let stripped_elem = strip_type(
+                &type_array.elem,
+                wrappers,
+                prefixes,
+                stripped,
+                source_location,
+            );
             syn::Type::Array(syn::TypeArray {
                 bracket_token: type_array.bracket_token,
                 elem: Box::new(stripped_elem),
