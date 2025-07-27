@@ -676,19 +676,24 @@ fn prefix_exported_types_in_type(
 
                 // Only prefix if the last segment is an exported type
                 if exported_types.contains(&type_name) {
-                    // Check if the type path is a single segment or starts with any of the strip prefixes
-                    if type_path.path.segments.len() == 1 {
-                        // Single segment exported type: Foo -> example_ffi::Foo
-                        return syn::parse_quote! { #source_crate_ident::#type_path };
-                    } else {
-                        // Multi-segment path: check if it matches any full exported type
-                        for full_exported_type in prefixed_exported_types {
-                            if paths_equal(&type_path.path, full_exported_type) {
-                                // Path matches full exported type: foo::Foo -> example_ffi::foo::Foo
-                                return syn::parse_quote! { #source_crate_ident::#type_path };
+                    // Check if the type matches any prefixed exported type
+                    for full_exported_type in prefixed_exported_types {
+                        if paths_equal(&type_path.path, full_exported_type) {
+                            // Path matches full exported type: foo::Foo -> example_ffi::foo::Foo
+                            return syn::parse_quote! { #source_crate_ident::#type_path };
+                        }
+                        // Check if single-segment type matches the last segment of a prefixed type
+                        if type_path.path.segments.len() == 1 {
+                            if let Some(last_segment) = full_exported_type.segments.last() {
+                                if last_segment.ident.to_string() == type_name {
+                                    // Found matching type: InsideFoo -> example_ffi::foo::InsideFoo
+                                    return syn::parse_quote! { #source_crate_ident::#full_exported_type };
+                                }
                             }
                         }
                     }
+                    // Default: prefix with crate name only
+                    return syn::parse_quote! { #source_crate_ident::#type_path };
                 }
 
                 // Handle generic arguments recursively
