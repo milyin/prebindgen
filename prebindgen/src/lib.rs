@@ -130,6 +130,10 @@ pub mod map {
     pub mod strip_derive {
         pub use crate::api::map::strip_derive::Builder;
     }
+    pub use crate::api::map::replace_types::ReplaceTypes;
+    pub mod replace_types {
+        pub use crate::api::map::replace_types::Builder;
+    }
 }
 
 /// Collectors for sequences of (syn::Item, SourceLocation) called by `collect`
