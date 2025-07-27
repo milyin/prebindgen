@@ -19,27 +19,32 @@ pub const EXAMPLE_RESULT_ERROR: example_result = -1;
 // See build.rs for details.
 include!(concat!(env!("OUT_DIR"), "/bar.rs"));
 
-#[prebindgen("structs")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Foo {
-    // Demonstrate that for #cfg macro all works transparently
-    #[cfg(target_arch = "x86_64")]
-    pub x86_64_field: u64,
-    #[cfg(target_arch = "aarch64")]
-    pub aarch64_field: u64,
-    #[cfg(feature = "unstable")]
-    pub unstable_field: u64,
-    #[cfg(not(feature = "unstable"))]
-    pub stable_field: u64,
-    #[cfg(any(feature = "unstable", feature = "internal"))]
-    pub unstable_or_internal_field: u64,
-    #[cfg(all(feature = "unstable", feature = "internal"))]
-    pub unstable_and_internal_field: u64,
+// Separate mod to demonstrate "strip_type_prefix" feature
+mod foo {
+    use prebindgen_proc_macro::prebindgen;
+
+    #[prebindgen("structs")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    pub struct Foo {
+        // Demonstrate that for #cfg macro all works transparently
+        #[cfg(target_arch = "x86_64")]
+        pub x86_64_field: u64,
+        #[cfg(target_arch = "aarch64")]
+        pub aarch64_field: u64,
+        #[cfg(feature = "unstable")]
+        pub unstable_field: u64,
+        #[cfg(not(feature = "unstable"))]
+        pub stable_field: u64,
+        #[cfg(any(feature = "unstable", feature = "internal"))]
+        pub unstable_or_internal_field: u64,
+        #[cfg(all(feature = "unstable", feature = "internal"))]
+        pub unstable_and_internal_field: u64,
+    }
 }
 
 #[prebindgen("functions")]
-pub fn copy_foo(dst: &mut std::mem::MaybeUninit<Foo>, src: &Foo) -> example_result {
+pub fn copy_foo(dst: &mut std::mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
@@ -55,7 +60,7 @@ pub fn get_unstable_field(input: &Foo) -> u64 {
 
 #[prebindgen("functions")]
 #[cfg(not(feature = "unstable"))]
-pub fn get_unstable_field(input: &Foo) -> u64 {
+pub fn get_unstable_field(input: &foo::Foo) -> u64 {
     // Return the unstable field if it exists
     input.stable_field
 }
@@ -85,7 +90,7 @@ pub fn void_function(x: i32) {
 }
 
 #[prebindgen("functions")]
-pub fn get_foo_field(input: &Foo) -> &u64 {
+pub fn get_foo_field(input: &foo::Foo) -> &u64 {
     // Return reference to the architecture-specific field
     #[cfg(target_arch = "x86_64")]
     return &input.x86_64_field;
@@ -94,7 +99,7 @@ pub fn get_foo_field(input: &Foo) -> &u64 {
 }
 
 #[prebindgen("functions")]
-pub fn get_foo_reference(input: &Foo) -> &Foo {
+pub fn get_foo_reference(input: &foo::Foo) -> &foo::Foo {
     // Return reference to the Foo struct
     input
 }
@@ -105,7 +110,7 @@ pub fn reference_to_array(input: &mut [u8; 4]) -> &[u8; 4] {
 }
 
 #[prebindgen("functions")]
-pub fn array_of_references<'a,'b>(input: &'a[&'b u8; 4]) -> &'a[&'b u8; 4] {
+pub fn array_of_references<'a, 'b>(input: &'a [&'b u8; 4]) -> &'a [&'b u8; 4] {
     input
 }
 

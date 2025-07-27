@@ -18,15 +18,18 @@ use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+    SourceLocation,
     codegen::replace_types::{
-        convert_to_stub, generate_standard_allowed_prefixes, generate_type_transmute_pair_assertions, replace_types_in_item, ParseConfig, TypeTransmutePair
-    }, SourceLocation
+        ParseConfig, TypeTransmutePair, convert_to_stub, generate_standard_allowed_prefixes,
+        generate_type_transmute_pair_assertions, replace_types_in_item,
+    },
 };
 
 /// Builder for configuring RustFfi without file operations
 pub struct Builder {
     pub(crate) source_crate_name: String,
     pub(crate) allowed_prefixes: Vec<syn::Path>,
+    pub(crate) strip_prefixes: Vec<syn::Path>,
     pub(crate) transparent_wrappers: Vec<syn::Path>,
     pub(crate) edition: String,
 }
@@ -38,6 +41,7 @@ impl Builder {
         Self {
             source_crate_name: source_crate_name.into(),
             allowed_prefixes: generate_standard_allowed_prefixes(),
+            strip_prefixes: Vec::new(),
             transparent_wrappers: Vec::new(),
             edition: "2021".to_string(),
         }
@@ -77,7 +81,8 @@ impl Builder {
         self
     }
 
-    /// Add a transparent wrapper type to be stripped from FFI function parameters
+    /// Add a transparent wrapper type to be stripped from structure fields and
+    /// FFI function parameters
     ///
     /// Transparent wrappers are types that wrap other types but have the same
     /// memory layout (like `std::mem::MaybeUninit<T>`). When generating FFI stubs,
@@ -103,6 +108,19 @@ impl Builder {
     ) -> Self {
         let path: syn::Path = syn::parse_str(wrapper.as_ref()).unwrap();
         self.transparent_wrappers.push(path);
+        self
+    }
+
+    /// Remove this prefix from types in structure fields and function parameters
+    /// This may be useful for types which are used with their module name prefix in the source code.
+    #[roxygen]
+    pub fn strip_type_prefix<S: AsRef<str>>(
+        mut self,
+        /// The type prefix to strip from FFI function parameters
+        prefix: S,
+    ) -> Self {
+        let path: syn::Path = syn::parse_str(prefix.as_ref()).unwrap();
+        self.strip_prefixes.push(path);
         self
     }
 
@@ -205,6 +223,7 @@ impl FfiConverter {
                 crate_name: &self.builder.source_crate_name,
                 exported_types: &self.exported_types,
                 allowed_prefixes: &self.builder.allowed_prefixes,
+                strip_prefixes: &self.builder.strip_prefixes,
                 transparent_wrappers: &self.builder.transparent_wrappers,
                 edition: &self.builder.edition,
             };
@@ -250,7 +269,8 @@ impl FfiConverter {
             {
                 self.followup_items
                     .push((size_assertion, source_location.clone()));
-                self.followup_items.push((align_assertion, source_location.clone()));
+                self.followup_items
+                    .push((align_assertion, source_location.clone()));
             }
         }
     }
@@ -294,9 +314,7 @@ impl FfiConverter {
     }
 
     /// Convert to closure compatible with batching
-    pub fn into_closure<I>(
-        mut self,
-    ) -> impl FnMut(&mut I) -> Option<(syn::Item, SourceLocation)>
+    pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<(syn::Item, SourceLocation)>
     where
         I: Iterator<Item = (syn::Item, SourceLocation)>,
     {

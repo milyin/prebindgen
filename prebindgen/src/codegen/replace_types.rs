@@ -7,7 +7,10 @@
 //! - Generating type assertion pairs for compile-time validation
 
 use roxygen::roxygen;
-use std::collections::{HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
 use crate::SourceLocation;
 
@@ -16,6 +19,7 @@ pub(crate) struct ParseConfig<'a> {
     pub crate_name: &'a str,
     pub exported_types: &'a HashSet<String>,
     pub allowed_prefixes: &'a [syn::Path],
+    pub strip_prefixes: &'a [syn::Path],
     pub transparent_wrappers: &'a [syn::Path],
     pub edition: &'a str,
 }
@@ -144,7 +148,7 @@ pub fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
 ///
 /// This method:
 /// - Validates that the type is suitable for FFI use
-/// - Strips transparent wrappers from the type
+/// - Strips transparent wrappers and prefixes to be stripped from the type
 /// - Converts references to pointers for FFI compatibility
 /// - Collects type assertion pairs when conversion is needed
 /// - Sets the `was_converted` flag to indicate if the type was modified
@@ -159,9 +163,15 @@ pub(crate) fn replace_types_in_type(
     /// Source location for error reporting
     source_location: &SourceLocation,
 ) -> Result<bool, String> {
-    // Strip transparent wrappers from the type
-    let mut has_wrapper = false;
-    let local_type = strip_transparent_wrappers(ty, config.transparent_wrappers, &mut has_wrapper);
+    // Strip prefixes and transparent wrappers from the type
+    let mut stripped = false;
+    let local_type = strip_type(
+        ty,
+        config.transparent_wrappers,
+        config.strip_prefixes,
+        &mut stripped,
+        source_location,
+    );
 
     // Validate the type for FFI compatibility and strip * and & references
     let mut is_exported_type = false;
@@ -175,7 +185,7 @@ pub(crate) fn replace_types_in_type(
 
     // Build the final type and determine if conversion is needed
     let references_replaced = !stripped_types.is_empty();
-    let core_type_changed = has_wrapper || is_exported_type;
+    let core_type_changed = stripped || is_exported_type;
     let conversion_needed = references_replaced || core_type_changed;
 
     if conversion_needed {
@@ -367,29 +377,55 @@ fn replace_types_in_fields(
 /// returning the inner type. Sets the `has_wrapper` flag to indicate if any wrappers
 /// were found and stripped.
 #[roxygen]
-fn strip_transparent_wrappers(
+fn strip_type(
     /// The type to strip wrappers from
     ty: &syn::Type,
-    /// List of transparent wrapper paths to recognize and strip
-    transparent_wrappers: &[syn::Path],
-    /// Flag set to true if any wrappers were found and stripped
-    has_wrapper: &mut bool,
+    /// List of wrapper paths to recognize and strip
+    wrappers: &[syn::Path],
+    /// List of type prefixes to recognize and strip
+    prefixes: &[syn::Path],
+    /// Flag set to true if the type was changed
+    stripped: &mut bool,
+    /// Source location for error reporting
+    source_location: &SourceLocation,
 ) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
+            // Associated types are not supported, report error
+            if type_path.qself.is_some() {
+                panic!("Associated types are not supported in FFI stubs: {source_location}");
+            }
+
+            // Check if this type path starts with any prefix in prefixes
+            let mut prefixes_iter = prefixes.iter();
+            let path = loop {
+                let Some(prefix) = prefixes_iter.next() else {
+                    break Cow::Borrowed(&type_path.path);
+                };
+                if path_starts_with(&type_path.path, prefix) {
+                    *stripped = true;
+                    // Remove the prefix segments from the path
+                    let iter = type_path
+                        .path
+                        .segments
+                        .iter()
+                        .skip(prefix.segments.len());
+                    break Cow::Owned(syn::Path {
+                        leading_colon: type_path.path.leading_colon,
+                        segments: iter.cloned().collect(),
+                    });
+                }
+            };
+
             // Check if this type path matches any transparent wrapper
-            for wrapper in transparent_wrappers {
-                if paths_equal(&type_path.path, wrapper) {
-                    *has_wrapper = true;
+            for wrapper in wrappers {
+                if paths_equal(path.as_ref(), wrapper) {
+                    *stripped = true;
                     // Extract the first generic argument if present
                     if let Some(last_segment) = type_path.path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                return strip_transparent_wrappers(
-                                    inner_ty,
-                                    transparent_wrappers,
-                                    has_wrapper,
-                                );
+                                return strip_type(inner_ty, wrappers, prefixes, stripped, source_location);
                             }
                         }
                     }
@@ -400,8 +436,7 @@ fn strip_transparent_wrappers(
         }
         syn::Type::Reference(type_ref) => {
             // Recursively strip wrappers from the referenced type
-            let stripped_elem =
-                strip_transparent_wrappers(&type_ref.elem, transparent_wrappers, has_wrapper);
+            let stripped_elem = strip_type(&type_ref.elem, wrappers, prefixes, stripped, source_location);
             syn::Type::Reference(syn::TypeReference {
                 and_token: type_ref.and_token,
                 lifetime: type_ref.lifetime.clone(),
@@ -411,8 +446,7 @@ fn strip_transparent_wrappers(
         }
         syn::Type::Ptr(type_ptr) => {
             // Recursively strip wrappers from the pointed-to type
-            let stripped_elem =
-                strip_transparent_wrappers(&type_ptr.elem, transparent_wrappers, has_wrapper);
+            let stripped_elem = strip_type(&type_ptr.elem, wrappers, prefixes, stripped, source_location);
             syn::Type::Ptr(syn::TypePtr {
                 star_token: type_ptr.star_token,
                 const_token: type_ptr.const_token,
@@ -422,8 +456,7 @@ fn strip_transparent_wrappers(
         }
         syn::Type::Array(type_array) => {
             // Recursively strip wrappers from the array element type
-            let stripped_elem =
-                strip_transparent_wrappers(&type_array.elem, transparent_wrappers, has_wrapper);
+            let stripped_elem = strip_type(&type_array.elem, wrappers, prefixes, stripped, source_location);
             syn::Type::Array(syn::TypeArray {
                 bracket_token: type_array.bracket_token,
                 elem: Box::new(stripped_elem),
@@ -753,6 +786,10 @@ fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
         return false;
     }
 
+    if prefix.leading_colon.is_some() != path.leading_colon.is_some() {
+        return false;
+    }
+
     for (path_segment, prefix_segment) in path.segments.iter().zip(prefix.segments.iter()) {
         if path_segment.ident != prefix_segment.ident {
             return false;
@@ -797,7 +834,7 @@ pub(crate) fn convert_to_stub(
     };
 
     // Apply type replacements to the function signature
-    let mut sig_type_replacements= type_replacements.clone();
+    let mut sig_type_replacements = type_replacements.clone();
     let (params_changed, return_changed) = replace_types_in_signature(
         &mut function.sig,
         config,
