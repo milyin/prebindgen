@@ -3,7 +3,7 @@
 use quote::ToTokens;
 
 /// Extract alignment value from a struct's repr attribute
-pub fn struct_align(item: &syn::Item) -> Option<u32> {
+pub fn struct_align(item: &syn::Item) -> Option<(String, u32)> {
     if let syn::Item::Struct(s) = item {
         s.attrs.iter().find_map(|attr| {
             if attr.path().is_ident("repr") {
@@ -12,11 +12,16 @@ pub fn struct_align(item: &syn::Item) -> Option<u32> {
                     let after_align = &tokens_str[align_pos + 5..];
                     let start = after_align.find('(')?;
                     let end = after_align.find(')')?;
-                    after_align[start + 1..end]
-                        .trim()
-                        .parse().ok()
-                } else { None }
-            } else { None }
+                    let align = after_align[start + 1..end].trim().parse().ok()?;
+                    Some((s.ident.to_string(), align))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         })
-    } else { None }
+    } else {
+        None
+    }
 }
