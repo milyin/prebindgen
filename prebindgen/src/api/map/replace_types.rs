@@ -68,38 +68,34 @@ struct TypeReplacer<'a> {
 
 impl<'a> VisitMut for TypeReplacer<'a> {
     fn visit_type_mut(&mut self, ty: &mut Type) {
-        let Type::Path(TypePath { path, .. }) = ty else {
-            return syn::visit_mut::visit_type_mut(self, ty);
-        };
-        
-        // Convert current path to string for matching
-        let current_path = path.segments.iter()
-            .map(|seg| seg.ident.to_string())
-            .collect::<Vec<_>>()
-            .join("::");
-        
-        let Some(replacement) = self.replacements.get(&current_path) else {
-            return syn::visit_mut::visit_type_mut(self, ty);
-        };
-        
-        let Ok(Type::Path(TypePath { path: new_path, .. })) = syn::parse_str::<Type>(replacement) else {
-            return syn::visit_mut::visit_type_mut(self, ty);
-        };
-        
-        // Preserve and process generic arguments from the last segment
-        let mut original_args = path.segments.last().unwrap().arguments.clone();
-        if let syn::PathArguments::AngleBracketed(ref mut args) = original_args {
-            for arg in &mut args.args {
-                if let syn::GenericArgument::Type(inner_ty) = arg {
-                    self.visit_type_mut(inner_ty);
+        if let Type::Path(TypePath { path, .. }) = ty {
+            let current_path = path.segments.iter()
+                .map(|seg| seg.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("::");
+            
+            if let Some(replacement) = self.replacements.get(&current_path) {
+                if let Ok(Type::Path(TypePath { path: new_path, .. })) = syn::parse_str::<Type>(replacement) {
+                    // Preserve and process generic arguments
+                    let mut original_args = path.segments.last().unwrap().arguments.clone();
+                    if let syn::PathArguments::AngleBracketed(ref mut args) = original_args {
+                        for arg in &mut args.args {
+                            if let syn::GenericArgument::Type(inner_ty) = arg {
+                                self.visit_type_mut(inner_ty);
+                            }
+                        }
+                    }
+                    
+                    // Apply replacement with preserved arguments
+                    path.segments = new_path.segments;
+                    if let Some(last_segment) = path.segments.last_mut() {
+                        last_segment.arguments = original_args;
+                    }
+                    return;
                 }
             }
         }
         
-        // Apply replacement with preserved arguments
-        path.segments = new_path.segments;
-        if let Some(last_segment) = path.segments.last_mut() {
-            last_segment.arguments = original_args;
-        }
+        syn::visit_mut::visit_type_mut(self, ty);
     }
 }
