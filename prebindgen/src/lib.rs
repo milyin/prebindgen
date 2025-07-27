@@ -126,7 +126,7 @@ pub mod filter_map {
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `map`
 pub mod map {
-    pub use crate::api::map::strip_derive::StripDerive;
+    pub use crate::api::map::strip_derive::StripDerives;
     pub mod strip_derive {
         pub use crate::api::map::strip_derive::Builder;
     }

@@ -36,8 +36,8 @@ impl Builder {
     }
 
     /// Build the StripDerive instance
-    pub fn build(self) -> StripDerive {
-        StripDerive { builder: self }
+    pub fn build(self) -> StripDerives {
+        StripDerives { builder: self }
     }
 }
 
@@ -48,11 +48,11 @@ impl Default for Builder {
 }
 
 /// Strip specified derive attributes from the items in the source.
-pub struct StripDerive {
+pub struct StripDerives {
     builder: Builder,
 }
 
-impl StripDerive {
+impl StripDerives {
     /// Create a builder for creating a strip derive instance
     pub fn builder() -> Builder {
         Builder::new()
