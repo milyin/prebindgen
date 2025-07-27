@@ -23,7 +23,7 @@ fn generate_ffi_bindings() -> PathBuf {
     let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
 
     // Create feature filter
-    let feature_filter = prebindgen::FeatureFilter::builder()
+    let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
         .disable_feature("unstable") // Disable unstable features
         .disable_feature("internal") // Disable internal features
         .build();
@@ -31,7 +31,7 @@ fn generate_ffi_bindings() -> PathBuf {
     // Create converter from the source items to FFI proxy items. It needs original crate name
     // for generating proxy functions. This name can be taken from source or passed explicitly if
     // source crate is imported with renaming
-    let converter = prebindgen::FfiConverter::builder(source.crate_name())
+    let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
         .strip_transparent_wrapper("Option") // Strip Option wrapper
@@ -44,7 +44,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .items_all()
         .filter_map(feature_filter.into_closure())
         .batching(converter.into_closure())
-        .collect::<prebindgen::Destination>()
+        .collect::<prebindgen::collect::Destination>()
         .write("example_ffi.rs");
 
     println!(
