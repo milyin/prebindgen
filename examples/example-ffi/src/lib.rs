@@ -1,3 +1,5 @@
+use std::mem;
+
 use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 
 pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
@@ -44,7 +46,7 @@ pub mod foo {
 }
 
 #[prebindgen("functions")]
-pub fn copy_foo(dst: &mut std::mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example_result {
+pub fn copy_foo(dst: &mut mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }
@@ -66,7 +68,7 @@ pub fn get_unstable_field(input: &foo::Foo) -> u64 {
 }
 
 #[prebindgen("functions")]
-pub fn copy_bar(dst: &mut std::mem::MaybeUninit<Bar>, src: &Bar) -> example_result {
+pub fn copy_bar(dst: &mut mem::MaybeUninit<Bar>, src: &Bar) -> example_result {
     unsafe {
         dst.as_mut_ptr().write(*src);
     }

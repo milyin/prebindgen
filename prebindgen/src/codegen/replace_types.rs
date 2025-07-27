@@ -19,7 +19,7 @@ pub(crate) struct ParseConfig<'a> {
     pub crate_name: &'a str,
     pub exported_types: &'a HashSet<String>,
     pub allowed_prefixes: &'a [syn::Path],
-    pub strip_prefixes: &'a [syn::Path],
+    pub prefixed_exported_types: &'a [syn::Path],
     pub transparent_wrappers: &'a [syn::Path],
     pub edition: &'a str,
 }
@@ -171,7 +171,7 @@ pub(crate) fn replace_types_in_type(
     let mut local_type = strip_type(
         ty,
         config.transparent_wrappers,
-        config.strip_prefixes,
+        config.prefixed_exported_types,
         &mut stripped,
         source_location,
     );
@@ -210,7 +210,7 @@ pub(crate) fn replace_types_in_type(
                 &original_ty,
                 &config.crate_ident(),
                 config.exported_types,
-                config.strip_prefixes,
+                config.prefixed_exported_types,
             );
             
             let local_str = quote::quote! { #local_type }.to_string();
@@ -254,7 +254,7 @@ pub(crate) fn replace_types_in_type(
                 &original_ty,
                 &config.crate_ident(),
                 config.exported_types,
-                config.strip_prefixes,
+                config.prefixed_exported_types,
             );
 
             // Strip both types to the same level until first path type
@@ -439,8 +439,8 @@ fn strip_type(
     ty: &syn::Type,
     /// List of wrapper paths to recognize and strip
     wrappers: &[syn::Path],
-    /// List of type prefixes to recognize and strip
-    prefixes: &[syn::Path],
+    /// List of exported type paths that should have prefixes stripped
+    prefixed_exported_types: &[syn::Path],
     /// Flag set to true if the type was changed
     stripped: &mut bool,
     /// Source location for error reporting
@@ -453,21 +453,26 @@ fn strip_type(
                 panic!("Associated types are not supported in FFI stubs: {source_location}");
             }
 
-            // Check if this type path starts with any prefix in prefixes
-            let mut prefixes_iter = prefixes.iter();
-            let path = loop {
-                let Some(prefix) = prefixes_iter.next() else {
-                    break Cow::Borrowed(&type_path.path);
-                };
-                if path_starts_with(&type_path.path, prefix) {
-                    *stripped = true;
-                    // Remove the prefix segments from the path
-                    let iter = type_path.path.segments.iter().skip(prefix.segments.len());
-                    break Cow::Owned(syn::Path {
-                        leading_colon: type_path.path.leading_colon,
-                        segments: iter.cloned().collect(),
-                    });
+            // Check if this type path matches any full exported type and strip its prefix
+            let path = {
+                let mut result_path = Cow::Borrowed(&type_path.path);
+                
+                for full_exported_type in prefixed_exported_types {
+                    if paths_equal(&type_path.path, full_exported_type) {
+                        // Found exact match - strip prefix if it has more than one segment
+                        if full_exported_type.segments.len() > 1 {
+                            *stripped = true;
+                            // Keep only the last segment (the type name)
+                            let last_segment = full_exported_type.segments.last().unwrap().clone();
+                            result_path = Cow::Owned(syn::Path {
+                                leading_colon: None,
+                                segments: std::iter::once(last_segment).collect(),
+                            });
+                            break;
+                        }
+                    }
                 }
+                result_path
             };
 
             // Check if this type path matches any transparent wrapper
@@ -481,7 +486,7 @@ fn strip_type(
                                 return strip_type(
                                     inner_ty,
                                     wrappers,
-                                    prefixes,
+                                    prefixed_exported_types,
                                     stripped,
                                     source_location,
                                 );
@@ -501,7 +506,7 @@ fn strip_type(
             let stripped_elem = strip_type(
                 &type_ref.elem,
                 wrappers,
-                prefixes,
+                prefixed_exported_types,
                 stripped,
                 source_location,
             );
@@ -517,7 +522,7 @@ fn strip_type(
             let stripped_elem = strip_type(
                 &type_ptr.elem,
                 wrappers,
-                prefixes,
+                prefixed_exported_types,
                 stripped,
                 source_location,
             );
@@ -533,7 +538,7 @@ fn strip_type(
             let stripped_elem = strip_type(
                 &type_array.elem,
                 wrappers,
-                prefixes,
+                prefixed_exported_types,
                 stripped,
                 source_location,
             );
@@ -548,12 +553,12 @@ fn strip_type(
             // Recursively strip wrappers from function parameter and return types
             let mut new_inputs = type_bare_fn.inputs.clone();
             for input in &mut new_inputs {
-                input.ty = strip_type(&input.ty, wrappers, prefixes, stripped, source_location);
+                input.ty = strip_type(&input.ty, wrappers, prefixed_exported_types, stripped, source_location);
             }
             
             let new_output = match &type_bare_fn.output {
                 syn::ReturnType::Type(arrow, return_type) => {
-                    let stripped_return = strip_type(return_type, wrappers, prefixes, stripped, source_location);
+                    let stripped_return = strip_type(return_type, wrappers, prefixed_exported_types, stripped, source_location);
                     syn::ReturnType::Type(*arrow, Box::new(stripped_return))
                 }
                 syn::ReturnType::Default => type_bare_fn.output.clone(),
@@ -662,7 +667,7 @@ fn prefix_exported_types_in_type(
     ty: &syn::Type,
     source_crate_ident: &syn::Ident,
     exported_types: &HashSet<String>,
-    strip_prefixes: &[syn::Path],
+    prefixed_exported_types: &[syn::Path],
 ) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
@@ -676,10 +681,10 @@ fn prefix_exported_types_in_type(
                         // Single segment exported type: Foo -> example_ffi::Foo
                         return syn::parse_quote! { #source_crate_ident::#type_path };
                     } else {
-                        // Multi-segment path: check if it starts with a strip prefix
-                        for prefix in strip_prefixes {
-                            if path_starts_with(&type_path.path, prefix) {
-                                // Path starts with strip prefix: foo::Foo -> example_ffi::foo::Foo
+                        // Multi-segment path: check if it matches any full exported type
+                        for full_exported_type in prefixed_exported_types {
+                            if paths_equal(&type_path.path, full_exported_type) {
+                                // Path matches full exported type: foo::Foo -> example_ffi::foo::Foo
                                 return syn::parse_quote! { #source_crate_ident::#type_path };
                             }
                         }
@@ -699,7 +704,7 @@ fn prefix_exported_types_in_type(
                                         inner_ty,
                                         source_crate_ident,
                                         exported_types,
-                                        strip_prefixes,
+                                        prefixed_exported_types,
                                     );
                                 }
                             }
@@ -721,7 +726,7 @@ fn prefix_exported_types_in_type(
                 &type_ref.elem,
                 source_crate_ident,
                 exported_types,
-                strip_prefixes,
+                prefixed_exported_types,
             )),
         }),
         syn::Type::Ptr(type_ptr) => syn::Type::Ptr(syn::TypePtr {
@@ -732,7 +737,7 @@ fn prefix_exported_types_in_type(
                 &type_ptr.elem,
                 source_crate_ident,
                 exported_types,
-                strip_prefixes,
+                prefixed_exported_types,
             )),
         }),
         syn::Type::BareFn(type_bare_fn) => {
@@ -742,7 +747,7 @@ fn prefix_exported_types_in_type(
                     &input.ty,
                     source_crate_ident,
                     exported_types,
-                    strip_prefixes,
+                    prefixed_exported_types,
                 );
             }
             
@@ -752,7 +757,7 @@ fn prefix_exported_types_in_type(
                         return_type,
                         source_crate_ident,
                         exported_types,
-                        strip_prefixes,
+                        prefixed_exported_types,
                     );
                     syn::ReturnType::Type(*arrow, Box::new(prefixed_return))
                 }

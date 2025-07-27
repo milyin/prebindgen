@@ -1,7 +1,7 @@
 pub(crate) mod buildrs;
-pub(crate) mod feature_filter;
 pub(crate) mod record;
-pub(crate) mod ffi_converter;
 pub(crate) mod source;
-pub(crate) mod destination;
-pub(crate) mod query;
+pub(crate) mod filter_map;
+pub(crate) mod collect;
+pub(crate) mod batching;
+pub(crate) mod map;

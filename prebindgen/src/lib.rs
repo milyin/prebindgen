@@ -103,25 +103,48 @@ pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
 
+pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::source::Source;
 pub use crate::api::record::SourceLocation;
+
+/// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
+pub mod batching {
+    pub mod ffi_converter {
+        pub use crate::api::batching::ffi_converter::Builder;
+    }
+    pub use crate::api::batching::ffi_converter::FfiConverter;
+}
+
+/// Filters for sequences of (syn::Item, SourceLocation) called by `filter_map`
+pub mod filter_map {
+    pub use crate::api::filter_map::struct_align::struct_align;
+    pub use crate::api::filter_map::feature_filter::FeatureFilter;
+    pub mod feature_filter {
+        pub use crate::api::filter_map::feature_filter::Builder;
+    }
+}
+
+/// Filters for sequences of (syn::Item, SourceLocation) called by `map`
+pub mod map {
+    pub use crate::api::map::strip_derive::StripDerive;
+    pub mod strip_derive {
+        pub use crate::api::map::strip_derive::Builder;
+    }
+    pub use crate::api::map::replace_types::ReplaceTypes;
+    pub mod replace_types {
+        pub use crate::api::map::replace_types::Builder;
+    }
+}
+
+/// Collectors for sequences of (syn::Item, SourceLocation) called by `collect`
+pub mod collect {
+    pub use crate::api::collect::destination::Destination;
+}
+
+#[doc(hidden)]
 pub use crate::api::record::Record;
+#[doc(hidden)]
 pub use crate::api::record::RecordKind;
-pub use crate::api::destination::Destination;
-
+#[doc(hidden)]
 pub use crate::api::buildrs::get_prebindgen_out_dir;
-pub use crate::api::buildrs::init_prebindgen_out_dir;
 
-pub use crate::api::feature_filter::FeatureFilter;
-pub mod feature_filter {
-    pub use crate::api::feature_filter::Builder;
-}
-
-pub use crate::api::ffi_converter::FfiConverter;
-pub mod ffi_converter {
-    pub use crate::api::ffi_converter::Builder;
-}
-
-pub mod query {
-    pub use crate::api::query::struct_align;
-}

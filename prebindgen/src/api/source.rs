@@ -52,7 +52,7 @@ impl Source {
         &self.crate_name
     }
 
-    pub fn items_by_groups(
+    pub fn items_in_groups(
         &self,
         groups: &[&str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
@@ -60,6 +60,16 @@ impl Source {
             .iter()
             .filter_map(|group| self.items.get(*group))
             .flat_map(|records| records.iter()).cloned()
+    }
+
+    pub fn items_except_groups(
+        &self,
+        groups: &[&str],
+    ) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
+        self.items
+            .iter()
+            .filter(|(group, _)| !groups.contains(&group.as_str()))
+            .flat_map(|(_, records)| records.iter()).cloned()
     }
 
     pub fn items_all(&self) -> impl Iterator<Item = (syn::Item, SourceLocation)> {

@@ -23,28 +23,35 @@ fn generate_ffi_bindings() -> PathBuf {
     let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
 
     // Create feature filter
-    let feature_filter = prebindgen::FeatureFilter::builder()
+    let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
         .disable_feature("unstable") // Disable unstable features
         .disable_feature("internal") // Disable internal features
+        .build();
+
+    // Create replacer for types without full paths
+    let type_replacer = prebindgen::map::replace_types::Builder::new()
+        .replace_type("Option", "std::option::Option")
+        .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
         .build();
 
     // Create converter from the source items to FFI proxy items. It needs original crate name
     // for generating proxy functions. This name can be taken from source or passed explicitly if
     // source crate is imported with renaming
-    let converter = prebindgen::FfiConverter::builder(source.crate_name())
+    let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
+        .strip_transparent_wrapper("std::option::Option") // Strip Option wrapper
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
-        .strip_transparent_wrapper("Option") // Strip Option wrapper
-        .strip_type_prefix("foo")
+        .prefixed_exported_type("foo::Foo")
         .build();
 
     // Do the conversion: take stream of syn::Item from source, process them with necessary
     // filters and dtore to destination rust file
     let bindings_file = source
         .items_all()
+        .map(type_replacer.into_closure())
         .filter_map(feature_filter.into_closure())
         .batching(converter.into_closure())
-        .collect::<prebindgen::Destination>()
+        .collect::<prebindgen::collect::Destination>()
         .write("example_ffi.rs");
 
     println!(
