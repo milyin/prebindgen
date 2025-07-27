@@ -4,6 +4,7 @@ use crate::api::record::SourceLocation;
 use roxygen::roxygen;
 use std::collections::HashSet;
 use syn::Item;
+use quote::ToTokens;
 
 pub struct Builder {
     derive_attrs: HashSet<String>,
@@ -76,61 +77,27 @@ impl StripDerives {
     fn strip_derives_from_attrs(&self, attrs: &mut Vec<syn::Attribute>) {
         for attr in attrs.iter_mut() {
             if attr.path().is_ident("derive") {
-                if let syn::Meta::List(meta_list) = attr.meta.clone() {
-                    let mut new_tokens = Vec::new();
+                if let Ok(list) = attr.parse_args_with(syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated) {
+                    let filtered: syn::punctuated::Punctuated<syn::Path, syn::Token![,]> = list
+                        .into_iter()
+                        .filter(|path| !self.builder.derive_attrs.contains(&path.get_ident().unwrap().to_string()))
+                        .collect();
                     
-                    // Parse the derive list and filter out unwanted derives
-                    let tokens = meta_list.tokens.clone();
-                    let mut token_iter = tokens.into_iter().peekable();
-                    
-                    while let Some(token) = token_iter.next() {
-                        if let proc_macro2::TokenTree::Ident(ident) = &token {
-                            if !self.builder.derive_attrs.contains(&ident.to_string()) {
-                                new_tokens.push(token);
-                                // Add comma if there's more tokens and next isn't already a comma
-                                if token_iter.peek().is_some() {
-                                    if let Some(proc_macro2::TokenTree::Punct(punct)) = token_iter.peek() {
-                                        if punct.as_char() == ',' {
-                                            new_tokens.push(token_iter.next().unwrap());
-                                        }
-                                    }
-                                }
-                            } else {
-                                // Skip the derive we want to remove
-                                // Also skip the following comma if present
-                                if let Some(proc_macro2::TokenTree::Punct(punct)) = token_iter.peek() {
-                                    if punct.as_char() == ',' {
-                                        token_iter.next();
-                                    }
-                                }
-                            }
-                        } else {
-                            new_tokens.push(token);
-                        }
+                    if !filtered.is_empty() {
+                        attr.meta = syn::Meta::List(syn::MetaList {
+                            path: attr.path().clone(),
+                            delimiter: syn::MacroDelimiter::Paren(Default::default()),
+                            tokens: filtered.to_token_stream(),
+                        });
                     }
-                    
-                    // Update the attribute with filtered derives
-                    let new_tokens_stream = new_tokens.into_iter().collect();
-                    attr.meta = syn::Meta::List(syn::MetaList {
-                        path: meta_list.path,
-                        delimiter: meta_list.delimiter,
-                        tokens: new_tokens_stream,
-                    });
                 }
             }
         }
         
-        // Remove empty derive attributes
         attrs.retain(|attr| {
-            if attr.path().is_ident("derive") {
-                if let syn::Meta::List(meta_list) = &attr.meta {
-                    !meta_list.tokens.is_empty()
-                } else {
-                    true
-                }
-            } else {
-                true
-            }
+            !attr.path().is_ident("derive") || 
+            attr.parse_args_with(syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated)
+                .map_or(true, |list: syn::punctuated::Punctuated<syn::Path, syn::Token![,]>| !list.is_empty())
         });
     }
 
