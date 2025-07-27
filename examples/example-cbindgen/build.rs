@@ -33,6 +33,10 @@ fn generate_ffi_bindings() -> PathBuf {
         .strip_derive("Default") // Strip Default derive from structs
         .build();
 
+    let strip_macros = prebindgen::map::StripMacros::builder()
+        .strip_macro("default") 
+        .build();
+
     // Create replacer for types without full paths
     let type_replacer = prebindgen::map::replace_types::Builder::new()
         .replace_type("Option", "std::option::Option")
@@ -55,6 +59,7 @@ fn generate_ffi_bindings() -> PathBuf {
     let bindings_file = source
         .items_all()
         .map(strip_derives.into_closure())
+        .map(strip_macros.into_closure())
         .map(type_replacer.into_closure())
         .filter_map(feature_filter.into_closure())
         .batching(converter.into_closure())
