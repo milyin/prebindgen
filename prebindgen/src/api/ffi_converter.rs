@@ -220,7 +220,7 @@ impl FfiConverter {
                         &source_location,
                     ) {
                         panic!(
-                            "Failed to convert function {function}{source_location}: {e}",
+                            "Failed to convert function {function} ({source_location}): {e}",
                             function = function.sig.ident,
                         );
                     }
