@@ -124,6 +124,14 @@ pub mod filter_map {
     }
 }
 
+/// Filters for sequences of (syn::Item, SourceLocation) called by `map`
+pub mod map {
+    pub use crate::api::map::strip_derive::StripDerive;
+    pub mod strip_derive {
+        pub use crate::api::map::strip_derive::Builder;
+    }
+}
+
 /// Collectors for sequences of (syn::Item, SourceLocation) called by `collect`
 pub mod collect {
     pub use crate::api::collect::destination::Destination;
