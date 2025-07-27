@@ -63,26 +63,75 @@ impl StripDerives {
         let (mut item, source_location) = item;
         match &mut item {
             Item::Struct(s) => {
-                s.attrs.retain(|attr| {
-                    !attr
-                        .path()
-                        .segments
-                        .iter()
-                        .any(|seg| self.builder.derive_attrs.contains(&seg.ident.to_string()))
-                });
+                self.strip_derives_from_attrs(&mut s.attrs);
             }
             Item::Enum(e) => {
-                e.attrs.retain(|attr| {
-                    !attr
-                        .path()
-                        .segments
-                        .iter()
-                        .any(|seg| self.builder.derive_attrs.contains(&seg.ident.to_string()))
-                });
+                self.strip_derives_from_attrs(&mut e.attrs);
             }
             _ => {}
         }
         (item, source_location)
+    }
+
+    fn strip_derives_from_attrs(&self, attrs: &mut Vec<syn::Attribute>) {
+        for attr in attrs.iter_mut() {
+            if attr.path().is_ident("derive") {
+                if let syn::Meta::List(meta_list) = attr.meta.clone() {
+                    let mut new_tokens = Vec::new();
+                    
+                    // Parse the derive list and filter out unwanted derives
+                    let tokens = meta_list.tokens.clone();
+                    let mut token_iter = tokens.into_iter().peekable();
+                    
+                    while let Some(token) = token_iter.next() {
+                        if let proc_macro2::TokenTree::Ident(ident) = &token {
+                            if !self.builder.derive_attrs.contains(&ident.to_string()) {
+                                new_tokens.push(token);
+                                // Add comma if there's more tokens and next isn't already a comma
+                                if token_iter.peek().is_some() {
+                                    if let Some(proc_macro2::TokenTree::Punct(punct)) = token_iter.peek() {
+                                        if punct.as_char() == ',' {
+                                            new_tokens.push(token_iter.next().unwrap());
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Skip the derive we want to remove
+                                // Also skip the following comma if present
+                                if let Some(proc_macro2::TokenTree::Punct(punct)) = token_iter.peek() {
+                                    if punct.as_char() == ',' {
+                                        token_iter.next();
+                                    }
+                                }
+                            }
+                        } else {
+                            new_tokens.push(token);
+                        }
+                    }
+                    
+                    // Update the attribute with filtered derives
+                    let new_tokens_stream = new_tokens.into_iter().collect();
+                    attr.meta = syn::Meta::List(syn::MetaList {
+                        path: meta_list.path,
+                        delimiter: meta_list.delimiter,
+                        tokens: new_tokens_stream,
+                    });
+                }
+            }
+        }
+        
+        // Remove empty derive attributes
+        attrs.retain(|attr| {
+            if attr.path().is_ident("derive") {
+                if let syn::Meta::List(meta_list) = &attr.meta {
+                    !meta_list.tokens.is_empty()
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        });
     }
 
     /// Convert to closure

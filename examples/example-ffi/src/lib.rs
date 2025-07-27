@@ -27,7 +27,7 @@ pub mod foo {
 
     #[prebindgen("structs")]
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, PartialEq, Default)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
     pub struct InsideFoo {
         pub field: u64,
     }
@@ -35,11 +35,11 @@ pub mod foo {
     // This Default implementation is not copied to the generated code,
     // so StripDerives is used to strip Default derive from the structures
     // depending on it
-    // impl Default for InsideFoo {
-    //     fn default() -> Self {
-    //         InsideFoo { field: 42 }
-    //     }
-    // }
+    impl Default for InsideFoo {
+        fn default() -> Self {
+            InsideFoo { field: 42 }
+        }
+    }
 
     #[prebindgen("structs")]
     #[repr(C)]

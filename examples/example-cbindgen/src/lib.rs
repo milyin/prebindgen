@@ -30,6 +30,7 @@ mod tests {
                 #[cfg(target_arch = "aarch64")]
                 aarch64_field: 12345,
                 stable_field: 54321,
+                inside: InsideFoo { field: 67890 },
             };
 
             // Test get_foo_field function
@@ -106,6 +107,7 @@ mod tests {
                 #[cfg(target_arch = "aarch64")]
                 aarch64_field: 999,
                 stable_field: 777,
+                inside: InsideFoo { field: 888 },
             };
 
             let mut dst_foo = MaybeUninit::<Foo>::uninit();
