@@ -751,37 +751,73 @@ fn validate_core_type_for_ffi(
     /// Flag indicating if the type is an exported type
     is_exported_type: &mut bool,
 ) -> Result<(), String> {
-    if let syn::Type::Path(type_path) = ty {
-        // Validate the type path (includes absolute paths, allowed prefixes, and exported types)
-        if !validate_type_path(
-            type_path,
-            allowed_prefixes,
-            exported_types,
-            is_exported_type,
-        ) {
-            return Err(format!(
-                "Type '{}' is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
-                quote::quote! { #ty },
-            ));
+    match ty {
+        syn::Type::Path(type_path) => {
+            if !validate_type_path(
+                type_path,
+                allowed_prefixes,
+                exported_types,
+                is_exported_type,
+            ) {
+                return Err(format!(
+                    "Type '{}' is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
+                    quote::quote! { #ty },
+                ));
+            }
+            let Some(segment) = type_path.path.segments.last() else {
+                return Err(format!(
+                    "Type '{}' is not valid for FFI: must have at least one segment",
+                    quote::quote! { #ty },
+                ));
+            };
+            if let syn::PathArguments::AngleBracketed(_) = &segment.arguments {
+                return Err(format!(
+                    "Type '{}' is not valid for FFI: generic arguments are not supported",
+                    quote::quote! { #ty },
+                ));
+            }
+            Ok(())
         }
-        let Some(segment) = type_path.path.segments.last() else {
-            return Err(format!(
-                "Type '{}' is not valid for FFI: must have at least one segment",
-                quote::quote! { #ty },
-            ));
-        };
-        if let syn::PathArguments::AngleBracketed(_) = &segment.arguments {
-            return Err(format!(
-                "Type '{}' is not valid for FFI: generic arguments are not supported",
-                quote::quote! { #ty },
-            ));
+        syn::Type::BareFn(type_bare_fn) => {
+            // Validate that function is extern "C"
+            let extern_c = type_bare_fn
+                .abi
+                .as_ref()
+                .and_then(|abi| abi.name.as_ref())
+                .is_some_and(|name| name.value() == "C");
+            if !extern_c {
+                return Err(format!(
+                    "Type '{}' is not valid for FFI: bare functions must be extern \"C\"",
+                    quote::quote! { #ty },
+                ));
+            }
+            // Check if the function parameters and return type are valid
+            // for param in &type_bare_fn.inputs {
+            //     if let syn::BareFnArg::Typed(pat_type) = param {
+            //         let mut param_is_exported = false;
+
+            //         // Validate the parameter type
+            //         validate_core_type_for_ffi(
+            //             &pat_type.ty,
+            //             exported_types,
+            //             allowed_prefixes,
+            //             &mut param_is_exported,
+            //         )?;
+
+            //         if !param_is_exported {
+            //             return Err(format!(
+            //                 "Type '{}' is not valid for FFI: function parameters must be exported types",
+            //                 quote::quote! { #pat_type },
+            //             ));
+            //         }
+            //     }
+            // }
+            Ok(())
         }
-        Ok(())
-    } else {
-        Err(format!(
-            "Unsupported type '{}': only path types are supported as core types for FFI",
+        _ => Err(format!(
+            "Unsupported type '{}': only path types and bare function types are supported as core types for FFI",
             quote::quote! { #ty },
-        ))
+        )),
     }
 }
 
