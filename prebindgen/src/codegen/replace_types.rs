@@ -163,6 +163,9 @@ pub(crate) fn replace_types_in_type(
     /// Source location for error reporting
     source_location: &SourceLocation,
 ) -> Result<bool, String> {
+    // Capture original type before any modifications for assertion generation
+    let original_ty = ty.clone();
+    
     // Strip prefixes and transparent wrappers from the type
     let mut stripped = false;
     let mut local_type = strip_type(
@@ -204,7 +207,7 @@ pub(crate) fn replace_types_in_type(
         if function_changed {
             // Generate assertion pair for the entire function type
             let prefixed_original_type = prefix_exported_types_in_type(
-                ty,
+                &original_ty,
                 &config.crate_ident(),
                 config.exported_types,
                 config.strip_prefixes,
@@ -248,7 +251,7 @@ pub(crate) fn replace_types_in_type(
         // Generate assertion pair by stripping both types to same level
         if core_type_changed {
             let prefixed_original_type = prefix_exported_types_in_type(
-                ty,
+                &original_ty,
                 &config.crate_ident(),
                 config.exported_types,
                 config.strip_prefixes,
@@ -666,16 +669,20 @@ fn prefix_exported_types_in_type(
             if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
 
-                // Only prefix if the last serment is an exported type and if remaining segments is empty
-                // of contained in the stripped paths
+                // Only prefix if the last segment is an exported type
                 if exported_types.contains(&type_name) {
-                    // Check if the type path is empty or if it starts with any of the strip prefixes
-                    if type_path.path.segments.len() == 1
-                        || strip_prefixes
-                            .iter()
-                            .any(|p| path_starts_with(&type_path.path, p))
-                    {
+                    // Check if the type path is a single segment or starts with any of the strip prefixes
+                    if type_path.path.segments.len() == 1 {
+                        // Single segment exported type: Foo -> example_ffi::Foo
                         return syn::parse_quote! { #source_crate_ident::#type_path };
+                    } else {
+                        // Multi-segment path: check if it starts with a strip prefix
+                        for prefix in strip_prefixes {
+                            if path_starts_with(&type_path.path, prefix) {
+                                // Path starts with strip prefix: foo::Foo -> example_ffi::foo::Foo
+                                return syn::parse_quote! { #source_crate_ident::#type_path };
+                            }
+                        }
                     }
                 }
 
