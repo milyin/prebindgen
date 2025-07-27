@@ -29,7 +29,7 @@ use crate::{
 pub struct Builder {
     pub(crate) source_crate_name: String,
     pub(crate) allowed_prefixes: Vec<syn::Path>,
-    pub(crate) strip_prefixes: Vec<syn::Path>,
+    pub(crate) prefixed_exported_types: Vec<syn::Path>,
     pub(crate) transparent_wrappers: Vec<syn::Path>,
     pub(crate) edition: String,
 }
@@ -41,7 +41,7 @@ impl Builder {
         Self {
             source_crate_name: source_crate_name.into(),
             allowed_prefixes: generate_standard_allowed_prefixes(),
-            strip_prefixes: Vec::new(),
+            prefixed_exported_types: Vec::new(),
             transparent_wrappers: Vec::new(),
             edition: "2021".to_string(),
         }
@@ -111,16 +111,17 @@ impl Builder {
         self
     }
 
-    /// Remove this prefix from types in structure fields and function parameters
-    /// This may be useful for types which are used with their module name prefix in the source code.
+    /// Add a full exported type path that should have its prefix stripped
+    /// This accepts the full path to an exported type (e.g., "foo::Foo") and will
+    /// strip the prefix only from this specific type when generating FFI stubs.
     #[roxygen]
-    pub fn strip_type_prefix<S: AsRef<str>>(
+    pub fn prefixed_exported_type<S: AsRef<str>>(
         mut self,
-        /// The type prefix to strip from FFI function parameters
-        prefix: S,
+        /// The full path to the exported type (e.g., "foo::Foo")
+        full_type_path: S,
     ) -> Self {
-        let path: syn::Path = syn::parse_str(prefix.as_ref()).unwrap();
-        self.strip_prefixes.push(path);
+        let path: syn::Path = syn::parse_str(full_type_path.as_ref()).unwrap();
+        self.prefixed_exported_types.push(path);
         self
     }
 
@@ -223,7 +224,7 @@ impl FfiConverter {
                 crate_name: &self.builder.source_crate_name,
                 exported_types: &self.exported_types,
                 allowed_prefixes: &self.builder.allowed_prefixes,
-                strip_prefixes: &self.builder.strip_prefixes,
+                prefixed_exported_types: &self.builder.prefixed_exported_types,
                 transparent_wrappers: &self.builder.transparent_wrappers,
                 edition: &self.builder.edition,
             };

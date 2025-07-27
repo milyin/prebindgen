@@ -41,7 +41,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
         .strip_transparent_wrapper("std::option::Option") // Strip Option wrapper
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
-        .strip_type_prefix("foo")
+        .prefixed_exported_type("foo::Foo")
         .build();
 
     // Do the conversion: take stream of syn::Item from source, process them with necessary
