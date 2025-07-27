@@ -20,7 +20,7 @@ pub const EXAMPLE_RESULT_ERROR: example_result = -1;
 include!(concat!(env!("OUT_DIR"), "/bar.rs"));
 
 // Separate mod to demonstrate "strip_type_prefix" feature
-mod foo {
+pub mod foo {
     use prebindgen_proc_macro::prebindgen;
 
     #[prebindgen("structs")]

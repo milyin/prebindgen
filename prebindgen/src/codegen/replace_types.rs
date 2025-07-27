@@ -197,8 +197,12 @@ pub(crate) fn replace_types_in_type(
 
         // Generate assertion pair by stripping both types to same level
         if core_type_changed {
-            let prefixed_original_type =
-                prefix_exported_types_in_type(ty, &config.crate_ident(), config.exported_types);
+            let prefixed_original_type = prefix_exported_types_in_type(
+                ty,
+                &config.crate_ident(),
+                config.exported_types,
+                config.strip_prefixes,
+            );
 
             // Strip both types to the same level until first path type
             let (local_stripped, original_stripped) =
@@ -556,15 +560,24 @@ fn prefix_exported_types_in_type(
     ty: &syn::Type,
     source_crate_ident: &syn::Ident,
     exported_types: &HashSet<String>,
+    strip_prefixes: &[syn::Path],
 ) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
             if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
 
-                // Only prefix if this is an exported type
-                if exported_types.contains(&type_name) && type_path.path.segments.len() == 1 {
-                    return syn::parse_quote! { #source_crate_ident::#type_path };
+                // Only prefix if the last serment is an exported type and if remaining segments is empty
+                // of contained in the stripped paths
+                if exported_types.contains(&type_name) {
+                    // Check if the type path is empty or if it starts with any of the strip prefixes
+                    if type_path.path.segments.len() == 1
+                        || strip_prefixes
+                            .iter()
+                            .any(|p| path_starts_with(&type_path.path, p))
+                    {
+                        return syn::parse_quote! { #source_crate_ident::#type_path };
+                    }
                 }
 
                 // Handle generic arguments recursively
@@ -580,6 +593,7 @@ fn prefix_exported_types_in_type(
                                         inner_ty,
                                         source_crate_ident,
                                         exported_types,
+                                        strip_prefixes,
                                     );
                                 }
                             }
@@ -601,6 +615,7 @@ fn prefix_exported_types_in_type(
                 &type_ref.elem,
                 source_crate_ident,
                 exported_types,
+                strip_prefixes,
             )),
         }),
         syn::Type::Ptr(type_ptr) => syn::Type::Ptr(syn::TypePtr {
@@ -611,6 +626,7 @@ fn prefix_exported_types_in_type(
                 &type_ptr.elem,
                 source_crate_ident,
                 exported_types,
+                strip_prefixes,
             )),
         }),
         _ => ty.clone(),
