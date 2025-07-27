@@ -2,9 +2,11 @@
 
 use quote::ToTokens;
 
+use crate::SourceLocation;
+
 /// Extract alignment value from a struct's repr attribute
-pub fn struct_align(item: &syn::Item) -> Option<(String, u32)> {
-    if let syn::Item::Struct(s) = item {
+pub fn struct_align(item: (syn::Item, SourceLocation)) -> Option<(String, u32)> {
+    if let (syn::Item::Struct(s), _) = item {
         s.attrs.iter().find_map(|attr| {
             if attr.path().is_ident("repr") {
                 let tokens_str = attr.meta.to_token_stream().to_string();
