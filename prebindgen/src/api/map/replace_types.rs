@@ -68,33 +68,39 @@ struct TypeReplacer<'a> {
 
 impl<'a> VisitMut for TypeReplacer<'a> {
     fn visit_type_mut(&mut self, ty: &mut Type) {
-        if let Type::Path(TypePath { path, .. }) = ty {
-            if path.segments.len() == 1 {
-                if let Some(first_segment) = path.segments.first() {
-                    let type_name = first_segment.ident.to_string();
-                    if let Some(replacement) = self.replacements.get(&type_name) {
-                        if let Ok(Type::Path(TypePath { path: new_path, .. })) = syn::parse_str::<Type>(replacement) {
-                            // Preserve the generic arguments from the original segment
-                            let mut original_args = first_segment.arguments.clone();
-                            // Recursively process generic arguments
-                            if let syn::PathArguments::AngleBracketed(ref mut args) = original_args {
-                                for arg in &mut args.args {
-                                    if let syn::GenericArgument::Type(inner_ty) = arg {
-                                        self.visit_type_mut(inner_ty);
-                                    }
-                                }
-                            }
-                            let mut new_segments = new_path.segments;
-                            if let Some(last_segment) = new_segments.last_mut() {
-                                last_segment.arguments = original_args;
-                            }
-                            path.segments = new_segments;
-                            return;
-                        }
-                    }
+        let Type::Path(TypePath { path, .. }) = ty else {
+            return syn::visit_mut::visit_type_mut(self, ty);
+        };
+        
+        if path.segments.len() != 1 {
+            return syn::visit_mut::visit_type_mut(self, ty);
+        }
+        
+        let first_segment = path.segments.first().unwrap();
+        let type_name = first_segment.ident.to_string();
+        
+        let Some(replacement) = self.replacements.get(&type_name) else {
+            return syn::visit_mut::visit_type_mut(self, ty);
+        };
+        
+        let Ok(Type::Path(TypePath { path: new_path, .. })) = syn::parse_str::<Type>(replacement) else {
+            return syn::visit_mut::visit_type_mut(self, ty);
+        };
+        
+        // Preserve and process generic arguments
+        let mut original_args = first_segment.arguments.clone();
+        if let syn::PathArguments::AngleBracketed(ref mut args) = original_args {
+            for arg in &mut args.args {
+                if let syn::GenericArgument::Type(inner_ty) = arg {
+                    self.visit_type_mut(inner_ty);
                 }
             }
         }
-        syn::visit_mut::visit_type_mut(self, ty);
+        
+        // Apply replacement with preserved arguments
+        path.segments = new_path.segments;
+        if let Some(last_segment) = path.segments.last_mut() {
+            last_segment.arguments = original_args;
+        }
     }
 }
