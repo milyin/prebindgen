@@ -31,7 +31,7 @@ fn generate_ffi_bindings() -> PathBuf {
     // Create replacer for types without full paths
     let type_replacer = prebindgen::map::replace_types::Builder::new()
         .replace_type("Option", "std::option::Option")
-        .replace_type("MaybeUninit", "std::mem::MaybeUninit")
+        .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
         .build();
 
     // Create converter from the source items to FFI proxy items. It needs original crate name

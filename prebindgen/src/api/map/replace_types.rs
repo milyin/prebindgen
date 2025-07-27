@@ -72,14 +72,13 @@ impl<'a> VisitMut for TypeReplacer<'a> {
             return syn::visit_mut::visit_type_mut(self, ty);
         };
         
-        if path.segments.len() != 1 {
-            return syn::visit_mut::visit_type_mut(self, ty);
-        }
+        // Convert current path to string for matching
+        let current_path = path.segments.iter()
+            .map(|seg| seg.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::");
         
-        let first_segment = path.segments.first().unwrap();
-        let type_name = first_segment.ident.to_string();
-        
-        let Some(replacement) = self.replacements.get(&type_name) else {
+        let Some(replacement) = self.replacements.get(&current_path) else {
             return syn::visit_mut::visit_type_mut(self, ty);
         };
         
@@ -87,8 +86,8 @@ impl<'a> VisitMut for TypeReplacer<'a> {
             return syn::visit_mut::visit_type_mut(self, ty);
         };
         
-        // Preserve and process generic arguments
-        let mut original_args = first_segment.arguments.clone();
+        // Preserve and process generic arguments from the last segment
+        let mut original_args = path.segments.last().unwrap().arguments.clone();
         if let syn::PathArguments::AngleBracketed(ref mut args) = original_args {
             for arg in &mut args.args {
                 if let syn::GenericArgument::Type(inner_ty) = arg {
