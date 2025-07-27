@@ -27,7 +27,23 @@ pub mod foo {
 
     #[prebindgen("structs")]
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Copy, Clone, Debug, PartialEq, Default)]
+    pub struct InsideFoo {
+        pub field: u64,
+    }
+
+    // This Default implementation is not copied to the generated code,
+    // so StripDerives is used to strip Default derive from the structures
+    // depending on it
+    // impl Default for InsideFoo {
+    //     fn default() -> Self {
+    //         InsideFoo { field: 42 }
+    //     }
+    // }
+
+    #[prebindgen("structs")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq, Default)]
     pub struct Foo {
         // Demonstrate that for #cfg macro all works transparently
         #[cfg(target_arch = "x86_64")]
@@ -42,6 +58,7 @@ pub mod foo {
         pub unstable_or_internal_field: u64,
         #[cfg(all(feature = "unstable", feature = "internal"))]
         pub unstable_and_internal_field: u64,
+        pub inside: InsideFoo,
     }
 }
 

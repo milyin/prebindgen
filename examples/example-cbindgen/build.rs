@@ -28,6 +28,11 @@ fn generate_ffi_bindings() -> PathBuf {
         .disable_feature("internal") // Disable internal features
         .build();
 
+    // Create filter for stripping derives
+    let strip_derives = prebindgen::map::StripDerives::builder()
+        .strip_derive("Default") // Strip Default derive from structs
+        .build();
+
     // Create replacer for types without full paths
     let type_replacer = prebindgen::map::replace_types::Builder::new()
         .replace_type("Option", "std::option::Option")
@@ -42,12 +47,14 @@ fn generate_ffi_bindings() -> PathBuf {
         .strip_transparent_wrapper("std::option::Option") // Strip Option wrapper
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
         .prefixed_exported_type("foo::Foo")
+        .prefixed_exported_type("foo::InsideFoo")
         .build();
 
     // Do the conversion: take stream of syn::Item from source, process them with necessary
     // filters and dtore to destination rust file
     let bindings_file = source
         .items_all()
+        .map(strip_derives.into_closure())
         .map(type_replacer.into_closure())
         .filter_map(feature_filter.into_closure())
         .batching(converter.into_closure())
