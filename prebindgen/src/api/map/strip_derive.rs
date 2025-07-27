@@ -83,13 +83,11 @@ impl StripDerives {
                         .filter(|path| !self.builder.derive_attrs.contains(&path.get_ident().unwrap().to_string()))
                         .collect();
                     
-                    if !filtered.is_empty() {
-                        attr.meta = syn::Meta::List(syn::MetaList {
-                            path: attr.path().clone(),
-                            delimiter: syn::MacroDelimiter::Paren(Default::default()),
-                            tokens: filtered.to_token_stream(),
-                        });
-                    }
+                    attr.meta = syn::Meta::List(syn::MetaList {
+                        path: attr.path().clone(),
+                        delimiter: syn::MacroDelimiter::Paren(Default::default()),
+                        tokens: filtered.to_token_stream(),
+                    });
                 }
             }
         }

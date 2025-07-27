@@ -43,7 +43,8 @@ pub mod foo {
 
     #[prebindgen("structs")]
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, PartialEq, Default)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Default)]
     pub struct Foo {
         // Demonstrate that for #cfg macro all works transparently
         #[cfg(target_arch = "x86_64")]
