@@ -1,6 +1,29 @@
 // Include the combined example_ffi bindings file from OUT_DIR
 include!(concat!(env!("OUT_DIR"), "/example_ffi.rs"));
 
+// This conversion is added to test if the Bar generated correctly in build.rs
+//
+// The problem is that the crates dependent on the example-ffi adds example-ffi to their build.rs dependencies
+// and by this extracts and processes the `#[prebindgen]`-marked code.
+// So the generation of Bar is performed on the host architecture.
+// The example-ffi/build.rs should ensure that both variants of Bar are generated (correctly marked with `#[cfg(target_arch=...`)] tags):
+// - one for the host architecture (std::env::var("TARGET") in build.rs) - to ensure that the code compiles in example-cbindgen/build.rs
+// - one for the target architecture (std::env::var("PREBINDGEN_TARGET") in build.rs) - to allow #[prebindgen] macro to generate correct code for the target architecture
+impl From<Bar> for LocalBar {
+    fn from(bar: Bar) -> Self {
+        #[cfg(target_arch = "x86_64")]
+        return LocalBar {
+            x86_64_field: bar.x86_64_field,
+        };
+        #[cfg(target_arch = "aarch64")]
+        return LocalBar {
+            aarch64_field: bar.aarch64_field,
+        };
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -30,7 +53,7 @@ mod tests {
                 #[cfg(target_arch = "aarch64")]
                 aarch64_field: 12345,
                 stable_field: 54321,
-                inside: InsideFoo { field: 67890 },
+                inside: InsideFoo::DouddleDee,
             };
 
             // Test get_foo_field function
@@ -107,7 +130,7 @@ mod tests {
                 #[cfg(target_arch = "aarch64")]
                 aarch64_field: 999,
                 stable_field: 777,
-                inside: InsideFoo { field: 888 },
+                inside: InsideFoo::DouddleDee,
             };
 
             let mut dst_foo = MaybeUninit::<Foo>::uninit();

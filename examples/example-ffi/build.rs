@@ -1,3 +1,26 @@
+use std::io::Write;
+
+fn generate_for_target(target: &str, filename: &str) {
+    let arch = if target.contains("x86_64") {
+        "x86_64"
+    } else if target.contains("aarch64") {
+        "aarch64"
+    } else {
+        panic!("Unsupported architecture: {target}");
+    };
+    
+    let bar = format!("#[prebindgen(\"structs\")]\n#[cfg(target_arch = \"{arch}\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar {{ pub {arch}_field: u64 }}\n");
+    
+    prebindgen::trace!("Generating {filename} for target: {target}");
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(filename)
+        .unwrap()
+        .write_all(bar.as_bytes())
+        .unwrap();
+}
+
 fn main() {
     prebindgen::init_prebindgen_out_dir();
 
@@ -17,21 +40,17 @@ fn main() {
     // PREBINDGEN_TARGET=x86_64-unknown-linux-gnu cargo build --target x86_64-unknown-linux-gnu
     // ```
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    let generate_for_target = |target: &str| {
-        let bar = if target.contains("x86_64") {
-            "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub x86_64_field: u64 }".to_string()
-        } else if target.contains("aarch64") {
-            "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
-        } else {
-            panic!("Unsupported architecture: {target}");
-        };
-        // write with append
-        let bar_rs = format!("{out_dir}/bar.rs");
-        prebindgen::trace!("Generating {bar_rs} for target: {target}");
-        std::fs::write(bar_rs, bar).unwrap();
-    };
-    if let Ok(target) = std::env::var("PREBINDGEN_TARGET") {
-        generate_for_target(&target);
+    let bar_rs = format!("{out_dir}/bar.rs");
+    
+    let current_target = std::env::var("TARGET").unwrap();
+    let prebindgen_target = std::env::var("PREBINDGEN_TARGET").ok();
+    
+    std::fs::remove_file(&bar_rs).ok();
+    
+    if let Some(ref target) = prebindgen_target {
+        if target != &current_target {
+            generate_for_target(target, &bar_rs);
+        }
     }
-    generate_for_target(&std::env::var("TARGET").unwrap());
+    generate_for_target(&current_target, &bar_rs);
 }
