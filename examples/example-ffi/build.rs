@@ -10,7 +10,7 @@ fn generate_for_target(target: &str, filename: &str, prebindgen: Option<bool>) {
     };
 
     let mut bar= if let Some(skip) = prebindgen {
-        format!("#[prebindgen(\"structs\", skip = {skip})]\n").into()
+        format!("#[prebindgen(\"structs\", skip = {skip})]\n")
     } else {
         String::new()
     };
