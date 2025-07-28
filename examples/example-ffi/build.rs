@@ -1,3 +1,34 @@
+use std::io::Write;
+
+fn generate_for_target(target: &str, filename: &str, prebindgen: Option<bool>) {
+    let arch = if target.contains("x86_64") {
+        "x86_64"
+    } else if target.contains("aarch64") {
+        "aarch64"
+    } else {
+        panic!("Unsupported architecture: {target}");
+    };
+
+    let mut bar= if let Some(skip) = prebindgen {
+        format!("#[prebindgen(\"structs\", skip = {skip})]\n").into()
+    } else {
+        String::new()
+    };
+    
+    bar.push_str(&format!(
+        "#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar {{ pub {arch}_field: u64 }}\n"
+    ));
+
+    prebindgen::trace!("Generating {filename} for target: {target}");
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(filename)
+        .unwrap()
+        .write_all(bar.as_bytes())
+        .unwrap();
+}
+
 fn main() {
     prebindgen::init_prebindgen_out_dir();
 
@@ -6,32 +37,31 @@ fn main() {
     //
     // Simulate the case when part of the source code is generated in example-ffi/build.rs and this code
     // depends on the target architecture.
-    // In this case the example-ffi/build.rs is called twice:
-    // - once for the host platform as a dependency for example-cbindgen/build.rs, The goal: generate the OUT_DIR/prebindgen.rs file
-    // - once for the target platform as a dependency for example-ffi itself. The goal: build the binding library for the target platform.
-    // The problem is that on the host platform call the target architecture is unknown, but example-ffi/build.rs should generate the source code for it.
-    // To make things work correctly the target architecture must be passed by some independent from cargo environment variable.
-    // ( PREBINDGEN_TARGET in this case ).
+    //
+    // Specially for this situation the "skip" attribute is supported in the `#[prebindgen]` macro.
+    // It allows to produce 2 variants of the generated code: one for host platform (std::env::var("TARGET") in build.rs)
+    // not intrumented with `#[prebindgen]` macro and one for the target platform (std::env::var("CROSS_TARGET") in build.rs)
+    // which is instrumented with `#[prebindgen]` macro but skipped in the host build.
+    //
     // E.g. to cross-build for x86_64-unknown-linux-gnu run
     // ```sh
-    // PREBINDGEN_TARGET=x86_64-unknown-linux-gnu cargo build --target x86_64-unknown-linux-gnu
+    // CROSS_TARGET=x86_64-unknown-linux-gnu cargo build --target x86_64-unknown-linux-gnu
     // ```
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    let generate_for_target = |target: &str| {
-        let bar = if target.contains("x86_64") {
-            "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub x86_64_field: u64 }".to_string()
-        } else if target.contains("aarch64") {
-            "#[prebindgen(\"structs\")]\n#[repr(C)]\n#[derive(Copy, Clone, Debug, PartialEq)]\npub struct Bar { pub aarch64_field: u64 }".to_string()
-        } else {
-            panic!("Unsupported architecture: {target}");
-        };
-        // write with append
-        let bar_rs = format!("{out_dir}/bar.rs");
-        prebindgen::trace!("Generating {bar_rs} for target: {target}");
-        std::fs::write(bar_rs, bar).unwrap();
-    };
-    if let Ok(target) = std::env::var("PREBINDGEN_TARGET") {
-        generate_for_target(&target);
+    let bar_rs = format!("{out_dir}/bar.rs");
+
+    let current_target = std::env::var("TARGET").unwrap();
+    let cross_target = std::env::var("CROSS_TARGET")
+        .ok()
+        .filter(|s| s != &current_target);
+
+    std::fs::remove_file(&bar_rs).ok();
+    if let Some(ref cross_target) = cross_target {
+        // Bar definition for the host, wihtout prebindgen generation
+        generate_for_target(&current_target, &bar_rs, None);
+        // Bar definition for the target, skipped on the host but generated prebindgen data for the target
+        generate_for_target(cross_target, &bar_rs, Some(true));
+    } else {
+        generate_for_target(&current_target, &bar_rs, Some(false));
     }
-    generate_for_target(&std::env::var("TARGET").unwrap());
 }
