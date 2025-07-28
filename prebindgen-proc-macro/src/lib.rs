@@ -15,9 +15,11 @@ use quote::quote;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
-use syn::LitStr;
+use syn::{LitStr, LitBool, Ident};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
+use syn::parse::{Parse, ParseStream};
+use syn::{Token, Result};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
 fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
@@ -51,6 +53,55 @@ fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
             .to_compile_error()
             .into()
         }
+    }
+}
+
+/// Arguments for the prebindgen macro
+struct PrebindgenArgs {
+    group: String,
+    skip: bool,
+}
+
+impl Parse for PrebindgenArgs {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut group = DEFAULT_GROUP_NAME.to_string();
+        let mut skip = false;
+
+        if input.is_empty() {
+            return Ok(PrebindgenArgs { group, skip });
+        }
+
+        // Parse first argument
+        if input.peek(LitStr) {
+            // First argument is a string literal (group name)
+            let group_lit: LitStr = input.parse()?;
+            group = group_lit.value();
+            
+            // Check for comma and skip attribute
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+                let skip_ident: Ident = input.parse()?;
+                if skip_ident != "skip" {
+                    return Err(syn::Error::new_spanned(skip_ident, "Expected 'skip'"));
+                }
+                input.parse::<Token![=]>()?;
+                let skip_lit: LitBool = input.parse()?;
+                skip = skip_lit.value();
+            }
+        } else if input.peek(Ident) {
+            // First argument is an identifier (should be 'skip')
+            let skip_ident: Ident = input.parse()?;
+            if skip_ident != "skip" {
+                return Err(syn::Error::new_spanned(skip_ident, "Expected 'skip'"));
+            }
+            input.parse::<Token![=]>()?;
+            let skip_lit: LitBool = input.parse()?;
+            skip = skip_lit.value();
+        } else {
+            return Err(syn::Error::new(input.span(), "Invalid argument format"));
+        }
+
+        Ok(PrebindgenArgs { group, skip })
     }
 }
 
@@ -122,16 +173,14 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 ///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
 /// }
 ///
-/// // Type aliases are also supported
-/// #[prebindgen]
-/// pub type example_result = i8;
+/// // Generate all the output for further processing but do not pass code to the compiler
+/// #[prebindgen(skip = true)]
+/// pub fn internal_function() -> i32 {
+///     42
+/// }
 ///
-/// // Constants are also supported
-/// #[prebindgen]
-/// pub const MAX_BUFFER_SIZE: usize = 1024;
-///
-/// // Or specify a group name
-/// #[prebindgen("functions")]
+/// // Combine group name with skip
+/// #[prebindgen("functions", skip = true)]
 /// pub fn another_function() -> i32 {
 ///     42
 /// }
@@ -141,18 +190,16 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 ///
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
 /// - Optionally takes a string literal group name for organization (defaults to "default")
+/// - Optionally takes `skip = true` to remove the item from compilation output
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
 
-    // Parse optional group name literal - use default if not provided
-    let group = if args.is_empty() {
-        DEFAULT_GROUP_NAME.to_string()
-    } else {
-        let group_lit = syn::parse::<LitStr>(args)
-            .expect("`#[prebindgen]` group name must be a string literal");
-        group_lit.value()
-    };
+    // Parse arguments
+    let parsed_args = syn::parse::<PrebindgenArgs>(args)
+        .expect("Invalid #[prebindgen] arguments");
+    
+    let group = parsed_args.group;
 
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
@@ -237,6 +284,11 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
-    // Return the original input unchanged
-    input_clone
+    if parsed_args.skip {
+        // If skip is true, return empty token stream (eat the input)
+        TokenStream::new()
+    } else {
+        // Otherwise return the original input unchanged
+        input_clone
+    }
 }

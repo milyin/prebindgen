@@ -8,7 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/example_ffi.rs"));
 // So the generation of Bar is performed on the host architecture.
 // The example-ffi/build.rs should ensure that both variants of Bar are generated (correctly marked with `#[cfg(target_arch=...`)] tags):
 // - one for the host architecture (std::env::var("TARGET") in build.rs) - to ensure that the code compiles in example-cbindgen/build.rs
-// - one for the target architecture (std::env::var("PREBINDGEN_TARGET") in build.rs) - to allow #[prebindgen] macro to generate correct code for the target architecture
+// - one for the target architecture (std::env::var("CROSS_TARGET") in build.rs) - to allow #[prebindgen] macro to generate correct code for the target architecture
 impl From<Bar> for LocalBar {
     fn from(bar: Bar) -> Self {
         #[cfg(target_arch = "x86_64")]
