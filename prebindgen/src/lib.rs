@@ -22,8 +22,11 @@
 //!
 //! ## Usage example
 //!
-//! See also example projects on https://github.com/milyin/prebindgen/tree/main/examples
-//! 
+//! See also example projects on <https://github.com/milyin/prebindgen/tree/main/examples>
+//!
+//! See also the prebindgen-proc-macro documentation for details on how to use the `#[prebindgen]` macro:
+//! <https://docs.rs/prebindgen-proc-macro/latest/prebindgen_proc_macro/>
+//!
 //! ### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:

@@ -107,4 +107,5 @@ See example projects on https://github.com/milyin/prebindgen/tree/main/examples
 
 ## Documentation
 
-- **API Reference**: See the [docs.rs documentation](https://docs.rs/prebindgen) for complete API details
+- **prebindgen API Reference**: [docs.rs/prebindgen](https://docs.rs/prebindgen)
+- **prebindgen-proc-macro API Reference**: [docs.rs/prebindgen-proc-macro](https://docs.rs/prebindgen-proc-macro)

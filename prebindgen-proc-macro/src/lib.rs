@@ -6,9 +6,6 @@
 //! - `#[prebindgen]` or `#[prebindgen("group")]` - Attribute macro for marking FFI definitions
 //! - `prebindgen_out_dir!()` - Macro that returns the prebindgen output directory path
 //!
-//! These macros are typically imported from the main `prebindgen` crate rather than
-//! used directly from this crate.
-
 use prebindgen::{DEFAULT_GROUP_NAME, Record, RecordKind, SourceLocation, get_prebindgen_out_dir};
 use proc_macro::TokenStream;
 use quote::quote;
