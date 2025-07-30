@@ -20,8 +20,10 @@
 //! Language-specific binding crates can then compile this generated code and pass it to their respective
 //! binding generators (such as cbindgen, csbindgen, etc.).
 //!
-//! ## How to Use
+//! ## Usage example
 //!
+//! See also example projects on https://github.com/milyin/prebindgen/tree/main/examples
+//! 
 //! ### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
@@ -153,7 +155,7 @@ pub mod map {
     }
 }
 
-/// Collectors for sequences of (syn::Item, SourceLocation) called by `collect`
+/// Collectors for sequences of (syn::Item, SourceLocation) produced by `collect`
 pub mod collect {
     pub use crate::api::collect::destination::Destination;
 }
