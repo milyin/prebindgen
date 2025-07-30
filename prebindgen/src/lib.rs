@@ -22,11 +22,11 @@
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 //!
-//! ```rust,ignore
+//! ```rust
 //! use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 //!
 //! // Declare a public constant with the path to prebindgen data:
-//! pub const PREBINDGEN_OUT_DIR : &str = prebindgen_out_dir!();
+//! pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 //!
 //! // Group structures and functions for selective handling
 //! #[prebindgen("structs")]
@@ -41,10 +41,9 @@
 //! }
 //! ```
 //!
-//! Call `init_prebindgen_out_dir()` in the crate's `build.rs`:
+//! Call [`init_prebindgen_out_dir`] in the crate's `build.rs`:
 //!
-//! ```rust,ignore
-//! // build.rs
+//! ```rust,no_run
 //! use prebindgen::init_prebindgen_out_dir;
 //!
 //! fn main() {
@@ -65,23 +64,33 @@
 //! In the binding crate's `build.rs`:
 //!
 //! ```rust,ignore
-//! use std::path::PathBuf;
+//! use prebindgen::{Source, batching::ffi_converter, filter_map::feature_filter, collect::Destination};
+//! use itertools::Itertools;
 //!
 //! fn main() {
-//!     // Create a prebindgen builder with the path from the common FFI crate
-//!     let pb = prebindgen::Builder::new(my_common_ffi::PREBINDGEN_OUT_DIR)
-//!         .allowed_prefix("libc::")  // Allow libc types
-//!         .allowed_prefix("core::")  // Allow core types
-//!         .disable_feature("experimental")  // Skip experimental features
-//!         .enable_feature("std")            // Include std features without cfg
-//!         .match_feature("internal", "public")  // Map feature names
-//!         .build();
+//!     // Create a source from the common FFI crate's prebindgen data
+//!     let source = Source::new(my_common_ffi::PREBINDGEN_OUT_DIR);
 //!
-//!     // Generate all FFI functions and types
-//!     let bindings_file = pb.all().write_to_file("ffi_bindings.rs");
+//!     // Process items with filtering and conversion
+//!     let destination = source
+//!         .items_all()
+//!         .filter_map(feature_filter::Builder::new()
+//!             .disable_feature("experimental")
+//!             .enable_feature("std")
+//!             .build()
+//!             .into_closure())
+//!         .batching(ffi_converter::Builder::new(source.crate_name())
+//!             .allowed_prefix("libc::")
+//!             .allowed_prefix("core::")
+//!             .build()
+//!             .into_closure())
+//!         .collect::<Destination>();
+//!
+//!     // Write generated FFI code to file
+//!     let bindings_file = destination.write("ffi_bindings.rs");
 //!
 //!     // Pass the generated file to cbindgen for C header generation
-//!     generate_c_headers(&bindings_file);
+//!     // generate_c_headers(&bindings_file);
 //! }
 //! ```
 //!
@@ -161,6 +170,8 @@ macro_rules! doctest_setup {
         let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
         std::fs::create_dir_all(&fallback_dir).unwrap();
         std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
+        // Set the OUT_DIR environment variable to point to our fallback directory
+        unsafe { std::env::set_var("OUT_DIR", &fallback_dir); }
         mod source_ffi {
             use prebindgen_proc_macro::prebindgen_out_dir;
             pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
