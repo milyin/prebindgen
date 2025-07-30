@@ -167,14 +167,49 @@ enum GenerationStage {
     /// These types will be copied to the destination file and transmuted to the original crate types when
     /// performing the ffi calls
     Collect,
-    /// Second stage: copy $[prebindgen] marked types and functions to the destination file
+    /// Second stage: copy #[prebindgen] marked types and functions to the destination file
     /// with necessary type name adjustments and generating function stubs
     Convert,
     /// Third stage: generate assertions for correctness of type transmute operations
     Followup,
 }
 
-/// Ffi structure that mirrors Prebindgen functionality without file operations
+/// Converts prebindgen items into FFI-compatible Rust code for language-specific binding generation
+///
+/// The `FfiConverter` is the core component that transforms items marked with `#[prebindgen]`
+/// from a source FFI crate into a Rust file suitable for:
+/// 1. **Binding generation**: Passing to tools like cbindgen, csbindgen, etc.
+/// 2. **Library compilation**: Including as Rust source to create C-style static or dynamic libraries
+///
+/// # Functionality
+///
+/// The converter transforms prebindgen items by:
+/// - Converting regular Rust functions into `#[no_mangle] extern "C"` proxy functions
+/// - Copying type definitions with necessary adjustments for FFI compatibility
+/// - Handling type transmutations between source and destination crate types
+/// - Generating compile-time assertions to ensure type safety
+///
+/// # Example
+///
+/// ```
+/// # prebindgen::doctest_setup!();
+/// # use itertools::Itertools;
+/// // In build.rs of a language-specific binding crate
+/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+/// 
+/// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
+///     .edition("2024")
+///     .strip_transparent_wrapper("std::option::Option")
+///     .strip_transparent_wrapper("std::mem::MaybeUninit")
+///     .build();
+/// 
+/// // Process items using itertools::batching
+/// let processed_items: Vec<_> = source
+///     .items_all()
+///     .batching(converter.into_closure())
+///     .take(0) // Take 0 for doctest
+///     .collect();
+/// ```
 pub struct FfiConverter {
     pub(crate) builder: Builder,
     /// Current generation stage
@@ -190,7 +225,20 @@ pub struct FfiConverter {
 }
 
 impl FfiConverter {
-    /// Create a builder for creating an FFI converter instance
+    /// Create a builder for configuring an FFI converter instance
+    ///
+    /// # Parameters
+    ///
+    /// * `source_crate_name` - Name of the source crate containing `#[prebindgen]` items
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi")
+    ///     .edition("2024")
+    ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
+    ///     .build();
+    /// ```
     pub fn builder(source_crate_name: impl Into<String>) -> Builder {
         Builder::new(source_crate_name)
     }
@@ -276,7 +324,19 @@ impl FfiConverter {
         }
     }
 
-    /// Call method for use with batching - wrap in closure: |iter| rust_ffi.call(iter)
+    /// Process items from an iterator in batching mode
+    ///
+    /// This method implements the three-stage conversion process, consuming items
+    /// from the iterator and returning converted FFI-compatible items one at a time.
+    /// Used internally by `into_closure()` for integration with `itertools::batching`.
+    ///
+    /// # Parameters
+    ///
+    /// * `iter` - Iterator over `(syn::Item, SourceLocation)` pairs from prebindgen data
+    ///
+    /// # Returns
+    ///
+    /// `Some((syn::Item, SourceLocation))` for each converted item, `None` when complete
     pub fn call<I>(&mut self, iter: &mut I) -> Option<(syn::Item, SourceLocation)>
     where
         I: Iterator<Item = (syn::Item, SourceLocation)>,
@@ -314,7 +374,29 @@ impl FfiConverter {
         }
     }
 
-    /// Convert to closure compatible with batching
+    /// Convert to closure compatible with `itertools::batching`
+    ///
+    /// This is the primary method for using `FfiConverter` in processing pipelines.
+    /// The returned closure must be passed to `itertools::batching()` to transform
+    /// a stream of prebindgen items into FFI-compatible Rust code.
+    ///
+    /// **Note**: Requires the `itertools` crate for the `batching` method.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # prebindgen::doctest_setup!();
+    /// # use itertools::Itertools;
+    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi").build();
+    /// 
+    /// // Use with itertools::batching
+    /// let processed_items: Vec<_> = source
+    ///     .items_all()
+    ///     .batching(converter.into_closure())
+    ///     .take(0) // Take 0 for doctest
+    ///     .collect();
+    /// ```
     pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<(syn::Item, SourceLocation)>
     where
         I: Iterator<Item = (syn::Item, SourceLocation)>,
