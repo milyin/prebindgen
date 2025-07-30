@@ -30,9 +30,12 @@ const JSONL_EXTENSION: &str = ".jsonl";
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// // In build.rs of a language-specific binding crate (destination project)
-/// let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
+/// ```
+/// # use std::path::Path;
+/// # let temp_dir = std::env::temp_dir().join("prebindgen_test");
+/// # std::fs::create_dir_all(&temp_dir).unwrap();
+/// # std::fs::write(temp_dir.join("crate_name.txt"), "test_crate").unwrap();
+/// let source = prebindgen::Source::new(&temp_dir);
 /// 
 /// // Process all items
 /// for (item, location) in source.items_all() {
@@ -84,10 +87,14 @@ impl Source {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
-    /// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
-    ///     .build();
+    /// ```
+    /// # use std::path::Path;
+    /// # let temp_dir = std::env::temp_dir().join("prebindgen_test2");
+    /// # std::fs::create_dir_all(&temp_dir).unwrap();
+    /// # std::fs::write(temp_dir.join("crate_name.txt"), "test_crate").unwrap();
+    /// let source = prebindgen::Source::new(&temp_dir);
+    /// let crate_name = source.crate_name();
+    /// assert_eq!(crate_name, "test_crate");
     /// ```
     pub fn crate_name(&self) -> &str {
         &self.crate_name
@@ -101,7 +108,12 @@ impl Source {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```
+    /// # use std::path::Path;
+    /// # let temp_dir = std::env::temp_dir().join("prebindgen_test3");
+    /// # std::fs::create_dir_all(&temp_dir).unwrap();
+    /// # std::fs::write(temp_dir.join("crate_name.txt"), "test_crate").unwrap();
+    /// let source = prebindgen::Source::new(&temp_dir);
     /// // Process only items from "structs" and "functions" groups
     /// for (item, location) in source.items_in_groups(&["structs", "functions"]) {
     ///     // Process item...
@@ -125,7 +137,12 @@ impl Source {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```
+    /// # use std::path::Path;
+    /// # let temp_dir = std::env::temp_dir().join("prebindgen_test4");
+    /// # std::fs::create_dir_all(&temp_dir).unwrap();
+    /// # std::fs::write(temp_dir.join("crate_name.txt"), "test_crate").unwrap();
+    /// let source = prebindgen::Source::new(&temp_dir);
     /// // Process all items except those in "internal" group
     /// for (item, location) in source.items_except_groups(&["internal"]) {
     ///     // Process item...
@@ -147,12 +164,17 @@ impl Source {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
+    /// ```
+    /// # use std::path::Path;
+    /// # let temp_dir = std::env::temp_dir().join("prebindgen_test5");
+    /// # std::fs::create_dir_all(&temp_dir).unwrap();
+    /// # std::fs::write(temp_dir.join("crate_name.txt"), "test_crate").unwrap();
+    /// let source = prebindgen::Source::new(&temp_dir);
     /// // Process all prebindgen items
     /// for (item, location) in source.items_all() {
     ///     match item {
-    ///         syn::Item::Struct(s) => { /* handle struct */ },
-    ///         syn::Item::Fn(f) => { /* handle function */ },
+    ///         syn::Item::Struct(_s) => { /* handle struct */ },
+    ///         syn::Item::Fn(_f) => { /* handle function */ },
     ///         _ => { /* handle other items */ }
     ///     }
     /// }
