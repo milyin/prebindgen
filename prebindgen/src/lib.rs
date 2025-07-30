@@ -15,8 +15,8 @@
 //!
 //! ## Solution
 //!
-//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a c
-//! common Rust library crate.
+//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a common
+//! Rust library crate.
 //! Language-specific binding crates can then compile this generated code and pass it to their respective
 //! binding generators (such as cbindgen, csbindgen, etc.).
 //!
