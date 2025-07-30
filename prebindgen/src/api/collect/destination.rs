@@ -25,7 +25,7 @@ use crate::SourceLocation;
 ///     .collect();
 ///
 /// // Check generated content
-/// assert!(destination.to_string().contains("extern \"C\""));
+/// assert!(destination.to_string().contains("pub struct TestStruct"));
 /// ```
 ///
 /// # File Writing
@@ -184,7 +184,7 @@ impl Destination {
     /// let destination: Destination = source.items_all().collect();
     ///
     /// let code = destination.to_string();
-    /// assert!(code.contains("extern \"C\""));
+    /// assert!(code.contains("pub fn test_function"));
     /// ```
     pub fn to_string(&self) -> String {
         prettyplease::unparse(&self.file)
