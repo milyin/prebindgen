@@ -25,7 +25,22 @@ use crate::{
     },
 };
 
-/// Builder for configuring RustFfi without file operations
+/// Builder for configuring FfiConverter instances
+///
+/// Configures how prebindgen items are converted into FFI-compatible Rust code
+/// with options for type handling, wrapper stripping, and code generation.
+///
+/// # Example
+///
+/// ```
+/// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
+///     .edition("2024")
+///     .strip_transparent_wrapper("std::mem::MaybeUninit")
+///     .strip_transparent_wrapper("std::option::Option")
+///     .allowed_prefix("libc")
+///     .prefixed_exported_type("foo::Foo")
+///     .build();
+/// ```
 pub struct Builder {
     pub(crate) source_crate_name: String,
     pub(crate) allowed_prefixes: Vec<syn::Path>,
@@ -35,7 +50,17 @@ pub struct Builder {
 }
 
 impl Builder {
-    /// Create a new RustFfi builder
+    /// Create a new Builder for configuring FfiConverter
+    ///
+    /// # Parameters
+    ///
+    /// * `source_crate_name` - Name of the source crate containing `#[prebindgen]` items
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi");
+    /// ```
     pub fn new(source_crate_name: impl Into<String>) -> Self {
         // Generate comprehensive allowed prefixes including standard prelude
         Self {
@@ -65,8 +90,8 @@ impl Builder {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
+    /// ```
+    /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
     ///     .allowed_prefix("libc")
     ///     .allowed_prefix("core");
     /// ```
@@ -95,8 +120,8 @@ impl Builder {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
+    /// ```
+    /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
     ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
     ///     .strip_transparent_wrapper("std::mem::ManuallyDrop");
     /// ```
@@ -135,8 +160,8 @@ impl Builder {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
+    /// ```
+    /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
     ///     .edition("2021");
     /// ```
     #[roxygen]
@@ -149,7 +174,15 @@ impl Builder {
         self
     }
 
-    /// Build the FfiConverter instance
+    /// Build the FfiConverter instance with the configured options
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let converter = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
+    ///     .edition("2024")
+    ///     .build();
+    /// ```
     pub fn build(self) -> FfiConverter {
         FfiConverter {
             builder: self,
