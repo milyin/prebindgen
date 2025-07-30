@@ -27,10 +27,21 @@ use crate::CRATE_NAME_FILE;
 /// }
 /// ```
 pub fn init_prebindgen_out_dir() {
-    // Get the crate name from CARGO_PKG_NAME
-    let crate_name = env::var("CARGO_PKG_NAME").expect(
-        "CARGO_PKG_NAME environment variable not set. This should be available in build.rs",
-    );
+    env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    init_prebindgen_out_dir_internal();
+}
+
+/// Internal implementation of prebindgen output directory initialization
+///
+/// This function performs the actual initialization work and can be called
+/// even when OUT_DIR is not set (e.g., during doctests).
+#[doc(hidden)]
+pub fn init_prebindgen_out_dir_internal() {
+    // Get the crate name from CARGO_PKG_NAME or use fallback
+    // For doctests, use "source_ffi" even if CARGO_PKG_NAME is set to "prebindgen"
+    let crate_name = env::var("CARGO_PKG_NAME")
+        .map(|name| if name == "prebindgen" { "source_ffi".to_string() } else { name })
+        .unwrap_or_else(|_| "source_ffi".to_string());
 
     // delete all files in the prebindgen directory
     let prebindgen_dir = get_prebindgen_out_dir();
@@ -75,7 +86,7 @@ const PREBINDGEN_DIR: &str = "prebindgen";
 #[doc(hidden)]
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
     let out_dir = std::env::var("OUT_DIR")
-        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+        .unwrap_or_else(|_| std::env::temp_dir().join("prebindgen_fallback").to_string_lossy().to_string());
     std::path::Path::new(&out_dir).join(PREBINDGEN_DIR)
 }
 

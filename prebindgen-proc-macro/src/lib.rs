@@ -15,11 +15,11 @@ use quote::quote;
 use std::fs::{OpenOptions, metadata};
 use std::io::Write;
 use std::path::Path;
-use syn::{LitStr, LitBool, Ident};
+use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
-use syn::parse::{Parse, ParseStream};
-use syn::{Token, Result};
+use syn::{Ident, LitBool, LitStr};
+use syn::{Result, Token};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
 fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
@@ -76,7 +76,7 @@ impl Parse for PrebindgenArgs {
             // First argument is a string literal (group name)
             let group_lit: LitStr = input.parse()?;
             group = group_lit.value();
-            
+
             // Check for comma and skip attribute
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
@@ -115,16 +115,8 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
         .strip_prefix("ThreadId(")
         .and_then(|s| s.strip_suffix(")"))
         .unwrap_or("0");
-    
-    let out_dir = match std::env::var("OUT_DIR") {
-        Ok(_) => get_prebindgen_out_dir(),
-        Err(_) => {
-            // OUT_DIR not available (e.g., in doc tests), use temp directory
-            std::env::temp_dir().join("prebindgen_fallback")
-        }
-    };
-    
-    out_dir.join(format!("{name}_{process_id}_{thread_id_num}.jsonl"))
+
+    get_prebindgen_out_dir().join(format!("{name}_{process_id}_{thread_id_num}.jsonl"))
 }
 
 /// Proc macro that returns the prebindgen output directory path as a string literal.
@@ -147,14 +139,7 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 /// ```
 #[proc_macro]
 pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
-    let file_path = match std::env::var("OUT_DIR") {
-        Ok(_) => get_prebindgen_out_dir(),
-        Err(_) => {
-            // OUT_DIR not available (e.g., in doc tests), use temp directory with warning
-            eprintln!("cargo:warning=OUT_DIR not available, using temp directory for prebindgen_out_dir!()");
-            std::env::temp_dir().join("prebindgen_fallback")
-        }
-    };
+    let file_path = get_prebindgen_out_dir();
     let path_str = file_path.to_string_lossy();
 
     // Return just the string literal
@@ -212,9 +197,8 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
 
     // Parse arguments
-    let parsed_args = syn::parse::<PrebindgenArgs>(args)
-        .expect("Invalid #[prebindgen] arguments");
-    
+    let parsed_args = syn::parse::<PrebindgenArgs>(args).expect("Invalid #[prebindgen] arguments");
+
     let group = parsed_args.group;
 
     // Get the full path to the JSONL file

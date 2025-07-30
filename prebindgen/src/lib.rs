@@ -112,7 +112,7 @@ pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
 
-pub use crate::api::buildrs::init_prebindgen_out_dir;
+pub use crate::api::buildrs::{init_prebindgen_out_dir, init_prebindgen_out_dir_internal};
 pub use crate::api::source::Source;
 pub use crate::api::record::SourceLocation;
 
@@ -167,11 +167,7 @@ pub use crate::api::buildrs::get_prebindgen_out_dir;
 macro_rules! doctest_setup {
     () => {
         use prebindgen_proc_macro::prebindgen_out_dir;
-        let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
-        std::fs::create_dir_all(&fallback_dir).unwrap();
-        std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
-        // Set the OUT_DIR environment variable to point to our fallback directory
-        unsafe { std::env::set_var("OUT_DIR", &fallback_dir); }
+        prebindgen::init_prebindgen_out_dir_internal();
         mod source_ffi {
             use prebindgen_proc_macro::prebindgen_out_dir;
             pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
