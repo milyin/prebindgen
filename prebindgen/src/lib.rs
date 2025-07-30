@@ -1,41 +1,48 @@
 //! # prebindgen
 //!
-//! A system for separating common FFI interface implementation from language-specific binding generation.
+//! A tool for separating FFI interface implementation itself and language-specific binding generation
+//! into different crates.
 //!
 //! ## Problem
 //!
-//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, you face a dilemma:
-//! - `#[no_mangle] extern "C"` functions can only be defined in `cdylib`/`staticlib` crates
-//! - If you need bindings for multiple languages, you must either:
-//!   - Generate all bindings from the same crate (tight coupling)
-//!   - Manually duplicate FFI functions in each language-specific crate (code duplication)
+//! When creating Rust libraries that need to expose FFI interfaces to multiple languages the following
+//! problems may arise:
+//! - `#[no_mangle] extern "C"` functions can only be defined in `cdylib`/`staticlib` crate. They cannot be
+//!   exported from a `lib` crate.
+//! - It may be preferrable to make separate `cdylib`/`staticlib` crates for each language-specific binding, 
+//!   adapted to the language specifics and to the quirks of the binding generator.
+//!
+//! It may be convenient to separate the common FFI library itself (set of
+//! "repr(C)" compatible functions and structures) and the language-specific binding
+//! (`cdylib`/`staticlib` crates for each language).
 //!
 //! ## Solution
 //!
-//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` source code from a common Rust library crate.
-//! Language-specific binding crates can then include this generated code and pass it to their respective
+//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` rust source code from a common Rust library crate.
+//! Language-specific binding crates can then both compile this generated code and pass it to their respective
 //! binding generators (cbindgen, csbindgen, etc.).
 //!
 //! ## How to Use
 //!
-//! ### 1. In the Common FFI Library Crate
+//! ### 1. In the Common FFI Library Crate (named e.g. `example_ffi`)
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 //!
 //! ```rust,ignore
+//! // example-ffi/src/lib.rs
 //! use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 //!
 //! // Declare a public constant with the path to prebindgen data:
 //! pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 //!
 //! // Group structures and functions for selective handling
-//! #[prebindgen("structs")]
+//! #[prebindgen]
 //! #[repr(C)]
 //! pub struct MyStruct {
 //!     pub field: i32,
 //! }
 //!
-//! #[prebindgen("functions")]
+//! #[prebindgen]
 //! pub fn my_function(arg: i32) -> i32 {
 //!     arg * 2
 //! }
@@ -44,26 +51,24 @@
 //! Call [`init_prebindgen_out_dir`] in the crate's `build.rs`:
 //!
 //! ```rust,no_run
-//! use prebindgen::init_prebindgen_out_dir;
-//!
+//! // example-ffi/build.rs
 //! fn main() {
-//!     init_prebindgen_out_dir();
+//!     prebindgen::init_prebindgen_out_dir();
 //! }
 //! ```
 //!
-//! ### 2. In Language-Specific FFI Binding Crates
+//! ### 2. In Language-Specific FFI Binding Crate (named e.g. `example-cbindgen`)
 //!
 //! Add the common FFI library to build dependencies in `Cargo.toml`:
 //!
 //! ```toml
 //! [build-dependencies]
-//! my_common_ffi = { path = "../my_common_ffi" }
-//! prebindgen = "0.1"
+//! example_ffi = { path = "../example_ffi" }
+//! prebindgen = "0.2"
+//! cbindgen = "0.24"
 //! ```
-//!
-//! In the binding crate's `build.rs`:
-//!
 //! ```rust,ignore
+//! // example-cbindgen/build.rs
 //! use prebindgen::{Source, batching::ffi_converter, filter_map::feature_filter, collect::Destination};
 //! use itertools::Itertools;
 //!
@@ -90,14 +95,14 @@
 //!     let bindings_file = destination.write("ffi_bindings.rs");
 //!
 //!     // Pass the generated file to cbindgen for C header generation
-//!     // generate_c_headers(&bindings_file);
+//!     generate_c_headers(&bindings_file);
 //! }
 //! ```
 //!
-//! Include the generated Rust files in your project:
+//! Include the generated Rust files in your project to build the static or dynamic library itself:
 //!
 //! ```rust,ignore
-//! // In your lib.rs
+//! // lib.rs
 //! include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 //! ```
 //!
@@ -113,8 +118,8 @@ pub(crate) mod codegen;
 pub(crate) mod utils;
 
 pub use crate::api::buildrs::init_prebindgen_out_dir;
-pub use crate::api::source::Source;
 pub use crate::api::record::SourceLocation;
+pub use crate::api::source::Source;
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {
@@ -126,8 +131,8 @@ pub mod batching {
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `filter_map`
 pub mod filter_map {
-    pub use crate::api::filter_map::struct_align::struct_align;
     pub use crate::api::filter_map::feature_filter::FeatureFilter;
+    pub use crate::api::filter_map::struct_align::struct_align;
     pub mod feature_filter {
         pub use crate::api::filter_map::feature_filter::Builder;
     }
@@ -155,11 +160,11 @@ pub mod collect {
 }
 
 #[doc(hidden)]
+pub use crate::api::buildrs::get_prebindgen_out_dir;
+#[doc(hidden)]
 pub use crate::api::record::Record;
 #[doc(hidden)]
 pub use crate::api::record::RecordKind;
-#[doc(hidden)]
-pub use crate::api::buildrs::get_prebindgen_out_dir;
 #[doc(hidden)]
 pub use crate::api::source::DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR;
 
