@@ -4,6 +4,20 @@ use roxygen::roxygen;
 
 use crate::{api::record::SourceLocation, codegen::process_features::process_item_features};
 
+/// Builder for configuring FeatureFilter instances
+///
+/// Configures how feature flags in `#[cfg(feature="...")]` attributes
+/// are processed when generating FFI bindings.
+///
+/// # Example
+///
+/// ```
+/// let builder = prebindgen::filter_map::feature_filter::Builder::new()
+///     .disable_feature("unstable")
+///     .enable_feature("std")
+///     .match_feature("internal", "public")
+///     .build();
+/// ```
 pub struct Builder {
     pub(crate) disabled_features: HashSet<String>,
     pub(crate) enabled_features: HashSet<String>,
@@ -11,6 +25,13 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Create a new Builder for configuring FeatureFilter
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let builder = prebindgen::filter_map::feature_filter::Builder::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             disabled_features: HashSet::new(),
@@ -26,8 +47,8 @@ impl Builder {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
+    /// ```
+    /// let builder = prebindgen::filter_map::feature_filter::Builder::new()
     ///     .disable_feature("experimental")
     ///     .disable_feature("deprecated");
     /// ```
@@ -49,8 +70,8 @@ impl Builder {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
+    /// ```
+    /// let builder = prebindgen::filter_map::feature_filter::Builder::new()
     ///     .enable_feature("experimental");
     /// ```
     #[roxygen]
@@ -70,8 +91,8 @@ impl Builder {
     ///
     /// # Example
     ///
-    /// ```rust,ignore
-    /// let builder = prebindgen::Builder::new(path)
+    /// ```
+    /// let builder = prebindgen::filter_map::feature_filter::Builder::new()
     ///     .match_feature("unstable", "unstable")
     ///     .match_feature("internal", "unstable");
     /// ```
@@ -87,7 +108,15 @@ impl Builder {
         self
     }
 
-    /// Build the Features instance
+    /// Build the FeatureFilter instance with the configured options
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let filter = prebindgen::filter_map::feature_filter::Builder::new()
+    ///     .disable_feature("internal")
+    ///     .build();
+    /// ```
     pub fn build(self) -> FeatureFilter {
         FeatureFilter { builder: self }
     }
@@ -99,16 +128,68 @@ impl Default for Builder {
     }
 }
 
+/// Filters prebindgen items based on Rust feature flags
+///
+/// The `FeatureFilter` processes items with `#[cfg(feature="...")]` attributes,
+/// allowing selective inclusion, exclusion, or renaming of feature-gated code
+/// in the generated FFI bindings.
+///
+/// # Functionality
+///
+/// - **Disable features**: Skip items guarded by disabled features
+/// - **Enable features**: Include items and remove their `#[cfg(...)]` attributes
+/// - **Map features**: Rename feature flags in the output
+///
+/// # Example
+///
+/// ```
+/// # prebindgen::doctest_setup!();
+/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+/// 
+/// let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
+///     .disable_feature("unstable")
+///     .disable_feature("internal")
+///     .enable_feature("std")
+///     .match_feature("experimental", "beta")
+///     .build();
+/// 
+/// // Apply filter to items
+/// let filtered_items: Vec<_> = source
+///     .items_all()
+///     .filter_map(feature_filter.into_closure())
+///     .take(0) // Take 0 for doctest
+///     .collect();
+/// ```
 pub struct FeatureFilter {
     builder: Builder,
 }
 
 impl FeatureFilter {
-    /// Create a builder for creating a feature filter instance
+    /// Create a builder for configuring a feature filter instance
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let filter = prebindgen::filter_map::FeatureFilter::builder()
+    ///     .disable_feature("unstable")
+    ///     .enable_feature("std")
+    ///     .build();
+    /// ```
     pub fn builder() -> Builder {
         Builder::new()
     }
-    // Call method to use with `filter_map` function
+    /// Process a single item through the feature filter
+    ///
+    /// Returns `Some(item)` if the item should be included, `None` if it should be filtered out.
+    /// Used internally by `into_closure()` for integration with `filter_map`.
+    ///
+    /// # Parameters
+    ///
+    /// * `item` - A `(syn::Item, SourceLocation)` pair to process
+    ///
+    /// # Returns
+    ///
+    /// `Some((syn::Item, SourceLocation))` if included, `None` if filtered out
     pub fn call(&self, item: (syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
         // Check if the item is affected by any feature flags
         let (mut item, source_location) = item;
@@ -125,7 +206,28 @@ impl FeatureFilter {
         }
     }
 
-    /// Convert to closure
+    /// Convert to closure compatible with `filter_map`
+    ///
+    /// This is the primary method for using `FeatureFilter` in processing pipelines.
+    /// The returned closure can be passed to `filter_map()` to selectively include
+    /// items based on their feature flags.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # prebindgen::doctest_setup!();
+    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let filter = prebindgen::filter_map::FeatureFilter::builder()
+    ///     .disable_feature("internal")
+    ///     .build();
+    /// 
+    /// // Use with filter_map
+    /// let filtered_items: Vec<_> = source
+    ///     .items_all()
+    ///     .filter_map(filter.into_closure())
+    ///     .take(0) // Take 0 for doctest
+    ///     .collect();
+    /// ```
     pub fn into_closure(
         self,
     ) -> impl FnMut((syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
