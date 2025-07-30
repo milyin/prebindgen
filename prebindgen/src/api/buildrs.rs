@@ -27,21 +27,12 @@ use crate::CRATE_NAME_FILE;
 /// }
 /// ```
 pub fn init_prebindgen_out_dir() {
-    env::var("OUT_DIR").expect("OUT_DIR environment variable not set. This function should be called from build.rs.");
-    init_prebindgen_out_dir_internal();
-}
-
-/// Internal implementation of prebindgen output directory initialization
-///
-/// This function performs the actual initialization work and can be called
-/// even when OUT_DIR is not set (e.g., during doctests).
-#[doc(hidden)]
-pub fn init_prebindgen_out_dir_internal() {
+    env::var("OUT_DIR").expect(
+        "OUT_DIR environment variable not set. This function should be called from build.rs.",
+    );
     // Get the crate name from CARGO_PKG_NAME or use fallback
     // For doctests, use "source_ffi" even if CARGO_PKG_NAME is set to "prebindgen"
-    let crate_name = env::var("CARGO_PKG_NAME")
-        .map(|name| if name == "prebindgen" { "source_ffi".to_string() } else { name })
-        .unwrap_or_else(|_| "source_ffi".to_string());
+    let crate_name = env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME environment variable not set. This function should be called from build.rs.");
 
     // delete all files in the prebindgen directory
     let prebindgen_dir = get_prebindgen_out_dir();
@@ -85,12 +76,13 @@ const PREBINDGEN_DIR: &str = "prebindgen";
 /// User code should use the `prebindgen_out_dir!()` macro instead.
 #[doc(hidden)]
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
-    let out_dir = std::env::var("OUT_DIR")
-        .unwrap_or_else(|_| std::env::temp_dir().join("prebindgen_fallback").to_string_lossy().to_string());
+    let out_dir = std::env::var("OUT_DIR").expect(
+        "OUT_DIR environment variable not set. Check if build.rs for the crate exitsts",
+    );
     std::path::Path::new(&out_dir).join(PREBINDGEN_DIR)
 }
 
-/// Macro for debug tracing in build.rs. Used by prebindgen-proc-macro to display paths to 
+/// Macro for debug tracing in build.rs. Used by prebindgen-proc-macro to display paths to
 /// generated files, but can be also used in other contexts.
 #[macro_export]
 macro_rules! trace {

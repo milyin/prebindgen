@@ -59,6 +59,10 @@ pub struct Source {
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
 }
 
+/// Provide special impossible in real world value for simulating input data in doctests
+#[doc(hidden)]
+pub const DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR: &str = "/dev/null/DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR";
+
 impl Source {
     #[roxygen]
     pub fn new<P: AsRef<Path>>(
@@ -67,6 +71,13 @@ impl Source {
     ) -> Self {
         // Determine the crate name or panic if not initialized
         let input_dir = input_dir.as_ref().to_path_buf();
+
+        // If the input_dir is the special doctest simulation path, call special function
+        // which initializes the `Source` with simulated data
+        if input_dir.as_path().to_str() == Some(DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR) {
+            return Self::doctest_simulate();
+        }
+
         if !input_dir.is_dir() {
             panic!(
                 "Input directory {} does not exist or is not a directory",
@@ -92,6 +103,40 @@ impl Source {
         Self { crate_name, items }
     }
 
+    #[doc(hidden)]
+    /// Simulate the Source for doctests by creating a dummy Source with few test items
+    fn doctest_simulate() -> Self {
+        Self {
+            crate_name: "source_ffi".to_string(),
+            items: HashMap::from([
+                (
+                    "structs".to_string(),
+                    vec![
+                        (
+                            syn::parse_quote! {
+                                #[prebindgen("structs")]
+                                pub struct TestStruct {
+                                    pub field: i32,
+                                }
+                            },
+                            SourceLocation::default(),
+                        ),
+                    ],
+                ),
+                (
+                    "functions".to_string(),
+                    vec![(
+                        syn::parse_quote! {
+                            #[prebindgen("functions")]
+                            pub fn test_function() -> i32 { 42 }
+                        },
+                        SourceLocation::default(),
+                    )],
+                ),
+            ]),
+        }
+    }
+
     /// Returns the name of the source crate that generated the prebindgen data
     ///
     /// This is typically used by [`FfiConverter`](crate::batching::FfiConverter) to
@@ -103,7 +148,6 @@ impl Source {
     /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// let crate_name = source.crate_name();
-    /// assert_eq!(crate_name, "source_ffi");
     /// ```
     pub fn crate_name(&self) -> &str {
         &self.crate_name

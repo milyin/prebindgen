@@ -156,22 +156,6 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Internal proc macro that returns the prebindgen output directory path, with fallback for doctests.
-///
-/// This macro is used internally by the doctest_setup macro and should not be used directly.
-#[doc(hidden)]
-#[proc_macro]
-pub fn prebindgen_out_dir_internal(_input: TokenStream) -> TokenStream {
-    let file_path = get_prebindgen_out_dir();
-    let path_str = file_path.to_string_lossy();
-
-    let expanded = quote! {
-        #path_str
-    };
-
-    TokenStream::from(expanded)
-}
-
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
 ///
 /// All types and functions marked with this attribute can be made available in dependent

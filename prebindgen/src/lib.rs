@@ -112,7 +112,7 @@ pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
 
-pub use crate::api::buildrs::{init_prebindgen_out_dir, init_prebindgen_out_dir_internal};
+pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::source::Source;
 pub use crate::api::record::SourceLocation;
 
@@ -160,17 +160,16 @@ pub use crate::api::record::Record;
 pub use crate::api::record::RecordKind;
 #[doc(hidden)]
 pub use crate::api::buildrs::get_prebindgen_out_dir;
+#[doc(hidden)]
+pub use crate::api::source::DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR;
 
 /// Macro for setting up doctest environment with source_ffi module
 #[doc(hidden)]
 #[macro_export]
 macro_rules! doctest_setup {
     () => {
-        use prebindgen_proc_macro::prebindgen_out_dir_internal;
-        prebindgen::init_prebindgen_out_dir_internal();
         mod source_ffi {
-            use prebindgen_proc_macro::prebindgen_out_dir_internal;
-            pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir_internal!();
+            pub const PREBINDGEN_OUT_DIR: &str = prebindgen::DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR;
         }
     };
 }
