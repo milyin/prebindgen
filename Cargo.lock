@@ -268,7 +268,6 @@ name = "prebindgen"
 version = "0.2.0"
 dependencies = [
  "itertools",
- "prebindgen-proc-macro",
  "prettyplease",
  "proc-macro2",
  "quote",
