@@ -5,21 +5,19 @@
 //!
 //! ## Problem
 //!
-//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, the following
-//! problems may arise:
-//! - `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate. They cannot be
-//!   exported from a `lib` crate.
-//! - It may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding,
-//!   tailored to the requirements and quirks of each binding generator.
-//!
-//! It is convenient to separate the common FFI library itself (the set of
-//! `repr(C)`-compatible functions and structures) from the language-specific binding
-//! (`cdylib`/`staticlib` crates for each language).
+//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, 
+//! it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding. 
+//! This allows you to tailor each crate to the requirements and quirks of its binding generator and to specifisc of the
+//! destination language.
+//! However, `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate, and cannot be
+//! exported from a `lib` crate. As a result, these functions must be duplicated in each language-specific
+//! binding crate. This duplication is inconvenient for large projects with many FFI functions and types.
 //!
 //! ## Solution
 //!
-//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust source code from a common Rust library crate.
-//! Language-specific binding crates can then both compile this generated code and pass it to their respective
+//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a c
+//! common Rust library crate.
+//! Language-specific binding crates can then compile this generated code and pass it to their respective
 //! binding generators (such as cbindgen, csbindgen, etc.).
 //!
 //! ## How to Use
