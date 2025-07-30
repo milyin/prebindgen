@@ -57,9 +57,10 @@
 //!
 //! ### 2. In Language-Specific FFI Binding Crate (named e.g. `example-cbindgen`)
 //!
-//! Add the common FFI library to build dependencies in `Cargo.toml`:
+//! Add the common FFI library to build dependencies
 //!
 //! ```toml
+//! # Cargo.toml
 //! [build-dependencies]
 //! example_ffi = { path = "../example_ffi" }
 //! prebindgen = "0.2"
