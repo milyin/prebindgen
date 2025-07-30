@@ -136,9 +136,40 @@ impl Builder {
         self
     }
 
-    /// Add a full exported type path that should have its prefix stripped
-    /// This accepts the full path to an exported type (e.g., "foo::Foo") and will
-    /// strip the prefix only from this specific type when generating FFI stubs.
+    /// Add a prefixed exported type that should have its module path stripped
+    ///
+    /// All `#[prebindgen]`-marked types are copied into the destination file without
+    /// their module structure (flattened). However, when the generated FFI functions
+    /// reference these types, they may still use the original module path from the
+    /// source crate. This method tells the converter to strip the module prefix
+    /// when accessing the flattened type in the destination.
+    ///
+    /// # Example
+    ///
+    /// In source crate:
+    /// ```rust,ignore
+    /// pub mod foo {
+    ///     #[prebindgen]
+    ///     pub struct Foo { /* ... */ }
+    /// }
+    /// 
+    /// #[prebindgen]
+    /// pub fn process_foo(f: &foo::Foo) -> i32 { /* ... */ }
+    /// ```
+    ///
+    /// In destination, without `prefixed_exported_type("foo::Foo")`:
+    /// - Type `Foo` is copied (flattened)
+    /// - Function still references `foo::Foo` (compilation error)
+    ///
+    /// With `prefixed_exported_type("foo::Foo")`:
+    /// - Type `Foo` is copied (flattened)
+    /// - Function references are changed from `foo::Foo` to `Foo`
+    ///
+    /// ```
+    /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
+    ///     .prefixed_exported_type("foo::Foo")
+    ///     .prefixed_exported_type("bar::Bar");
+    /// ```
     #[roxygen]
     pub fn prefixed_exported_type<S: AsRef<str>>(
         mut self,
