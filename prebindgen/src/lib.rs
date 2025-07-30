@@ -84,8 +84,8 @@
 //!             .build()
 //!             .into_closure())
 //!         .batching(ffi_converter::Builder::new(source.crate_name())
-//!             .allowed_prefix("libc::")
-//!             .allowed_prefix("core::")
+//!             .edition("2024")
+//!             .strip_transparent_wrapper("std::mem::MaybeUninit")
 //!             .build()
 //!             .into_closure())
 //!         .collect::<Destination>();
