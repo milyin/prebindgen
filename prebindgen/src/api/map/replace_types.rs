@@ -6,24 +6,66 @@ use crate::api::record::SourceLocation;
 use std::collections::HashMap;
 use syn::{Item, Type, TypePath, visit_mut::VisitMut};
 
+/// Builder for configuring ReplaceTypes instances
+///
+/// Configures which type names should be replaced with fully qualified paths
+/// to eliminate import dependencies in generated FFI code.
+///
+/// # Example
+///
+/// ```
+/// let builder = prebindgen::map::replace_types::Builder::new()
+///     .replace_type("Option", "std::option::Option")
+///     .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
+///     .replace_type("Vec", "std::vec::Vec")
+///     .build();
+/// ```
 pub struct Builder {
     type_replacements: HashMap<String, String>,
 }
 
 impl Builder {
+    /// Create a new Builder for configuring ReplaceTypes
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let builder = prebindgen::map::replace_types::Builder::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             type_replacements: HashMap::new(),
         }
     }
 
-    /// Add a type replacement mapping.
+    /// Add a type replacement mapping from short name to fully qualified path
+    ///
+    /// # Parameters
+    ///
+    /// * `from` - The type name to replace (e.g., "Option", "mem::MaybeUninit")
+    /// * `to` - The fully qualified replacement (e.g., "std::option::Option", "std::mem::MaybeUninit")
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let builder = prebindgen::map::replace_types::Builder::new()
+    ///     .replace_type("Option", "std::option::Option")
+    ///     .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit");
+    /// ```
     pub fn replace_type<S: Into<String>>(mut self, from: S, to: S) -> Self {
         self.type_replacements.insert(from.into(), to.into());
         self
     }
 
-    /// Build the ReplaceTypes instance
+    /// Build the ReplaceTypes instance with the configured options
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let replacer = prebindgen::map::replace_types::Builder::new()
+    ///     .replace_type("Option", "std::option::Option")
+    ///     .build();
+    /// ```
     pub fn build(self) -> ReplaceTypes {
         ReplaceTypes { builder: self }
     }
@@ -35,18 +77,83 @@ impl Default for Builder {
     }
 }
 
-/// Replace specific types in the items.
+/// Replaces type names with fully qualified paths to avoid import dependencies
+///
+/// When the source crate uses imports like `use std::mem; mem::MaybeUninit`, the generated
+/// FFI code would also need the same imports to compile. Instead of requiring users to
+/// add these imports before including the generated file, `ReplaceTypes` converts
+/// import-dependent type names to their fully qualified equivalents.
+///
+/// # Problem
+///
+/// Source crate code:
+/// ```rust,ignore
+/// use std::mem;
+/// 
+/// #[prebindgen]
+/// pub fn process(data: &mut mem::MaybeUninit<i32>) { /* ... */ }
+/// ```
+///
+/// Without replacement, generated code would require:
+/// ```rust,ignore
+/// use std::mem;  // User must add this import
+/// include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+/// ```
+///
+/// # Solution
+///
+/// Replace `mem::MaybeUninit` with `std::mem::MaybeUninit` so the generated code
+/// is self-contained and doesn't require additional imports.
+///
+/// # Example
+///
+/// ```
+/// # prebindgen::doctest_setup!();
+/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+/// 
+/// let type_replacer = prebindgen::map::ReplaceTypes::builder()
+///     .replace_type("Option", "std::option::Option")
+///     .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
+///     .build();
+/// 
+/// // Apply before FfiConverter to ensure fully qualified types
+/// let processed_items: Vec<_> = source
+///     .items_all()
+///     .map(type_replacer.into_closure())
+///     .take(0) // Take 0 for doctest
+///     .collect();
+/// ```
 pub struct ReplaceTypes {
     builder: Builder,
 }
 
 impl ReplaceTypes {
-    /// Create a builder for creating a replace types instance
+    /// Create a builder for configuring a replace types instance
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let replacer = prebindgen::map::ReplaceTypes::builder()
+    ///     .replace_type("Option", "std::option::Option")
+    ///     .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
+    ///     .build();
+    /// ```
     pub fn builder() -> Builder {
         Builder::new()
     }
 
-    /// Call method to use with `map` function
+    /// Process a single item to replace specified type names
+    ///
+    /// Replaces configured type names with their fully qualified equivalents
+    /// throughout the item. Used internally by `into_closure()` for integration with `map`.
+    ///
+    /// # Parameters
+    ///
+    /// * `item` - A `(syn::Item, SourceLocation)` pair to process
+    ///
+    /// # Returns
+    ///
+    /// The same item with type names replaced
     pub fn call(&self, item: (Item, SourceLocation)) -> (Item, SourceLocation) {
         let (mut item, source_location) = item;
         let mut visitor = TypeReplacer {
@@ -56,7 +163,28 @@ impl ReplaceTypes {
         (item, source_location)
     }
 
-    /// Convert to closure
+    /// Convert to closure compatible with `map`
+    ///
+    /// This is the primary method for using `ReplaceTypes` in processing pipelines.
+    /// The returned closure can be passed to `map()` to replace type names with
+    /// fully qualified paths, typically before `FfiConverter` processing.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # prebindgen::doctest_setup!();
+    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
+    ///     .replace_type("Option", "std::option::Option")
+    ///     .build();
+    /// 
+    /// // Use with map before FfiConverter
+    /// let processed_items: Vec<_> = source
+    ///     .items_all()
+    ///     .map(type_replacer.into_closure())
+    ///     .take(0) // Take 0 for doctest
+    ///     .collect();
+    /// ```
     pub fn into_closure(self) -> impl FnMut((Item, SourceLocation)) -> (Item, SourceLocation) {
         move |item| self.call(item)
     }
