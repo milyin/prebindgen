@@ -267,6 +267,7 @@ checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 name = "prebindgen"
 version = "0.2.0"
 dependencies = [
+ "prebindgen-proc-macro",
  "prettyplease",
  "proc-macro2",
  "quote",

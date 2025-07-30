@@ -138,7 +138,14 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 /// ```
 #[proc_macro]
 pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
-    let file_path = get_prebindgen_out_dir();
+    let file_path = match std::env::var("OUT_DIR") {
+        Ok(_) => get_prebindgen_out_dir(),
+        Err(_) => {
+            // OUT_DIR not available (e.g., in doc tests), use temp directory with warning
+            eprintln!("cargo:warning=OUT_DIR not available, using temp directory for prebindgen_out_dir!()");
+            std::env::temp_dir().join("prebindgen_fallback")
+        }
+    };
     let path_str = file_path.to_string_lossy();
 
     // Return just the string literal
