@@ -33,7 +33,7 @@ const JSONL_EXTENSION: &str = ".jsonl";
 /// The `PREBINDGEN_OUT_DIR` constant is defined in the source FFI crate using the
 /// `prebindgen_out_dir!()` macro:
 ///
-/// ```rust,ignore
+/// ```
 /// // In source_ffi/src/lib.rs
 /// use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 /// 
@@ -104,11 +104,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # use prebindgen_proc_macro::prebindgen_out_dir;
-    /// # let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
-    /// # std::fs::create_dir_all(&fallback_dir).unwrap();
-    /// # std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
-    /// # mod source_ffi { use prebindgen_proc_macro::prebindgen_out_dir; pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!(); }
+    /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// let crate_name = source.crate_name();
     /// assert_eq!(crate_name, "source_ffi");
@@ -126,11 +122,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # use prebindgen_proc_macro::prebindgen_out_dir;
-    /// # let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
-    /// # std::fs::create_dir_all(&fallback_dir).unwrap();
-    /// # std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
-    /// # mod source_ffi { use prebindgen_proc_macro::prebindgen_out_dir; pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!(); }
+    /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// // Process only items from "structs" and "functions" groups
     /// for (item, location) in source.items_in_groups(&["structs", "functions"]) {
@@ -156,11 +148,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # use prebindgen_proc_macro::prebindgen_out_dir;
-    /// # let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
-    /// # std::fs::create_dir_all(&fallback_dir).unwrap();
-    /// # std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
-    /// # mod source_ffi { use prebindgen_proc_macro::prebindgen_out_dir; pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!(); }
+    /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// // Process all items except those in "internal" group
     /// for (item, location) in source.items_except_groups(&["internal"]) {
@@ -184,11 +172,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # use prebindgen_proc_macro::prebindgen_out_dir;
-    /// # let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
-    /// # std::fs::create_dir_all(&fallback_dir).unwrap();
-    /// # std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
-    /// # mod source_ffi { use prebindgen_proc_macro::prebindgen_out_dir; pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!(); }
+    /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// // Process all prebindgen items
     /// for (item, location) in source.items_all() {

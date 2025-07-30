@@ -115,7 +115,16 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
         .strip_prefix("ThreadId(")
         .and_then(|s| s.strip_suffix(")"))
         .unwrap_or("0");
-    get_prebindgen_out_dir().join(format!("{name}_{process_id}_{thread_id_num}.jsonl"))
+    
+    let out_dir = match std::env::var("OUT_DIR") {
+        Ok(_) => get_prebindgen_out_dir(),
+        Err(_) => {
+            // OUT_DIR not available (e.g., in doc tests), use temp directory
+            std::env::temp_dir().join("prebindgen_fallback")
+        }
+    };
+    
+    out_dir.join(format!("{name}_{process_id}_{thread_id_num}.jsonl"))
 }
 
 /// Proc macro that returns the prebindgen output directory path as a string literal.

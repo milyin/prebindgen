@@ -152,3 +152,18 @@ pub use crate::api::record::RecordKind;
 #[doc(hidden)]
 pub use crate::api::buildrs::get_prebindgen_out_dir;
 
+/// Macro for setting up doctest environment with source_ffi module
+#[doc(hidden)]
+#[macro_export]
+macro_rules! doctest_setup {
+    () => {
+        use prebindgen_proc_macro::prebindgen_out_dir;
+        let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
+        std::fs::create_dir_all(&fallback_dir).unwrap();
+        std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
+        mod source_ffi {
+            use prebindgen_proc_macro::prebindgen_out_dir;
+            pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+        }
+    };
+}
