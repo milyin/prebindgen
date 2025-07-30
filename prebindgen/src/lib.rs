@@ -1,30 +1,30 @@
 //! # prebindgen
 //!
-//! A tool for separating FFI interface implementation itself and language-specific binding generation
-//! into different crates.
+//! A tool for separating the implementation of FFI interfaces from language-specific binding generation,
+//! allowing each to reside in different crates.
 //!
 //! ## Problem
 //!
-//! When creating Rust libraries that need to expose FFI interfaces to multiple languages the following
+//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, the following
 //! problems may arise:
-//! - `#[no_mangle] extern "C"` functions can only be defined in `cdylib`/`staticlib` crate. They cannot be
+//! - `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate. They cannot be
 //!   exported from a `lib` crate.
-//! - It may be preferrable to make separate `cdylib`/`staticlib` crates for each language-specific binding, 
-//!   adapted to the language specifics and to the quirks of the binding generator.
+//! - It may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding,
+//!   tailored to the requirements and quirks of each binding generator.
 //!
-//! It may be convenient to separate the common FFI library itself (set of
-//! "repr(C)" compatible functions and structures) and the language-specific binding
+//! It is convenient to separate the common FFI library itself (the set of
+//! `repr(C)`-compatible functions and structures) from the language-specific binding
 //! (`cdylib`/`staticlib` crates for each language).
 //!
 //! ## Solution
 //!
-//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` rust source code from a common Rust library crate.
+//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust source code from a common Rust library crate.
 //! Language-specific binding crates can then both compile this generated code and pass it to their respective
-//! binding generators (cbindgen, csbindgen, etc.).
+//! binding generators (such as cbindgen, csbindgen, etc.).
 //!
 //! ## How to Use
 //!
-//! ### 1. In the Common FFI Library Crate (named e.g. `example_ffi`)
+//! ### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 //!
