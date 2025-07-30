@@ -27,7 +27,7 @@ use crate::CRATE_NAME_FILE;
 /// }
 /// ```
 pub fn init_prebindgen_out_dir() {
-    env::var("OUT_DIR").expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    env::var("OUT_DIR").expect("OUT_DIR environment variable not set. This function should be called from build.rs.");
     init_prebindgen_out_dir_internal();
 }
 

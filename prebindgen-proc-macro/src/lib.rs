@@ -125,6 +125,11 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 /// output directory. It should be used to create a public constant that can be
 /// consumed by language-specific binding crates.
 ///
+/// # Panics
+///
+/// Panics if OUT_DIR environment variable is not set. This indicates that the macro
+/// is being used outside of a build.rs context.
+///
 /// # Returns
 ///
 /// A string literal with the path to the prebindgen output directory.
@@ -139,10 +144,27 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 /// ```
 #[proc_macro]
 pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
+    let out_dir = std::env::var("OUT_DIR")
+        .expect("OUT_DIR environment variable not set. Please ensure you have a build.rs file in your project.");
+    let file_path = std::path::Path::new(&out_dir).join("prebindgen");
+    let path_str = file_path.to_string_lossy();
+
+    let expanded = quote! {
+        #path_str
+    };
+
+    TokenStream::from(expanded)
+}
+
+/// Internal proc macro that returns the prebindgen output directory path, with fallback for doctests.
+///
+/// This macro is used internally by the doctest_setup macro and should not be used directly.
+#[doc(hidden)]
+#[proc_macro]
+pub fn prebindgen_out_dir_internal(_input: TokenStream) -> TokenStream {
     let file_path = get_prebindgen_out_dir();
     let path_str = file_path.to_string_lossy();
 
-    // Return just the string literal
     let expanded = quote! {
         #path_str
     };

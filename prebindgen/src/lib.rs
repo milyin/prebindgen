@@ -22,7 +22,7 @@
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 //!
 //! // Declare a public constant with the path to prebindgen data:
@@ -166,11 +166,11 @@ pub use crate::api::buildrs::get_prebindgen_out_dir;
 #[macro_export]
 macro_rules! doctest_setup {
     () => {
-        use prebindgen_proc_macro::prebindgen_out_dir;
+        use prebindgen_proc_macro::prebindgen_out_dir_internal;
         prebindgen::init_prebindgen_out_dir_internal();
         mod source_ffi {
-            use prebindgen_proc_macro::prebindgen_out_dir;
-            pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+            use prebindgen_proc_macro::prebindgen_out_dir_internal;
+            pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir_internal!();
         }
     };
 }

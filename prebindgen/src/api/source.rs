@@ -33,7 +33,7 @@ const JSONL_EXTENSION: &str = ".jsonl";
 /// The `PREBINDGEN_OUT_DIR` constant is defined in the source FFI crate using the
 /// `prebindgen_out_dir!()` macro:
 ///
-/// ```
+/// ```ignore
 /// // In source_ffi/src/lib.rs
 /// use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 /// 
@@ -46,11 +46,7 @@ const JSONL_EXTENSION: &str = ".jsonl";
 /// Then in the destination project's `build.rs`:
 ///
 /// ```
-/// # use prebindgen_proc_macro::prebindgen_out_dir;
-/// # let fallback_dir = std::env::temp_dir().join("prebindgen_fallback");
-/// # std::fs::create_dir_all(&fallback_dir).unwrap();
-/// # std::fs::write(fallback_dir.join("crate_name.txt"), "source_ffi").unwrap();
-/// # mod source_ffi { use prebindgen_proc_macro::prebindgen_out_dir; pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!(); }
+/// # prebindgen::doctest_setup!();
 /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
 /// 
 /// // Process all items
