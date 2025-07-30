@@ -60,7 +60,7 @@
 //! Add the common FFI library to build dependencies
 //!
 //! ```toml
-//! # Cargo.toml
+//! # example-cbindgen/Cargo.toml
 //! [build-dependencies]
 //! example_ffi = { path = "../example_ffi" }
 //! prebindgen = "0.2"
