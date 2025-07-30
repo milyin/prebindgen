@@ -8,8 +8,8 @@ use syn::{Item, Type, TypePath, visit_mut::VisitMut};
 
 /// Builder for configuring ReplaceTypes instances
 ///
-/// Configures which type names should be replaced with fully qualified paths
-/// to eliminate import dependencies in generated FFI code.
+/// Configures type name replacements. While any type can be replaced with any other,
+/// the primary use case is replacing import-dependent names with fully qualified paths.
 ///
 /// # Example
 ///
@@ -38,12 +38,12 @@ impl Builder {
         }
     }
 
-    /// Add a type replacement mapping from short name to fully qualified path
+    /// Add a type replacement mapping
     ///
     /// # Parameters
     ///
-    /// * `from` - The type name to replace (e.g., "Option", "mem::MaybeUninit")
-    /// * `to` - The fully qualified replacement (e.g., "std::option::Option", "std::mem::MaybeUninit")
+    /// * `from` - The type name to replace (e.g., "Option", "mem::MaybeUninit", "MyType")
+    /// * `to` - The replacement type (e.g., "std::option::Option", "std::mem::MaybeUninit", "crate::NewType")
     ///
     /// # Example
     ///
@@ -77,12 +77,13 @@ impl Default for Builder {
     }
 }
 
-/// Replaces type names with fully qualified paths to avoid import dependencies
+/// Replaces type names throughout items with specified alternatives
 ///
-/// When the source crate uses imports like `use std::mem; mem::MaybeUninit`, the generated
-/// FFI code would also need the same imports to compile. Instead of requiring users to
-/// add these imports before including the generated file, `ReplaceTypes` converts
-/// import-dependent type names to their fully qualified equivalents.
+/// While `ReplaceTypes` can perform any type name replacement, its primary purpose is
+/// converting import-dependent type names to fully qualified paths. When the source crate
+/// uses imports like `use std::mem; mem::MaybeUninit`, the generated FFI code would also
+/// need the same imports to compile. `ReplaceTypes` converts these to self-contained
+/// fully qualified names.
 ///
 /// # Problem
 ///
@@ -144,8 +145,8 @@ impl ReplaceTypes {
 
     /// Process a single item to replace specified type names
     ///
-    /// Replaces configured type names with their fully qualified equivalents
-    /// throughout the item. Used internally by `into_closure()` for integration with `map`.
+    /// Replaces configured type names with their specified alternatives throughout
+    /// the item. Used internally by `into_closure()` for integration with `map`.
     ///
     /// # Parameters
     ///
@@ -167,7 +168,7 @@ impl ReplaceTypes {
     ///
     /// This is the primary method for using `ReplaceTypes` in processing pipelines.
     /// The returned closure can be passed to `map()` to replace type names with
-    /// fully qualified paths, typically before `FfiConverter` processing.
+    /// their configured alternatives, typically before `FfiConverter` processing.
     ///
     /// # Example
     ///
