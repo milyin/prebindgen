@@ -16,18 +16,16 @@ use crate::SourceLocation;
 /// of processed FFI items:
 ///
 /// ```rust
-/// use prebindgen::collect::Destination;
+/// # prebindgen::doctest_setup!();
+/// use prebindgen::{Source, collect::Destination};
 ///
-/// // Collect processed items into a destination
+/// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
 /// let destination: Destination = source
 ///     .items_all()
-///     .map(strip_derives.into_closure())
-///     .filter_map(feature_filter.into_closure())
-///     .batching(converter.into_closure())
 ///     .collect();
 ///
-/// // Write the collected items to a file
-/// let bindings_file = destination.write("ffi_bindings.rs");
+/// // Check generated content
+/// assert!(destination.to_string().contains("extern \"C\""));
 /// ```
 ///
 /// # File Writing
@@ -41,7 +39,7 @@ use crate::SourceLocation;
 ///
 /// `Destination` is commonly used in conjunction with cbindgen for C header generation:
 ///
-/// ```rust
+/// ```ignore
 /// // Generate Rust FFI bindings
 /// let bindings_file = destination.write("ffi_bindings.rs");
 ///
@@ -66,9 +64,11 @@ impl FromIterator<syn::Item> for Destination {
     /// # Examples
     ///
     /// ```rust
-    /// use prebindgen::collect::Destination;
+    /// # prebindgen::doctest_setup!();
+    /// use prebindgen::{Source, collect::Destination};
     ///
-    /// let destination: Destination = items_iterator.collect();
+    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let destination: Destination = source.items_all().collect();
     /// ```
     fn from_iter<T: IntoIterator<Item = syn::Item>>(iter: T) -> Self {
         Self {
@@ -91,9 +91,11 @@ impl FromIterator<(syn::Item, SourceLocation)> for Destination {
     /// # Examples
     ///
     /// ```rust
-    /// use prebindgen::collect::Destination;
+    /// # prebindgen::doctest_setup!();
+    /// use prebindgen::{Source, collect::Destination};
     ///
-    /// let destination: Destination = items_with_locations.collect();
+    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let destination: Destination = source.items_all().collect();
     /// ```
     fn from_iter<T: IntoIterator<Item = (syn::Item, SourceLocation)>>(iter: T) -> Self {
         Self {
@@ -132,8 +134,12 @@ impl Destination {
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// use prebindgen::collect::Destination;
+    /// ```ignore
+    /// # prebindgen::doctest_setup!();
+    /// use prebindgen::{Source, collect::Destination};
+    ///
+    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let destination: Destination = source.items_all().collect();
     ///
     /// // Write to a relative path (resolved to OUT_DIR/ffi_bindings.rs)
     /// let bindings_file = destination.write("ffi_bindings.rs");
@@ -161,5 +167,26 @@ impl Destination {
         });
 
         file_path
+    }
+
+    /// Returns the formatted Rust source code as a string.
+    ///
+    /// This method formats the collected `syn::Item` objects into valid Rust source code
+    /// using `prettyplease` without writing to a file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # prebindgen::doctest_setup!();
+    /// use prebindgen::{Source, collect::Destination};
+    ///
+    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let destination: Destination = source.items_all().collect();
+    ///
+    /// let code = destination.to_string();
+    /// assert!(code.contains("extern \"C\""));
+    /// ```
+    pub fn to_string(&self) -> String {
+        prettyplease::unparse(&self.file)
     }
 }
