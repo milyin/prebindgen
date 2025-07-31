@@ -165,9 +165,8 @@ impl Source {
     /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// // Process only items from "structs" and "functions" groups
-    /// for (item, location) in source.items_in_groups(&["structs", "functions"]) {
-    ///     // Process item...
-    /// }
+    /// let items = source.items_in_groups(&["structs"]).collect::<Vec<_>>();
+    /// assert_eq!(items.len(), 1); // only TestStruct should be present
     /// ```
     pub fn items_in_groups(
         &self,
@@ -190,10 +189,8 @@ impl Source {
     /// ```
     /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-    /// // Process all items except those in "internal" group
-    /// for (item, location) in source.items_except_groups(&["internal"]) {
-    ///     // Process item...
-    /// }
+    /// let items = source.items_except_groups(&["structs"]).collect::<Vec<_>>();
+    /// assert_eq!(items.len(), 1); // only test_function should be present
     /// ```
     pub fn items_except_groups(
         &self,
@@ -214,14 +211,8 @@ impl Source {
     /// ```
     /// # prebindgen::doctest_setup!();
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-    /// // Process all prebindgen items
-    /// for (item, location) in source.items_all() {
-    ///     match item {
-    ///         syn::Item::Struct(_s) => { /* handle struct */ },
-    ///         syn::Item::Fn(_f) => { /* handle function */ },
-    ///         _ => { /* handle other items */ }
-    ///     }
-    /// }
+    /// let items: Vec<_> = source.items_all().collect();
+    /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
     pub fn items_all(&self) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
         self.items
