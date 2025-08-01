@@ -592,7 +592,11 @@ fn strip_type(
 }
 
 /// Check if two types are equivalent (e.g., both are type aliases to the same primitive type)
-fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &HashMap<String, String>) -> bool {
+fn types_are_equivalent(
+    type1: &syn::Type,
+    type2: &syn::Type,
+    primitive_types: &HashMap<String, String>,
+) -> bool {
     let type1_str = quote::quote! { #type1 }.to_string();
     let type2_str = quote::quote! { #type2 }.to_string();
     if type1_str == type2_str {
@@ -608,10 +612,12 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &
             // Check if both types map to the same basic primitive type
             let name1 = quote::quote! { #path1 }.to_string();
             let name2 = quote::quote! { #path2 }.to_string();
-            if let (Some(basic1), Some(basic2)) = (primitive_types.get(&name1), primitive_types.get(&name2)) {
+            if let (Some(basic1), Some(basic2)) =
+                (primitive_types.get(&name1), primitive_types.get(&name2))
+            {
                 return basic1 == basic2;
             }
-            
+
             false
         }
         (syn::Type::Array(arr1), syn::Type::Array(arr2)) => {
@@ -630,8 +636,6 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &
         _ => false,
     }
 }
-
-
 
 /// Check if two syn::Path values are equal
 fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
@@ -666,7 +670,8 @@ fn add_assertion_pair(
     let local_str = quote::quote! { #local_type }.to_string();
     let origin_str = quote::quote! { #origin_type }.to_string();
 
-    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, primitive_types) {
+    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, primitive_types)
+    {
         if let std::collections::hash_map::Entry::Vacant(e) =
             assertion_type_pairs.entry(TypeTransmutePair::new(local_str, origin_str))
         {
@@ -1111,9 +1116,7 @@ pub(crate) fn convert_to_stub(
     )?;
 
     // Determine if we need unsafe block
-    let need_unsafe_block = function.sig.unsafety.is_some()
-        || params_changed.iter().any(|&changed| changed)
-        || return_changed;
+    let need_unsafe_block = params_changed.iter().any(|&changed| changed) || return_changed;
 
     // Check for unsupported parameter patterns first
     for input in &function.sig.inputs {
