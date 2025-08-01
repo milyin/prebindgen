@@ -215,12 +215,20 @@ impl Builder {
     ///     .build();
     /// ```
     pub fn build(self) -> FfiConverter {
+        // Prefill primitive types with real primitive types
+        let mut primitive_types = HashSet::new();
+        for primitive in ["bool", "char", "i8", "i16", "i32", "i64", "i128", "isize", 
+                         "u8", "u16", "u32", "u64", "u128", "usize", "f32", "f64", "str"] {
+            primitive_types.insert(primitive.to_string());
+        }
+        
         FfiConverter {
             builder: self,
             stage: GenerationStage::Collect,
             source_items: Vec::new(),
             type_replacements: HashMap::new(),
             exported_types: HashSet::new(),
+            primitive_types,
             followup_items: Vec::new(),
         }
     }
@@ -282,6 +290,8 @@ pub struct FfiConverter {
     source_items: Vec<(syn::Item, SourceLocation)>,
     /// Copied types which needs transmute operations - filled on `Collect` stage and used on `Convert` stage
     exported_types: HashSet<String>,
+    /// Types that are primitive or aliases to primitive types - prefilled with real primitives and updated during collection
+    primitive_types: HashSet<String>,
     /// Type replacements made - filled on `Convert` stage and used to prepare assertion items for `Followup` stage
     type_replacements: HashMap<TypeTransmutePair, SourceLocation>,
     /// Items which are output in the end
@@ -321,6 +331,16 @@ impl FfiConverter {
             }
             syn::Item::Type(t) => {
                 self.exported_types.insert(t.ident.to_string());
+                
+                // Check if this type alias points to a primitive type
+                if let syn::Type::Path(type_path) = &*t.ty {
+                    if let Some(last_segment) = type_path.path.segments.last() {
+                        let target_type = last_segment.ident.to_string();
+                        if self.primitive_types.contains(&target_type) {
+                            self.primitive_types.insert(t.ident.to_string());
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -335,6 +355,7 @@ impl FfiConverter {
             let config = ParseConfig {
                 crate_name: &self.builder.source_crate_name,
                 exported_types: &self.exported_types,
+                primitive_types: &self.primitive_types,
                 allowed_prefixes: &self.builder.allowed_prefixes,
                 prefixed_exported_types: &self.builder.prefixed_exported_types,
                 transparent_wrappers: &self.builder.transparent_wrappers,
@@ -466,5 +487,101 @@ impl FfiConverter {
         I: Iterator<Item = (syn::Item, SourceLocation)>,
     {
         move |iter| self.call(iter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_primitive_types_prefilled() {
+        let converter = FfiConverter::builder("test_crate").build();
+        
+        // Check that real primitive types are prefilled
+        assert!(converter.primitive_types.contains("i32"));
+        assert!(converter.primitive_types.contains("u64"));
+        assert!(converter.primitive_types.contains("f32"));
+        assert!(converter.primitive_types.contains("bool"));
+        assert!(converter.primitive_types.contains("char"));
+        assert!(converter.primitive_types.contains("str"));
+        
+        // Check that non-primitive types are not included
+        assert!(!converter.primitive_types.contains("String"));
+        assert!(!converter.primitive_types.contains("Vec"));
+        assert!(!converter.primitive_types.contains("Option"));
+    }
+
+    #[test]
+    fn test_type_alias_to_primitive_detection() {
+        let mut converter = FfiConverter::builder("test_crate").build();
+        
+        // Simulate a type alias to a primitive type
+        let type_alias: syn::Item = syn::parse_quote! {
+            pub type MyInt = i32;
+        };
+        
+        let source_location = SourceLocation {
+            file: "test.rs".to_string(),
+            line: 1,
+            column: 1,
+        };
+        
+        // Collect the item (this should detect the type alias to primitive)
+        converter.collect_item(type_alias, source_location);
+        
+        // Check that the type alias is now in primitive_types
+        assert!(converter.primitive_types.contains("MyInt"));
+        assert!(converter.exported_types.contains("MyInt"));
+    }
+
+    #[test]
+    fn test_type_alias_to_non_primitive_not_detected() {
+        let mut converter = FfiConverter::builder("test_crate").build();
+        
+        // Simulate a type alias to a non-primitive type
+        let type_alias: syn::Item = syn::parse_quote! {
+            pub type MyString = String;
+        };
+        
+        let source_location = SourceLocation {
+            file: "test.rs".to_string(),
+            line: 1,
+            column: 1,
+        };
+        
+        // Collect the item
+        converter.collect_item(type_alias, source_location);
+        
+        // Check that the type alias is in exported_types but not in primitive_types
+        assert!(!converter.primitive_types.contains("MyString"));
+        assert!(converter.exported_types.contains("MyString"));
+    }
+
+    #[test]
+    fn test_chained_type_alias_to_primitive() {
+        let mut converter = FfiConverter::builder("test_crate").build();
+        
+        let source_location = SourceLocation {
+            file: "test.rs".to_string(),
+            line: 1,
+            column: 1,
+        };
+        
+        // First, add a type alias to a primitive
+        let first_alias: syn::Item = syn::parse_quote! {
+            pub type MyInt = i32;
+        };
+        converter.collect_item(first_alias, source_location.clone());
+        
+        // Then, add a type alias to the first alias
+        let second_alias: syn::Item = syn::parse_quote! {
+            pub type MyOtherInt = MyInt;
+        };
+        converter.collect_item(second_alias, source_location);
+        
+        // Check that both are detected as primitive types
+        assert!(converter.primitive_types.contains("MyInt"));
+        assert!(converter.primitive_types.contains("MyOtherInt"));
     }
 }

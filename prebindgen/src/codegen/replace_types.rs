@@ -18,6 +18,7 @@ use crate::SourceLocation;
 pub(crate) struct ParseConfig<'a> {
     pub crate_name: &'a str,
     pub exported_types: &'a HashSet<String>,
+    pub primitive_types: &'a HashSet<String>,
     pub allowed_prefixes: &'a [syn::Path],
     pub prefixed_exported_types: &'a [syn::Path],
     pub transparent_wrappers: &'a [syn::Path],
@@ -589,7 +590,7 @@ fn strip_type(
 }
 
 /// Check if two types are equivalent (e.g., both are type aliases to the same primitive type)
-fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
+fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &HashSet<String>) -> bool {
     let type1_str = quote::quote! { #type1 }.to_string();
     let type2_str = quote::quote! { #type2 }.to_string();
     if type1_str == type2_str {
@@ -605,49 +606,30 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
             if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
                 let name1 = path1.path.segments.first().unwrap().ident.to_string();
                 let name2 = path2.path.segments.first().unwrap().ident.to_string();
-                return name1 == name2 && is_primitive_type(&name1);
+                return name1 == name2 && is_primitive_type(&name1, primitive_types);
             }
             false
         }
         (syn::Type::Array(arr1), syn::Type::Array(arr2)) => {
             let len1_str = quote::quote! { #arr1.len }.to_string();
             let len2_str = quote::quote! { #arr2.len }.to_string();
-            len1_str == len2_str && types_are_equivalent(&arr1.elem, &arr2.elem)
+            len1_str == len2_str && types_are_equivalent(&arr1.elem, &arr2.elem, primitive_types)
         }
         (syn::Type::Reference(ref1), syn::Type::Reference(ref2)) => {
             ref1.mutability.is_some() == ref2.mutability.is_some()
-                && types_are_equivalent(&ref1.elem, &ref2.elem)
+                && types_are_equivalent(&ref1.elem, &ref2.elem, primitive_types)
         }
         (syn::Type::Ptr(ptr1), syn::Type::Ptr(ptr2)) => {
             ptr1.mutability.is_some() == ptr2.mutability.is_some()
-                && types_are_equivalent(&ptr1.elem, &ptr2.elem)
+                && types_are_equivalent(&ptr1.elem, &ptr2.elem, primitive_types)
         }
         _ => false,
     }
 }
 
 /// Check if a type name represents a primitive type
-fn is_primitive_type(name: &str) -> bool {
-    matches!(
-        name,
-        "bool"
-            | "char"
-            | "i8"
-            | "i16"
-            | "i32"
-            | "i64"
-            | "i128"
-            | "isize"
-            | "u8"
-            | "u16"
-            | "u32"
-            | "u64"
-            | "u128"
-            | "usize"
-            | "f32"
-            | "f64"
-            | "str"
-    )
+fn is_primitive_type(name: &str, primitive_types: &HashSet<String>) -> bool {
+    primitive_types.contains(name)
 }
 
 /// Check if two syn::Path values are equal
@@ -682,7 +664,7 @@ fn add_assertion_pair(
     let local_str = quote::quote! { #local_type }.to_string();
     let origin_str = quote::quote! { #origin_type }.to_string();
 
-    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type) {
+    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, &HashSet::new()) {
         if let std::collections::hash_map::Entry::Vacant(e) =
             assertion_type_pairs.entry(TypeTransmutePair::new(local_str, origin_str))
         {
@@ -1252,13 +1234,13 @@ fn generate_param_conversion(
     replace_lifetimes_with_static(&mut from_type);
     replace_lifetimes_with_static(&mut to_type);
 
-    if types_are_equivalent(&from_type, &to_type) {
+    if types_are_equivalent(&from_type, &to_type, config.primitive_types) {
         return quote::quote! { #param_name };
     }
 
     match (&from_type, &to_type) {
         (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
-            if types_are_equivalent(&from_ptr.elem, &to_ref.elem) {
+            if types_are_equivalent(&from_ptr.elem, &to_ref.elem, config.primitive_types) {
                 if to_ref.mutability.is_some() {
                     quote::quote! { &mut *#param_name }
                 } else {
@@ -1307,13 +1289,13 @@ fn generate_return_conversion(
 
     let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
 
-    if types_are_equivalent(&from_type, &to_type) {
+    if types_are_equivalent(&from_type, &to_type, config.primitive_types) {
         return function_call;
     }
 
     match (&from_type, &to_type) {
         (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
-            if types_are_equivalent(&from_ref.elem, &to_ptr.elem) {
+            if types_are_equivalent(&from_ref.elem, &to_ptr.elem, config.primitive_types) {
                 if to_ptr.mutability.is_some() {
                     quote::quote! { #function_call as *mut _ }
                 } else {
