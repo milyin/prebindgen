@@ -1147,7 +1147,6 @@ pub(crate) fn convert_to_stub(
                         match (&from_type, &to_type) {
                             (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
                                 let from_elem = &from_ptr.elem;
-                                let to_elem = &to_ref.elem;
                                 
                                 // Apply transmute between reference types, then pointer conversion
                                 let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
@@ -1157,9 +1156,9 @@ pub(crate) fn convert_to_stub(
                                 };
                                 
                                 if to_ref.mutability.is_some() {
-                                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name.cast::<#from_elem>()) }
+                                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
                                 } else {
-                                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name.cast::<#from_elem>()) }
+                                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
                                 }
                             }
                             _ => {
@@ -1227,10 +1226,23 @@ pub(crate) fn convert_to_stub(
                     let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
                     let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
                     
-                    if to_ptr.mutability.is_some() {
-                        quote::quote! { #transmuted_ref as *mut #to_elem }
+                    // Check if cast is needed for the final pointer conversion
+                    let from_elem_str = quote::quote! { #from_elem }.to_string();
+                    let to_elem_str = quote::quote! { #to_elem }.to_string();
+                    let needs_cast = from_elem_str != to_elem_str;
+                    
+                    if needs_cast {
+                        if to_ptr.mutability.is_some() {
+                            quote::quote! { #transmuted_ref as *mut #to_elem }
+                        } else {
+                            quote::quote! { #transmuted_ref as *const #to_elem }
+                        }
                     } else {
-                        quote::quote! { #transmuted_ref as *const #to_elem }
+                        if to_ptr.mutability.is_some() {
+                            quote::quote! { #transmuted_ref as *mut _ }
+                        } else {
+                            quote::quote! { #transmuted_ref as *const _ }
+                        }
                     }
                 }
                 _ => {
