@@ -278,6 +278,40 @@ pub(crate) fn replace_types_in_type(
     }
 }
 
+/// Replace lifetimes in a type with 'static
+fn replace_lifetimes_with_static(ty: &mut syn::Type) {
+    match ty {
+        syn::Type::Reference(type_ref) => {
+            type_ref.lifetime = Some(syn::parse_quote! { 'static });
+            replace_lifetimes_with_static(&mut type_ref.elem);
+        }
+        syn::Type::Path(type_path) => {
+            if let Some(last_segment) = type_path.path.segments.last_mut() {
+                if let syn::PathArguments::AngleBracketed(ref mut args) = last_segment.arguments {
+                    for arg in &mut args.args {
+                        match arg {
+                            syn::GenericArgument::Type(inner_ty) => {
+                                replace_lifetimes_with_static(inner_ty);
+                            }
+                            syn::GenericArgument::Lifetime(lifetime) => {
+                                *lifetime = syn::parse_quote! { 'static };
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        syn::Type::Array(type_array) => {
+            replace_lifetimes_with_static(&mut type_array.elem);
+        }
+        syn::Type::Ptr(type_ptr) => {
+            replace_lifetimes_with_static(&mut type_ptr.elem);
+        }
+        _ => {}
+    }
+}
+
 /// Replace types in a single item recursively
 pub(crate) fn replace_types_in_item(
     item: &mut syn::Item,
@@ -1099,8 +1133,15 @@ pub(crate) fn convert_to_stub(
                     let param_changed = params_changed.get(i).copied().unwrap_or(false);
 
                     let arg = if param_changed {
-                        let from_type = &pat_type.ty;
-                        let to_type = &original_param_types[i];
+                        let mut from_type = pat_type.ty.as_ref().clone();
+                        let mut to_type = prefix_exported_types_in_type(
+                            &original_param_types[i],
+                            &config.crate_ident(),
+                            config.exported_types,
+                            config.prefixed_exported_types,
+                        );
+                        replace_lifetimes_with_static(&mut from_type);
+                        replace_lifetimes_with_static(&mut to_type);
                         quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
                     } else {
                         quote::quote! { #param_name }
@@ -1133,11 +1174,18 @@ pub(crate) fn convert_to_stub(
         return_needs_transmute || is_converted_return_reference,
     ) {
         (true, true) => {
-            let from_type = original_return_type.as_ref().unwrap();
-            let to_type = match &function.sig.output {
-                syn::ReturnType::Type(_, return_type) => return_type,
+            let mut from_type = prefix_exported_types_in_type(
+                original_return_type.as_ref().unwrap(),
+                &config.crate_ident(),
+                config.exported_types,
+                config.prefixed_exported_types,
+            );
+            let mut to_type = match &function.sig.output {
+                syn::ReturnType::Type(_, return_type) => return_type.as_ref().clone(),
                 _ => unreachable!(),
             };
+            replace_lifetimes_with_static(&mut from_type);
+            replace_lifetimes_with_static(&mut to_type);
             quote::quote! {
                 std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
             }
@@ -1165,6 +1213,10 @@ pub(crate) fn convert_to_stub(
     function.sig.unsafety = Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
     function.sig.abi = Some(syn::parse_quote! { extern "C" });
     function.vis = syn::parse_quote! { pub };
+    
+    // Remove lifetime parameters as they are useless when replacing references with pointers
+    function.sig.generics.lifetimes().for_each(|_| {});
+    function.sig.generics = syn::Generics::default();
 
     // Add the type replacements to the global set for assertion generation
     type_replacements.extend(sig_type_replacements);
