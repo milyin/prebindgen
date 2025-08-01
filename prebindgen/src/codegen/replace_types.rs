@@ -1042,6 +1042,8 @@ fn validate_type_path(
     false
 }
 
+
+
 /// Check if a path starts with a given prefix path
 fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
     if prefix.segments.len() > path.segments.len() {
@@ -1162,8 +1164,14 @@ pub(crate) fn convert_to_stub(
                                 }
                             }
                             _ => {
-                                // Use transmute for type conversions (not pointer conversions)
-                                quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
+                                // Check if types are identical to avoid unnecessary transmute
+                                let from_str = quote::quote! { #from_type }.to_string();
+                                let to_str = quote::quote! { #to_type }.to_string();
+                                if from_str == to_str {
+                                    quote::quote! { #param_name }
+                                } else {
+                                    quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
+                                }
                             }
                         }
                     } else {
@@ -1246,9 +1254,15 @@ pub(crate) fn convert_to_stub(
                     }
                 }
                 _ => {
-                    // Use transmute for type conversions (not pointer conversions)
-                    quote::quote! {
-                        std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
+                    // Check if types are identical to avoid unnecessary transmute
+                    let from_str = quote::quote! { #from_type }.to_string();
+                    let to_str = quote::quote! { #to_type }.to_string();
+                    if from_str == to_str {
+                        quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
+                    } else {
+                        quote::quote! {
+                            std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
+                        }
                     }
                 }
             }
