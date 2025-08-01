@@ -186,7 +186,13 @@ impl Destination {
     /// let code = destination.to_string();
     /// assert!(code.contains("pub fn test_function"));
     /// ```
-    pub fn to_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         prettyplease::unparse(&self.file)
+    }
+}
+
+impl std::fmt::Display for Destination {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", prettyplease::unparse(&self.file))
     }
 }

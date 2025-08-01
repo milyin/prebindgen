@@ -96,7 +96,7 @@ pub fn copy_foo(dst: &mut mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example
 
 #[prebindgen("functions")]
 #[cfg(feature = "unstable")]
-pub fn get_unstable_field(input: &Foo) -> u64 {
+pub fn get_unstable_field(input: &foo::Foo) -> u64 {
     // Return the unstable field if it exists
     input.unstable_field
 }

@@ -55,9 +55,7 @@
 //!
 //! ```rust,no_run
 //! // example-ffi/build.rs
-//! fn main() {
-//!     prebindgen::init_prebindgen_out_dir();
-//! }
+//! prebindgen::init_prebindgen_out_dir();
 //! ```
 //!
 //! ### 2. In Language-Specific FFI Binding Crate (named e.g. `example-cbindgen`)
