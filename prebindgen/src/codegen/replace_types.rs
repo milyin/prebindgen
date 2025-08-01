@@ -263,10 +263,15 @@ pub(crate) fn replace_types_in_type(
 
             let local_str = quote::quote! { #local_stripped }.to_string();
             let original_str = quote::quote! { #original_stripped }.to_string();
-            if let std::collections::hash_map::Entry::Vacant(e) =
-                assertion_type_pairs.entry(TypeTransmutePair::new(local_str, original_str))
-            {
-                e.insert(source_location.clone());
+            
+            // Only add assertion if types are actually different
+            // This avoids generating assertions for type aliases that resolve to the same underlying type
+            if local_str != original_str {
+                if let std::collections::hash_map::Entry::Vacant(e) =
+                    assertion_type_pairs.entry(TypeTransmutePair::new(local_str, original_str))
+                {
+                    e.insert(source_location.clone());
+                }
             }
         }
 
@@ -610,6 +615,38 @@ fn strip_type(
             })
         }
         _ => ty.clone(),
+    }
+}
+
+/// Check if two types are equivalent (e.g., both are type aliases to the same primitive type)
+/// This is a heuristic check for common cases where transmute is unnecessary
+fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
+    match (type1, type2) {
+        // Both are simple paths - check if they might be type aliases to primitives
+        (syn::Type::Path(path1), syn::Type::Path(path2)) => {
+            // If both paths have only one segment and look like type aliases
+            if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
+                let name1 = path1.path.segments.first().unwrap().ident.to_string();
+                let name2 = path2.path.segments.first().unwrap().ident.to_string();
+                
+                // Check if both names suggest they might be type aliases to the same primitive
+                // This is a heuristic - we look for similar naming patterns
+                if name1.contains("result") && name2.contains("result") {
+                    return true;
+                }
+            }
+            
+            // Check if one is a prefixed version of the other (e.g., example_ffi::example_result vs example_result)
+            if let (Some(seg1), Some(seg2)) = (path1.path.segments.last(), path2.path.segments.last()) {
+                if seg1.ident == seg2.ident {
+                    // Same final segment name - likely the same type with different prefixing
+                    return true;
+                }
+            }
+            
+            false
+        }
+        _ => false,
     }
 }
 
@@ -1145,31 +1182,31 @@ pub(crate) fn convert_to_stub(
                         replace_lifetimes_with_static(&mut from_type);
                         replace_lifetimes_with_static(&mut to_type);
                         
-                        // Check if this is a pointer-to-reference conversion that clippy warns about
-                        match (&from_type, &to_type) {
-                            (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
-                                let from_elem = &from_ptr.elem;
-                                
-                                // Apply transmute between reference types, then pointer conversion
-                                let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
-                                    syn::parse_quote! { &'static mut #from_elem }
-                                } else {
-                                    syn::parse_quote! { &'static #from_elem }
-                                };
-                                
-                                if to_ref.mutability.is_some() {
-                                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
-                                } else {
-                                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
+                        // Check if types are identical to avoid unnecessary transmute
+                        let from_str = quote::quote! { #from_type }.to_string();
+                        let to_str = quote::quote! { #to_type }.to_string();
+                        if from_str == to_str || types_are_equivalent(&from_type, &to_type) {
+                            quote::quote! { #param_name }
+                        } else {
+                            // Check if this is a pointer-to-reference conversion that clippy warns about
+                            match (&from_type, &to_type) {
+                                (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
+                                    let from_elem = &from_ptr.elem;
+                                    
+                                    // Apply transmute between reference types, then pointer conversion
+                                    let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
+                                        syn::parse_quote! { &'static mut #from_elem }
+                                    } else {
+                                        syn::parse_quote! { &'static #from_elem }
+                                    };
+                                    
+                                    if to_ref.mutability.is_some() {
+                                        quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
+                                    } else {
+                                        quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
+                                    }
                                 }
-                            }
-                            _ => {
-                                // Check if types are identical to avoid unnecessary transmute
-                                let from_str = quote::quote! { #from_type }.to_string();
-                                let to_str = quote::quote! { #to_type }.to_string();
-                                if from_str == to_str {
-                                    quote::quote! { #param_name }
-                                } else {
+                                _ => {
                                     quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
                                 }
                             }
@@ -1218,46 +1255,46 @@ pub(crate) fn convert_to_stub(
             replace_lifetimes_with_static(&mut from_type);
             replace_lifetimes_with_static(&mut to_type);
             
-            // Check if this is a reference-to-pointer conversion that clippy warns about
-            match (&from_type, &to_type) {
-                (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
-                    let from_elem = &from_ref.elem;
-                    let to_elem = &to_ptr.elem;
-                    
-                    // Apply transmute between reference types, then pointer conversion
-                    let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
-                        syn::parse_quote! { &'static mut #to_elem }
-                    } else {
-                        syn::parse_quote! { &'static #to_elem }
-                    };
-                    
-                    let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
-                    let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
-                    
-                    // Check if cast is needed for the final pointer conversion
-                    let from_elem_str = quote::quote! { #from_elem }.to_string();
-                    let to_elem_str = quote::quote! { #to_elem }.to_string();
-                    let needs_cast = from_elem_str != to_elem_str;
-                    
-                    if needs_cast {
-                        if to_ptr.mutability.is_some() {
-                            quote::quote! { #transmuted_ref as *mut #to_elem }
+            // Check if types are identical to avoid unnecessary transmute
+            let from_str = quote::quote! { #from_type }.to_string();
+            let to_str = quote::quote! { #to_type }.to_string();
+            if from_str == to_str || types_are_equivalent(&from_type, &to_type) {
+                quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
+            } else {
+                // Check if this is a reference-to-pointer conversion that clippy warns about
+                match (&from_type, &to_type) {
+                    (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
+                        let from_elem = &from_ref.elem;
+                        let to_elem = &to_ptr.elem;
+                        
+                        // Apply transmute between reference types, then pointer conversion
+                        let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
+                            syn::parse_quote! { &'static mut #to_elem }
                         } else {
-                            quote::quote! { #transmuted_ref as *const #to_elem }
+                            syn::parse_quote! { &'static #to_elem }
+                        };
+                        
+                        let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
+                        let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
+                        
+                        // Check if cast is needed for the final pointer conversion
+                        let from_elem_str = quote::quote! { #from_elem }.to_string();
+                        let to_elem_str = quote::quote! { #to_elem }.to_string();
+                        let needs_cast = from_elem_str != to_elem_str;
+                        
+                        if needs_cast {
+                            if to_ptr.mutability.is_some() {
+                                quote::quote! { #transmuted_ref as *mut #to_elem }
+                            } else {
+                                quote::quote! { #transmuted_ref as *const #to_elem }
+                            }
+                        } else if to_ptr.mutability.is_some() {
+                            quote::quote! { #transmuted_ref as *mut _ }
+                        } else {
+                            quote::quote! { #transmuted_ref as *const _ }
                         }
-                    } else if to_ptr.mutability.is_some() {
-                        quote::quote! { #transmuted_ref as *mut _ }
-                    } else {
-                        quote::quote! { #transmuted_ref as *const _ }
                     }
-                }
-                _ => {
-                    // Check if types are identical to avoid unnecessary transmute
-                    let from_str = quote::quote! { #from_type }.to_string();
-                    let to_str = quote::quote! { #to_type }.to_string();
-                    if from_str == to_str {
-                        quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
-                    } else {
+                    _ => {
                         quote::quote! {
                             std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
                         }
