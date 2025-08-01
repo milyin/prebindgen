@@ -1099,7 +1099,9 @@ pub(crate) fn convert_to_stub(
                     let param_changed = params_changed.get(i).copied().unwrap_or(false);
 
                     let arg = if param_changed {
-                        quote::quote! { std::mem::transmute(#param_name) }
+                        let from_type = &pat_type.ty;
+                        let to_type = &original_param_types[i];
+                        quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
                     } else {
                         quote::quote! { #param_name }
                     };
@@ -1130,8 +1132,15 @@ pub(crate) fn convert_to_stub(
         has_return_type,
         return_needs_transmute || is_converted_return_reference,
     ) {
-        (true, true) => quote::quote! {
-            std::mem::transmute(#source_crate_ident::#function_name(#(#call_args),*))
+        (true, true) => {
+            let from_type = original_return_type.as_ref().unwrap();
+            let to_type = match &function.sig.output {
+                syn::ReturnType::Type(_, return_type) => return_type,
+                _ => unreachable!(),
+            };
+            quote::quote! {
+                std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
+            }
         },
         (true, false) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
         (false, _) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
