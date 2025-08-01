@@ -123,8 +123,8 @@ pub fn test_function(a: i32, b: f64) -> i32 {
 }
 
 #[prebindgen("functions")]
-pub fn another_test_function() -> bool {
-    false
+pub fn another_test_function() -> example_result {
+    EXAMPLE_RESULT_OK
 }
 
 #[prebindgen("functions")]

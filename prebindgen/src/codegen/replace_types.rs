@@ -1108,15 +1108,12 @@ pub(crate) fn convert_to_stub(
 
     // Apply type replacements to the function signature
     let mut sig_type_replacements = type_replacements.clone();
-    let (params_changed, return_changed) = replace_types_in_signature(
+    replace_types_in_signature(
         &mut function.sig,
         config,
         &mut sig_type_replacements,
         source_location,
     )?;
-
-    // Determine if we need unsafe block
-    let need_unsafe_block = params_changed.iter().any(|&changed| changed) || return_changed;
 
     // Check for unsupported parameter patterns first
     for input in &function.sig.inputs {
@@ -1130,7 +1127,8 @@ pub(crate) fn convert_to_stub(
     }
 
     // Build call arguments with conditional transmutes
-    let call_args: Vec<_> = function
+    let mut args_need_unsafe = false;
+    let call_args = function
         .sig
         .inputs
         .iter()
@@ -1139,56 +1137,47 @@ pub(crate) fn convert_to_stub(
             if let syn::FnArg::Typed(pat_type) = input {
                 if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
                     let param_name = &pat_ident.ident;
-                    let param_changed = params_changed.get(i).copied().unwrap_or(false);
-
-                    let arg = if param_changed {
-                        generate_param_conversion(
-                            param_name,
-                            &pat_type.ty,
-                            &original_param_types[i],
-                            config,
-                        )
-                    } else {
-                        quote::quote! { #param_name }
-                    };
-                    return Some(arg);
+                    return Some(generate_param_conversion(
+                        param_name,
+                        &pat_type.ty,
+                        &original_param_types[i],
+                        config,
+                    ));
                 }
             }
             None
+        }).map(|(code, need_unsafe)| {
+            args_need_unsafe |= need_unsafe;
+            code
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     // Determine if return type needs transmutation
     let has_return_type = !matches!(&function.sig.output, syn::ReturnType::Default);
-    let return_needs_transmute = has_return_type && return_changed;
 
     // Generate function body
     let function_name = &function.sig.ident;
     let source_crate_ident = &config.crate_ident();
 
-    // Check if the original return type was a reference that got converted to a pointer
-    let is_converted_return_reference = if let Some(original_ret) = &original_return_type {
-        matches!(original_ret, syn::Type::Reference(_))
-            && matches!(&function.sig.output, syn::ReturnType::Type(_, ret_ty) if matches!(**ret_ty, syn::Type::Ptr(_)))
+    let (function_body, return_need_unsafe) = if has_return_type {
+        generate_return_conversion(
+            source_crate_ident,
+            function_name,
+            &call_args,
+            original_return_type.as_ref().unwrap(),
+            &function.sig.output,
+            config,
+        )
     } else {
-        false
+        (
+            quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
+            false,
+        )
     };
 
-    let function_body =
-        if has_return_type && (return_needs_transmute || is_converted_return_reference) {
-            generate_return_conversion(
-                source_crate_ident,
-                function_name,
-                &call_args,
-                original_return_type.as_ref().unwrap(),
-                &function.sig.output,
-                config,
-            )
-        } else {
-            quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
-        };
+    // Determine if we need unsafe block based on transmute usage or pointer dereferencing
 
-    let function_body = if need_unsafe_block {
+    let function_body = if args_need_unsafe || return_need_unsafe {
         quote::quote! { unsafe { #function_body } }
     } else {
         function_body
@@ -1222,13 +1211,13 @@ pub(crate) fn convert_to_stub(
     Ok(())
 }
 
-/// Generate parameter conversion code
+/// Generate parameter conversion code and return whether unsafe is needed
 fn generate_param_conversion(
     param_name: &syn::Ident,
     current_type: &syn::Type,
     original_type: &syn::Type,
     config: &ParseConfig,
-) -> proc_macro2::TokenStream {
+) -> (proc_macro2::TokenStream, bool) {
     let mut from_type = current_type.clone();
     let mut to_type = prefix_exported_types_in_type(
         original_type,
@@ -1240,17 +1229,18 @@ fn generate_param_conversion(
     replace_lifetimes_with_static(&mut to_type);
 
     if types_are_equivalent(&from_type, &to_type, config.primitive_types) {
-        return quote::quote! { #param_name };
+        return (quote::quote! { #param_name }, false);
     }
 
     match (&from_type, &to_type) {
         (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
             if types_are_equivalent(&from_ptr.elem, &to_ref.elem, config.primitive_types) {
-                if to_ref.mutability.is_some() {
+                let code = if to_ref.mutability.is_some() {
                     quote::quote! { &mut *#param_name }
                 } else {
                     quote::quote! { &*#param_name }
-                }
+                };
+                (code, true) // Pointer dereferencing requires unsafe
             } else {
                 let from_elem = &*from_ptr.elem;
                 let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
@@ -1259,18 +1249,22 @@ fn generate_param_conversion(
                     syn::parse_quote! { &'static #from_elem }
                 };
 
-                if to_ref.mutability.is_some() {
+                let code = if to_ref.mutability.is_some() {
                     quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
                 } else {
                     quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
-                }
+                };
+                (code, true) // Both transmute and pointer dereferencing require unsafe
             }
         }
-        _ => quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) },
+        _ => (
+            quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) },
+            true,
+        ),
     }
 }
 
-/// Generate return type conversion code
+/// Generate return type conversion code and return whether unsafe is needed
 fn generate_return_conversion(
     source_crate_ident: &syn::Ident,
     function_name: &syn::Ident,
@@ -1278,7 +1272,7 @@ fn generate_return_conversion(
     original_return_type: &syn::Type,
     current_return_type: &syn::ReturnType,
     config: &ParseConfig,
-) -> proc_macro2::TokenStream {
+) -> (proc_macro2::TokenStream, bool) {
     let mut from_type = prefix_exported_types_in_type(
         original_return_type,
         &config.crate_ident(),
@@ -1295,17 +1289,18 @@ fn generate_return_conversion(
     let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
 
     if types_are_equivalent(&from_type, &to_type, config.primitive_types) {
-        return function_call;
+        return (function_call, false);
     }
 
     match (&from_type, &to_type) {
         (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
             if types_are_equivalent(&from_ref.elem, &to_ptr.elem, config.primitive_types) {
-                if to_ptr.mutability.is_some() {
+                let code = if to_ptr.mutability.is_some() {
                     quote::quote! { #function_call as *mut _ }
                 } else {
                     quote::quote! { #function_call as *const _ }
-                }
+                };
+                (code, false)
             } else {
                 let to_elem = &*to_ptr.elem;
                 let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
@@ -1316,13 +1311,17 @@ fn generate_return_conversion(
 
                 let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
 
-                if to_ptr.mutability.is_some() {
+                let code = if to_ptr.mutability.is_some() {
                     quote::quote! { #transmuted_ref as *mut #to_elem }
                 } else {
                     quote::quote! { #transmuted_ref as *const #to_elem }
-                }
+                };
+                (code, true) // Transmute requires unsafe
             }
         }
-        _ => quote::quote! { std::mem::transmute::<#from_type, #to_type>(#function_call) },
+        _ => (
+            quote::quote! { std::mem::transmute::<#from_type, #to_type>(#function_call) },
+            true,
+        ),
     }
 }
