@@ -205,21 +205,13 @@ pub(crate) fn replace_types_in_type(
         let function_changed = any_param_changed || any_return_changed;
         
         if function_changed {
-            // Generate assertion pair for the entire function type
             let prefixed_original_type = prefix_exported_types_in_type(
                 &original_ty,
                 &config.crate_ident(),
                 config.exported_types,
                 config.prefixed_exported_types,
             );
-            
-            let local_str = quote::quote! { #local_type }.to_string();
-            let original_str = quote::quote! { #prefixed_original_type }.to_string();
-            if let std::collections::hash_map::Entry::Vacant(e) =
-                assertion_type_pairs.entry(TypeTransmutePair::new(local_str, original_str))
-            {
-                e.insert(source_location.clone());
-            }
+            add_assertion_pair(assertion_type_pairs, local_type.clone(), prefixed_original_type, source_location);
         }
         
         *ty = local_type;
@@ -248,7 +240,6 @@ pub(crate) fn replace_types_in_type(
             local_core_type.clone()
         };
 
-        // Generate assertion pair by stripping both types to same level
         if core_type_changed {
             let prefixed_original_type = prefix_exported_types_in_type(
                 &original_ty,
@@ -256,23 +247,8 @@ pub(crate) fn replace_types_in_type(
                 config.exported_types,
                 config.prefixed_exported_types,
             );
-
-            // Strip both types to the same level until first path type
-            let (local_stripped, original_stripped) =
-                strip_to_same_level(final_type.clone(), prefixed_original_type);
-
-            let local_str = quote::quote! { #local_stripped }.to_string();
-            let original_str = quote::quote! { #original_stripped }.to_string();
-            
-            // Only add assertion if types are actually different
-            // This avoids generating assertions for type aliases that resolve to the same underlying type
-            if local_str != original_str && !types_are_equivalent(&local_stripped, &original_stripped) {
-                if let std::collections::hash_map::Entry::Vacant(e) =
-                    assertion_type_pairs.entry(TypeTransmutePair::new(local_str, original_str))
-                {
-                    e.insert(source_location.clone());
-                }
-            }
+            let (local_stripped, original_stripped) = strip_to_same_level(final_type.clone(), prefixed_original_type);
+            add_assertion_pair(assertion_type_pairs, local_stripped, original_stripped, source_location);
         }
 
         *ty = final_type;
@@ -468,10 +444,6 @@ fn replace_types_in_fields(
 }
 
 /// Strip transparent wrappers from a type and track if any were removed
-///
-/// Recursively removes transparent wrapper types (like `MaybeUninit<T>`) from a type,
-/// returning the inner type. Sets the `has_wrapper` flag to indicate if any wrappers
-/// were found and stripped.
 #[roxygen]
 fn strip_type(
     /// The type to strip wrappers from
@@ -487,48 +459,34 @@ fn strip_type(
 ) -> syn::Type {
     match ty {
         syn::Type::Path(type_path) => {
-            // Associated types are not supported, report error
             if type_path.qself.is_some() {
                 panic!("Associated types are not supported in FFI stubs: {source_location}");
             }
 
-            // Check if this type path matches any full exported type and strip its prefix
             let path = {
                 let mut result_path = Cow::Borrowed(&type_path.path);
                 
                 for full_exported_type in prefixed_exported_types {
-                    if paths_equal(&type_path.path, full_exported_type) {
-                        // Found exact match - strip prefix if it has more than one segment
-                        if full_exported_type.segments.len() > 1 {
-                            *stripped = true;
-                            // Keep only the last segment (the type name)
-                            let last_segment = full_exported_type.segments.last().unwrap().clone();
-                            result_path = Cow::Owned(syn::Path {
-                                leading_colon: None,
-                                segments: std::iter::once(last_segment).collect(),
-                            });
-                            break;
-                        }
+                    if paths_equal(&type_path.path, full_exported_type) && full_exported_type.segments.len() > 1 {
+                        *stripped = true;
+                        let last_segment = full_exported_type.segments.last().unwrap().clone();
+                        result_path = Cow::Owned(syn::Path {
+                            leading_colon: None,
+                            segments: std::iter::once(last_segment).collect(),
+                        });
+                        break;
                     }
                 }
                 result_path
             };
 
-            // Check if this type path matches any transparent wrapper
             for wrapper in wrappers {
                 if paths_equal(path.as_ref(), wrapper) {
                     *stripped = true;
-                    // Extract the first generic argument if present
                     if let Some(last_segment) = path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                return strip_type(
-                                    inner_ty,
-                                    wrappers,
-                                    prefixed_exported_types,
-                                    stripped,
-                                    source_location,
-                                );
+                                return strip_type(inner_ty, wrappers, prefixed_exported_types, stripped, source_location);
                             }
                         }
                     }
@@ -541,55 +499,27 @@ fn strip_type(
             })
         }
         syn::Type::Reference(type_ref) => {
-            // Recursively strip wrappers from the referenced type
-            let stripped_elem = strip_type(
-                &type_ref.elem,
-                wrappers,
-                prefixed_exported_types,
-                stripped,
-                source_location,
-            );
+            let stripped_elem = strip_type(&type_ref.elem, wrappers, prefixed_exported_types, stripped, source_location);
             syn::Type::Reference(syn::TypeReference {
-                and_token: type_ref.and_token,
-                lifetime: type_ref.lifetime.clone(),
-                mutability: type_ref.mutability,
                 elem: Box::new(stripped_elem),
+                ..type_ref.clone()
             })
         }
         syn::Type::Ptr(type_ptr) => {
-            // Recursively strip wrappers from the pointed-to type
-            let stripped_elem = strip_type(
-                &type_ptr.elem,
-                wrappers,
-                prefixed_exported_types,
-                stripped,
-                source_location,
-            );
+            let stripped_elem = strip_type(&type_ptr.elem, wrappers, prefixed_exported_types, stripped, source_location);
             syn::Type::Ptr(syn::TypePtr {
-                star_token: type_ptr.star_token,
-                const_token: type_ptr.const_token,
-                mutability: type_ptr.mutability,
                 elem: Box::new(stripped_elem),
+                ..type_ptr.clone()
             })
         }
         syn::Type::Array(type_array) => {
-            // Recursively strip wrappers from the array element type
-            let stripped_elem = strip_type(
-                &type_array.elem,
-                wrappers,
-                prefixed_exported_types,
-                stripped,
-                source_location,
-            );
+            let stripped_elem = strip_type(&type_array.elem, wrappers, prefixed_exported_types, stripped, source_location);
             syn::Type::Array(syn::TypeArray {
-                bracket_token: type_array.bracket_token,
                 elem: Box::new(stripped_elem),
-                semi_token: type_array.semi_token,
-                len: type_array.len.clone(),
+                ..type_array.clone()
             })
         }
         syn::Type::BareFn(type_bare_fn) => {
-            // Recursively strip wrappers from function parameter and return types
             let mut new_inputs = type_bare_fn.inputs.clone();
             for input in &mut new_inputs {
                 input.ty = strip_type(&input.ty, wrappers, prefixed_exported_types, stripped, source_location);
@@ -604,14 +534,9 @@ fn strip_type(
             };
             
             syn::Type::BareFn(syn::TypeBareFn {
-                lifetimes: type_bare_fn.lifetimes.clone(),
-                unsafety: type_bare_fn.unsafety,
-                abi: type_bare_fn.abi.clone(),
-                fn_token: type_bare_fn.fn_token,
-                paren_token: type_bare_fn.paren_token,
                 inputs: new_inputs,
-                variadic: type_bare_fn.variadic.clone(),
                 output: new_output,
+                ..type_bare_fn.clone()
             })
         }
         _ => ty.clone(),
@@ -619,9 +544,7 @@ fn strip_type(
 }
 
 /// Check if two types are equivalent (e.g., both are type aliases to the same primitive type)
-/// This is a heuristic check for common cases where transmute is unnecessary
 fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
-    // First check if the types are syntactically identical
     let type1_str = quote::quote! { #type1 }.to_string();
     let type2_str = quote::quote! { #type2 }.to_string();
     if type1_str == type2_str {
@@ -629,48 +552,27 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
     }
     
     match (type1, type2) {
-        // Both are simple paths - check if they might be type aliases to primitives
         (syn::Type::Path(path1), syn::Type::Path(path2)) => {
-            // Only consider types equivalent if they have the exact same path structure
-            // This is more conservative to avoid incorrectly identifying different types as equivalent
             if path1.path.segments.len() == path2.path.segments.len() {
-                // Check if all segments match exactly
-                for (seg1, seg2) in path1.path.segments.iter().zip(path2.path.segments.iter()) {
-                    if seg1.ident != seg2.ident {
-                        return false;
-                    }
-                }
-                return true;
+                return paths_equal(&path1.path, &path2.path);
             }
             
-            // Special case: check if both are type aliases to the same primitive (very conservative)
             if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
                 let name1 = path1.path.segments.first().unwrap().ident.to_string();
                 let name2 = path2.path.segments.first().unwrap().ident.to_string();
-                
-                // Only consider equivalent if they are exactly the same primitive type
-                if name1 == name2 && is_primitive_type(&name1) {
-                    return true;
-                }
+                return name1 == name2 && is_primitive_type(&name1);
             }
-            
             false
         }
-        // Check array types
         (syn::Type::Array(arr1), syn::Type::Array(arr2)) => {
-            // Arrays are equivalent if their element types are equivalent and lengths are the same
             let len1_str = quote::quote! { #arr1.len }.to_string();
             let len2_str = quote::quote! { #arr2.len }.to_string();
             len1_str == len2_str && types_are_equivalent(&arr1.elem, &arr2.elem)
         }
-        // Check reference types
         (syn::Type::Reference(ref1), syn::Type::Reference(ref2)) => {
-            // References are equivalent if mutability matches and element types are equivalent
             ref1.mutability.is_some() == ref2.mutability.is_some() && types_are_equivalent(&ref1.elem, &ref2.elem)
         }
-        // Check pointer types
         (syn::Type::Ptr(ptr1), syn::Type::Ptr(ptr2)) => {
-            // Pointers are equivalent if mutability matches and element types are equivalent
             ptr1.mutability.is_some() == ptr2.mutability.is_some() && types_are_equivalent(&ptr1.elem, &ptr2.elem)
         }
         _ => false,
@@ -684,25 +586,37 @@ fn is_primitive_type(name: &str) -> bool {
 
 /// Check if two syn::Path values are equal
 fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
-    // Compare leading colons
-    if path1.leading_colon.is_some() != path2.leading_colon.is_some() {
-        return false;
-    }
+    path1.leading_colon.is_some() == path2.leading_colon.is_some()
+        && path1.segments.len() == path2.segments.len()
+        && path1.segments.iter().zip(path2.segments.iter())
+            .all(|(seg1, seg2)| seg1.ident == seg2.ident)
+}
 
-    // Compare segments
-    if path1.segments.len() != path2.segments.len() {
-        return false;
-    }
+/// Check if a path starts with a given prefix path
+fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
+    prefix.segments.len() <= path.segments.len()
+        && prefix.leading_colon.is_some() == path.leading_colon.is_some()
+        && path.segments.iter().zip(prefix.segments.iter())
+            .all(|(path_seg, prefix_seg)| path_seg.ident == prefix_seg.ident)
+}
 
-    for (seg1, seg2) in path1.segments.iter().zip(path2.segments.iter()) {
-        if seg1.ident != seg2.ident {
-            return false;
+/// Helper function to add assertion pair if not already present
+fn add_assertion_pair(
+    assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
+    local_type: syn::Type,
+    origin_type: syn::Type,
+    source_location: &SourceLocation,
+) {
+    let local_str = quote::quote! { #local_type }.to_string();
+    let origin_str = quote::quote! { #origin_type }.to_string();
+    
+    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type) {
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            assertion_type_pairs.entry(TypeTransmutePair::new(local_str, origin_str))
+        {
+            e.insert(source_location.clone());
         }
-        // For transparent wrapper detection, we only care about the path name,
-        // not the generic arguments
     }
-
-    true
 }
 
 /// Generate compile-time assertions for a single type transmute pair
@@ -765,6 +679,18 @@ pub(crate) fn generate_type_transmute_pair_assertions(
     }
 }
 
+/// Helper to process generic arguments recursively
+fn process_generic_args(
+    args: &mut syn::AngleBracketedGenericArguments,
+    processor: impl Fn(&syn::Type) -> syn::Type,
+) {
+    for arg in &mut args.args {
+        if let syn::GenericArgument::Type(inner_ty) = arg {
+            *inner_ty = processor(inner_ty);
+        }
+    }
+}
+
 /// Recursively prefix exported types in a type with the source crate name
 fn prefix_exported_types_in_type(
     ty: &syn::Type,
@@ -772,50 +698,36 @@ fn prefix_exported_types_in_type(
     exported_types: &HashSet<String>,
     prefixed_exported_types: &[syn::Path],
 ) -> syn::Type {
+    let processor = |inner_ty: &syn::Type| {
+        prefix_exported_types_in_type(inner_ty, source_crate_ident, exported_types, prefixed_exported_types)
+    };
+    
     match ty {
         syn::Type::Path(type_path) => {
             if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
 
-                // Only prefix if the last segment is an exported type
                 if exported_types.contains(&type_name) {
-                    // Check if the type matches any prefixed exported type
                     for full_exported_type in prefixed_exported_types {
                         if paths_equal(&type_path.path, full_exported_type) {
-                            // Path matches full exported type: foo::Foo -> example_ffi::foo::Foo
                             return syn::parse_quote! { #source_crate_ident::#type_path };
                         }
-                        // Check if single-segment type matches the last segment of a prefixed type
                         if type_path.path.segments.len() == 1 {
                             if let Some(last_segment) = full_exported_type.segments.last() {
                                 if last_segment.ident == type_name {
-                                    // Found matching type: InsideFoo -> example_ffi::foo::InsideFoo
                                     return syn::parse_quote! { #source_crate_ident::#full_exported_type };
                                 }
                             }
                         }
                     }
-                    // Default: prefix with crate name only
                     return syn::parse_quote! { #source_crate_ident::#type_path };
                 }
 
-                // Handle generic arguments recursively
-                if let syn::PathArguments::AngleBracketed(_args) = &segment.arguments {
+                if let syn::PathArguments::AngleBracketed(_) = &segment.arguments {
                     let mut new_path = type_path.path.clone();
                     if let Some(last_segment) = new_path.segments.last_mut() {
-                        if let syn::PathArguments::AngleBracketed(ref mut args) =
-                            last_segment.arguments
-                        {
-                            for arg in &mut args.args {
-                                if let syn::GenericArgument::Type(inner_ty) = arg {
-                                    *inner_ty = prefix_exported_types_in_type(
-                                        inner_ty,
-                                        source_crate_ident,
-                                        exported_types,
-                                        prefixed_exported_types,
-                                    );
-                                }
-                            }
+                        if let syn::PathArguments::AngleBracketed(ref mut args) = last_segment.arguments {
+                            process_generic_args(args, processor);
                         }
                     }
                     return syn::Type::Path(syn::TypePath {
@@ -827,60 +739,30 @@ fn prefix_exported_types_in_type(
             ty.clone()
         }
         syn::Type::Reference(type_ref) => syn::Type::Reference(syn::TypeReference {
-            and_token: type_ref.and_token,
-            lifetime: type_ref.lifetime.clone(),
-            mutability: type_ref.mutability,
-            elem: Box::new(prefix_exported_types_in_type(
-                &type_ref.elem,
-                source_crate_ident,
-                exported_types,
-                prefixed_exported_types,
-            )),
+            elem: Box::new(processor(&type_ref.elem)),
+            ..type_ref.clone()
         }),
         syn::Type::Ptr(type_ptr) => syn::Type::Ptr(syn::TypePtr {
-            star_token: type_ptr.star_token,
-            const_token: type_ptr.const_token,
-            mutability: type_ptr.mutability,
-            elem: Box::new(prefix_exported_types_in_type(
-                &type_ptr.elem,
-                source_crate_ident,
-                exported_types,
-                prefixed_exported_types,
-            )),
+            elem: Box::new(processor(&type_ptr.elem)),
+            ..type_ptr.clone()
         }),
         syn::Type::BareFn(type_bare_fn) => {
             let mut new_inputs = type_bare_fn.inputs.clone();
             for input in &mut new_inputs {
-                input.ty = prefix_exported_types_in_type(
-                    &input.ty,
-                    source_crate_ident,
-                    exported_types,
-                    prefixed_exported_types,
-                );
+                input.ty = processor(&input.ty);
             }
             
             let new_output = match &type_bare_fn.output {
                 syn::ReturnType::Type(arrow, return_type) => {
-                    let prefixed_return = prefix_exported_types_in_type(
-                        return_type,
-                        source_crate_ident,
-                        exported_types,
-                        prefixed_exported_types,
-                    );
-                    syn::ReturnType::Type(*arrow, Box::new(prefixed_return))
+                    syn::ReturnType::Type(*arrow, Box::new(processor(return_type)))
                 }
                 syn::ReturnType::Default => type_bare_fn.output.clone(),
             };
             
             syn::Type::BareFn(syn::TypeBareFn {
-                lifetimes: type_bare_fn.lifetimes.clone(),
-                unsafety: type_bare_fn.unsafety,
-                abi: type_bare_fn.abi.clone(),
-                fn_token: type_bare_fn.fn_token,
-                paren_token: type_bare_fn.paren_token,
                 inputs: new_inputs,
-                variadic: type_bare_fn.variadic.clone(),
                 output: new_output,
+                ..type_bare_fn.clone()
             })
         }
         _ => ty.clone(),
@@ -1113,24 +995,7 @@ fn validate_type_path(
 
 
 
-/// Check if a path starts with a given prefix path
-fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
-    if prefix.segments.len() > path.segments.len() {
-        return false;
-    }
 
-    if prefix.leading_colon.is_some() != path.leading_colon.is_some() {
-        return false;
-    }
-
-    for (path_segment, prefix_segment) in path.segments.iter().zip(prefix.segments.iter()) {
-        if path_segment.ident != prefix_segment.ident {
-            return false;
-        }
-    }
-
-    true
-}
 
 /// Create a stub implementation for a function with transmutes applied
 ///
@@ -1204,54 +1069,12 @@ pub(crate) fn convert_to_stub(
                     let param_changed = params_changed.get(i).copied().unwrap_or(false);
 
                     let arg = if param_changed {
-                        let mut from_type = pat_type.ty.as_ref().clone();
-                        let mut to_type = prefix_exported_types_in_type(
+                        generate_param_conversion(
+                            param_name,
+                            &pat_type.ty,
                             &original_param_types[i],
-                            &config.crate_ident(),
-                            config.exported_types,
-                            config.prefixed_exported_types,
-                        );
-                        replace_lifetimes_with_static(&mut from_type);
-                        replace_lifetimes_with_static(&mut to_type);
-                        
-                        // Check if types are identical to avoid unnecessary transmute
-                        if types_are_equivalent(&from_type, &to_type) {
-                            quote::quote! { #param_name }
-                        } else {
-                            // Check if this is a pointer-to-reference conversion that clippy warns about
-                            match (&from_type, &to_type) {
-                                (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
-                                    let from_elem = &from_ptr.elem;
-                                    let to_elem = &to_ref.elem;
-                                    
-                                    // Check if element types are equivalent
-                                    if types_are_equivalent(from_elem, to_elem) {
-                                        // No transmute needed, just dereference
-                                        if to_ref.mutability.is_some() {
-                                            quote::quote! { &mut *#param_name }
-                                        } else {
-                                            quote::quote! { &*#param_name }
-                                        }
-                                    } else {
-                                        // Apply transmute between reference types, then pointer conversion
-                                        let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
-                                            syn::parse_quote! { &'static mut #from_elem }
-                                        } else {
-                                            syn::parse_quote! { &'static #from_elem }
-                                        };
-                                        
-                                        if to_ref.mutability.is_some() {
-                                            quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
-                                        } else {
-                                            quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
-                                }
-                            }
-                        }
+                            config,
+                        )
                     } else {
                         quote::quote! { #param_name }
                     };
@@ -1278,73 +1101,17 @@ pub(crate) fn convert_to_stub(
         false
     };
 
-    let function_body = match (
-        has_return_type,
-        return_needs_transmute || is_converted_return_reference,
-    ) {
-        (true, true) => {
-            let mut from_type = prefix_exported_types_in_type(
-                original_return_type.as_ref().unwrap(),
-                &config.crate_ident(),
-                config.exported_types,
-                config.prefixed_exported_types,
-            );
-            let mut to_type = match &function.sig.output {
-                syn::ReturnType::Type(_, return_type) => return_type.as_ref().clone(),
-                _ => unreachable!(),
-            };
-            replace_lifetimes_with_static(&mut from_type);
-            replace_lifetimes_with_static(&mut to_type);
-            
-            // Check if types are identical to avoid unnecessary transmute
-            if types_are_equivalent(&from_type, &to_type) {
-                quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
-            } else {
-                // Check if this is a reference-to-pointer conversion that clippy warns about
-                match (&from_type, &to_type) {
-                    (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
-                        let from_elem = &from_ref.elem;
-                        let to_elem = &to_ptr.elem;
-                        
-                        // Check if the element types are equivalent
-                        if types_are_equivalent(from_elem, to_elem) {
-                            // No transmute needed, just cast to pointer
-                            let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
-                            if to_ptr.mutability.is_some() {
-                                quote::quote! { #function_call as *mut _ }
-                            } else {
-                                quote::quote! { #function_call as *const _ }
-                            }
-                        } else {
-                            // Apply transmute between reference types, then pointer conversion
-                            let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
-                                syn::parse_quote! { &'static mut #to_elem }
-                            } else {
-                                syn::parse_quote! { &'static #to_elem }
-                            };
-                            
-                            let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
-                            
-                            // Apply transmute to convert the reference type, then cast to pointer
-                            let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
-                            
-                            if to_ptr.mutability.is_some() {
-                                quote::quote! { #transmuted_ref as *mut #to_elem }
-                            } else {
-                                quote::quote! { #transmuted_ref as *const #to_elem }
-                            }
-                        }
-                    }
-                    _ => {
-                        quote::quote! {
-                            std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
-                        }
-                    }
-                }
-            }
-        },
-        (true, false) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
-        (false, _) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
+    let function_body = if has_return_type && (return_needs_transmute || is_converted_return_reference) {
+        generate_return_conversion(
+            source_crate_ident,
+            function_name,
+            &call_args,
+            original_return_type.as_ref().unwrap(),
+            &function.sig.output,
+            config,
+        )
+    } else {
+        quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
     };
 
     let function_body = if need_unsafe_block {
@@ -1376,4 +1143,109 @@ pub(crate) fn convert_to_stub(
     type_replacements.extend(sig_type_replacements);
 
     Ok(())
+}
+
+/// Generate parameter conversion code
+fn generate_param_conversion(
+    param_name: &syn::Ident,
+    current_type: &syn::Type,
+    original_type: &syn::Type,
+    config: &ParseConfig,
+) -> proc_macro2::TokenStream {
+    let mut from_type = current_type.clone();
+    let mut to_type = prefix_exported_types_in_type(
+        original_type,
+        &config.crate_ident(),
+        config.exported_types,
+        config.prefixed_exported_types,
+    );
+    replace_lifetimes_with_static(&mut from_type);
+    replace_lifetimes_with_static(&mut to_type);
+    
+    if types_are_equivalent(&from_type, &to_type) {
+        return quote::quote! { #param_name };
+    }
+    
+    match (&from_type, &to_type) {
+        (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
+            if types_are_equivalent(&from_ptr.elem, &to_ref.elem) {
+                if to_ref.mutability.is_some() {
+                    quote::quote! { &mut *#param_name }
+                } else {
+                    quote::quote! { &*#param_name }
+                }
+            } else {
+                let from_elem = &*from_ptr.elem;
+                let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
+                    syn::parse_quote! { &'static mut #from_elem }
+                } else {
+                    syn::parse_quote! { &'static #from_elem }
+                };
+                
+                if to_ref.mutability.is_some() {
+                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
+                } else {
+                    quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
+                }
+            }
+        }
+        _ => quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) },
+    }
+}
+
+/// Generate return type conversion code
+fn generate_return_conversion(
+    source_crate_ident: &syn::Ident,
+    function_name: &syn::Ident,
+    call_args: &[proc_macro2::TokenStream],
+    original_return_type: &syn::Type,
+    current_return_type: &syn::ReturnType,
+    config: &ParseConfig,
+) -> proc_macro2::TokenStream {
+    let mut from_type = prefix_exported_types_in_type(
+        original_return_type,
+        &config.crate_ident(),
+        config.exported_types,
+        config.prefixed_exported_types,
+    );
+    let mut to_type = match current_return_type {
+        syn::ReturnType::Type(_, return_type) => return_type.as_ref().clone(),
+        _ => unreachable!(),
+    };
+    replace_lifetimes_with_static(&mut from_type);
+    replace_lifetimes_with_static(&mut to_type);
+    
+    let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
+    
+    if types_are_equivalent(&from_type, &to_type) {
+        return function_call;
+    }
+    
+    match (&from_type, &to_type) {
+        (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
+            if types_are_equivalent(&from_ref.elem, &to_ptr.elem) {
+                if to_ptr.mutability.is_some() {
+                    quote::quote! { #function_call as *mut _ }
+                } else {
+                    quote::quote! { #function_call as *const _ }
+                }
+            } else {
+                let to_elem = &*to_ptr.elem;
+                let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
+                    syn::parse_quote! { &'static mut #to_elem }
+                } else {
+                    syn::parse_quote! { &'static #to_elem }
+                };
+                
+                let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
+                
+                if to_ptr.mutability.is_some() {
+                    quote::quote! { #transmuted_ref as *mut #to_elem }
+                } else {
+                    quote::quote! { #transmuted_ref as *const #to_elem }
+                }
+            }
+        }
+        _ => quote::quote! { std::mem::transmute::<#from_type, #to_type>(#function_call) },
+    }
 }
