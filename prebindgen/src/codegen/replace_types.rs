@@ -266,7 +266,7 @@ pub(crate) fn replace_types_in_type(
             
             // Only add assertion if types are actually different
             // This avoids generating assertions for type aliases that resolve to the same underlying type
-            if local_str != original_str {
+            if local_str != original_str && !types_are_equivalent(&local_stripped, &original_stripped) {
                 if let std::collections::hash_map::Entry::Vacant(e) =
                     assertion_type_pairs.entry(TypeTransmutePair::new(local_str, original_str))
                 {
@@ -621,33 +621,65 @@ fn strip_type(
 /// Check if two types are equivalent (e.g., both are type aliases to the same primitive type)
 /// This is a heuristic check for common cases where transmute is unnecessary
 fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
+    // First check if the types are syntactically identical
+    let type1_str = quote::quote! { #type1 }.to_string();
+    let type2_str = quote::quote! { #type2 }.to_string();
+    if type1_str == type2_str {
+        return true;
+    }
+    
     match (type1, type2) {
         // Both are simple paths - check if they might be type aliases to primitives
         (syn::Type::Path(path1), syn::Type::Path(path2)) => {
-            // If both paths have only one segment and look like type aliases
+            // Only consider types equivalent if they have the exact same path structure
+            // This is more conservative to avoid incorrectly identifying different types as equivalent
+            if path1.path.segments.len() == path2.path.segments.len() {
+                // Check if all segments match exactly
+                for (seg1, seg2) in path1.path.segments.iter().zip(path2.path.segments.iter()) {
+                    if seg1.ident != seg2.ident {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            
+            // Special case: check if both are type aliases to the same primitive (very conservative)
             if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
                 let name1 = path1.path.segments.first().unwrap().ident.to_string();
                 let name2 = path2.path.segments.first().unwrap().ident.to_string();
                 
-                // Check if both names suggest they might be type aliases to the same primitive
-                // This is a heuristic - we look for similar naming patterns
-                if name1.contains("result") && name2.contains("result") {
-                    return true;
-                }
-            }
-            
-            // Check if one is a prefixed version of the other (e.g., example_ffi::example_result vs example_result)
-            if let (Some(seg1), Some(seg2)) = (path1.path.segments.last(), path2.path.segments.last()) {
-                if seg1.ident == seg2.ident {
-                    // Same final segment name - likely the same type with different prefixing
+                // Only consider equivalent if they are exactly the same primitive type
+                if name1 == name2 && is_primitive_type(&name1) {
                     return true;
                 }
             }
             
             false
         }
+        // Check array types
+        (syn::Type::Array(arr1), syn::Type::Array(arr2)) => {
+            // Arrays are equivalent if their element types are equivalent and lengths are the same
+            let len1_str = quote::quote! { #arr1.len }.to_string();
+            let len2_str = quote::quote! { #arr2.len }.to_string();
+            len1_str == len2_str && types_are_equivalent(&arr1.elem, &arr2.elem)
+        }
+        // Check reference types
+        (syn::Type::Reference(ref1), syn::Type::Reference(ref2)) => {
+            // References are equivalent if mutability matches and element types are equivalent
+            ref1.mutability.is_some() == ref2.mutability.is_some() && types_are_equivalent(&ref1.elem, &ref2.elem)
+        }
+        // Check pointer types
+        (syn::Type::Ptr(ptr1), syn::Type::Ptr(ptr2)) => {
+            // Pointers are equivalent if mutability matches and element types are equivalent
+            ptr1.mutability.is_some() == ptr2.mutability.is_some() && types_are_equivalent(&ptr1.elem, &ptr2.elem)
+        }
         _ => false,
     }
+}
+
+/// Check if a type name represents a primitive type
+fn is_primitive_type(name: &str) -> bool {
+    matches!(name, "bool" | "char" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" | "str")
 }
 
 /// Check if two syn::Path values are equal
@@ -1183,27 +1215,36 @@ pub(crate) fn convert_to_stub(
                         replace_lifetimes_with_static(&mut to_type);
                         
                         // Check if types are identical to avoid unnecessary transmute
-                        let from_str = quote::quote! { #from_type }.to_string();
-                        let to_str = quote::quote! { #to_type }.to_string();
-                        if from_str == to_str || types_are_equivalent(&from_type, &to_type) {
+                        if types_are_equivalent(&from_type, &to_type) {
                             quote::quote! { #param_name }
                         } else {
                             // Check if this is a pointer-to-reference conversion that clippy warns about
                             match (&from_type, &to_type) {
                                 (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
                                     let from_elem = &from_ptr.elem;
+                                    let to_elem = &to_ref.elem;
                                     
-                                    // Apply transmute between reference types, then pointer conversion
-                                    let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
-                                        syn::parse_quote! { &'static mut #from_elem }
+                                    // Check if element types are equivalent
+                                    if types_are_equivalent(from_elem, to_elem) {
+                                        // No transmute needed, just dereference
+                                        if to_ref.mutability.is_some() {
+                                            quote::quote! { &mut *#param_name }
+                                        } else {
+                                            quote::quote! { &*#param_name }
+                                        }
                                     } else {
-                                        syn::parse_quote! { &'static #from_elem }
-                                    };
-                                    
-                                    if to_ref.mutability.is_some() {
-                                        quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
-                                    } else {
-                                        quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
+                                        // Apply transmute between reference types, then pointer conversion
+                                        let from_ref_type: syn::Type = if to_ref.mutability.is_some() {
+                                            syn::parse_quote! { &'static mut #from_elem }
+                                        } else {
+                                            syn::parse_quote! { &'static #from_elem }
+                                        };
+                                        
+                                        if to_ref.mutability.is_some() {
+                                            quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
+                                        } else {
+                                            quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&*#param_name) }
+                                        }
                                     }
                                 }
                                 _ => {
@@ -1256,9 +1297,7 @@ pub(crate) fn convert_to_stub(
             replace_lifetimes_with_static(&mut to_type);
             
             // Check if types are identical to avoid unnecessary transmute
-            let from_str = quote::quote! { #from_type }.to_string();
-            let to_str = quote::quote! { #to_type }.to_string();
-            if from_str == to_str || types_are_equivalent(&from_type, &to_type) {
+            if types_are_equivalent(&from_type, &to_type) {
                 quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
             } else {
                 // Check if this is a reference-to-pointer conversion that clippy warns about
@@ -1267,31 +1306,33 @@ pub(crate) fn convert_to_stub(
                         let from_elem = &from_ref.elem;
                         let to_elem = &to_ptr.elem;
                         
-                        // Apply transmute between reference types, then pointer conversion
-                        let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
-                            syn::parse_quote! { &'static mut #to_elem }
+                        // Check if the element types are equivalent
+                        if types_are_equivalent(from_elem, to_elem) {
+                            // No transmute needed, just cast to pointer
+                            let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
+                            if to_ptr.mutability.is_some() {
+                                quote::quote! { #function_call as *mut _ }
+                            } else {
+                                quote::quote! { #function_call as *const _ }
+                            }
                         } else {
-                            syn::parse_quote! { &'static #to_elem }
-                        };
-                        
-                        let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
-                        let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
-                        
-                        // Check if cast is needed for the final pointer conversion
-                        let from_elem_str = quote::quote! { #from_elem }.to_string();
-                        let to_elem_str = quote::quote! { #to_elem }.to_string();
-                        let needs_cast = from_elem_str != to_elem_str;
-                        
-                        if needs_cast {
+                            // Apply transmute between reference types, then pointer conversion
+                            let to_ref_type: syn::Type = if to_ptr.mutability.is_some() {
+                                syn::parse_quote! { &'static mut #to_elem }
+                            } else {
+                                syn::parse_quote! { &'static #to_elem }
+                            };
+                            
+                            let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
+                            
+                            // Apply transmute to convert the reference type, then cast to pointer
+                            let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
+                            
                             if to_ptr.mutability.is_some() {
                                 quote::quote! { #transmuted_ref as *mut #to_elem }
                             } else {
                                 quote::quote! { #transmuted_ref as *const #to_elem }
                             }
-                        } else if to_ptr.mutability.is_some() {
-                            quote::quote! { #transmuted_ref as *mut _ }
-                        } else {
-                            quote::quote! { #transmuted_ref as *const _ }
                         }
                     }
                     _ => {
