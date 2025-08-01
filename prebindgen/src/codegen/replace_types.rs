@@ -145,14 +145,12 @@ pub fn generate_standard_allowed_prefixes() -> Vec<syn::Path> {
 }
 
 /// Convert a remote type to its local equivalent, validate FFI compatibility, and collect assertion pairs
-/// Returns true if transmute is needed, false otherwise
 ///
 /// This method:
 /// - Validates that the type is suitable for FFI use
 /// - Strips transparent wrappers and prefixes to be stripped from the type
 /// - Converts references to pointers for FFI compatibility
-/// - Collects type assertion pairs when conversion is needed
-/// - Sets the `was_converted` flag to indicate if the type was modified
+/// - Collects type assertion pairs
 #[roxygen]
 pub(crate) fn replace_types_in_type(
     /// Destination type for the converted type
@@ -163,9 +161,11 @@ pub(crate) fn replace_types_in_type(
     assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
     /// Source location for error reporting
     source_location: &SourceLocation,
-) -> Result<bool, String> {
+) {
     // Capture original type before any modifications for assertion generation
-    let original_ty = ty.clone();
+    // and remove all lifetimes to statics in it
+    let mut original_ty = ty.clone();
+    replace_lifetimes_with_static(&mut original_ty);
 
     // Strip prefixes and transparent wrappers from the type
     let mut stripped = false;
@@ -179,46 +179,32 @@ pub(crate) fn replace_types_in_type(
 
     // Handle bare function types specially
     if let syn::Type::BareFn(ref mut type_bare_fn) = local_type {
-        let mut any_param_changed = false;
-        let mut any_return_changed = false;
-
         // Process function parameters
         for input in &mut type_bare_fn.inputs {
-            let param_changed = replace_types_in_type(
-                &mut input.ty,
-                config,
-                assertion_type_pairs,
-                source_location,
-            )?;
-            any_param_changed |= param_changed;
+            replace_types_in_type(&mut input.ty, config, assertion_type_pairs, source_location);
         }
 
         // Process return type
         if let syn::ReturnType::Type(_, ref mut return_type) = type_bare_fn.output {
-            any_return_changed =
-                replace_types_in_type(return_type, config, assertion_type_pairs, source_location)?;
+            replace_types_in_type(return_type, config, assertion_type_pairs, source_location);
         }
 
-        let function_changed = any_param_changed || any_return_changed;
-
-        if function_changed {
-            let prefixed_original_type = prefix_exported_types_in_type(
-                &original_ty,
-                &config.crate_ident(),
-                config.exported_types,
-                config.prefixed_exported_types,
-            );
-            add_assertion_pair(
-                assertion_type_pairs,
-                local_type.clone(),
-                prefixed_original_type,
-                source_location,
-                config.primitive_types,
-            );
-        }
+        let prefixed_original_type = prefix_exported_types_in_type(
+            &original_ty,
+            &config.crate_ident(),
+            config.exported_types,
+            config.prefixed_exported_types,
+        );
+        add_assertion_pair(
+            assertion_type_pairs,
+            local_type.clone(),
+            prefixed_original_type,
+            source_location,
+            config.primitive_types,
+        );
 
         *ty = local_type;
-        return Ok(function_changed);
+        return;
     }
 
     // Validate the type for FFI compatibility and strip * and & references
@@ -229,44 +215,38 @@ pub(crate) fn replace_types_in_type(
         config.exported_types,
         config.allowed_prefixes,
         &mut is_exported_type,
-    )?;
+        source_location,
+    );
 
     // Build the final type and determine if conversion is needed
     let references_replaced = !stripped_types.is_empty();
-    let core_type_changed = stripped || is_exported_type;
-    let conversion_needed = references_replaced || core_type_changed;
-
-    if conversion_needed {
-        let final_type = if references_replaced {
-            restore_stripped_references_as_pointers(local_core_type.clone(), stripped_types)?
-        } else {
-            local_core_type.clone()
-        };
-
-        if core_type_changed {
-            let prefixed_original_type = prefix_exported_types_in_type(
-                &original_ty,
-                &config.crate_ident(),
-                config.exported_types,
-                config.prefixed_exported_types,
-            );
-            let (local_stripped, original_stripped) =
-                strip_to_same_level(final_type.clone(), prefixed_original_type);
-            add_assertion_pair(
-                assertion_type_pairs,
-                local_stripped,
-                original_stripped,
-                source_location,
-                config.primitive_types,
-            );
-        }
-
-        *ty = final_type;
-        Ok(true)
+    let final_type = if references_replaced {
+        restore_stripped_references_as_pointers(
+            local_core_type.clone(),
+            stripped_types,
+            source_location,
+        )
     } else {
-        // No conversion needed, keep original type
-        Ok(false)
-    }
+        local_core_type.clone()
+    };
+
+    let prefixed_original_type = prefix_exported_types_in_type(
+        &original_ty,
+        &config.crate_ident(),
+        config.exported_types,
+        config.prefixed_exported_types,
+    );
+    let (local_stripped, original_stripped) =
+        strip_to_same_level(final_type.clone(), prefixed_original_type);
+    add_assertion_pair(
+        assertion_type_pairs,
+        local_stripped,
+        original_stripped,
+        source_location,
+        config.primitive_types,
+    );
+
+    *ty = final_type;
 }
 
 /// Replace lifetimes in a type with 'static
@@ -309,22 +289,21 @@ pub(crate) fn replace_types_in_item(
     config: &ParseConfig,
     type_replacements: &mut HashMap<TypeTransmutePair, SourceLocation>,
     source_location: &SourceLocation,
-) -> Result<bool, String> {
+) {
     match item {
         syn::Item::Fn(item_fn) => {
-            let (_, sig_changed) = replace_types_in_signature(
+            replace_types_in_signature(
                 &mut item_fn.sig,
                 config,
                 type_replacements,
                 source_location,
-            )?;
-            let block_changed = replace_types_in_block(
+            );
+            replace_types_in_block(
                 &mut item_fn.block,
                 config,
                 type_replacements,
                 source_location,
-            )?;
-            Ok(sig_changed || block_changed)
+            );
         }
         syn::Item::Struct(item_struct) => replace_types_in_fields(
             &mut item_struct.fields,
@@ -333,25 +312,21 @@ pub(crate) fn replace_types_in_item(
             source_location,
         ),
         syn::Item::Enum(item_enum) => {
-            let mut any_changed = false;
             for variant in &mut item_enum.variants {
-                any_changed |= replace_types_in_fields(
+                replace_types_in_fields(
                     &mut variant.fields,
                     config,
                     type_replacements,
                     source_location,
-                )?;
+                );
             }
-            Ok(any_changed)
         }
         syn::Item::Union(item_union) => {
             let mut fields = syn::Fields::Named(item_union.fields.clone());
-            let changed =
-                replace_types_in_fields(&mut fields, config, type_replacements, source_location)?;
+            replace_types_in_fields(&mut fields, config, type_replacements, source_location);
             if let syn::Fields::Named(fields_named) = fields {
                 item_union.fields = fields_named;
             }
-            Ok(changed)
         }
         syn::Item::Type(item_type) => replace_types_in_type(
             &mut item_type.ty,
@@ -371,7 +346,7 @@ pub(crate) fn replace_types_in_item(
             type_replacements,
             source_location,
         ),
-        _ => Ok(false),
+        _ => (),
     }
 }
 
@@ -381,29 +356,25 @@ pub(crate) fn replace_types_in_signature(
     config: &ParseConfig,
     assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
     source_location: &SourceLocation,
-) -> Result<(Vec<bool>, bool), String> {
+) {
     // Replace parameter types
-    let mut parameters_changed = Vec::new();
     for input in sig.inputs.iter_mut() {
         if let syn::FnArg::Typed(pat_type) = input {
-            parameters_changed.push(replace_types_in_type(
+            replace_types_in_type(
                 &mut pat_type.ty,
                 config,
                 assertion_type_pairs,
                 source_location,
-            )?);
+            );
         } else {
-            return Err("self parameters are not supported in FFI stubs".into());
+            panic!("self parameters are not supported in FFI stubs: {source_location}");
         }
     }
 
     // Replace return type
-    let mut return_type_changed = false;
     if let syn::ReturnType::Type(_, return_type) = &mut sig.output {
-        return_type_changed =
-            replace_types_in_type(return_type, config, assertion_type_pairs, source_location)?;
+        replace_types_in_type(return_type, config, assertion_type_pairs, source_location);
     };
-    Ok((parameters_changed, return_type_changed))
 }
 
 /// Replace types in a function block
@@ -412,9 +383,8 @@ fn replace_types_in_block(
     _config: &ParseConfig,
     _assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
     _source_location: &SourceLocation,
-) -> Result<bool, String> {
+) {
     // For now, we don't need to replace types in function bodies
-    Ok(false)
 }
 
 /// Replace types in struct/enum fields
@@ -423,34 +393,22 @@ fn replace_types_in_fields(
     config: &ParseConfig,
     assertion_type_pairs: &mut HashMap<TypeTransmutePair, SourceLocation>,
     source_location: &SourceLocation,
-) -> Result<bool, String> {
-    let mut any_changed = false;
+) {
     match fields {
         syn::Fields::Named(fields_named) => {
             for field in fields_named.named.iter_mut() {
-                any_changed |= replace_types_in_type(
-                    &mut field.ty,
-                    config,
-                    assertion_type_pairs,
-                    source_location,
-                )?;
+                replace_types_in_type(&mut field.ty, config, assertion_type_pairs, source_location);
             }
         }
         syn::Fields::Unnamed(fields_unnamed) => {
             for field in fields_unnamed.unnamed.iter_mut() {
-                any_changed |= replace_types_in_type(
-                    &mut field.ty,
-                    config,
-                    assertion_type_pairs,
-                    source_location,
-                )?;
+                replace_types_in_type(&mut field.ty, config, assertion_type_pairs, source_location);
             }
         }
         syn::Fields::Unit => {
             // No fields to process
         }
     }
-    Ok(any_changed)
 }
 
 /// Strip transparent wrappers from a type and track if any were removed
@@ -914,7 +872,8 @@ fn strip_references_and_pointers(mut ty: syn::Type) -> (syn::Type, Vec<syn::Type
 fn restore_stripped_references_as_pointers(
     ty: syn::Type,
     stripped: Vec<syn::Type>,
-) -> Result<syn::Type, String> {
+    source_location: &SourceLocation,
+) -> syn::Type {
     let mut result = ty;
     for stripped_type in stripped.into_iter().rev() {
         match stripped_type {
@@ -939,14 +898,15 @@ fn restore_stripped_references_as_pointers(
                 });
             }
             _ => {
-                return Err(format!(
-                    "Unsupported stripped type for FFI conversion: {}",
-                    quote::quote! { #stripped_type }
-                ));
+                panic!(
+                    "Unsupported stripped type for FFI conversion {}: {}",
+                    quote::quote! { #stripped_type },
+                    source_location
+                );
             }
         }
     }
-    Ok(result)
+    result
 }
 
 /// Checks if type is exported type or prefix matches allowed prefixes
@@ -965,7 +925,9 @@ fn validate_core_type_for_ffi(
     allowed_prefixes: &[syn::Path],
     /// Flag indicating if the type is an exported type
     is_exported_type: &mut bool,
-) -> Result<(), String> {
+    /// Source location for error reporting
+    source_location: &SourceLocation,
+) {
     match ty {
         syn::Type::Path(type_path) => {
             if !validate_type_path(
@@ -974,24 +936,26 @@ fn validate_core_type_for_ffi(
                 exported_types,
                 is_exported_type,
             ) {
-                return Err(format!(
-                    "Type '{}' is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types",
+                panic!(
+                    "Type '{}' is not valid for FFI: must be either absolute (starting with '::'), start with an allowed prefix, or be defined in exported types: {}",
                     quote::quote! { #ty },
-                ));
+                    source_location
+                );
             }
             let Some(segment) = type_path.path.segments.last() else {
-                return Err(format!(
-                    "Type '{}' is not valid for FFI: must have at least one segment",
+                panic!(
+                    "Type '{}' is not valid for FFI: must have at least one segment: {}",
                     quote::quote! { #ty },
-                ));
+                    source_location
+                );
             };
             if let syn::PathArguments::AngleBracketed(_) = &segment.arguments {
-                return Err(format!(
-                    "Type '{}' is not valid for FFI: generic arguments are not supported",
+                panic!(
+                    "Type '{}' is not valid for FFI: generic arguments are not supported: {}",
                     quote::quote! { #ty },
-                ));
+                    source_location
+                );
             }
-            Ok(())
         }
         syn::Type::BareFn(type_bare_fn) => {
             // Validate that function is extern "C"
@@ -1001,10 +965,11 @@ fn validate_core_type_for_ffi(
                 .and_then(|abi| abi.name.as_ref())
                 .is_some_and(|name| name.value() == "C");
             if !extern_c {
-                return Err(format!(
-                    "Type '{}' is not valid for FFI: bare functions must be extern \"C\"",
+                panic!(
+                    "Type '{}' is not valid for FFI: bare functions must be extern \"C\": {}",
                     quote::quote! { #ty },
-                ));
+                    source_location
+                );
             }
 
             // Validate function parameters
@@ -1015,7 +980,8 @@ fn validate_core_type_for_ffi(
                     exported_types,
                     allowed_prefixes,
                     &mut param_is_exported,
-                )?;
+                    source_location,
+                );
             }
 
             // Validate return type if present
@@ -1026,15 +992,15 @@ fn validate_core_type_for_ffi(
                     exported_types,
                     allowed_prefixes,
                     &mut return_is_exported,
-                )?;
+                    source_location,
+                );
             }
-
-            Ok(())
         }
-        _ => Err(format!(
-            "Unsupported type '{}': only path types and bare function types are supported as core types for FFI",
+        _ => panic!(
+            "Unsupported type '{}': only path types and bare function types are supported as core types for FFI: {}",
             quote::quote! { #ty },
-        )),
+            source_location
+        ),
     }
 }
 
@@ -1113,7 +1079,7 @@ pub(crate) fn convert_to_stub(
         config,
         &mut sig_type_replacements,
         source_location,
-    )?;
+    );
 
     // Check for unsupported parameter patterns first
     for input in &function.sig.inputs {
@@ -1146,7 +1112,8 @@ pub(crate) fn convert_to_stub(
                 }
             }
             None
-        }).map(|(code, need_unsafe)| {
+        })
+        .map(|(code, need_unsafe)| {
             args_need_unsafe |= need_unsafe;
             code
         })
