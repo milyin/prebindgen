@@ -1142,7 +1142,34 @@ pub(crate) fn convert_to_stub(
                         );
                         replace_lifetimes_with_static(&mut from_type);
                         replace_lifetimes_with_static(&mut to_type);
-                        quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
+                        
+                        // Check if this is a pointer-to-reference conversion that clippy warns about
+                        match (&from_type, &to_type) {
+                            (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
+                                // For pointer-to-reference, check if the pointed-to types are the same
+                                let from_elem = &from_ptr.elem;
+                                let to_elem = &to_ref.elem;
+                                
+                                let from_elem_str = quote::quote! { #from_elem }.to_string();
+                                let to_elem_str = quote::quote! { #to_elem }.to_string();
+                                
+                                if from_elem_str == to_elem_str {
+                                    // Same pointed-to type, use cast + dereference
+                                    if to_ref.mutability.is_some() {
+                                        quote::quote! { &mut *#param_name.cast::<#to_elem>() }
+                                    } else {
+                                        quote::quote! { &*#param_name.cast::<#to_elem>() }
+                                    }
+                                } else {
+                                    // Different pointed-to types, need transmute
+                                    quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
+                                }
+                            }
+                            _ => {
+                                // Use transmute for type conversions (not pointer conversions)
+                                quote::quote! { std::mem::transmute::<#from_type, #to_type>(#param_name) }
+                            }
+                        }
                     } else {
                         quote::quote! { #param_name }
                     };
@@ -1186,8 +1213,38 @@ pub(crate) fn convert_to_stub(
             };
             replace_lifetimes_with_static(&mut from_type);
             replace_lifetimes_with_static(&mut to_type);
-            quote::quote! {
-                std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
+            
+            // Check if this is a reference-to-pointer conversion that clippy warns about
+            match (&from_type, &to_type) {
+                (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
+                    // For reference-to-pointer, check if the referenced types are the same
+                    let from_elem = &from_ref.elem;
+                    let to_elem = &to_ptr.elem;
+                    
+                    let from_elem_str = quote::quote! { #from_elem }.to_string();
+                    let to_elem_str = quote::quote! { #to_elem }.to_string();
+                    
+                    if from_elem_str == to_elem_str {
+                        // Same referenced type, use cast
+                        let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
+                        if to_ptr.mutability.is_some() {
+                            quote::quote! { #function_call as *mut #to_elem }
+                        } else {
+                            quote::quote! { #function_call as *const #to_elem }
+                        }
+                    } else {
+                        // Different referenced types, need transmute
+                        quote::quote! {
+                            std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
+                        }
+                    }
+                }
+                _ => {
+                    // Use transmute for type conversions (not pointer conversions)
+                    quote::quote! {
+                        std::mem::transmute::<#from_type, #to_type>(#source_crate_ident::#function_name(#(#call_args),*))
+                    }
+                }
             }
         },
         (true, false) => quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) },
