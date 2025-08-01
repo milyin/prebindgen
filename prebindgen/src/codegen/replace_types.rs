@@ -719,7 +719,7 @@ fn prefix_exported_types_in_type(
                         // Check if single-segment type matches the last segment of a prefixed type
                         if type_path.path.segments.len() == 1 {
                             if let Some(last_segment) = full_exported_type.segments.last() {
-                                if last_segment.ident.to_string() == type_name {
+                                if last_segment.ident == type_name {
                                     // Found matching type: InsideFoo -> example_ffi::foo::InsideFoo
                                     return syn::parse_quote! { #source_crate_ident::#full_exported_type };
                                 }
@@ -1245,12 +1245,10 @@ pub(crate) fn convert_to_stub(
                         } else {
                             quote::quote! { #transmuted_ref as *const #to_elem }
                         }
+                    } else if to_ptr.mutability.is_some() {
+                        quote::quote! { #transmuted_ref as *mut _ }
                     } else {
-                        if to_ptr.mutability.is_some() {
-                            quote::quote! { #transmuted_ref as *mut _ }
-                        } else {
-                            quote::quote! { #transmuted_ref as *const _ }
-                        }
+                        quote::quote! { #transmuted_ref as *const _ }
                     }
                 }
                 _ => {
@@ -1287,6 +1285,7 @@ pub(crate) fn convert_to_stub(
     };
 
     function.attrs.insert(0, no_mangle_attr);
+    function.attrs.insert(1, syn::parse_quote! { #[allow(clippy::missing_safety_doc)] });
     function.sig.unsafety = Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
     function.sig.abi = Some(syn::parse_quote! { extern "C" });
     function.vis = syn::parse_quote! { pub };
