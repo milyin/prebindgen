@@ -18,7 +18,7 @@ use crate::SourceLocation;
 pub(crate) struct ParseConfig<'a> {
     pub crate_name: &'a str,
     pub exported_types: &'a HashSet<String>,
-    pub primitive_types: &'a HashSet<String>,
+    pub primitive_types: &'a HashMap<String, String>,
     pub allowed_prefixes: &'a [syn::Path],
     pub prefixed_exported_types: &'a [syn::Path],
     pub transparent_wrappers: &'a [syn::Path],
@@ -590,7 +590,7 @@ fn strip_type(
 }
 
 /// Check if two types are equivalent (e.g., both are type aliases to the same primitive type)
-fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &HashSet<String>) -> bool {
+fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &HashMap<String, String>) -> bool {
     let type1_str = quote::quote! { #type1 }.to_string();
     let type2_str = quote::quote! { #type2 }.to_string();
     if type1_str == type2_str {
@@ -606,7 +606,9 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &
             if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
                 let name1 = path1.path.segments.first().unwrap().ident.to_string();
                 let name2 = path2.path.segments.first().unwrap().ident.to_string();
-                return name1 == name2 && is_primitive_type(&name1, primitive_types);
+                if let (Some(basic1), Some(basic2)) = (primitive_types.get(&name1), primitive_types.get(&name2)) {
+                    return basic1 == basic2;
+                }
             }
             false
         }
@@ -627,10 +629,7 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &
     }
 }
 
-/// Check if a type name represents a primitive type
-fn is_primitive_type(name: &str, primitive_types: &HashSet<String>) -> bool {
-    primitive_types.contains(name)
-}
+
 
 /// Check if two syn::Path values are equal
 fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
@@ -664,7 +663,7 @@ fn add_assertion_pair(
     let local_str = quote::quote! { #local_type }.to_string();
     let origin_str = quote::quote! { #origin_type }.to_string();
 
-    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, &HashSet::new()) {
+    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, &HashMap::new()) {
         if let std::collections::hash_map::Entry::Vacant(e) =
             assertion_type_pairs.entry(TypeTransmutePair::new(local_str, origin_str))
         {
