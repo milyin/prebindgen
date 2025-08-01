@@ -323,26 +323,14 @@ impl FfiConverter {
             syn::Item::Struct(s) => {
                 let type_name = s.ident.to_string();
                 self.exported_types.insert(type_name.clone());
-                // Add both the exported type itself and its crate name prefixed counterpart
-                self.primitive_types.insert(type_name.clone(), type_name.clone());
-                let prefixed_name = format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name);
-                self.primitive_types.insert(prefixed_name, type_name);
             }
             syn::Item::Enum(e) => {
                 let type_name = e.ident.to_string();
                 self.exported_types.insert(type_name.clone());
-                // Add both the exported type itself and its crate name prefixed counterpart
-                self.primitive_types.insert(type_name.clone(), type_name.clone());
-                let prefixed_name = format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name);
-                self.primitive_types.insert(prefixed_name, type_name);
             }
             syn::Item::Union(u) => {
                 let type_name = u.ident.to_string();
                 self.exported_types.insert(type_name.clone());
-                // Add both the exported type itself and its crate name prefixed counterpart
-                self.primitive_types.insert(type_name.clone(), type_name.clone());
-                let prefixed_name = format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name);
-                self.primitive_types.insert(prefixed_name, type_name);
             }
             syn::Item::Type(t) => {
                 let type_name = t.ident.to_string();
@@ -354,13 +342,9 @@ impl FfiConverter {
                         let target_type = last_segment.ident.to_string();
                         if let Some(basic_type) = self.primitive_types.get(&target_type).cloned() {
                             self.primitive_types.insert(type_name.clone(), basic_type.clone());
-                            let prefixed_name = format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name);
+                            let prefixed_path: syn::Path = syn::parse_str(&format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name)).unwrap();
+                            let prefixed_name = quote::quote! { #prefixed_path }.to_string();
                             self.primitive_types.insert(prefixed_name, basic_type);
-                        } else {
-                            // For exported types that don't map to primitives, map to themselves
-                            self.primitive_types.insert(type_name.clone(), type_name.clone());
-                            let prefixed_name = format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name);
-                            self.primitive_types.insert(prefixed_name, type_name);
                         }
                     }
                 }

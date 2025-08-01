@@ -213,6 +213,7 @@ pub(crate) fn replace_types_in_type(
                 local_type.clone(),
                 prefixed_original_type,
                 source_location,
+                config.primitive_types,
             );
         }
 
@@ -256,6 +257,7 @@ pub(crate) fn replace_types_in_type(
                 local_stripped,
                 original_stripped,
                 source_location,
+                config.primitive_types,
             );
         }
 
@@ -603,13 +605,13 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type, primitive_types: &
                 return paths_equal(&path1.path, &path2.path);
             }
 
-            if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
-                let name1 = path1.path.segments.first().unwrap().ident.to_string();
-                let name2 = path2.path.segments.first().unwrap().ident.to_string();
-                if let (Some(basic1), Some(basic2)) = (primitive_types.get(&name1), primitive_types.get(&name2)) {
-                    return basic1 == basic2;
-                }
+            // Check if both types map to the same basic primitive type
+            let name1 = quote::quote! { #path1 }.to_string();
+            let name2 = quote::quote! { #path2 }.to_string();
+            if let (Some(basic1), Some(basic2)) = (primitive_types.get(&name1), primitive_types.get(&name2)) {
+                return basic1 == basic2;
             }
+            
             false
         }
         (syn::Type::Array(arr1), syn::Type::Array(arr2)) => {
@@ -659,11 +661,12 @@ fn add_assertion_pair(
     local_type: syn::Type,
     origin_type: syn::Type,
     source_location: &SourceLocation,
+    primitive_types: &HashMap<String, String>,
 ) {
     let local_str = quote::quote! { #local_type }.to_string();
     let origin_str = quote::quote! { #origin_type }.to_string();
 
-    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, &HashMap::new()) {
+    if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type, primitive_types) {
         if let std::collections::hash_map::Entry::Vacant(e) =
             assertion_type_pairs.entry(TypeTransmutePair::new(local_str, origin_str))
         {
