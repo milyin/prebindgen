@@ -165,7 +165,7 @@ pub(crate) fn replace_types_in_type(
 ) -> Result<bool, String> {
     // Capture original type before any modifications for assertion generation
     let original_ty = ty.clone();
-    
+
     // Strip prefixes and transparent wrappers from the type
     let mut stripped = false;
     let mut local_type = strip_type(
@@ -180,7 +180,7 @@ pub(crate) fn replace_types_in_type(
     if let syn::Type::BareFn(ref mut type_bare_fn) = local_type {
         let mut any_param_changed = false;
         let mut any_return_changed = false;
-        
+
         // Process function parameters
         for input in &mut type_bare_fn.inputs {
             let param_changed = replace_types_in_type(
@@ -191,19 +191,15 @@ pub(crate) fn replace_types_in_type(
             )?;
             any_param_changed |= param_changed;
         }
-        
+
         // Process return type
         if let syn::ReturnType::Type(_, ref mut return_type) = type_bare_fn.output {
-            any_return_changed = replace_types_in_type(
-                return_type,
-                config,
-                assertion_type_pairs,
-                source_location,
-            )?;
+            any_return_changed =
+                replace_types_in_type(return_type, config, assertion_type_pairs, source_location)?;
         }
-        
+
         let function_changed = any_param_changed || any_return_changed;
-        
+
         if function_changed {
             let prefixed_original_type = prefix_exported_types_in_type(
                 &original_ty,
@@ -211,9 +207,14 @@ pub(crate) fn replace_types_in_type(
                 config.exported_types,
                 config.prefixed_exported_types,
             );
-            add_assertion_pair(assertion_type_pairs, local_type.clone(), prefixed_original_type, source_location);
+            add_assertion_pair(
+                assertion_type_pairs,
+                local_type.clone(),
+                prefixed_original_type,
+                source_location,
+            );
         }
-        
+
         *ty = local_type;
         return Ok(function_changed);
     }
@@ -247,8 +248,14 @@ pub(crate) fn replace_types_in_type(
                 config.exported_types,
                 config.prefixed_exported_types,
             );
-            let (local_stripped, original_stripped) = strip_to_same_level(final_type.clone(), prefixed_original_type);
-            add_assertion_pair(assertion_type_pairs, local_stripped, original_stripped, source_location);
+            let (local_stripped, original_stripped) =
+                strip_to_same_level(final_type.clone(), prefixed_original_type);
+            add_assertion_pair(
+                assertion_type_pairs,
+                local_stripped,
+                original_stripped,
+                source_location,
+            );
         }
 
         *ty = final_type;
@@ -465,9 +472,11 @@ fn strip_type(
 
             let path = {
                 let mut result_path = Cow::Borrowed(&type_path.path);
-                
+
                 for full_exported_type in prefixed_exported_types {
-                    if paths_equal(&type_path.path, full_exported_type) && full_exported_type.segments.len() > 1 {
+                    if paths_equal(&type_path.path, full_exported_type)
+                        && full_exported_type.segments.len() > 1
+                    {
                         *stripped = true;
                         let last_segment = full_exported_type.segments.last().unwrap().clone();
                         result_path = Cow::Owned(syn::Path {
@@ -486,7 +495,13 @@ fn strip_type(
                     if let Some(last_segment) = path.segments.last() {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                return strip_type(inner_ty, wrappers, prefixed_exported_types, stripped, source_location);
+                                return strip_type(
+                                    inner_ty,
+                                    wrappers,
+                                    prefixed_exported_types,
+                                    stripped,
+                                    source_location,
+                                );
                             }
                         }
                     }
@@ -499,21 +514,39 @@ fn strip_type(
             })
         }
         syn::Type::Reference(type_ref) => {
-            let stripped_elem = strip_type(&type_ref.elem, wrappers, prefixed_exported_types, stripped, source_location);
+            let stripped_elem = strip_type(
+                &type_ref.elem,
+                wrappers,
+                prefixed_exported_types,
+                stripped,
+                source_location,
+            );
             syn::Type::Reference(syn::TypeReference {
                 elem: Box::new(stripped_elem),
                 ..type_ref.clone()
             })
         }
         syn::Type::Ptr(type_ptr) => {
-            let stripped_elem = strip_type(&type_ptr.elem, wrappers, prefixed_exported_types, stripped, source_location);
+            let stripped_elem = strip_type(
+                &type_ptr.elem,
+                wrappers,
+                prefixed_exported_types,
+                stripped,
+                source_location,
+            );
             syn::Type::Ptr(syn::TypePtr {
                 elem: Box::new(stripped_elem),
                 ..type_ptr.clone()
             })
         }
         syn::Type::Array(type_array) => {
-            let stripped_elem = strip_type(&type_array.elem, wrappers, prefixed_exported_types, stripped, source_location);
+            let stripped_elem = strip_type(
+                &type_array.elem,
+                wrappers,
+                prefixed_exported_types,
+                stripped,
+                source_location,
+            );
             syn::Type::Array(syn::TypeArray {
                 elem: Box::new(stripped_elem),
                 ..type_array.clone()
@@ -522,17 +555,29 @@ fn strip_type(
         syn::Type::BareFn(type_bare_fn) => {
             let mut new_inputs = type_bare_fn.inputs.clone();
             for input in &mut new_inputs {
-                input.ty = strip_type(&input.ty, wrappers, prefixed_exported_types, stripped, source_location);
+                input.ty = strip_type(
+                    &input.ty,
+                    wrappers,
+                    prefixed_exported_types,
+                    stripped,
+                    source_location,
+                );
             }
-            
+
             let new_output = match &type_bare_fn.output {
                 syn::ReturnType::Type(arrow, return_type) => {
-                    let stripped_return = strip_type(return_type, wrappers, prefixed_exported_types, stripped, source_location);
+                    let stripped_return = strip_type(
+                        return_type,
+                        wrappers,
+                        prefixed_exported_types,
+                        stripped,
+                        source_location,
+                    );
                     syn::ReturnType::Type(*arrow, Box::new(stripped_return))
                 }
                 syn::ReturnType::Default => type_bare_fn.output.clone(),
             };
-            
+
             syn::Type::BareFn(syn::TypeBareFn {
                 inputs: new_inputs,
                 output: new_output,
@@ -550,13 +595,13 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
     if type1_str == type2_str {
         return true;
     }
-    
+
     match (type1, type2) {
         (syn::Type::Path(path1), syn::Type::Path(path2)) => {
             if path1.path.segments.len() == path2.path.segments.len() {
                 return paths_equal(&path1.path, &path2.path);
             }
-            
+
             if path1.path.segments.len() == 1 && path2.path.segments.len() == 1 {
                 let name1 = path1.path.segments.first().unwrap().ident.to_string();
                 let name2 = path2.path.segments.first().unwrap().ident.to_string();
@@ -570,10 +615,12 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
             len1_str == len2_str && types_are_equivalent(&arr1.elem, &arr2.elem)
         }
         (syn::Type::Reference(ref1), syn::Type::Reference(ref2)) => {
-            ref1.mutability.is_some() == ref2.mutability.is_some() && types_are_equivalent(&ref1.elem, &ref2.elem)
+            ref1.mutability.is_some() == ref2.mutability.is_some()
+                && types_are_equivalent(&ref1.elem, &ref2.elem)
         }
         (syn::Type::Ptr(ptr1), syn::Type::Ptr(ptr2)) => {
-            ptr1.mutability.is_some() == ptr2.mutability.is_some() && types_are_equivalent(&ptr1.elem, &ptr2.elem)
+            ptr1.mutability.is_some() == ptr2.mutability.is_some()
+                && types_are_equivalent(&ptr1.elem, &ptr2.elem)
         }
         _ => false,
     }
@@ -581,14 +628,36 @@ fn types_are_equivalent(type1: &syn::Type, type2: &syn::Type) -> bool {
 
 /// Check if a type name represents a primitive type
 fn is_primitive_type(name: &str) -> bool {
-    matches!(name, "bool" | "char" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" | "f32" | "f64" | "str")
+    matches!(
+        name,
+        "bool"
+            | "char"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+            | "f32"
+            | "f64"
+            | "str"
+    )
 }
 
 /// Check if two syn::Path values are equal
 fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
     path1.leading_colon.is_some() == path2.leading_colon.is_some()
         && path1.segments.len() == path2.segments.len()
-        && path1.segments.iter().zip(path2.segments.iter())
+        && path1
+            .segments
+            .iter()
+            .zip(path2.segments.iter())
             .all(|(seg1, seg2)| seg1.ident == seg2.ident)
 }
 
@@ -596,7 +665,10 @@ fn paths_equal(path1: &syn::Path, path2: &syn::Path) -> bool {
 fn path_starts_with(path: &syn::Path, prefix: &syn::Path) -> bool {
     prefix.segments.len() <= path.segments.len()
         && prefix.leading_colon.is_some() == path.leading_colon.is_some()
-        && path.segments.iter().zip(prefix.segments.iter())
+        && path
+            .segments
+            .iter()
+            .zip(prefix.segments.iter())
             .all(|(path_seg, prefix_seg)| path_seg.ident == prefix_seg.ident)
 }
 
@@ -609,7 +681,7 @@ fn add_assertion_pair(
 ) {
     let local_str = quote::quote! { #local_type }.to_string();
     let origin_str = quote::quote! { #origin_type }.to_string();
-    
+
     if local_str != origin_str && !types_are_equivalent(&local_type, &origin_type) {
         if let std::collections::hash_map::Entry::Vacant(e) =
             assertion_type_pairs.entry(TypeTransmutePair::new(local_str, origin_str))
@@ -635,10 +707,12 @@ pub(crate) fn generate_type_transmute_pair_assertions(
         syn::parse_str::<syn::Type>(&assertion_pair.origin_type),
     ) {
         // Skip assertions for bare function types as they are complex and the conversion is already validated
-        if matches!(stripped_type, syn::Type::BareFn(_)) || matches!(source_type, syn::Type::BareFn(_)) {
+        if matches!(stripped_type, syn::Type::BareFn(_))
+            || matches!(source_type, syn::Type::BareFn(_))
+        {
             return None;
         }
-        
+
         // Skip assertions where the source type looks like it might have incorrect module path
         // This is a temporary fix for cases where the prefixing logic doesn't correctly handle module paths
         if let syn::Type::Path(type_path) = &source_type {
@@ -656,7 +730,7 @@ pub(crate) fn generate_type_transmute_pair_assertions(
                 }
             }
         }
-        
+
         // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
         let size_assertion: syn::Item = syn::parse_quote! {
             const _: () = assert!(
@@ -679,18 +753,6 @@ pub(crate) fn generate_type_transmute_pair_assertions(
     }
 }
 
-/// Helper to process generic arguments recursively
-fn process_generic_args(
-    args: &mut syn::AngleBracketedGenericArguments,
-    processor: impl Fn(&syn::Type) -> syn::Type,
-) {
-    for arg in &mut args.args {
-        if let syn::GenericArgument::Type(inner_ty) = arg {
-            *inner_ty = processor(inner_ty);
-        }
-    }
-}
-
 /// Recursively prefix exported types in a type with the source crate name
 fn prefix_exported_types_in_type(
     ty: &syn::Type,
@@ -698,10 +760,6 @@ fn prefix_exported_types_in_type(
     exported_types: &HashSet<String>,
     prefixed_exported_types: &[syn::Path],
 ) -> syn::Type {
-    let processor = |inner_ty: &syn::Type| {
-        prefix_exported_types_in_type(inner_ty, source_crate_ident, exported_types, prefixed_exported_types)
-    };
-    
     match ty {
         syn::Type::Path(type_path) => {
             if let Some(segment) = type_path.path.segments.last() {
@@ -726,8 +784,19 @@ fn prefix_exported_types_in_type(
                 if let syn::PathArguments::AngleBracketed(_) = &segment.arguments {
                     let mut new_path = type_path.path.clone();
                     if let Some(last_segment) = new_path.segments.last_mut() {
-                        if let syn::PathArguments::AngleBracketed(ref mut args) = last_segment.arguments {
-                            process_generic_args(args, processor);
+                        if let syn::PathArguments::AngleBracketed(ref mut args) =
+                            last_segment.arguments
+                        {
+                            for arg in &mut args.args {
+                                if let syn::GenericArgument::Type(inner_ty) = arg {
+                                    *inner_ty = prefix_exported_types_in_type(
+                                        inner_ty,
+                                        source_crate_ident,
+                                        exported_types,
+                                        prefixed_exported_types,
+                                    );
+                                }
+                            }
                         }
                     }
                     return syn::Type::Path(syn::TypePath {
@@ -739,26 +808,47 @@ fn prefix_exported_types_in_type(
             ty.clone()
         }
         syn::Type::Reference(type_ref) => syn::Type::Reference(syn::TypeReference {
-            elem: Box::new(processor(&type_ref.elem)),
+            elem: Box::new(prefix_exported_types_in_type(
+                &type_ref.elem,
+                source_crate_ident,
+                exported_types,
+                prefixed_exported_types,
+            )),
             ..type_ref.clone()
         }),
         syn::Type::Ptr(type_ptr) => syn::Type::Ptr(syn::TypePtr {
-            elem: Box::new(processor(&type_ptr.elem)),
+            elem: Box::new(prefix_exported_types_in_type(
+                &type_ptr.elem,
+                source_crate_ident,
+                exported_types,
+                prefixed_exported_types,
+            )),
             ..type_ptr.clone()
         }),
         syn::Type::BareFn(type_bare_fn) => {
             let mut new_inputs = type_bare_fn.inputs.clone();
             for input in &mut new_inputs {
-                input.ty = processor(&input.ty);
+                input.ty = prefix_exported_types_in_type(
+                    &input.ty,
+                    source_crate_ident,
+                    exported_types,
+                    prefixed_exported_types,
+                );
             }
-            
+
             let new_output = match &type_bare_fn.output {
-                syn::ReturnType::Type(arrow, return_type) => {
-                    syn::ReturnType::Type(*arrow, Box::new(processor(return_type)))
-                }
+                syn::ReturnType::Type(arrow, return_type) => syn::ReturnType::Type(
+                    *arrow,
+                    Box::new(prefix_exported_types_in_type(
+                        return_type,
+                        source_crate_ident,
+                        exported_types,
+                        prefixed_exported_types,
+                    )),
+                ),
                 syn::ReturnType::Default => type_bare_fn.output.clone(),
             };
-            
+
             syn::Type::BareFn(syn::TypeBareFn {
                 inputs: new_inputs,
                 output: new_output,
@@ -927,7 +1017,7 @@ fn validate_core_type_for_ffi(
                     quote::quote! { #ty },
                 ));
             }
-            
+
             // Validate function parameters
             for param in &type_bare_fn.inputs {
                 let mut param_is_exported = false;
@@ -938,7 +1028,7 @@ fn validate_core_type_for_ffi(
                     &mut param_is_exported,
                 )?;
             }
-            
+
             // Validate return type if present
             if let syn::ReturnType::Type(_, return_type) = &type_bare_fn.output {
                 let mut return_is_exported = false;
@@ -949,7 +1039,7 @@ fn validate_core_type_for_ffi(
                     &mut return_is_exported,
                 )?;
             }
-            
+
             Ok(())
         }
         _ => Err(format!(
@@ -992,10 +1082,6 @@ fn validate_type_path(
 
     false
 }
-
-
-
-
 
 /// Create a stub implementation for a function with transmutes applied
 ///
@@ -1101,18 +1187,19 @@ pub(crate) fn convert_to_stub(
         false
     };
 
-    let function_body = if has_return_type && (return_needs_transmute || is_converted_return_reference) {
-        generate_return_conversion(
-            source_crate_ident,
-            function_name,
-            &call_args,
-            original_return_type.as_ref().unwrap(),
-            &function.sig.output,
-            config,
-        )
-    } else {
-        quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
-    };
+    let function_body =
+        if has_return_type && (return_needs_transmute || is_converted_return_reference) {
+            generate_return_conversion(
+                source_crate_ident,
+                function_name,
+                &call_args,
+                original_return_type.as_ref().unwrap(),
+                &function.sig.output,
+                config,
+            )
+        } else {
+            quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) }
+        };
 
     let function_body = if need_unsafe_block {
         quote::quote! { unsafe { #function_body } }
@@ -1130,11 +1217,14 @@ pub(crate) fn convert_to_stub(
     };
 
     function.attrs.insert(0, no_mangle_attr);
-    function.attrs.insert(1, syn::parse_quote! { #[allow(clippy::missing_safety_doc)] });
+    function.attrs.insert(
+        1,
+        syn::parse_quote! { #[allow(clippy::missing_safety_doc)] },
+    );
     function.sig.unsafety = Some(syn::Token![unsafe](proc_macro2::Span::call_site()));
     function.sig.abi = Some(syn::parse_quote! { extern "C" });
     function.vis = syn::parse_quote! { pub };
-    
+
     // Remove lifetime parameters as they are useless when replacing references with pointers
     function.sig.generics.lifetimes().for_each(|_| {});
     function.sig.generics = syn::Generics::default();
@@ -1161,11 +1251,11 @@ fn generate_param_conversion(
     );
     replace_lifetimes_with_static(&mut from_type);
     replace_lifetimes_with_static(&mut to_type);
-    
+
     if types_are_equivalent(&from_type, &to_type) {
         return quote::quote! { #param_name };
     }
-    
+
     match (&from_type, &to_type) {
         (syn::Type::Ptr(from_ptr), syn::Type::Reference(to_ref)) => {
             if types_are_equivalent(&from_ptr.elem, &to_ref.elem) {
@@ -1181,7 +1271,7 @@ fn generate_param_conversion(
                 } else {
                     syn::parse_quote! { &'static #from_elem }
                 };
-                
+
                 if to_ref.mutability.is_some() {
                     quote::quote! { std::mem::transmute::<#from_ref_type, #to_type>(&mut *#param_name) }
                 } else {
@@ -1214,13 +1304,13 @@ fn generate_return_conversion(
     };
     replace_lifetimes_with_static(&mut from_type);
     replace_lifetimes_with_static(&mut to_type);
-    
+
     let function_call = quote::quote! { #source_crate_ident::#function_name(#(#call_args),*) };
-    
+
     if types_are_equivalent(&from_type, &to_type) {
         return function_call;
     }
-    
+
     match (&from_type, &to_type) {
         (syn::Type::Reference(from_ref), syn::Type::Ptr(to_ptr)) => {
             if types_are_equivalent(&from_ref.elem, &to_ptr.elem) {
@@ -1236,9 +1326,9 @@ fn generate_return_conversion(
                 } else {
                     syn::parse_quote! { &'static #to_elem }
                 };
-                
+
                 let transmuted_ref = quote::quote! { std::mem::transmute::<#from_type, #to_ref_type>(#function_call) };
-                
+
                 if to_ptr.mutability.is_some() {
                     quote::quote! { #transmuted_ref as *mut #to_elem }
                 } else {
