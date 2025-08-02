@@ -14,6 +14,8 @@ However, `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` o
 
 `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a common Rust library crate. Language-specific binding crates can then compile this generated code and pass it to their respective binding generators (such as cbindgen, csbindgen, etc.).
 
+The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying fragments of code from the source crate, and `prebindgen`, which converts these fragments into a source file that can be included in the destination crate and processed by binding generators.
+
 ## Usage
 
 ### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
