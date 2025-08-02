@@ -1051,7 +1051,7 @@ pub(crate) fn convert_to_stub(
     config: &ParseConfig,
     type_replacements: &mut HashMap<TypeTransmutePair, SourceLocation>,
     source_location: &SourceLocation,
-) -> Result<(), String> {
+) {
     // Extract original types before transformation
     let mut original_param_types = Vec::new();
     for input in &function.sig.inputs {
@@ -1060,8 +1060,8 @@ pub(crate) fn convert_to_stub(
                 original_param_types.push((*pat_type.ty).clone());
             }
             syn::FnArg::Receiver(_) => {
-                return Err(
-                    "FFI functions cannot have receiver arguments (like 'self')".to_string()
+                panic!(
+                    "FFI functions cannot have receiver arguments (like 'self'): {source_location}",
                 );
             }
         }
@@ -1081,13 +1081,17 @@ pub(crate) fn convert_to_stub(
         source_location,
     );
 
-    // Check for unsupported parameter patterns first
-    for input in &function.sig.inputs {
+    // Check for unsupported parameter patterns and remove unnecessary mut keywords
+    for input in &mut function.sig.inputs {
         if let syn::FnArg::Typed(pat_type) = input {
             if matches!(&*pat_type.pat, syn::Pat::Wild(_)) {
-                return Err(
-                    "Wildcard parameters ('_') are not supported in FFI functions".to_string(),
+                panic!(
+                    "Wildcard parameters ('_') are not supported in FFI functions: {source_location}",
                 );
+            }
+            // Remove mut from parameter patterns since extern C parameters don't need to be mutable
+            if let syn::Pat::Ident(pat_ident) = &mut *pat_type.pat {
+                pat_ident.mutability = None;
             }
         }
     }
@@ -1174,8 +1178,6 @@ pub(crate) fn convert_to_stub(
 
     // Add the type replacements to the global set for assertion generation
     type_replacements.extend(sig_type_replacements);
-
-    Ok(())
 }
 
 /// Generate parameter conversion code and return whether unsafe is needed

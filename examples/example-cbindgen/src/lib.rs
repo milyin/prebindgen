@@ -40,9 +40,9 @@ mod tests {
             let int_result = test_function(42, 42.42);
             println!("test_function(42, 42.42) returned: {int_result}");
 
-            // Test void function
-            void_function(123);
-            println!("void_function(123) called successfully");
+            // Test show_square function
+            show_square(123);
+            println!("show_square(123) called successfully");
 
             // Test functions with struct parameters and return values
             

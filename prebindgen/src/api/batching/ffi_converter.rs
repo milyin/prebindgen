@@ -152,7 +152,7 @@ impl Builder {
     ///     #[prebindgen]
     ///     pub struct Foo { /* ... */ }
     /// }
-    /// 
+    ///
     /// #[prebindgen]
     /// pub fn process_foo(f: &foo::Foo) -> i32 { /* ... */ }
     /// ```
@@ -217,11 +217,13 @@ impl Builder {
     pub fn build(self) -> FfiConverter {
         // Prefill primitive types with real primitive types mapping to themselves
         let mut primitive_types = HashMap::new();
-        for primitive in ["bool", "char", "i8", "i16", "i32", "i64", "i128", "isize", 
-                         "u8", "u16", "u32", "u64", "u128", "usize", "f32", "f64", "str"] {
+        for primitive in [
+            "bool", "char", "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64",
+            "u128", "usize", "f32", "f64", "str",
+        ] {
             primitive_types.insert(primitive.to_string(), primitive.to_string());
         }
-        
+
         FfiConverter {
             builder: self,
             stage: GenerationStage::Collect,
@@ -268,13 +270,13 @@ enum GenerationStage {
 /// # use itertools::Itertools;
 /// // In build.rs of a language-specific binding crate
 /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+///
 /// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
 ///     .edition("2024")
 ///     .strip_transparent_wrapper("std::option::Option")
 ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
 ///     .build();
-/// 
+///
 /// // Process items using itertools::batching
 /// let processed_items: Vec<_> = source
 ///     .items_all()
@@ -335,14 +337,20 @@ impl FfiConverter {
             syn::Item::Type(t) => {
                 let type_name = t.ident.to_string();
                 self.exported_types.insert(type_name.clone());
-                
+
                 // Check if this type alias points to a primitive type
                 if let syn::Type::Path(type_path) = &*t.ty {
                     if let Some(last_segment) = type_path.path.segments.last() {
                         let target_type = last_segment.ident.to_string();
                         if let Some(basic_type) = self.primitive_types.get(&target_type).cloned() {
-                            self.primitive_types.insert(type_name.clone(), basic_type.clone());
-                            let prefixed_path: syn::Path = syn::parse_str(&format!("{}::{}", self.builder.source_crate_name.replace('-', "_"), type_name)).unwrap();
+                            self.primitive_types
+                                .insert(type_name.clone(), basic_type.clone());
+                            let prefixed_path: syn::Path = syn::parse_str(&format!(
+                                "{}::{}",
+                                self.builder.source_crate_name.replace('-', "_"),
+                                type_name
+                            ))
+                            .unwrap();
                             let prefixed_name = quote::quote! { #prefixed_path }.to_string();
                             self.primitive_types.insert(prefixed_name, basic_type);
                         }
@@ -371,29 +379,20 @@ impl FfiConverter {
 
             // Process based on item type
             match item {
-                syn::Item::Fn(ref mut function) => {
-                    // Convert function to FFI stub
-                    if let Err(e) = convert_to_stub(
-                        function,
-                        &config,
-                        &mut self.type_replacements,
-                        &source_location,
-                    ) {
-                        panic!(
-                            "Failed to convert function {function} ({source_location}): {e}",
-                            function = function.sig.ident,
-                        );
-                    }
-                }
-                _ => {
-                    // Replace types in non-function items
-                    let _ = replace_types_in_item(
-                        &mut item,
-                        &config,
-                        &mut self.type_replacements,
-                        &source_location,
-                    );
-                }
+                // Convert function to FFI stub
+                syn::Item::Fn(ref mut function) => convert_to_stub(
+                    function,
+                    &config,
+                    &mut self.type_replacements,
+                    &source_location,
+                ),
+                // Replace types in non-function items
+                _ => replace_types_in_item(
+                    &mut item,
+                    &config,
+                    &mut self.type_replacements,
+                    &source_location,
+                ),
             }
 
             return Some((item, source_location));
@@ -481,7 +480,7 @@ impl FfiConverter {
     /// # use itertools::Itertools;
     /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
     /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi").build();
-    /// 
+    ///
     /// // Use with itertools::batching
     /// let processed_items: Vec<_> = source
     ///     .items_all()

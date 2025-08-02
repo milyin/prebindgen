@@ -127,9 +127,11 @@ pub fn another_test_function() -> example_result {
     EXAMPLE_RESULT_OK
 }
 
+// demonstrate auto remove of mut from the function signature in proxy function
 #[prebindgen("functions")]
-pub fn void_function(x: i32) {
-    println!("Called void_function with x = {x}");
+pub fn show_square(mut x: i32) {
+    x *= x;
+    println!("Square of the number is: {x}");
 }
 
 #[prebindgen("functions")]
