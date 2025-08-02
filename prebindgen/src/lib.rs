@@ -3,6 +3,8 @@
 //! A tool for separating the implementation of FFI interfaces from language-specific binding generation,
 //! allowing each to reside in different crates.
 //!
+//! See also: [`prebindgen-proc-macro`](https://docs.rs/prebindgen-proc-macro) for the procedural macros.
+//!
 //! ## Problem
 //!
 //! When creating Rust libraries that need to expose FFI interfaces to multiple languages, 
