@@ -4,7 +4,9 @@ A tool for separating the implementation of FFI interfaces from language-specifi
 
 ## Problem
 
-When creating Rust libraries that need to expose FFI interfaces to multiple languages, it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding. This allows you to tailor each crate to the requirements and quirks of its binding generator and to specifics of the destination language.
+When creating Rust libraries that need to expose FFI interfaces to multiple languages, it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding. This allows you to tailor each crate to the requirements and quirks of its binding generator and to the specifics of the destination language.
+
+There is a discussion about this problem in issue [2771](https://github.com/rust-lang/rfcs/issues/2771).
 
 However, `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate, and cannot be exported from a `lib` crate. As a result, these functions must be duplicated in each language-specific binding crate. This duplication is inconvenient for large projects with many FFI functions and types.
 
@@ -47,7 +49,7 @@ fn main() {
 }
 ```
 
-### 2. In Language-Specific FFI Binding Crate (named e.g. `example-cbindgen`)
+### 2. In the Language-Specific FFI Binding Crate (e.g., `example-cbindgen`)
 
 Add the common FFI library to build dependencies:
 
@@ -100,7 +102,7 @@ include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 
 ## Examples
 
-See example projects on https://github.com/milyin/prebindgen/tree/main/examples
+See example projects at https://github.com/milyin/prebindgen/tree/main/examples
 
 - **example-ffi**: Common FFI library demonstrating prebindgen usage
 - **example-cbindgen**: Language-specific binding using cbindgen for C headers
