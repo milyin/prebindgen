@@ -37,7 +37,7 @@ use crate::{
 ///
 /// ```
 /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
-///     .edition(prebindgen::Edition::Edition2024)
+///     .edition(prebindgen::RustEdition::Edition2024)
 ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
 ///     .strip_transparent_wrapper("std::option::Option")
 ///     .allowed_prefix("libc")
@@ -197,7 +197,7 @@ impl Builder {
     ///
     /// ```
     /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
-    ///     .edition(prebindgen::Edition::Edition2024);
+    ///     .edition(prebindgen::RustEdition::Edition2024);
     /// ```
     #[roxygen]
     pub fn edition(
@@ -215,7 +215,7 @@ impl Builder {
     ///
     /// ```
     /// let converter = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
-    ///     .edition(prebindgen::Edition::Edition2024)
+    ///     .edition(prebindgen::RustEdition::Edition2024)
     ///     .build();
     /// ```
     pub fn build(self) -> FfiConverter {
@@ -276,7 +276,7 @@ enum GenerationStage {
 /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
 ///
 /// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
-///     .edition(prebindgen::Edition::Edition2024)
+///     .edition(prebindgen::RustEdition::Edition2024)
 ///     .strip_transparent_wrapper("std::option::Option")
 ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
 ///     .build();
@@ -315,7 +315,7 @@ impl FfiConverter {
     ///
     /// ```
     /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi")
-    ///     .edition(prebindgen::Edition::Edition2024)
+    ///     .edition(prebindgen::RustEdition::Edition2024)
     ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
     ///     .build();
     /// ```
