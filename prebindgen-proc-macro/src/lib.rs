@@ -262,12 +262,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     // Extract basic source location information available during compilation
-    // Convert proc_macro2::Span to proc_macro::Span to access file() method
-    let source_location = SourceLocation {
-        file: span.unwrap().file(),
-        line: span.unwrap().line(),
-        column: span.unwrap().column(),
-    };
+    let source_location = SourceLocation::from_span(&span);
 
     // Create the new record
     let new_record = Record::new(kind, name, content, source_location);

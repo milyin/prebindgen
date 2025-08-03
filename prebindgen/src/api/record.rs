@@ -35,6 +35,17 @@ impl std::fmt::Display for SourceLocation {
     }
 }
 
+impl SourceLocation {
+    pub fn from_span(span: &proc_macro2::Span) -> Self {
+        // Convert proc_macro2::Span to proc_macro::Span to access file() method
+        Self {
+            file: span.unwrap().file(),
+            line: span.unwrap().line(),
+            column: span.unwrap().column(),
+        }
+    }
+}
+
 /// The kind of record (struct, enum, union, or function).
 ///
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.
