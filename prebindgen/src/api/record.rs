@@ -39,10 +39,13 @@ impl SourceLocation {
     pub fn from_span(span: &proc_macro2::Span) -> Self {
         if_rust_version::if_rust_version! { >= 1.88 {
             // Convert proc_macro2::Span to proc_macro::Span to access file() method
-            Self {
-                file: span.unwrap().file(),
-                line: span.unwrap().line(),
-                column: span.unwrap().column(),
+            #[allow(clippy::incompatible_msrv)]
+            {
+                Self {
+                    file: span.unwrap().file(),
+                    line: span.unwrap().line(),
+                    column: span.unwrap().column(),
+                }
             }
         } else {
             let _ = span; // Suppress unused variable warning
