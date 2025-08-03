@@ -21,6 +21,7 @@ proc-macro2 = { workspace = true }
 regex = { workspace = true }
 prettyplease = { workspace = true }
 roxygen = { workspace = true }
+if_rust_version = { workspace = true }
 
 [features]
 debug = []
