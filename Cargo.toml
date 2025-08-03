@@ -6,7 +6,7 @@ members = [
     "examples/example-ffi",
 ]
 resolver = "2"
-package.version = "0.3.0"
+package.version = "0.4.0"
 package.edition = "2021"
 package.rust-version = "1.75"
 package.license = "MIT OR Apache-2.0"
@@ -18,8 +18,8 @@ package.keywords = ["ffi", "bindings", "cbindgen", "csbindgen", "cross-platform"
 package.categories = ["development-tools", "external-ffi-bindings"] 
 
 [workspace.dependencies]
-prebindgen = { path = "prebindgen", version = "0.3.0" }
-prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.3.0" }
+prebindgen = { path = "prebindgen", version = "0.4.0" }
+prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.4.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "2.0", features = ["full", "visit-mut"] }
