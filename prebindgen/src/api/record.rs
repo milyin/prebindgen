@@ -37,11 +37,24 @@ impl std::fmt::Display for SourceLocation {
 
 impl SourceLocation {
     pub fn from_span(span: &proc_macro2::Span) -> Self {
-        // Convert proc_macro2::Span to proc_macro::Span to access file() method
-        Self {
-            file: span.unwrap().file(),
-            line: span.unwrap().line(),
-            column: span.unwrap().column(),
+        #[cfg(proc_macro_span)]
+        {
+            // Convert proc_macro2::Span to proc_macro::Span to access file() method
+            Self {
+                file: span.unwrap().file(),
+                line: span.unwrap().line(),
+                column: span.unwrap().column(),
+            }
+        }
+        #[cfg(not(proc_macro_span))]
+        {
+            let _ = span; // Suppress unused variable warning
+            // Fallback for stable Rust without proc_macro_span feature
+            Self {
+                file: "<unknown>".to_string(),
+                line: 0,
+                column: 0,
+            }
         }
     }
 }
