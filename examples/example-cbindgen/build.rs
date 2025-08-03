@@ -47,7 +47,6 @@ fn generate_ffi_bindings() -> PathBuf {
     // for generating proxy functions. This name can be taken from source or passed explicitly if
     // source crate is imported with renaming
     let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
-        .edition("2024") // Use Rust 2024 edition features like #[unsafe(no_mangle)]
         .strip_transparent_wrapper("std::option::Option") // Strip Option wrapper
         .strip_transparent_wrapper("std::mem::MaybeUninit") // Strip MaybeUninit wrapper
         .prefixed_exported_type("foo::Foo")

@@ -89,7 +89,7 @@
 //!             .build()
 //!             .into_closure())
 //!         .batching(ffi_converter::Builder::new(source.crate_name())
-//!             .edition("2024")
+//!             .edition(prebindgen::Edition::Edition2024)
 //!             .strip_transparent_wrapper("std::mem::MaybeUninit")
 //!             .build()
 //!             .into_closure())
@@ -124,6 +124,7 @@ pub(crate) mod utils;
 pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
+pub use crate::utils::edition::RustEdition;
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {

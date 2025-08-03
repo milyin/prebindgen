@@ -35,6 +35,30 @@ impl std::fmt::Display for SourceLocation {
     }
 }
 
+impl SourceLocation {
+    pub fn from_span(span: &proc_macro2::Span) -> Self {
+        if_rust_version::if_rust_version! { >= 1.88 {
+            // Convert proc_macro2::Span to proc_macro::Span to access file() method
+            #[allow(clippy::incompatible_msrv)]
+            {
+                Self {
+                    file: span.unwrap().file(),
+                    line: span.unwrap().line(),
+                    column: span.unwrap().column(),
+                }
+            }
+        } else {
+            let _ = span; // Suppress unused variable warning
+            // Fallback for Rust versions before 1.88
+            Self {
+                file: "<unknown>".to_string(),
+                line: 0,
+                column: 0,
+            }
+        }}
+    }
+}
+
 /// The kind of record (struct, enum, union, or function).
 ///
 /// **Internal API**: This type is public only for interaction with the proc-macro crate.

@@ -19,11 +19,14 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     SourceLocation,
+    RustEdition,
     codegen::replace_types::{
         ParseConfig, TypeTransmutePair, convert_to_stub, generate_standard_allowed_prefixes,
         generate_type_transmute_pair_assertions, replace_types_in_item,
     },
 };
+
+
 
 /// Builder for configuring FfiConverter instances
 ///
@@ -34,7 +37,7 @@ use crate::{
 ///
 /// ```
 /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
-///     .edition("2024")
+///     .edition(prebindgen::RustEdition::Edition2024)
 ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
 ///     .strip_transparent_wrapper("std::option::Option")
 ///     .allowed_prefix("libc")
@@ -46,10 +49,12 @@ pub struct Builder {
     pub(crate) allowed_prefixes: Vec<syn::Path>,
     pub(crate) prefixed_exported_types: Vec<syn::Path>,
     pub(crate) transparent_wrappers: Vec<syn::Path>,
-    pub(crate) edition: String,
+    pub(crate) edition: RustEdition,
 }
 
 impl Builder {
+
+
     /// Create a new Builder for configuring FfiConverter
     ///
     /// # Parameters
@@ -62,13 +67,12 @@ impl Builder {
     /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi");
     /// ```
     pub fn new(source_crate_name: impl Into<String>) -> Self {
-        // Generate comprehensive allowed prefixes including standard prelude
         Self {
             source_crate_name: source_crate_name.into(),
             allowed_prefixes: generate_standard_allowed_prefixes(),
             prefixed_exported_types: Vec::new(),
             transparent_wrappers: Vec::new(),
-            edition: "2021".to_string(),
+            edition: RustEdition::default(),
         }
     }
 
@@ -184,24 +188,24 @@ impl Builder {
     /// Set the Rust edition to use for generated code
     ///
     /// This affects how the `#[no_mangle]` attribute is generated:
-    /// - For edition "2024": `#[unsafe(no_mangle)]`
-    /// - For other editions: `#[no_mangle]`
+    /// - For Edition2024 with Rust >= 1.82: `#[unsafe(no_mangle)]`
+    /// - For Edition2021 or older Rust versions: `#[no_mangle]`
     ///
-    /// Default is "2024" if not specified.
+    /// Default is automatically detected based on the current compiler version.
     ///
     /// # Example
     ///
     /// ```
     /// let builder = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
-    ///     .edition("2021");
+    ///     .edition(prebindgen::RustEdition::Edition2024);
     /// ```
     #[roxygen]
-    pub fn edition<S: Into<String>>(
+    pub fn edition(
         mut self,
-        /// The Rust edition ("2021", "2024", etc.)
-        edition: S,
+        /// The Rust edition
+        edition: RustEdition,
     ) -> Self {
-        self.edition = edition.into();
+        self.edition = edition;
         self
     }
 
@@ -211,7 +215,7 @@ impl Builder {
     ///
     /// ```
     /// let converter = prebindgen::batching::ffi_converter::Builder::new("example_ffi")
-    ///     .edition("2024")
+    ///     .edition(prebindgen::RustEdition::Edition2024)
     ///     .build();
     /// ```
     pub fn build(self) -> FfiConverter {
@@ -272,7 +276,7 @@ enum GenerationStage {
 /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
 ///
 /// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
-///     .edition("2024")
+///     .edition(prebindgen::RustEdition::Edition2024)
 ///     .strip_transparent_wrapper("std::option::Option")
 ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
 ///     .build();
@@ -311,7 +315,7 @@ impl FfiConverter {
     ///
     /// ```
     /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi")
-    ///     .edition("2024")
+    ///     .edition(prebindgen::RustEdition::Edition2024)
     ///     .strip_transparent_wrapper("std::mem::MaybeUninit")
     ///     .build();
     /// ```
@@ -374,7 +378,7 @@ impl FfiConverter {
                 allowed_prefixes: &self.builder.allowed_prefixes,
                 prefixed_exported_types: &self.builder.prefixed_exported_types,
                 transparent_wrappers: &self.builder.transparent_wrappers,
-                edition: &self.builder.edition,
+                edition: self.builder.edition,
             };
 
             // Process based on item type

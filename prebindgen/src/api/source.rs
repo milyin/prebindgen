@@ -36,9 +36,9 @@ const JSONL_EXTENSION: &str = ".jsonl";
 /// ```ignore
 /// // In source_ffi/src/lib.rs
 /// use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
-/// 
+///
 /// pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
-/// 
+///
 /// #[prebindgen]
 /// pub fn my_function() -> i32 { 42 }
 /// ```
@@ -48,7 +48,7 @@ const JSONL_EXTENSION: &str = ".jsonl";
 /// ```
 /// # prebindgen::doctest_setup!();
 /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+///
 /// // Process all items
 /// for (item, location) in source.items_all() {
 ///     // Process each syn::Item...
@@ -61,7 +61,8 @@ pub struct Source {
 
 /// Provide special impossible in real world value for simulating input data in doctests
 #[doc(hidden)]
-pub const DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR: &str = "/dev/null/DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR";
+pub const DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR: &str =
+    "/dev/null/DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR";
 
 impl Source {
     #[roxygen]
@@ -111,17 +112,15 @@ impl Source {
             items: HashMap::from([
                 (
                     "structs".to_string(),
-                    vec![
-                        (
-                            syn::parse_quote! {
-                                #[prebindgen("structs")]
-                                pub struct TestStruct {
-                                    pub field: i32,
-                                }
-                            },
-                            SourceLocation::default(),
-                        ),
-                    ],
+                    vec![(
+                        syn::parse_quote! {
+                            #[prebindgen("structs")]
+                            pub struct TestStruct {
+                                pub field: i32,
+                            }
+                        },
+                        SourceLocation::default(),
+                    )],
                 ),
                 (
                     "functions".to_string(),
@@ -168,14 +167,15 @@ impl Source {
     /// let items = source.items_in_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only TestStruct should be present
     /// ```
-    pub fn items_in_groups(
-        &self,
-        groups: &[&str],
-    ) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
+    pub fn items_in_groups<'a>(
+        &'a self,
+        groups: &'a [&'a str],
+    ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         groups
             .iter()
             .filter_map(|group| self.items.get(*group))
-            .flat_map(|records| records.iter()).cloned()
+            .flat_map(|records| records.iter())
+            .cloned()
     }
 
     /// Returns an iterator over items excluding specific groups
@@ -192,14 +192,15 @@ impl Source {
     /// let items = source.items_except_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only test_function should be present
     /// ```
-    pub fn items_except_groups(
-        &self,
-        groups: &[&str],
-    ) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
+    pub fn items_except_groups<'a>(
+        &'a self,
+        groups: &'a [&'a str],
+    ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         self.items
             .iter()
             .filter(|(group, _)| !groups.contains(&group.as_str()))
-            .flat_map(|(_, records)| records.iter()).cloned()
+            .flat_map(|(_, records)| records.iter())
+            .cloned()
     }
 
     /// Returns an iterator over all items from all groups
@@ -214,10 +215,11 @@ impl Source {
     /// let items: Vec<_> = source.items_all().collect();
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
-    pub fn items_all(&self) -> impl Iterator<Item = (syn::Item, SourceLocation)> {
+    pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         self.items
             .iter()
-            .flat_map(|(_, records)| records.iter()).cloned()
+            .flat_map(|(_, records)| records.iter())
+            .cloned()
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`

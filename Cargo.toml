@@ -7,8 +7,8 @@ members = [
 ]
 resolver = "2"
 package.version = "0.3.0"
-package.edition = "2024"
-package.rust-version = "1.88"
+package.edition = "2021"
+package.rust-version = "1.75"
 package.license = "MIT OR Apache-2.0"
 package.authors = ["Michael Ilyin <milyin@gmail.com>"]
 package.repository = "https://github.com/milyin/prebindgen"
@@ -30,3 +30,4 @@ prettyplease = "0.2"
 roxygen = "1.0.4"
 tempfile = "3.0"
 itertools = "0.14.0"
+if_rust_version = "1.0"
