@@ -12,7 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use crate::SourceLocation;
+use crate::{utils::edition::RustEdition, SourceLocation};
 
 /// Configuration parameters for parsing records
 pub(crate) struct ParseConfig<'a> {
@@ -22,7 +22,7 @@ pub(crate) struct ParseConfig<'a> {
     pub allowed_prefixes: &'a [syn::Path],
     pub prefixed_exported_types: &'a [syn::Path],
     pub transparent_wrappers: &'a [syn::Path],
-    pub edition: &'a str,
+    pub edition: RustEdition,
 }
 
 impl<'a> ParseConfig<'a> {
@@ -1157,7 +1157,8 @@ pub(crate) fn convert_to_stub(
     // Update function with new body and FFI attributes
     function.block = Box::new(syn::parse_quote! { { #function_body } });
 
-    let no_mangle_attr = if config.edition == "2024" {
+    // Generate appropriate no_mangle attribute based on edition
+    let no_mangle_attr = if config.edition == RustEdition::Edition2024 {
         syn::parse_quote! { #[unsafe(no_mangle)] }
     } else {
         syn::parse_quote! { #[no_mangle] }
