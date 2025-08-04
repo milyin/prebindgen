@@ -59,36 +59,40 @@ Add the common FFI library to build dependencies:
 # example-cbindgen/Cargo.toml
 [build-dependencies]
 example_ffi = { path = "../example_ffi" }
-prebindgen = "0.2"
-cbindgen = "0.24"
+prebindgen = "0.4"
+cbindgen = "0.29"
+itertools = "0.14"
 ```
 
 ```rust
 // example-cbindgen/build.rs
-use prebindgen::{Source, batching::ffi_converter, filter_map::feature_filter, collect::Destination};
 use itertools::Itertools;
 
 fn main() {
     // Create a source from the common FFI crate's prebindgen data
-    let source = Source::new(my_common_ffi::PREBINDGEN_OUT_DIR);
+    let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
+
+    // Create feature filter
+    let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
+        .disable_feature("unstable")
+        .disable_feature("internal")
+        .build();
+
+    // Create converter with transparent wrapper stripping
+    let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
+        .edition(prebindgen::RustEdition::Edition2024)
+        .strip_transparent_wrapper("std::mem::MaybeUninit")
+        .strip_transparent_wrapper("std::option::Option")
+        .prefixed_exported_type("foo::Foo")
+        .build();
 
     // Process items with filtering and conversion
-    let destination = source
+    let bindings_file = source
         .items_all()
-        .filter_map(feature_filter::Builder::new()
-            .disable_feature("experimental")
-            .enable_feature("std")
-            .build()
-            .into_closure())
-        .batching(ffi_converter::Builder::new(source.crate_name())
-            .edition("2024")
-            .strip_transparent_wrapper("std::mem::MaybeUninit")
-            .build()
-            .into_closure())
-        .collect::<Destination>();
-
-    // Write generated FFI code to file
-    let bindings_file = destination.write("ffi_bindings.rs");
+        .filter_map(feature_filter.into_closure())
+        .batching(converter.into_closure())
+        .collect::<prebindgen::collect::Destination>()
+        .write("ffi_bindings.rs");
 
     // Pass the generated file to cbindgen for C header generation
     generate_c_headers(&bindings_file);
