@@ -34,19 +34,37 @@ pub(crate) fn process_item_features(
         syn::Item::Fn(f) => &mut f.attrs,
         syn::Item::Struct(s) => {
             // Process struct fields recursively
-            process_struct_fields(&mut s.fields, disabled_features, enabled_features, feature_mappings, source_location);
+            process_struct_fields(
+                &mut s.fields,
+                disabled_features,
+                enabled_features,
+                feature_mappings,
+                source_location,
+            );
             &mut s.attrs
-        },
+        }
         syn::Item::Enum(e) => {
             // Process enum variants recursively
-            process_enum_variants(&mut e.variants, disabled_features, enabled_features, feature_mappings, source_location);
+            process_enum_variants(
+                &mut e.variants,
+                disabled_features,
+                enabled_features,
+                feature_mappings,
+                source_location,
+            );
             &mut e.attrs
-        },
+        }
         syn::Item::Union(u) => {
             // Process union fields recursively
-            process_union_fields(&mut u.fields, disabled_features, enabled_features, feature_mappings, source_location);
+            process_union_fields(
+                &mut u.fields,
+                disabled_features,
+                enabled_features,
+                feature_mappings,
+                source_location,
+            );
             &mut u.attrs
-        },
+        }
         syn::Item::Type(t) => &mut t.attrs,
         syn::Item::Const(c) => &mut c.attrs,
         syn::Item::Static(s) => &mut s.attrs,
@@ -58,7 +76,13 @@ pub(crate) fn process_item_features(
     };
 
     // Use the centralized attribute processing function
-    process_attributes(attrs, disabled_features, enabled_features, feature_mappings, source_location)
+    process_attributes(
+        attrs,
+        disabled_features,
+        enabled_features,
+        feature_mappings,
+        source_location,
+    )
 }
 
 /// Process struct fields for feature flags
@@ -75,7 +99,13 @@ fn process_struct_fields(
             let mut new_fields = syn::punctuated::Punctuated::new();
             for field in fields_named.named.pairs() {
                 let mut field = field.into_value().clone();
-                if process_attributes(&mut field.attrs, disabled_features, enabled_features, feature_mappings, source_location) {
+                if process_attributes(
+                    &mut field.attrs,
+                    disabled_features,
+                    enabled_features,
+                    feature_mappings,
+                    source_location,
+                ) {
                     new_fields.push(field);
                 }
             }
@@ -86,7 +116,13 @@ fn process_struct_fields(
             let mut new_fields = syn::punctuated::Punctuated::new();
             for field in fields_unnamed.unnamed.pairs() {
                 let mut field = field.into_value().clone();
-                if process_attributes(&mut field.attrs, disabled_features, enabled_features, feature_mappings, source_location) {
+                if process_attributes(
+                    &mut field.attrs,
+                    disabled_features,
+                    enabled_features,
+                    feature_mappings,
+                    source_location,
+                ) {
                     new_fields.push(field);
                 }
             }
@@ -111,11 +147,23 @@ fn process_enum_variants(
     for variant_pair in variants.pairs() {
         let mut variant = variant_pair.into_value().clone();
         // Process variant attributes
-        let keep_variant = process_attributes(&mut variant.attrs, disabled_features, enabled_features, feature_mappings, source_location);
-        
+        let keep_variant = process_attributes(
+            &mut variant.attrs,
+            disabled_features,
+            enabled_features,
+            feature_mappings,
+            source_location,
+        );
+
         if keep_variant {
             // Process variant fields if it's kept
-            process_struct_fields(&mut variant.fields, disabled_features, enabled_features, feature_mappings, source_location);
+            process_struct_fields(
+                &mut variant.fields,
+                disabled_features,
+                enabled_features,
+                feature_mappings,
+                source_location,
+            );
             new_variants.push(variant);
         }
     }
@@ -134,7 +182,13 @@ fn process_union_fields(
     let mut new_fields = syn::punctuated::Punctuated::new();
     for field_pair in fields.named.pairs() {
         let mut field = field_pair.into_value().clone();
-        if process_attributes(&mut field.attrs, disabled_features, enabled_features, feature_mappings, source_location) {
+        if process_attributes(
+            &mut field.attrs,
+            disabled_features,
+            enabled_features,
+            feature_mappings,
+            source_location,
+        ) {
             new_fields.push(field);
         }
     }
@@ -161,7 +215,12 @@ fn process_attributes(
                 match CfgExpr::parse_from_tokens(&meta_list.tokens) {
                     Ok(cfg_expr) => {
                         // Apply strict feature processing
-                        match cfg_expr.process_features_strict(enabled_features, disabled_features, feature_mappings, source_location) {
+                        match cfg_expr.process_features_strict(
+                            enabled_features,
+                            disabled_features,
+                            feature_mappings,
+                            source_location,
+                        ) {
                             Some(processed_expr) => {
                                 // Check if the processed expression is CfgExpr::False
                                 if matches!(processed_expr, CfgExpr::False) {

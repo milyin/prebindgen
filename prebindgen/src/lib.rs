@@ -7,8 +7,8 @@
 //!
 //! ## Problem
 //!
-//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, 
-//! it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding. 
+//! When creating Rust libraries that need to expose FFI interfaces to multiple languages,
+//! it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding.
 //! This allows you to tailor each crate to the requirements and quirks of its binding generator and to specifisc of the
 //! destination language.
 //! However, `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate, and cannot be
@@ -31,14 +31,16 @@
 //!
 //! ### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
 //!
+//! Add "links" element to Cargo.toml to enable `DEP_` variables passing to downstream crates. Value of "links" should be the crate name.
+//! // example-ffi/Cargo.toml
+//! \[package\]
+//! links = "example_ffi"
+//!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 //!
 //! ```rust,ignore
 //! // example-ffi/src/lib.rs
-//! use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
-//!
-//! // Declare a public constant with the path to prebindgen data:
-//! pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+//! use prebindgen_proc_macro::prebindgen;
 //!
 //! // Group structures and functions for selective handling
 //! #[prebindgen]
@@ -78,7 +80,7 @@
 //!
 //! fn main() {
 //!     // Create a source from the common FFI crate's prebindgen data
-//!     let source = Source::new(my_common_ffi::PREBINDGEN_OUT_DIR);
+//!     let source = Source::new("example_ffi");
 //!
 //!     // Process items with filtering and conversion
 //!     let destination = source
@@ -121,6 +123,7 @@ pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
 
+pub use crate::api::buildrs::get_prebindgen_out_dir;
 pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
@@ -165,21 +168,6 @@ pub mod collect {
 }
 
 #[doc(hidden)]
-pub use crate::api::buildrs::get_prebindgen_out_dir;
-#[doc(hidden)]
 pub use crate::api::record::Record;
 #[doc(hidden)]
 pub use crate::api::record::RecordKind;
-#[doc(hidden)]
-pub use crate::api::source::DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR;
-
-/// Macro for setting up doctest environment with source_ffi module
-#[doc(hidden)]
-#[macro_export]
-macro_rules! doctest_setup {
-    () => {
-        mod source_ffi {
-            pub const PREBINDGEN_OUT_DIR: &str = prebindgen::DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR;
-        }
-    };
-}

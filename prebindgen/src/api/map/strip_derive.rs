@@ -1,10 +1,10 @@
 //! Strip the specified derive attributes from the items in the source.
 
 use crate::api::record::SourceLocation;
+use quote::ToTokens;
 use roxygen::roxygen;
 use std::collections::HashSet;
 use syn::Item;
-use quote::ToTokens;
 
 /// Builder for configuring StripDerives instances
 ///
@@ -98,17 +98,16 @@ impl Default for Builder {
 /// for memory layout compatibility and FFI calls, most derives are unnecessary.
 ///
 /// # Example
-///
 /// ```
-/// # prebindgen::doctest_setup!();
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+/// # prebindgen::Source::init_doctest_simulate();
+/// let source = prebindgen::Source::new("source_ffi");
+///
 /// let strip_derives = prebindgen::map::StripDerives::builder()
 ///     .strip_derive("Debug")
 ///     .strip_derive("Clone")
 ///     .strip_derive("Default")
 ///     .build();
-/// 
+///
 /// // Apply to items before FfiConverter processing
 /// let processed_items: Vec<_> = source
 ///     .items_all()
@@ -164,12 +163,19 @@ impl StripDerives {
     fn strip_derives_from_attrs(&self, attrs: &mut Vec<syn::Attribute>) {
         for attr in attrs.iter_mut() {
             if attr.path().is_ident("derive") {
-                if let Ok(list) = attr.parse_args_with(syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated) {
+                if let Ok(list) = attr.parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated,
+                ) {
                     let filtered: syn::punctuated::Punctuated<syn::Path, syn::Token![,]> = list
                         .into_iter()
-                        .filter(|path| !self.builder.derive_attrs.contains(&path.get_ident().unwrap().to_string()))
+                        .filter(|path| {
+                            !self
+                                .builder
+                                .derive_attrs
+                                .contains(&path.get_ident().unwrap().to_string())
+                        })
                         .collect();
-                    
+
                     attr.meta = syn::Meta::List(syn::MetaList {
                         path: attr.path().clone(),
                         delimiter: syn::MacroDelimiter::Paren(Default::default()),
@@ -178,11 +184,19 @@ impl StripDerives {
                 }
             }
         }
-        
+
         attrs.retain(|attr| {
-            !attr.path().is_ident("derive") || 
-            attr.parse_args_with(syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated)
-                .map_or(true, |list: syn::punctuated::Punctuated<syn::Path, syn::Token![,]>| !list.is_empty())
+            !attr.path().is_ident("derive")
+                || attr
+                    .parse_args_with(
+                        syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated,
+                    )
+                    .map_or(
+                        true,
+                        |list: syn::punctuated::Punctuated<syn::Path, syn::Token![,]>| {
+                            !list.is_empty()
+                        },
+                    )
         });
     }
 
@@ -195,12 +209,12 @@ impl StripDerives {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// # prebindgen::Source::init_doctest_simulate();
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let strip_derives = prebindgen::map::StripDerives::builder()
     ///     .strip_derive("Debug")
     ///     .build();
-    /// 
+    ///
     /// // Use with map
     /// let processed_items: Vec<_> = source
     ///     .items_all()

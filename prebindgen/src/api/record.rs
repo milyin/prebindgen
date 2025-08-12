@@ -93,7 +93,7 @@ impl RecordKind {
     }
 }
 
-impl From<&(syn::Item,SourceLocation)> for RecordKind {
+impl From<&(syn::Item, SourceLocation)> for RecordKind {
     fn from((item, source_location): &(syn::Item, SourceLocation)) -> Self {
         match item {
             syn::Item::Struct(_) => RecordKind::Struct,
@@ -119,7 +119,6 @@ impl std::fmt::Display for RecordKind {
         }
     }
 }
-
 
 impl Record {
     /// Create a new record with the specified kind, name, content, and source location.
@@ -150,12 +149,14 @@ impl Record {
 
     pub(crate) fn parse(self: &Record) -> (syn::Item, SourceLocation) {
         // Parse the raw content into a syntax tree
-        let parsed = syn::parse_file(&self.content).map_err(|e| {
-            panic!(
-                "Failed to parse record content at {}: {}",
-                self.source_location, e
-            )
-        }).unwrap();
+        let parsed = syn::parse_file(&self.content)
+            .map_err(|e| {
+                panic!(
+                    "Failed to parse record content at {}: {}",
+                    self.source_location, e
+                )
+            })
+            .unwrap();
 
         // Check that we have exactly one item
         let mut items = parsed.items.into_iter();

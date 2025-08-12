@@ -27,20 +27,20 @@ pub fn read_jsonl_file<P: AsRef<Path>>(
 ) -> Result<Vec<Record>, Box<dyn std::error::Error>> {
     let content = fs::read_to_string(&file_path)?;
     let mut records = Vec::new();
-    
+
     // Parse JSON-lines format: each line is a separate JSON object
     for (line_num, line) in content.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() {
             continue; // Skip empty lines
         }
-        
+
         let record: Record = serde_json::from_str(line)
             .map_err(|e| format!("{}:{}: {}", file_path.as_ref().display(), line_num + 1, e))?;
-        
+
         records.push(record);
     }
-    
+
     Ok(records)
 }
 
@@ -104,7 +104,7 @@ mod tests {
             content: "pub struct Test { }".to_string(),
             source_location: Default::default(),
         };
-        
+
         // Create a temporary file
         let temp_file = NamedTempFile::new().unwrap();
         let temp_path = temp_file.path();
@@ -115,10 +115,10 @@ mod tests {
         // Read raw content and verify format
         let content = fs::read_to_string(temp_path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
-        
+
         // Should have exactly one line
         assert_eq!(lines.len(), 1);
-        
+
         // Line should be valid JSON
         let parsed: Record = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(parsed.name, "Test");
