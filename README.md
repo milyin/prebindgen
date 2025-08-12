@@ -49,7 +49,7 @@ pub fn my_function(arg: i32) -> i32 {
 }
 ```
 
-Call `init_prebindgen_out_dir()` in the source crate's `build.rs` to make `#prebindgen`-marked items available to the `prebindgen::Source` object in dependent crates' `build.rs`. This function calls `println!("cargo:prebindgen=<path>")`, which provides the path to the prebindgen output directory to the `build.rs` of dependent crates via the `DEP_<crate_name>_PREBINDGEN` variable.
+Call `init_prebindgen_out_dir()` in the source crate's `build.rs` to make `#prebindgen`-marked items available to the `prebindgen::Source` object in dependent crates' `build.rs`.
 
 ```rust
 // example-ffi/build.rs
