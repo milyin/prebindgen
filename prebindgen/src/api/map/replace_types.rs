@@ -1,10 +1,10 @@
 //! Filter items in a sequence of (syn::Item, SourceLocation) by replacing specific types
-//! Mostly useful for explicitly appending full paths to types, e.g. 
+//! Mostly useful for explicitly appending full paths to types, e.g.
 //! replacing `Option` with `std::option::Option` or `MaybeUninit` with `std::mem::MaybeUninit`
 
 use crate::api::record::SourceLocation;
 use std::collections::HashMap;
-use syn::{Item, Type, TypePath, visit_mut::VisitMut};
+use syn::{visit_mut::VisitMut, Item, Type, TypePath};
 
 /// Builder for configuring ReplaceTypes instances
 ///
@@ -90,7 +90,7 @@ impl Default for Builder {
 /// Source crate code:
 /// ```rust,ignore
 /// use std::mem;
-/// 
+///
 /// #[prebindgen]
 /// pub fn process(data: &mut mem::MaybeUninit<i32>) { /* ... */ }
 /// ```
@@ -109,12 +109,13 @@ impl Default for Builder {
 /// # Example
 /// ```
 /// let source = prebindgen::Source::new("source_ffi");
+/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
 ///     .replace_type("Option", "std::option::Option")
 ///     .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
 ///     .build();
-/// 
+///
 /// // Apply before FfiConverter to ensure fully qualified types
 /// let processed_items: Vec<_> = source
 ///     .items_all()
@@ -172,10 +173,11 @@ impl ReplaceTypes {
     ///
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
     ///     .replace_type("Option", "std::option::Option")
     ///     .build();
-    /// 
+    ///
     /// // Use with map before FfiConverter
     /// let processed_items: Vec<_> = source
     ///     .items_all()
@@ -195,13 +197,17 @@ struct TypeReplacer<'a> {
 impl<'a> VisitMut for TypeReplacer<'a> {
     fn visit_type_mut(&mut self, ty: &mut Type) {
         if let Type::Path(TypePath { path, .. }) = ty {
-            let current_path = path.segments.iter()
+            let current_path = path
+                .segments
+                .iter()
                 .map(|seg| seg.ident.to_string())
                 .collect::<Vec<_>>()
                 .join("::");
-            
+
             if let Some(replacement) = self.replacements.get(&current_path) {
-                if let Ok(Type::Path(TypePath { path: new_path, .. })) = syn::parse_str::<Type>(replacement) {
+                if let Ok(Type::Path(TypePath { path: new_path, .. })) =
+                    syn::parse_str::<Type>(replacement)
+                {
                     // Preserve and process generic arguments
                     let mut original_args = path.segments.last().unwrap().arguments.clone();
                     if let syn::PathArguments::AngleBracketed(ref mut args) = original_args {
@@ -211,7 +217,7 @@ impl<'a> VisitMut for TypeReplacer<'a> {
                             }
                         }
                     }
-                    
+
                     // Apply replacement with preserved arguments
                     path.segments = new_path.segments;
                     if let Some(last_segment) = path.segments.last_mut() {
@@ -221,7 +227,7 @@ impl<'a> VisitMut for TypeReplacer<'a> {
                 }
             }
         }
-        
+
         syn::visit_mut::visit_type_mut(self, ty);
     }
 }

@@ -20,13 +20,14 @@ use crate::SourceLocation;
 ///
 /// ```
 /// let source = prebindgen::Source::new("source_ffi");
+/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// // Extract alignment information from structs
 /// let alignments: Vec<_> = source
 ///     .items_all()
 ///     .filter_map(prebindgen::filter_map::struct_align)
 ///     .collect();
-/// 
+///
 /// // Use alignment data to patch csbindgen output
 /// for (struct_name, alignment) in alignments {
 ///     println!("Struct {} has alignment {}", struct_name, alignment);

@@ -73,9 +73,8 @@ const PREBINDGEN_DIR: &str = "prebindgen";
 
 /// Get the full path to the prebindgen output directory in OUT_DIR.
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
-    let out_dir = std::env::var("OUT_DIR").expect(
-        "OUT_DIR environment variable not set. Check if build.rs for the crate exitsts",
-    );
+    let out_dir = std::env::var("OUT_DIR")
+        .expect("OUT_DIR environment variable not set. Check if build.rs for the crate exitsts");
     std::path::Path::new(&out_dir).join(PREBINDGEN_DIR)
 }
 

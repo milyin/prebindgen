@@ -143,6 +143,7 @@ impl Default for Builder {
 /// # Example
 /// ```
 /// let source = prebindgen::Source::new("source_ffi");
+/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
 ///     .disable_feature("unstable")
@@ -150,7 +151,7 @@ impl Default for Builder {
 ///     .enable_feature("std")
 ///     .match_feature("experimental", "beta")
 ///     .build();
-/// 
+///
 /// // Apply filter to items
 /// let filtered_items: Vec<_> = source
 ///     .items_all()
@@ -214,10 +215,11 @@ impl FeatureFilter {
     ///
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// let filter = prebindgen::filter_map::FeatureFilter::builder()
     ///     .disable_feature("internal")
     ///     .build();
-    /// 
+    ///
     /// // Use with filter_map
     /// let filtered_items: Vec<_> = source
     ///     .items_all()

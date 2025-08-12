@@ -47,6 +47,7 @@ const JSONL_EXTENSION: &str = ".jsonl";
 ///
 /// ```
 /// let source = prebindgen::Source::new("source_ffi");
+/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// // Process all items
 /// for (item, location) in source.items_all() {
@@ -59,19 +60,13 @@ pub struct Source {
 }
 
 impl Source {
-    #[cfg(doctest)]
-    pub fn new(crate_name: &str) -> Self {
-        return Self::doctest_simulate();
-    }
-
     /// Create a new `Source` instance from directory, specified by variable `DEP_<uppercase_crate_name>_PREBINDGEN`.
     /// This variable is passed from upstream source "ffi" crate by `init_prebindgen_out_dir()` function.
     /// This `crate_name` value is also used to prefix source crate function if not overridden by `crate_name()` method.
-    #[cfg(not(doctest))]
     #[roxygen]
     pub fn new(
         /// The name of the source crate that generated the prebindgen data
-        crate_name: &str
+        crate_name: &str,
     ) -> Self {
         let uppercase_crate_name = crate_name.to_uppercase();
         let input_dir = std::env::var(format!("DEP_{uppercase_crate_name}_PREBINDGEN"))
@@ -119,7 +114,7 @@ impl Source {
 
     #[doc(hidden)]
     /// Simulate the Source for doctests by creating a dummy Source with few test items
-    fn doctest_simulate() -> Self {
+    pub fn doctest_simulate() -> Self {
         Self {
             crate_name: "source_ffi".to_string(),
             items: HashMap::from([
@@ -158,6 +153,7 @@ impl Source {
     ///
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// let crate_name = source.crate_name();
     /// ```
     pub fn crate_name(&self) -> &str {
@@ -174,6 +170,7 @@ impl Source {
     ///
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// // Process only items from "structs" and "functions" groups
     /// let items = source.items_in_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only TestStruct should be present
@@ -199,6 +196,7 @@ impl Source {
     ///
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// let items = source.items_except_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only test_function should be present
     /// ```
@@ -221,6 +219,7 @@ impl Source {
     ///
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// let items: Vec<_> = source.items_all().collect();
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```

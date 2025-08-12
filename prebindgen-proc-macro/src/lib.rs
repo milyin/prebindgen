@@ -8,10 +8,10 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
-use prebindgen::{DEFAULT_GROUP_NAME, Record, RecordKind, SourceLocation, get_prebindgen_out_dir};
+use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
 use quote::quote;
-use std::fs::{OpenOptions, metadata};
+use std::fs::{metadata, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 use syn::parse::{Parse, ParseStream};

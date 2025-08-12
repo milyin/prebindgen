@@ -90,12 +90,13 @@ impl Default for Builder {
 /// # Example
 /// ```
 /// let source = prebindgen::Source::new("source_ffi");
+/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// let strip_macros = prebindgen::map::StripMacros::builder()
 ///     .strip_macro("default")  // Remove #[default] from enum variants
 ///     .strip_macro("serde")    // Remove serde-related macros
 ///     .build();
-/// 
+///
 /// // Apply after StripDerives to clean up orphaned macros
 /// let processed_items: Vec<_> = source
 ///     .items_all()
@@ -162,7 +163,9 @@ impl StripMacros {
             } else {
                 // For multi-segment paths, check each segment
                 !attr.path().segments.iter().any(|segment| {
-                    self.builder.macro_attrs.contains(&segment.ident.to_string())
+                    self.builder
+                        .macro_attrs
+                        .contains(&segment.ident.to_string())
                 })
             }
         });
@@ -177,10 +180,11 @@ impl StripMacros {
     /// # Example
     /// ```
     /// let source = prebindgen::Source::new("source_ffi");
+    /// # let source = prebindgen::Source::doctest_simulate();
     /// let strip_macros = prebindgen::map::StripMacros::builder()
     ///     .strip_macro("default")
     ///     .build();
-    /// 
+    ///
     /// // Use with map after StripDerives
     /// let processed_items: Vec<_> = source
     ///     .items_all()

@@ -7,8 +7,8 @@
 //!
 //! ## Problem
 //!
-//! When creating Rust libraries that need to expose FFI interfaces to multiple languages, 
-//! it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding. 
+//! When creating Rust libraries that need to expose FFI interfaces to multiple languages,
+//! it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding.
 //! This allows you to tailor each crate to the requirements and quirks of its binding generator and to specifisc of the
 //! destination language.
 //! However, `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate, and cannot be
@@ -123,8 +123,8 @@ pub(crate) mod api;
 pub(crate) mod codegen;
 pub(crate) mod utils;
 
-pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::buildrs::get_prebindgen_out_dir;
+pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
 pub use crate::utils::edition::RustEdition;
@@ -171,4 +171,3 @@ pub mod collect {
 pub use crate::api::record::Record;
 #[doc(hidden)]
 pub use crate::api::record::RecordKind;
-

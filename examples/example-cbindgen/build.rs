@@ -34,7 +34,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .build();
 
     let strip_macros = prebindgen::map::StripMacros::builder()
-        .strip_macro("default") 
+        .strip_macro("default")
         .build();
 
     // Create replacer for types without full paths
