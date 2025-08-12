@@ -60,16 +60,24 @@ fn main() {
 
 ### 2. In the Language-Specific FFI Binding Crate (e.g., `example-cbindgen`)
 
-Add the common FFI library to build dependencies:
+Add the source FFI library to dependencies and `prebindgen` and `itertools` to build-dependencies:
 
 ```toml
 # example-cbindgen/Cargo.toml
-[build-dependencies]
+[dependencies]
 example_ffi = { path = "../example_ffi" }
+
+[build-dependencies]
 prebindgen = "0.4"
 cbindgen = "0.29"
 itertools = "0.14"
 ```
+
+Convert `#prebindgen`-marked pieces to FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). The items not valid for FFI will be rejected by `FfiConverter`.
+
+Generate target language bindings based on this source.
+
+If nesessary, custom filters can be applied.
 
 ```rust
 // example-cbindgen/build.rs
@@ -106,7 +114,7 @@ fn main() {
 }
 ```
 
-Include the generated Rust file in your project to build the static or dynamic library:
+Include the generated Rust file in your project to build the static or dynamic FFI compatible library:
 
 ```rust
 // lib.rs
