@@ -6,7 +6,7 @@ A tool for separating the implementation of FFI interfaces from language-specifi
 
 When creating Rust libraries that need to expose FFI interfaces to multiple languages, it may be preferable to create separate `cdylib` or `staticlib` crates for each language-specific binding. This allows you to tailor each crate to the requirements and quirks of its binding generator and to the specifics of the destination language.
 
-However, `#[no_mangle] extern "C"` functions can only be defined in a `cdylib` or `staticlib` crate, and cannot be exported from a `lib` crate. As a result, these functions must be duplicated in each language-specific binding crate. This duplication is inconvenient for large projects with many FFI functions and types.
+However, `#[no_mangle] extern "C"` functions can only be defined in `cdylib` or `staticlib` crates and cannot be exported from `lib` crates. As a result, these functions must be duplicated in each language-specific binding crate. This duplication becomes cumbersome for large projects with many FFI functions and types.
 
 There is a discussion about this problem in issue [2771](https://github.com/rust-lang/rfcs/issues/2771).
 
@@ -14,7 +14,7 @@ There is a discussion about this problem in issue [2771](https://github.com/rust
 
 `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a common Rust library crate. Language-specific binding crates can then compile this generated code and pass it to their respective binding generators (such as cbindgen, csbindgen, etc.).
 
-The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying fragments of code from the source crate, and `prebindgen`, which converts these fragments into a source file that can be included in the destination crate and processed by binding generators.
+The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying code fragments from the source crate, and `prebindgen`, which converts these fragments into a source file that can be included in the destination crate and processed by binding generators.
 
 ## Usage
 
@@ -27,7 +27,7 @@ Mark structures and functions that are part of the FFI interface with the `prebi
 [package]
 name = "example-ffi"
 build = "build.rs"
-links = "example_ffi" # important to make variables DEP_<crate_name>_PREBINDGEN work
+links = "example_ffi" # Required for DEP_<crate_name>_PREBINDGEN variables to work
 
 ```rust
 // example-ffi/src/lib.rs
@@ -46,11 +46,7 @@ pub fn my_function(arg: i32) -> i32 {
 }
 ```
 
-Call `init_prebindgen_out_dir()` in the source crate's `build.rs` to make `#prebindgen`-marked pieces
-available to `prebindgen::Source` object in dependent crates' build.rs.
-It does `println!("cargo:prebindgen=<path>")` which provides the path to the prebindgen output directory to build.rs of dependent crates via variable `DEP_<crate_name>_PREBINDGEN`.
-
-```toml
+Call `init_prebindgen_out_dir()` in the source crate's `build.rs` to make `#prebindgen`-marked items available to the `prebindgen::Source` object in dependent crates' `build.rs`. This function calls `println!("cargo:prebindgen=<path>")`, which provides the path to the prebindgen output directory to the `build.rs` of dependent crates via the `DEP_<crate_name>_PREBINDGEN` variable.
 
 ```rust
 // example-ffi/build.rs
@@ -107,7 +103,7 @@ fn main() {
 }
 ```
 
-Include the generated Rust files in your project to build the static or dynamic library itself:
+Include the generated Rust file in your project to build the static or dynamic library:
 
 ```rust
 // lib.rs
@@ -116,7 +112,7 @@ include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 
 ## Examples
 
-See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples)
+See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples):
 
 - **example-ffi**: Common FFI library demonstrating prebindgen usage
 - **example-cbindgen**: Language-specific binding using cbindgen for C headers
