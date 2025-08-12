@@ -28,6 +28,7 @@ Mark structures and functions that are part of the FFI interface with the `prebi
 name = "example-ffi"
 build = "build.rs"
 links = "example_ffi" # Required for DEP_<crate_name>_PREBINDGEN variables to work
+```
 
 ```rust
 // example-ffi/src/lib.rs
