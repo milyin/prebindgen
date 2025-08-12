@@ -19,7 +19,7 @@ use crate::SourceLocation;
 /// # Example
 ///
 /// ```
-/// # prebindgen::init_doctest_simulate();
+/// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
 /// // Extract alignment information from structs

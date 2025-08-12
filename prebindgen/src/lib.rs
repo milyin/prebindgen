@@ -127,11 +127,6 @@ pub use crate::api::buildrs::get_prebindgen_out_dir;
 pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
-
-#[doc(hidden)]
-pub fn init_doctest_simulate() {
-    Source::init_doctest_simulate();
-}
 pub use crate::utils::edition::RustEdition;
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`

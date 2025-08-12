@@ -108,7 +108,7 @@ impl Default for Builder {
 ///
 /// # Example
 /// ```
-/// # prebindgen::init_doctest_simulate();
+/// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
 /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
@@ -172,7 +172,7 @@ impl ReplaceTypes {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
     ///     .replace_type("Option", "std::option::Option")

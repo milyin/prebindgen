@@ -18,7 +18,7 @@ use crate::SourceLocation;
 /// ```rust
 /// use prebindgen::{Source, collect::Destination};
 ///
-/// # prebindgen::init_doctest_simulate();
+/// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 /// let destination: Destination = source
 ///     .items_all()
@@ -66,7 +66,7 @@ impl FromIterator<syn::Item> for Destination {
     /// ```rust
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     /// ```
@@ -93,7 +93,7 @@ impl FromIterator<(syn::Item, SourceLocation)> for Destination {
     /// ```rust
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     /// ```
@@ -137,7 +137,7 @@ impl Destination {
     /// ```ignore
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     ///
@@ -179,7 +179,7 @@ impl Destination {
     /// ```rust
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     ///

@@ -51,7 +51,7 @@ thread_local! {
 /// Then in the destination project's `build.rs`:
 ///
 /// ```
-/// # prebindgen::init_doctest_simulate();
+/// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
 /// // Process all items
@@ -164,7 +164,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let crate_name = source.crate_name();
     /// ```
@@ -181,7 +181,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// // Process only items from "structs" and "functions" groups
     /// let items = source.items_in_groups(&["structs"]).collect::<Vec<_>>();
@@ -207,7 +207,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let items = source.items_except_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only test_function should be present
@@ -230,7 +230,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let items: Vec<_> = source.items_all().collect();
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function

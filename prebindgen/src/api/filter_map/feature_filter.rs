@@ -142,7 +142,7 @@ impl Default for Builder {
 ///
 /// # Example
 /// ```
-/// # prebindgen::init_doctest_simulate();
+/// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
 /// let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
@@ -214,7 +214,7 @@ impl FeatureFilter {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let filter = prebindgen::filter_map::FeatureFilter::builder()
     ///     .disable_feature("internal")

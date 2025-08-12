@@ -267,7 +267,7 @@ enum GenerationStage {
 /// ```
 /// # use itertools::Itertools;
 /// // In build.rs of a language-specific binding crate
-/// # prebindgen::init_doctest_simulate();
+/// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
 /// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
@@ -476,7 +476,7 @@ impl FfiConverter {
     ///
     /// ```
     /// # use itertools::Itertools;
-    /// # prebindgen::init_doctest_simulate();
+    /// # prebindgen::Source::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
     /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi").build();
     ///
