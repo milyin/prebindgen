@@ -20,7 +20,7 @@ The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which pro
 
 ### 1. In the Common FFI Library Crate (e.g., `example-ffi`)
 
-Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
+Add `links` field to Cargo.topl to enable passing data to downstream crates via environment variables
 
 ```toml
 # example-ffi/Cargo.toml
@@ -29,6 +29,8 @@ name = "example-ffi"
 build = "build.rs"
 links = "example_ffi" # Required for DEP_<crate_name>_PREBINDGEN variables to work
 ```
+
+Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 
 ```rust
 // example-ffi/src/lib.rs
