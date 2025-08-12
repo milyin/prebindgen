@@ -99,8 +99,8 @@ impl Default for Builder {
 ///
 /// # Example
 /// ```
+/// # prebindgen::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
-/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// let strip_derives = prebindgen::map::StripDerives::builder()
 ///     .strip_derive("Debug")
@@ -209,8 +209,8 @@ impl StripDerives {
     /// # Example
     ///
     /// ```
+    /// # prebindgen::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
-    /// # let source = prebindgen::Source::doctest_simulate();
     /// let strip_derives = prebindgen::map::StripDerives::builder()
     ///     .strip_derive("Debug")
     ///     .build();

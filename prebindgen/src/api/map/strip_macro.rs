@@ -89,8 +89,8 @@ impl Default for Builder {
 ///
 /// # Example
 /// ```
+/// # prebindgen::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
-/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// let strip_macros = prebindgen::map::StripMacros::builder()
 ///     .strip_macro("default")  // Remove #[default] from enum variants
@@ -179,8 +179,8 @@ impl StripMacros {
     ///
     /// # Example
     /// ```
+    /// # prebindgen::init_doctest_simulate();
     /// let source = prebindgen::Source::new("source_ffi");
-    /// # let source = prebindgen::Source::doctest_simulate();
     /// let strip_macros = prebindgen::map::StripMacros::builder()
     ///     .strip_macro("default")
     ///     .build();

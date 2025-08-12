@@ -19,8 +19,8 @@ use crate::SourceLocation;
 /// # Example
 ///
 /// ```
+/// # prebindgen::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
-/// # let source = prebindgen::Source::doctest_simulate();
 ///
 /// // Extract alignment information from structs
 /// let alignments: Vec<_> = source
