@@ -33,7 +33,7 @@
 //!
 //! Add "links" element to Cargo.toml to enable `DEP_` variables passing to downstream crates. Value of "links" should be the crate name.
 //! // example-ffi/Cargo.toml
-//! [package]
+//! \[package\]
 //! links = "example_ffi"
 //!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:

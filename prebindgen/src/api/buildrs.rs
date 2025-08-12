@@ -8,7 +8,7 @@ use crate::CRATE_NAME_FILE;
 /// the `#[prebindgen]` attribute macro. It performs the following operations:
 ///
 /// 1. Creates the prebindgen output directory in `OUT_DIR` and initializes it
-/// 2. Prints line "cargo:prebindgen=<path>" which provides path to prebindgen output directory
+/// 2. Prints line "cargo:prebindgen=`path`" which provides path to prebindgen output directory
 ///    to build.rs of dependent crates via variable DEP_<crate_name>_PREBINDGEN
 ///
 /// # Panics
