@@ -12,15 +12,17 @@ There is a discussion about this problem in issue [2771](https://github.com/rust
 
 ## Solution
 
-`prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a common Rust library crate. Language-specific binding crates can then compile this generated code and pass it to their respective binding generators (such as cbindgen, csbindgen, etc.).
+`prebindgen` solves this by generating `#[no_mangle] extern "C"` functions for each language binding, proxying a common Rust library crate.
 
-The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying code fragments from the source crate, and `prebindgen`, which converts these fragments into a source file that can be included in the destination crate and processed by binding generators.
+It also allows you to convert and analyze the source to adapt the result for the specific binding generator and/or for collecting data necessary for postprocessing the generated language binding.
+
+The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying code fragments from the source crate, and `prebindgen`, which converts these fragments into an FFI source file.
 
 ## Usage
 
 ### 1. In the Common FFI Library Crate (e.g., `example-ffi`)
 
-Add `links` field to Cargo.topl to enable passing data to downstream crates via environment variables
+Add the `links` field to Cargo.toml to enable passing data to downstream crates via environment variables
 
 ```toml
 # example-ffi/Cargo.toml
@@ -73,11 +75,11 @@ cbindgen = "0.29"
 itertools = "0.14"
 ```
 
-Convert `#prebindgen`-marked pieces to FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). The items not valid for FFI will be rejected by `FfiConverter`.
+Convert `#prebindgen`-marked pieces to an FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). Items not valid for FFI will be rejected by `FfiConverter`.
 
 Generate target language bindings based on this source.
 
-If nesessary, custom filters can be applied.
+If necessary, custom filters can be applied.
 
 ```rust
 // example-cbindgen/build.rs
@@ -114,7 +116,7 @@ fn main() {
 }
 ```
 
-Include the generated Rust file in your project to build the static or dynamic FFI compatible library:
+Include the generated Rust file in your project to build the static or dynamic FFI-compatible library:
 
 ```rust
 // lib.rs
