@@ -7,9 +7,9 @@ use crate::CRATE_NAME_FILE;
 /// This function must be called in the `build.rs` file of any crate that uses
 /// the `#[prebindgen]` attribute macro. It performs the following operations:
 ///
-/// 1. Creates the prebindgen output directory in `OUT_DIR`
-/// 2. Clears any existing files from the directory
-/// 3. Stores the current crate's name for later reference
+/// 1. Creates the prebindgen output directory in `OUT_DIR` and initializes it
+/// 2. Prints line "cargo:prebindgen=<path>" which provides path to prebindgen output directory
+///    to build.rs of dependent crates via variable DEP_<crate_name>_PREBINDGEN
 ///
 /// # Panics
 ///
@@ -65,16 +65,13 @@ pub fn init_prebindgen_out_dir() {
             e
         );
     });
+    println!("cargo:prebindgen={}", prebindgen_dir.display());
 }
 
 /// Name of the prebindgen output directory
 const PREBINDGEN_DIR: &str = "prebindgen";
 
 /// Get the full path to the prebindgen output directory in OUT_DIR.
-///
-/// **Internal API**: This function is public only for interaction with the proc-macro crate.
-/// User code should use the `prebindgen_out_dir!()` macro instead.
-#[doc(hidden)]
 pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
     let out_dir = std::env::var("OUT_DIR").expect(
         "OUT_DIR environment variable not set. Check if build.rs for the crate exitsts",

@@ -98,11 +98,9 @@ impl Default for Builder {
 /// for memory layout compatibility and FFI calls, most derives are unnecessary.
 ///
 /// # Example
-///
 /// ```
-/// # prebindgen::doctest_setup!();
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+/// let source = prebindgen::Source::new("source_ffi");
+///
 /// let strip_derives = prebindgen::map::StripDerives::builder()
 ///     .strip_derive("Debug")
 ///     .strip_derive("Clone")
@@ -195,8 +193,7 @@ impl StripDerives {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let strip_derives = prebindgen::map::StripDerives::builder()
     ///     .strip_derive("Debug")
     ///     .build();

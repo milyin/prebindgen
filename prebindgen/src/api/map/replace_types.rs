@@ -107,11 +107,9 @@ impl Default for Builder {
 /// is self-contained and doesn't require additional imports.
 ///
 /// # Example
-///
 /// ```
-/// # prebindgen::doctest_setup!();
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+/// let source = prebindgen::Source::new("source_ffi");
+///
 /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
 ///     .replace_type("Option", "std::option::Option")
 ///     .replace_type("mem::MaybeUninit", "std::mem::MaybeUninit")
@@ -173,8 +171,7 @@ impl ReplaceTypes {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let type_replacer = prebindgen::map::ReplaceTypes::builder()
     ///     .replace_type("Option", "std::option::Option")
     ///     .build();

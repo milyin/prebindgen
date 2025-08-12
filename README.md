@@ -24,10 +24,7 @@ Mark structures and functions that are part of the FFI interface with the `prebi
 
 ```rust
 // example-ffi/src/lib.rs
-use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
-
-// Declare a public constant with the path to prebindgen data:
-pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+use prebindgen_proc_macro::prebindgen;
 
 // Group structures and functions for selective handling
 #[prebindgen]
@@ -70,7 +67,7 @@ use itertools::Itertools;
 
 fn main() {
     // Create a source from the common FFI crate's prebindgen data
-    let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
+    let source = prebindgen::Source::new("example_ffi");
 
     // Create feature filter
     let feature_filter = prebindgen::filter_map::FeatureFilter::builder()

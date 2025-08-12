@@ -88,11 +88,9 @@ impl Default for Builder {
 /// on enum variants becomes invalid and must also be stripped to prevent compilation errors.
 ///
 /// # Example
-///
 /// ```
-/// # prebindgen::doctest_setup!();
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+/// let source = prebindgen::Source::new("source_ffi");
+///
 /// let strip_macros = prebindgen::map::StripMacros::builder()
 ///     .strip_macro("default")  // Remove #[default] from enum variants
 ///     .strip_macro("serde")    // Remove serde-related macros
@@ -177,10 +175,8 @@ impl StripMacros {
     /// from items, typically after `StripDerives` processing.
     ///
     /// # Example
-    ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let strip_macros = prebindgen::map::StripMacros::builder()
     ///     .strip_macro("default")
     ///     .build();

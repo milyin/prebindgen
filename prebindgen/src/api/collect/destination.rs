@@ -16,10 +16,9 @@ use crate::SourceLocation;
 /// of processed FFI items:
 ///
 /// ```rust
-/// # prebindgen::doctest_setup!();
 /// use prebindgen::{Source, collect::Destination};
 ///
-/// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+/// let source = Source::new("source_ffi");
 /// let destination: Destination = source
 ///     .items_all()
 ///     .collect();
@@ -64,10 +63,9 @@ impl FromIterator<syn::Item> for Destination {
     /// # Examples
     ///
     /// ```rust
-    /// # prebindgen::doctest_setup!();
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     /// ```
     fn from_iter<T: IntoIterator<Item = syn::Item>>(iter: T) -> Self {
@@ -91,10 +89,9 @@ impl FromIterator<(syn::Item, SourceLocation)> for Destination {
     /// # Examples
     ///
     /// ```rust
-    /// # prebindgen::doctest_setup!();
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     /// ```
     fn from_iter<T: IntoIterator<Item = (syn::Item, SourceLocation)>>(iter: T) -> Self {
@@ -135,10 +132,9 @@ impl Destination {
     /// # Examples
     ///
     /// ```ignore
-    /// # prebindgen::doctest_setup!();
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     ///
     /// // Write to a relative path (resolved to OUT_DIR/ffi_bindings.rs)
@@ -177,10 +173,9 @@ impl Destination {
     /// # Examples
     ///
     /// ```rust
-    /// # prebindgen::doctest_setup!();
     /// use prebindgen::{Source, collect::Destination};
     ///
-    /// let source = Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = Source::new("source_ffi");
     /// let destination: Destination = source.items_all().collect();
     ///
     /// let code = destination.to_string();

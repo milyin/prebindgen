@@ -268,12 +268,10 @@ enum GenerationStage {
 /// - Generating compile-time assertions to ensure type safety
 ///
 /// # Example
-///
 /// ```
-/// # prebindgen::doctest_setup!();
 /// # use itertools::Itertools;
 /// // In build.rs of a language-specific binding crate
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+/// let source = prebindgen::Source::new("source_ffi");
 ///
 /// let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
 ///     .edition(prebindgen::RustEdition::Edition2024)
@@ -480,9 +478,8 @@ impl FfiConverter {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
     /// # use itertools::Itertools;
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let converter = prebindgen::batching::FfiConverter::builder("example_ffi").build();
     ///
     /// // Use with itertools::batching

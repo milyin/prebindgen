@@ -46,8 +46,7 @@ const JSONL_EXTENSION: &str = ".jsonl";
 /// Then in the destination project's `build.rs`:
 ///
 /// ```
-/// # prebindgen::doctest_setup!();
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+/// let source = prebindgen::Source::new("source_ffi");
 ///
 /// // Process all items
 /// for (item, location) in source.items_all() {
@@ -59,25 +58,39 @@ pub struct Source {
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
 }
 
-/// Provide special impossible in real world value for simulating input data in doctests
-#[doc(hidden)]
-pub const DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR: &str =
-    "/dev/null/DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR";
-
 impl Source {
+    #[cfg(doctest)]
+    pub fn new(crate_name: &str) -> Self {
+        return Self::doctest_simulate();
+    }
+
+    /// Create a new `Source` instance from directory, specified by variable `DEP_<uppercase_crate_name>_PREBINDGEN`.
+    /// This variable is passed from upstream source "ffi" crate by `init_prebindgen_out_dir()` function.
+    /// This `crate_name` value is also used to prefix source crate function if not overridden by `crate_name()` method.
+    #[cfg(not(doctest))]
     #[roxygen]
-    pub fn new<P: AsRef<Path>>(
+    pub fn new(
+        /// The name of the source crate that generated the prebindgen data
+        crate_name: &str
+    ) -> Self {
+        let uppercase_crate_name = crate_name.to_uppercase();
+        let input_dir = std::env::var(format!("DEP_{uppercase_crate_name}_PREBINDGEN"))
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{e}: Environment variable DEP_{uppercase_crate_name}_PREBINDGEN not found. \
+                Make sure to call init_prebindgen_out_dir() in the build.rs of the source crate."
+                )
+            });
+        Self::from_path(input_dir)
+    }
+
+    #[roxygen]
+    pub fn from_path<P: AsRef<Path>>(
         /// Path to the directory containing prebindgen data files
         input_dir: P,
     ) -> Self {
         // Determine the crate name or panic if not initialized
         let input_dir = input_dir.as_ref().to_path_buf();
-
-        // If the input_dir is the special doctest simulation path, call special function
-        // which initializes the `Source` with simulated data
-        if input_dir.as_path().to_str() == Some(DOCTEST_SIMULATE_PREBINDGEN_OUT_DIR) {
-            return Self::doctest_simulate();
-        }
 
         if !input_dir.is_dir() {
             panic!(
@@ -144,8 +157,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let crate_name = source.crate_name();
     /// ```
     pub fn crate_name(&self) -> &str {
@@ -161,8 +173,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// // Process only items from "structs" and "functions" groups
     /// let items = source.items_in_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only TestStruct should be present
@@ -187,8 +198,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let items = source.items_except_groups(&["structs"]).collect::<Vec<_>>();
     /// assert_eq!(items.len(), 1); // only test_function should be present
     /// ```
@@ -210,8 +220,7 @@ impl Source {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let items: Vec<_> = source.items_all().collect();
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```

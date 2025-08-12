@@ -3,6 +3,7 @@ name = "example-ffi"
 version = { workspace = true }
 edition = { workspace = true }
 build = "build.rs"
+links = "example_ffi"
 
 [features]
 unstable = []

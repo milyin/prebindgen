@@ -141,11 +141,9 @@ impl Default for Builder {
 /// - **Map features**: Rename feature flags in the output
 ///
 /// # Example
-///
 /// ```
-/// # prebindgen::doctest_setup!();
-/// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
-/// 
+/// let source = prebindgen::Source::new("source_ffi");
+///
 /// let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
 ///     .disable_feature("unstable")
 ///     .disable_feature("internal")
@@ -215,8 +213,7 @@ impl FeatureFilter {
     /// # Example
     ///
     /// ```
-    /// # prebindgen::doctest_setup!();
-    /// let source = prebindgen::Source::new(source_ffi::PREBINDGEN_OUT_DIR);
+    /// let source = prebindgen::Source::new("source_ffi");
     /// let filter = prebindgen::filter_map::FeatureFilter::builder()
     ///     .disable_feature("internal")
     ///     .build();
