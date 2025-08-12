@@ -18,9 +18,16 @@ The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which pro
 
 ## Usage
 
-### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
+### 1. In the Common FFI Library Crate (e.g., `example-ffi`)
 
 Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
+
+```toml
+# example-ffi/Cargo.toml
+[package]
+name = "example-ffi"
+build = "build.rs"
+links = "example_ffi" # important to make variables DEP_<crate_name>_PREBINDGEN work
 
 ```rust
 // example-ffi/src/lib.rs
@@ -39,7 +46,11 @@ pub fn my_function(arg: i32) -> i32 {
 }
 ```
 
-Call `init_prebindgen_out_dir()` in the crate's `build.rs`:
+Call `init_prebindgen_out_dir()` in the source crate's `build.rs` to make `#prebindgen`-marked pieces
+available to `prebindgen::Source` object in dependent crates' build.rs.
+It does `println!("cargo:prebindgen=<path>")` which provides the path to the prebindgen output directory to build.rs of dependent crates via variable `DEP_<crate_name>_PREBINDGEN`.
+
+```toml
 
 ```rust
 // example-ffi/build.rs
@@ -105,7 +116,7 @@ include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
 
 ## Examples
 
-See example projects at https://github.com/milyin/prebindgen/tree/main/examples
+See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples)
 
 - **example-ffi**: Common FFI library demonstrating prebindgen usage
 - **example-cbindgen**: Language-specific binding using cbindgen for C headers
