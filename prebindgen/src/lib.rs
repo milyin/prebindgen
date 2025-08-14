@@ -31,16 +31,14 @@
 //!
 //! ### 1. In the Common FFI Library Crate (e.g., `example_ffi`)
 //!
-//! Add "links" element to Cargo.toml to enable `DEP_` variables passing to downstream crates. Value of "links" should be the crate name.
-//! // example-ffi/Cargo.toml
-//! \[package\]
-//! links = "example_ffi"
-//!
 //! Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
 //!
 //! ```rust,ignore
 //! // example-ffi/src/lib.rs
 //! use prebindgen_proc_macro::prebindgen;
+//! 
+//! // Export path to prebindgen output directory
+//! const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
 //!
 //! // Group structures and functions for selective handling
 //! #[prebindgen]
@@ -68,6 +66,9 @@
 //!
 //! ```toml
 //! # example-cbindgen/Cargo.toml
+//! [dependencies]
+//! example_ffi = { path = "../example_ffi" }
+//! 
 //! [build-dependencies]
 //! example_ffi = { path = "../example_ffi" }
 //! prebindgen = "0.2"
@@ -80,7 +81,7 @@
 //!
 //! fn main() {
 //!     // Create a source from the common FFI crate's prebindgen data
-//!     let source = Source::new("example_ffi");
+//!     let source = Source::new(example_ffi::PREBINDGEN_OUT_DIR);
 //!
 //!     // Process items with filtering and conversion
 //!     let destination = source

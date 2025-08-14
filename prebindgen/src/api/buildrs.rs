@@ -7,10 +7,6 @@ use crate::CRATE_NAME_FILE;
 /// This function must be called in the `build.rs` file of any crate that uses
 /// the `#[prebindgen]` attribute macro. It performs the following operations:
 ///
-/// 1. Creates the prebindgen output directory in `OUT_DIR` and initializes it
-/// 2. Prints line "cargo:prebindgen=`path`" which provides path to prebindgen output directory
-///    to build.rs of dependent crates via variable DEP_<crate_name>_PREBINDGEN
-///
 /// # Panics
 ///
 /// Panics if:
@@ -65,7 +61,6 @@ pub fn init_prebindgen_out_dir() {
             e
         );
     });
-    println!("cargo:prebindgen={}", prebindgen_dir.display());
 }
 
 /// Name of the prebindgen output directory
