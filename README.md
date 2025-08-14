@@ -12,15 +12,21 @@ There is a discussion about this problem in issue [2771](https://github.com/rust
 
 ## Solution
 
-`prebindgen` solves this by generating `#[no_mangle] extern "C"` functions for each language binding, proxying a common Rust library crate.
+`prebindgen` solves this by generating `#[no_mangle] extern "C"` functions for each language binding that proxy a common Rust library crate.
 
-It also allows you to convert and analyze the source to adapt the result for the specific binding generator and/or for collecting data necessary for postprocessing the generated language binding.
+It also allows you to convert and analyze the source to adapt the result for specific binding generators and/or to collect data necessary for postprocessing the generated language bindings.
 
 The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying code fragments from the source crate, and `prebindgen`, which converts these fragments into an FFI source file.
 
 ### Architecture
 
-The dependent crate's `build.rs` accesses the prebindgen output directory path through a constant exported from the source crate, rather than using Cargo's `DEP_` environment variables. This approach avoids race conditions that can occur because data collection happens during package compilation (after `build.rs`), while the dependent package's `build.rs` may start before the source package compilation completes. In cross-compilation scenarios, this race condition persists even if soource crate is added to build-dependencies, as the `DEP_` variable contains the path related to the target platform while build-dependencies is for the host platform.
+Each element to export is marked in the source crate with the `#[prebindgen]` macro. When compiling
+the source crate, these elements are stored in a directory. The build.rs of the dependent crate
+reads these elements and creates FFI-compatible functions and copies of structures that proxy them.
+The generated source file is included with the `include!()` macro in the dependent crate and parsed
+by the language binding generator (e.g., cbindgen).
+
+The dependent crate's `build.rs` accesses the prebindgen output directory path through a constant exported from the source crate, rather than using Cargo's `DEP_` environment variables. This approach avoids race conditions that can occur because data collection happens during package compilation (after `build.rs`), while the dependent package's `build.rs` may start right after the source's build.rs, before the source package compilation completes. In cross-compilation scenarios, this race condition persists even if the source crate is added to build-dependencies, as the `DEP_` variable contains the path related to the target platform while build-dependencies are for the host platform.
 
 ## Usage
 
@@ -73,11 +79,11 @@ cbindgen = "0.29"
 itertools = "0.14"
 ```
 
-Convert `#prebindgen`-marked pieces to an FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). Items not valid for FFI will be rejected by `FfiConverter`.
+Convert `#[prebindgen]`-marked items to an FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). Items not valid for FFI will be rejected by `FfiConverter`.
 
 Generate target language bindings based on this source.
 
-If necessary, custom filters can be applied.
+Custom filters can be applied if necessary.
 
 ```rust
 // example-cbindgen/build.rs
