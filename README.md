@@ -18,25 +18,22 @@ It also allows you to convert and analyze the source to adapt the result for the
 
 The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying code fragments from the source crate, and `prebindgen`, which converts these fragments into an FFI source file.
 
+### Architecture
+
+The dependent crate's `build.rs` accesses the prebindgen output directory path through a constant exported from the source crate, rather than using Cargo's `DEP_` environment variables. This approach avoids race conditions that can occur because data collection happens during package compilation (after `build.rs`), while the dependent package's `build.rs` may start before the source package compilation completes. In cross-compilation scenarios, this race condition persists even if soource crate is added to build-dependencies, as the `DEP_` variable contains the path related to the target platform while build-dependencies is for the host platform.
+
 ## Usage
 
 ### 1. In the Common FFI Library Crate (e.g., `example-ffi`)
 
-Add the `links` field to Cargo.toml to enable passing data to downstream crates via environment variables
-
-```toml
-# example-ffi/Cargo.toml
-[package]
-name = "example-ffi"
-build = "build.rs"
-links = "example_ffi" # Required for DEP_<crate_name>_PREBINDGEN variables to work
-```
-
-Mark structures and functions that are part of the FFI interface with the `prebindgen` macro:
+Mark structures and functions that are part of the FFI interface with the `prebindgen` macro and export the prebindgen output directory path:
 
 ```rust
 // example-ffi/src/lib.rs
 use prebindgen_proc_macro::prebindgen;
+
+// Export path to prebindgen output directory
+pub const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
 
 // Group structures and functions for selective handling
 #[prebindgen]
@@ -51,7 +48,7 @@ pub fn my_function(arg: i32) -> i32 {
 }
 ```
 
-Call `init_prebindgen_out_dir()` in the source crate's `build.rs` to make `#prebindgen`-marked items available to the `prebindgen::Source` object in dependent crates' `build.rs`.
+Call `init_prebindgen_out_dir()` in the source crate's `build.rs`:
 
 ```rust
 // example-ffi/build.rs
@@ -62,7 +59,7 @@ fn main() {
 
 ### 2. In the Language-Specific FFI Binding Crate (e.g., `example-cbindgen`)
 
-Add the source FFI library to dependencies and `prebindgen` and `itertools` to build-dependencies:
+Add the source FFI library to both dependencies and build-dependencies:
 
 ```toml
 # example-cbindgen/Cargo.toml
@@ -70,6 +67,7 @@ Add the source FFI library to dependencies and `prebindgen` and `itertools` to b
 example_ffi = { path = "../example_ffi" }
 
 [build-dependencies]
+example_ffi = { path = "../example_ffi" }
 prebindgen = "0.4"
 cbindgen = "0.29"
 itertools = "0.14"
@@ -87,7 +85,7 @@ use itertools::Itertools;
 
 fn main() {
     // Create a source from the common FFI crate's prebindgen data
-    let source = prebindgen::Source::new("example_ffi");
+    let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
 
     // Create feature filter
     let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
