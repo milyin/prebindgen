@@ -66,43 +66,23 @@ pub struct Source {
 }
 
 impl Source {
-    /// Create a new `Source` instance from directory, specified by variable `DEP_<uppercase_crate_name>_PREBINDGEN`.
-    /// This variable is passed from upstream source "ffi" crate by `init_prebindgen_out_dir()` function.
-    /// This `crate_name` value is also used to prefix source crate function if not overridden by `crate_name()` method.
+    /// Create a new `Source` instance from specified directory
     #[roxygen]
-    pub fn new(
-        /// The name of the source crate that generated the prebindgen data
-        crate_name: &str,
+    pub fn new<P: AsRef<Path>>(
+        /// Path to the directory containing prebindgen data files
+        input_dir: P,
     ) -> Self {
         if let Some(source) = DOCTEST_SOURCE.with(|source| (*source.borrow()).clone()) {
             return source;
         }
-        let uppercase_crate_name = crate_name.to_uppercase();
-        let input_dir = std::env::var(format!("DEP_{uppercase_crate_name}_PREBINDGEN"))
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{e}: Environment variable DEP_{uppercase_crate_name}_PREBINDGEN not found. \
-                    Make sure to call init_prebindgen_out_dir() in the build.rs of the source crate."
-                    )
-                });
-        Self::from_path(input_dir)
-    }
-
-    #[roxygen]
-    pub fn from_path<P: AsRef<Path>>(
-        /// Path to the directory containing prebindgen data files
-        input_dir: P,
-    ) -> Self {
-        // Determine the crate name or panic if not initialized
-        let input_dir = input_dir.as_ref().to_path_buf();
-
+        let input_dir = input_dir.as_ref();
         if !input_dir.is_dir() {
             panic!(
                 "Input directory {} does not exist or is not a directory",
                 input_dir.display()
             );
         }
-        let crate_name = read_stored_crate_name(&input_dir).unwrap_or_else(|| {
+        let crate_name = read_stored_crate_name(input_dir).unwrap_or_else(|| {
             panic!(
                 "The directory {} was not initialized with init_prebindgen_out_dir(). \
                 Please ensure that init_prebindgen_out_dir() is called in the build.rs of the source crate.",
@@ -110,10 +90,10 @@ impl Source {
             )
         });
 
-        let groups = Self::discover_groups(&input_dir);
+        let groups = Self::discover_groups(input_dir);
         let mut items = HashMap::new();
         for group in groups {
-            let records = Self::read_group(&input_dir, &group);
+            let records = Self::read_group(input_dir, &group);
             let group_items = records.iter().map(|r| (r.parse())).collect::<Vec<_>>();
             items.insert(group, group_items);
         }

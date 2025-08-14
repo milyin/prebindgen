@@ -14,5 +14,6 @@ example-ffi = { path = "../example-ffi" }
 [build-dependencies]
 prebindgen = { workspace = true }
 serde_json = { workspace = true }
-cbindgen = "0.29.0"
 itertools = { workspace = true }
+cbindgen = "0.29.0"
+example-ffi = { path = "../example-ffi" }
