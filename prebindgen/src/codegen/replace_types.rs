@@ -712,7 +712,8 @@ fn prefix_exported_types_in_type(
             if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
 
-                if exported_types.contains(&type_name) {
+                if exported_types.contains(&type_name) || 
+                   exported_types.iter().any(|key| key.starts_with(&format!("{}#", type_name))) {
                     for full_exported_type in prefixed_exported_types {
                         if paths_equal(&type_path.path, full_exported_type) {
                             return syn::parse_quote! { #source_crate_ident::#type_path };
@@ -1028,7 +1029,9 @@ fn validate_type_path(
     if type_path.path.segments.len() == 1 {
         if let Some(segment) = type_path.path.segments.first() {
             let type_name = segment.ident.to_string();
-            if exported_types.contains(&type_name) {
+            // Check both the plain type name and any cfg-prefixed versions
+            if exported_types.contains(&type_name) || 
+               exported_types.iter().any(|key| key.starts_with(&format!("{}#", type_name))) {
                 *is_exported_type = true;
                 return true;
             }

@@ -240,8 +240,13 @@ impl Source {
                         match read_jsonl_file(&path) {
                             Ok(records) => {
                                 for record in records {
-                                    // Use HashMap to deduplicate records by name
-                                    record_map.insert(record.name.clone(), record);
+                                    // Use HashMap to deduplicate records by name and cfg
+                                    let key = if let Some(cfg) = &record.cfg {
+                                        format!("{}#{}", record.name, cfg)
+                                    } else {
+                                        record.name.clone()
+                                    };
+                                    record_map.insert(key, record);
                                 }
                             }
                             Err(e) => {
