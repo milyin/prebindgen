@@ -16,7 +16,6 @@
 
 use roxygen::roxygen;
 use std::collections::{HashMap, HashSet};
-use quote::ToTokens;
 
 use crate::{
     codegen::replace_types::{
@@ -321,54 +320,22 @@ impl FfiConverter {
 
     fn collect_item(&mut self, item: syn::Item, source_location: SourceLocation) {
         // Update exported_types for type items
-        // Create a unique key that includes cfg attributes to handle multiple definitions
-        let get_type_key = |name: &str, item: &syn::Item| -> String {
-            let cfg_attrs: Vec<String> = match item {
-                syn::Item::Struct(s) => s.attrs.iter()
-                    .filter(|attr| attr.path().is_ident("cfg"))
-                    .map(|attr| attr.to_token_stream().to_string())
-                    .collect(),
-                syn::Item::Enum(e) => e.attrs.iter()
-                    .filter(|attr| attr.path().is_ident("cfg"))
-                    .map(|attr| attr.to_token_stream().to_string())
-                    .collect(),
-                syn::Item::Union(u) => u.attrs.iter()
-                    .filter(|attr| attr.path().is_ident("cfg"))
-                    .map(|attr| attr.to_token_stream().to_string())
-                    .collect(),
-                syn::Item::Type(t) => t.attrs.iter()
-                    .filter(|attr| attr.path().is_ident("cfg"))
-                    .map(|attr| attr.to_token_stream().to_string())
-                    .collect(),
-                _ => Vec::new(),
-            };
-            if cfg_attrs.is_empty() {
-                name.to_string()
-            } else {
-                format!("{}#{}", name, cfg_attrs.join("|"))
-            }
-        };
-
         match &item {
             syn::Item::Struct(s) => {
                 let type_name = s.ident.to_string();
-                let type_key = get_type_key(&type_name, &item);
-                self.exported_types.insert(type_key);
+                self.exported_types.insert(type_name.clone());
             }
             syn::Item::Enum(e) => {
                 let type_name = e.ident.to_string();
-                let type_key = get_type_key(&type_name, &item);
-                self.exported_types.insert(type_key);
+                self.exported_types.insert(type_name.clone());
             }
             syn::Item::Union(u) => {
                 let type_name = u.ident.to_string();
-                let type_key = get_type_key(&type_name, &item);
-                self.exported_types.insert(type_key);
+                self.exported_types.insert(type_name.clone());
             }
             syn::Item::Type(t) => {
                 let type_name = t.ident.to_string();
-                let type_key = get_type_key(&type_name, &item);
-                self.exported_types.insert(type_key);
+                self.exported_types.insert(type_name.clone());
 
                 // Check if this type alias points to a primitive type
                 if let syn::Type::Path(type_path) = &*t.ty {
