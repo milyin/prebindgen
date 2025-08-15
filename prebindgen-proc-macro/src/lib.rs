@@ -242,7 +242,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_location = SourceLocation::from_span(&span);
 
     // Create the new record
-    let new_record = Record::new(kind, name, content, source_location, parsed_args.cfg);
+    let new_record = Record::new(kind, name, content, source_location, parsed_args.cfg.clone());
 
     // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {
@@ -265,8 +265,21 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         // If skip is true, return empty token stream (eat the input)
         TokenStream::new()
     } else {
-        // Otherwise return the original input unchanged
-        input_clone
+        // Apply cfg attribute to the original code if specified
+        if let Some(cfg_value) = &parsed_args.cfg {
+            let cfg_tokens: proc_macro2::TokenStream = cfg_value.parse()
+                .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
+            let cfg_attr = quote! { #[cfg(#cfg_tokens)] };
+            let original_tokens: proc_macro2::TokenStream = input_clone.into();
+            let result = quote! {
+                #cfg_attr
+                #original_tokens
+            };
+            result.into()
+        } else {
+            // Otherwise return the original input unchanged
+            input_clone
+        }
     }
 }
 
