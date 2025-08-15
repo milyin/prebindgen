@@ -24,7 +24,7 @@ fn generate_ffi_bindings() -> PathBuf {
 
     // Create feature filter
     let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
-        .disable_feature("unstable") // Disable unstable features
+        .match_feature("unstable", "unstable") // Keep unstable feature in generated code
         .disable_feature("internal") // Disable internal features
         .build();
 

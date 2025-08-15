@@ -17,13 +17,21 @@ pub const EXAMPLE_RESULT_ERROR: example_result = -1;
 pub mod foo {
     use prebindgen_proc_macro::prebindgen;
 
-    #[prebindgen("structs")]
+    #[prebindgen("structs", cfg = "target_arch = \"x86_64\"")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Default)]
     pub enum InsideFoo {
         #[default]
         DouddleDee = 42,
         DouddleDum = 24,
+    }
+    #[prebindgen("structs", cfg = "target_arch = \"aarch64\"")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq, Default)]
+    pub enum InsideFoo {
+        #[default]
+        DouddleDee = 14,
+        DouddleDum = 88,
     }
 
     #[prebindgen("structs")]
@@ -55,18 +63,9 @@ pub fn copy_foo(dst: &mut mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example
     EXAMPLE_RESULT_OK
 }
 
-#[prebindgen("functions")]
-#[cfg(feature = "unstable")]
-pub fn get_unstable_field(input: &foo::Foo) -> u64 {
-    // Return the unstable field if it exists
-    input.unstable_field
-}
-
-#[prebindgen("functions")]
-#[cfg(not(feature = "unstable"))]
-pub fn get_unstable_field(input: &foo::Foo) -> u64 {
-    // Return the unstable field if it exists
-    input.stable_field
+#[prebindgen("functions", cfg = "feature = \"unstable\"")]
+pub fn unstable_function() -> example_result {
+    EXAMPLE_RESULT_OK
 }
 
 #[prebindgen("functions")]

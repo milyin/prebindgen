@@ -36,7 +36,7 @@
 //! ```rust,ignore
 //! // example-ffi/src/lib.rs
 //! use prebindgen_proc_macro::prebindgen;
-//! 
+//!
 //! // Export path to prebindgen output directory
 //! const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
 //!
@@ -68,7 +68,7 @@
 //! # example-cbindgen/Cargo.toml
 //! [dependencies]
 //! example_ffi = { path = "../example_ffi" }
-//! 
+//!
 //! [build-dependencies]
 //! example_ffi = { path = "../example_ffi" }
 //! prebindgen = "0.2"

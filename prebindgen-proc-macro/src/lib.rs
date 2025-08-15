@@ -17,7 +17,7 @@ use std::path::Path;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
-use syn::{Ident, LitBool, LitStr};
+use syn::{Ident, LitStr};
 use syn::{Result, Token};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
@@ -58,49 +58,53 @@ fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
 /// Arguments for the prebindgen macro
 struct PrebindgenArgs {
     group: String,
-    skip: bool,
+    cfg: Option<String>,
 }
 
 impl Parse for PrebindgenArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut group = DEFAULT_GROUP_NAME.to_string();
-        let mut skip = false;
+        let mut cfg = None;
 
         if input.is_empty() {
-            return Ok(PrebindgenArgs { group, skip });
+            return Ok(PrebindgenArgs { group, cfg });
         }
 
-        // Parse first argument
-        if input.peek(LitStr) {
-            // First argument is a string literal (group name)
-            let group_lit: LitStr = input.parse()?;
-            group = group_lit.value();
+        // Parse arguments in any order
+        while !input.is_empty() {
+            if input.peek(LitStr) {
+                // String literal - could be group name
+                let lit: LitStr = input.parse()?;
+                group = lit.value();
+            } else if input.peek(Ident) {
+                let ident: Ident = input.parse()?;
+                input.parse::<Token![=]>()?;
 
-            // Check for comma and skip attribute
+                match ident.to_string().as_str() {
+                    "cfg" => {
+                        let cfg_lit: LitStr = input.parse()?;
+                        cfg = Some(cfg_lit.value());
+                    }
+                    _ => {
+                        return Err(syn::Error::new_spanned(ident, "Expected 'cfg'"));
+                    }
+                }
+            } else {
+                return Err(syn::Error::new(input.span(), "Invalid argument format"));
+            }
+
+            // Parse optional comma
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
-                let skip_ident: Ident = input.parse()?;
-                if skip_ident != "skip" {
-                    return Err(syn::Error::new_spanned(skip_ident, "Expected 'skip'"));
-                }
-                input.parse::<Token![=]>()?;
-                let skip_lit: LitBool = input.parse()?;
-                skip = skip_lit.value();
+            } else if !input.is_empty() {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "Expected comma between arguments",
+                ));
             }
-        } else if input.peek(Ident) {
-            // First argument is an identifier (should be 'skip')
-            let skip_ident: Ident = input.parse()?;
-            if skip_ident != "skip" {
-                return Err(syn::Error::new_spanned(skip_ident, "Expected 'skip'"));
-            }
-            input.parse::<Token![=]>()?;
-            let skip_lit: LitBool = input.parse()?;
-            skip = skip_lit.value();
-        } else {
-            return Err(syn::Error::new(input.span(), "Invalid argument format"));
         }
 
-        Ok(PrebindgenArgs { group, skip })
+        Ok(PrebindgenArgs { group, cfg })
     }
 }
 
@@ -142,14 +146,14 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 ///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
 /// }
 ///
-/// // Generate all the output for further processing but do not pass code to the compiler
-/// #[prebindgen(skip = true)]
-/// pub fn internal_function() -> i32 {
+/// // Add cfg attribute to generated code
+/// #[prebindgen(cfg = "feature = \"experimental\"")]
+/// pub fn experimental_function() -> i32 {
 ///     42
 /// }
 ///
-/// // Combine group name with skip
-/// #[prebindgen("functions", skip = true)]
+/// // Combine group name with cfg
+/// #[prebindgen("functions", cfg = "unix")]
 /// pub fn another_function() -> i32 {
 ///     42
 /// }
@@ -159,7 +163,7 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 ///
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
 /// - Optionally takes a string literal group name for organization (defaults to "default")
-/// - Optionally takes `skip = true` to remove the item from compilation output
+/// - Optionally takes `cfg = "condition"` to add `#[cfg(condition)]` to generated code
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
@@ -228,7 +232,13 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_location = SourceLocation::from_span(&span);
 
     // Create the new record
-    let new_record = Record::new(kind, name, content, source_location);
+    let new_record = Record::new(
+        kind,
+        name,
+        content,
+        source_location,
+        parsed_args.cfg.clone(),
+    );
 
     // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {
@@ -247,9 +257,18 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
-    if parsed_args.skip {
-        // If skip is true, return empty token stream (eat the input)
-        TokenStream::new()
+    // Apply cfg attribute to the original code if specified
+    if let Some(cfg_value) = &parsed_args.cfg {
+        let cfg_tokens: proc_macro2::TokenStream = cfg_value
+            .parse()
+            .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
+        let cfg_attr = quote! { #[cfg(#cfg_tokens)] };
+        let original_tokens: proc_macro2::TokenStream = input_clone.into();
+        let result = quote! {
+            #cfg_attr
+            #original_tokens
+        };
+        result.into()
     } else {
         // Otherwise return the original input unchanged
         input_clone
@@ -292,4 +311,3 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-
