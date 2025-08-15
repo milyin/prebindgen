@@ -4,6 +4,9 @@ version = { workspace = true }
 edition = { workspace = true }
 build = "build.rs"
 
+[features]
+unstable = []
+
 [lib]
 crate-type = ["staticlib", "cdylib"]
 
