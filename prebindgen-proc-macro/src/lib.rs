@@ -17,7 +17,7 @@ use std::path::Path;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
-use syn::{Ident, LitBool, LitStr};
+use syn::{Ident, LitStr};
 use syn::{Result, Token};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
@@ -58,18 +58,16 @@ fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
 /// Arguments for the prebindgen macro
 struct PrebindgenArgs {
     group: String,
-    skip: bool,
     cfg: Option<String>,
 }
 
 impl Parse for PrebindgenArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut group = DEFAULT_GROUP_NAME.to_string();
-        let mut skip = false;
         let mut cfg = None;
 
         if input.is_empty() {
-            return Ok(PrebindgenArgs { group, skip, cfg });
+            return Ok(PrebindgenArgs { group, cfg });
         }
 
         // Parse arguments in any order
@@ -83,16 +81,12 @@ impl Parse for PrebindgenArgs {
                 input.parse::<Token![=]>()?;
                 
                 match ident.to_string().as_str() {
-                    "skip" => {
-                        let skip_lit: LitBool = input.parse()?;
-                        skip = skip_lit.value();
-                    }
                     "cfg" => {
                         let cfg_lit: LitStr = input.parse()?;
                         cfg = Some(cfg_lit.value());
                     }
                     _ => {
-                        return Err(syn::Error::new_spanned(ident, "Expected 'skip' or 'cfg'"));
+                        return Err(syn::Error::new_spanned(ident, "Expected 'cfg'"));
                     }
                 }
             } else {
@@ -107,7 +101,7 @@ impl Parse for PrebindgenArgs {
             }
         }
 
-        Ok(PrebindgenArgs { group, skip, cfg })
+        Ok(PrebindgenArgs { group, cfg })
     }
 }
 
@@ -149,20 +143,14 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 ///     ((p2.x - p1.x).powi(2) + (p2.y - p1.y).powi(2)).sqrt()
 /// }
 ///
-/// // Generate all the output for further processing but do not pass code to the compiler
-/// #[prebindgen(skip = true)]
-/// pub fn internal_function() -> i32 {
-///     42
-/// }
-///
 /// // Add cfg attribute to generated code
 /// #[prebindgen(cfg = "feature = \"experimental\"")]
 /// pub fn experimental_function() -> i32 {
 ///     42
 /// }
 ///
-/// // Combine multiple arguments
-/// #[prebindgen("functions", skip = true, cfg = "unix")]
+/// // Combine group name with cfg
+/// #[prebindgen("functions", cfg = "unix")]
 /// pub fn another_function() -> i32 {
 ///     42
 /// }
@@ -172,7 +160,6 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 ///
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
 /// - Optionally takes a string literal group name for organization (defaults to "default")
-/// - Optionally takes `skip = true` to remove the item from compilation output
 /// - Optionally takes `cfg = "condition"` to add `#[cfg(condition)]` to generated code
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -261,25 +248,20 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
-    if parsed_args.skip {
-        // If skip is true, return empty token stream (eat the input)
-        TokenStream::new()
+    // Apply cfg attribute to the original code if specified
+    if let Some(cfg_value) = &parsed_args.cfg {
+        let cfg_tokens: proc_macro2::TokenStream = cfg_value.parse()
+            .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
+        let cfg_attr = quote! { #[cfg(#cfg_tokens)] };
+        let original_tokens: proc_macro2::TokenStream = input_clone.into();
+        let result = quote! {
+            #cfg_attr
+            #original_tokens
+        };
+        result.into()
     } else {
-        // Apply cfg attribute to the original code if specified
-        if let Some(cfg_value) = &parsed_args.cfg {
-            let cfg_tokens: proc_macro2::TokenStream = cfg_value.parse()
-                .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
-            let cfg_attr = quote! { #[cfg(#cfg_tokens)] };
-            let original_tokens: proc_macro2::TokenStream = input_clone.into();
-            let result = quote! {
-                #cfg_attr
-                #original_tokens
-            };
-            result.into()
-        } else {
-            // Otherwise return the original input unchanged
-            input_clone
-        }
+        // Otherwise return the original input unchanged
+        input_clone
     }
 }
 
