@@ -63,18 +63,9 @@ pub fn copy_foo(dst: &mut mem::MaybeUninit<foo::Foo>, src: &foo::Foo) -> example
     EXAMPLE_RESULT_OK
 }
 
-#[prebindgen("functions")]
-#[cfg(feature = "unstable")]
-pub fn get_unstable_field(input: &foo::Foo) -> u64 {
-    // Return the unstable field if it exists
-    input.unstable_field
-}
-
-#[prebindgen("functions")]
-#[cfg(not(feature = "unstable"))]
-pub fn get_unstable_field(input: &foo::Foo) -> u64 {
-    // Return the unstable field if it exists
-    input.stable_field
+#[prebindgen("functions", cfg = "feature = \"unstable\"")]
+pub fn unstable_function() -> example_result {
+    EXAMPLE_RESULT_OK
 }
 
 #[prebindgen("functions")]
@@ -139,10 +130,4 @@ pub fn function_parameter(pfoo: &foo::Foo, f: Option<extern "C" fn(Option<&foo::
     } else {
         println!("No function provided");
     }
-}
-
-// Demonstrate cfg argument - this function will have #[cfg(feature = "unstable")] in generated code
-#[prebindgen(cfg = "feature = \"unstable\"")]
-pub fn unstable_function() -> example_result {
-    EXAMPLE_RESULT_OK
 }
