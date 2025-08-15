@@ -26,6 +26,10 @@ fn generate_ffi_bindings() -> PathBuf {
     let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
         .disable_feature("unstable") // Disable unstable features
         .disable_feature("internal") // Disable internal features
+        .enable_feature("experimental") // Enable experimental features for cfg demo
+        .enable_feature("advanced") // Enable advanced features for cfg demo
+        .disable_feature("disabled_feature") // Disable this feature to demonstrate cfg preservation
+        .enable_feature("skip_demo") // Enable skip_demo feature for cfg demo
         .build();
 
     // Create filter for stripping derives

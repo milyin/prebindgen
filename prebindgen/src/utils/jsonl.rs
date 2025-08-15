@@ -56,24 +56,24 @@ mod tests {
     fn test_jsonl_round_trip() {
         // Create some test records
         let records = vec![
-            Record {
-                kind: RecordKind::Struct,
-                name: "TestStruct".to_string(),
-                content: "pub struct TestStruct { }".to_string(),
-                source_location: Default::default(),
-            },
-            Record {
-                kind: RecordKind::Function,
-                name: "test_func".to_string(),
-                content: "pub fn test_func() { }".to_string(),
-                source_location: Default::default(),
-            },
-            Record {
-                kind: RecordKind::Enum,
-                name: "TestEnum".to_string(),
-                content: "pub enum TestEnum { A, B }".to_string(),
-                source_location: Default::default(),
-            },
+            Record::new(
+                RecordKind::Struct,
+                "TestStruct".to_string(),
+                "pub struct TestStruct { }".to_string(),
+                Default::default(),
+            ),
+            Record::new(
+                RecordKind::Function,
+                "test_func".to_string(),
+                "pub fn test_func() { }".to_string(),
+                Default::default(),
+            ),
+            Record::new(
+                RecordKind::Enum,
+                "TestEnum".to_string(),
+                "pub enum TestEnum { A, B }".to_string(),
+                Default::default(),
+            ),
         ];
 
         // Create a temporary file
@@ -98,12 +98,12 @@ mod tests {
     #[test]
     fn test_jsonl_file_format() {
         // Create a test record
-        let record = Record {
-            kind: RecordKind::Struct,
-            name: "Test".to_string(),
-            content: "pub struct Test { }".to_string(),
-            source_location: Default::default(),
-        };
+        let record = Record::new(
+            RecordKind::Struct,
+            "Test".to_string(),
+            "pub struct Test { }".to_string(),
+            Default::default(),
+        );
 
         // Create a temporary file
         let temp_file = NamedTempFile::new().unwrap();

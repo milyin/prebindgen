@@ -15,6 +15,9 @@ pub struct Record {
     pub content: String,
     /// Source location information
     pub source_location: SourceLocation,
+    /// Optional cfg attribute value to be applied to the generated code
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cfg: Option<String>,
 }
 
 /// Source location information for tracking where code originated
@@ -136,6 +139,27 @@ impl Record {
             name,
             content,
             source_location,
+            cfg: None,
+        }
+    }
+
+    /// Create a new record with cfg attribute.
+    ///
+    /// **Internal API**: This method is public only for interaction with the proc-macro crate.
+    #[doc(hidden)]
+    pub fn new_with_cfg(
+        kind: RecordKind,
+        name: String,
+        content: String,
+        source_location: SourceLocation,
+        cfg: Option<String>,
+    ) -> Self {
+        Self {
+            kind,
+            name,
+            content,
+            source_location,
+            cfg,
         }
     }
 
@@ -160,7 +184,7 @@ impl Record {
 
         // Check that we have exactly one item
         let mut items = parsed.items.into_iter();
-        let item = items.next().unwrap_or_else(|| {
+        let mut item = items.next().unwrap_or_else(|| {
             panic!(
                 "Expected exactly one item in record, found 0 at {}",
                 self.source_location
@@ -172,6 +196,23 @@ impl Record {
                 "Expected exactly one item in record, found more than 1 at {}",
                 self.source_location
             );
+        }
+
+        // Add cfg attribute if specified
+        if let Some(cfg_value) = &self.cfg {
+            // Parse the cfg condition as tokens
+            let cfg_tokens: proc_macro2::TokenStream = cfg_value.parse()
+                .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
+            let cfg_attr: syn::Attribute = syn::parse_quote! { #[cfg(#cfg_tokens)] };
+            match &mut item {
+                syn::Item::Struct(s) => s.attrs.insert(0, cfg_attr),
+                syn::Item::Enum(e) => e.attrs.insert(0, cfg_attr),
+                syn::Item::Union(u) => u.attrs.insert(0, cfg_attr),
+                syn::Item::Fn(f) => f.attrs.insert(0, cfg_attr),
+                syn::Item::Type(t) => t.attrs.insert(0, cfg_attr),
+                syn::Item::Const(c) => c.attrs.insert(0, cfg_attr),
+                _ => {}
+            }
         }
 
         // Create RecordSyn first

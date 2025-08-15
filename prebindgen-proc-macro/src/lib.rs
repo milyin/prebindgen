@@ -59,48 +59,55 @@ fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {
 struct PrebindgenArgs {
     group: String,
     skip: bool,
+    cfg: Option<String>,
 }
 
 impl Parse for PrebindgenArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut group = DEFAULT_GROUP_NAME.to_string();
         let mut skip = false;
+        let mut cfg = None;
 
         if input.is_empty() {
-            return Ok(PrebindgenArgs { group, skip });
+            return Ok(PrebindgenArgs { group, skip, cfg });
         }
 
-        // Parse first argument
-        if input.peek(LitStr) {
-            // First argument is a string literal (group name)
-            let group_lit: LitStr = input.parse()?;
-            group = group_lit.value();
+        // Parse arguments in any order
+        while !input.is_empty() {
+            if input.peek(LitStr) {
+                // String literal - could be group name
+                let lit: LitStr = input.parse()?;
+                group = lit.value();
+            } else if input.peek(Ident) {
+                let ident: Ident = input.parse()?;
+                input.parse::<Token![=]>()?;
+                
+                match ident.to_string().as_str() {
+                    "skip" => {
+                        let skip_lit: LitBool = input.parse()?;
+                        skip = skip_lit.value();
+                    }
+                    "cfg" => {
+                        let cfg_lit: LitStr = input.parse()?;
+                        cfg = Some(cfg_lit.value());
+                    }
+                    _ => {
+                        return Err(syn::Error::new_spanned(ident, "Expected 'skip' or 'cfg'"));
+                    }
+                }
+            } else {
+                return Err(syn::Error::new(input.span(), "Invalid argument format"));
+            }
 
-            // Check for comma and skip attribute
+            // Parse optional comma
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
-                let skip_ident: Ident = input.parse()?;
-                if skip_ident != "skip" {
-                    return Err(syn::Error::new_spanned(skip_ident, "Expected 'skip'"));
-                }
-                input.parse::<Token![=]>()?;
-                let skip_lit: LitBool = input.parse()?;
-                skip = skip_lit.value();
+            } else if !input.is_empty() {
+                return Err(syn::Error::new(input.span(), "Expected comma between arguments"));
             }
-        } else if input.peek(Ident) {
-            // First argument is an identifier (should be 'skip')
-            let skip_ident: Ident = input.parse()?;
-            if skip_ident != "skip" {
-                return Err(syn::Error::new_spanned(skip_ident, "Expected 'skip'"));
-            }
-            input.parse::<Token![=]>()?;
-            let skip_lit: LitBool = input.parse()?;
-            skip = skip_lit.value();
-        } else {
-            return Err(syn::Error::new(input.span(), "Invalid argument format"));
         }
 
-        Ok(PrebindgenArgs { group, skip })
+        Ok(PrebindgenArgs { group, skip, cfg })
     }
 }
 
@@ -148,8 +155,14 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 ///     42
 /// }
 ///
-/// // Combine group name with skip
-/// #[prebindgen("functions", skip = true)]
+/// // Add cfg attribute to generated code
+/// #[prebindgen(cfg = "feature = \"experimental\"")]
+/// pub fn experimental_function() -> i32 {
+///     42
+/// }
+///
+/// // Combine multiple arguments
+/// #[prebindgen("functions", skip = true, cfg = "unix")]
 /// pub fn another_function() -> i32 {
 ///     42
 /// }
@@ -160,6 +173,7 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
 /// - Optionally takes a string literal group name for organization (defaults to "default")
 /// - Optionally takes `skip = true` to remove the item from compilation output
+/// - Optionally takes `cfg = "condition"` to add `#[cfg(condition)]` to generated code
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
@@ -228,7 +242,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_location = SourceLocation::from_span(&span);
 
     // Create the new record
-    let new_record = Record::new(kind, name, content, source_location);
+    let new_record = Record::new_with_cfg(kind, name, content, source_location, parsed_args.cfg);
 
     // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {

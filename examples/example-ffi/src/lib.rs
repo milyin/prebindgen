@@ -132,3 +132,35 @@ pub fn function_parameter(pfoo: &foo::Foo, f: Option<extern "C" fn(Option<&foo::
         println!("No function provided");
     }
 }
+
+// Demonstrate cfg argument - this function will have #[cfg(feature = "experimental")] in generated code
+#[prebindgen(cfg = "feature = \"experimental\"")]
+pub fn experimental_function() -> example_result {
+    EXAMPLE_RESULT_OK
+}
+
+// Demonstrate cfg with disabled feature - this should keep the cfg attribute
+#[prebindgen(cfg = "feature = \"disabled_feature\"")]
+pub fn disabled_feature_function() -> example_result {
+    EXAMPLE_RESULT_OK
+}
+
+
+
+// Demonstrate cfg with complex condition
+#[prebindgen(cfg = "all(unix, feature = \"advanced\")")]
+pub fn unix_advanced_function() -> example_result {
+    EXAMPLE_RESULT_OK
+}
+
+// Demonstrate cfg with group name
+#[prebindgen("platform", cfg = "target_os = \"linux\"")]
+pub fn linux_specific_function() -> example_result {
+    EXAMPLE_RESULT_OK
+}
+
+// Demonstrate cfg with test condition
+#[prebindgen(cfg = "test")]
+pub fn test_only_function() -> example_result {
+    EXAMPLE_RESULT_OK
+}
