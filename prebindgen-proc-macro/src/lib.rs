@@ -242,7 +242,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_location = SourceLocation::from_span(&span);
 
     // Create the new record
-    let new_record = Record::new_with_cfg(kind, name, content, source_location, parsed_args.cfg);
+    let new_record = Record::new(kind, name, content, source_location, parsed_args.cfg);
 
     // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {

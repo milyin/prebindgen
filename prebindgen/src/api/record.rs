@@ -133,25 +133,6 @@ impl Record {
         name: String,
         content: String,
         source_location: SourceLocation,
-    ) -> Self {
-        Self {
-            kind,
-            name,
-            content,
-            source_location,
-            cfg: None,
-        }
-    }
-
-    /// Create a new record with cfg attribute.
-    ///
-    /// **Internal API**: This method is public only for interaction with the proc-macro crate.
-    #[doc(hidden)]
-    pub fn new_with_cfg(
-        kind: RecordKind,
-        name: String,
-        content: String,
-        source_location: SourceLocation,
         cfg: Option<String>,
     ) -> Self {
         Self {
@@ -162,6 +143,8 @@ impl Record {
             cfg,
         }
     }
+
+
 
     /// Serialize this record to a JSON-lines compatible string.
     ///

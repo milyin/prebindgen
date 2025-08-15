@@ -61,18 +61,21 @@ mod tests {
                 "TestStruct".to_string(),
                 "pub struct TestStruct { }".to_string(),
                 Default::default(),
+                None,
             ),
             Record::new(
                 RecordKind::Function,
                 "test_func".to_string(),
                 "pub fn test_func() { }".to_string(),
                 Default::default(),
+                None,
             ),
             Record::new(
                 RecordKind::Enum,
                 "TestEnum".to_string(),
                 "pub enum TestEnum { A, B }".to_string(),
                 Default::default(),
+                None,
             ),
         ];
 
@@ -103,6 +106,7 @@ mod tests {
             "Test".to_string(),
             "pub struct Test { }".to_string(),
             Default::default(),
+            None,
         );
 
         // Create a temporary file
