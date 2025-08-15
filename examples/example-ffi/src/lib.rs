@@ -17,7 +17,7 @@ pub const EXAMPLE_RESULT_ERROR: example_result = -1;
 pub mod foo {
     use prebindgen_proc_macro::prebindgen;
 
-    #[prebindgen("structs", cfg="target_arch = \"x86_64\"")]
+    #[prebindgen("structs", cfg = "target_arch = \"x86_64\"")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Default)]
     pub enum InsideFoo {
@@ -25,7 +25,7 @@ pub mod foo {
         DouddleDee = 42,
         DouddleDum = 24,
     }
-    #[prebindgen("structs", cfg="target_arch = \"aarch64\"")]
+    #[prebindgen("structs", cfg = "target_arch = \"aarch64\"")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Default)]
     pub enum InsideFoo {

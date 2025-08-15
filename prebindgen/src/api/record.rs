@@ -144,8 +144,6 @@ impl Record {
         }
     }
 
-
-
     /// Serialize this record to a JSON-lines compatible string.
     ///
     /// **Internal API**: This method is public only for interaction with the proc-macro crate.
@@ -184,7 +182,8 @@ impl Record {
         // Add cfg attribute if specified
         if let Some(cfg_value) = &self.cfg {
             // Parse the cfg condition as tokens
-            let cfg_tokens: proc_macro2::TokenStream = cfg_value.parse()
+            let cfg_tokens: proc_macro2::TokenStream = cfg_value
+                .parse()
                 .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
             let cfg_attr: syn::Attribute = syn::parse_quote! { #[cfg(#cfg_tokens)] };
             match &mut item {

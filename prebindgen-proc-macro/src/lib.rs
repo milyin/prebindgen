@@ -79,7 +79,7 @@ impl Parse for PrebindgenArgs {
             } else if input.peek(Ident) {
                 let ident: Ident = input.parse()?;
                 input.parse::<Token![=]>()?;
-                
+
                 match ident.to_string().as_str() {
                     "cfg" => {
                         let cfg_lit: LitStr = input.parse()?;
@@ -97,7 +97,10 @@ impl Parse for PrebindgenArgs {
             if input.peek(Token![,]) {
                 input.parse::<Token![,]>()?;
             } else if !input.is_empty() {
-                return Err(syn::Error::new(input.span(), "Expected comma between arguments"));
+                return Err(syn::Error::new(
+                    input.span(),
+                    "Expected comma between arguments",
+                ));
             }
         }
 
@@ -229,7 +232,13 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let source_location = SourceLocation::from_span(&span);
 
     // Create the new record
-    let new_record = Record::new(kind, name, content, source_location, parsed_args.cfg.clone());
+    let new_record = Record::new(
+        kind,
+        name,
+        content,
+        source_location,
+        parsed_args.cfg.clone(),
+    );
 
     // Convert record to JSON and append to file in JSON-lines format
     if let Ok(json_content) = serde_json::to_string(&new_record) {
@@ -250,7 +259,8 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 
     // Apply cfg attribute to the original code if specified
     if let Some(cfg_value) = &parsed_args.cfg {
-        let cfg_tokens: proc_macro2::TokenStream = cfg_value.parse()
+        let cfg_tokens: proc_macro2::TokenStream = cfg_value
+            .parse()
             .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
         let cfg_attr = quote! { #[cfg(#cfg_tokens)] };
         let original_tokens: proc_macro2::TokenStream = input_clone.into();
@@ -301,4 +311,3 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
-
