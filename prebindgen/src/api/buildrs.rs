@@ -94,7 +94,15 @@ pub fn init_prebindgen_out_dir() {
 
     // Export features list to the main crate as an env variable
     // Accessible via env!("PREBINDGEN_FEATURES") or std::env::var at compile time/runtime
-    println!("cargo:rustc-env=PREBINDGEN_FEATURES={}", features.join(","));
+    // Make the list of format "crate_name/f1 crate_name/f2"
+    println!(
+        "cargo:rustc-env=PREBINDGEN_FEATURES={}",
+        features
+            .into_iter()
+            .map(|f| format!("{}/{}", crate_name, f))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
 }
 
 /// Name of the prebindgen output directory

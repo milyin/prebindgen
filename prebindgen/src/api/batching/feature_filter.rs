@@ -30,8 +30,8 @@ pub struct Builder {
     pub(crate) feature_mappings: HashMap<String, String>,
     // When true, unknown features are treated as disabled (skipped) instead of causing an error
     pub(crate) disable_unknown_features: bool,
-    // Optional name of a features constant (accepted by predefined_features for API parity)
-    pub(crate) features_constant: Option<String>,
+    // Source crate features constant name and features list in format "crate/f1 crate/f2"
+    pub(crate) features_assert: Option<(String, String)>,
 }
 
 impl Builder {
@@ -48,7 +48,7 @@ impl Builder {
             enabled_features: HashSet::new(),
             feature_mappings: HashMap::new(),
             disable_unknown_features: false,
-            features_constant: None,
+            features_assert: None,
         }
     }
 
@@ -120,32 +120,47 @@ impl Builder {
         self
     }
 
-    /// Assume a predefined feature set: the provided list is enabled, all others are disabled.
-    /// Also enables skipping of unknown features (treat them as disabled) to avoid reporting.
+    /// Automatically filter features according to provided list
+    /// In the beginning put assert that list matches the actual features list of imported source crate
+    /// The feature list comes directly from the prebindgen output directory, so it should match the
+    /// actual features of the source crate. Unfortunately this is not always guaranteed:
+    /// the crate may be built with different set of features as a destination crate dependency and
+    /// as it's build.rs dependency. The assert allows to detect such mismatches early.
+    ///
+    /// To fix the issue 
+    /// - make sure that build dependency of ffi crate is consistent with the main dependency
+    /// - avoid hidden features which may be silently turned on by build --all-features
     #[roxygen]
-    pub fn predefined_features<S, I, T>(
+    pub fn predefined_features<S1: Into<String>, S2: Into<String>>(
         mut self,
-        /// Name of the feature constant defined in the source crate
-        feature_constant: S,
-        /// Iterator or collection of enabled feature names
-        features: I,
+        /// Name of the feature` constant defined in the source crate
+        features_constant: S1,
+        /// List of source crate features in format "crate/f1 crate/f2"
+        features_list: S2,
     ) -> Self
-    where
-        S: Into<String>,
-        I: IntoIterator<Item = T>,
-        T: Into<String>,
     {
         // Reset previous configuration to avoid conflicts
         self.disabled_features.clear();
         self.enabled_features.clear();
         self.feature_mappings.clear();
 
-        // Record constant name (not used at runtime here, kept for API completeness)
-        self.features_constant = Some(feature_constant.into());
+        let features_constant = features_constant.into();
+        let features_list = features_list.into();
 
         // Enable exactly the provided features
-        self.enabled_features
-            .extend(features.into_iter().map(|f| f.into()));
+        // remove from each feature part "crate_name/", no
+        // matter which crate is it, just strip the prefix
+        self.enabled_features.extend(
+            features_list
+                .split_whitespace()
+                .map(|f| f.split('/').last().unwrap_or(f).to_string()),
+        );
+
+        // Record constant name (not used at runtime here, kept for API completeness)
+        self.features_assert = Some((
+            features_constant,
+            features_list
+        ));
 
         // Treat unknown features as disabled to "skip" them silently
         self.disable_unknown_features = true;
@@ -174,7 +189,7 @@ impl Builder {
     /// ```
     pub fn build(self) -> FeatureFilter {
         // Determine if this filter is active (i.e., not pass-through)
-        let active = self.features_constant.is_some()
+        let active = self.features_assert.is_some()
             || self.disable_unknown_features
             || !self.disabled_features.is_empty()
             || !self.enabled_features.is_empty()
@@ -182,14 +197,9 @@ impl Builder {
 
         // Optionally create a prelude assertion comparing FEATURES const path with expected features string
         let mut prelude_item: Option<(syn::Item, SourceLocation)> = None;
-        if let Some(const_name) = self.features_constant.clone() {
-            // Build expected features string from enabled_features
-            let mut feats: Vec<String> = self.enabled_features.iter().cloned().collect();
-            feats.sort();
-            feats.dedup();
-            let feats_str = feats.join(",");
+        if let Some((const_name, features_list)) = self.features_assert.clone() {
 
-            let features_lit = syn::LitStr::new(&feats_str, proc_macro2::Span::call_site());
+            let features_lit = syn::LitStr::new(&features_list, proc_macro2::Span::call_site());
 
             // Parse the provided constant name into a path/expression so it is not quoted as a string.
             // This allows using values like `my_crate::FEATURES` or `FEATURES`.

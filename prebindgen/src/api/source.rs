@@ -70,7 +70,7 @@ pub struct Source {
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
     // Configuration needed to build a FeatureFilter at iteration time
     features_constant: Option<String>,
-    features_list: Option<Vec<String>>, // normalized list from features.txt
+    features_list: Vec<String>, // normalized list from features.txt
 }
 
 impl Source {
@@ -118,13 +118,7 @@ impl Source {
         }
 
         // Read features list once and store normalized list
-        let features_list = read_features_from_out_dir(input_dir).map(|s| {
-            if s.is_empty() {
-                Vec::new()
-            } else {
-                s.split(',').map(|x| x.to_string()).collect::<Vec<_>>()
-            }
-        });
+        let features_list = read_features_from_out_dir(input_dir);
 
         Self {
             crate_name,
@@ -164,7 +158,7 @@ impl Source {
                 ),
             ]),
             features_constant: None,
-            features_list: None,
+            features_list: Vec::new(),
         };
         DOCTEST_SOURCE.with(|cell| {
             *cell.borrow_mut() = Some(source);
@@ -267,14 +261,19 @@ impl Source {
     fn build_feature_filter(&self) -> feature_filter::FeatureFilter {
         let mut builder = feature_filter::FeatureFilter::builder();
         if let Some(const_name) = &self.features_constant {
-            let feats = self.features_list.clone().unwrap_or_default();
             // If the provided constant isn't fully qualified, qualify it with the crate name
             let qualified_const = if const_name.contains("::") {
                 const_name.clone()
             } else {
                 format!("{}::{}", self.crate_name.replace('-', "_"), const_name)
             };
-            builder = builder.predefined_features(qualified_const, feats);
+            // prepend each feature with "crare_name/" and join with spaces
+            let features_list = self
+                .features_list
+                .iter()
+                .map(|f| format!("{}/{}", self.crate_name, f))
+                .join(" ");
+            builder = builder.predefined_features(qualified_const,features_list);
         }
         builder.build()
     }
@@ -352,9 +351,11 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
 }
 
 /// Read enabled features list from features.txt and normalize into a comma-separated string
-fn read_features_from_out_dir(input_dir: &Path) -> Option<String> {
+fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
     let features_path = input_dir.join(FEATURES_FILE);
-    let contents = fs::read_to_string(&features_path).ok()?;
+    let Some(contents) = fs::read_to_string(&features_path).ok() else {
+      return Vec::new();
+    };
     let mut features: Vec<String> = contents
         .lines()
         .map(str::trim)
@@ -363,7 +364,7 @@ fn read_features_from_out_dir(input_dir: &Path) -> Option<String> {
         .collect();
     features.sort();
     features.dedup();
-    Some(features.join(","))
+    features
 }
 
 /// Builder for constructing a `Source` with custom options
@@ -376,7 +377,6 @@ impl Builder {
     fn new<P: AsRef<Path>>(input_dir: P) -> Self {
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
-            // Default requested: Some("FEATURES")
             features_constant: Some("FEATURES".to_string()),
         }
     }
