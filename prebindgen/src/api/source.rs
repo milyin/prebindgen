@@ -2,12 +2,17 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use roxygen::roxygen;
+use proc_macro2::Span;
 
-use crate::{api::record::Record, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE};
+use crate::{
+    api::record::Record,
+    utils::jsonl::read_jsonl_file,
+    SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
+};
 
 /// File extension for data files
 const JSONL_EXTENSION: &str = ".jsonl";
@@ -63,6 +68,8 @@ thread_local! {
 pub struct Source {
     crate_name: String,
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
+    // Items that should always be emitted first (e.g., compile-time assertions)
+    prelude: Vec<(syn::Item, SourceLocation)>,
 }
 
 impl Source {
@@ -72,10 +79,21 @@ impl Source {
         /// Path to the directory containing prebindgen data files
         input_dir: P,
     ) -> Self {
+        // Backward-compatible constructor: defaults to asserting the `FEATURES` constant
+        Self::builder(input_dir).build()
+    }
+
+    /// Create a builder to configure how `Source` is constructed
+    pub fn builder<P: AsRef<Path>>(input_dir: P) -> Builder {
+        Builder::new(input_dir)
+    }
+}
+
+impl Source {
+    fn build_internal(input_dir: &Path, features_constant: Option<String>) -> Self {
         if let Some(source) = DOCTEST_SOURCE.with(|source| (*source.borrow()).clone()) {
             return source;
         }
-        let input_dir = input_dir.as_ref();
         if !input_dir.is_dir() {
             panic!(
                 "Input directory {} does not exist or is not a directory",
@@ -98,7 +116,29 @@ impl Source {
             items.insert(group, group_items);
         }
 
-        Self { crate_name, items }
+        // Optionally inject a compile-time features assertion as the first emitted item
+        let mut prelude: Vec<(syn::Item, SourceLocation)> = Vec::new();
+        if let Some(const_name) = features_constant {
+            if let Some(expected) = read_features_from_out_dir(input_dir) {
+                let features_lit = syn::LitStr::new(&expected, Span::call_site());
+                let crate_ident = syn::Ident::new(&crate_name.replace('-', "_"), Span::call_site());
+                let const_ident = syn::Ident::new(&const_name, Span::call_site());
+                    // Emit a test-only assertion to verify features equality without const-eval.
+                    let item: syn::Item = syn::parse_quote! {
+                        #[cfg(test)]
+                        mod _prebindgen_features_assert {
+                            #[test]
+                            fn features_match() {
+                                assert_eq!(#crate_ident::#const_ident, #features_lit,
+                                    "prebindgen: features mismatch between source crate and prebindgen build");
+                            }
+                        }
+                    };
+                prelude.push((item, SourceLocation::default()));
+            }
+        }
+
+        Self { crate_name, items, prelude }
     }
 
     #[doc(hidden)]
@@ -130,6 +170,7 @@ impl Source {
                     )],
                 ),
             ]),
+            prelude: Vec::new(),
         };
         DOCTEST_SOURCE.with(|cell| {
             *cell.borrow_mut() = Some(source);
@@ -174,8 +215,8 @@ impl Source {
         groups
             .iter()
             .filter_map(|group| self.items.get(*group))
-            .flat_map(|records| records.iter())
-            .cloned()
+            .flat_map(|records| records.iter().cloned())
+            .chain(self.prelude.iter().cloned())
     }
 
     /// Returns an iterator over items excluding specific groups
@@ -199,8 +240,8 @@ impl Source {
         self.items
             .iter()
             .filter(|(group, _)| !groups.contains(&group.as_str()))
-            .flat_map(|(_, records)| records.iter())
-            .cloned()
+            .flat_map(|(_, records)| records.iter().cloned())
+            .chain(self.prelude.iter().cloned())
     }
 
     /// Returns an iterator over all items from all groups
@@ -218,8 +259,8 @@ impl Source {
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         self.items
             .iter()
-            .flat_map(|(_, records)| records.iter())
-            .cloned()
+            .flat_map(|(_, records)| records.iter().cloned())
+            .chain(self.prelude.iter().cloned())
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
@@ -292,4 +333,47 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
     fs::read_to_string(&crate_name_path)
         .ok()
         .map(|s| s.trim().to_string())
+}
+
+/// Read enabled features list from features.txt and normalize into a comma-separated string
+fn read_features_from_out_dir(input_dir: &Path) -> Option<String> {
+    let features_path = input_dir.join(FEATURES_FILE);
+    let contents = fs::read_to_string(&features_path).ok()?;
+    let mut features: Vec<String> = contents
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    features.sort();
+    features.dedup();
+    Some(features.join(","))
+}
+
+/// Builder for constructing a `Source` with custom options
+pub struct Builder {
+    input_dir: PathBuf,
+    features_constant: Option<String>,
+}
+
+impl Builder {
+    fn new<P: AsRef<Path>>(input_dir: P) -> Self {
+        Self {
+            input_dir: input_dir.as_ref().to_path_buf(),
+            // Default requested: Some("FEATURES")
+            features_constant: Some("FEATURES".to_string()),
+        }
+    }
+
+    /// Set the name of the features constant to assert against.
+    /// Pass `None` to disable emitting the assertion item.
+    pub fn features_constant(mut self, name: Option<impl Into<String>>) -> Self {
+        self.features_constant = name.map(|n| n.into());
+        self
+    }
+
+    /// Build the `Source` instance
+    pub fn build(self) -> Source {
+        Source::build_internal(&self.input_dir, self.features_constant)
+    }
 }

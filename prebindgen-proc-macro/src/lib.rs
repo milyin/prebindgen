@@ -340,6 +340,6 @@ pub fn features(_input: TokenStream) -> TokenStream {
     let features = std::env::var("PREBINDGEN_FEATURES").expect(
         "PREBINDGEN_FEATURES environment variable not set. Ensure prebindgen::init_prebindgen_out_dir() is called in build.rs",
     );
-    let expanded = quote! { #features };
-    TokenStream::from(expanded)
+    let lit = syn::LitStr::new(&features, proc_macro2::Span::call_site());
+    TokenStream::from(quote! { #lit })
 }
