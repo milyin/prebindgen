@@ -185,12 +185,16 @@ impl Builder {
 
             let features_lit = syn::LitStr::new(&feats_str, proc_macro2::Span::call_site());
 
+            // Parse the provided constant name into a path/expression so it is not quoted as a string.
+            // This allows using values like `my_crate::FEATURES` or `FEATURES`.
+            let const_path: syn::Expr = syn::parse_str(&const_name).expect("invalid features constant path");
+
             // Prefer a fully-qualified path if provided in feature_constant
-            let item = syn::parse_quote! {
-            const _: () = {
-                prebindgen::konst::assertc_eq!(
-                    #const_name,
-                    #features_lit,
+            let item: syn::Item = syn::parse_quote! {
+                const _: () = {
+                    prebindgen::konst::assertc_eq!(
+                        #const_path,
+                        #features_lit,
                         "prebindgen: features mismatch between source crate and prebindgen build"
                     );
                 };
