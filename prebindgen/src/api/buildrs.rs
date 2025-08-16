@@ -66,7 +66,10 @@ pub fn init_prebindgen_out_dir() {
     // Cargo exposes enabled features to build.rs as env vars CARGO_FEATURE_<NAME>
     // where <NAME> is uppercased and '-' replaced with '_'. Here we convert back.
     let mut features: Vec<String> = std::env::vars()
-        .filter_map(|(k, _)| k.strip_prefix("CARGO_FEATURE_").map(|name| name.to_string()))
+        .filter_map(|(k, _)| {
+            k.strip_prefix("CARGO_FEATURE_")
+                .map(|name| name.to_string())
+        })
         .map(|name| name.to_lowercase().replace('_', "-"))
         .collect();
     features.sort();
@@ -91,10 +94,7 @@ pub fn init_prebindgen_out_dir() {
 
     // Export features list to the main crate as an env variable
     // Accessible via env!("PREBINDGEN_FEATURES") or std::env::var at compile time/runtime
-    println!(
-        "cargo:rustc-env=PREBINDGEN_FEATURES={}",
-        features.join(",")
-    );
+    println!("cargo:rustc-env=PREBINDGEN_FEATURES={}", features.join(","));
 }
 
 /// Name of the prebindgen output directory

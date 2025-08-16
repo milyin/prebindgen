@@ -94,7 +94,7 @@ fn main() {
     let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
 
     // Create feature filter
-    let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
+    let feature_filter = prebindgen::batching::FeatureFilter::builder()
         .disable_feature("unstable")
         .disable_feature("internal")
         .build();
@@ -110,8 +110,8 @@ fn main() {
     // Process items with filtering and conversion
     let bindings_file = source
         .items_all()
-        .filter_map(feature_filter.into_closure())
-        .batching(converter.into_closure())
+    .batching(feature_filter.into_closure())
+    .batching(converter.into_closure())
         .collect::<prebindgen::collect::Destination>()
         .write("ffi_bindings.rs");
 

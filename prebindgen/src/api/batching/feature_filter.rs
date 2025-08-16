@@ -12,7 +12,7 @@ use crate::{api::record::SourceLocation, codegen::process_features::process_item
 /// # Example
 ///
 /// ```
-/// let builder = prebindgen::filter_map::feature_filter::Builder::new()
+/// let builder = prebindgen::batching::feature_filter::Builder::new()
 ///     .disable_feature("unstable")
 ///     .enable_feature("std")
 ///     .match_feature("internal", "public")
@@ -30,7 +30,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::filter_map::feature_filter::Builder::new();
+    /// let builder = prebindgen::batching::feature_filter::Builder::new();
     /// ```
     pub fn new() -> Self {
         Self {
@@ -48,7 +48,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::filter_map::feature_filter::Builder::new()
+    /// let builder = prebindgen::batching::feature_filter::Builder::new()
     ///     .disable_feature("experimental")
     ///     .disable_feature("deprecated");
     /// ```
@@ -71,7 +71,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::filter_map::feature_filter::Builder::new()
+    /// let builder = prebindgen::batching::feature_filter::Builder::new()
     ///     .enable_feature("experimental");
     /// ```
     #[roxygen]
@@ -92,7 +92,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::filter_map::feature_filter::Builder::new()
+    /// let builder = prebindgen::batching::feature_filter::Builder::new()
     ///     .match_feature("unstable", "unstable")
     ///     .match_feature("internal", "unstable");
     /// ```
@@ -113,7 +113,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let filter = prebindgen::filter_map::feature_filter::Builder::new()
+    /// let filter = prebindgen::batching::feature_filter::Builder::new()
     ///     .disable_feature("internal")
     ///     .build();
     /// ```
@@ -145,17 +145,18 @@ impl Default for Builder {
 /// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
-/// let feature_filter = prebindgen::filter_map::FeatureFilter::builder()
+/// let feature_filter = prebindgen::batching::FeatureFilter::builder()
 ///     .disable_feature("unstable")
 ///     .disable_feature("internal")
 ///     .enable_feature("std")
 ///     .match_feature("experimental", "beta")
 ///     .build();
 ///
-/// // Apply filter to items
+/// // Apply filter to items using itertools::batching
+/// # use itertools::Itertools;
 /// let filtered_items: Vec<_> = source
 ///     .items_all()
-///     .filter_map(feature_filter.into_closure())
+///     .batching(feature_filter.into_closure())
 ///     .take(0) // Take 0 for doctest
 ///     .collect();
 /// ```
@@ -169,7 +170,7 @@ impl FeatureFilter {
     /// # Example
     ///
     /// ```
-    /// let filter = prebindgen::filter_map::FeatureFilter::builder()
+    /// let filter = prebindgen::batching::FeatureFilter::builder()
     ///     .disable_feature("unstable")
     ///     .enable_feature("std")
     ///     .build();
@@ -177,59 +178,35 @@ impl FeatureFilter {
     pub fn builder() -> Builder {
         Builder::new()
     }
-    /// Process a single item through the feature filter
+    /// Process items from an iterator in batching mode
     ///
-    /// Returns `Some(item)` if the item should be included, `None` if it should be filtered out.
-    /// Used internally by `into_closure()` for integration with `filter_map`.
-    ///
-    /// # Parameters
-    ///
-    /// * `item` - A `(syn::Item, SourceLocation)` pair to process
-    ///
-    /// # Returns
-    ///
-    /// `Some((syn::Item, SourceLocation))` if included, `None` if filtered out
-    pub fn call(&self, item: (syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
-        // Check if the item is affected by any feature flags
-        let (mut item, source_location) = item;
-        if process_item_features(
-            &mut item,
-            &self.builder.disabled_features,
-            &self.builder.enabled_features,
-            &self.builder.feature_mappings,
-            &source_location,
-        ) {
-            Some((item, source_location))
-        } else {
-            None
+    /// Consumes items until it finds one that should be kept according to feature flags.
+    /// Returns that item, possibly with adjusted attributes. Otherwise `None` at end.
+    pub fn call<I>(&mut self, iter: &mut I) -> Option<(syn::Item, SourceLocation)>
+    where
+        I: Iterator<Item = (syn::Item, SourceLocation)>,
+    {
+        for (mut item, source_location) in iter {
+            if process_item_features(
+                &mut item,
+                &self.builder.disabled_features,
+                &self.builder.enabled_features,
+                &self.builder.feature_mappings,
+                &source_location,
+            ) {
+                return Some((item, source_location));
+            }
         }
+        None
     }
 
-    /// Convert to closure compatible with `filter_map`
+    /// Convert to closure compatible with `itertools::batching`
     ///
-    /// This is the primary method for using `FeatureFilter` in processing pipelines.
-    /// The returned closure can be passed to `filter_map()` to selectively include
-    /// items based on their feature flags.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # prebindgen::Source::init_doctest_simulate();
-    /// let source = prebindgen::Source::new("source_ffi");
-    /// let filter = prebindgen::filter_map::FeatureFilter::builder()
-    ///     .disable_feature("internal")
-    ///     .build();
-    ///
-    /// // Use with filter_map
-    /// let filtered_items: Vec<_> = source
-    ///     .items_all()
-    ///     .filter_map(filter.into_closure())
-    ///     .take(0) // Take 0 for doctest
-    ///     .collect();
-    /// ```
-    pub fn into_closure(
-        self,
-    ) -> impl FnMut((syn::Item, SourceLocation)) -> Option<(syn::Item, SourceLocation)> {
-        move |item| self.call(item)
+    /// The returned closure should be passed to `.batching(...)` in the iterator chain.
+    pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<(syn::Item, SourceLocation)>
+    where
+        I: Iterator<Item = (syn::Item, SourceLocation)>,
+    {
+        move |iter| self.call(iter)
     }
 }

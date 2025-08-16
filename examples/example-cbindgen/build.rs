@@ -60,7 +60,7 @@ fn generate_ffi_bindings() -> PathBuf {
         .map(strip_derives.into_closure())
         .map(strip_macros.into_closure())
         .map(type_replacer.into_closure())
-        .filter_map(feature_filter.into_closure())
+        .batching(feature_filter.into_closure())
         .batching(converter.into_closure())
         .collect::<prebindgen::collect::Destination>()
         .write("example_ffi.rs");

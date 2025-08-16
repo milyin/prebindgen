@@ -360,11 +360,11 @@ impl FfiConverter {
         }
 
         // Store the item and its source location
-    self.source_items.push_back((item, source_location));
+        self.source_items.push_back((item, source_location));
     }
 
     fn convert(&mut self) -> Option<(syn::Item, SourceLocation)> {
-    if let Some((mut item, source_location)) = self.source_items.pop_front() {
+        if let Some((mut item, source_location)) = self.source_items.pop_front() {
             // Create parse config
             let config = ParseConfig {
                 crate_name: &self.builder.source_crate_name,

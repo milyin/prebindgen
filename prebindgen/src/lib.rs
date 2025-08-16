@@ -76,7 +76,7 @@
 //! ```
 //! ```rust,ignore
 //! // example-cbindgen/build.rs
-//! use prebindgen::{Source, batching::ffi_converter, filter_map::feature_filter, collect::Destination};
+//! use prebindgen::{Source, batching::ffi_converter, collect::Destination};
 //! use itertools::Itertools;
 //!
 //! fn main() {
@@ -86,7 +86,7 @@
 //!     // Process items with filtering and conversion
 //!     let destination = source
 //!         .items_all()
-//!         .filter_map(feature_filter::Builder::new()
+//!         .batching(crate::batching::feature_filter::Builder::new()
 //!             .disable_feature("experimental")
 //!             .enable_feature("std")
 //!             .build()
@@ -139,8 +139,8 @@ pub mod batching {
     pub mod ffi_converter {
         pub use crate::api::batching::ffi_converter::Builder;
     }
-    pub use crate::api::batching::ffi_converter::FfiConverter;
     pub use crate::api::batching::feature_filter::FeatureFilter;
+    pub use crate::api::batching::ffi_converter::FfiConverter;
     pub mod feature_filter {
         pub use crate::api::batching::feature_filter::Builder;
     }

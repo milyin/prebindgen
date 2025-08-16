@@ -5,13 +5,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use roxygen::roxygen;
 use proc_macro2::Span;
+use roxygen::roxygen;
 
 use crate::{
-    api::record::Record,
-    utils::jsonl::read_jsonl_file,
-    SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
+    api::record::Record, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE,
+    FEATURES_FILE,
 };
 
 /// File extension for data files
@@ -138,7 +137,11 @@ impl Source {
             }
         }
 
-        Self { crate_name, items, prelude }
+        Self {
+            crate_name,
+            items,
+            prelude,
+        }
     }
 
     #[doc(hidden)]
@@ -213,15 +216,12 @@ impl Source {
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         // Emit prelude first, then items from the requested groups
-        self.prelude
-            .iter()
-            .cloned()
-            .chain(
-                groups
-                    .iter()
-                    .filter_map(|group| self.items.get(*group))
-                    .flat_map(|records| records.iter().cloned()),
-            )
+        self.prelude.iter().cloned().chain(
+            groups
+                .iter()
+                .filter_map(|group| self.items.get(*group))
+                .flat_map(|records| records.iter().cloned()),
+        )
     }
 
     /// Returns an iterator over items excluding specific groups
@@ -243,15 +243,12 @@ impl Source {
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         // Emit prelude first, then items excluding the specified groups
-        self.prelude
-            .iter()
-            .cloned()
-            .chain(
-                self.items
-                    .iter()
-                    .filter(|(group, _)| !groups.contains(&group.as_str()))
-                    .flat_map(|(_, records)| records.iter().cloned()),
-            )
+        self.prelude.iter().cloned().chain(
+            self.items
+                .iter()
+                .filter(|(group, _)| !groups.contains(&group.as_str()))
+                .flat_map(|(_, records)| records.iter().cloned()),
+        )
     }
 
     /// Returns an iterator over all items from all groups
@@ -268,14 +265,11 @@ impl Source {
     /// ```
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
         // Emit prelude first, then all items from all groups
-        self.prelude
-            .iter()
-            .cloned()
-            .chain(
-                self.items
-                    .iter()
-                    .flat_map(|(_, records)| records.iter().cloned()),
-            )
+        self.prelude.iter().cloned().chain(
+            self.items
+                .iter()
+                .flat_map(|(_, records)| records.iter().cloned()),
+        )
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
