@@ -22,6 +22,7 @@ regex = { workspace = true }
 prettyplease = { workspace = true }
 roxygen = { workspace = true }
 if_rust_version = { workspace = true }
+konst = { workspace = true, features = ["cmp"] }
 
 [features]
 debug = []

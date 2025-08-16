@@ -132,6 +132,7 @@ pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
 pub use crate::utils::edition::RustEdition;
+pub use konst; // Re-export konst for compile-time comparisons in generated code
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {

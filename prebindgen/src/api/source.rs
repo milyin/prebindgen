@@ -123,17 +123,17 @@ impl Source {
                 let features_lit = syn::LitStr::new(&expected, Span::call_site());
                 let crate_ident = syn::Ident::new(&crate_name.replace('-', "_"), Span::call_site());
                 let const_ident = syn::Ident::new(&const_name, Span::call_site());
-                    // Emit a test-only assertion to verify features equality without const-eval.
-                    let item: syn::Item = syn::parse_quote! {
-                        #[cfg(test)]
-                        mod _prebindgen_features_assert {
-                            #[test]
-                            fn features_match() {
-                                assert_eq!(#crate_ident::#const_ident, #features_lit,
-                                    "prebindgen: features mismatch between source crate and prebindgen build");
-                            }
-                        }
+                // Use konst to compare at compile-time, avoiding non-const assert_eq!
+                // konst is re-exported by the `prebindgen` crate so consumers don't need to depend on it directly.
+                let item: syn::Item = syn::parse_quote! {
+                    const _: () = {
+                        prebindgen::konst::assertc_eq!(
+                            #crate_ident::#const_ident,
+                            #features_lit,
+                            "prebindgen: features mismatch between source crate and prebindgen build"
+                        );
                     };
+                };
                 prelude.push((item, SourceLocation::default()));
             }
         }

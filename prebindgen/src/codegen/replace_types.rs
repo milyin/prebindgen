@@ -334,12 +334,21 @@ pub(crate) fn replace_types_in_item(
             type_replacements,
             source_location,
         ),
-        syn::Item::Const(item_const) => replace_types_in_type(
-            &mut item_const.ty,
-            config,
-            type_replacements,
-            source_location,
-        ),
+        syn::Item::Const(item_const) => {
+            // Allow constants named '_' (commonly used for compile-time assertions)
+            // to pass through without any type replacement or validation.
+            // These often use unit type `()` or const generics which are irrelevant for FFI.
+            if item_const.ident == "_" {
+                // Do nothing; leave the const item unchanged.
+            } else {
+                replace_types_in_type(
+                    &mut item_const.ty,
+                    config,
+                    type_replacements,
+                    source_location,
+                );
+            }
+        }
         syn::Item::Static(item_static) => replace_types_in_type(
             &mut item_static.ty,
             config,
