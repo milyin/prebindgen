@@ -27,6 +27,8 @@ pub(crate) fn process_item_features(
     enabled_features: &HashSet<String>,
     /// Mapping from old feature names to new feature names
     feature_mappings: &HashMap<String, String>,
+    /// If true, unknown features are treated as disabled (skipped) instead of causing an error
+    disable_unknown_features: bool,
     /// Source location information for error reporting
     source_location: &SourceLocation,
 ) -> bool {
@@ -39,6 +41,7 @@ pub(crate) fn process_item_features(
                 disabled_features,
                 enabled_features,
                 feature_mappings,
+                disable_unknown_features,
                 source_location,
             );
             &mut s.attrs
@@ -50,6 +53,7 @@ pub(crate) fn process_item_features(
                 disabled_features,
                 enabled_features,
                 feature_mappings,
+                disable_unknown_features,
                 source_location,
             );
             &mut e.attrs
@@ -61,6 +65,7 @@ pub(crate) fn process_item_features(
                 disabled_features,
                 enabled_features,
                 feature_mappings,
+                disable_unknown_features,
                 source_location,
             );
             &mut u.attrs
@@ -81,6 +86,7 @@ pub(crate) fn process_item_features(
         disabled_features,
         enabled_features,
         feature_mappings,
+        disable_unknown_features,
         source_location,
     )
 }
@@ -91,6 +97,7 @@ fn process_struct_fields(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
+    disable_unknown_features: bool,
     source_location: &SourceLocation,
 ) {
     match fields {
@@ -104,6 +111,7 @@ fn process_struct_fields(
                     disabled_features,
                     enabled_features,
                     feature_mappings,
+                    disable_unknown_features,
                     source_location,
                 ) {
                     new_fields.push(field);
@@ -121,6 +129,7 @@ fn process_struct_fields(
                     disabled_features,
                     enabled_features,
                     feature_mappings,
+                    disable_unknown_features,
                     source_location,
                 ) {
                     new_fields.push(field);
@@ -140,6 +149,7 @@ fn process_enum_variants(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
+    disable_unknown_features: bool,
     source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
@@ -152,6 +162,7 @@ fn process_enum_variants(
             disabled_features,
             enabled_features,
             feature_mappings,
+            disable_unknown_features,
             source_location,
         );
 
@@ -162,6 +173,7 @@ fn process_enum_variants(
                 disabled_features,
                 enabled_features,
                 feature_mappings,
+                disable_unknown_features,
                 source_location,
             );
             new_variants.push(variant);
@@ -176,6 +188,7 @@ fn process_union_fields(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
+    disable_unknown_features: bool,
     source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
@@ -187,6 +200,7 @@ fn process_union_fields(
             disabled_features,
             enabled_features,
             feature_mappings,
+            disable_unknown_features,
             source_location,
         ) {
             new_fields.push(field);
@@ -201,6 +215,7 @@ fn process_attributes(
     disabled_features: &HashSet<String>,
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
+    disable_unknown_features: bool,
     source_location: &SourceLocation,
 ) -> bool {
     let mut keep_item = true;
@@ -219,6 +234,7 @@ fn process_attributes(
                             enabled_features,
                             disabled_features,
                             feature_mappings,
+                            disable_unknown_features,
                             source_location,
                         ) {
                             Some(processed_expr) => {

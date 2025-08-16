@@ -1,8 +1,9 @@
 use std::mem;
 
-use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
+use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 
 pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+pub const FEATURES: &str = features!();
 
 #[prebindgen]
 #[allow(non_camel_case_types)]

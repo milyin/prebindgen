@@ -78,6 +78,7 @@ impl CfgExpr {
         enabled_features: &HashSet<String>,
         disabled_features: &HashSet<String>,
         feature_mappings: &std::collections::HashMap<String, String>,
+        disable_unknown_features: bool,
         source_location: &SourceLocation,
     ) -> Option<Self> {
         match self {
@@ -91,9 +92,12 @@ impl CfgExpr {
                 } else if let Some(new_name) = feature_mappings.get(name) {
                     // Feature should be mapped
                     Some(CfgExpr::Feature(new_name.clone()))
+                } else if disable_unknown_features {
+                    // Treat unknown feature as disabled
+                    Some(CfgExpr::False)
                 } else {
                     // Unmapped feature - panic with source location information
-                    panic!("unmapped feature: {name} (at {source_location})",);
+                    panic!("unmapped feature: {name} (at {source_location})");
                 }
             }
             CfgExpr::TargetArch(_) => Some(self.clone()),
@@ -104,6 +108,7 @@ impl CfgExpr {
                         enabled_features,
                         disabled_features,
                         feature_mappings,
+                        disable_unknown_features,
                         source_location,
                     ) {
                         Some(CfgExpr::False) => {
@@ -130,6 +135,7 @@ impl CfgExpr {
                         enabled_features,
                         disabled_features,
                         feature_mappings,
+                        disable_unknown_features,
                         source_location,
                     ) {
                         Some(CfgExpr::False) => {
@@ -157,6 +163,7 @@ impl CfgExpr {
                     enabled_features,
                     disabled_features,
                     feature_mappings,
+                    disable_unknown_features,
                     source_location,
                 ) {
                     Some(CfgExpr::False) => None, // not(false) = true
@@ -379,6 +386,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             None
@@ -391,6 +399,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::False)
@@ -403,6 +412,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::Feature("new_feature".to_string()))
@@ -418,6 +428,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             None
@@ -433,6 +444,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::False)
@@ -445,6 +457,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             None
@@ -457,6 +470,7 @@ mod tests {
                 &enabled_features,
                 &disabled_features,
                 &feature_mappings,
+                false,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::False)
@@ -478,6 +492,7 @@ mod tests {
             &enabled_features,
             &disabled_features,
             &feature_mappings,
+            false,
             &SourceLocation::default(),
         );
     }
@@ -502,6 +517,7 @@ mod tests {
             &enabled_features,
             &disabled_features,
             &feature_mappings,
+            false,
             &SourceLocation::default(),
         );
     }

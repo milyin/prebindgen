@@ -2,12 +2,16 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
+use itertools::Itertools;
 use roxygen::roxygen;
 
-use crate::{api::record::Record, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE};
+use crate::{
+    api::batching::feature_filter, api::record::Record, utils::jsonl::read_jsonl_file,
+    SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
+};
 
 /// File extension for data files
 const JSONL_EXTENSION: &str = ".jsonl";
@@ -43,6 +47,7 @@ thread_local! {
 /// use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 ///
 /// pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+/// pub const FEATURES: &str = features!();
 ///
 /// #[prebindgen]
 /// pub fn my_function() -> i32 { 42 }
@@ -63,6 +68,9 @@ thread_local! {
 pub struct Source {
     crate_name: String,
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
+    // Configuration needed to build a FeatureFilter at iteration time
+    features_constant: Option<String>,
+    features_list: Option<Vec<String>>, // normalized list from features.txt
 }
 
 impl Source {
@@ -72,10 +80,21 @@ impl Source {
         /// Path to the directory containing prebindgen data files
         input_dir: P,
     ) -> Self {
+        // Backward-compatible constructor: defaults to asserting the `FEATURES` constant
+        Self::builder(input_dir).build()
+    }
+
+    /// Create a builder to configure how `Source` is constructed
+    pub fn builder<P: AsRef<Path>>(input_dir: P) -> Builder {
+        Builder::new(input_dir)
+    }
+}
+
+impl Source {
+    fn build_internal(input_dir: &Path, features_constant: Option<String>) -> Self {
         if let Some(source) = DOCTEST_SOURCE.with(|source| (*source.borrow()).clone()) {
             return source;
         }
-        let input_dir = input_dir.as_ref();
         if !input_dir.is_dir() {
             panic!(
                 "Input directory {} does not exist or is not a directory",
@@ -98,7 +117,21 @@ impl Source {
             items.insert(group, group_items);
         }
 
-        Self { crate_name, items }
+        // Read features list once and store normalized list
+        let features_list = read_features_from_out_dir(input_dir).map(|s| {
+            if s.is_empty() {
+                Vec::new()
+            } else {
+                s.split(',').map(|x| x.to_string()).collect::<Vec<_>>()
+            }
+        });
+
+        Self {
+            crate_name,
+            items,
+            features_constant,
+            features_list,
+        }
     }
 
     #[doc(hidden)]
@@ -130,6 +163,8 @@ impl Source {
                     )],
                 ),
             ]),
+            features_constant: None,
+            features_list: None,
         };
         DOCTEST_SOURCE.with(|cell| {
             *cell.borrow_mut() = Some(source);
@@ -171,11 +206,13 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
+        // Build a feature filter and apply it lazily with itertools::batching
+        let mut filter = self.build_feature_filter();
         groups
             .iter()
             .filter_map(|group| self.items.get(*group))
-            .flat_map(|records| records.iter())
-            .cloned()
+            .flat_map(|records| records.iter().cloned())
+            .batching(move |iter| filter.call(iter))
     }
 
     /// Returns an iterator over items excluding specific groups
@@ -196,11 +233,13 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
+        // Build a feature filter and apply it lazily with itertools::batching
+        let mut filter = self.build_feature_filter();
         self.items
             .iter()
             .filter(|(group, _)| !groups.contains(&group.as_str()))
-            .flat_map(|(_, records)| records.iter())
-            .cloned()
+            .flat_map(|(_, records)| records.iter().cloned())
+            .batching(move |iter| filter.call(iter))
     }
 
     /// Returns an iterator over all items from all groups
@@ -216,10 +255,28 @@ impl Source {
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
+        // Build a feature filter and apply it lazily with itertools::batching
+        let mut filter = self.build_feature_filter();
         self.items
             .iter()
-            .flat_map(|(_, records)| records.iter())
-            .cloned()
+            .flat_map(|(_, records)| records.iter().cloned())
+            .batching(move |iter| filter.call(iter))
+    }
+
+    /// Internal: construct a FeatureFilter from the stored configuration and features file
+    fn build_feature_filter(&self) -> feature_filter::FeatureFilter {
+        let mut builder = feature_filter::FeatureFilter::builder();
+        if let Some(const_name) = &self.features_constant {
+            let feats = self.features_list.clone().unwrap_or_default();
+            // If the provided constant isn't fully qualified, qualify it with the crate name
+            let qualified_const = if const_name.contains("::") {
+                const_name.clone()
+            } else {
+                format!("{}::{}", self.crate_name.replace('-', "_"), const_name)
+            };
+            builder = builder.predefined_features(qualified_const, feats);
+        }
+        builder.build()
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
@@ -292,4 +349,57 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
     fs::read_to_string(&crate_name_path)
         .ok()
         .map(|s| s.trim().to_string())
+}
+
+/// Read enabled features list from features.txt and normalize into a comma-separated string
+fn read_features_from_out_dir(input_dir: &Path) -> Option<String> {
+    let features_path = input_dir.join(FEATURES_FILE);
+    let contents = fs::read_to_string(&features_path).ok()?;
+    let mut features: Vec<String> = contents
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    features.sort();
+    features.dedup();
+    Some(features.join(","))
+}
+
+/// Builder for constructing a `Source` with custom options
+pub struct Builder {
+    input_dir: PathBuf,
+    features_constant: Option<String>,
+}
+
+impl Builder {
+    fn new<P: AsRef<Path>>(input_dir: P) -> Self {
+        Self {
+            input_dir: input_dir.as_ref().to_path_buf(),
+            // Default requested: Some("FEATURES")
+            features_constant: Some("FEATURES".to_string()),
+        }
+    }
+
+    /// Set the name of the features constant to assert against.
+    /// If this option is enabled, the `Source` will filter out all code
+    /// under disabled features. This behavior is default, the default
+    /// name of the constant is `FEATURES` prepended by source crate name.
+    ///
+    /// Source crate by default should contain line
+    /// ```rust,ignore
+    /// const FEATURES: &str = prebindgen_proc_macro::features!();
+    /// ```
+    #[roxygen]
+    pub fn features_constant(mut self, 
+        /// Full name of the constant with features in the source crate
+        name: Option<impl Into<String>>) -> Self {
+        self.features_constant = name.map(|n| n.into());
+        self
+    }
+
+    /// Build the `Source` instance
+    pub fn build(self) -> Source {
+        Source::build_internal(&self.input_dir, self.features_constant)
+    }
 }
