@@ -5,12 +5,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use proc_macro2::Span;
+use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::record::Record, utils::jsonl::read_jsonl_file, SourceLocation, CRATE_NAME_FILE,
-    FEATURES_FILE,
+    api::batching::feature_filter, api::record::Record, utils::jsonl::read_jsonl_file,
+    SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
 };
 
 /// File extension for data files
@@ -67,8 +67,9 @@ thread_local! {
 pub struct Source {
     crate_name: String,
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
-    // Items that should always be emitted first (e.g., compile-time assertions)
-    prelude: Vec<(syn::Item, SourceLocation)>,
+    // Configuration needed to build a FeatureFilter at iteration time
+    features_constant: Option<String>,
+    features_list: Option<Vec<String>>, // normalized list from features.txt
 }
 
 impl Source {
@@ -115,32 +116,20 @@ impl Source {
             items.insert(group, group_items);
         }
 
-        // Optionally inject a compile-time features assertion as the first emitted item
-        let mut prelude: Vec<(syn::Item, SourceLocation)> = Vec::new();
-        if let Some(const_name) = features_constant {
-            if let Some(expected) = read_features_from_out_dir(input_dir) {
-                let features_lit = syn::LitStr::new(&expected, Span::call_site());
-                let crate_ident = syn::Ident::new(&crate_name.replace('-', "_"), Span::call_site());
-                let const_ident = syn::Ident::new(&const_name, Span::call_site());
-                // Use konst to compare at compile-time, avoiding non-const assert_eq!
-                // konst is re-exported by the `prebindgen` crate so consumers don't need to depend on it directly.
-                let item: syn::Item = syn::parse_quote! {
-                    const _: () = {
-                        prebindgen::konst::assertc_eq!(
-                            #crate_ident::#const_ident,
-                            #features_lit,
-                            "prebindgen: features mismatch between source crate and prebindgen build"
-                        );
-                    };
-                };
-                prelude.push((item, SourceLocation::default()));
+        // Read features list once and store normalized list
+        let features_list = read_features_from_out_dir(input_dir).map(|s| {
+            if s.is_empty() {
+                Vec::new()
+            } else {
+                s.split(',').map(|x| x.to_string()).collect::<Vec<_>>()
             }
-        }
+        });
 
         Self {
             crate_name,
             items,
-            prelude,
+            features_constant,
+            features_list,
         }
     }
 
@@ -173,7 +162,8 @@ impl Source {
                     )],
                 ),
             ]),
-            prelude: Vec::new(),
+            features_constant: None,
+            features_list: None,
         };
         DOCTEST_SOURCE.with(|cell| {
             *cell.borrow_mut() = Some(source);
@@ -215,13 +205,13 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Emit prelude first, then items from the requested groups
-        self.prelude.iter().cloned().chain(
-            groups
-                .iter()
-                .filter_map(|group| self.items.get(*group))
-                .flat_map(|records| records.iter().cloned()),
-        )
+        // Build a feature filter and apply it lazily with itertools::batching
+        let mut filter = self.build_feature_filter();
+        groups
+            .iter()
+            .filter_map(|group| self.items.get(*group))
+            .flat_map(|records| records.iter().cloned())
+            .batching(move |iter| filter.call(iter))
     }
 
     /// Returns an iterator over items excluding specific groups
@@ -242,13 +232,13 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Emit prelude first, then items excluding the specified groups
-        self.prelude.iter().cloned().chain(
-            self.items
-                .iter()
-                .filter(|(group, _)| !groups.contains(&group.as_str()))
-                .flat_map(|(_, records)| records.iter().cloned()),
-        )
+        // Build a feature filter and apply it lazily with itertools::batching
+        let mut filter = self.build_feature_filter();
+        self.items
+            .iter()
+            .filter(|(group, _)| !groups.contains(&group.as_str()))
+            .flat_map(|(_, records)| records.iter().cloned())
+            .batching(move |iter| filter.call(iter))
     }
 
     /// Returns an iterator over all items from all groups
@@ -264,12 +254,23 @@ impl Source {
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Emit prelude first, then all items from all groups
-        self.prelude.iter().cloned().chain(
-            self.items
-                .iter()
-                .flat_map(|(_, records)| records.iter().cloned()),
-        )
+        // Build a feature filter and apply it lazily with itertools::batching
+        let mut filter = self.build_feature_filter();
+        self.items
+            .iter()
+            .flat_map(|(_, records)| records.iter().cloned())
+            .batching(move |iter| filter.call(iter))
+    }
+
+    /// Internal: construct a FeatureFilter from the stored configuration and features file
+    fn build_feature_filter(&self) -> feature_filter::FeatureFilter {
+        let mut builder = feature_filter::FeatureFilter::builder();
+        builder = builder.source_crate_name(&self.crate_name);
+        if let Some(const_name) = &self.features_constant {
+            let feats = self.features_list.clone().unwrap_or_default();
+            builder = builder.predefined_features(const_name.clone(), feats);
+        }
+        builder.build()
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`

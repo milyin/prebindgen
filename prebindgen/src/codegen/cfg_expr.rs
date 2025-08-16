@@ -92,14 +92,12 @@ impl CfgExpr {
                 } else if let Some(new_name) = feature_mappings.get(name) {
                     // Feature should be mapped
                     Some(CfgExpr::Feature(new_name.clone()))
+                } else if disable_unknown_features {
+                    // Treat unknown feature as disabled
+                    Some(CfgExpr::False)
                 } else {
-                    if disable_unknown_features {
-                        // Treat unknown feature as disabled
-                        Some(CfgExpr::False)
-                    } else {
-                        // Unmapped feature - panic with source location information
-                        panic!("unmapped feature: {name} (at {source_location})");
-                    }
+                    // Unmapped feature - panic with source location information
+                    panic!("unmapped feature: {name} (at {source_location})");
                 }
             }
             CfgExpr::TargetArch(_) => Some(self.clone()),

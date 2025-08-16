@@ -26,6 +26,8 @@ pub struct Builder {
     pub(crate) disable_unknown_features: bool,
     // Optional name of a features constant (accepted by predefined_features for API parity)
     pub(crate) features_constant: Option<String>,
+    // Optional source crate name to qualify the features constant
+    pub(crate) source_crate_name: Option<String>,
 }
 
 impl Builder {
@@ -43,6 +45,7 @@ impl Builder {
             feature_mappings: HashMap::new(),
             disable_unknown_features: false,
             features_constant: None,
+            source_crate_name: None,
         }
     }
 
@@ -157,6 +160,17 @@ impl Builder {
         self
     }
 
+    /// Set the source crate name used to qualify the features constant in the prelude assertion.
+    #[roxygen]
+    pub fn source_crate_name(
+        mut self,
+        /// Name of the source crate that exports the FEATURES constant
+        crate_name: impl Into<String>,
+    ) -> Self {
+        self.source_crate_name = Some(crate_name.into());
+        self
+    }
+
     /// Build the FeatureFilter instance with the configured options
     ///
     /// # Example
@@ -167,7 +181,49 @@ impl Builder {
     ///     .build();
     /// ```
     pub fn build(self) -> FeatureFilter {
-        FeatureFilter { builder: self }
+        // Determine if this filter is active (i.e., not pass-through)
+        let active = self.features_constant.is_some()
+            || self.disable_unknown_features
+            || !self.disabled_features.is_empty()
+            || !self.enabled_features.is_empty()
+            || !self.feature_mappings.is_empty();
+
+        // Optionally create a prelude assertion comparing crate::FEATURES with expected features string
+        let mut prelude_item: Option<(syn::Item, SourceLocation)> = None;
+        if let (Some(const_name), Some(crate_name)) = (
+            self.features_constant.clone(),
+            self.source_crate_name.clone(),
+        ) {
+            // Build expected features string from enabled_features
+            let mut feats: Vec<String> = self.enabled_features.iter().cloned().collect();
+            feats.sort();
+            feats.dedup();
+            let feats_str = feats.join(",");
+
+            let features_lit = syn::LitStr::new(&feats_str, proc_macro2::Span::call_site());
+            let crate_ident = syn::Ident::new(
+                &crate_name.replace('-', "_"),
+                proc_macro2::Span::call_site(),
+            );
+            let const_ident = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
+            let item: syn::Item = syn::parse_quote! {
+                const _: () = {
+                    prebindgen::konst::assertc_eq!(
+                        #crate_ident::#const_ident,
+                        #features_lit,
+                        "prebindgen: features mismatch between source crate and prebindgen build"
+                    );
+                };
+            };
+            prelude_item = Some((item, SourceLocation::default()));
+        }
+
+        FeatureFilter {
+            builder: self,
+            prelude_item,
+            prelude_emitted: false,
+            active,
+        }
     }
 }
 
@@ -211,6 +267,9 @@ impl Default for Builder {
 /// ```
 pub struct FeatureFilter {
     builder: Builder,
+    prelude_item: Option<(syn::Item, SourceLocation)>,
+    prelude_emitted: bool,
+    active: bool,
 }
 
 impl FeatureFilter {
@@ -235,6 +294,18 @@ impl FeatureFilter {
     where
         I: Iterator<Item = (syn::Item, SourceLocation)>,
     {
+        // Emit prelude item if configured
+        if !self.prelude_emitted {
+            if let Some(prelude) = self.prelude_item.take() {
+                self.prelude_emitted = true;
+                return Some(prelude);
+            }
+            self.prelude_emitted = true;
+        }
+
+        if !self.active {
+            return iter.next();
+        }
         for (mut item, source_location) in iter {
             if process_item_features(
                 &mut item,
