@@ -15,7 +15,7 @@
 //! - adapt the ffi source to specificity of different binding generators
 
 use roxygen::roxygen;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
     codegen::replace_types::{
@@ -227,7 +227,7 @@ impl Builder {
         FfiConverter {
             builder: self,
             stage: GenerationStage::Collect,
-            source_items: Vec::new(),
+            source_items: VecDeque::new(),
             type_replacements: HashMap::new(),
             exported_types: HashSet::new(),
             primitive_types,
@@ -287,8 +287,8 @@ pub struct FfiConverter {
     pub(crate) builder: Builder,
     /// Current generation stage
     stage: GenerationStage,
-    /// Items read from the source iterator
-    source_items: Vec<(syn::Item, SourceLocation)>,
+    /// Items read from the source iterator (FIFO queue)
+    source_items: VecDeque<(syn::Item, SourceLocation)>,
     /// Copied types which needs transmute operations - filled on `Collect` stage and used on `Convert` stage
     exported_types: HashSet<String>,
     /// Types that are primitive or aliases to primitive types - prefilled with real primitives and updated during collection
@@ -360,11 +360,11 @@ impl FfiConverter {
         }
 
         // Store the item and its source location
-        self.source_items.push((item, source_location));
+    self.source_items.push_back((item, source_location));
     }
 
     fn convert(&mut self) -> Option<(syn::Item, SourceLocation)> {
-        if let Some((mut item, source_location)) = self.source_items.pop() {
+    if let Some((mut item, source_location)) = self.source_items.pop_front() {
             // Create parse config
             let config = ParseConfig {
                 crate_name: &self.builder.source_crate_name,
