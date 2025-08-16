@@ -5,6 +5,7 @@
 //! This crate provides the procedural macros used by the prebindgen system:
 //! - `#[prebindgen]` or `#[prebindgen("group")]` - Attribute macro for marking FFI definitions
 //! - `prebindgen_out_dir!()` - Macro that returns the prebindgen output directory path
+//! - `features!()` - Macro that returns the list of features enabled for the crate
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
@@ -309,5 +310,36 @@ pub fn prebindgen_out_dir(_input: TokenStream) -> TokenStream {
         #path_str
     };
 
+    TokenStream::from(expanded)
+}
+
+/// Proc macro that returns the enabled features, joined by commas, as a string literal.
+///
+/// The value is sourced from the `PREBINDGEN_FEATURES` compile-time environment variable,
+/// which is set by calling `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`.
+///
+/// # Panics
+///
+/// Emits a compile-time error if `PREBINDGEN_FEATURES` is not set, which typically means
+/// `prebindgen::init_prebindgen_out_dir()` wasn't called in `build.rs`.
+///
+/// # Returns
+///
+/// A string literal containing the comma-separated list of enabled features.
+/// The string may be empty if no features are enabled.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use prebindgen_proc_macro::features;
+///
+/// pub const ENABLED_FEATURES: &str = features!();
+/// ```
+#[proc_macro]
+pub fn features(_input: TokenStream) -> TokenStream {
+    let features = std::env::var("PREBINDGEN_FEATURES").expect(
+        "PREBINDGEN_FEATURES environment variable not set. Ensure prebindgen::init_prebindgen_out_dir() is called in build.rs",
+    );
+    let expanded = quote! { #features };
     TokenStream::from(expanded)
 }
