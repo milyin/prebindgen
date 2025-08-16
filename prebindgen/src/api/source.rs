@@ -212,11 +212,16 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        groups
+        // Emit prelude first, then items from the requested groups
+        self.prelude
             .iter()
-            .filter_map(|group| self.items.get(*group))
-            .flat_map(|records| records.iter().cloned())
-            .chain(self.prelude.iter().cloned())
+            .cloned()
+            .chain(
+                groups
+                    .iter()
+                    .filter_map(|group| self.items.get(*group))
+                    .flat_map(|records| records.iter().cloned()),
+            )
     }
 
     /// Returns an iterator over items excluding specific groups
@@ -237,11 +242,16 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        self.items
+        // Emit prelude first, then items excluding the specified groups
+        self.prelude
             .iter()
-            .filter(|(group, _)| !groups.contains(&group.as_str()))
-            .flat_map(|(_, records)| records.iter().cloned())
-            .chain(self.prelude.iter().cloned())
+            .cloned()
+            .chain(
+                self.items
+                    .iter()
+                    .filter(|(group, _)| !groups.contains(&group.as_str()))
+                    .flat_map(|(_, records)| records.iter().cloned()),
+            )
     }
 
     /// Returns an iterator over all items from all groups
@@ -257,10 +267,15 @@ impl Source {
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        self.items
+        // Emit prelude first, then all items from all groups
+        self.prelude
             .iter()
-            .flat_map(|(_, records)| records.iter().cloned())
-            .chain(self.prelude.iter().cloned())
+            .cloned()
+            .chain(
+                self.items
+                    .iter()
+                    .flat_map(|(_, records)| records.iter().cloned()),
+            )
     }
 
     /// Internal method to read all exported files matching the group name pattern `<group>_*`
