@@ -22,6 +22,10 @@ pub struct Builder {
     pub(crate) disabled_features: HashSet<String>,
     pub(crate) enabled_features: HashSet<String>,
     pub(crate) feature_mappings: HashMap<String, String>,
+    // When true, unknown features are treated as disabled (skipped) instead of causing an error
+    pub(crate) disable_unknown_features: bool,
+    // Optional name of a features constant (accepted by predefined_features for API parity)
+    pub(crate) features_constant: Option<String>,
 }
 
 impl Builder {
@@ -37,6 +41,8 @@ impl Builder {
             disabled_features: HashSet::new(),
             enabled_features: HashSet::new(),
             feature_mappings: HashMap::new(),
+            disable_unknown_features: false,
+            features_constant: None,
         }
     }
 
@@ -105,6 +111,49 @@ impl Builder {
         to: S2,
     ) -> Self {
         self.feature_mappings.insert(from.into(), to.into());
+        self
+    }
+
+    /// Assume a predefined feature set: the provided list is enabled, all others are disabled.
+    /// Also enables skipping of unknown features (treat them as disabled) to avoid reporting.
+    #[roxygen]
+    pub fn predefined_features<S, I, T>(
+        mut self,
+        /// Name of the feature constant defined in the source crate
+        feature_constant: S,
+        /// Iterator or collection of enabled feature names
+        features: I,
+    ) -> Self
+    where
+        S: Into<String>,
+        I: IntoIterator<Item = T>,
+        T: Into<String>,
+    {
+        // Reset previous configuration to avoid conflicts
+        self.disabled_features.clear();
+        self.enabled_features.clear();
+        self.feature_mappings.clear();
+
+        // Record constant name (not used at runtime here, kept for API completeness)
+        self.features_constant = Some(feature_constant.into());
+
+        // Enable exactly the provided features
+        self.enabled_features
+            .extend(features.into_iter().map(|f| f.into()));
+
+        // Treat unknown features as disabled to "skip" them silently
+        self.disable_unknown_features = true;
+        self
+    }
+
+    /// Set whether unknown features should be treated as disabled (skipped) instead of reported.
+    #[roxygen]
+    pub fn disable_unknown_features(
+        mut self,
+        /// If true, unknown features are skipped instead of reported
+        value: bool,
+    ) -> Self {
+        self.disable_unknown_features = value;
         self
     }
 
@@ -192,6 +241,7 @@ impl FeatureFilter {
                 &self.builder.disabled_features,
                 &self.builder.enabled_features,
                 &self.builder.feature_mappings,
+                self.builder.disable_unknown_features,
                 &source_location,
             ) {
                 return Some((item, source_location));
