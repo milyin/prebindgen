@@ -140,15 +140,15 @@ pub mod batching {
         pub use crate::api::batching::ffi_converter::Builder;
     }
     pub use crate::api::batching::ffi_converter::FfiConverter;
+    pub use crate::api::batching::feature_filter::FeatureFilter;
+    pub mod feature_filter {
+        pub use crate::api::batching::feature_filter::Builder;
+    }
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `filter_map`
 pub mod filter_map {
-    pub use crate::api::filter_map::feature_filter::FeatureFilter;
     pub use crate::api::filter_map::struct_align::struct_align;
-    pub mod feature_filter {
-        pub use crate::api::filter_map::feature_filter::Builder;
-    }
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `map`
