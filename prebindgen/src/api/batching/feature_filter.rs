@@ -9,6 +9,12 @@ use crate::{api::record::SourceLocation, codegen::process_features::process_item
 /// Configures how feature flags in `#[cfg(feature="...")]` attributes
 /// are processed when generating FFI bindings.
 ///
+/// This filter is usually not necessary: the `Source` by default automatically reads
+/// features enabled in the crate and removes any code guarded by disabled features.
+///
+/// But if necessary this option can be disabled (see and FeatureFilter can be applied
+/// explicitly.
+///
 /// # Example
 ///
 /// ```
@@ -187,7 +193,8 @@ impl Builder {
 
             // Parse the provided constant name into a path/expression so it is not quoted as a string.
             // This allows using values like `my_crate::FEATURES` or `FEATURES`.
-            let const_path: syn::Expr = syn::parse_str(&const_name).expect("invalid features constant path");
+            let const_path: syn::Expr =
+                syn::parse_str(&const_name).expect("invalid features constant path");
 
             // Prefer a fully-qualified path if provided in feature_constant
             let item: syn::Item = syn::parse_quote! {
@@ -195,7 +202,10 @@ impl Builder {
                     prebindgen::konst::assertc_eq!(
                         #const_path,
                         #features_lit,
-                        "prebindgen: features mismatch between source crate and prebindgen build"
+                        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
+                        This usually happens if source crate is compiled with different feature set\n\
+                        for build dependencies and for library usage. You may need to explicitly set\n\
+                        the necessary features."
                     );
                 };
             };

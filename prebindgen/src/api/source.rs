@@ -47,6 +47,7 @@ thread_local! {
 /// use prebindgen_proc_macro::{prebindgen, prebindgen_out_dir};
 ///
 /// pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
+/// pub const FEATURES: &str = features!();
 ///
 /// #[prebindgen]
 /// pub fn my_function() -> i32 { 42 }
@@ -381,8 +382,18 @@ impl Builder {
     }
 
     /// Set the name of the features constant to assert against.
-    /// Pass `None` to disable emitting the assertion item.
-    pub fn features_constant(mut self, name: Option<impl Into<String>>) -> Self {
+    /// If this option is enabled, the `Source` will filter out all code
+    /// under disabled features. This behavior is default, the default
+    /// name of the constant is `FEATURES` prepended by source crate name.
+    ///
+    /// Source crate by default should contain line
+    /// ```rust,ignore
+    /// const FEATURES: &str = prebindgen_proc_macro::features!();
+    /// ```
+    #[roxygen]
+    pub fn features_constant(mut self, 
+        /// Full name of the constant with features in the source crate
+        name: Option<impl Into<String>>) -> Self {
         self.features_constant = name.map(|n| n.into());
         self
     }
