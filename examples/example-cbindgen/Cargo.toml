@@ -6,6 +6,7 @@ build = "build.rs"
 
 [features]
 unstable = ["example-ffi/unstable"]
+internal = ["example-ffi/internal"]
 
 [lib]
 crate-type = ["staticlib", "cdylib"]
