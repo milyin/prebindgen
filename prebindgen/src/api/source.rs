@@ -265,10 +265,15 @@ impl Source {
     /// Internal: construct a FeatureFilter from the stored configuration and features file
     fn build_feature_filter(&self) -> feature_filter::FeatureFilter {
         let mut builder = feature_filter::FeatureFilter::builder();
-        builder = builder.source_crate_name(&self.crate_name);
         if let Some(const_name) = &self.features_constant {
             let feats = self.features_list.clone().unwrap_or_default();
-            builder = builder.predefined_features(const_name.clone(), feats);
+            // If the provided constant isn't fully qualified, qualify it with the crate name
+            let qualified_const = if const_name.contains("::") {
+                const_name.clone()
+            } else {
+                format!("{}::{}", self.crate_name.replace('-', "_"), const_name)
+            };
+            builder = builder.predefined_features(qualified_const, feats);
         }
         builder.build()
     }

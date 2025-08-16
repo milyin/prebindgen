@@ -26,8 +26,6 @@ pub struct Builder {
     pub(crate) disable_unknown_features: bool,
     // Optional name of a features constant (accepted by predefined_features for API parity)
     pub(crate) features_constant: Option<String>,
-    // Optional source crate name to qualify the features constant
-    pub(crate) source_crate_name: Option<String>,
 }
 
 impl Builder {
@@ -45,7 +43,6 @@ impl Builder {
             feature_mappings: HashMap::new(),
             disable_unknown_features: false,
             features_constant: None,
-            source_crate_name: None,
         }
     }
 
@@ -160,17 +157,6 @@ impl Builder {
         self
     }
 
-    /// Set the source crate name used to qualify the features constant in the prelude assertion.
-    #[roxygen]
-    pub fn source_crate_name(
-        mut self,
-        /// Name of the source crate that exports the FEATURES constant
-        crate_name: impl Into<String>,
-    ) -> Self {
-        self.source_crate_name = Some(crate_name.into());
-        self
-    }
-
     /// Build the FeatureFilter instance with the configured options
     ///
     /// # Example
@@ -188,12 +174,9 @@ impl Builder {
             || !self.enabled_features.is_empty()
             || !self.feature_mappings.is_empty();
 
-        // Optionally create a prelude assertion comparing crate::FEATURES with expected features string
+        // Optionally create a prelude assertion comparing FEATURES const path with expected features string
         let mut prelude_item: Option<(syn::Item, SourceLocation)> = None;
-        if let (Some(const_name), Some(crate_name)) = (
-            self.features_constant.clone(),
-            self.source_crate_name.clone(),
-        ) {
+        if let Some(const_name) = self.features_constant.clone() {
             // Build expected features string from enabled_features
             let mut feats: Vec<String> = self.enabled_features.iter().cloned().collect();
             feats.sort();
@@ -201,16 +184,13 @@ impl Builder {
             let feats_str = feats.join(",");
 
             let features_lit = syn::LitStr::new(&feats_str, proc_macro2::Span::call_site());
-            let crate_ident = syn::Ident::new(
-                &crate_name.replace('-', "_"),
-                proc_macro2::Span::call_site(),
-            );
-            let const_ident = syn::Ident::new(&const_name, proc_macro2::Span::call_site());
-            let item: syn::Item = syn::parse_quote! {
-                const _: () = {
-                    prebindgen::konst::assertc_eq!(
-                        #crate_ident::#const_ident,
-                        #features_lit,
+
+            // Prefer a fully-qualified path if provided in feature_constant
+            let item = syn::parse_quote! {
+            const _: () = {
+                prebindgen::konst::assertc_eq!(
+                    #const_name,
+                    #features_lit,
                         "prebindgen: features mismatch between source crate and prebindgen build"
                     );
                 };
