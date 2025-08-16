@@ -678,20 +678,19 @@ pub(crate) fn generate_type_transmute_pair_assertions(
             }
         }
 
-        // Generate size assertion: stripped type (stub parameter) vs source crate type (original)
+        // Prefer array-length equality for compile-time checks so rustc shows actual numbers
+        // on mismatch (e.g., expected an array of N elements, found M elements).
+        // Also embed the compared type names to aid diagnostics.
+        // Size assertion: stripped type (stub parameter) vs source crate type (original)
         let size_assertion: syn::Item = syn::parse_quote! {
-            const _: () = assert!(
-                std::mem::size_of::<#stripped_type>() == std::mem::size_of::<#source_type>(),
-                "Size mismatch between stub parameter type and source crate type"
-            );
+            // Types: stripped = stringify!(#stripped_type), source = stringify!(#source_type)
+            const _: [(); std::mem::size_of::<#stripped_type>()] = [(); std::mem::size_of::<#source_type>()];
         };
 
-        // Generate alignment assertion: stripped type (stub parameter) vs source crate type (original)
+        // Alignment assertion: stripped type (stub parameter) vs source crate type (original)
         let align_assertion: syn::Item = syn::parse_quote! {
-            const _: () = assert!(
-                std::mem::align_of::<#stripped_type>() == std::mem::align_of::<#source_type>(),
-                "Alignment mismatch between stub parameter type and source crate type"
-            );
+            // Types: stripped = stringify!(#stripped_type), source = stringify!(#source_type)
+            const _: [(); std::mem::align_of::<#stripped_type>()] = [(); std::mem::align_of::<#source_type>()];
         };
 
         Some((size_assertion, align_assertion))
