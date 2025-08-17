@@ -17,11 +17,14 @@ fn main() {
     if manifest_dir.starts_with(&cargo_home) {
         panic!(
             "\nThe crate `prebindgen-project-root` located at\n\
-             {}\n\
-             is being used as a Cargo dependency from CARGO_HOME.\n\
-             Since it is not located inside your workspace, it cannot determine the path to the workspace root.\n\
-           Please add `prebindgen-project-root` as a member of your workspace and patch dependencies to use it locally.\n\n\
-           This can be done using the helper tool: <instructions to be added>\n",
+            {}\n\
+            is being used as a Cargo dependency from CARGO_HOME.\n\
+            Since it is not located inside your workspace, it cannot determine the path to the workspace root.\n\
+            Please add `prebindgen-project-root` as a member of your workspace and patch dependencies to use it locally.\n\n\
+            This can be done using the helper tool:\n\n\
+            cargo install prebindgen-project-root\n\
+            cargo prebindgen-project-root install <path>\n\n\
+            where `<path>` is the path to your workspace root.\n",
             manifest_dir.display()
         );
     }
