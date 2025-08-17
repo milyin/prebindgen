@@ -32,15 +32,32 @@ fn main() {
 }
 
 fn real_main() -> Result<()> {
+    // Collect CLI args (skip argv[0])
     let mut args = env::args().skip(1).collect::<Vec<_>>();
-    if args.is_empty() {
+
+    // When invoked as a Cargo subcommand, Cargo may pass the subcommand name
+    // as the first argument. Accept and skip both binary names just in case.
+    if let Some(first) = args.first().map(|s| s.as_str()) {
+        if matches!(
+            first,
+            "prebindgen-project-root" | "cargo-prebindgen-project-root"
+        ) {
+            let _ = args.remove(0);
+        }
+    }
+
+    // No args or explicit help -> show usage
+    if args.is_empty()
+        || matches!(args.first().map(|s| s.as_str()), Some("help" | "-h" | "--help"))
+    {
         println!("{}", USAGE);
         return Ok(());
     }
 
     match args.remove(0).as_str() {
         "install" => {
-            let path = args.first()
+            let path = args
+                .first()
                 .ok_or_else(|| anyhow!("install requires <path>"))?;
             install(Path::new(path))
         }
