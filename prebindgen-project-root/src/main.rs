@@ -9,7 +9,6 @@ use toml_edit::{Array, DocumentMut, Item, Table, Value};
 const USAGE: &str = "prebindgen-project-root
 
 Usage:
-    prebindgen-project-root install <path>
     cargo prebindgen-project-root install <path>
 
 Commands:
