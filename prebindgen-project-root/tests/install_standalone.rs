@@ -57,7 +57,7 @@ fn copy_fixture(tmp_root: &Path, fixture: &str) -> PathBuf {
 }
 
 fn run_install(manifest: &Path) {
-    let bin = cargo_bin("prebindgen-project-root");
+    let bin = cargo_bin("cargo-prebindgen-project-root");
     Command::new(&bin)
         .arg("install")
         .arg(manifest)
