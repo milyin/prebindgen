@@ -12,25 +12,17 @@ There is a discussion about this problem in issue [2771](https://github.com/rust
 
 ## Solution
 
-`prebindgen` solves this by generating `#[no_mangle] extern "C"` functions for each language binding that proxy a common Rust library crate.
+`prebindgen` solves this by generating `#[no_mangle] extern "C"` functions for each language-specific binding which act as proxies to a common Rust library crate.
 
-It also allows you to convert and analyze the source to adapt the result for specific binding generators and/or to collect data necessary for postprocessing the generated language bindings.
+It also allows you to convert and analyze the source to adapt the result for specific binding generators and/or to collect data necessary for post-processing the generated language bindings.
 
 The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which provides macros for copying code fragments from the source crate, and `prebindgen`, which converts these fragments into an FFI source file.
 
 ### Architecture
 
-Each element to export is marked in the source crate with the `#[prebindgen]` macro. When compiling
-the source crate, these elements are stored in a directory. The build.rs of the destination crate
-reads these elements and creates FFI-compatible functions and copies of structures that proxy them.
-The generated source file is included with the `include!()` macro in the dependent crate and parsed
-by the language binding generator (e.g., cbindgen).
+Each element to export is marked in the source crate with the `#[prebindgen]` macro. When the source crate is compiled, these elements are written to an output directory. The `build.rs` of the destination crate reads these elements and creates FFI-compatible functions and proxy structures for them. The generated source file is included with the `include!()` macro in the dependent crate and parsed by the language binding generator (e.g., cbindgen).
 
-It's important to keep in mind that `[build-dependencies]` and `[dependencies]` are different. The
-`#[prebindgen]` macro collects sources when compiling [build-dependencies]` instance of source crate.
-But later these sources are used to generate proxy calls to `[dependencies]` instance, which could be
-built with different feature set and for different architecture. The set of assertions is put into generated
-code to catch possible divergencies, but it's developer job to manually resolve these errors.
+It's important to keep in mind that `[build-dependencies]` and `[dependencies]` are different. The `#[prebindgen]` macro collects sources when compiling the `[build-dependencies]` instance of the source crate. Later, these sources are used to generate proxy calls to the `[dependencies]` instance, which may be built with a different feature set and for a different architecture. A set of assertions is put into the generated code to catch possible divergences, but it's the developer's job to manually resolve these errors.
 
 ## Usage
 
@@ -88,7 +80,7 @@ cbindgen = "0.29"
 itertools = "0.14"
 ```
 
-Convert `#[prebindgen]`-marked items to an FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). Items not valid for FFI will be rejected by `FfiConverter`.
+Convert `#[prebindgen]`-marked items to an FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). Items that are not valid for FFI will be rejected by `FfiConverter`.
 
 Generate target language bindings based on this source.
 
