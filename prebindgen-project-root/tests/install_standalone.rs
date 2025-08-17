@@ -30,6 +30,12 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+fn keep_tmp_enabled() -> bool {
+    env::var("PREBINDGEN_KEEP_TMP")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 #[test]
 fn installs_into_standalone_crate_from_resources() {
     // 1) Copy dummy simple package into a temp dir
@@ -37,7 +43,8 @@ fn installs_into_standalone_crate_from_resources() {
         .prefix("prebindgen-test-")
         .tempdir_in(Path::new("/tmp"))
         .expect("tempdir in /tmp");
-    let tmp_path = tmp.path();
+    // Use owned PathBuf so we can later move `tmp` via into_path() safely.
+    let tmp_path = tmp.path().to_path_buf();
 
     let src_pkg = tests_resources_dir().join("simple-package");
     let dst_pkg = tmp_path.join("simple-package");
@@ -76,6 +83,12 @@ fn installs_into_standalone_crate_from_resources() {
     eprintln!("[test] installed helper dir: {}", local_helper_dir.display());
     assert!(local_helper_dir.join("src/lib.rs").exists(), "src/lib.rs should exist");
     assert!(local_helper_dir.join("build.rs").exists(), "build.rs should exist");
+
+    // Optionally keep the temp dir for manual inspection
+    if keep_tmp_enabled() {
+        let kept_path = tmp.keep();
+        eprintln!("[test] kept temp dir at: {}", kept_path.display());
+    }
 }
 
 #[test]
@@ -85,7 +98,8 @@ fn installs_into_existing_workspace_from_resources() {
         .prefix("prebindgen-test-")
         .tempdir_in(Path::new("/tmp"))
         .expect("tempdir in /tmp");
-    let tmp_path = tmp.path();
+    // Use owned PathBuf so we can later move `tmp` via into_path() safely.
+    let tmp_path = tmp.path().to_path_buf();
 
     let src_ws = tests_resources_dir().join("workspace-package");
     let dst_ws = tmp_path.join("workspace-package");
@@ -124,4 +138,10 @@ fn installs_into_existing_workspace_from_resources() {
     eprintln!("[test] installed helper dir: {}", local_helper_dir.display());
     assert!(local_helper_dir.join("src/lib.rs").exists(), "src/lib.rs should exist");
     assert!(local_helper_dir.join("build.rs").exists(), "build.rs should exist");
+
+    // Optionally keep the temp dir for manual inspection
+    if keep_tmp_enabled() {
+        let kept_path = tmp.keep();
+        eprintln!("[test] kept temp dir at: {}", kept_path.display());
+    }
 }
