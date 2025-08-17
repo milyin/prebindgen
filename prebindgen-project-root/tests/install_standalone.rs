@@ -209,3 +209,24 @@ fn installs_into_existing_workspace_from_resources() {
 
     maybe_keep_tmp(tmp);
 }
+
+#[test]
+fn installs_into_simple_workspace_root_from_resources() {
+    // Workspace with [workspace] in the root manifest and a root package
+    let (tmp, tmp_root) = make_tmp("prebindgen-test-");
+    let dst_ws = copy_fixture(&tmp_root, "simple-workspace-package");
+    let ws_manifest = dst_ws.join("Cargo.toml");
+
+    run_install(&ws_manifest);
+
+    let doc: DocumentMut = read_manifest_doc(&ws_manifest);
+    // Expect the helper crate to be added as a workspace member
+    assert_workspace_members(&doc, &["prebindgen-project-root"]);
+    assert_helper_patch(&doc);
+    assert_helper_files_exist(&dst_ws);
+
+    // Running the root package should print the workspace root path (the workspace dir)
+    cargo_run_and_assert_workspace(&dst_ws, None);
+
+    maybe_keep_tmp(tmp);
+}
