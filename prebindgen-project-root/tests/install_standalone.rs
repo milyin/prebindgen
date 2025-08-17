@@ -132,13 +132,44 @@ fn maybe_keep_tmp(tmp: TempDir) {
     }
 }
 
-fn cargo_check_workspace(dir: &Path) {
-    eprintln!("[test] running `cargo check` in {}", dir.display());
-    Command::new("cargo")
-        .arg("check")
+fn cargo_run_and_assert_workspace(dir: &Path, pkg: Option<&str>) {
+    let pkg_suffix = pkg.map(|p| format!(" -p {}", p)).unwrap_or_default();
+    eprintln!(
+        "[test] running `cargo run{}` in {}",
+        pkg_suffix,
+        dir.display()
+    );
+
+    let mut cmd = Command::new("cargo");
+    cmd.arg("run").arg("--quiet");
+    if let Some(p) = pkg {
+        cmd.arg("-p").arg(p);
+    }
+    let output = cmd
         .current_dir(dir)
-        .assert()
-        .success();
+        .output()
+        .expect("failed to execute cargo run");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "cargo run failed.\nstatus: {:?}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        stdout,
+        stderr
+    );
+
+    let printed = stdout.trim();
+    let expected = fs::canonicalize(dir).expect("canonicalize workspace dir");
+    let expected_str = expected.to_string_lossy();
+    eprintln!("[test] program printed: {}", printed);
+    eprintln!("[test] expected root  : {}", expected_str);
+    assert_eq!(
+        printed,
+        expected_str,
+        "printed workspace root does not match expected"
+    );
 }
 
 #[test]
@@ -154,7 +185,8 @@ fn installs_into_standalone_crate_from_resources() {
     assert_helper_patch(&doc);
     assert_helper_files_exist(&dst_pkg);
 
-    cargo_check_workspace(&dst_pkg);
+    // Running the package should print its workspace root path (the package dir itself)
+    cargo_run_and_assert_workspace(&dst_pkg, None);
 
     maybe_keep_tmp(tmp);
 }
@@ -172,7 +204,29 @@ fn installs_into_existing_workspace_from_resources() {
     assert_helper_patch(&doc);
     assert_helper_files_exist(&dst_ws);
 
-    cargo_check_workspace(&dst_ws);
+    // Running the workspace member should print the workspace root path (the workspace dir)
+    cargo_run_and_assert_workspace(&dst_ws, Some("simple_member"));
+
+    maybe_keep_tmp(tmp);
+}
+
+#[test]
+fn installs_into_simple_workspace_root_from_resources() {
+    // Workspace with [workspace] in the root manifest and a root package
+    let (tmp, tmp_root) = make_tmp("prebindgen-test-");
+    let dst_ws = copy_fixture(&tmp_root, "simple-workspace-package");
+    let ws_manifest = dst_ws.join("Cargo.toml");
+
+    run_install(&ws_manifest);
+
+    let doc: DocumentMut = read_manifest_doc(&ws_manifest);
+    // Expect the helper crate to be added as a workspace member
+    assert_workspace_members(&doc, &["prebindgen-project-root"]);
+    assert_helper_patch(&doc);
+    assert_helper_files_exist(&dst_ws);
+
+    // Running the root package should print the workspace root path (the workspace dir)
+    cargo_run_and_assert_workspace(&dst_ws, None);
 
     maybe_keep_tmp(tmp);
 }

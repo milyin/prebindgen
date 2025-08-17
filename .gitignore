@@ -1,4 +1,4 @@
 /target
-/examples/*/target
+/**/target
 Cargo.lock
 .vscode/

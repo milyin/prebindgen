@@ -47,7 +47,10 @@ fn real_main() -> Result<()> {
 
     // No args or explicit help -> show usage
     if args.is_empty()
-        || matches!(args.first().map(|s| s.as_str()), Some("help" | "-h" | "--help"))
+        || matches!(
+            args.first().map(|s| s.as_str()),
+            Some("help" | "-h" | "--help")
+        )
     {
         println!("{}", USAGE);
         return Ok(());
@@ -91,12 +94,9 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Utility to expose the workspace project root at build time"
 
-[lib]
-name = "prebindgen_project_root"
-path = "src/lib.rs"
-
 [build-dependencies]
 project-root = "0.2"
+quote = "1"
 "#;
         fs::write(&local_cargo, cargo_toml)
             .with_context(|| format!("writing {}", local_cargo.display()))?;
