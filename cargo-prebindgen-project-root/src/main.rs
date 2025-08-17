@@ -104,8 +104,8 @@ project-root = "0.2"
 
     // 3) Write lib.rs and build.rs content from this package's real source files
     // We embed our own canonical lib.rs and build.rs to install.
-    let lib_rs = include_str!("./lib.rs");
-    let build_rs = include_str!("../build.rs");
+    let lib_rs = include_str!("../../prebindgen-project-root/src/lib.rs");
+    let build_rs = include_str!("../../prebindgen-project-root/build.rs");
 
     fs::write(local_crate_dir.join("src/lib.rs"), lib_rs)
         .with_context(|| format!("writing {}", local_crate_dir.join("src/lib.rs").display()))?;

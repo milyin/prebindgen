@@ -3,6 +3,7 @@ members = [
     "prebindgen",
     "prebindgen-proc-macro",
     "prebindgen-project-root",
+    "cargo-prebindgen-project-root",
     "examples/example-cbindgen",
     "examples/example-ffi",
 ]
