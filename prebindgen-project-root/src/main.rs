@@ -94,10 +94,6 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Utility to expose the workspace project root at build time"
 
-[lib]
-name = "prebindgen_project_root"
-path = "src/lib.rs"
-
 [build-dependencies]
 project-root = "0.2"
 quote = "1"
