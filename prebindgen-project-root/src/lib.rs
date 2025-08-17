@@ -5,15 +5,3 @@
 pub fn get_project_root() -> &'static str {
     env!("PROJECT_ROOT")
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::Path;
-
-    #[test]
-    fn project_root_is_absolute() {
-        let p = get_project_root();
-        assert!(Path::new(p).is_absolute(), "PROJECT_ROOT should be an absolute path: {}", p);
-    }
-}

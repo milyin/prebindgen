@@ -34,3 +34,10 @@ tempfile = "3.0"
 itertools = "0.14.0"
 if_rust_version = "1.0"
 konst = "0.3"
+
+[patch]
+
+[patch.crates-io]
+
+[patch.crates-io.prebindgen-project-root]
+path = "prebindgen-project-root"
