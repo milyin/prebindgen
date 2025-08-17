@@ -2,7 +2,7 @@ use assert_cmd::cargo::cargo_bin;
 use assert_cmd::prelude::*;
 use std::{env, fs, path::{Path, PathBuf}};
 use std::process::Command;
-use tempfile::Builder as TempDirBuilder;
+use tempfile::{Builder as TempDirBuilder, TempDir};
 use toml_edit::DocumentMut;
 
 fn crate_root() -> PathBuf {
@@ -36,55 +36,62 @@ fn keep_tmp_enabled() -> bool {
         .unwrap_or(false)
 }
 
-#[test]
-fn installs_into_standalone_crate_from_resources() {
-    // 1) Copy dummy simple package into a temp dir
+fn make_tmp(prefix: &str) -> (TempDir, PathBuf) {
     let tmp = TempDirBuilder::new()
-        .prefix("prebindgen-test-")
+        .prefix(prefix)
         .tempdir_in(Path::new("/tmp"))
         .expect("tempdir in /tmp");
-    // Use owned PathBuf so we can later move `tmp` via into_path() safely.
     let tmp_path = tmp.path().to_path_buf();
+    (tmp, tmp_path)
+}
 
-    let src_pkg = tests_resources_dir().join("simple-package");
-    let dst_pkg = tmp_path.join("simple-package");
-    copy_dir_all(&src_pkg, &dst_pkg).expect("copy simple package");
+fn copy_fixture(tmp_root: &Path, fixture: &str) -> PathBuf {
+    let src = tests_resources_dir().join(fixture);
+    let dst = tmp_root.join(fixture);
+    copy_dir_all(&src, &dst).expect("copy fixture");
+    eprintln!("[test] {} copied to: {}", fixture, dst.display());
+    dst
+}
 
-    let manifest = dst_pkg.join("Cargo.toml");
-    eprintln!("[test] simple package copied to: {}", dst_pkg.display());
-
-    // 2) Run installer binary against the crate manifest (creates workspace, installs helper)
+fn run_install(manifest: &Path) {
     let bin = cargo_bin("prebindgen-project-root");
     Command::new(&bin)
         .arg("install")
-        .arg(&manifest)
+        .arg(manifest)
         .assert()
         .success();
+}
 
-    // 3) Validate changes: workspace created with '.' + helper member, patch present
-    let manifest_text = fs::read_to_string(&manifest).expect("read manifest");
-    let doc: DocumentMut = manifest_text.parse().expect("parse manifest as toml");
+fn read_manifest_doc(manifest: &Path) -> DocumentMut {
+    let manifest_text = fs::read_to_string(manifest).expect("read manifest");
+    manifest_text.parse().expect("parse manifest as toml")
+}
+
+fn assert_workspace_members(doc: &DocumentMut, expected: &[&str]) {
     assert!(doc.contains_key("workspace"), "workspace section should exist");
     let members = doc["workspace"]["members"].as_array().expect("members array");
-    let has_dot = members.iter().any(|v| v.as_str() == Some("."));
-    let has_helper_member = members.iter().any(|v| v.as_str() == Some("prebindgen-project-root"));
-    assert!(has_dot, "workspace members should include '.'");
-    assert!(has_helper_member, "workspace members should include 'prebindgen-project-root'");
+    for m in expected {
+        assert!(members.iter().any(|v| v.as_str() == Some(m)), "workspace members should include '{}'", m);
+    }
+}
 
+fn assert_helper_patch(doc: &DocumentMut) {
     let patch_tbl = doc["patch"]["crates-io"].as_table().expect("patch.crates-io table");
     let helper = patch_tbl.get("prebindgen-project-root").expect("patch entry for helper crate");
     let helper_tbl = helper.as_table().expect("helper patch table");
     let path_value = helper_tbl.get("path").and_then(|i| i.as_str()).expect("path value");
     eprintln!("[test] patch crates-io.prebindgen-project-root.path = {}", path_value);
     assert!(path_value.contains("prebindgen-project-root"), "path should reference 'prebindgen-project-root'");
+}
 
-    // Files exist in the new local crate under the dummy crate dir
-    let local_helper_dir = dst_pkg.join("prebindgen-project-root");
+fn assert_helper_files_exist(base_dir: &Path) {
+    let local_helper_dir = base_dir.join("prebindgen-project-root");
     eprintln!("[test] installed helper dir: {}", local_helper_dir.display());
     assert!(local_helper_dir.join("src/lib.rs").exists(), "src/lib.rs should exist");
     assert!(local_helper_dir.join("build.rs").exists(), "build.rs should exist");
+}
 
-    // Optionally keep the temp dir for manual inspection
+fn maybe_keep_tmp(tmp: TempDir) {
     if keep_tmp_enabled() {
         let kept_path = tmp.keep();
         eprintln!("[test] kept temp dir at: {}", kept_path.display());
@@ -92,56 +99,33 @@ fn installs_into_standalone_crate_from_resources() {
 }
 
 #[test]
+fn installs_into_standalone_crate_from_resources() {
+    let (tmp, tmp_root) = make_tmp("prebindgen-test-");
+    let dst_pkg = copy_fixture(&tmp_root, "simple-package");
+    let manifest = dst_pkg.join("Cargo.toml");
+
+    run_install(&manifest);
+
+    let doc: DocumentMut = read_manifest_doc(&manifest);
+    assert_workspace_members(&doc, &[".", "prebindgen-project-root"]);
+    assert_helper_patch(&doc);
+    assert_helper_files_exist(&dst_pkg);
+
+    maybe_keep_tmp(tmp);
+}
+
+#[test]
 fn installs_into_existing_workspace_from_resources() {
-    // 1) Copy dummy workspace into a temp dir
-    let tmp = TempDirBuilder::new()
-        .prefix("prebindgen-test-")
-        .tempdir_in(Path::new("/tmp"))
-        .expect("tempdir in /tmp");
-    // Use owned PathBuf so we can later move `tmp` via into_path() safely.
-    let tmp_path = tmp.path().to_path_buf();
-
-    let src_ws = tests_resources_dir().join("workspace-package");
-    let dst_ws = tmp_path.join("workspace-package");
-    copy_dir_all(&src_ws, &dst_ws).expect("copy workspace package");
-
+    let (tmp, tmp_root) = make_tmp("prebindgen-test-");
+    let dst_ws = copy_fixture(&tmp_root, "workspace-package");
     let ws_manifest = dst_ws.join("Cargo.toml");
-    eprintln!("[test] workspace package copied to: {}", dst_ws.display());
 
-    // 2) Run installer binary against workspace manifest (adds helper member + patch)
-    let bin = cargo_bin("prebindgen-project-root");
-    Command::new(&bin)
-        .arg("install")
-        .arg(&ws_manifest)
-        .assert()
-        .success();
+    run_install(&ws_manifest);
 
-    // 3) Validate changes: workspace members include existing member and helper, patch present
-    let manifest_text = fs::read_to_string(&ws_manifest).expect("read manifest");
-    let doc: DocumentMut = manifest_text.parse().expect("parse manifest as toml");
-    assert!(doc.contains_key("workspace"), "workspace section should exist");
-    let members = doc["workspace"]["members"].as_array().expect("members array");
-    let has_member = members.iter().any(|v| v.as_str() == Some("simple-member"));
-    let has_helper_member = members.iter().any(|v| v.as_str() == Some("prebindgen-project-root"));
-    assert!(has_member, "workspace members should include 'simple-member'");
-    assert!(has_helper_member, "workspace members should include 'prebindgen-project-root'");
+    let doc: DocumentMut = read_manifest_doc(&ws_manifest);
+    assert_workspace_members(&doc, &["simple-member", "prebindgen-project-root"]);
+    assert_helper_patch(&doc);
+    assert_helper_files_exist(&dst_ws);
 
-    let patch_tbl = doc["patch"]["crates-io"].as_table().expect("patch.crates-io table");
-    let helper = patch_tbl.get("prebindgen-project-root").expect("patch entry for helper crate");
-    let helper_tbl = helper.as_table().expect("helper patch table");
-    let path_value = helper_tbl.get("path").and_then(|i| i.as_str()).expect("path value");
-    eprintln!("[test] patch crates-io.prebindgen-project-root.path = {}", path_value);
-    assert!(path_value.contains("prebindgen-project-root"), "path should reference 'prebindgen-project-root'");
-
-    // Files exist under workspace root
-    let local_helper_dir = dst_ws.join("prebindgen-project-root");
-    eprintln!("[test] installed helper dir: {}", local_helper_dir.display());
-    assert!(local_helper_dir.join("src/lib.rs").exists(), "src/lib.rs should exist");
-    assert!(local_helper_dir.join("build.rs").exists(), "build.rs should exist");
-
-    // Optionally keep the temp dir for manual inspection
-    if keep_tmp_enabled() {
-        let kept_path = tmp.keep();
-        eprintln!("[test] kept temp dir at: {}", kept_path.display());
-    }
+    maybe_keep_tmp(tmp);
 }
