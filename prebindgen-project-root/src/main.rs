@@ -46,7 +46,7 @@ fn real_main() -> Result<()> {
 }
 
 fn install(input: &Path) -> Result<()> {
-    let (ws_root, ws_manifest_path) = resolve_workspace_root_and_manifest(input)?;
+    let (ws_root, ws_manifest_path) = resolve_workspace_root_and_manifest_or_create(input)?;
 
     // 1) Ensure destination crate directory
     let local_crate_dir = ws_root.join("prebindgen-project-root");
@@ -103,7 +103,7 @@ project-root = "0.2"
     Ok(())
 }
 
-fn resolve_workspace_root_and_manifest(input: &Path) -> Result<(PathBuf, PathBuf)> {
+fn resolve_workspace_root_and_manifest_or_create(input: &Path) -> Result<(PathBuf, PathBuf)> {
     let p = if input.is_dir() { input.join("Cargo.toml") } else { input.to_path_buf() };
     if !p.exists() {
         bail!("Path does not exist: {}", p.display());
@@ -111,18 +111,90 @@ fn resolve_workspace_root_and_manifest(input: &Path) -> Result<(PathBuf, PathBuf
     if p.is_dir() {
         bail!("Expected a Cargo.toml file or a directory containing one: {}", p.display());
     }
-    // Read and parse
+
+    // Parse the provided manifest
     let text = fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?;
     let doc: DocumentMut = text
         .parse()
         .with_context(|| format!("parsing TOML at {}", p.display()))?;
-    if !doc.contains_key("workspace") {
-        bail!("Cargo.toml is not a workspace manifest; missing [workspace] at {}", p.display());
+
+    // Case 1: user passed a workspace Cargo.toml directly
+    if doc.contains_key("workspace") {
+        let ws_root = p.parent().ok_or_else(|| anyhow!("manifest has no parent: {}", p.display()))?.to_path_buf();
+        return Ok((ws_root, p));
     }
 
-    // Determine workspace root directory
-    let ws_root = p.parent().ok_or_else(|| anyhow!("manifest has no parent: {}", p.display()))?.to_path_buf();
-    Ok((ws_root, p))
+    // Case 2: user passed a crate (non-workspace) Cargo.toml
+    if doc.contains_key("package") {
+        // 2a: If it belongs to an ancestor workspace, use that workspace
+        if let Some(ws_manifest) = find_ancestor_workspace_manifest(p.parent().unwrap())? {
+            let ws_root = ws_manifest.parent().unwrap().to_path_buf();
+            return Ok((ws_root, ws_manifest));
+        }
+        // 2b: Standalone crate; create workspace here and include "."
+        create_workspace_in_manifest(&p)?;
+        return Ok((p.parent().unwrap().to_path_buf(), p));
+    }
+
+    bail!(
+        "{} is not a valid Cargo manifest (neither [workspace] nor [package] found)",
+        p.display()
+    )
+}
+
+fn find_ancestor_workspace_manifest(start_dir: &Path) -> Result<Option<PathBuf>> {
+    let mut cur = Some(start_dir);
+    while let Some(dir) = cur {
+        let cand = dir.join("Cargo.toml");
+        if cand.exists() {
+            let text = fs::read_to_string(&cand).with_context(|| format!("reading {}", cand.display()))?;
+            let doc: DocumentMut = match text.parse() {
+                Ok(d) => d,
+                Err(_) => {
+                    // Not valid TOML; skip
+                    cur = dir.parent();
+                    continue;
+                }
+            };
+            if doc.contains_key("workspace") {
+                return Ok(Some(cand));
+            }
+        }
+        cur = dir.parent();
+    }
+    Ok(None)
+}
+
+fn create_workspace_in_manifest(manifest_path: &Path) -> Result<()> {
+    let mut text = fs::read_to_string(manifest_path)
+        .with_context(|| format!("reading {}", manifest_path.display()))?;
+    let mut doc: DocumentMut = text
+        .parse()
+        .with_context(|| format!("parsing TOML at {}", manifest_path.display()))?;
+
+    // Insert [workspace] if missing
+    let ws = doc["workspace"].or_insert(Item::Table(Table::new()));
+    let ws_tbl = ws.as_table_mut().expect("workspace to be a table");
+
+    // Ensure members includes "."
+    let members = ws_tbl
+        .entry("members")
+        .or_insert(Item::Value(Value::Array(Array::default())));
+    if let Some(arr) = members.as_array_mut() {
+        let has_dot = arr.iter().any(|v| v.as_str() == Some("."));
+        if !has_dot {
+            arr.push(".");
+        }
+    } else {
+        let mut arr = Array::default();
+        arr.push(".");
+        ws_tbl["members"] = Item::Value(Value::Array(arr));
+    }
+
+    text = doc.to_string();
+    fs::write(manifest_path, text)
+        .with_context(|| format!("writing {}", manifest_path.display()))?;
+    Ok(())
 }
 
 fn add_member_and_patch(ws_manifest_path: &Path, local_crate_dir: &Path) -> Result<()> {
