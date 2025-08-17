@@ -98,6 +98,15 @@ fn maybe_keep_tmp(tmp: TempDir) {
     }
 }
 
+fn cargo_check_workspace(dir: &Path) {
+    eprintln!("[test] running `cargo check` in {}", dir.display());
+    Command::new("cargo")
+        .arg("check")
+        .current_dir(dir)
+        .assert()
+        .success();
+}
+
 #[test]
 fn installs_into_standalone_crate_from_resources() {
     let (tmp, tmp_root) = make_tmp("prebindgen-test-");
@@ -110,6 +119,8 @@ fn installs_into_standalone_crate_from_resources() {
     assert_workspace_members(&doc, &[".", "prebindgen-project-root"]);
     assert_helper_patch(&doc);
     assert_helper_files_exist(&dst_pkg);
+
+    cargo_check_workspace(&dst_pkg);
 
     maybe_keep_tmp(tmp);
 }
@@ -126,6 +137,8 @@ fn installs_into_existing_workspace_from_resources() {
     assert_workspace_members(&doc, &["simple-member", "prebindgen-project-root"]);
     assert_helper_patch(&doc);
     assert_helper_files_exist(&dst_ws);
+
+    cargo_check_workspace(&dst_ws);
 
     maybe_keep_tmp(tmp);
 }
