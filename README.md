@@ -21,12 +21,16 @@ The `prebindgen` tool consists of two crates: `prebindgen-proc-macro`, which pro
 ### Architecture
 
 Each element to export is marked in the source crate with the `#[prebindgen]` macro. When compiling
-the source crate, these elements are stored in a directory. The build.rs of the dependent crate
+the source crate, these elements are stored in a directory. The build.rs of the destination crate
 reads these elements and creates FFI-compatible functions and copies of structures that proxy them.
 The generated source file is included with the `include!()` macro in the dependent crate and parsed
 by the language binding generator (e.g., cbindgen).
 
-The dependent crate's `build.rs` accesses the prebindgen output directory path through a constant exported from the source crate, rather than using Cargo's `DEP_` environment variables. This approach avoids race conditions that can occur because data collection happens during package compilation (after `build.rs`), while the dependent package's `build.rs` may start right after the source's build.rs, before the source package compilation completes. In cross-compilation scenarios, this race condition persists even if the source crate is added to build-dependencies, as the `DEP_` variable contains the path related to the target platform while build-dependencies are for the host platform.
+It's important to keep in mind that `[build-dependencies]` and `[dependencies]` are different. The
+`#[prebindgen]` macro collects sources when compiling [build-dependencies]` instance of source crate.
+But later these sources are used to generate proxy calls to `[dependencies]` instance, which could be
+built with different feature set and for different architecture. The set of assertions is put into generated
+code to catch possible divergencies, but it's developer job to manually resolve these errors.
 
 ## Usage
 
@@ -38,8 +42,13 @@ Mark structures and functions that are part of the FFI interface with the `prebi
 // example-ffi/src/lib.rs
 use prebindgen_proc_macro::prebindgen;
 
-// Export path to prebindgen output directory
+// Path to prebindgen output directory. The `build.rs` of the destination crate
+// reads the collected code from this path.
 pub const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
+
+// Features which the crate is compiled with. This constant is used
+// in the generated code to validate that it's compatible with the actual crate
+pub const FEATURES: &str = prebindgen_proc_macro::features!();
 
 // Group structures and functions for selective handling
 #[prebindgen]
@@ -93,12 +102,6 @@ fn main() {
     // Create a source from the common FFI crate's prebindgen data
     let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
 
-    // Create feature filter
-    let feature_filter = prebindgen::batching::FeatureFilter::builder()
-        .disable_feature("unstable")
-        .disable_feature("internal")
-        .build();
-
     // Create converter with transparent wrapper stripping
     let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
         .edition(prebindgen::RustEdition::Edition2024)
@@ -110,8 +113,7 @@ fn main() {
     // Process items with filtering and conversion
     let bindings_file = source
         .items_all()
-    .batching(feature_filter.into_closure())
-    .batching(converter.into_closure())
+        .batching(converter.into_closure())
         .collect::<prebindgen::collect::Destination>()
         .write("ffi_bindings.rs");
 

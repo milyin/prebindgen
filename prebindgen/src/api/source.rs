@@ -273,7 +273,7 @@ impl Source {
                 .iter()
                 .map(|f| format!("{}/{}", self.crate_name, f))
                 .join(" ");
-            builder = builder.predefined_features(qualified_const,features_list);
+            builder = builder.predefined_features(qualified_const, features_list);
         }
         builder.build()
     }
@@ -354,7 +354,7 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
 fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
     let features_path = input_dir.join(FEATURES_FILE);
     let Some(contents) = fs::read_to_string(&features_path).ok() else {
-      return Vec::new();
+        return Vec::new();
     };
     let mut features: Vec<String> = contents
         .lines()
@@ -381,19 +381,27 @@ impl Builder {
         }
     }
 
-    /// Set the name of the features constant to assert against.
-    /// If this option is enabled, the `Source` will filter out all code
-    /// under disabled features. This behavior is default, the default
-    /// name of the constant is `FEATURES` prepended by source crate name.
+    /// Enables or disables filtering by enabled features when
+    /// extracting collected data. 
+    ///
+    /// Pass `None` to disable feature filtering.
+    ///
+    /// Pass e.g. `Some("source_crate::FEATURES")` or `Some("FEATURES")` 
+    /// to enable filtering. The value is the name of the features constant 
+    /// from source crate.
+    ///
+    /// Filtering is enabled by default, default constant name is `FEATURES`.
     ///
     /// Source crate by default should contain line
     /// ```rust,ignore
     /// const FEATURES: &str = prebindgen_proc_macro::features!();
     /// ```
     #[roxygen]
-    pub fn features_constant(mut self, 
+    pub fn enable_feature_filtering(
+        mut self,
         /// Full name of the constant with features in the source crate
-        name: Option<impl Into<String>>) -> Self {
+        name: Option<impl Into<String>>,
+    ) -> Self {
         self.features_constant = name.map(|n| n.into());
         self
     }

@@ -39,6 +39,9 @@
 //!
 //! // Export path to prebindgen output directory
 //! const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
+//! 
+//! // Export crate's features for verification
+//! const FEATURES: &str = prebindgen_proc_macro::features!();
 //!
 //! // Group structures and functions for selective handling
 //! #[prebindgen]
@@ -86,11 +89,6 @@
 //!     // Process items with filtering and conversion
 //!     let destination = source
 //!         .items_all()
-//!         .batching(crate::batching::feature_filter::Builder::new()
-//!             .disable_feature("experimental")
-//!             .enable_feature("std")
-//!             .build()
-//!             .into_closure())
 //!         .batching(ffi_converter::Builder::new(source.crate_name())
 //!             .edition(prebindgen::Edition::Edition2024)
 //!             .strip_transparent_wrapper("std::mem::MaybeUninit")
