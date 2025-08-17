@@ -1,15 +1,20 @@
 # prebindgen-project-root
 
-A tiny utility crate that, when built inside a Cargo workspace, determines the workspace root using the `project-root` crate
+A tiny utility crate that, when built inside a Cargo workspace, discovers the workspace root.
 
-- build.rs sets `PROJECT_ROOT` using `cargo:rustc-env`.
-- `get_project_root()` returns that path at runtime.
+The main purpose of this tool is to allow a crate installed from crates.io (i.e., not part of the workspace)
+to find the workspace's `Cargo.lock` at compile time. A simple call to the well-known
+`project_root::get_project_root()` doesn't work here because it searches upward from the current working
+directory, which during a build is inside `$HOME/.cargo` rather than your workspace.
 
-If this crate is compiled from within `CARGO_HOME` (i.e., used as a dependency outside your workspace), the build will panic to avoid misconfiguration.
+This crate solves the problem by injecting itself into the user's workspace via the `[patch]` section.
+That is, the workspace contains a copy of the `prebindgen-project-root` crate which, being inside the
+workspace, can determine the workspace root. Any crate that depends on `prebindgen-project-root` will then
+use the copy from the user's workspace instead of the one in `$HOME/.cargo`.
 
-## CLI
+The Cargo subcommand `prebindgen-project-root` automates this injection. Run:
 
-You can run it either directly or via the Cargo subcommand alias:
-
-- Direct: `prebindgen-project-root install <path>`
-- Cargo: `cargo prebindgen-project-root install <path>`
+```sh
+cargo install prebindgen-project-root
+cargo prebindgen-project-root install .
+```
