@@ -129,7 +129,7 @@ impl Source {
     }
 
     #[doc(hidden)]
-    /// Initialize the Source for doctests by creating a dummy Source with few test items
+    /// Initialize the Source for doctests by creating a dummy Source with a few test items.
     pub fn init_doctest_simulate() {
         let source = Self {
             crate_name: "source_ffi".to_string(),
@@ -267,7 +267,7 @@ impl Source {
             } else {
                 format!("{}::{}", self.crate_name.replace('-', "_"), const_name)
             };
-            // prepend each feature with "crare_name/" and join with spaces
+            // Prepend each feature with "crate_name/" and join with spaces
             let features_list = self
                 .features_list
                 .iter()
@@ -296,7 +296,7 @@ impl Source {
                         match read_jsonl_file(&path) {
                             Ok(records) => {
                                 for record in records {
-                                    // Use HashMap to deduplicate records by name and cfg
+                                    // Use a HashMap to deduplicate records by name and cfg
                                     let key = if let Some(cfg) = &record.cfg {
                                         format!("{}#{}", record.name, cfg)
                                     } else {
@@ -350,7 +350,7 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
-/// Read enabled features list from features.txt and normalize into a comma-separated string
+/// Read enabled features list from FEATURES_FILE and normalize into a sorted, deduplicated Vec<String>
 fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
     let features_path = input_dir.join(FEATURES_FILE);
     let Some(contents) = fs::read_to_string(&features_path).ok() else {
@@ -381,18 +381,18 @@ impl Builder {
         }
     }
 
-    /// Enables or disables filtering by enabled features when
-    /// extracting collected data. 
+    /// Enables or disables filtering by features when
+    /// extracting collected data.
     ///
     /// Pass `None` to disable feature filtering.
     ///
-    /// Pass e.g. `Some("source_crate::FEATURES")` or `Some("FEATURES")` 
-    /// to enable filtering. The value is the name of the features constant 
-    /// from source crate.
+    /// Pass, for example, `Some("source_crate::FEATURES")` or `Some("FEATURES")`
+    /// to enable filtering. The value is the name of the features constant
+    /// from the source crate.
     ///
-    /// Filtering is enabled by default, default constant name is `FEATURES`.
+    /// Filtering is enabled by default; the default constant name is `FEATURES`.
     ///
-    /// Source crate by default should contain line
+    /// The source crate should contain the following line by default:
     /// ```rust,ignore
     /// const FEATURES: &str = prebindgen_proc_macro::features!();
     /// ```
