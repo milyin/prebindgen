@@ -6,3 +6,10 @@ A tiny utility crate that, when built inside a Cargo workspace, determines the w
 - `get_project_root()` returns that path at runtime.
 
 If this crate is compiled from within `CARGO_HOME` (i.e., used as a dependency outside your workspace), the build will panic to avoid misconfiguration.
+
+## CLI
+
+You can run it either directly or via the Cargo subcommand alias:
+
+- Direct: `prebindgen-project-root install <path>`
+- Cargo: `cargo prebindgen-project-root install <path>`

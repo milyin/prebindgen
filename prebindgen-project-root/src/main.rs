@@ -9,20 +9,19 @@ use toml_edit::{Array, DocumentMut, Item, Table, Value};
 const USAGE: &str = "prebindgen-project-root
 
 Usage:
-  prebindgen-project-root help
-  prebindgen-project-root install <path>
+    prebindgen-project-root install <path>
+    cargo prebindgen-project-root install <path>
 
 Commands:
-  help                 Show this help.
-  install <path>       Install local copy of prebindgen-project-root crate into the given Cargo workspace.
+    help                 Show this help.
+    install <path>       Install local copy of prebindgen-project-root crate into the given Cargo workspace.
 
 Details:
-  - <path> may be either a path to a workspace root directory (containing Cargo.toml with [workspace])
-    or a path directly to that workspace's Cargo.toml file.
-  - This will:
-      * add a new member crate named 'prebindgen-project-root' inside the workspace
-      * place build.rs and lib.rs into that crate (no main.rs)
-      * add a [patch.crates-io] to point prebindgen-project-root to the local path
+    - <path> may be either a path to a workspace root directory (containing Cargo.toml with [workspace])
+        or a path directly to that workspace's Cargo.toml file.
+    - This will:
+            * add a new member crate named 'prebindgen-project-root' inside the workspace
+            * add a [patch.crates-io] to point prebindgen-project-root to the local path
 ";
 
 fn main() {
@@ -34,15 +33,14 @@ fn main() {
 
 fn real_main() -> Result<()> {
     let mut args = env::args().skip(1).collect::<Vec<_>>();
-    if args.is_empty() || matches!(args[0].as_str(), "help" | "-h" | "--help") {
+    if args.is_empty() {
         println!("{}", USAGE);
         return Ok(());
     }
 
     match args.remove(0).as_str() {
         "install" => {
-            let path = args
-                .get(0)
+            let path = args.first()
                 .ok_or_else(|| anyhow!("install requires <path>"))?;
             install(Path::new(path))
         }

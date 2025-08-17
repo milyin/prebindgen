@@ -20,6 +20,14 @@ anyhow = "1"
 toml_edit = { version = "0.22", features = ["serde"] }
 pathdiff = "0.2"
 
+[[bin]]
+name = "prebindgen-project-root"
+path = "src/main.rs"
+
+[[bin]]
+name = "cargo-prebindgen-project-root"
+path = "src/main.rs"
+
 [package.metadata.docs.rs]
 all-features = true
 
