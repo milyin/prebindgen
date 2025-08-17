@@ -39,6 +39,9 @@
 //!
 //! // Export path to prebindgen output directory
 //! const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
+//! 
+//! // Export crate's features for verification
+//! const FEATURES: &str = prebindgen_proc_macro::features!();
 //!
 //! // Group structures and functions for selective handling
 //! #[prebindgen]
@@ -76,7 +79,7 @@
 //! ```
 //! ```rust,ignore
 //! // example-cbindgen/build.rs
-//! use prebindgen::{Source, batching::ffi_converter, filter_map::feature_filter, collect::Destination};
+//! use prebindgen::{Source, batching::ffi_converter, collect::Destination};
 //! use itertools::Itertools;
 //!
 //! fn main() {
@@ -86,11 +89,6 @@
 //!     // Process items with filtering and conversion
 //!     let destination = source
 //!         .items_all()
-//!         .filter_map(feature_filter::Builder::new()
-//!             .disable_feature("experimental")
-//!             .enable_feature("std")
-//!             .build()
-//!             .into_closure())
 //!         .batching(ffi_converter::Builder::new(source.crate_name())
 //!             .edition(prebindgen::Edition::Edition2024)
 //!             .strip_transparent_wrapper("std::mem::MaybeUninit")
@@ -117,6 +115,9 @@
 /// File name for storing the crate name
 const CRATE_NAME_FILE: &str = "crate_name.txt";
 
+/// File name for storing enabled Cargo features collected in build.rs
+const FEATURES_FILE: &str = "features.txt";
+
 /// Default group name for items without explicit group name
 pub const DEFAULT_GROUP_NAME: &str = "default";
 
@@ -129,22 +130,23 @@ pub use crate::api::buildrs::init_prebindgen_out_dir;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
 pub use crate::utils::edition::RustEdition;
+pub use konst; // Re-export konst for compile-time comparisons in generated code
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {
     pub mod ffi_converter {
         pub use crate::api::batching::ffi_converter::Builder;
     }
+    pub use crate::api::batching::feature_filter::FeatureFilter;
     pub use crate::api::batching::ffi_converter::FfiConverter;
+    pub mod feature_filter {
+        pub use crate::api::batching::feature_filter::Builder;
+    }
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `filter_map`
 pub mod filter_map {
-    pub use crate::api::filter_map::feature_filter::FeatureFilter;
     pub use crate::api::filter_map::struct_align::struct_align;
-    pub mod feature_filter {
-        pub use crate::api::filter_map::feature_filter::Builder;
-    }
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `map`

@@ -127,7 +127,7 @@ mod tests {
         let parsed: Record = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(parsed.name, "Test");
         assert_eq!(parsed.kind, RecordKind::Struct);
-        
+
         // Test record with cfg feature field
         let record_with_cfg = Record::new(
             RecordKind::Function,
@@ -136,12 +136,12 @@ mod tests {
             Default::default(),
             Some("feature = \"unstable\"".to_string()),
         );
-        
+
         write_jsonl_file(temp_path, &[record_with_cfg]).unwrap();
         let content = fs::read_to_string(temp_path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 1);
-        
+
         let parsed: Record = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(parsed.cfg, Some("feature = \"unstable\"".to_string()));
     }

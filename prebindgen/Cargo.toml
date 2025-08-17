@@ -22,6 +22,8 @@ regex = { workspace = true }
 prettyplease = { workspace = true }
 roxygen = { workspace = true }
 if_rust_version = { workspace = true }
+konst = { workspace = true, features = ["cmp"] }
+itertools = { workspace = true }
 
 [features]
 debug = []
@@ -29,4 +31,3 @@ debug = []
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-itertools = { workspace = true }

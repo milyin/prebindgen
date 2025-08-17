@@ -24,6 +24,8 @@ jobs:
         rustup toolchain install ${{ matrix.rust }}
         rustup default ${{ matrix.rust }}
     - name: Build
-      run: cargo build --verbose
+      run: cargo build
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        cargo test
+        cargo test --all --all-features

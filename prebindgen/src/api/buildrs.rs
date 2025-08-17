@@ -1,11 +1,11 @@
 use std::{env, fs};
 
-use crate::CRATE_NAME_FILE;
+use crate::{CRATE_NAME_FILE, FEATURES_FILE};
 
 /// Initialize the prebindgen output directory for the current crate
 ///
 /// This function must be called in the `build.rs` file of any crate that uses
-/// the `#[prebindgen]` attribute macro. It performs the following operations:
+/// the `#[prebindgen]` attribute macro.
 ///
 /// # Panics
 ///
@@ -61,6 +61,48 @@ pub fn init_prebindgen_out_dir() {
             e
         );
     });
+
+    // Collect enabled Cargo features from environment and store them
+    // Cargo exposes enabled features to build.rs as env vars CARGO_FEATURE_<NAME>
+    // where <NAME> is uppercased and '-' replaced with '_'. Here we convert back.
+    let mut features: Vec<String> = std::env::vars()
+        .filter_map(|(k, _)| {
+            k.strip_prefix("CARGO_FEATURE_")
+                .map(|name| name.to_string())
+        })
+        .map(|name| name.to_lowercase().replace('_', "-"))
+        .collect();
+    features.sort();
+    features.dedup();
+
+    // Save features list to features.txt (one per line)
+    let features_path = prebindgen_dir.join(FEATURES_FILE);
+    let features_contents = if features.is_empty() {
+        String::new()
+    } else {
+        let mut s = features.join("\n");
+        s.push('\n');
+        s
+    };
+    fs::write(&features_path, features_contents).unwrap_or_else(|e| {
+        panic!(
+            "Failed to write features to {}: {}",
+            features_path.display(),
+            e
+        );
+    });
+
+    // Export features list to the main crate as an env variable
+    // Accessible via env!("PREBINDGEN_FEATURES") or std::env::var at compile time/runtime
+    // Make the list of format "crate_name/f1 crate_name/f2"
+    println!(
+        "cargo:rustc-env=PREBINDGEN_FEATURES={}",
+        features
+            .into_iter()
+            .map(|f| format!("{}/{}", crate_name, f))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
 }
 
 /// Name of the prebindgen output directory
