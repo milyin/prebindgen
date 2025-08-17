@@ -1,7 +1,14 @@
+use std::path::PathBuf;
+
 /// Returns the absolute path to the cargo workspace root that built this crate.
 ///
-/// This value is determined at build time in `build.rs` and injected via the
-/// `PROJECT_ROOT` environment variable using `cargo:rustc-env`.
-pub fn get_project_root() -> &'static str {
-    env!("PROJECT_ROOT")
+/// This works only if this crate is included in a Cargo workspace. In the opposite case,
+/// it will return an error, explaining how to correctly configure the crate.
+pub fn get_project_root() -> Result<PathBuf, &'static str> {
+    let project_root = env!("PROJECT_ROOT");
+    if project_root.is_empty() {
+        Err(env!("PROJECT_ROOT_ERROR"))
+    } else {
+        Ok(project_root.into())
+    }
 }

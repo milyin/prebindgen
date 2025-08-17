@@ -14,3 +14,4 @@ prebindgen-proc-macro = { workspace = true }
 
 [build-dependencies]
 prebindgen = { workspace = true }
+prebindgen-project-root = { workspace = true }
