@@ -26,6 +26,6 @@ jobs:
     - name: Build
       run: cargo build
     - name: Run tests
-      run: 
+      run: |
         cargo test
         cargo test --all --all-features
