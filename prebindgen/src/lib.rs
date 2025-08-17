@@ -39,7 +39,7 @@
 //!
 //! // Export path to prebindgen output directory
 //! const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
-//! 
+//!
 //! // Export crate's features for verification
 //! const FEATURES: &str = prebindgen_proc_macro::features!();
 //!

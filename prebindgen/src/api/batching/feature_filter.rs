@@ -127,7 +127,7 @@ impl Builder {
     /// the crate may be built with different set of features as a destination crate dependency and
     /// as it's build.rs dependency. The assert allows to detect such mismatches early.
     ///
-    /// To fix the issue 
+    /// To fix the issue
     /// - make sure that build dependency of ffi crate is consistent with the main dependency
     /// - avoid hidden features which may be silently turned on by build --all-features
     #[roxygen]
@@ -137,8 +137,7 @@ impl Builder {
         features_constant: S1,
         /// List of source crate features in format "crate/f1 crate/f2"
         features_list: S2,
-    ) -> Self
-    {
+    ) -> Self {
         // Reset previous configuration to avoid conflicts
         self.disabled_features.clear();
         self.enabled_features.clear();
@@ -157,10 +156,7 @@ impl Builder {
         );
 
         // Record constant name (not used at runtime here, kept for API completeness)
-        self.features_assert = Some((
-            features_constant,
-            features_list
-        ));
+        self.features_assert = Some((features_constant, features_list));
 
         // Treat unknown features as disabled to "skip" them silently
         self.disable_unknown_features = true;
@@ -198,7 +194,6 @@ impl Builder {
         // Optionally create a prelude assertion comparing FEATURES const path with expected features string
         let mut prelude_item: Option<(syn::Item, SourceLocation)> = None;
         if let Some((const_name, features_list)) = self.features_assert.clone() {
-
             let features_lit = syn::LitStr::new(&features_list, proc_macro2::Span::call_site());
 
             // Parse the provided constant name into a path/expression so it is not quoted as a string.

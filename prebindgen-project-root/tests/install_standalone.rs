@@ -1,7 +1,10 @@
 use assert_cmd::cargo::cargo_bin;
 use assert_cmd::prelude::*;
-use std::{env, fs, path::{Path, PathBuf}};
 use std::process::Command;
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 use tempfile::{Builder as TempDirBuilder, TempDir};
 use toml_edit::DocumentMut;
 
@@ -68,27 +71,58 @@ fn read_manifest_doc(manifest: &Path) -> DocumentMut {
 }
 
 fn assert_workspace_members(doc: &DocumentMut, expected: &[&str]) {
-    assert!(doc.contains_key("workspace"), "workspace section should exist");
-    let members = doc["workspace"]["members"].as_array().expect("members array");
+    assert!(
+        doc.contains_key("workspace"),
+        "workspace section should exist"
+    );
+    let members = doc["workspace"]["members"]
+        .as_array()
+        .expect("members array");
     for m in expected {
-        assert!(members.iter().any(|v| v.as_str() == Some(m)), "workspace members should include '{}'", m);
+        assert!(
+            members.iter().any(|v| v.as_str() == Some(m)),
+            "workspace members should include '{}'",
+            m
+        );
     }
 }
 
 fn assert_helper_patch(doc: &DocumentMut) {
-    let patch_tbl = doc["patch"]["crates-io"].as_table().expect("patch.crates-io table");
-    let helper = patch_tbl.get("prebindgen-project-root").expect("patch entry for helper crate");
+    let patch_tbl = doc["patch"]["crates-io"]
+        .as_table()
+        .expect("patch.crates-io table");
+    let helper = patch_tbl
+        .get("prebindgen-project-root")
+        .expect("patch entry for helper crate");
     let helper_tbl = helper.as_table().expect("helper patch table");
-    let path_value = helper_tbl.get("path").and_then(|i| i.as_str()).expect("path value");
-    eprintln!("[test] patch crates-io.prebindgen-project-root.path = {}", path_value);
-    assert!(path_value.contains("prebindgen-project-root"), "path should reference 'prebindgen-project-root'");
+    let path_value = helper_tbl
+        .get("path")
+        .and_then(|i| i.as_str())
+        .expect("path value");
+    eprintln!(
+        "[test] patch crates-io.prebindgen-project-root.path = {}",
+        path_value
+    );
+    assert!(
+        path_value.contains("prebindgen-project-root"),
+        "path should reference 'prebindgen-project-root'"
+    );
 }
 
 fn assert_helper_files_exist(base_dir: &Path) {
     let local_helper_dir = base_dir.join("prebindgen-project-root");
-    eprintln!("[test] installed helper dir: {}", local_helper_dir.display());
-    assert!(local_helper_dir.join("src/lib.rs").exists(), "src/lib.rs should exist");
-    assert!(local_helper_dir.join("build.rs").exists(), "build.rs should exist");
+    eprintln!(
+        "[test] installed helper dir: {}",
+        local_helper_dir.display()
+    );
+    assert!(
+        local_helper_dir.join("src/lib.rs").exists(),
+        "src/lib.rs should exist"
+    );
+    assert!(
+        local_helper_dir.join("build.rs").exists(),
+        "build.rs should exist"
+    );
 }
 
 fn maybe_keep_tmp(tmp: TempDir) {

@@ -1,4 +1,7 @@
-use std::{env, fs, path::{Path, PathBuf}};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use toml_edit::{Array, DocumentMut, Item, Table, Value};
@@ -38,7 +41,9 @@ fn real_main() -> Result<()> {
 
     match args.remove(0).as_str() {
         "install" => {
-            let path = args.get(0).ok_or_else(|| anyhow!("install requires <path>"))?;
+            let path = args
+                .get(0)
+                .ok_or_else(|| anyhow!("install requires <path>"))?;
             install(Path::new(path))
         }
         other => bail!("unknown command: {}\n\n{}", other, USAGE),
@@ -53,13 +58,14 @@ fn install(input: &Path) -> Result<()> {
     if local_crate_dir.exists() {
         // If exists, ensure it's a directory and has src/. If not, bail to avoid clobbering.
         if !local_crate_dir.is_dir() {
-            bail!("Target path exists and is not a directory: {}", local_crate_dir.display());
+            bail!(
+                "Target path exists and is not a directory: {}",
+                local_crate_dir.display()
+            );
         }
     } else {
-        fs::create_dir_all(local_crate_dir.join("src")).with_context(|| format!(
-            "creating crate dir {}",
-            local_crate_dir.display()
-        ))?;
+        fs::create_dir_all(local_crate_dir.join("src"))
+            .with_context(|| format!("creating crate dir {}", local_crate_dir.display()))?;
     }
 
     // 2) Write Cargo.toml for the local crate (library only)
@@ -67,7 +73,6 @@ fn install(input: &Path) -> Result<()> {
     if !local_cargo.exists() {
         let cargo_toml = r#"[package]
 name = "prebindgen-project-root"
-version = "0.4.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Utility to expose the workspace project root at build time"
@@ -79,13 +84,14 @@ path = "src/lib.rs"
 [build-dependencies]
 project-root = "0.2"
 "#;
-        fs::write(&local_cargo, cargo_toml).with_context(|| format!("writing {}", local_cargo.display()))?;
+        fs::write(&local_cargo, cargo_toml)
+            .with_context(|| format!("writing {}", local_cargo.display()))?;
     }
 
-    // 3) Write lib.rs and build.rs content from this package's templates
+    // 3) Write lib.rs and build.rs content from this package's real source files
     // We embed our own canonical lib.rs and build.rs to install.
-    let lib_rs = include_str!("./lib.rs.template");
-    let build_rs = include_str!("./build.rs.template");
+    let lib_rs = include_str!("./lib.rs");
+    let build_rs = include_str!("../build.rs");
 
     fs::write(local_crate_dir.join("src/lib.rs"), lib_rs)
         .with_context(|| format!("writing {}", local_crate_dir.join("src/lib.rs").display()))?;
@@ -104,12 +110,19 @@ project-root = "0.2"
 }
 
 fn resolve_workspace_root_and_manifest_or_create(input: &Path) -> Result<(PathBuf, PathBuf)> {
-    let p = if input.is_dir() { input.join("Cargo.toml") } else { input.to_path_buf() };
+    let p = if input.is_dir() {
+        input.join("Cargo.toml")
+    } else {
+        input.to_path_buf()
+    };
     if !p.exists() {
         bail!("Path does not exist: {}", p.display());
     }
     if p.is_dir() {
-        bail!("Expected a Cargo.toml file or a directory containing one: {}", p.display());
+        bail!(
+            "Expected a Cargo.toml file or a directory containing one: {}",
+            p.display()
+        );
     }
 
     // Parse the provided manifest
@@ -120,7 +133,10 @@ fn resolve_workspace_root_and_manifest_or_create(input: &Path) -> Result<(PathBu
 
     // Case 1: user passed a workspace Cargo.toml directly
     if doc.contains_key("workspace") {
-        let ws_root = p.parent().ok_or_else(|| anyhow!("manifest has no parent: {}", p.display()))?.to_path_buf();
+        let ws_root = p
+            .parent()
+            .ok_or_else(|| anyhow!("manifest has no parent: {}", p.display()))?
+            .to_path_buf();
         return Ok((ws_root, p));
     }
 
@@ -147,7 +163,8 @@ fn find_ancestor_workspace_manifest(start_dir: &Path) -> Result<Option<PathBuf>>
     while let Some(dir) = cur {
         let cand = dir.join("Cargo.toml");
         if cand.exists() {
-            let text = fs::read_to_string(&cand).with_context(|| format!("reading {}", cand.display()))?;
+            let text =
+                fs::read_to_string(&cand).with_context(|| format!("reading {}", cand.display()))?;
             let doc: DocumentMut = match text.parse() {
                 Ok(d) => d,
                 Err(_) => {
@@ -209,9 +226,13 @@ fn add_member_and_patch(ws_manifest_path: &Path, local_crate_dir: &Path) -> Resu
     let ws_tbl = ws.as_table_mut().expect("workspace to be a table");
 
     // Ensure members array includes "prebindgen-project-root"
-    let members = ws_tbl.entry("members").or_insert(Item::Value(Value::Array(Array::default())));
+    let members = ws_tbl
+        .entry("members")
+        .or_insert(Item::Value(Value::Array(Array::default())));
     if let Some(arr) = members.as_array_mut() {
-        let exists = arr.iter().any(|v| v.as_str() == Some("prebindgen-project-root"));
+        let exists = arr
+            .iter()
+            .any(|v| v.as_str() == Some("prebindgen-project-root"));
         if !exists {
             arr.push("prebindgen-project-root");
         }
@@ -225,7 +246,9 @@ fn add_member_and_patch(ws_manifest_path: &Path, local_crate_dir: &Path) -> Resu
     // Add [patch.crates-io]
     let patch = doc["patch"].or_insert(Item::Table(Table::new()));
     let patch_tbl = patch.as_table_mut().unwrap();
-    let crates_io = patch_tbl.entry("crates-io").or_insert(Item::Table(Table::new()));
+    let crates_io = patch_tbl
+        .entry("crates-io")
+        .or_insert(Item::Table(Table::new()));
     let crates_io_tbl = crates_io.as_table_mut().unwrap();
 
     let rel_path = pathdiff::diff_paths(local_crate_dir, ws_manifest_path.parent().unwrap())
@@ -243,4 +266,3 @@ fn add_member_and_patch(ws_manifest_path: &Path, local_crate_dir: &Path) -> Resu
         .with_context(|| format!("writing {}", ws_manifest_path.display()))?;
     Ok(())
 }
-
