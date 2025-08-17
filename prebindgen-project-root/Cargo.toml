@@ -1,0 +1,32 @@
+[package]
+name = "prebindgen-project-root"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Michael Ilyin <milyin@gmail.com>"]
+repository = "https://github.com/milyin/prebindgen"
+description = "Utility to expose the workspace project root at build time"
+readme = "README.md"
+
+[lib]
+name = "prebindgen_project_root"
+path = "src/lib.rs"
+
+[build-dependencies]
+project-root = "0.2"
+
+[dependencies]
+anyhow = "1"
+toml_edit = { version = "0.22", features = ["serde"] }
+pathdiff = "0.2"
+
+[[bin]]
+name = "cargo-prebindgen-project-root"
+path = "src/main.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dev-dependencies]
+assert_cmd = "2"
+tempfile = { workspace = true }
