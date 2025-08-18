@@ -88,16 +88,22 @@ fn install(input: &Path) -> Result<()> {
     // 2) Write Cargo.toml for the local crate (library only)
     let local_cargo = local_crate_dir.join("Cargo.toml");
     if !local_cargo.exists() {
-        let cargo_toml = r#"[package]
+        // Use this binary's package version for the generated crate version.
+        let version = env!("CARGO_PKG_VERSION");
+        let cargo_toml = format!(
+            r#"[package]
 name = "prebindgen-project-root"
+version = "{version}"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Utility to expose the workspace project root at build time"
+publish = false
 
 [build-dependencies]
 project-root = "0.2"
 quote = "1"
-"#;
+"#
+        );
         fs::write(&local_cargo, cargo_toml)
             .with_context(|| format!("writing {}", local_cargo.display()))?;
     }
