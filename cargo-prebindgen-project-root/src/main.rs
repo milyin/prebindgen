@@ -47,10 +47,7 @@ fn real_main() -> Result<()> {
 
     // No args or explicit help -> show usage
     if args.is_empty()
-        || matches!(
-            args.first().map(|s| s.as_str()),
-            Some("help" | "-h" | "--help")
-        )
+        || matches!(args.first().map(|s| s.as_str()), Some("help" | "-h" | "--help"))
     {
         println!("{}", USAGE);
         return Ok(());
@@ -97,11 +94,13 @@ version = "{version}"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Utility to expose the workspace project root at build time"
-publish = false
+
+[lib]
+name = "prebindgen_project_root"
+path = "src/lib.rs"
 
 [build-dependencies]
 project-root = "0.2"
-quote = "1"
 "#
         );
         fs::write(&local_cargo, cargo_toml)
@@ -110,8 +109,8 @@ quote = "1"
 
     // 3) Write lib.rs and build.rs content from this package's real source files
     // We embed our own canonical lib.rs and build.rs to install.
-    let lib_rs = include_str!("./lib.rs");
-    let build_rs = include_str!("../build.rs");
+    let lib_rs = include_str!("../../prebindgen-project-root/src/lib.rs");
+    let build_rs = include_str!("../../prebindgen-project-root/build.rs");
 
     fs::write(local_crate_dir.join("src/lib.rs"), lib_rs)
         .with_context(|| format!("writing {}", local_crate_dir.join("src/lib.rs").display()))?;

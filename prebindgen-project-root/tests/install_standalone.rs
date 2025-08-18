@@ -166,8 +166,7 @@ fn cargo_run_and_assert_workspace(dir: &Path, pkg: Option<&str>) {
     eprintln!("[test] program printed: {}", printed);
     eprintln!("[test] expected root  : {}", expected_str);
     assert_eq!(
-        printed,
-        expected_str,
+        printed, expected_str,
         "printed workspace root does not match expected"
     );
 }
