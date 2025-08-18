@@ -127,6 +127,8 @@ pub(crate) mod utils;
 
 pub use crate::api::buildrs::get_prebindgen_out_dir;
 pub use crate::api::buildrs::init_prebindgen_out_dir;
+pub use crate::api::buildrs::get_features;
+
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
 pub use crate::utils::edition::RustEdition;

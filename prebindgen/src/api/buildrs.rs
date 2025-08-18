@@ -65,15 +65,7 @@ pub fn init_prebindgen_out_dir() {
     // Collect enabled Cargo features from environment and store them
     // Cargo exposes enabled features to build.rs as env vars CARGO_FEATURE_<NAME>
     // where <NAME> is uppercased and '-' replaced with '_'. Here we convert back.
-    let mut features: Vec<String> = std::env::vars()
-        .filter_map(|(k, _)| {
-            k.strip_prefix("CARGO_FEATURE_")
-                .map(|name| name.to_string())
-        })
-        .map(|name| name.to_lowercase().replace('_', "-"))
-        .collect();
-    features.sort();
-    features.dedup();
+    let features = get_features();
 
     // Save features list to features.txt (one per line)
     let features_path = prebindgen_dir.join(FEATURES_FILE);
@@ -103,6 +95,23 @@ pub fn init_prebindgen_out_dir() {
             .collect::<Vec<_>>()
             .join(" ")
     );
+}
+
+/// Return list of enabled Cargo features in build.rs
+pub fn get_features() -> Vec<String> {
+    env::var("OUT_DIR").expect(
+        "OUT_DIR environment variable not set. This function should be called from build.rs.",
+    );
+    let mut features: Vec<String> = std::env::vars()
+        .filter_map(|(k, _)| {
+            k.strip_prefix("CARGO_FEATURE_")
+                .map(|name| name.to_string())
+        })
+        .map(|name| name.to_lowercase().replace('_', "-"))
+        .collect();
+    features.sort();
+    features.dedup();
+    features
 }
 
 /// Name of the prebindgen output directory
