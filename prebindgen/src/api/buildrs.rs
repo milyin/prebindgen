@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{collections::BTreeSet, env, fs};
 
 use crate::{CRATE_NAME_FILE, FEATURES_FILE};
 
@@ -62,21 +62,16 @@ pub fn init_prebindgen_out_dir() {
         );
     });
 
-    // Collect enabled Cargo features from environment and store them
-    // Cargo exposes enabled features to build.rs as env vars CARGO_FEATURE_<NAME>
-    // where <NAME> is uppercased and '-' replaced with '_'. Here we convert back.
     let features = get_features();
 
     // Save features list to features.txt (one per line)
     let features_path = prebindgen_dir.join(FEATURES_FILE);
-    let features_contents = if features.is_empty() {
-        String::new()
-    } else {
-        let mut s = features.join("\n");
-        s.push('\n');
-        s
-    };
-    fs::write(&features_path, features_contents).unwrap_or_else(|e| {
+    let mut feature_contents = String::new();
+    for feature in &features {
+        feature_contents += feature;
+        feature_contents.push('\n');
+    }
+    fs::write(&features_path, feature_contents).unwrap_or_else(|e| {
         panic!(
             "Failed to write features to {}: {}",
             features_path.display(),
@@ -97,21 +92,20 @@ pub fn init_prebindgen_out_dir() {
     );
 }
 
-/// Return list of enabled Cargo features in build.rs
-pub fn get_features() -> Vec<String> {
+/// Collect enabled Cargo features from environment and store them
+/// Cargo exposes enabled features to build.rs as env vars CARGO_FEATURE_<NAME>
+/// where <NAME> is uppercased and '-' replaced with '_'. Here we convert back.
+pub fn get_features() -> BTreeSet<String> {
     env::var("OUT_DIR").expect(
         "OUT_DIR environment variable not set. This function should be called from build.rs.",
     );
-    let mut features: Vec<String> = std::env::vars()
+    std::env::vars()
         .filter_map(|(k, _)| {
             k.strip_prefix("CARGO_FEATURE_")
                 .map(|name| name.to_string())
         })
         .map(|name| name.to_lowercase().replace('_', "-"))
-        .collect();
-    features.sort();
-    features.dedup();
-    features
+        .collect()
 }
 
 /// Name of the prebindgen output directory
