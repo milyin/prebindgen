@@ -94,7 +94,10 @@ pub fn init_prebindgen_out_dir() {
 
 /// Collect enabled Cargo features from environment and store them
 /// Cargo exposes enabled features to build.rs as env vars CARGO_FEATURE_<NAME>
-/// where <NAME> is uppercased and '-' replaced with '_'. Here we convert back.
+/// where <NAME> is uppercased.
+/// TODO: there is ambiguity in feature names with '-' and '_'
+/// Currently this is ignored, the projects with features with hyphens will
+/// not work correctly with this implementation.
 pub fn get_features() -> BTreeSet<String> {
     env::var("OUT_DIR").expect(
         "OUT_DIR environment variable not set. This function should be called from build.rs.",
@@ -104,7 +107,7 @@ pub fn get_features() -> BTreeSet<String> {
             k.strip_prefix("CARGO_FEATURE_")
                 .map(|name| name.to_string())
         })
-        .map(|name| name.to_lowercase().replace('_', "-"))
+        .map(|name| name.to_lowercase())
         .collect()
 }
 
