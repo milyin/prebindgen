@@ -1,3 +1,4 @@
+use konst;
 use std::collections::{HashMap, HashSet};
 
 use roxygen::roxygen;
@@ -204,7 +205,7 @@ impl Builder {
             // Prefer a fully-qualified path if provided in feature_constant
             let item: syn::Item = syn::parse_quote! {
                 const _: () = {
-                    prebindgen::konst::assertc_eq!(
+                    konst::assertc_eq!(
                         #const_path,
                         #features_lit,
                         "prebindgen: features mismatch between source crate and prebindgen generated file.\n\

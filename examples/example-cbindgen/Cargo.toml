@@ -14,6 +14,7 @@ crate-type = ["staticlib", "cdylib"]
 [dependencies]
 prebindgen = { workspace = true }
 example-ffi = { path = "../example-ffi" }
+konst = "0.3.0"
 
 [build-dependencies]
 prebindgen = { workspace = true }
