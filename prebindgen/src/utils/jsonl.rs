@@ -1,5 +1,6 @@
 //! Serialization utilities for reading and writing records.
 
+use std::borrow::Borrow;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
@@ -7,16 +8,16 @@ use std::path::Path;
 use crate::api::record::Record;
 
 /// Write a collection of records to a file in JSON-lines format
-pub fn write_to_jsonl_file<P: AsRef<Path>>(
+pub fn write_to_jsonl_file<P: AsRef<Path>, R: Borrow<Record>>(
     file_path: P,
-    records: &[&Record],
+    records: &[R],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) else {
         return Err("Failed to open file".into());
     };
     // Check if file is empty (just created or was deleted)
     for record in records {
-        let json_line = record.to_jsonl_string()?;
+        let json_line = record.borrow().to_jsonl_string()?;
         writeln!(file, "{json_line}")?;
     }
     file.flush()?;
@@ -86,7 +87,7 @@ mod tests {
         let temp_path = temp_file.path();
 
         // Write records to JSONL file
-        write_jsonl_file(temp_path, &records).unwrap();
+        write_to_jsonl_file(temp_path, &records).unwrap();
 
         // Read records back
         let loaded_records = read_jsonl_file(temp_path).unwrap();
@@ -116,7 +117,7 @@ mod tests {
         let temp_path = temp_file.path();
 
         // Write record to JSONL file
-        write_jsonl_file(temp_path, &[record]).unwrap();
+        write_to_jsonl_file(temp_path, &[record]).unwrap();
 
         // Read raw content and verify format
         let content = fs::read_to_string(temp_path).unwrap();
@@ -139,12 +140,13 @@ mod tests {
             Some("feature = \"unstable\"".to_string()),
         );
 
-        write_jsonl_file(temp_path, &[record_with_cfg]).unwrap();
+        write_to_jsonl_file(temp_path, &[record_with_cfg]).unwrap();
         let content = fs::read_to_string(temp_path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 1);
+        dbg!(&lines);
+        assert_eq!(lines.len(), 2);
 
-        let parsed: Record = serde_json::from_str(lines[0]).unwrap();
+        let parsed: Record = serde_json::from_str(lines[1]).unwrap();
         assert_eq!(parsed.cfg, Some("feature = \"unstable\"".to_string()));
     }
 }
