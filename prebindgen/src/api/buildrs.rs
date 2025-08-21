@@ -176,7 +176,6 @@ pub fn get_prebindgen_out_dir() -> std::path::PathBuf {
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
-        #[cfg(debug_assertions)]
         println!("cargo:warning=[{}:{}] {}",
             file!(),
             line!(),
