@@ -1,4 +1,3 @@
-use konst;
 use std::collections::{HashMap, HashSet};
 
 use roxygen::roxygen;

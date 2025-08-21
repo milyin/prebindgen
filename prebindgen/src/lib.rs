@@ -174,6 +174,8 @@ pub mod collect {
 }
 
 #[doc(hidden)]
+pub use utils::jsonl::{write_to_jsonl_file, read_jsonl_file};
+#[doc(hidden)]
 pub use crate::api::record::Record;
 #[doc(hidden)]
 pub use crate::api::record::RecordKind;

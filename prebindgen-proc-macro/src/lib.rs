@@ -12,9 +12,7 @@
 use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
 use quote::quote;
-use std::fs::{metadata, OpenOptions};
-use std::io::Write;
-use std::path::Path;
+use std::fs::OpenOptions;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
@@ -109,18 +107,38 @@ impl Parse for PrebindgenArgs {
     }
 }
 
-/// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
-fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
-    let thread_id = std::thread::current().id();
-    let process_id = std::process::id();
-    // Extract numeric thread ID from ThreadId debug representation
-    let thread_id_str = format!("{thread_id:?}");
-    let thread_id_num = thread_id_str
-        .strip_prefix("ThreadId(")
-        .and_then(|s| s.strip_suffix(")"))
-        .unwrap_or("0");
+thread_local! {
+    static PREBINDGEN_JSONL_PATH: std::cell::RefCell<Option<std::path::PathBuf>> = std::cell::RefCell::new(None);
+}
 
-    get_prebindgen_out_dir().join(format!("{name}_{process_id}_{thread_id_num}.jsonl"))
+/// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
+/// Use another approach: make unique file name, create it and in case of sucess
+/// store the name in Option<PathBuf> threadlocal variable.
+/// If variable is already some, use this value.
+/// Form file name by calling get_prebindgen_jsonl_path() + random value
+fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
+    if let Some(p) = PREBINDGEN_JSONL_PATH.with(|path| path.borrow().as_ref().map(|p| p.clone())) {
+        return p;
+    }
+    let process_id = std::process::id();
+    // Try to really create file and return it only if successful
+    let new_path = loop {
+        let random_value = rand::random::<u64>();
+        let path =
+            get_prebindgen_out_dir().join(format!("{name}_{process_id}_{random_value}.jsonl"));
+        if OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+            .is_ok()
+        {
+            break path;
+        }
+    };
+    PREBINDGEN_JSONL_PATH.with(|path| {
+        *path.borrow_mut() = Some(new_path.clone());
+    });
+    new_path
 }
 
 /// Attribute macro that exports FFI definitions for use in language-specific binding crates.
@@ -173,10 +191,6 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let parsed_args = syn::parse::<PrebindgenArgs>(args).expect("Invalid #[prebindgen] arguments");
 
     let group = parsed_args.group;
-
-    // Get the full path to the JSONL file
-    let file_path = get_prebindgen_jsonl_path(&group);
-    let dest_path = Path::new(&file_path);
 
     // Try to parse as different item types
     let (kind, name, content, span) = if let Ok(parsed) = syn::parse::<DeriveInput>(input.clone()) {
@@ -241,21 +255,12 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         parsed_args.cfg.clone(),
     );
 
-    // Convert record to JSON and append to file in JSON-lines format
-    if let Ok(json_content) = serde_json::to_string(&new_record) {
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(dest_path) {
-            // Check if file is empty (just created or was deleted)
-            let is_empty = metadata(dest_path).map(|m| m.len() == 0).unwrap_or(true);
-
-            if is_empty {
-                #[cfg(feature = "debug")]
-                println!("Creating jsonl file: {}", dest_path.display());
-            }
-
-            // Write the record as a single line (JSON-lines format)
-            let _ = writeln!(file, "{json_content}");
-            let _ = file.flush();
-        }
+    // Get the full path to the JSONL file
+    let file_path = get_prebindgen_jsonl_path(&group);
+    if let Err(_) = prebindgen::write_to_jsonl_file(&file_path, &[&new_record]) {
+        return TokenStream::from(quote! {
+            compile_error!("Failed to write prebindgen record");
+        });
     }
 
     // Apply cfg attribute to the original code if specified

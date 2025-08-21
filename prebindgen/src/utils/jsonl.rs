@@ -1,18 +1,20 @@
 //! Serialization utilities for reading and writing records.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 
 use crate::api::record::Record;
 
 /// Write a collection of records to a file in JSON-lines format
-#[allow(dead_code)]
-pub fn write_jsonl_file<P: AsRef<Path>>(
+pub fn write_to_jsonl_file<P: AsRef<Path>>(
     file_path: P,
-    records: &[Record],
+    records: &[&Record],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut file = fs::File::create(&file_path)?;
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(file_path) else {
+        return Err("Failed to open file".into());
+    };
+    // Check if file is empty (just created or was deleted)
     for record in records {
         let json_line = record.to_jsonl_string()?;
         writeln!(file, "{json_line}")?;
