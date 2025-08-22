@@ -134,7 +134,7 @@ pub use crate::api::buildrs::is_feature_enabled;
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
 pub use crate::utils::edition::RustEdition;
-pub use crate::utils::target::TargetTriple;
+pub use crate::utils::target_triple::TargetTriple;
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {
@@ -172,6 +172,10 @@ pub mod map {
 /// Collectors for sequences of (syn::Item, SourceLocation) produced by `collect`
 pub mod collect {
     pub use crate::api::collect::destination::Destination;
+}
+
+pub mod utils {
+    pub use crate::utils::target_triple::TargetTriple;
 }
 
 #[doc(hidden)]

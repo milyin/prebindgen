@@ -67,6 +67,14 @@ impl TargetTriple {
     }
 }
 
+impl std::str::FromStr for TargetTriple {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        TargetTriple::parse(s)
+    }
+}
+
 /// Allow quoting a TargetTriple directly, yielding its cfg tokens.
 impl quote::ToTokens for TargetTriple {
     fn to_tokens(&self, tokens: &mut TokenStream) {
