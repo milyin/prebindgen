@@ -12,6 +12,7 @@
 use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
 use quote::quote;
+use std::collections::HashMap;
 use std::fs::OpenOptions;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
@@ -108,24 +109,35 @@ impl Parse for PrebindgenArgs {
 }
 
 thread_local! {
-    static PREBINDGEN_JSONL_PATH: std::cell::RefCell<Option<std::path::PathBuf>> = std::cell::RefCell::new(None);
+    static THREAD_ID: std::cell::RefCell<Option<u64>> = std::cell::RefCell::new(None);
+    static JSONL_PATHS: std::cell::RefCell<HashMap<String, std::path::PathBuf>> = std::cell::RefCell::new(HashMap::new());
 }
 
 /// Get the full path to `{group}_{pid}_{thread_id}.jsonl` generated in OUT_DIR.
-/// Use another approach: make unique file name, create it and in case of sucess
-/// store the name in Option<PathBuf> threadlocal variable.
-/// If variable is already some, use this value.
-/// Form file name by calling get_prebindgen_jsonl_path() + random value
-fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
-    if let Some(p) = PREBINDGEN_JSONL_PATH.with(|path| path.borrow().as_ref().map(|p| p.clone())) {
+fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
+    if let Some(p) = JSONL_PATHS.with(|path| path.borrow().get(group).cloned()) {
         return p;
     }
     let process_id = std::process::id();
-    // Try to really create file and return it only if successful
+    let thread_id = if let Some(in_thread_id) = THREAD_ID.with(|id| *id.borrow()) {
+        in_thread_id
+    } else {
+        let new_id = rand::random::<u64>();
+        THREAD_ID.with(|id| *id.borrow_mut() = Some(new_id));
+        new_id
+    };
+    let mut random_value = None;
+    // Try to really create file and repeat until success
+    // to avoid collisions in extremely rare case when two threads got 
+    // the same random value
     let new_path = loop {
-        let random_value = rand::random::<u64>();
-        let path =
-            get_prebindgen_out_dir().join(format!("{name}_{process_id}_{random_value}.jsonl"));
+        let postfix = if let Some(rv) = random_value {
+            format!("_{rv}")
+        } else {
+            "".to_string()
+        };
+        let path = get_prebindgen_out_dir()
+            .join(format!("{group}_{process_id}_{thread_id}{postfix}.jsonl"));
         if OpenOptions::new()
             .create_new(true)
             .write(true)
@@ -134,9 +146,11 @@ fn get_prebindgen_jsonl_path(name: &str) -> std::path::PathBuf {
         {
             break path;
         }
+        random_value = Some(rand::random::<u32>());
     };
-    PREBINDGEN_JSONL_PATH.with(|path| {
-        *path.borrow_mut() = Some(new_path.clone());
+    JSONL_PATHS.with(|path| {
+        path.borrow_mut()
+            .insert(group.to_string(), new_path.clone());
     });
     new_path
 }
