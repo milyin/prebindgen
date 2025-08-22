@@ -32,6 +32,11 @@ pub struct Builder {
     pub(crate) disable_unknown_features: bool,
     // Source crate features constant name and features list in format "crate/f1 crate/f2"
     pub(crate) features_assert: Option<(String, String)>,
+    // Selected target configuration parameters. When Some, only the selected value is enabled and others are disabled.
+    pub(crate) enabled_target_arch: Option<String>,
+    pub(crate) enabled_target_vendor: Option<String>,
+    pub(crate) enabled_target_os: Option<String>,
+    pub(crate) enabled_target_env: Option<String>,
 }
 
 impl Builder {
@@ -49,6 +54,10 @@ impl Builder {
             feature_mappings: HashMap::new(),
             disable_unknown_features: false,
             features_assert: None,
+            enabled_target_arch: None,
+            enabled_target_vendor: None,
+            enabled_target_os: None,
+            enabled_target_env: None,
         }
     }
 
@@ -93,6 +102,65 @@ impl Builder {
         feature: S,
     ) -> Self {
         self.enabled_features.insert(feature.into());
+        self
+    }
+
+    /// Enable a specific target architecture. All other architectures are treated as disabled.
+    ///
+    /// Only one architecture can be enabled. Calling this again overwrites the previous choice.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let builder = prebindgen::batching::feature_filter::Builder::new()
+    ///     .enable_target_arch("x86_64");
+    /// ```
+    #[roxygen]
+    pub fn enable_target_arch<S: Into<String>>(
+        mut self,
+        /// The target architecture value to enable (e.g., "x86_64", "aarch64")
+        arch: S,
+    ) -> Self {
+        self.enabled_target_arch = Some(arch.into());
+        self
+    }
+
+    /// Enable a specific target vendor. All other vendors are treated as disabled.
+    ///
+    /// Only one vendor can be enabled. Calling this again overwrites the previous choice.
+    #[roxygen]
+    pub fn enable_target_vendor<S: Into<String>>(
+        mut self,
+        /// The target vendor value to enable (e.g., "apple", "pc")
+        vendor: S,
+    ) -> Self {
+        self.enabled_target_vendor = Some(vendor.into());
+        self
+    }
+
+    /// Enable a specific target operating system. All other OS values are treated as disabled.
+    ///
+    /// Only one OS can be enabled. Calling this again overwrites the previous choice.
+    #[roxygen]
+    pub fn enable_target_os<S: Into<String>>(
+        mut self,
+        /// The target operating system to enable (e.g., "macos", "linux", "windows")
+        os: S,
+    ) -> Self {
+        self.enabled_target_os = Some(os.into());
+        self
+    }
+
+    /// Enable a specific target environment. All other environments are treated as disabled.
+    ///
+    /// Only one environment can be enabled. Calling this again overwrites the previous choice.
+    #[roxygen]
+    pub fn enable_target_env<S: Into<String>>(
+        mut self,
+        /// The target environment to enable (e.g., "gnu", "musl", "msvc")
+        env: S,
+    ) -> Self {
+        self.enabled_target_env = Some(env.into());
         self
     }
     /// Map a feature name to a different name in the generated code
@@ -189,7 +257,11 @@ impl Builder {
             || self.disable_unknown_features
             || !self.disabled_features.is_empty()
             || !self.enabled_features.is_empty()
-            || !self.feature_mappings.is_empty();
+            || !self.feature_mappings.is_empty()
+            || self.enabled_target_arch.is_some()
+            || self.enabled_target_vendor.is_some()
+            || self.enabled_target_os.is_some()
+            || self.enabled_target_env.is_some();
 
         // Optionally create a prelude assertion comparing FEATURES const path with expected features string
         let mut prelude_item: Option<(syn::Item, SourceLocation)> = None;
@@ -312,6 +384,10 @@ impl FeatureFilter {
                 &self.builder.enabled_features,
                 &self.builder.feature_mappings,
                 self.builder.disable_unknown_features,
+                &self.builder.enabled_target_arch,
+                &self.builder.enabled_target_vendor,
+                &self.builder.enabled_target_os,
+                &self.builder.enabled_target_env,
                 &source_location,
             ) {
                 return Some((item, source_location));

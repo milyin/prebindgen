@@ -19,6 +19,12 @@ pub enum CfgExpr {
     All(Vec<CfgExpr>),
     /// Logical OR: `any(expr1, expr2, ...)`
     Any(Vec<CfgExpr>),
+    /// Target vendor check: `target_vendor = "vendor"`
+    TargetVendor(String),
+    /// Target OS check: `target_os = "os"`
+    TargetOs(String),
+    /// Target environment check: `target_env = "env"`
+    TargetEnv(String),
     /// Logical NOT: `not(expr)`
     Not(Box<CfgExpr>),
     /// Any other cfg expression we don't specifically handle
@@ -63,6 +69,20 @@ impl CfgExpr {
         if let Some(arch) = extract_target_arch(input) {
             return Ok(CfgExpr::TargetArch(arch));
         }
+        // Handle target_vendor expressions
+        if let Some(vendor) = extract_target_vendor(input) {
+            return Ok(CfgExpr::TargetVendor(vendor));
+        }
+
+        // Handle target_os expressions
+        if let Some(os) = extract_target_os(input) {
+            return Ok(CfgExpr::TargetOs(os));
+        }
+
+        // Handle target_env expressions
+        if let Some(env) = extract_target_env(input) {
+            return Ok(CfgExpr::TargetEnv(env));
+        }
 
         // If we can't parse it, store it as "Other"
         Ok(CfgExpr::Other(input.to_string()))
@@ -79,6 +99,10 @@ impl CfgExpr {
         disabled_features: &HashSet<String>,
         feature_mappings: &std::collections::HashMap<String, String>,
         disable_unknown_features: bool,
+        enabled_target_arch: &Option<String>,
+        enabled_target_vendor: &Option<String>,
+        enabled_target_os: &Option<String>,
+        enabled_target_env: &Option<String>,
         source_location: &SourceLocation,
     ) -> Option<Self> {
         match self {
@@ -100,7 +124,20 @@ impl CfgExpr {
                     panic!("unmapped feature: {name} (at {source_location})");
                 }
             }
-            CfgExpr::TargetArch(_) => Some(self.clone()),
+            CfgExpr::TargetVendor(val) => {
+                if let Some(sel) = enabled_target_vendor.as_ref() {
+                    if val == sel { None } else { Some(CfgExpr::False) }
+                } else {
+                    Some(self.clone())
+                }
+            }
+            CfgExpr::TargetArch(val) => {
+                if let Some(sel) = enabled_target_arch.as_ref() {
+                    if val == sel { None } else { Some(CfgExpr::False) }
+                } else {
+                    Some(self.clone())
+                }
+            }
             CfgExpr::All(exprs) => {
                 let mut processed_exprs = Vec::new();
                 for expr in exprs {
@@ -109,6 +146,10 @@ impl CfgExpr {
                         disabled_features,
                         feature_mappings,
                         disable_unknown_features,
+                        enabled_target_arch,
+                        enabled_target_vendor,
+                        enabled_target_os,
+                        enabled_target_env,
                         source_location,
                     ) {
                         Some(CfgExpr::False) => {
@@ -136,6 +177,10 @@ impl CfgExpr {
                         disabled_features,
                         feature_mappings,
                         disable_unknown_features,
+                        enabled_target_arch,
+                        enabled_target_vendor,
+                        enabled_target_os,
+                        enabled_target_env,
                         source_location,
                     ) {
                         Some(CfgExpr::False) => {
@@ -164,11 +209,29 @@ impl CfgExpr {
                     disabled_features,
                     feature_mappings,
                     disable_unknown_features,
+                    enabled_target_arch,
+                    enabled_target_vendor,
+                    enabled_target_os,
+                    enabled_target_env,
                     source_location,
                 ) {
                     Some(CfgExpr::False) => None, // not(false) = true
                     Some(processed) => Some(CfgExpr::Not(Box::new(processed))),
                     None => Some(CfgExpr::False), // not(true) = false
+                }
+            }
+            CfgExpr::TargetOs(val) => {
+                if let Some(sel) = enabled_target_os.as_ref() {
+                    if val == sel { None } else { Some(CfgExpr::False) }
+                } else {
+                    Some(self.clone())
+                }
+            }
+            CfgExpr::TargetEnv(val) => {
+                if let Some(sel) = enabled_target_env.as_ref() {
+                    if val == sel { None } else { Some(CfgExpr::False) }
+                } else {
+                    Some(self.clone())
                 }
             }
             CfgExpr::Other(_) => Some(self.clone()),
@@ -184,6 +247,15 @@ impl CfgExpr {
             }
             CfgExpr::TargetArch(arch) => {
                 quote::quote! { target_arch = #arch }
+            }
+            CfgExpr::TargetVendor(vendor) => {
+                quote::quote! { target_vendor = #vendor }
+            }
+            CfgExpr::TargetOs(os) => {
+                quote::quote! { target_os = #os }
+            }
+            CfgExpr::TargetEnv(env) => {
+                quote::quote! { target_env = #env }
             }
             CfgExpr::All(exprs) => {
                 let tokens: Vec<_> = exprs.iter().map(|e| e.to_tokens()).collect();
@@ -233,6 +305,27 @@ fn extract_target_arch(input: &str) -> Option<String> {
     arch_regex
         .captures(input)
         .map(|captures| captures[1].to_string())
+}
+
+/// Extract target vendor from expressions like `target_vendor = "apple"`
+fn extract_target_vendor(input: &str) -> Option<String> {
+    use regex::Regex;
+    let re = Regex::new(r#"target_vendor\s*=\s*\"([^\"]+)\""#).unwrap();
+    re.captures(input).map(|c| c[1].to_string())
+}
+
+/// Extract target OS from expressions like `target_os = "macos"`
+fn extract_target_os(input: &str) -> Option<String> {
+    use regex::Regex;
+    let re = Regex::new(r#"target_os\s*=\s*\"([^\"]+)\""#).unwrap();
+    re.captures(input).map(|c| c[1].to_string())
+}
+
+/// Extract target env from expressions like `target_env = "gnu"`
+fn extract_target_env(input: &str) -> Option<String> {
+    use regex::Regex;
+    let re = Regex::new(r#"target_env\s*=\s*\"([^\"]+)\""#).unwrap();
+    re.captures(input).map(|c| c[1].to_string())
 }
 
 /// Strip a function call wrapper, returning the inner content
@@ -387,6 +480,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             None
@@ -400,6 +497,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::False)
@@ -413,6 +514,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::Feature("new_feature".to_string()))
@@ -429,6 +534,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             None
@@ -445,6 +554,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::False)
@@ -458,6 +571,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             None
@@ -471,6 +588,10 @@ mod tests {
                 &disabled_features,
                 &feature_mappings,
                 false,
+                &None,
+                &None,
+                &None,
+                &None,
                 &SourceLocation::default()
             ),
             Some(CfgExpr::False)
@@ -493,6 +614,10 @@ mod tests {
             &disabled_features,
             &feature_mappings,
             false,
+            &None,
+            &None,
+            &None,
+            &None,
             &SourceLocation::default(),
         );
     }
@@ -518,6 +643,10 @@ mod tests {
             &disabled_features,
             &feature_mappings,
             false,
+            &None,
+            &None,
+            &None,
+            &None,
             &SourceLocation::default(),
         );
     }
