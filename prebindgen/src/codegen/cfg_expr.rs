@@ -11,22 +11,27 @@ use crate::SourceLocation;
 /// Represents a cfg expression that can be evaluated against a set of enabled/disabled features
 #[derive(Debug, Clone, PartialEq)]
 pub enum CfgExpr {
+    // Simple predicates first
     /// A simple feature check: `feature = "name"`
     Feature(String),
     /// Target architecture check: `target_arch = "arch"`
     TargetArch(String),
-    /// Logical AND: `all(expr1, expr2, ...)`
-    All(Vec<CfgExpr>),
-    /// Logical OR: `any(expr1, expr2, ...)`
-    Any(Vec<CfgExpr>),
     /// Target vendor check: `target_vendor = "vendor"`
     TargetVendor(String),
     /// Target OS check: `target_os = "os"`
     TargetOs(String),
     /// Target environment check: `target_env = "env"`
     TargetEnv(String),
+
+    // Logical operators next
     /// Logical NOT: `not(expr)`
     Not(Box<CfgExpr>),
+    /// Logical AND: `all(expr1, expr2, ...)`
+    All(Vec<CfgExpr>),
+    /// Logical OR: `any(expr1, expr2, ...)`
+    Any(Vec<CfgExpr>),
+
+    // Fallbacks
     /// Any other cfg expression we don't specifically handle
     Other(String),
     /// Explicit false value (for feature processing)
@@ -420,6 +425,136 @@ mod tests {
     fn test_target_arch() {
         let expr = CfgExpr::parse_from_string(r#"target_arch = "x86_64""#).unwrap();
         assert_eq!(expr, CfgExpr::TargetArch("x86_64".to_string()));
+    }
+
+    #[test]
+    fn test_target_vendor_os_env_parse() {
+        let vendor = CfgExpr::parse_from_string(r#"target_vendor = "apple""#).unwrap();
+        assert_eq!(vendor, CfgExpr::TargetVendor("apple".to_string()));
+
+        let os = CfgExpr::parse_from_string(r#"target_os = "macos""#).unwrap();
+        assert_eq!(os, CfgExpr::TargetOs("macos".to_string()));
+
+        let env = CfgExpr::parse_from_string(r#"target_env = "gnu""#).unwrap();
+        assert_eq!(env, CfgExpr::TargetEnv("gnu".to_string()));
+    }
+
+    #[test]
+    fn test_target_filters_processing() {
+        use std::collections::HashMap;
+        let enabled_features = HashSet::new();
+        let disabled_features = HashSet::new();
+        let feature_mappings: HashMap<String, String> = HashMap::new();
+        let src = SourceLocation::default();
+
+        // With no selection, keep predicates as-is
+        let expr = CfgExpr::TargetOs("macos".into());
+        assert_eq!(
+            expr.process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &None,
+                &None,
+                &None,
+                &None,
+                &src,
+            ),
+            Some(CfgExpr::TargetOs("macos".into()))
+        );
+
+        // Select OS = macos: becomes true (None)
+        assert_eq!(
+            CfgExpr::TargetOs("macos".into()).process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &None,
+                &None,
+                &Some("macos".into()),
+                &None,
+                &src,
+            ),
+            None
+        );
+
+        // Non-matching becomes False
+        assert_eq!(
+            CfgExpr::TargetOs("linux".into()).process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &None,
+                &None,
+                &Some("macos".into()),
+                &None,
+                &src,
+            ),
+            Some(CfgExpr::False)
+        );
+
+        // Arch selection
+        assert_eq!(
+            CfgExpr::TargetArch("x86_64".into()).process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &Some("x86_64".into()),
+                &None,
+                &None,
+                &None,
+                &src,
+            ),
+            None
+        );
+        assert_eq!(
+            CfgExpr::TargetArch("aarch64".into()).process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &Some("x86_64".into()),
+                &None,
+                &None,
+                &None,
+                &src,
+            ),
+            Some(CfgExpr::False)
+        );
+
+        // Vendor and Env selection
+        assert_eq!(
+            CfgExpr::TargetVendor("apple".into()).process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &None,
+                &Some("apple".into()),
+                &None,
+                &None,
+                &src,
+            ),
+            None
+        );
+        assert_eq!(
+            CfgExpr::TargetEnv("gnu".into()).process_features_strict(
+                &enabled_features,
+                &disabled_features,
+                &feature_mappings,
+                false,
+                &None,
+                &None,
+                &None,
+                &Some("gnu".into()),
+                &src,
+            ),
+            None
+        );
     }
 
     #[test]
