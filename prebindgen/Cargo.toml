@@ -25,6 +25,7 @@ if_rust_version = { workspace = true }
 konst = { workspace = true, features = ["cmp"] }
 itertools = { workspace = true }
 toml = { workspace = true }
+target-lexicon = { workspace = true }
 
 [features]
 debug = []
