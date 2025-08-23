@@ -12,7 +12,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use crate::{utils::edition::RustEdition, SourceLocation};
+use crate::{api::utils::edition::RustEdition, SourceLocation};
 
 /// Configuration parameters for parsing records
 pub(crate) struct ParseConfig<'a> {

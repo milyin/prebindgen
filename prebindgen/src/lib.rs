@@ -123,7 +123,6 @@ pub const DEFAULT_GROUP_NAME: &str = "default";
 
 pub(crate) mod api;
 pub(crate) mod codegen;
-pub(crate) mod utils;
 
 pub use crate::api::buildrs::get_all_features;
 pub use crate::api::buildrs::get_enabled_features;
@@ -133,17 +132,18 @@ pub use crate::api::buildrs::is_feature_enabled;
 
 pub use crate::api::record::SourceLocation;
 pub use crate::api::source::Source;
-pub use crate::utils::edition::RustEdition;
+pub use crate::api::utils::edition::RustEdition;
+pub use crate::api::utils::target_triple::TargetTriple;
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {
     pub mod ffi_converter {
         pub use crate::api::batching::ffi_converter::Builder;
     }
-    pub use crate::api::batching::feature_filter::FeatureFilter;
+    pub use crate::api::batching::cfg_filter::CfgFilter;
     pub use crate::api::batching::ffi_converter::FfiConverter;
-    pub mod feature_filter {
-        pub use crate::api::batching::feature_filter::Builder;
+    pub mod cfg_filter {
+        pub use crate::api::batching::cfg_filter::Builder;
     }
 }
 
@@ -173,8 +173,12 @@ pub mod collect {
     pub use crate::api::collect::destination::Destination;
 }
 
-#[doc(hidden)]
-pub use utils::jsonl::{write_to_jsonl_file, read_jsonl_file};
+pub mod utils {
+    #[doc(hidden)]
+    pub use crate::api::utils::jsonl::{read_jsonl_file, write_to_jsonl_file};
+    pub use crate::api::utils::target_triple::TargetTriple;
+}
+
 #[doc(hidden)]
 pub use crate::api::record::Record;
 #[doc(hidden)]

@@ -9,8 +9,8 @@ use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::batching::feature_filter, api::record::Record, utils::jsonl::read_jsonl_file,
-    SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
+    api::{batching::cfg_filter, record::Record, utils::jsonl::read_jsonl_file},
+    SourceLocation, TargetTriple, CRATE_NAME_FILE, FEATURES_FILE,
 };
 
 /// File extension for data files
@@ -68,8 +68,9 @@ thread_local! {
 pub struct Source {
     crate_name: String,
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
-    // Configuration needed to build a FeatureFilter at iteration time
+    // Configuration needed to build a CfgFilter at iteration time
     features_constant: Option<String>,
+    target_triple_env_var: Option<String>,
     features_list: Vec<String>, // normalized list from features.txt
 }
 
@@ -91,7 +92,11 @@ impl Source {
 }
 
 impl Source {
-    fn build_internal(input_dir: &Path, features_constant: Option<String>) -> Self {
+    fn build_internal(
+        input_dir: &Path,
+        features_constant: Option<String>,
+        target_triple_env_var: Option<String>,
+    ) -> Self {
         if let Some(source) = DOCTEST_SOURCE.with(|source| (*source.borrow()).clone()) {
             return source;
         }
@@ -125,6 +130,7 @@ impl Source {
             items,
             features_constant,
             features_list,
+            target_triple_env_var,
         }
     }
 
@@ -158,6 +164,7 @@ impl Source {
                 ),
             ]),
             features_constant: None,
+            target_triple_env_var: None,
             features_list: Vec::new(),
         };
         DOCTEST_SOURCE.with(|cell| {
@@ -200,8 +207,8 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Build a feature filter and apply it lazily with itertools::batching
-        let mut filter = self.build_feature_filter();
+        // Build a cfg filter and apply it lazily with itertools::batching
+        let mut filter = self.build_cfg_filter();
         groups
             .iter()
             .filter_map(|group| self.items.get(*group))
@@ -227,8 +234,8 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Build a feature filter and apply it lazily with itertools::batching
-        let mut filter = self.build_feature_filter();
+        // Build a cfg filter and apply it lazily with itertools::batching
+        let mut filter = self.build_cfg_filter();
         self.items
             .iter()
             .filter(|(group, _)| !groups.contains(&group.as_str()))
@@ -249,17 +256,17 @@ impl Source {
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Build a feature filter and apply it lazily with itertools::batching
-        let mut filter = self.build_feature_filter();
+        // Build a cfg filter and apply it lazily with itertools::batching
+        let mut filter = self.build_cfg_filter();
         self.items
             .iter()
             .flat_map(|(_, records)| records.iter().cloned())
             .batching(move |iter| filter.call(iter))
     }
 
-    /// Internal: construct a FeatureFilter from the stored configuration and features file
-    fn build_feature_filter(&self) -> feature_filter::FeatureFilter {
-        let mut builder = feature_filter::FeatureFilter::builder();
+    /// Internal: construct a CfgFilter from the stored configuration and features file
+    fn build_cfg_filter(&self) -> cfg_filter::CfgFilter {
+        let mut builder = cfg_filter::CfgFilter::builder();
         if let Some(const_name) = &self.features_constant {
             // If the provided constant isn't fully qualified, qualify it with the crate name
             let qualified_const = if const_name.contains("::") {
@@ -274,6 +281,28 @@ impl Source {
                 .map(|f| format!("{}/{}", self.crate_name, f))
                 .join(" ");
             builder = builder.predefined_features(qualified_const, features_list);
+        }
+        if let Some(env_var) = &self.target_triple_env_var {
+            let target = std::env::var(env_var).unwrap_or_else(|_| {
+                panic!(
+                    "Environment variable {} is not set. \
+                    Ensure that the build script sets it to the target triple.",
+                    env_var
+                )
+            });
+            let target_triple = TargetTriple::parse(&target).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to parse target triple '{}' from environment variable {}: {}",
+                    target, env_var, e
+                )
+            });
+            builder = builder
+                .enable_target_arch(target_triple.arch())
+                .enable_target_os(target_triple.os())
+                .enable_target_vendor(target_triple.vendor());
+            if let Some(env) = target_triple.env() {
+                builder = builder.enable_target_env(env);
+            }
         }
         builder.build()
     }
@@ -371,6 +400,7 @@ fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
 pub struct Builder {
     input_dir: PathBuf,
     features_constant: Option<String>,
+    target_triple_env_var: Option<String>,
 }
 
 impl Builder {
@@ -378,11 +408,12 @@ impl Builder {
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
             features_constant: Some("FEATURES".to_string()),
+            target_triple_env_var: Some("TARGET".to_string()),
         }
     }
 
-    /// Enables or disables filtering by features when
-    /// extracting collected data.
+    /// Enables or disables filtering by features when extracting collected data.
+    /// Accepts name of the constant with the list of features in the source crate.
     ///
     /// Pass `None` to disable feature filtering.
     ///
@@ -390,9 +421,20 @@ impl Builder {
     /// to enable filtering. The value is the name of the features constant
     /// from the source crate.
     ///
+    /// It's important to note that the set of features to filter is determined
+    /// not by this constant, but by file "features.txt" in
+    /// prebindgen output directory. These are features which the source crate was
+    /// built with *as build.rs dependency*. The constant contains the features which
+    /// the source crate was built *as library dependency*.
+    /// The purpose of the constant is to use it in the assert in the
+    /// generated code to ensure that both feature lists are the same.
+    /// If it's not the case, compilation fails and it's developer's
+    /// job to ensure that the source crate is configured in the same way for
+    /// both `[dependencies]` and `[build-dependencies]`.
+    ///
     /// Filtering is enabled by default; the default constant name is `FEATURES`.
     ///
-    /// The source crate should contain the following line by default:
+    /// The features constant should be defined in the source crate as follows:
     /// ```rust,ignore
     /// const FEATURES: &str = prebindgen_proc_macro::features!();
     /// ```
@@ -406,8 +448,54 @@ impl Builder {
         self
     }
 
+    /// Enables filtering source code by target-triple which is usually
+    /// passed to `build.rs` in `TARGET` environment variable.
+    /// Accepts the name of the environment variable as an optional string.
+    /// Default value is `TARGET`.
+    ///
+    /// Pass `None` to disable target filtering.
+    ///
+    /// When enabled, the code will be filtered by the target triple specified
+    /// (architecture, vendor, os, env). By default filtering is performed
+    /// by the value from the `TARGET` environment variable which contains
+    /// the target triple for the library.
+    ///
+    /// It's useful to mention that it's hard to imagine a scenario
+    /// when it's necessary to change the environment variable name.
+    /// The `Source` object is used in the final crate, the one which builds the
+    /// no-mangle library and the language bindings (e.g. C headers). On this
+    /// stage the `TARGET` environment variable contains real target triple
+    /// even in cross-compilation scenarios. Passing the real target in the
+    /// other variable's name, e.g:
+    /// ```ignore
+    /// CROSS_TARGET=x86_64-pc-windows-gnu cargo build --target x86_64-pc-windows-gnu
+    /// ```
+    /// sometimes is necessary to inform the underlying "ffi" crate about the
+    /// real target triple, because it's compiled as a `build.rs` dependency on
+    /// the host platform and therefore it's target is the host.
+    /// But the `Source` is not called on this stage, so normally the access to
+    /// this `CROSS_TARGET` variable is not needed.
+    /// But for the sake of completeness the ability to use any environment variable
+    /// is provided.
+    /// It's also possible to just create standalone `CfgFilter` object
+    /// with necessary configuration and insert into the iterator chain.
+    #[roxygen]
+    pub fn enable_target_filtering(
+        mut self,
+        /// Full name of the environment variable which contains the target triple
+        /// to which the code is generated
+        name: Option<impl Into<String>>,
+    ) -> Self {
+        self.target_triple_env_var = name.map(|n| n.into());
+        self
+    }
+
     /// Build the `Source` instance
     pub fn build(self) -> Source {
-        Source::build_internal(&self.input_dir, self.features_constant)
+        Source::build_internal(
+            &self.input_dir,
+            self.features_constant,
+            self.target_triple_env_var,
+        )
     }
 }

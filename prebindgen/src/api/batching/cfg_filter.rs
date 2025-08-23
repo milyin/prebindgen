@@ -4,21 +4,22 @@ use roxygen::roxygen;
 
 use crate::{api::record::SourceLocation, codegen::process_features::process_item_features};
 
-/// Builder for configuring FeatureFilter instances
+/// Builder for configuring CfgFilter instances
 ///
-/// Configures how feature flags in `#[cfg(feature="...")]` attributes
+/// Configures how flags in `#[cfg(...)]` attributes
 /// are processed when generating FFI bindings.
+/// Supports features and target architecture filtering.
 ///
 /// This filter is usually not necessary: the `Source` by default automatically reads
 /// features enabled in the crate and removes any code guarded by disabled features.
 ///
-/// But if necessary this option can be disabled (see and FeatureFilter can be applied
-/// explicitly.
+/// But if necessary this filtering on `Source` level can be disabled and CfgFilter
+/// can be applied explicitly.
 ///
 /// # Example
 ///
 /// ```
-/// let builder = prebindgen::batching::feature_filter::Builder::new()
+/// let builder = prebindgen::batching::cfg_filter::Builder::new()
 ///     .disable_feature("unstable")
 ///     .enable_feature("std")
 ///     .match_feature("internal", "public")
@@ -32,15 +33,20 @@ pub struct Builder {
     pub(crate) disable_unknown_features: bool,
     // Source crate features constant name and features list in format "crate/f1 crate/f2"
     pub(crate) features_assert: Option<(String, String)>,
+    // Selected target configuration parameters. When Some, only the selected value is enabled and others are disabled.
+    pub(crate) enabled_target_arch: Option<String>,
+    pub(crate) enabled_target_vendor: Option<String>,
+    pub(crate) enabled_target_os: Option<String>,
+    pub(crate) enabled_target_env: Option<String>,
 }
 
 impl Builder {
-    /// Create a new Builder for configuring FeatureFilter
+    /// Create a new Builder for configuring CfgFilter
     ///
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::batching::feature_filter::Builder::new();
+    /// let builder = prebindgen::batching::cfg_filter::Builder::new();
     /// ```
     pub fn new() -> Self {
         Self {
@@ -49,6 +55,10 @@ impl Builder {
             feature_mappings: HashMap::new(),
             disable_unknown_features: false,
             features_assert: None,
+            enabled_target_arch: None,
+            enabled_target_vendor: None,
+            enabled_target_os: None,
+            enabled_target_env: None,
         }
     }
 
@@ -60,7 +70,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::batching::feature_filter::Builder::new()
+    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
     ///     .disable_feature("experimental")
     ///     .disable_feature("deprecated");
     /// ```
@@ -83,7 +93,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::batching::feature_filter::Builder::new()
+    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
     ///     .enable_feature("experimental");
     /// ```
     #[roxygen]
@@ -95,6 +105,65 @@ impl Builder {
         self.enabled_features.insert(feature.into());
         self
     }
+
+    /// Enable a specific target architecture. All other architectures are treated as disabled.
+    ///
+    /// Only one architecture can be enabled. Calling this again overwrites the previous choice.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
+    ///     .enable_target_arch("x86_64");
+    /// ```
+    #[roxygen]
+    pub fn enable_target_arch<S: Into<String>>(
+        mut self,
+        /// The target architecture value to enable (e.g., "x86_64", "aarch64")
+        arch: S,
+    ) -> Self {
+        self.enabled_target_arch = Some(arch.into());
+        self
+    }
+
+    /// Enable a specific target vendor. All other vendors are treated as disabled.
+    ///
+    /// Only one vendor can be enabled. Calling this again overwrites the previous choice.
+    #[roxygen]
+    pub fn enable_target_vendor<S: Into<String>>(
+        mut self,
+        /// The target vendor value to enable (e.g., "apple", "pc")
+        vendor: S,
+    ) -> Self {
+        self.enabled_target_vendor = Some(vendor.into());
+        self
+    }
+
+    /// Enable a specific target operating system. All other OS values are treated as disabled.
+    ///
+    /// Only one OS can be enabled. Calling this again overwrites the previous choice.
+    #[roxygen]
+    pub fn enable_target_os<S: Into<String>>(
+        mut self,
+        /// The target operating system to enable (e.g., "macos", "linux", "windows")
+        os: S,
+    ) -> Self {
+        self.enabled_target_os = Some(os.into());
+        self
+    }
+
+    /// Enable a specific target environment. All other environments are treated as disabled.
+    ///
+    /// Only one environment can be enabled. Calling this again overwrites the previous choice.
+    #[roxygen]
+    pub fn enable_target_env<S: Into<String>>(
+        mut self,
+        /// The target environment to enable (e.g., "gnu", "musl", "msvc")
+        env: S,
+    ) -> Self {
+        self.enabled_target_env = Some(env.into());
+        self
+    }
     /// Map a feature name to a different name in the generated code
     ///
     /// When processing code with `#[cfg(feature="...")]` attributes, features
@@ -104,7 +173,7 @@ impl Builder {
     /// # Example
     ///
     /// ```
-    /// let builder = prebindgen::batching::feature_filter::Builder::new()
+    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
     ///     .match_feature("unstable", "unstable")
     ///     .match_feature("internal", "unstable");
     /// ```
@@ -174,22 +243,26 @@ impl Builder {
         self
     }
 
-    /// Build the FeatureFilter instance with the configured options
+    /// Build the CfgFilter instance with the configured options
     ///
     /// # Example
     ///
     /// ```
-    /// let filter = prebindgen::batching::feature_filter::Builder::new()
+    /// let filter = prebindgen::batching::cfg_filter::Builder::new()
     ///     .disable_feature("internal")
     ///     .build();
     /// ```
-    pub fn build(self) -> FeatureFilter {
+    pub fn build(self) -> CfgFilter {
         // Determine if this filter is active (i.e., not pass-through)
         let active = self.features_assert.is_some()
             || self.disable_unknown_features
             || !self.disabled_features.is_empty()
             || !self.enabled_features.is_empty()
-            || !self.feature_mappings.is_empty();
+            || !self.feature_mappings.is_empty()
+            || self.enabled_target_arch.is_some()
+            || self.enabled_target_vendor.is_some()
+            || self.enabled_target_os.is_some()
+            || self.enabled_target_env.is_some();
 
         // Optionally create a prelude assertion comparing FEATURES const path with expected features string
         let mut prelude_item: Option<(syn::Item, SourceLocation)> = None;
@@ -217,7 +290,7 @@ impl Builder {
             prelude_item = Some((item, SourceLocation::default()));
         }
 
-        FeatureFilter {
+        CfgFilter {
             builder: self,
             prelude_item,
             prelude_emitted: false,
@@ -234,7 +307,7 @@ impl Default for Builder {
 
 /// Filters prebindgen items based on Rust feature flags
 ///
-/// The `FeatureFilter` processes items with `#[cfg(feature="...")]` attributes,
+/// The `CfgFilter` processes items with `#[cfg(feature="...")]` attributes,
 /// allowing selective inclusion, exclusion, or renaming of feature-gated code
 /// in the generated FFI bindings.
 ///
@@ -249,7 +322,7 @@ impl Default for Builder {
 /// # prebindgen::Source::init_doctest_simulate();
 /// let source = prebindgen::Source::new("source_ffi");
 ///
-/// let feature_filter = prebindgen::batching::FeatureFilter::builder()
+/// let cfg_filter = prebindgen::batching::CfgFilter::builder()
 ///     .disable_feature("unstable")
 ///     .disable_feature("internal")
 ///     .enable_feature("std")
@@ -260,24 +333,24 @@ impl Default for Builder {
 /// # use itertools::Itertools;
 /// let filtered_items: Vec<_> = source
 ///     .items_all()
-///     .batching(feature_filter.into_closure())
+///     .batching(cfg_filter.into_closure())
 ///     .take(0) // Take 0 for doctest
 ///     .collect();
 /// ```
-pub struct FeatureFilter {
+pub struct CfgFilter {
     builder: Builder,
     prelude_item: Option<(syn::Item, SourceLocation)>,
     prelude_emitted: bool,
     active: bool,
 }
 
-impl FeatureFilter {
-    /// Create a builder for configuring a feature filter instance
+impl CfgFilter {
+    /// Create a builder for configuring a cfg filter instance
     ///
     /// # Example
     ///
     /// ```
-    /// let filter = prebindgen::batching::FeatureFilter::builder()
+    /// let filter = prebindgen::batching::CfgFilter::builder()
     ///     .disable_feature("unstable")
     ///     .enable_feature("std")
     ///     .build();
@@ -312,6 +385,10 @@ impl FeatureFilter {
                 &self.builder.enabled_features,
                 &self.builder.feature_mappings,
                 self.builder.disable_unknown_features,
+                &self.builder.enabled_target_arch,
+                &self.builder.enabled_target_vendor,
+                &self.builder.enabled_target_os,
+                &self.builder.enabled_target_env,
                 &source_location,
             ) {
                 return Some((item, source_location));

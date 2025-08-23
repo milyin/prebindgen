@@ -29,6 +29,11 @@ pub(crate) fn process_item_features(
     feature_mappings: &HashMap<String, String>,
     /// If true, unknown features are treated as disabled (skipped) instead of causing an error
     disable_unknown_features: bool,
+    /// Selected target parameters to evaluate target_* cfgs
+    enabled_target_arch: &Option<String>,
+    enabled_target_vendor: &Option<String>,
+    enabled_target_os: &Option<String>,
+    enabled_target_env: &Option<String>,
     /// Source location information for error reporting
     source_location: &SourceLocation,
 ) -> bool {
@@ -42,6 +47,10 @@ pub(crate) fn process_item_features(
                 enabled_features,
                 feature_mappings,
                 disable_unknown_features,
+                enabled_target_arch,
+                enabled_target_vendor,
+                enabled_target_os,
+                enabled_target_env,
                 source_location,
             );
             &mut s.attrs
@@ -54,6 +63,10 @@ pub(crate) fn process_item_features(
                 enabled_features,
                 feature_mappings,
                 disable_unknown_features,
+                enabled_target_arch,
+                enabled_target_vendor,
+                enabled_target_os,
+                enabled_target_env,
                 source_location,
             );
             &mut e.attrs
@@ -66,6 +79,10 @@ pub(crate) fn process_item_features(
                 enabled_features,
                 feature_mappings,
                 disable_unknown_features,
+                enabled_target_arch,
+                enabled_target_vendor,
+                enabled_target_os,
+                enabled_target_env,
                 source_location,
             );
             &mut u.attrs
@@ -87,6 +104,10 @@ pub(crate) fn process_item_features(
         enabled_features,
         feature_mappings,
         disable_unknown_features,
+        enabled_target_arch,
+        enabled_target_vendor,
+        enabled_target_os,
+        enabled_target_env,
         source_location,
     )
 }
@@ -98,6 +119,10 @@ fn process_struct_fields(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
     disable_unknown_features: bool,
+    enabled_target_arch: &Option<String>,
+    enabled_target_vendor: &Option<String>,
+    enabled_target_os: &Option<String>,
+    enabled_target_env: &Option<String>,
     source_location: &SourceLocation,
 ) {
     match fields {
@@ -112,6 +137,10 @@ fn process_struct_fields(
                     enabled_features,
                     feature_mappings,
                     disable_unknown_features,
+                    enabled_target_arch,
+                    enabled_target_vendor,
+                    enabled_target_os,
+                    enabled_target_env,
                     source_location,
                 ) {
                     new_fields.push(field);
@@ -130,6 +159,10 @@ fn process_struct_fields(
                     enabled_features,
                     feature_mappings,
                     disable_unknown_features,
+                    enabled_target_arch,
+                    enabled_target_vendor,
+                    enabled_target_os,
+                    enabled_target_env,
                     source_location,
                 ) {
                     new_fields.push(field);
@@ -150,6 +183,10 @@ fn process_enum_variants(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
     disable_unknown_features: bool,
+    enabled_target_arch: &Option<String>,
+    enabled_target_vendor: &Option<String>,
+    enabled_target_os: &Option<String>,
+    enabled_target_env: &Option<String>,
     source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
@@ -163,6 +200,10 @@ fn process_enum_variants(
             enabled_features,
             feature_mappings,
             disable_unknown_features,
+            enabled_target_arch,
+            enabled_target_vendor,
+            enabled_target_os,
+            enabled_target_env,
             source_location,
         );
 
@@ -174,6 +215,10 @@ fn process_enum_variants(
                 enabled_features,
                 feature_mappings,
                 disable_unknown_features,
+                enabled_target_arch,
+                enabled_target_vendor,
+                enabled_target_os,
+                enabled_target_env,
                 source_location,
             );
             new_variants.push(variant);
@@ -189,6 +234,10 @@ fn process_union_fields(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
     disable_unknown_features: bool,
+    enabled_target_arch: &Option<String>,
+    enabled_target_vendor: &Option<String>,
+    enabled_target_os: &Option<String>,
+    enabled_target_env: &Option<String>,
     source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
@@ -201,6 +250,10 @@ fn process_union_fields(
             enabled_features,
             feature_mappings,
             disable_unknown_features,
+            enabled_target_arch,
+            enabled_target_vendor,
+            enabled_target_os,
+            enabled_target_env,
             source_location,
         ) {
             new_fields.push(field);
@@ -216,6 +269,10 @@ fn process_attributes(
     enabled_features: &HashSet<String>,
     feature_mappings: &HashMap<String, String>,
     disable_unknown_features: bool,
+    enabled_target_arch: &Option<String>,
+    enabled_target_vendor: &Option<String>,
+    enabled_target_os: &Option<String>,
+    enabled_target_env: &Option<String>,
     source_location: &SourceLocation,
 ) -> bool {
     let mut keep_item = true;
@@ -235,6 +292,10 @@ fn process_attributes(
                             disabled_features,
                             feature_mappings,
                             disable_unknown_features,
+                            enabled_target_arch,
+                            enabled_target_vendor,
+                            enabled_target_os,
+                            enabled_target_env,
                             source_location,
                         ) {
                             Some(processed_expr) => {

@@ -128,7 +128,7 @@ fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
     };
     let mut random_value = None;
     // Try to really create file and repeat until success
-    // to avoid collisions in extremely rare case when two threads got 
+    // to avoid collisions in extremely rare case when two threads got
     // the same random value
     let new_path = loop {
         let postfix = if let Some(rv) = random_value {
@@ -271,7 +271,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
-    if let Err(_) = prebindgen::write_to_jsonl_file(&file_path, &[&new_record]) {
+    if let Err(_) = prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]) {
         return TokenStream::from(quote! {
             compile_error!("Failed to write prebindgen record");
         });
