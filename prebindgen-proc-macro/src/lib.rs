@@ -271,7 +271,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
-    if let Err(_) = prebindgen::write_to_jsonl_file(&file_path, &[&new_record]) {
+    if let Err(_) = prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]) {
         return TokenStream::from(quote! {
             compile_error!("Failed to write prebindgen record");
         });

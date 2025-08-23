@@ -9,7 +9,7 @@ use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::batching::cfg_filter, api::record::Record, utils::jsonl::read_jsonl_file,
+    api::batching::cfg_filter, api::record::Record, api::utils::jsonl::read_jsonl_file,
     SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
 };
 
@@ -381,23 +381,34 @@ impl Builder {
         }
     }
 
-    /// Enables or disables filtering by features when
-    /// extracting collected data.
+    /// Enables or disables filtering by features when extracting collected data.
+    /// Accepts name of the constant with the list of features in the source crate.
     ///
-    /// Pass `None` to disable cfg filtering.
+    /// Pass `None` to disable feature filtering.
     ///
     /// Pass, for example, `Some("source_crate::FEATURES")` or `Some("FEATURES")`
     /// to enable filtering. The value is the name of the features constant
     /// from the source crate.
     ///
+    /// It's important to note that the set of features to filter is determined
+    /// not by this constant, but by file "features.txt" in
+    /// prebindgen output directory. These are features which the source crate was
+    /// built with *as build.rs dependency*. The constant contains the features which 
+    /// the source crate was built *as library dependency*.
+    /// The purpose of the constant is to use it in the assert in the
+    /// generated code to ensure that both feature lists are the same.
+    /// If it's not the case, compilation fails and it's developer's
+    /// job to ensure that the source crate is configured in the same way for
+    /// both `[dependencies]` and `[build-dependencies]`.
+    ///
     /// Filtering is enabled by default; the default constant name is `FEATURES`.
     ///
-    /// The source crate should contain the following line by default:
+    /// The features constant should be defined in the source crate as follows:
     /// ```rust,ignore
     /// const FEATURES: &str = prebindgen_proc_macro::features!();
     /// ```
     #[roxygen]
-    pub fn enable_cfg_filtering(
+    pub fn enable_feature_filtering(
         mut self,
         /// Full name of the constant with features in the source crate
         name: Option<impl Into<String>>,
