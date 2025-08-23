@@ -102,12 +102,12 @@ pub(crate) fn process_item_features(
         attrs,
         disabled_features,
         enabled_features,
-    feature_mappings,
-    disable_unknown_features,
-    enabled_target_arch,
-    enabled_target_vendor,
-    enabled_target_os,
-    enabled_target_env,
+        feature_mappings,
+        disable_unknown_features,
+        enabled_target_arch,
+        enabled_target_vendor,
+        enabled_target_os,
+        enabled_target_env,
         source_location,
     )
 }

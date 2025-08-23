@@ -131,14 +131,22 @@ impl CfgExpr {
             }
             CfgExpr::TargetVendor(val) => {
                 if let Some(sel) = enabled_target_vendor.as_ref() {
-                    if val == sel { None } else { Some(CfgExpr::False) }
+                    if val == sel {
+                        None
+                    } else {
+                        Some(CfgExpr::False)
+                    }
                 } else {
                     Some(self.clone())
                 }
             }
             CfgExpr::TargetArch(val) => {
                 if let Some(sel) = enabled_target_arch.as_ref() {
-                    if val == sel { None } else { Some(CfgExpr::False) }
+                    if val == sel {
+                        None
+                    } else {
+                        Some(CfgExpr::False)
+                    }
                 } else {
                     Some(self.clone())
                 }
@@ -227,14 +235,22 @@ impl CfgExpr {
             }
             CfgExpr::TargetOs(val) => {
                 if let Some(sel) = enabled_target_os.as_ref() {
-                    if val == sel { None } else { Some(CfgExpr::False) }
+                    if val == sel {
+                        None
+                    } else {
+                        Some(CfgExpr::False)
+                    }
                 } else {
                     Some(self.clone())
                 }
             }
             CfgExpr::TargetEnv(val) => {
                 if let Some(sel) = enabled_target_env.as_ref() {
-                    if val == sel { None } else { Some(CfgExpr::False) }
+                    if val == sel {
+                        None
+                    } else {
+                        Some(CfgExpr::False)
+                    }
                 } else {
                     Some(self.clone())
                 }

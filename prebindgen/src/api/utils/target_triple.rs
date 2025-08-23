@@ -17,13 +17,19 @@ impl TargetTriple {
     }
 
     /// Create from an existing target_lexicon Triple.
-    pub fn from_triple(triple: Triple) -> Self { Self(triple) }
+    pub fn from_triple(triple: Triple) -> Self {
+        Self(triple)
+    }
 
     /// Get the architecture as a canonical string used by Rust cfg target_arch.
-    pub fn arch(&self) -> String { self.0.architecture.to_string() }
+    pub fn arch(&self) -> String {
+        self.0.architecture.to_string()
+    }
 
     /// Get the vendor as string used by Rust cfg target_vendor.
-    pub fn vendor(&self) -> String { self.0.vendor.to_string() }
+    pub fn vendor(&self) -> String {
+        self.0.vendor.to_string()
+    }
 
     /// Get the operating system as string used by Rust cfg target_os.
     /// Maps Darwin to "macos" to match Rust cfg semantics.
@@ -35,13 +41,23 @@ impl TargetTriple {
     }
 
     /// Get the environment as string used by Rust cfg target_env (may be "unknown").
-    pub fn env(&self) -> String { self.0.environment.to_string() }
+    pub fn env(&self) -> Option<String> {
+        if self.0.environment == target_lexicon::Environment::Unknown {
+            None
+        } else {
+            Some(self.0.environment.to_string())
+        }
+    }
 
     /// Access the inner Triple.
-    pub fn as_triple(&self) -> &Triple { &self.0 }
+    pub fn as_triple(&self) -> &Triple {
+        &self.0
+    }
 
     /// Decompose into the inner Triple.
-    pub fn into_triple(self) -> Triple { self.0 }
+    pub fn into_triple(self) -> Triple {
+        self.0
+    }
 
     /// Build a cfg expression TokenStream like:
     /// all(target_arch = "aarch64", target_vendor = "apple", target_os = "macos", target_env = "gnu")
@@ -55,7 +71,7 @@ impl TargetTriple {
         parts.push(quote! { target_arch = #arch });
         parts.push(quote! { target_vendor = #vendor });
         parts.push(quote! { target_os = #os });
-        if !env.is_empty() && env != "unknown" {
+        if let Some(env) = env {
             let env_lit = LitStr::new(&env, proc_macro2::Span::call_site());
             parts.push(quote! { target_env = #env_lit });
         }

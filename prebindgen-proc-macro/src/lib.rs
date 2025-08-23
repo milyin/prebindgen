@@ -128,7 +128,7 @@ fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
     };
     let mut random_value = None;
     // Try to really create file and repeat until success
-    // to avoid collisions in extremely rare case when two threads got 
+    // to avoid collisions in extremely rare case when two threads got
     // the same random value
     let new_path = loop {
         let postfix = if let Some(rv) = random_value {
