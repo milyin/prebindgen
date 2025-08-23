@@ -9,7 +9,7 @@ use itertools::Itertools;
 use roxygen::roxygen;
 
 use crate::{
-    api::batching::feature_filter, api::record::Record, utils::jsonl::read_jsonl_file,
+    api::batching::cfg_filter, api::record::Record, utils::jsonl::read_jsonl_file,
     SourceLocation, CRATE_NAME_FILE, FEATURES_FILE,
 };
 
@@ -68,7 +68,7 @@ thread_local! {
 pub struct Source {
     crate_name: String,
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
-    // Configuration needed to build a FeatureFilter at iteration time
+    // Configuration needed to build a CfgFilter at iteration time
     features_constant: Option<String>,
     features_list: Vec<String>, // normalized list from features.txt
 }
@@ -200,8 +200,8 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Build a feature filter and apply it lazily with itertools::batching
-        let mut filter = self.build_feature_filter();
+        // Build a cfg filter and apply it lazily with itertools::batching
+        let mut filter = self.build_cfg_filter();
         groups
             .iter()
             .filter_map(|group| self.items.get(*group))
@@ -227,8 +227,8 @@ impl Source {
         &'a self,
         groups: &'a [&'a str],
     ) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Build a feature filter and apply it lazily with itertools::batching
-        let mut filter = self.build_feature_filter();
+        // Build a cfg filter and apply it lazily with itertools::batching
+        let mut filter = self.build_cfg_filter();
         self.items
             .iter()
             .filter(|(group, _)| !groups.contains(&group.as_str()))
@@ -249,17 +249,17 @@ impl Source {
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
     pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
-        // Build a feature filter and apply it lazily with itertools::batching
-        let mut filter = self.build_feature_filter();
+        // Build a cfg filter and apply it lazily with itertools::batching
+        let mut filter = self.build_cfg_filter();
         self.items
             .iter()
             .flat_map(|(_, records)| records.iter().cloned())
             .batching(move |iter| filter.call(iter))
     }
 
-    /// Internal: construct a FeatureFilter from the stored configuration and features file
-    fn build_feature_filter(&self) -> feature_filter::FeatureFilter {
-        let mut builder = feature_filter::FeatureFilter::builder();
+    /// Internal: construct a CfgFilter from the stored configuration and features file
+    fn build_cfg_filter(&self) -> cfg_filter::CfgFilter {
+        let mut builder = cfg_filter::CfgFilter::builder();
         if let Some(const_name) = &self.features_constant {
             // If the provided constant isn't fully qualified, qualify it with the crate name
             let qualified_const = if const_name.contains("::") {
@@ -384,7 +384,7 @@ impl Builder {
     /// Enables or disables filtering by features when
     /// extracting collected data.
     ///
-    /// Pass `None` to disable feature filtering.
+    /// Pass `None` to disable cfg filtering.
     ///
     /// Pass, for example, `Some("source_crate::FEATURES")` or `Some("FEATURES")`
     /// to enable filtering. The value is the name of the features constant
@@ -397,7 +397,7 @@ impl Builder {
     /// const FEATURES: &str = prebindgen_proc_macro::features!();
     /// ```
     #[roxygen]
-    pub fn enable_feature_filtering(
+    pub fn enable_cfg_filtering(
         mut self,
         /// Full name of the constant with features in the source crate
         name: Option<impl Into<String>>,

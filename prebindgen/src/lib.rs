@@ -141,10 +141,10 @@ pub mod batching {
     pub mod ffi_converter {
         pub use crate::api::batching::ffi_converter::Builder;
     }
-    pub use crate::api::batching::feature_filter::FeatureFilter;
+    pub use crate::api::batching::cfg_filter::CfgFilter;
     pub use crate::api::batching::ffi_converter::FfiConverter;
-    pub mod feature_filter {
-        pub use crate::api::batching::feature_filter::Builder;
+    pub mod cfg_filter {
+        pub use crate::api::batching::cfg_filter::Builder;
     }
 }
 
