@@ -394,7 +394,15 @@ pub struct Builder {
 
 impl Builder {
     fn new<P: AsRef<Path>>(input_dir: P) -> Self {
-        let target_triple = std::env::var("TARGET").or(std::env::var("HOST")).ok();
+        let target = std::env::var("TARGET").unwrap_or_default();
+        let host = std::env::var("HOST").unwrap_or_default();
+        let target_triple = if !target.is_empty() {
+            Some(target)
+        } else if !host.is_empty() {
+            Some(host)
+        } else {
+            None
+        };
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
             features_constant: Some("FEATURES".to_string()),
