@@ -104,11 +104,7 @@ fn process_enum_variants(
     for variant_pair in variants.pairs() {
         let mut variant = variant_pair.into_value().clone();
         // Process variant attributes
-        let keep_variant = process_attributes(
-            &mut variant.attrs,
-            rules,
-            source_location,
-        );
+        let keep_variant = process_attributes(&mut variant.attrs, rules, source_location);
 
         if keep_variant {
             // Process variant fields if it's kept
@@ -129,11 +125,7 @@ fn process_union_fields(
     let mut new_fields = syn::punctuated::Punctuated::new();
     for field_pair in fields.named.pairs() {
         let mut field = field_pair.into_value().clone();
-        if process_attributes(
-            &mut field.attrs,
-            rules,
-            source_location,
-        ) {
+        if process_attributes(&mut field.attrs, rules, source_location) {
             new_fields.push(field);
         }
     }
@@ -158,10 +150,7 @@ fn process_attributes(
                 match CfgExpr::parse_from_tokens(&meta_list.tokens) {
                     Ok(cfg_expr) => {
                         // Apply strict feature processing
-                        match cfg_expr.apply_rules(
-                            rules,
-                            source_location,
-                        ) {
+                        match cfg_expr.apply_rules(rules, source_location) {
                             Some(processed_expr) => {
                                 // Check if the processed expression is CfgExpr::False
                                 if matches!(processed_expr, CfgExpr::False) {

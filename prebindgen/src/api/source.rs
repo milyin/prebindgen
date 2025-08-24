@@ -70,7 +70,7 @@ pub struct Source {
     items: HashMap<String, Vec<(syn::Item, SourceLocation)>>,
     // Configuration needed to build a CfgFilter at iteration time
     features_constant: Option<String>,
-    target_triple_env_var: Option<String>,
+    target_triple: Option<String>,
     features_list: Vec<String>, // normalized list from features.txt
 }
 
@@ -95,7 +95,7 @@ impl Source {
     fn build_internal(
         input_dir: &Path,
         features_constant: Option<String>,
-        target_triple_env_var: Option<String>,
+        target_triple: Option<String>,
     ) -> Self {
         if let Some(source) = DOCTEST_SOURCE.with(|source| (*source.borrow()).clone()) {
             return source;
@@ -130,7 +130,7 @@ impl Source {
             items,
             features_constant,
             features_list,
-            target_triple_env_var,
+            target_triple,
         }
     }
 
@@ -164,7 +164,7 @@ impl Source {
                 ),
             ]),
             features_constant: None,
-            target_triple_env_var: None,
+            target_triple: None,
             features_list: Vec::new(),
         };
         DOCTEST_SOURCE.with(|cell| {
@@ -282,20 +282,9 @@ impl Source {
                 .join(" ");
             builder = builder.predefined_features(qualified_const, features_list);
         }
-        if let Some(env_var) = &self.target_triple_env_var {
-            let target = std::env::var(env_var).unwrap_or_else(|_| {
-                panic!(
-                    "Environment variable {} is not set. \
-                    Ensure that the build script sets it to the target triple.",
-                    env_var
-                )
-            });
-            let target_triple = TargetTriple::parse(&target).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to parse target triple '{}' from environment variable {}: {}",
-                    target, env_var, e
-                )
-            });
+        if let Some(target) = &self.target_triple {
+            let target_triple = TargetTriple::parse(target)
+                .unwrap_or_else(|e| panic!("Failed to parse target triple '{}': {}", target, e));
             builder = builder
                 .enable_target_arch(target_triple.arch())
                 .enable_target_os(target_triple.os())
@@ -400,15 +389,16 @@ fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
 pub struct Builder {
     input_dir: PathBuf,
     features_constant: Option<String>,
-    target_triple_env_var: Option<String>,
+    target_triple: Option<String>,
 }
 
 impl Builder {
     fn new<P: AsRef<Path>>(input_dir: P) -> Self {
+        let target_triple = std::env::var("TARGET").or(std::env::var("HOST")).ok();
         Self {
             input_dir: input_dir.as_ref().to_path_buf(),
             features_constant: Some("FEATURES".to_string()),
-            target_triple_env_var: Some("TARGET".to_string()),
+            target_triple,
         }
     }
 
@@ -448,54 +438,58 @@ impl Builder {
         self
     }
 
-    /// Enables filtering source code by target-triple which is usually
-    /// passed to `build.rs` in `TARGET` environment variable.
-    /// Accepts the name of the environment variable as an optional string.
-    /// Default value is `TARGET`.
+    /// Enables filtering source code by target-triple. This is
+    /// useful if some binding generators or custom tools over them
+    /// encounter problems with build conditions in the source code.
+    ///
+    /// Accepts the target triple string.
+    ///
+    /// Default value is the value of the environment variable
+    /// `TARGET` or `HOST` if `TARGET` is not set.
     ///
     /// Pass `None` to disable target filtering.
     ///
     /// When enabled, the code will be filtered by the target triple specified
-    /// (architecture, vendor, os, env). By default filtering is performed
-    /// by the value from the `TARGET` environment variable which contains
-    /// the target triple for the library.
+    /// (architecture, vendor, os, env).
     ///
     /// It's useful to mention that it's hard to imagine a scenario
-    /// when it's necessary to change the environment variable name.
+    /// when it's necessary to change the target triple.
     /// The `Source` object is used in the final crate, the one which builds the
-    /// no-mangle library and the language bindings (e.g. C headers). On this
-    /// stage the `TARGET` environment variable contains real target triple
-    /// even in cross-compilation scenarios. Passing the real target in the
-    /// other variable's name, e.g:
+    /// no-mangle library. On this stage the `TARGET` environment variable contains
+    /// real target triple for cross-compilation scenarios.
+    ///
+    /// There is the case when build.rs is not aware of the cross-compilation
+    /// target: the build.rs for library in [build-dependencies] section.
+    /// This is the situation which the "ffi" crate found itself in. So sometimes
+    /// for correct code generation it's necessary to inform the underlying "ffi"
+    /// crate about the real target in a way like this:
+    ///
     /// ```ignore
     /// CROSS_TARGET=x86_64-pc-windows-gnu cargo build --target x86_64-pc-windows-gnu
     /// ```
-    /// sometimes is necessary to inform the underlying "ffi" crate about the
-    /// real target triple, because it's compiled as a `build.rs` dependency on
-    /// the host platform and therefore it's target is the host.
-    /// But the `Source` is not called on this stage, so normally the access to
-    /// this `CROSS_TARGET` variable is not needed.
-    /// But for the sake of completeness the ability to use any environment variable
-    /// is provided.
-    /// It's also possible to just create standalone `CfgFilter` object
+    ///
+    /// But in typical situation this doesn't affect the `Source` object which
+    /// reads the data prepared by "ffi" crate on the following stage.
+    ///
+    /// So this `Some(<target-triple>)` is added mostly for API completeness,
+    /// typical usage if this function will be with `None` argument to disable
+    /// filtering by target triple if it's necessary to see the original
+    /// collected code.
+    ///
+    /// Notice also that it's possible to just create standalone `CfgFilter` object
     /// with necessary configuration and insert into the iterator chain.
     #[roxygen]
     pub fn enable_target_filtering(
         mut self,
-        /// Full name of the environment variable which contains the target triple
-        /// to which the code is generated
+        /// The target triple to filter collected sources
         name: Option<impl Into<String>>,
     ) -> Self {
-        self.target_triple_env_var = name.map(|n| n.into());
+        self.target_triple = name.map(|n| n.into());
         self
     }
 
     /// Build the `Source` instance
     pub fn build(self) -> Source {
-        Source::build_internal(
-            &self.input_dir,
-            self.features_constant,
-            self.target_triple_env_var,
-        )
+        Source::build_internal(&self.input_dir, self.features_constant, self.target_triple)
     }
 }

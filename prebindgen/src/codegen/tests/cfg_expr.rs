@@ -30,7 +30,10 @@ fn test_target_filters_processing() {
 
     // With no selection, keep predicates as-is
     let expr = CfgExpr::TargetOs("macos".into());
-    assert_eq!(expr.apply_rules(&CfgExprRules::default(), &src), Some(CfgExpr::TargetOs("macos".into())));
+    assert_eq!(
+        expr.apply_rules(&CfgExprRules::default(), &src),
+        Some(CfgExpr::TargetOs("macos".into()))
+    );
 
     // No selection for arch/vendor/env should also keep predicates as-is
     assert_eq!(
@@ -49,7 +52,10 @@ fn test_target_filters_processing() {
     // Select OS = macos: becomes true (None)
     assert_eq!(
         CfgExpr::TargetOs("macos".into()).apply_rules(
-            &CfgExprRules { enabled_target_os: Some("macos".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_os: Some("macos".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
@@ -58,7 +64,10 @@ fn test_target_filters_processing() {
     // Non-matching becomes False
     assert_eq!(
         CfgExpr::TargetOs("linux".into()).apply_rules(
-            &CfgExprRules { enabled_target_os: Some("macos".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_os: Some("macos".into()),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::False)
@@ -67,14 +76,20 @@ fn test_target_filters_processing() {
     // Arch selection
     assert_eq!(
         CfgExpr::TargetArch("x86_64".into()).apply_rules(
-            &CfgExprRules { enabled_target_arch: Some("x86_64".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_arch: Some("x86_64".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
     );
     assert_eq!(
         CfgExpr::TargetArch("aarch64".into()).apply_rules(
-            &CfgExprRules { enabled_target_arch: Some("x86_64".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_arch: Some("x86_64".into()),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::False)
@@ -83,7 +98,10 @@ fn test_target_filters_processing() {
     // Vendor and Env selection
     assert_eq!(
         CfgExpr::TargetVendor("apple".into()).apply_rules(
-            &CfgExprRules { enabled_target_vendor: Some("apple".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_vendor: Some("apple".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
@@ -91,14 +109,20 @@ fn test_target_filters_processing() {
     // Non-matching vendor becomes False
     assert_eq!(
         CfgExpr::TargetVendor("unknown".into()).apply_rules(
-            &CfgExprRules { enabled_target_vendor: Some("apple".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_vendor: Some("apple".into()),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::False)
     );
     assert_eq!(
         CfgExpr::TargetEnv("gnu".into()).apply_rules(
-            &CfgExprRules { enabled_target_env: Some("gnu".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_env: Some("gnu".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
@@ -106,7 +130,10 @@ fn test_target_filters_processing() {
     // Non-matching env becomes False
     assert_eq!(
         CfgExpr::TargetEnv("msvc".into()).apply_rules(
-            &CfgExprRules { enabled_target_env: Some("gnu".into()), ..Default::default() },
+            &CfgExprRules {
+                enabled_target_env: Some("gnu".into()),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::False)
@@ -259,10 +286,7 @@ fn test_strict_feature_processing() {
 fn test_strict_feature_processing_unmapped_panic() {
     // Test unmapped feature - should panic
     let expr = CfgExpr::Feature("unknown".to_string());
-    expr.apply_rules(
-    &CfgExprRules::default(),
-        &SourceLocation::default(),
-    );
+    expr.apply_rules(&CfgExprRules::default(), &SourceLocation::default());
 }
 
 #[test]

@@ -26,14 +26,14 @@ pub struct CfgExprRules {
 impl CfgExprRules {
     // Return true if any rule is exists
     pub fn is_active(&self) -> bool {
-        !self.enabled_features.is_empty() || 
-        !self.disabled_features.is_empty() ||
-        !self.feature_mappings.is_empty() ||
-        self.disable_unknown_features ||
-        self.enabled_target_arch.is_some() ||
-        self.enabled_target_vendor.is_some() ||
-        self.enabled_target_os.is_some() ||
-        self.enabled_target_env.is_some()
+        !self.enabled_features.is_empty()
+            || !self.disabled_features.is_empty()
+            || !self.feature_mappings.is_empty()
+            || self.disable_unknown_features
+            || self.enabled_target_arch.is_some()
+            || self.enabled_target_vendor.is_some()
+            || self.enabled_target_os.is_some()
+            || self.enabled_target_env.is_some()
     }
 }
 
