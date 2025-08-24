@@ -4,9 +4,7 @@
 //! that include logical operators like `any`, `all`, and `not`, as well as simple
 //! feature checks.
 
-use std::collections::HashSet;
-
-use crate::SourceLocation;
+use crate::{codegen::CfgExprRules, SourceLocation};
 
 /// Represents a cfg expression that can be evaluated against a set of enabled/disabled features
 #[derive(Debug, Clone, PartialEq)]
@@ -93,35 +91,31 @@ impl CfgExpr {
         Ok(CfgExpr::Other(input.to_string()))
     }
 
-    /// Process features according to strict rules:
+    /// Process features according to the rules:
     /// - Features in enabled list: replaced with true and removed from expression
     /// - Features in disabled list: replaced with false and removed from expression  
     /// - Features in mapping list: renamed
     /// - Any unmapped feature remaining: panic with "unmapped feature"
-    pub fn process_features_strict(
+    /// - If architecture, os, target, env condition is specified, replace
+    ///   matching condition with false and unmatching to true
+    /// - If architecture, os, target, env condition is not specified, leave as is
+    pub fn apply_rules(
         &self,
-        enabled_features: &HashSet<String>,
-        disabled_features: &HashSet<String>,
-        feature_mappings: &std::collections::HashMap<String, String>,
-        disable_unknown_features: bool,
-        enabled_target_arch: &Option<String>,
-        enabled_target_vendor: &Option<String>,
-        enabled_target_os: &Option<String>,
-        enabled_target_env: &Option<String>,
+        rules: &CfgExprRules,
         source_location: &SourceLocation,
     ) -> Option<Self> {
         match self {
             CfgExpr::Feature(name) => {
-                if enabled_features.contains(name) {
+                if rules.enabled_features.contains(name) {
                     // Feature is enabled - replace with true (remove from expression)
                     None // This means "always true", caller should handle removal
-                } else if disabled_features.contains(name) {
+                } else if rules.disabled_features.contains(name) {
                     // Feature is disabled - replace with false (remove from expression)
                     Some(CfgExpr::False) // Explicit false value
-                } else if let Some(new_name) = feature_mappings.get(name) {
+                } else if let Some(new_name) = rules.feature_mappings.get(name) {
                     // Feature should be mapped
                     Some(CfgExpr::Feature(new_name.clone()))
-                } else if disable_unknown_features {
+                } else if rules.disable_unknown_features {
                     // Treat unknown feature as disabled
                     Some(CfgExpr::False)
                 } else {
@@ -130,7 +124,7 @@ impl CfgExpr {
                 }
             }
             CfgExpr::TargetVendor(val) => {
-                if let Some(sel) = enabled_target_vendor.as_ref() {
+                if let Some(sel) = rules.enabled_target_vendor.as_ref() {
                     if val == sel {
                         None
                     } else {
@@ -141,7 +135,7 @@ impl CfgExpr {
                 }
             }
             CfgExpr::TargetArch(val) => {
-                if let Some(sel) = enabled_target_arch.as_ref() {
+                if let Some(sel) = rules.enabled_target_arch.as_ref() {
                     if val == sel {
                         None
                     } else {
@@ -154,17 +148,7 @@ impl CfgExpr {
             CfgExpr::All(exprs) => {
                 let mut processed_exprs = Vec::new();
                 for expr in exprs {
-                    match expr.process_features_strict(
-                        enabled_features,
-                        disabled_features,
-                        feature_mappings,
-                        disable_unknown_features,
-                        enabled_target_arch,
-                        enabled_target_vendor,
-                        enabled_target_os,
-                        enabled_target_env,
-                        source_location,
-                    ) {
+                    match expr.apply_rules(rules, source_location) {
                         Some(CfgExpr::False) => {
                             // If any expression in All is false, the whole All is false
                             return Some(CfgExpr::False);
@@ -185,17 +169,7 @@ impl CfgExpr {
                 let mut processed_exprs = Vec::new();
                 let mut has_true = false;
                 for expr in exprs {
-                    match expr.process_features_strict(
-                        enabled_features,
-                        disabled_features,
-                        feature_mappings,
-                        disable_unknown_features,
-                        enabled_target_arch,
-                        enabled_target_vendor,
-                        enabled_target_os,
-                        enabled_target_env,
-                        source_location,
-                    ) {
+                    match expr.apply_rules(rules, source_location) {
                         Some(CfgExpr::False) => {
                             // False expressions in Any can be omitted
                         }
@@ -217,24 +191,14 @@ impl CfgExpr {
                 }
             }
             CfgExpr::Not(expr) => {
-                match expr.process_features_strict(
-                    enabled_features,
-                    disabled_features,
-                    feature_mappings,
-                    disable_unknown_features,
-                    enabled_target_arch,
-                    enabled_target_vendor,
-                    enabled_target_os,
-                    enabled_target_env,
-                    source_location,
-                ) {
+                match expr.apply_rules(rules, source_location) {
                     Some(CfgExpr::False) => None, // not(false) = true
                     Some(processed) => Some(CfgExpr::Not(Box::new(processed))),
                     None => Some(CfgExpr::False), // not(true) = false
                 }
             }
             CfgExpr::TargetOs(val) => {
-                if let Some(sel) = enabled_target_os.as_ref() {
+                if let Some(sel) = rules.enabled_target_os.as_ref() {
                     if val == sel {
                         None
                     } else {
@@ -245,7 +209,7 @@ impl CfgExpr {
                 }
             }
             CfgExpr::TargetEnv(val) => {
-                if let Some(sel) = enabled_target_env.as_ref() {
+                if let Some(sel) = rules.enabled_target_env.as_ref() {
                     if val == sel {
                         None
                     } else {
@@ -426,6 +390,3 @@ fn parse_comma_separated(input: &str) -> Result<Vec<CfgExpr>, String> {
 
     Ok(exprs)
 }
-
-#[cfg(test)]
-mod cfg_expr_tests;

@@ -1,4 +1,6 @@
-use super::*;
+use std::collections::HashSet;
+
+use crate::{codegen::cfg_expr::CfgExpr, codegen::CfgExprRules, SourceLocation};
 
 #[test]
 fn test_simple_feature() {
@@ -35,15 +37,13 @@ fn test_target_filters_processing() {
     // With no selection, keep predicates as-is
     let expr = CfgExpr::TargetOs("macos".into());
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::TargetOs("macos".into()))
@@ -51,15 +51,14 @@ fn test_target_filters_processing() {
 
     // Select OS = macos: becomes true (None)
     assert_eq!(
-        CfgExpr::TargetOs("macos".into()).process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &Some("macos".into()),
-            &None,
+        CfgExpr::TargetOs("macos".into()).apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                enabled_target_os: Some("macos".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
@@ -67,15 +66,14 @@ fn test_target_filters_processing() {
 
     // Non-matching becomes False
     assert_eq!(
-        CfgExpr::TargetOs("linux".into()).process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &Some("macos".into()),
-            &None,
+        CfgExpr::TargetOs("linux".into()).apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                enabled_target_os: Some("macos".into()),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::False)
@@ -83,29 +81,27 @@ fn test_target_filters_processing() {
 
     // Arch selection
     assert_eq!(
-        CfgExpr::TargetArch("x86_64".into()).process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &Some("x86_64".into()),
-            &None,
-            &None,
-            &None,
+        CfgExpr::TargetArch("x86_64".into()).apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                enabled_target_arch: Some("x86_64".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
     );
     assert_eq!(
-        CfgExpr::TargetArch("aarch64".into()).process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &Some("x86_64".into()),
-            &None,
-            &None,
-            &None,
+        CfgExpr::TargetArch("aarch64".into()).apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                enabled_target_arch: Some("x86_64".into()),
+                ..Default::default()
+            },
             &src,
         ),
         Some(CfgExpr::False)
@@ -113,29 +109,27 @@ fn test_target_filters_processing() {
 
     // Vendor and Env selection
     assert_eq!(
-        CfgExpr::TargetVendor("apple".into()).process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &Some("apple".into()),
-            &None,
-            &None,
+        CfgExpr::TargetVendor("apple".into()).apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                enabled_target_vendor: Some("apple".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
     );
     assert_eq!(
-        CfgExpr::TargetEnv("gnu".into()).process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &Some("gnu".into()),
+        CfgExpr::TargetEnv("gnu".into()).apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                enabled_target_env: Some("gnu".into()),
+                ..Default::default()
+            },
             &src,
         ),
         None
@@ -195,15 +189,13 @@ fn test_strict_feature_processing() {
     // Test enabled feature - should be removed (None = always true)
     let expr = CfgExpr::Feature("feature1".to_string());
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         None
@@ -212,15 +204,13 @@ fn test_strict_feature_processing() {
     // Test disabled feature - should become False
     let expr = CfgExpr::Feature("feature2".to_string());
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         Some(CfgExpr::False)
@@ -229,15 +219,13 @@ fn test_strict_feature_processing() {
     // Test mapped feature - should be renamed
     let expr = CfgExpr::Feature("old_feature".to_string());
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         Some(CfgExpr::Feature("new_feature".to_string()))
@@ -249,15 +237,13 @@ fn test_strict_feature_processing() {
         CfgExpr::Feature("feature2".to_string()),
     ]);
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         None
@@ -269,15 +255,13 @@ fn test_strict_feature_processing() {
         CfgExpr::Feature("feature2".to_string()),
     ]);
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         Some(CfgExpr::False)
@@ -286,15 +270,13 @@ fn test_strict_feature_processing() {
     // Test not() with disabled feature - should be removed (not(false) = true)
     let expr = CfgExpr::Not(Box::new(CfgExpr::Feature("feature2".to_string())));
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         None
@@ -303,15 +285,13 @@ fn test_strict_feature_processing() {
     // Test not() with enabled feature - should become False (not(true) = false)
     let expr = CfgExpr::Not(Box::new(CfgExpr::Feature("feature1".to_string())));
     assert_eq!(
-        expr.process_features_strict(
-            &enabled_features,
-            &disabled_features,
-            &feature_mappings,
-            false,
-            &None,
-            &None,
-            &None,
-            &None,
+        expr.apply_rules(
+            &CfgExprRules {
+                enabled_features: enabled_features.clone(),
+                disabled_features: disabled_features.clone(),
+                feature_mappings: feature_mappings.clone(),
+                ..Default::default()
+            },
             &SourceLocation::default()
         ),
         Some(CfgExpr::False)
@@ -329,15 +309,13 @@ fn test_strict_feature_processing_unmapped_panic() {
 
     // Test unmapped feature - should panic
     let expr = CfgExpr::Feature("unknown".to_string());
-    expr.process_features_strict(
-        &enabled_features,
-        &disabled_features,
-        &feature_mappings,
-        false,
-        &None,
-        &None,
-        &None,
-        &None,
+    expr.apply_rules(
+        &CfgExprRules {
+            enabled_features,
+            disabled_features,
+            feature_mappings,
+            ..Default::default()
+        },
         &SourceLocation::default(),
     );
 }
@@ -358,15 +336,13 @@ fn test_strict_feature_processing_unmapped_in_any_panic() {
         CfgExpr::Feature("feature1".to_string()),
         CfgExpr::Feature("unknown".to_string()),
     ]);
-    expr.process_features_strict(
-        &enabled_features,
-        &disabled_features,
-        &feature_mappings,
-        false,
-        &None,
-        &None,
-        &None,
-        &None,
+    expr.apply_rules(
+        &CfgExprRules {
+            enabled_features,
+            disabled_features,
+            feature_mappings,
+            ..Default::default()
+        },
         &SourceLocation::default(),
     );
 }

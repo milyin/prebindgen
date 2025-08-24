@@ -7,9 +7,11 @@
 //! - Replacing feature names according to the mapping
 
 use roxygen::roxygen;
-use std::collections::{HashMap, HashSet};
 
-use crate::{codegen::cfg_expr::CfgExpr, SourceLocation};
+use crate::{
+    codegen::{cfg_expr::CfgExpr, CfgExprRules},
+    SourceLocation,
+};
 
 /// Process a single item (struct, enum, function, etc.) for feature flags
 ///
@@ -21,19 +23,7 @@ use crate::{codegen::cfg_expr::CfgExpr, SourceLocation};
 pub(crate) fn process_item_features(
     /// The item to process for feature flags
     item: &mut syn::Item,
-    /// Set of feature names that should have their cfg attributes removed
-    disabled_features: &HashSet<String>,
-    /// Mapping from old feature names to new feature names
-    enabled_features: &HashSet<String>,
-    /// Mapping from old feature names to new feature names
-    feature_mappings: &HashMap<String, String>,
-    /// If true, unknown features are treated as disabled (skipped) instead of causing an error
-    disable_unknown_features: bool,
-    /// Selected target parameters to evaluate target_* cfgs
-    enabled_target_arch: &Option<String>,
-    enabled_target_vendor: &Option<String>,
-    enabled_target_os: &Option<String>,
-    enabled_target_env: &Option<String>,
+    rules: &CfgExprRules,
     /// Source location information for error reporting
     source_location: &SourceLocation,
 ) -> bool {
@@ -41,50 +31,17 @@ pub(crate) fn process_item_features(
         syn::Item::Fn(f) => &mut f.attrs,
         syn::Item::Struct(s) => {
             // Process struct fields recursively
-            process_struct_fields(
-                &mut s.fields,
-                disabled_features,
-                enabled_features,
-                feature_mappings,
-                disable_unknown_features,
-                enabled_target_arch,
-                enabled_target_vendor,
-                enabled_target_os,
-                enabled_target_env,
-                source_location,
-            );
+            process_struct_fields(&mut s.fields, rules, source_location);
             &mut s.attrs
         }
         syn::Item::Enum(e) => {
             // Process enum variants recursively
-            process_enum_variants(
-                &mut e.variants,
-                disabled_features,
-                enabled_features,
-                feature_mappings,
-                disable_unknown_features,
-                enabled_target_arch,
-                enabled_target_vendor,
-                enabled_target_os,
-                enabled_target_env,
-                source_location,
-            );
+            process_enum_variants(&mut e.variants, rules, source_location);
             &mut e.attrs
         }
         syn::Item::Union(u) => {
             // Process union fields recursively
-            process_union_fields(
-                &mut u.fields,
-                disabled_features,
-                enabled_features,
-                feature_mappings,
-                disable_unknown_features,
-                enabled_target_arch,
-                enabled_target_vendor,
-                enabled_target_os,
-                enabled_target_env,
-                source_location,
-            );
+            process_union_fields(&mut u.fields, rules, source_location);
             &mut u.attrs
         }
         syn::Item::Type(t) => &mut t.attrs,
@@ -98,31 +55,13 @@ pub(crate) fn process_item_features(
     };
 
     // Use the centralized attribute processing function
-    process_attributes(
-        attrs,
-        disabled_features,
-        enabled_features,
-        feature_mappings,
-        disable_unknown_features,
-        enabled_target_arch,
-        enabled_target_vendor,
-        enabled_target_os,
-        enabled_target_env,
-        source_location,
-    )
+    process_attributes(attrs, rules, source_location)
 }
 
 /// Process struct fields for feature flags
 fn process_struct_fields(
     fields: &mut syn::Fields,
-    disabled_features: &HashSet<String>,
-    enabled_features: &HashSet<String>,
-    feature_mappings: &HashMap<String, String>,
-    disable_unknown_features: bool,
-    enabled_target_arch: &Option<String>,
-    enabled_target_vendor: &Option<String>,
-    enabled_target_os: &Option<String>,
-    enabled_target_env: &Option<String>,
+    rules: &CfgExprRules,
     source_location: &SourceLocation,
 ) {
     match fields {
@@ -131,18 +70,7 @@ fn process_struct_fields(
             let mut new_fields = syn::punctuated::Punctuated::new();
             for field in fields_named.named.pairs() {
                 let mut field = field.into_value().clone();
-                if process_attributes(
-                    &mut field.attrs,
-                    disabled_features,
-                    enabled_features,
-                    feature_mappings,
-                    disable_unknown_features,
-                    enabled_target_arch,
-                    enabled_target_vendor,
-                    enabled_target_os,
-                    enabled_target_env,
-                    source_location,
-                ) {
+                if process_attributes(&mut field.attrs, rules, source_location) {
                     new_fields.push(field);
                 }
             }
@@ -153,18 +81,7 @@ fn process_struct_fields(
             let mut new_fields = syn::punctuated::Punctuated::new();
             for field in fields_unnamed.unnamed.pairs() {
                 let mut field = field.into_value().clone();
-                if process_attributes(
-                    &mut field.attrs,
-                    disabled_features,
-                    enabled_features,
-                    feature_mappings,
-                    disable_unknown_features,
-                    enabled_target_arch,
-                    enabled_target_vendor,
-                    enabled_target_os,
-                    enabled_target_env,
-                    source_location,
-                ) {
+                if process_attributes(&mut field.attrs, rules, source_location) {
                     new_fields.push(field);
                 }
             }
@@ -179,14 +96,7 @@ fn process_struct_fields(
 /// Process enum variants for feature flags
 fn process_enum_variants(
     variants: &mut syn::punctuated::Punctuated<syn::Variant, syn::Token![,]>,
-    disabled_features: &HashSet<String>,
-    enabled_features: &HashSet<String>,
-    feature_mappings: &HashMap<String, String>,
-    disable_unknown_features: bool,
-    enabled_target_arch: &Option<String>,
-    enabled_target_vendor: &Option<String>,
-    enabled_target_os: &Option<String>,
-    enabled_target_env: &Option<String>,
+    rules: &CfgExprRules,
     source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
@@ -196,31 +106,13 @@ fn process_enum_variants(
         // Process variant attributes
         let keep_variant = process_attributes(
             &mut variant.attrs,
-            disabled_features,
-            enabled_features,
-            feature_mappings,
-            disable_unknown_features,
-            enabled_target_arch,
-            enabled_target_vendor,
-            enabled_target_os,
-            enabled_target_env,
+            rules,
             source_location,
         );
 
         if keep_variant {
             // Process variant fields if it's kept
-            process_struct_fields(
-                &mut variant.fields,
-                disabled_features,
-                enabled_features,
-                feature_mappings,
-                disable_unknown_features,
-                enabled_target_arch,
-                enabled_target_vendor,
-                enabled_target_os,
-                enabled_target_env,
-                source_location,
-            );
+            process_struct_fields(&mut variant.fields, rules, source_location);
             new_variants.push(variant);
         }
     }
@@ -230,14 +122,7 @@ fn process_enum_variants(
 /// Process union fields for feature flags
 fn process_union_fields(
     fields: &mut syn::FieldsNamed,
-    disabled_features: &HashSet<String>,
-    enabled_features: &HashSet<String>,
-    feature_mappings: &HashMap<String, String>,
-    disable_unknown_features: bool,
-    enabled_target_arch: &Option<String>,
-    enabled_target_vendor: &Option<String>,
-    enabled_target_os: &Option<String>,
-    enabled_target_env: &Option<String>,
+    rules: &CfgExprRules,
     source_location: &SourceLocation,
 ) {
     // Manual filtering since Punctuated doesn't have retain_mut
@@ -246,14 +131,7 @@ fn process_union_fields(
         let mut field = field_pair.into_value().clone();
         if process_attributes(
             &mut field.attrs,
-            disabled_features,
-            enabled_features,
-            feature_mappings,
-            disable_unknown_features,
-            enabled_target_arch,
-            enabled_target_vendor,
-            enabled_target_os,
-            enabled_target_env,
+            rules,
             source_location,
         ) {
             new_fields.push(field);
@@ -265,14 +143,7 @@ fn process_union_fields(
 /// Process attributes for feature flags and return whether the item should be kept
 fn process_attributes(
     attrs: &mut Vec<syn::Attribute>,
-    disabled_features: &HashSet<String>,
-    enabled_features: &HashSet<String>,
-    feature_mappings: &HashMap<String, String>,
-    disable_unknown_features: bool,
-    enabled_target_arch: &Option<String>,
-    enabled_target_vendor: &Option<String>,
-    enabled_target_os: &Option<String>,
-    enabled_target_env: &Option<String>,
+    rules: &CfgExprRules,
     source_location: &SourceLocation,
 ) -> bool {
     let mut keep_item = true;
@@ -287,15 +158,8 @@ fn process_attributes(
                 match CfgExpr::parse_from_tokens(&meta_list.tokens) {
                     Ok(cfg_expr) => {
                         // Apply strict feature processing
-                        match cfg_expr.process_features_strict(
-                            enabled_features,
-                            disabled_features,
-                            feature_mappings,
-                            disable_unknown_features,
-                            enabled_target_arch,
-                            enabled_target_vendor,
-                            enabled_target_os,
-                            enabled_target_env,
+                        match cfg_expr.apply_rules(
+                            rules,
                             source_location,
                         ) {
                             Some(processed_expr) => {
