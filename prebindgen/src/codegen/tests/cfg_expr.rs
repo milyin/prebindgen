@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::{codegen::cfg_expr::CfgExpr, codegen::CfgExprRules, SourceLocation};
 
 #[test]
@@ -28,37 +26,30 @@ fn test_target_vendor_os_env_parse() {
 
 #[test]
 fn test_target_filters_processing() {
-    use std::collections::HashMap;
-    let enabled_features = HashSet::new();
-    let disabled_features = HashSet::new();
-    let feature_mappings: HashMap<String, String> = HashMap::new();
     let src = SourceLocation::default();
 
     // With no selection, keep predicates as-is
     let expr = CfgExpr::TargetOs("macos".into());
+    assert_eq!(expr.apply_rules(&CfgExprRules::default(), &src), Some(CfgExpr::TargetOs("macos".into())));
+
+    // No selection for arch/vendor/env should also keep predicates as-is
     assert_eq!(
-        expr.apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                ..Default::default()
-            },
-            &src,
-        ),
-        Some(CfgExpr::TargetOs("macos".into()))
+        CfgExpr::TargetArch("x86_64".into()).apply_rules(&CfgExprRules::default(), &src),
+        Some(CfgExpr::TargetArch("x86_64".into()))
+    );
+    assert_eq!(
+        CfgExpr::TargetVendor("apple".into()).apply_rules(&CfgExprRules::default(), &src),
+        Some(CfgExpr::TargetVendor("apple".into()))
+    );
+    assert_eq!(
+        CfgExpr::TargetEnv("gnu".into()).apply_rules(&CfgExprRules::default(), &src),
+        Some(CfgExpr::TargetEnv("gnu".into()))
     );
 
     // Select OS = macos: becomes true (None)
     assert_eq!(
         CfgExpr::TargetOs("macos".into()).apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                enabled_target_os: Some("macos".into()),
-                ..Default::default()
-            },
+            &CfgExprRules { enabled_target_os: Some("macos".into()), ..Default::default() },
             &src,
         ),
         None
@@ -67,13 +58,7 @@ fn test_target_filters_processing() {
     // Non-matching becomes False
     assert_eq!(
         CfgExpr::TargetOs("linux".into()).apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                enabled_target_os: Some("macos".into()),
-                ..Default::default()
-            },
+            &CfgExprRules { enabled_target_os: Some("macos".into()), ..Default::default() },
             &src,
         ),
         Some(CfgExpr::False)
@@ -82,26 +67,14 @@ fn test_target_filters_processing() {
     // Arch selection
     assert_eq!(
         CfgExpr::TargetArch("x86_64".into()).apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                enabled_target_arch: Some("x86_64".into()),
-                ..Default::default()
-            },
+            &CfgExprRules { enabled_target_arch: Some("x86_64".into()), ..Default::default() },
             &src,
         ),
         None
     );
     assert_eq!(
         CfgExpr::TargetArch("aarch64".into()).apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                enabled_target_arch: Some("x86_64".into()),
-                ..Default::default()
-            },
+            &CfgExprRules { enabled_target_arch: Some("x86_64".into()), ..Default::default() },
             &src,
         ),
         Some(CfgExpr::False)
@@ -110,29 +83,33 @@ fn test_target_filters_processing() {
     // Vendor and Env selection
     assert_eq!(
         CfgExpr::TargetVendor("apple".into()).apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                enabled_target_vendor: Some("apple".into()),
-                ..Default::default()
-            },
+            &CfgExprRules { enabled_target_vendor: Some("apple".into()), ..Default::default() },
             &src,
         ),
         None
     );
+    // Non-matching vendor becomes False
+    assert_eq!(
+        CfgExpr::TargetVendor("unknown".into()).apply_rules(
+            &CfgExprRules { enabled_target_vendor: Some("apple".into()), ..Default::default() },
+            &src,
+        ),
+        Some(CfgExpr::False)
+    );
     assert_eq!(
         CfgExpr::TargetEnv("gnu".into()).apply_rules(
-            &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
-                enabled_target_env: Some("gnu".into()),
-                ..Default::default()
-            },
+            &CfgExprRules { enabled_target_env: Some("gnu".into()), ..Default::default() },
             &src,
         ),
         None
+    );
+    // Non-matching env becomes False
+    assert_eq!(
+        CfgExpr::TargetEnv("msvc".into()).apply_rules(
+            &CfgExprRules { enabled_target_env: Some("gnu".into()), ..Default::default() },
+            &src,
+        ),
+        Some(CfgExpr::False)
     );
 }
 
@@ -175,25 +152,12 @@ fn test_all_expression() {
 
 #[test]
 fn test_strict_feature_processing() {
-    use std::collections::HashMap;
-
-    let mut enabled_features = HashSet::new();
-    enabled_features.insert("feature1".to_string());
-
-    let mut disabled_features = HashSet::new();
-    disabled_features.insert("feature2".to_string());
-
-    let mut feature_mappings = HashMap::new();
-    feature_mappings.insert("old_feature".to_string(), "new_feature".to_string());
-
     // Test enabled feature - should be removed (None = always true)
     let expr = CfgExpr::Feature("feature1".to_string());
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                enabled_features: vec!["feature1".to_string()].into_iter().collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -206,9 +170,7 @@ fn test_strict_feature_processing() {
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                disabled_features: vec!["feature2".to_string()].into_iter().collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -221,9 +183,9 @@ fn test_strict_feature_processing() {
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                feature_mappings: vec![("old_feature".to_string(), "new_feature".to_string())]
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -239,9 +201,8 @@ fn test_strict_feature_processing() {
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                enabled_features: vec!["feature1".to_string()].into_iter().collect(),
+                disabled_features: vec!["feature2".to_string()].into_iter().collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -257,9 +218,8 @@ fn test_strict_feature_processing() {
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                enabled_features: vec!["feature1".to_string()].into_iter().collect(),
+                disabled_features: vec!["feature2".to_string()].into_iter().collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -272,9 +232,7 @@ fn test_strict_feature_processing() {
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                disabled_features: vec!["feature2".to_string()].into_iter().collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -287,9 +245,7 @@ fn test_strict_feature_processing() {
     assert_eq!(
         expr.apply_rules(
             &CfgExprRules {
-                enabled_features: enabled_features.clone(),
-                disabled_features: disabled_features.clone(),
-                feature_mappings: feature_mappings.clone(),
+                enabled_features: vec!["feature1".to_string()].into_iter().collect(),
                 ..Default::default()
             },
             &SourceLocation::default()
@@ -301,21 +257,10 @@ fn test_strict_feature_processing() {
 #[test]
 #[should_panic(expected = "unmapped feature: unknown")]
 fn test_strict_feature_processing_unmapped_panic() {
-    use std::collections::HashMap;
-
-    let enabled_features = HashSet::new();
-    let disabled_features = HashSet::new();
-    let feature_mappings = HashMap::new();
-
     // Test unmapped feature - should panic
     let expr = CfgExpr::Feature("unknown".to_string());
     expr.apply_rules(
-        &CfgExprRules {
-            enabled_features,
-            disabled_features,
-            feature_mappings,
-            ..Default::default()
-        },
+    &CfgExprRules::default(),
         &SourceLocation::default(),
     );
 }
@@ -323,14 +268,6 @@ fn test_strict_feature_processing_unmapped_panic() {
 #[test]
 #[should_panic(expected = "unmapped feature: unknown")]
 fn test_strict_feature_processing_unmapped_in_any_panic() {
-    use std::collections::HashMap;
-
-    let mut enabled_features = HashSet::new();
-    enabled_features.insert("feature1".to_string());
-
-    let disabled_features = HashSet::new();
-    let feature_mappings = HashMap::new();
-
     // Test unmapped feature in any() - should panic
     let expr = CfgExpr::Any(vec![
         CfgExpr::Feature("feature1".to_string()),
@@ -338,9 +275,7 @@ fn test_strict_feature_processing_unmapped_in_any_panic() {
     ]);
     expr.apply_rules(
         &CfgExprRules {
-            enabled_features,
-            disabled_features,
-            feature_mappings,
+            enabled_features: vec!["feature1".to_string()].into_iter().collect(),
             ..Default::default()
         },
         &SourceLocation::default(),
