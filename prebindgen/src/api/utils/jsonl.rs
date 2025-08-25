@@ -1,9 +1,11 @@
 //! Serialization utilities for reading and writing records.
 
-use std::borrow::Borrow;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-use std::path::Path;
+use std::{
+    borrow::Borrow,
+    fs::{self, OpenOptions},
+    io::Write,
+    path::Path,
+};
 
 use crate::api::record::Record;
 
@@ -49,11 +51,12 @@ pub fn read_jsonl_file<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
-    use crate::api::record::RecordKind;
+    use std::fs;
+
+    use tempfile::NamedTempFile;
 
     use super::*;
-    use std::fs;
-    use tempfile::NamedTempFile;
+    use crate::api::record::RecordKind;
 
     #[test]
     fn test_jsonl_round_trip() {

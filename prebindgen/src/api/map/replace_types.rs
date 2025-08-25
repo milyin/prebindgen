@@ -2,9 +2,11 @@
 //! Mostly useful for explicitly appending full paths to types, e.g.
 //! replacing `Option` with `std::option::Option` or `MaybeUninit` with `std::mem::MaybeUninit`
 
-use crate::api::record::SourceLocation;
 use std::collections::HashMap;
+
 use syn::{visit_mut::VisitMut, Item, Type, TypePath};
+
+use crate::api::record::SourceLocation;
 
 /// Builder for configuring ReplaceTypes instances
 ///

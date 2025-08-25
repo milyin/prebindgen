@@ -9,16 +9,16 @@
 //!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
+use std::{collections::HashMap, fs::OpenOptions};
+
 use prebindgen::{get_prebindgen_out_dir, Record, RecordKind, SourceLocation, DEFAULT_GROUP_NAME};
 use proc_macro::TokenStream;
 use quote::quote;
-use std::collections::HashMap;
-use std::fs::OpenOptions;
-use syn::parse::{Parse, ParseStream};
-use syn::spanned::Spanned;
-use syn::{DeriveInput, ItemConst, ItemFn, ItemType};
-use syn::{Ident, LitStr};
-use syn::{Result, Token};
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+    DeriveInput, Ident, ItemConst, ItemFn, ItemType, LitStr, Result, Token,
+};
 
 /// Helper function to generate consistent error messages for unsupported or unparseable items.
 fn unsupported_item_error(item: Option<syn::Item>) -> TokenStream {

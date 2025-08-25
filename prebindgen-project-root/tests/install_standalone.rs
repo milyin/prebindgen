@@ -1,10 +1,10 @@
-use assert_cmd::cargo::cargo_bin;
-use assert_cmd::prelude::*;
-use std::process::Command;
 use std::{
     env, fs,
     path::{Path, PathBuf},
+    process::Command,
 };
+
+use assert_cmd::{cargo::cargo_bin, prelude::*};
 use tempfile::{Builder as TempDirBuilder, TempDir};
 use toml_edit::DocumentMut;
 

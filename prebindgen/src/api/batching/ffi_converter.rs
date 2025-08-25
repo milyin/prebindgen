@@ -14,8 +14,9 @@
 //! - have a single ffi implementation and reuse it for different language bindings without squashing all to single crate
 //! - adapt the ffi source to specificity of different binding generators
 
-use roxygen::roxygen;
 use std::collections::{HashMap, HashSet, VecDeque};
+
+use roxygen::roxygen;
 
 use crate::{
     codegen::replace_types::{

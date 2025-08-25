@@ -6,11 +6,12 @@
 //! - Processing exported types with proper crate prefixing
 //! - Generating type assertion pairs for compile-time validation
 
-use roxygen::roxygen;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
 };
+
+use roxygen::roxygen;
 
 use crate::{api::utils::edition::RustEdition, SourceLocation};
 

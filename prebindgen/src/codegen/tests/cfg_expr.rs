@@ -1,4 +1,7 @@
-use crate::{codegen::cfg_expr::CfgExpr, codegen::CfgExprRules, SourceLocation};
+use crate::{
+    codegen::{cfg_expr::CfgExpr, CfgExprRules},
+    SourceLocation,
+};
 
 #[test]
 fn test_simple_feature() {

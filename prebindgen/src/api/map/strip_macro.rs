@@ -1,9 +1,11 @@
 //! Strip the specified macro attributes from the items in the source.
 
-use crate::api::record::SourceLocation;
-use roxygen::roxygen;
 use std::collections::HashSet;
+
+use roxygen::roxygen;
 use syn::Item;
+
+use crate::api::record::SourceLocation;
 
 /// Builder for configuring StripMacros instances
 ///

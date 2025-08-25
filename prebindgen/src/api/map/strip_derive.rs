@@ -1,10 +1,12 @@
 //! Strip the specified derive attributes from the items in the source.
 
-use crate::api::record::SourceLocation;
+use std::collections::HashSet;
+
 use quote::ToTokens;
 use roxygen::roxygen;
-use std::collections::HashSet;
 use syn::Item;
+
+use crate::api::record::SourceLocation;
 
 /// Builder for configuring StripDerives instances
 ///

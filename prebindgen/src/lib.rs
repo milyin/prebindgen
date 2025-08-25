@@ -124,24 +124,22 @@ pub const DEFAULT_GROUP_NAME: &str = "default";
 pub(crate) mod api;
 pub(crate) mod codegen;
 
-pub use crate::api::buildrs::get_all_features;
-pub use crate::api::buildrs::get_enabled_features;
-pub use crate::api::buildrs::get_prebindgen_out_dir;
-pub use crate::api::buildrs::init_prebindgen_out_dir;
-pub use crate::api::buildrs::is_feature_enabled;
-
-pub use crate::api::record::SourceLocation;
-pub use crate::api::source::Source;
-pub use crate::api::utils::edition::RustEdition;
-pub use crate::api::utils::target_triple::TargetTriple;
+pub use crate::api::{
+    buildrs::{
+        get_all_features, get_enabled_features, get_prebindgen_out_dir, init_prebindgen_out_dir,
+        is_feature_enabled,
+    },
+    record::SourceLocation,
+    source::Source,
+    utils::{edition::RustEdition, target_triple::TargetTriple},
+};
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {
     pub mod ffi_converter {
         pub use crate::api::batching::ffi_converter::Builder;
     }
-    pub use crate::api::batching::cfg_filter::CfgFilter;
-    pub use crate::api::batching::ffi_converter::FfiConverter;
+    pub use crate::api::batching::{cfg_filter::CfgFilter, ffi_converter::FfiConverter};
     pub mod cfg_filter {
         pub use crate::api::batching::cfg_filter::Builder;
     }
