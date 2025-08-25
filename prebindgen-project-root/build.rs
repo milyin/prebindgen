@@ -14,7 +14,7 @@ fn main() {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
 
-    if manifest_dir.starts_with(&cargo_home) {
+    if manifest_dir.starts_with(cargo_home) {
         println!("cargo:rustc-env=PROJECT_ROOT=");
         println!("cargo:warning=prebindgen-project-root is not located inside your workspace");
     } else {

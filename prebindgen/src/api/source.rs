@@ -255,7 +255,7 @@ impl Source {
     /// let items: Vec<_> = source.items_all().collect();
     /// assert_eq!(items.len(), 2); // should contain TestStruct and test_function
     /// ```
-    pub fn items_all<'a>(&'a self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + 'a {
+    pub fn items_all(&self) -> impl Iterator<Item = (syn::Item, SourceLocation)> + '_ {
         // Build a cfg filter and apply it lazily with itertools::batching
         let mut filter = self.build_cfg_filter();
         self.items
@@ -363,7 +363,7 @@ impl Source {
 /// Read the crate name from the stored file
 fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
     let crate_name_path = input_dir.join(CRATE_NAME_FILE);
-    fs::read_to_string(&crate_name_path)
+    fs::read_to_string(crate_name_path)
         .ok()
         .map(|s| s.trim().to_string())
 }
@@ -371,7 +371,7 @@ fn read_stored_crate_name(input_dir: &Path) -> Option<String> {
 /// Read enabled features list from FEATURES_FILE and normalize into a sorted, deduplicated Vec<String>
 fn read_features_from_out_dir(input_dir: &Path) -> Vec<String> {
     let features_path = input_dir.join(FEATURES_FILE);
-    let Some(contents) = fs::read_to_string(&features_path).ok() else {
+    let Some(contents) = fs::read_to_string(features_path).ok() else {
         return Vec::new();
     };
     let mut features: Vec<String> = contents
