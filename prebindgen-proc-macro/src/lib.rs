@@ -109,7 +109,7 @@ impl Parse for PrebindgenArgs {
 }
 
 thread_local! {
-    static THREAD_ID: std::cell::RefCell<Option<u64>> = std::cell::RefCell::new(None);
+    static THREAD_ID: std::cell::RefCell<Option<u64>> = const { std::cell::RefCell::new(None) };
     static JSONL_PATHS: std::cell::RefCell<HashMap<String, std::path::PathBuf>> = std::cell::RefCell::new(HashMap::new());
 }
 
@@ -271,7 +271,7 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
 
     // Get the full path to the JSONL file
     let file_path = get_prebindgen_jsonl_path(&group);
-    if let Err(_) = prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]) {
+    if prebindgen::utils::write_to_jsonl_file(&file_path, &[&new_record]).is_err() {
         return TokenStream::from(quote! {
             compile_error!("Failed to write prebindgen record");
         });
