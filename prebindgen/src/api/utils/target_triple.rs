@@ -5,7 +5,7 @@ use target_lexicon::{OperatingSystem, Triple};
 
 /// TargetTriple is a small utility around `target_lexicon::Triple` with helpers
 /// to access parts and to convert into Rust cfg tokens.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TargetTriple(Triple);
 
 impl TargetTriple {
