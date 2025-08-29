@@ -1,6 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::LitStr;
+use std::collections::HashMap;
+use std::sync::{OnceLock, RwLock};
 
 /// TargetTriple is a small utility around `target_lexicon::Triple` with helpers
 /// to access parts and to convert into Rust cfg tokens.
@@ -31,6 +33,16 @@ impl TargetTriple {
     /// Parse from a string like "aarch64-apple-darwin".
     pub fn parse(s: impl Into<String>) -> Result<Self, String> {
         let triple = s.into();
+
+        // Fast path: check global cache first.
+        if let Some(cached) = TARGET_TRIPLE_CACHE
+            .get_or_init(|| RwLock::new(HashMap::new()))
+            .read()
+            .ok()
+            .and_then(|m| m.get(&triple).cloned())
+        {
+            return Ok(cached);
+        }
         // run `rustc --print cfg --target <target_triple>` and capture the output
         let output = std::process::Command::new("rustc")
             .args(["--print", "cfg", "--target", &triple])
@@ -59,13 +71,22 @@ impl TargetTriple {
             }
         }
 
-        Ok(Self {
-            triple,
+        let parsed = Self {
+            triple: triple.clone(),
             arch,
             vendor,
             os,
             env,
-        })
+        };
+
+        // Store in cache for subsequent calls.
+        if let Some(lock) = TARGET_TRIPLE_CACHE.get() {
+            if let Ok(mut map) = lock.write() {
+                map.insert(triple, parsed.clone());
+            }
+        }
+
+        Ok(parsed)
     }
 
     /// Get the architecture as a canonical string used by Rust cfg target_arch.
@@ -133,6 +154,9 @@ impl quote::ToTokens for TargetTriple {
         tokens.extend(self.to_cfg_tokens());
     }
 }
+
+// Global cache for parsed TargetTriple results.
+static TARGET_TRIPLE_CACHE: OnceLock<RwLock<HashMap<String, TargetTriple>>> = OnceLock::new();
 
 #[cfg(test)]
 mod tests {
