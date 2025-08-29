@@ -285,10 +285,15 @@ impl Source {
         if let Some(target) = &self.target_triple {
             let target_triple = TargetTriple::parse(target)
                 .unwrap_or_else(|e| panic!("Failed to parse target triple '{}': {}", target, e));
-            builder = builder
-                .enable_target_arch(target_triple.arch())
-                .enable_target_os(target_triple.os())
-                .enable_target_vendor(target_triple.vendor());
+            if let Some(arch) = target_triple.arch() {
+                builder = builder.enable_target_arch(arch);
+            }
+            if let Some(vendor) = target_triple.vendor() {
+                builder = builder.enable_target_vendor(vendor);
+            }
+            if let Some(os) = target_triple.os() {
+                builder = builder.enable_target_os(os);
+            }
             if let Some(env) = target_triple.env() {
                 builder = builder.enable_target_env(env);
             }
