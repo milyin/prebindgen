@@ -36,7 +36,6 @@ if_rust_version = "1.0"
 konst = "0.3.0" # old one for for rust 1.75
 toml = "0.9.5"
 rand = "0.9.2"
-target-lexicon = "0.13.2"
 
 [patch]
 
