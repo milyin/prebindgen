@@ -1,8 +1,11 @@
+use std::{
+    collections::HashMap,
+    sync::{OnceLock, RwLock},
+};
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::LitStr;
-use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
 
 /// TargetTriple is a small utility around `target_lexicon::Triple` with helpers
 /// to access parts and to convert into Rust cfg tokens.
