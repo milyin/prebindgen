@@ -349,6 +349,32 @@ impl Prebindgen for Cbindgen {
             }
         }
 
+        // Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
+        for (key, _cfg) in sorted_by_key(&self.enums) {
+            let ty = key.to_type();
+            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+                continue;
+            }
+            let Some(e) = enum_item(registry, &ty) else {
+                continue;
+            };
+            assert_unit_variants(e);
+            let cname = format_ident!("{}", type_short(&ty));
+            let variants = e.variants.iter().map(|v| {
+                let id = &v.ident;
+                match &v.discriminant {
+                    Some((_, expr)) => quote!(#id = #expr),
+                    None => quote!(#id),
+                }
+            });
+            items.push(syn::parse_quote!(
+                #[repr(C)]
+                pub enum #cname {
+                    #(#variants),*
+                }
+            ));
+        }
+
         items
     }
 
@@ -434,6 +460,32 @@ impl Prebindgen for Cbindgen {
             });
         }
 
+        // Enum input: `match` the C enum back to the source enum — infallible.
+        if self.enums.contains_key(&key) {
+            let e = enum_item(_r, ty)?;
+            assert_unit_variants(e);
+            let name = Self::in_name(ty);
+            let cname = format_ident!("{}", type_short(ty));
+            let src = self.src_ty(ty);
+            let arms = e.variants.iter().map(|v| {
+                let id = &v.ident;
+                quote!(#cname::#id => #src::#id,)
+            });
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #cname) -> #src {
+                    match v { #(#arms)* }
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(#cname),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         // `String` input: `*const c_char` → owned `String` — fallible.
         if is_string(ty) {
             let name = Self::in_name(ty);
@@ -473,11 +525,51 @@ impl Prebindgen for Cbindgen {
 
     fn on_input_type_rank_1(
         &self,
-        _pat: &syn::Type,
-        _t1: &syn::Type,
+        pat: &syn::Type,
+        t1: &syn::Type,
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
-        None
+        // `&T` (shared borrow) of an opaque handle: wire `*const <C struct>`,
+        // decode to `&<src>` borrowed from the C-owned `Box`. Fallible (null
+        // checks). Mutable borrows / non-opaque inners fall through.
+        let syn::Type::Reference(r) = pat else { return None };
+        if r.mutability.is_some() {
+            return None;
+        }
+        if !self.opaque.contains_key(&TypeKey::from_type(t1)) {
+            return None;
+        }
+        let ref_ty: syn::Type = syn::parse_quote!(&#t1);
+        let name = Self::in_name(&ref_ty);
+        let c_struct = format_ident!("{}", type_short(t1));
+        let src = self.src_ty(t1);
+        let short = type_short(t1);
+        let null_ptr_msg = format!("null {short} pointer");
+        let null_handle_msg = format!("null {short} handle");
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name<'a>(
+                v: *const #c_struct,
+            ) -> ::core::result::Result<&'a #src, ::std::string::String> {
+                if v.is_null() {
+                    return ::core::result::Result::Err(::std::string::String::from(#null_ptr_msg));
+                }
+                let __h = &*v;
+                if __h._0.is_null() {
+                    return ::core::result::Result::Err(
+                        ::std::string::String::from(#null_handle_msg),
+                    );
+                }
+                ::core::result::Result::Ok(&*(__h._0 as *const #src))
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(*const #c_struct),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
     fn on_input_type_rank_2(
@@ -570,6 +662,32 @@ impl Prebindgen for Cbindgen {
             );
             return Some(ConverterImpl {
                 destination: syn::parse_quote!(#c_struct),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
+        // Enum output: `match` the source enum to the C enum.
+        if self.enums.contains_key(&key) {
+            let e = enum_item(_r, ty)?;
+            assert_unit_variants(e);
+            let name = Self::out_name(ty);
+            let cname = format_ident!("{}", type_short(ty));
+            let src = self.src_ty(ty);
+            let arms = e.variants.iter().map(|v| {
+                let id = &v.ident;
+                quote!(#src::#id => #cname::#id,)
+            });
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #src) -> #cname {
+                    match v { #(#arms)* }
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(#cname),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -858,13 +976,10 @@ impl Cbindgen {
                 decodes.push(quote!(let #ident = #conv(#ident);));
             }
 
-            match arg_ty {
-                syn::Type::Reference(r) if r.mutability.is_some() => {
-                    call_args.push(quote!(&mut #ident))
-                }
-                syn::Type::Reference(_) => call_args.push(quote!(&#ident)),
-                _ => call_args.push(quote!(#ident)),
-            }
+            // Each input converter produces exactly the source param type
+            // (`String` by value, `&T` for borrows, owned `T` for consume), so
+            // the decoded binding is passed straight through.
+            call_args.push(quote!(#ident));
         }
 
         (params, decodes, call_args)
@@ -893,6 +1008,25 @@ fn type_short(ty: &syn::Type) -> String {
     type_path_tail(ty)
         .map(|i| i.to_string())
         .unwrap_or_else(|| sanitize(&TypeKey::from_type(ty)))
+}
+
+/// The indexed `syn::ItemEnum` for a declared enum type, by tail ident.
+fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
+    let ident = type_path_tail(ty)?;
+    registry.enums.get(&ident).map(|(e, _)| e)
+}
+
+/// Hard error on a non-C-like enum (only fieldless / unit variants supported).
+fn assert_unit_variants(e: &syn::ItemEnum) {
+    for v in &e.variants {
+        assert!(
+            matches!(v.fields, syn::Fields::Unit),
+            "Cbindgen: enum `{}` variant `{}` has fields; only C-like (fieldless) \
+             enums are supported",
+            e.ident,
+            v.ident
+        );
+    }
 }
 
 /// Last path-segment ident of a path type.
@@ -1055,6 +1189,60 @@ mod tests {
             "{src}"
         );
         assert!(compact.contains("__cbg_out_Error"), "{src}");
+    }
+
+    /// `z_keyexpr_relation_to(a: &ZKeyExpr, b: &ZKeyExpr) -> SetIntersectionLevel`
+    /// lowers to a borrow-input + enum-return wrapper; `.panic()` lets the
+    /// fallible borrow decode abort.
+    #[test]
+    fn relation_to_lowering() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_keyexpr_relation_to(a: &ZKeyExpr, b: &ZKeyExpr) -> SetIntersectionLevel {
+                unimplemented!()
+            }
+        );
+        let enum_item: syn::ItemEnum = syn::parse_quote!(
+            pub enum SetIntersectionLevel {
+                Disjoint = 0,
+                Intersects = 1,
+                Includes = 2,
+                Equals = 3,
+            }
+        );
+
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Enum(enum_item), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
+            .enum_(syn::parse_quote!(SetIntersectionLevel))
+            .function(syn::parse_quote!(z_keyexpr_relation_to))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "relation_to");
+        let compact: String = src.split_whitespace().collect();
+
+        // repr(C) enum mirror with discriminants.
+        assert!(compact.contains("#[repr(C)]"), "{src}");
+        assert!(compact.contains("pubenumSetIntersectionLevel"), "{src}");
+        assert!(compact.contains("Disjoint=0"), "{src}");
+        // Wrapper: borrow params + enum return.
+        assert!(compact.contains("externfnz_keyexpr_relation_to") || compact.contains("extern\"C\"fnz_keyexpr_relation_to"), "{src}");
+        assert!(compact.contains("a:*constZKeyExpr"), "{src}");
+        assert!(compact.contains("b:*constZKeyExpr"), "{src}");
+        assert!(compact.contains("->SetIntersectionLevel"), "{src}");
+        // Fallible borrow decode aborts (no Result channel).
+        assert!(compact.contains("panic!("), "{src}");
+        // Enum output converter matches by variant name.
+        assert!(
+            compact.contains("zenoh_flat::SetIntersectionLevel::Disjoint=>SetIntersectionLevel::Disjoint"),
+            "{src}"
+        );
     }
 
     /// Returning `Result<_, E>` where `E` is not declared via `.error()` is a
