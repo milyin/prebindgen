@@ -65,19 +65,21 @@ impl fmt::Display for TypeKey {
 /// Per-cell registry entry.
 #[derive(Clone)]
 pub struct TypeEntry<M = ()> {
-    /// Wire/destination type (e.g. `jni::sys::jlong`). Other converters
-    /// that ask "what's the wire form of this rust type?" read this.
+    /// Wire/destination type — the form the value takes on the wire as
+    /// chosen by the back-end (e.g. an `i64` handle for a JNI back-end, or
+    /// a `*const T` raw pointer for a C back-end). Other converters that
+    /// ask "what's the wire form of this rust type?" read this.
     pub destination: syn::Type,
     /// Complete generated function for the **wire-facing** stage of the
-    /// converter (signature, body, attributes, lifetimes). Plugin owns
-    /// the shape. Callers compute this stage's name via
+    /// converter (signature, body, attributes, lifetimes). The back-end
+    /// owns the shape. Callers compute this stage's name via
     /// `function.sig.ident`.
     pub function: syn::ItemFn,
     /// **Rust-side** stages that compose with [`Self::function`] to form
     /// the full chain — copied verbatim from the resolving
     /// [`crate::api::core::prebindgen::ConverterImpl::pre_stages`]. See
     /// that field's docs for the chain-order semantics.
-    pub pre_stages: Vec<Stage>,
+    pub pre_stages: Vec<Stage<M>>,
     /// Inner types whose function delegates to their converters. Empty for
     /// rank-0 resolutions; equal to the rank-N `subs` array for rank-N≥1
     /// resolutions. Used by the post-resolution propagation pass.
@@ -93,17 +95,16 @@ pub struct TypeEntry<M = ()> {
     /// Source-arm metadata for `impl Into<target>` dispatcher entries —
     /// `Some(...)` only when this entry was produced by
     /// [`crate::api::core::prebindgen::Prebindgen::dispatch_into_input`].
-    /// Language-side wrapper emitters (e.g. the Kotlin emitter in
-    /// `jni_kotlin_ext.rs`) read this to drive per-source `is JNI<X>`
-    /// fan-out — one Java-side arm per declared
+    /// The back-end's language-side emitter reads this to drive per-source
+    /// fan-out — one foreign-side arm per declared
     /// [`crate::api::core::prebindgen::IntoSource`] with the source's
     /// borrow/consume mode. `None` for every non-dispatcher entry.
     pub into_sources: Option<Vec<IntoSource>>,
-    /// Language-specific extras carried in by the
+    /// Back-end-specific extras carried in by the
     /// [`crate::api::core::prebindgen::ConverterImpl`] that filled this
     /// slot. Emitter code reads this directly — the registry is the
-    /// single source of truth for cross-language facts (Kotlin names,
-    /// C header names, etc.). Defaults to `()` for back-ends that don't
+    /// single source of truth for cross-language facts (C header names,
+    /// JVM class names, etc.). Defaults to `()` for back-ends that don't
     /// need any.
     pub metadata: M,
 }

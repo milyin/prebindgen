@@ -91,8 +91,8 @@ impl std::error::Error for ResolveError {}
 ///
 /// The single-loop design lets cross-direction dependencies converge: e.g.
 /// `impl Fn(Sample)` is an INPUT entry whose callback wrapper needs
-/// `Sample`'s OUTPUT converter (callback args flow Rust→Kotlin). Sample's
-/// output resolves in the same iteration as everything else, then
+/// `Sample`'s OUTPUT converter (callback args flow Rust→foreign side).
+/// Sample's output resolves in the same iteration as everything else, then
 /// `impl Fn(Sample)`'s rank-1 attempt succeeds in the next.
 pub fn resolve<E: Prebindgen>(
     registry: &mut Registry<E::Metadata>,
@@ -984,7 +984,7 @@ mod tests {
         reg.input_types[0].insert(
             inner_key.clone(),
             Some(TypeEntry {
-                destination: syn::parse_quote!(jni::sys::jlong),
+                destination: syn::parse_quote!(i64),
                 function: syn::parse_quote!(fn __dummy() {}),
                 pre_stages: vec![],
                 subs: vec![],

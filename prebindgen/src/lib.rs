@@ -134,13 +134,55 @@ pub use crate::api::{
     utils::{edition::RustEdition, target_triple::TargetTriple},
 };
 
-/// Registry-based universal converter pipeline.
+/// Registry-based, **language-agnostic** converter pipeline.
 ///
-/// [`Registry`](core::Registry) scans a stream of `#[prebindgen]` items; a
-/// back-end implementing the [`Prebindgen`](core::Prebindgen) trait drives type
-/// resolution and per-item code emission. Language adapters that implement
-/// [`Prebindgen`](core::Prebindgen) are provided separately (none are built in
-/// yet).
+/// This module is the language-neutral core of prebindgen: it turns a stream of
+/// `#[prebindgen]` items into generated Rust FFI bindings plus a fully resolved
+/// table of type converters. It has no knowledge of any particular destination
+/// language — C, JNI/Kotlin, Swift, Python, etc. all plug in the same way.
+///
+/// # The plug-in point
+///
+/// Implement the [`Prebindgen`](core::Prebindgen) trait once per destination
+/// language. The trait teaches the pipeline two things:
+///
+/// * **How the language represents Rust types on the wire** — the
+///   `on_input_type_rank_0..3` / `on_output_type_rank_0..3` methods return a
+///   [`ConverterImpl`](core::ConverterImpl) (a generated converter fn plus its
+///   wire type) for each required type.
+/// * **What wrapper code to emit per item** — `on_function` / `on_struct` /
+///   `on_enum` / `on_const`.
+///
+/// Everything language-specific that must travel through the pipeline rides in
+/// the back-end's chosen [`Metadata`](core::Prebindgen::Metadata) type (a JNI
+/// back-end's Kotlin class names and exception info, a C back-end's header
+/// names, …). It is set on each converter, propagated into the registry's
+/// [`TypeEntry`](core::TypeEntry), and read back by the back-end's own emitter —
+/// no side channels. Back-ends needing no extras leave it at the default `()`.
+///
+/// # Flow
+///
+/// 1. [`Registry::from_items`](core::Registry::from_items) indexes the
+///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`]).
+/// 2. [`Registry::write_rust`](core::Registry::write_rust) resolves every
+///    required type via your back-end and writes the generated Rust bindings
+///    file.
+/// 3. The back-end produces any secondary artifacts (C headers, Kotlin sources,
+///    …) by walking the resolved [`Registry`](core::Registry).
+///
+/// # Universality, by example
+///
+/// The same machinery serves very different languages:
+///
+/// * **C / cbindgen back-end:** wire types are raw pointers and primitive C
+///   types; converters are thin transmutes; `pre_stages` are usually empty
+///   (errors surface as return codes).
+/// * **JNI / Kotlin back-end:** wire types are JNI handles (`jlong`,
+///   `JObject`); converters marshal across the JVM boundary; `pre_stages`
+///   carry fallible steps whose `Err` arms throw JVM exceptions (the exception
+///   info lives in that back-end's `Metadata`).
+///
+/// Both back-ends are future work — none are built in yet.
 pub mod core {
     pub use crate::api::core::{
         ConverterImpl, Direction, IntoSource, IntoSourceMode, NicheSlot, Niches, Prebindgen,

@@ -25,32 +25,30 @@ use crate::api::core::niches::Niches;
 use crate::api::core::registry::{Registry, TypeKey};
 
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
-/// a value-inspecting throw stage that sits between the rust value the
+/// a value-inspecting step that sits between the rust value the
 /// `#[prebindgen]` fn yields/receives and the wire-facing
 /// [`ConverterImpl::function`].
 ///
-/// Each stage emits an `In → Result<Out, ErrTy>` function plus a JVM
-/// exception class to raise when its `Err` arm fires. The function
-/// wrapper drives them in chain order, emitting one match-throw per
-/// stage (see `emit_jni_function_wrapper` in the JNI back-end).
+/// Each stage is a fallible `In → Result<Out, Err>` function. The core
+/// pipeline only ever emits and de-duplicates [`Self::function`]; how a
+/// stage's `Err` arm is surfaced to the foreign side — throw an exception,
+/// return an error code, set `errno`, … — is entirely up to the
+/// destination-language back-end and is described by [`Self::metadata`].
 #[derive(Clone)]
-pub struct Stage {
+pub struct Stage<M = ()> {
     /// Complete function definition for this stage. Same shape as
     /// [`ConverterImpl::function`] but typed for this stage's own `In →
     /// Out` and own error type.
     pub function: syn::ItemFn,
-    /// JVM exception class FQN this stage raises on `Err` (e.g.
-    /// `"io.zenoh.jni.ZError"`). Contributes to the Kotlin emitter's
-    /// `@Throws(...)` union; the framework treats the chain's @Throws as
-    /// the set of every stage's `throws_fqn` plus the wire-facing
-    /// function's.
-    pub throws_fqn: String,
-    /// Bare-ident path to the generated `throw_<short>` free fn the
-    /// function wrapper calls on this stage's `Err` (e.g.
-    /// `throw_ZError`). Resolved through the same mechanism as
-    /// [`crate::api::core::registry::TypeEntry::metadata`]'s
-    /// `throws_action`.
-    pub throws_action: syn::Path,
+    /// Back-end-specific extras for this stage — same [`Metadata`] type as
+    /// the owning converter ([`ConverterImpl::metadata`]). The core never
+    /// inspects this; the back-end's emitter reads it to decide how the
+    /// stage's `Err` arm is surfaced (e.g. a JNI back-end stores the JVM
+    /// exception class and `throw_*` fn to call here; a C back-end might
+    /// store the error-code sentinel). Defaults to `()`.
+    ///
+    /// [`Metadata`]: Prebindgen::Metadata
+    pub metadata: M,
 }
 
 /// Result of resolving one converter — the wire (destination) type the rest
@@ -58,18 +56,18 @@ pub struct Stage {
 ///
 /// Invariant: `function.sig.ident` MUST be a deterministic function of the
 /// `(rust_type, destination)` pair so that callers of this converter — both
-/// other generated converters in the same plugin and any hand-written code
+/// other generated converters from the same back-end and any hand-written code
 /// that knows the convention — can compute or look up the name.
 #[derive(Clone)]
 pub struct ConverterImpl<M = ()> {
     /// Wire/destination type. Other converters that ask "what's the wire
     /// form of this rust type?" read this. The actual function may return
-    /// a wrapped form (e.g. `ZResult<destination>`) — that is the plugin's
-    /// internal calling convention; `destination` is the value the wire
-    /// carries on success.
+    /// a wrapped form (e.g. a back-end's own `Result`-like envelope) — that
+    /// is the back-end's internal calling convention; `destination` is the
+    /// value the wire carries on success.
     pub destination: syn::Type,
     /// Complete function definition for the **wire-facing** stage. The
-    /// plugin owns the parameter list, return type, `unsafe`/`pub`
+    /// back-end owns the parameter list, return type, `unsafe`/`pub`
     /// modifiers, lifetime parameters, and any attribute annotations.
     /// For input direction this is the FIRST stage in execution order
     /// (it takes the wire); for output direction this is the LAST stage
@@ -85,49 +83,47 @@ pub struct ConverterImpl<M = ()> {
     /// * **Output** (rust → wire): chain runs `rust → pre_stages[N-1] →
     ///   … → pre_stages[1] → pre_stages[0] → function → wire`.
     ///
-    /// Each stage raises its own configured exception (see
-    /// [`Stage::throws_fqn`]); the function wrapper emits one match-throw
-    /// per stage.
-    pub pre_stages: Vec<Stage>,
+    /// Each stage is fallible; how its `Err` arm is surfaced is back-end
+    /// specific and carried in [`Stage::metadata`].
+    pub pre_stages: Vec<Stage<M>>,
     /// Bit-patterns the wire type can represent but this converter never
     /// produces (output) and rejects (input). Wrapper handlers like
     /// `Option<_>` consume one slot for their own discriminant and
     /// re-export the rest — see [`Niches`] for the cascade model.
     /// Default is empty (no niche optimisation).
     pub niches: Niches,
-    /// Language-specific extras carried alongside the converter. Filled by
+    /// Back-end-specific extras carried alongside the converter. Filled by
     /// the same handler that produces `destination` / `function` /
     /// `niches`, copied through into `TypeEntry::metadata` by the resolver,
-    /// and read by language-side emitters. Set this where you build the
-    /// converter, not in a side channel.
+    /// and read by the back-end's language-side emitters. Set this where you
+    /// build the converter, not in a side channel.
     pub metadata: M,
 }
 
-/// How a single `impl Into<target>` source arm consumes the Java-side
-/// value when the source maps to an opaque-handle Rust type (i.e. the
-/// source's registered input decoder returns `OwnedObject<T>`). The
-/// mode is a no-op for non-opaque sources (they have no `Box` slot to
-/// manage).
+/// Whether a single `impl Into<target>` source arm **borrows** or **takes
+/// ownership of** the foreign-side value when the source maps to an
+/// opaque-handle Rust type (a type whose wire form is a raw owned pointer /
+/// handle the foreign side holds). The mode is a no-op for non-opaque
+/// sources, which own no foreign-side handle slot.
 ///
 /// Used by [`IntoSource`] to drive
 /// [`Prebindgen::dispatch_into_input`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IntoSourceMode {
-    /// Borrow: opaque sources decode via
-    /// `OwnedObject::from_raw(...).clone()` (Java's `Box` slot stays
-    /// live across the call; requires `T: Clone`).
+    /// Borrow: opaque sources are decoded by cloning out of the handle, so
+    /// the foreign side's handle stays valid across the call (requires
+    /// `T: Clone`).
     Borrow,
-    /// Consume: opaque sources decode via
-    /// `*Box::from_raw(ptr as *mut T)` (Java's `Box` slot is taken;
-    /// caller's typed handle is invalidated by the call). No
+    /// Consume: opaque sources are decoded by taking ownership of the
+    /// handle, so the foreign side's handle is invalidated by the call. No
     /// `T: Clone` bound.
     Consume,
 }
 
 /// One source arm in the dispatcher for an
 /// `impl Into<target> + Send + 'static` parameter — the Rust source
-/// type plus the borrow/consume mode that determines how the opaque
-/// `Box` slot is treated when the source is an opaque-handle type.
+/// type plus the borrow/consume mode that determines how the foreign-side
+/// handle is treated when the source is an opaque-handle type.
 ///
 /// Order in [`Prebindgen::into_sources`]'s returned vector
 /// determines the runtime dispatch order in the emitted converter.
@@ -137,14 +133,13 @@ pub struct IntoSource {
     /// `TryInto::<target>::try_into` runs.
     pub source_type: syn::Type,
     /// Borrow vs. Consume — relevant only when `source_type` is an
-    /// opaque-handle type (input decoder returns `OwnedObject<T>`).
+    /// opaque-handle type.
     pub mode: IntoSourceMode,
 }
 
 impl IntoSource {
-    /// Borrow-mode arm — opaque sources keep the Java handle live
-    /// (`OwnedObject::from_raw(...).clone()`); non-opaque sources are
-    /// unaffected. Equivalent to today's universal behavior.
+    /// Borrow-mode arm — opaque sources keep the foreign-side handle valid;
+    /// non-opaque sources are unaffected.
     pub fn borrow(ty: syn::Type) -> Self {
         Self {
             source_type: ty,
@@ -152,9 +147,9 @@ impl IntoSource {
         }
     }
 
-    /// Consume-mode arm — opaque sources take ownership of the Java
-    /// slot (`*Box::from_raw(ptr as *mut T)`), invalidating the
-    /// caller's typed handle. Non-opaque sources are unaffected.
+    /// Consume-mode arm — opaque sources take ownership of the foreign-side
+    /// handle, invalidating the caller's handle. Non-opaque sources are
+    /// unaffected.
     pub fn consume(ty: syn::Type) -> Self {
         Self {
             source_type: ty,
@@ -163,19 +158,28 @@ impl IntoSource {
     }
 }
 
-/// Implemented by destination-language back-ends (e.g. JNI). The resolver
-/// drives this trait to fill `Registry::input_types` / `output_types`
-/// entries; the file emitter calls `on_function` / `on_struct` / `on_enum` /
-/// `on_const` to produce per-item wrapper code.
+/// The single extension point of the pipeline: implement this trait once per
+/// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
+/// the language-agnostic [`Registry`] how that language represents Rust types
+/// on the wire and what wrapper code to emit.
 ///
-/// Back-ends pick a [`Self::Metadata`] type to carry language-specific
-/// extras (Kotlin names, C header names, …) end-to-end through the
-/// pipeline — set in each `ConverterImpl::metadata`, propagated by the
-/// resolver into `TypeEntry::metadata`, and read directly by emitter
-/// code. Back-ends that don't need any extras leave it at the default
-/// `()`.
+/// The trait has no language-specific concepts of its own. Two jobs:
+/// * **Type resolution.** The resolver asks `on_input_type_rank_0..3` /
+///   `on_output_type_rank_0..3` for the wire form of each required type and
+///   gets back a [`ConverterImpl`] (a generated converter fn + its wire type);
+///   these fill `Registry::input_types` / `output_types`.
+/// * **Per-item emission.** The file emitter calls `on_function` / `on_struct`
+///   / `on_enum` / `on_const` to produce the per-item wrapper code for the
+///   destination language.
+///
+/// Anything language-specific the rest of the pipeline must carry — a JNI
+/// back-end's Kotlin class names and exception info, a C back-end's header
+/// names, etc. — rides in [`Self::Metadata`], an opaque type the back-end
+/// chooses. It is set in each `ConverterImpl::metadata`, propagated by the
+/// resolver into `TypeEntry::metadata`, and read back by the back-end's own
+/// emitter. Back-ends that need no extras leave it at the default `()`.
 pub trait Prebindgen {
-    /// Language-specific extras every resolved converter carries. The
+    /// Back-end-specific extras every resolved converter carries. The
     /// resolver copies this from each `ConverterImpl` it accepts into
     /// the matching `TypeEntry`, so emitter code reads metadata off
     /// the registry rather than through a parallel side channel.

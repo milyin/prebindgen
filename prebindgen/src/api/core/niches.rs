@@ -15,11 +15,11 @@
 //! | `Option<Option<NonZeroU32>>` | falls back unless inner exposes ≥2      |
 //!
 //! In the FFI setting the canonical example is a Rust value encoded as a
-//! raw `Box::into_raw` pointer carried over the wire as `jlong`: real
-//! `Box::into_raw` results are never `0`, so the converter declares the
-//! single niche `{0}`. `Option<T>` then automatically reuses the same
-//! `jlong` wire with `0` meaning `None`, matching the C-pointer-with-null
-//! ABI most JNI bindings already use.
+//! raw `Box::into_raw` pointer carried over the wire as an integer handle:
+//! real `Box::into_raw` results are never `0`, so the converter declares
+//! the single niche `{0}`. `Option<T>` then automatically reuses the same
+//! integer wire with `0` meaning `None`, matching the C-pointer-with-null
+//! ABI most native bindings already use.
 //!
 //! ## Cascading
 //!
@@ -35,7 +35,7 @@
 //!
 //! For the carve to be sound, the inner converter's outputs must
 //! genuinely avoid the carved bit pattern, and its input must reject it
-//! (typically by erroring). The plugin author guarantees this — `Niches`
+//! (typically by erroring). The back-end author guarantees this — `Niches`
 //! is a *declaration* that the resolver and wrappers trust.
 //!
 //! ## Calling convention for `matches`
@@ -44,16 +44,17 @@
 //! the wire-typed parameter `v` is in scope. The exact shape of `v`
 //! depends on the wire kind:
 //!
-//! * Standard wires (e.g. `JObject`, `jlong`): `v: &<wire>` — write
-//!   `*v == 0` for `jlong`, `v.is_null()` for `JObject` (autoderef).
+//! * By-reference wires (e.g. an integer handle, or an object-handle
+//!   type): `v: &<wire>` — write `*v == 0`, or `v.is_null()` for a handle
+//!   type that derefs to a null check.
 //! * Raw-pointer wires (`*const T`): `v: <wire>` — write `v.is_null()`
 //!   directly, no `*` deref.
 //!
-//! The plugin producing the niche knows which wire kind it is using and
+//! The back-end producing the niche knows which wire kind it is using and
 //! must write `matches` accordingly.
 //!
-//! `value` is a wire-typed *constant* expression with no `v`, no `env` —
-//! just the bit pattern (e.g. `0i64`, `jni::objects::JObject::null()`,
+//! `value` is a wire-typed *constant* expression with no `v` and no other
+//! locals in scope — just the bit pattern (e.g. `0i64`,
 //! `std::ptr::null()`).
 
 /// One free bit-pattern slot in the wire encoding.
@@ -85,8 +86,8 @@ pub struct Niches {
 
 impl Niches {
     /// No free bit-patterns. The default for converters whose wire
-    /// encoding uses every bit-pattern as a valid value (e.g. `i64`
-    /// over `jlong`).
+    /// encoding uses every bit-pattern as a valid value (e.g. a plain
+    /// `i64` wire).
     pub fn empty() -> Self {
         Self::default()
     }
@@ -179,18 +180,18 @@ mod tests {
     #[test]
     fn cascading_carve() {
         let n = Niches::from_slots([
-            NicheSlot { value: syn::parse_quote!(jni::sys::jint::MIN), matches: syn::parse_quote!(*v == jni::sys::jint::MIN) },
-            NicheSlot { value: syn::parse_quote!(jni::sys::jint::MAX), matches: syn::parse_quote!(*v == jni::sys::jint::MAX) },
+            NicheSlot { value: syn::parse_quote!(i32::MIN), matches: syn::parse_quote!(*v == i32::MIN) },
+            NicheSlot { value: syn::parse_quote!(i32::MAX), matches: syn::parse_quote!(*v == i32::MAX) },
         ]);
 
         // Outer wrapper takes the first niche.
         let (outer, rest1) = n.carve().unwrap();
-        assert_eq!(slot_strs(&outer).0, "jni :: sys :: jint :: MIN");
+        assert_eq!(slot_strs(&outer).0, "i32 :: MIN");
         assert_eq!(rest1.len(), 1);
 
         // Inner wrapper (carving from `rest1`) takes the second.
         let (inner, rest2) = rest1.carve().unwrap();
-        assert_eq!(slot_strs(&inner).0, "jni :: sys :: jint :: MAX");
+        assert_eq!(slot_strs(&inner).0, "i32 :: MAX");
         assert!(rest2.is_empty());
     }
 

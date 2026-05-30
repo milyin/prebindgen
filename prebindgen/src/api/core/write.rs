@@ -171,15 +171,15 @@ mod tests {
         let mut reg: Registry<()> = Registry::default();
         let key_a = TypeKey::parse("u64");
         let key_b = TypeKey::parse("Sample");
-        let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let wire2: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let wire: syn::Type = syn::parse_quote!(i64);
+        let wire2: syn::Type = syn::parse_quote!(*const u8);
 
         reg.input_types[0].insert(
             key_a.clone(),
             Some(TypeEntry {
                 destination: wire.clone(),
                 function: syn::parse_quote!(
-                    fn jlong_to_u64_aaaa(v: jni::sys::jlong) -> u64 { v as u64 }
+                    fn handle_to_u64_aaaa(v: i64) -> u64 { v as u64 }
                 ),
                 pre_stages: vec![],
                 subs: vec![],
@@ -194,7 +194,7 @@ mod tests {
             Some(TypeEntry {
                 destination: wire2.clone(),
                 function: syn::parse_quote!(
-                    fn JObject_to_Sample_bbbb(v: jni::objects::JObject) -> Sample { decode_sample(v) }
+                    fn Ptr_to_Sample_bbbb(v: *const u8) -> Sample { decode_sample(v) }
                 ),
                 pre_stages: vec![],
                 subs: vec![],
@@ -207,9 +207,9 @@ mod tests {
 
         let items = collect_converter_items(&reg);
         assert_eq!(items.len(), 2);
-        // Sorted ASCII: "JObject_to_Sample_bbbb" < "jlong_to_u64_aaaa"
-        // (uppercase J < lowercase j).
-        assert_eq!(items[0].0.to_string(), "JObject_to_Sample_bbbb");
-        assert_eq!(items[1].0.to_string(), "jlong_to_u64_aaaa");
+        // Sorted ASCII: "Ptr_to_Sample_bbbb" < "handle_to_u64_aaaa"
+        // (uppercase P < lowercase h).
+        assert_eq!(items[0].0.to_string(), "Ptr_to_Sample_bbbb");
+        assert_eq!(items[1].0.to_string(), "handle_to_u64_aaaa");
     }
 }
