@@ -118,7 +118,7 @@ impl Source {
         let mut items = HashMap::new();
         for group in groups {
             let records = Self::read_group(input_dir, &group);
-            let group_items = records.iter().map(|r| (r.parse())).collect::<Vec<_>>();
+            let group_items = records.iter().map(|r| r.parse()).collect::<Vec<_>>();
             items.insert(group, group_items);
         }
 
