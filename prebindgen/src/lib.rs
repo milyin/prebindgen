@@ -134,6 +134,20 @@ pub use crate::api::{
     utils::{edition::RustEdition, target_triple::TargetTriple},
 };
 
+/// Registry-based universal converter pipeline.
+///
+/// [`Registry`](core::Registry) scans a stream of `#[prebindgen]` items; a
+/// back-end implementing the [`Prebindgen`](core::Prebindgen) trait drives type
+/// resolution and per-item code emission. Language adapters that implement
+/// [`Prebindgen`](core::Prebindgen) are provided separately (none are built in
+/// yet).
+pub mod core {
+    pub use crate::api::core::{
+        ConverterImpl, Direction, IntoSource, IntoSourceMode, NicheSlot, Niches, Prebindgen,
+        Registry, ScanError, Stage, TypeEntry, TypeKey, WriteRustError,
+    };
+}
+
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
 pub mod batching {
     pub mod ffi_converter {
