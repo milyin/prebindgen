@@ -182,12 +182,23 @@ pub use crate::api::{
 ///   carry fallible steps whose `Err` arms throw JVM exceptions (the exception
 ///   info lives in that back-end's `Metadata`).
 ///
-/// Both back-ends are future work — none are built in yet.
+/// Both back-ends are future work — only the C/cbindgen adapter
+/// ([`lang::Cbindgen`]) has begun (scaffolding).
 pub mod core {
     pub use crate::api::core::{
         ConverterImpl, Direction, IntoSource, IntoSourceMode, NicheSlot, Niches, Prebindgen,
         Registry, ScanError, Stage, TypeEntry, TypeKey, WriteRustError,
     };
+}
+
+/// Destination-language adapters implementing [`core::Prebindgen`].
+///
+/// [`lang::Cbindgen`] is the C / cbindgen adapter: it turns a flat
+/// `#[prebindgen]` library into a Rust file ready for `cbindgen` to parse into
+/// a C header plus a static / dynamic library. Items are opt-in via its
+/// declaration builder. (Currently scaffolding — emits an empty library.)
+pub mod lang {
+    pub use crate::api::lang::cbindgen::Cbindgen;
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
