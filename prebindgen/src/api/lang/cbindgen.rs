@@ -21,15 +21,29 @@
 //!   `bool fn(T *out, <inputs>, E *e)`. `e` may be `NULL`, in which case the
 //!   error value is dropped. Returns `true` on `Ok`, `false` on `Err`.
 //!
+//! ## Error handling (multiple error types)
+//!
+//! Any type used as the `E` of a `Result<T, E>` return **must be declared** as an
+//! error type via [`Cbindgen::data_struct`] + [`Cbindgen::error`] — otherwise the
+//! build fails. Error types are ordinary data structs (marshalled by value) and
+//! must additionally implement `From<String>`.
+//!
+//! Built-in input converters that can fail (a `String` arg, an opaque handle
+//! passed by value) are **error-type-agnostic**: they return `Result<_, String>`
+//! where the `Err` is just a message. The generated wrapper for a `Result<T, E>`
+//! function converts such a message into *that function's* `E` via
+//! `<E as From<String>>::from(msg)`; the function's own `Err(E)` is marshalled
+//! directly through `E`'s output converter.
+//!
+//! If a function can produce such an internal message but does **not** return
+//! `Result`, that is a build error — suppress it by chaining [`Cbindgen::panic`]
+//! after the function declaration, which makes the wrapper `panic!` on the
+//! internal error instead.
+//!
 //! References to the original Rust types in generated bodies are written
 //! fully-qualified against [`Cbindgen::source_module`] so the generated file can
 //! define its own identically-named `#[repr(C)]` wrapper structs without
 //! colliding with the source crate's types.
-//!
-//! This first increment hardcodes one assumption: the framework error type is
-//! the source crate's `Error` struct with a single `message: String` field
-//! (aliased as `__CErr` in the generated file). Generalising the error type is
-//! future work.
 
 use std::collections::{HashMap, HashSet};
 
@@ -48,6 +62,26 @@ struct TypeCfg {
     c_name: Option<String>,
 }
 
+/// Per-declared-function configuration.
+#[derive(Clone, Default)]
+struct FnCfg {
+    /// Allow the generated wrapper to `panic!` on an internal error message
+    /// (set by [`Cbindgen::panic`]). Only meaningful for non-`Result` functions
+    /// that have a fallible input.
+    panic: bool,
+}
+
+/// Where a fallible input-decode failure is routed in a generated wrapper.
+enum ErrRoute<'a> {
+    /// `Result<T, E>` function: convert the message to `E` and write `*e`.
+    Result {
+        e_conv: &'a syn::Ident,
+        e_ty_src: syn::Type,
+    },
+    /// Non-`Result` function declared `.panic()`: abort via `panic!`.
+    Panic,
+}
+
 /// C / cbindgen language adapter. Build it with [`Cbindgen::new`], declare the
 /// items to convert with the fluent methods, then drive it through
 /// [`Registry::write_rust`](crate::core::Registry::write_rust).
@@ -56,14 +90,21 @@ pub struct Cbindgen {
     /// Module path the original `#[prebindgen]` items live under. Used to
     /// fully-qualify bare references to source types in generated bodies.
     source_module: Option<syn::Path>,
-    /// Idents of `#[prebindgen]` functions explicitly declared for conversion.
-    functions: HashSet<syn::Ident>,
+    /// `#[prebindgen]` functions explicitly declared for conversion.
+    functions: HashMap<syn::Ident, FnCfg>,
     /// Opaque-handle types (`Box` + `void*` lifecycle, auto `_drop`).
     opaque: HashMap<TypeKey, TypeCfg>,
     /// By-value `#[repr(C)]` data structs.
     data: HashMap<TypeKey, TypeCfg>,
     /// Enum types.
     enums: HashMap<TypeKey, TypeCfg>,
+    /// Data structs additionally marked as error types (allowlist for the
+    /// "Result error type must be declared" rule).
+    error: HashSet<TypeKey>,
+    /// Cursor for [`Self::error`] — the last `data_struct`/`opaque`/`enum_`.
+    last_declared: Option<TypeKey>,
+    /// Cursor for [`Self::panic`] — the last `function`.
+    last_fn: Option<syn::Ident>,
 }
 
 impl Cbindgen {
@@ -81,14 +122,32 @@ impl Cbindgen {
 
     /// Declare a `#[prebindgen]` function to convert into the C layer.
     pub fn function(mut self, ident: syn::Ident) -> Self {
-        self.functions.insert(ident);
+        self.last_fn = Some(ident.clone());
+        self.functions.insert(ident, FnCfg::default());
+        self
+    }
+
+    /// Allow the most recently declared [`Self::function`] to `panic!` on an
+    /// internal error message. Required when a non-`Result` function has a
+    /// fallible input (otherwise that's a build error).
+    pub fn panic(mut self) -> Self {
+        let ident = self
+            .last_fn
+            .clone()
+            .expect("Cbindgen::panic must be chained after a function(...) call");
+        self.functions
+            .get_mut(&ident)
+            .expect("function entry vanished")
+            .panic = true;
         self
     }
 
     /// Declare an opaque-handle type. Its C struct + `snake_case(short)_drop`
     /// destructor are generated.
     pub fn opaque(mut self, ty: syn::Type) -> Self {
-        self.opaque.insert(TypeKey::from_type(&ty), TypeCfg::default());
+        let key = TypeKey::from_type(&ty);
+        self.opaque.insert(key.clone(), TypeCfg::default());
+        self.last_declared = Some(key);
         self
     }
 
@@ -96,32 +155,54 @@ impl Cbindgen {
     /// (e.g. `.opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")` →
     /// `z_keyexpr_drop`), since naive snake_case of `ZKeyExpr` is `z_key_expr`.
     pub fn opaque_named(mut self, ty: syn::Type, c_name: &str) -> Self {
-        self.opaque.insert(
-            TypeKey::from_type(&ty),
-            TypeCfg { c_name: Some(c_name.to_string()) },
-        );
+        let key = TypeKey::from_type(&ty);
+        self.opaque
+            .insert(key.clone(), TypeCfg { c_name: Some(c_name.to_string()) });
+        self.last_declared = Some(key);
         self
     }
 
     /// Declare a by-value `#[repr(C)]` data struct (e.g. `Error`).
     pub fn data_struct(mut self, ty: syn::Type) -> Self {
-        self.data.insert(TypeKey::from_type(&ty), TypeCfg::default());
+        let key = TypeKey::from_type(&ty);
+        self.data.insert(key.clone(), TypeCfg::default());
+        self.last_declared = Some(key);
         self
     }
 
     /// Like [`Self::data_struct`] but pins the C base name used for the
     /// generated `_drop` destructor of heap-owning structs.
     pub fn data_struct_named(mut self, ty: syn::Type, c_name: &str) -> Self {
-        self.data.insert(
-            TypeKey::from_type(&ty),
-            TypeCfg { c_name: Some(c_name.to_string()) },
+        let key = TypeKey::from_type(&ty);
+        self.data
+            .insert(key.clone(), TypeCfg { c_name: Some(c_name.to_string()) });
+        self.last_declared = Some(key);
+        self
+    }
+
+    /// Mark the most recently declared [`Self::data_struct`] as an error type:
+    /// it may appear as the `E` of a `Result<_, E>` return. The type must
+    /// implement `From<String>`.
+    pub fn error(mut self) -> Self {
+        let key = self
+            .last_declared
+            .clone()
+            .expect("Cbindgen::error must be chained after a data_struct(...) call");
+        assert!(
+            self.data.contains_key(&key),
+            "Cbindgen::error: `{}` must be declared via `data_struct` (error types \
+             are marshalled by value)",
+            key.as_str()
         );
+        self.error.insert(key);
         self
     }
 
     /// Declare an enum (by type) to convert. (Codegen for enums is future work.)
     pub fn enum_(mut self, ty: syn::Type) -> Self {
-        self.enums.insert(TypeKey::from_type(&ty), TypeCfg::default());
+        let key = TypeKey::from_type(&ty);
+        self.enums.insert(key.clone(), TypeCfg::default());
+        self.last_declared = Some(key);
         self
     }
 
@@ -154,17 +235,6 @@ impl Cbindgen {
         }
     }
 
-    /// The framework error type (the source crate's `Error`).
-    fn err_ty(&self) -> syn::Type {
-        self.src_ty(&syn::parse_quote!(Error))
-    }
-
-    /// Construct a framework error value carrying `msg`.
-    fn err_value(&self, msg: &str) -> syn::Expr {
-        let err = self.err_ty();
-        syn::parse_quote!(#err { message: ::std::string::String::from(#msg) })
-    }
-
     fn in_name(ty: &syn::Type) -> syn::Ident {
         format_ident!("__cbg_in_{}", sanitize(&TypeKey::from_type(ty)))
     }
@@ -186,7 +256,7 @@ impl Prebindgen for Cbindgen {
     type Metadata = ();
 
     fn declared_functions(&self) -> HashSet<syn::Ident> {
-        self.functions.clone()
+        self.functions.keys().cloned().collect()
     }
 
     fn declared_types(&self) -> HashSet<TypeKey> {
@@ -200,19 +270,6 @@ impl Prebindgen for Cbindgen {
 
     fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
-
-        // Nothing declared → emit nothing (keeps an unconfigured adapter inert).
-        if self.opaque.is_empty() && self.data.is_empty() && self.functions.is_empty() {
-            return items;
-        }
-
-        // Framework error alias. Built-in fallible converters return
-        // `Result<_, __CErr>`.
-        let err = self.err_ty();
-        items.push(syn::parse_quote!(
-            #[allow(dead_code)]
-            pub(crate) type __CErr = #err;
-        ));
 
         // Opaque handles: `#[repr(C)] struct T { _0: *mut c_void }` + `_drop`.
         for (key, cfg) in sorted_by_key(&self.opaque) {
@@ -316,17 +373,21 @@ impl Prebindgen for Cbindgen {
     fn on_input_type_rank_0(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
 
-        // Opaque handle, by-value consume: `*Box::from_raw(v._0)`.
+        // Opaque handle, by-value consume: `*Box::from_raw(v._0)` — fallible
+        // (null handle → message).
         if self.opaque.contains_key(&key) {
             let name = Self::in_name(ty);
             let c_struct = format_ident!("{}", type_short(ty));
             let src = self.src_ty(ty);
-            let err = self.err_value("null opaque handle passed by value");
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(v: #c_struct) -> ::core::result::Result<#src, __CErr> {
+                pub(crate) unsafe fn #name(
+                    v: #c_struct,
+                ) -> ::core::result::Result<#src, ::std::string::String> {
                     if v._0.is_null() {
-                        return ::core::result::Result::Err(#err);
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from("null opaque handle passed by value"),
+                        );
                     }
                     ::core::result::Result::Ok(*::std::boxed::Box::from_raw(v._0 as *mut #src))
                 }
@@ -340,7 +401,7 @@ impl Prebindgen for Cbindgen {
             });
         }
 
-        // Data struct: decode each field from its C wire.
+        // Data struct: decode each field from its C wire — infallible.
         if self.data.contains_key(&key) {
             let fields = self.struct_fields(_r, ty)?;
             let name = Self::in_name(ty);
@@ -360,8 +421,8 @@ impl Prebindgen for Cbindgen {
             }
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(v: #c_struct) -> ::core::result::Result<#src, __CErr> {
-                    ::core::result::Result::Ok(#src { #(#inits),* })
+                pub(crate) unsafe fn #name(v: #c_struct) -> #src {
+                    #src { #(#inits),* }
                 }
             );
             return Some(ConverterImpl {
@@ -373,25 +434,27 @@ impl Prebindgen for Cbindgen {
             });
         }
 
-        // `String` input: `*const c_char` → owned `String`.
+        // `String` input: `*const c_char` → owned `String` — fallible.
         if is_string(ty) {
             let name = Self::in_name(ty);
-            let null_err = self.err_value("null pointer passed for String argument");
-            let utf8_err = self.err_value("invalid UTF-8 in String argument");
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) unsafe fn #name(
                     v: *const ::core::ffi::c_char,
-                ) -> ::core::result::Result<::std::string::String, __CErr> {
+                ) -> ::core::result::Result<::std::string::String, ::std::string::String> {
                     if v.is_null() {
-                        return ::core::result::Result::Err(#null_err);
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from("null pointer passed for String argument"),
+                        );
                     }
                     match ::std::ffi::CStr::from_ptr(v).to_str() {
                         ::core::result::Result::Ok(s) => {
                             ::core::result::Result::Ok(s.to_owned())
                         }
                         ::core::result::Result::Err(_) => {
-                            ::core::result::Result::Err(#utf8_err)
+                            ::core::result::Result::Err(
+                                ::std::string::String::from("invalid UTF-8 in String argument"),
+                            )
                         }
                     }
                 }
@@ -441,6 +504,23 @@ impl Prebindgen for Cbindgen {
     // ── Output direction (rust → wire) ─────────────────────────────────
 
     fn on_output_type_rank_0(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
+        // Void-returning wrappers ignore it; `Result<(), _>` keeps an out-param
+        // of unit type for now (refinement: drop the out-param — future work).
+        if is_unit(ty) {
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused_variables)]
+                pub(crate) fn __cbg_out_unit(v: ()) {}
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         let key = TypeKey::from_type(ty);
 
         // Opaque handle output: `Box::into_raw` into the wire struct.
@@ -586,9 +666,37 @@ impl Cbindgen {
             syn::ReturnType::Type(_, ty) => (**ty).clone(),
         };
 
+        let has_fallible_input = f.sig.inputs.iter().any(|input| {
+            let syn::FnArg::Typed(pt) = input else { return false };
+            registry
+                .input_entry(&pt.ty)
+                .map(|e| returns_result(&e.function.sig.output))
+                .unwrap_or(false)
+        });
+
         if let Some((ok_ty, err_ty)) = result_parts(&return_ty) {
+            // Rule 1: the Result error type must be declared via `.error()`.
+            assert!(
+                self.error.contains(&TypeKey::from_type(&err_ty)),
+                "Cbindgen: function `{}` returns `Result<_, {}>` but `{}` is not a \
+                 declared error type — add `.data_struct({}).error()`",
+                orig,
+                TypeKey::from_type(&err_ty),
+                TypeKey::from_type(&err_ty),
+                TypeKey::from_type(&err_ty),
+            );
             self.emit_fallible_wrapper(orig, &call_path, f, &ok_ty, &err_ty, registry)
         } else {
+            // Rule 3: a fallible input with no Result channel needs `.panic()`.
+            let allows_panic = self.functions.get(orig).map(|c| c.panic).unwrap_or(false);
+            assert!(
+                !has_fallible_input || allows_panic,
+                "Cbindgen: function `{}` has a fallible input (e.g. a `String` or \
+                 opaque-by-value argument) but does not return `Result`; add \
+                 `.panic()` after its `.function(...)` declaration to allow aborting \
+                 on the internal error, or change its signature",
+                orig,
+            );
             self.emit_infallible_wrapper(orig, &call_path, f, &return_ty, registry)
         }
     }
@@ -617,13 +725,16 @@ impl Cbindgen {
                 orig
             )
         });
-        let ok_wire = &ok_entry.destination;
-        let ok_conv = &ok_entry.function.sig.ident;
-        let err_wire = &err_entry.destination;
-        let err_conv = &err_entry.function.sig.ident;
+        let ok_wire = ok_entry.destination.clone();
+        let ok_conv = ok_entry.function.sig.ident.clone();
+        let err_wire = err_entry.destination.clone();
+        let err_conv = err_entry.function.sig.ident.clone();
 
-        let (params, decodes, call_args) =
-            self.emit_inputs(orig, f, registry, Some(err_conv));
+        let route = ErrRoute::Result {
+            e_conv: &err_conv,
+            e_ty_src: self.src_ty(err_ty),
+        };
+        let (params, decodes, call_args) = self.emit_inputs(orig, f, registry, &route);
 
         quote! {
             #[no_mangle]
@@ -651,9 +762,8 @@ impl Cbindgen {
     }
 
     /// Non-`Result` return: natural shape (`void` for unit, wire by value
-    /// otherwise). Input-decode failures have no error channel here (none occur
-    /// among the currently-declared fns); this path is filled out in a later
-    /// increment.
+    /// otherwise). A fallible input here only reaches this point when the fn is
+    /// declared `.panic()`, so decode failures `panic!`.
     fn emit_infallible_wrapper(
         &self,
         orig: &syn::Ident,
@@ -662,7 +772,7 @@ impl Cbindgen {
         return_ty: &syn::Type,
         registry: &Registry<()>,
     ) -> TokenStream {
-        let (params, decodes, call_args) = self.emit_inputs(orig, f, registry, None);
+        let (params, decodes, call_args) = self.emit_inputs(orig, f, registry, &ErrRoute::Panic);
         let call = quote!(#call_path(#(#call_args),*));
 
         if is_unit(return_ty) {
@@ -682,8 +792,8 @@ impl Cbindgen {
                     orig
                 )
             });
-            let wire = &out_entry.destination;
-            let conv = &out_entry.function.sig.ident;
+            let wire = out_entry.destination.clone();
+            let conv = out_entry.function.sig.ident.clone();
             quote! {
                 #[no_mangle]
                 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
@@ -696,14 +806,15 @@ impl Cbindgen {
     }
 
     /// Build the wire param list, per-input decode statements, and call-site
-    /// argument expressions. When `err_conv` is `Some`, decode failures write
-    /// `*e` and `return false`; otherwise they abort (no error channel).
+    /// argument expressions. Fallible inputs (converter returns `Result<_,
+    /// String>`) route their `Err(msg)` per `route`; infallible inputs decode
+    /// directly.
     fn emit_inputs(
         &self,
         orig: &syn::Ident,
         f: &syn::ItemFn,
         registry: &Registry<()>,
-        err_conv: Option<&syn::Ident>,
+        route: &ErrRoute,
     ) -> (Vec<TokenStream>, Vec<TokenStream>, Vec<TokenStream>) {
         let mut params = Vec::new();
         let mut decodes = Vec::new();
@@ -727,16 +838,25 @@ impl Cbindgen {
 
             params.push(quote!(#ident: #wire));
 
-            let on_err = match err_conv {
-                Some(ec) => quote!(if !e.is_null() { *e = #ec(__err); } return false;),
-                None => quote!(::std::process::abort();),
-            };
-            decodes.push(quote!(
-                let #ident = match #conv(#ident) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__err) => { #on_err }
+            if returns_result(&entry.function.sig.output) {
+                let on_err = match route {
+                    ErrRoute::Result { e_conv, e_ty_src } => quote!(
+                        if !e.is_null() {
+                            *e = #e_conv(<#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg));
+                        }
+                        return false;
+                    ),
+                    ErrRoute::Panic => quote!(panic!("{}", __msg);),
                 };
-            ));
+                decodes.push(quote!(
+                    let #ident = match #conv(#ident) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__msg) => { #on_err }
+                    };
+                ));
+            } else {
+                decodes.push(quote!(let #ident = #conv(#ident);));
+            }
 
             match arg_ty {
                 syn::Type::Reference(r) if r.mutability.is_some() => {
@@ -812,6 +932,14 @@ fn is_result(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "Result").unwrap_or(false)
 }
 
+/// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
+fn returns_result(output: &syn::ReturnType) -> bool {
+    match output {
+        syn::ReturnType::Type(_, ty) => is_result(ty),
+        syn::ReturnType::Default => false,
+    }
+}
+
 /// If `ty` is `Result<T, E>`, return `(T, E)`.
 fn result_parts(ty: &syn::Type) -> Option<(syn::Type, syn::Type)> {
     let syn::Type::Path(tp) = ty else { return None };
@@ -850,26 +978,38 @@ mod tests {
     use super::*;
     use crate::SourceLocation;
 
+    fn write(cbindgen: &Cbindgen, registry: &mut Registry<()>, tag: &str) -> String {
+        let dir = std::env::temp_dir().join(format!(
+            "cbindgen_{}_{}",
+            tag,
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join(format!("{tag}.rs"));
+        let path = registry.write_rust(cbindgen, &out).expect("write_rust");
+        std::fs::read_to_string(&path).unwrap()
+    }
+
+    fn error_struct() -> syn::ItemStruct {
+        syn::parse_quote!(
+            pub struct Error {
+                pub message: String,
+            }
+        )
+    }
+
     /// An adapter with no declarations writes an empty (whitespace-only) file.
     #[test]
     fn empty_adapter_writes_empty_file() {
-        let dir = std::env::temp_dir().join(format!("cbindgen_scaffold_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let out = dir.join("empty.rs");
-
         let cbindgen = Cbindgen::new();
         let mut registry: Registry<()> = Registry::default();
-        let path = registry.write_rust(&cbindgen, &out).expect("write_rust");
-
-        let contents = std::fs::read_to_string(&path).unwrap();
-        assert!(
-            contents.trim().is_empty(),
-            "expected empty output, got:\n{contents}"
-        );
+        let src = write(&cbindgen, &mut registry, "empty");
+        assert!(src.trim().is_empty(), "expected empty output, got:\n{src}");
     }
 
     /// `z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error>` lowers to the
-    /// C out-param + bool convention, with auto-generated drops.
+    /// C out-param + bool convention; decode failures route through `From<String>`
+    /// into the declared error type; no `__CErr` alias is emitted.
     #[test]
     fn keyexpr_try_from_lowering() {
         let loc = SourceLocation::default();
@@ -878,15 +1018,10 @@ mod tests {
                 unimplemented!()
             }
         );
-        let error_struct: syn::ItemStruct = syn::parse_quote!(
-            pub struct Error {
-                pub message: String,
-            }
-        );
 
         let mut registry = Registry::<()>::from_items([
             (syn::Item::Fn(func), loc.clone()),
-            (syn::Item::Struct(error_struct), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
         ])
         .expect("index items");
 
@@ -894,25 +1029,95 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
             .data_struct_named(syn::parse_quote!(Error), "z_error")
+            .error()
             .function(syn::parse_quote!(z_keyexpr_try_from));
 
-        let dir = std::env::temp_dir().join(format!("cbindgen_keyexpr_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let out = dir.join("keyexpr.rs");
-        let path = registry.write_rust(&cbindgen, &out).expect("write_rust");
-        let src = std::fs::read_to_string(&path).unwrap();
+        let src = write(&cbindgen, &mut registry, "keyexpr");
+        // Whitespace-insensitive haystack (the file is prettyplease-formatted).
+        let compact: String = src.split_whitespace().collect();
 
         // Wrapper signature.
-        assert!(src.contains("extern \"C\" fn z_keyexpr_try_from"), "{src}");
-        assert!(src.contains("out : * mut ZKeyExpr") || src.contains("out: *mut ZKeyExpr"), "{src}");
-        assert!(src.contains("-> bool"), "{src}");
-        // repr(C) wrapper structs.
-        assert!(src.contains("struct ZKeyExpr"), "{src}");
-        assert!(src.contains("struct Error"), "{src}");
-        // Auto-generated destructors with pinned names.
-        assert!(src.contains("fn z_keyexpr_drop"), "{src}");
-        assert!(src.contains("fn z_error_drop"), "{src}");
-        // Source call is fully qualified.
-        assert!(src.contains("zenoh_flat :: z_keyexpr_try_from") || src.contains("zenoh_flat::z_keyexpr_try_from"), "{src}");
+        assert!(compact.contains("extern\"C\"fnz_keyexpr_try_from"), "{src}");
+        assert!(compact.contains("out:*mutZKeyExpr"), "{src}");
+        assert!(compact.contains("->bool"), "{src}");
+        // repr(C) wrapper structs + pinned destructors.
+        assert!(compact.contains("structZKeyExpr"), "{src}");
+        assert!(compact.contains("structError"), "{src}");
+        assert!(compact.contains("fnz_keyexpr_drop"), "{src}");
+        assert!(compact.contains("fnz_error_drop"), "{src}");
+        // Source call fully qualified.
+        assert!(compact.contains("zenoh_flat::z_keyexpr_try_from"), "{src}");
+        // Error model: no global alias; decode failure routes via From<String>
+        // through the declared error's output converter.
+        assert!(!compact.contains("__CErr"), "{src}");
+        assert!(
+            compact.contains("as::core::convert::From<::std::string::String"),
+            "{src}"
+        );
+        assert!(compact.contains("__cbg_out_Error"), "{src}");
+    }
+
+    /// Returning `Result<_, E>` where `E` is not declared via `.error()` is a
+    /// build error.
+    #[test]
+    fn result_error_not_declared_is_build_error() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        // Error declared as data_struct but NOT marked `.error()`.
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
+            .data_struct_named(syn::parse_quote!(Error), "z_error")
+            .function(syn::parse_quote!(z_keyexpr_try_from));
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = registry.write_rust(&cbindgen, std::env::temp_dir().join("nope.rs"));
+        }));
+        assert!(result.is_err(), "expected a build error for undeclared error type");
+    }
+
+    /// A non-`Result` fn with a fallible (`String`) input needs `.panic()`;
+    /// without it that's a build error, with it the wrapper `panic!`s.
+    #[test]
+    fn fallible_input_without_result_needs_panic() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_log(s: String) {
+                unimplemented!()
+            }
+        );
+
+        // No `.panic()` → build error.
+        let mut reg1 = Registry::<()>::from_items([(syn::Item::Fn(func.clone()), loc.clone())])
+            .expect("index items");
+        let cb1 = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .function(syn::parse_quote!(z_log));
+        let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = reg1.write_rust(&cb1, std::env::temp_dir().join("nope2.rs"));
+        }));
+        assert!(err.is_err(), "expected a build error without .panic()");
+
+        // With `.panic()` → wrapper aborts on decode failure.
+        let mut reg2 = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
+            .expect("index items");
+        let cb2 = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .function(syn::parse_quote!(z_log))
+            .panic();
+        let src = write(&cb2, &mut reg2, "panicfn");
+        let compact: String = src.split_whitespace().collect();
+        assert!(compact.contains("extern\"C\"fnz_log"), "{src}");
+        assert!(compact.contains("panic!("), "{src}");
     }
 }
