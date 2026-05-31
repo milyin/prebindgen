@@ -178,6 +178,11 @@ impl Cbindgen {
 
     /// Declare a `#[prebindgen]` function to convert into the C layer.
     pub fn function(mut self, ident: syn::Ident) -> Self {
+        assert!(
+            !self.ignored_functions.contains(&ident),
+            "Cbindgen::function cannot declare `{}` because it is already ignored",
+            ident
+        );
         self.functions.insert(ident.clone(), FnCfg::default());
         self.current = Some(CurrentDecl::Function(ident));
         self
@@ -188,6 +193,11 @@ impl Cbindgen {
     /// "skipping undeclared" warning for that function without scanning or
     /// emitting it.
     pub fn ignore_function(mut self, ident: syn::Ident) -> Self {
+        assert!(
+            !self.functions.contains_key(&ident),
+            "Cbindgen::ignore_function cannot ignore `{}` because it is already declared",
+            ident
+        );
         self.ignored_functions.insert(ident);
         self.current = None;
         self
@@ -220,6 +230,11 @@ impl Cbindgen {
     /// `ptr_class`.)
     pub fn ptr_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
+        assert!(
+            !self.ignored_types.contains(&key),
+            "Cbindgen::ptr_struct cannot declare `{}` because it is already ignored",
+            key
+        );
         self.opaque.insert(key.clone(), TypeCfg::default());
         self.current = Some(CurrentDecl::Ptr(key));
         self
@@ -228,6 +243,11 @@ impl Cbindgen {
     /// Declare a by-value `#[repr(C)]` data struct (e.g. `Error`).
     pub fn data_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
+        assert!(
+            !self.ignored_types.contains(&key),
+            "Cbindgen::data_struct cannot declare `{}` because it is already ignored",
+            key
+        );
         self.data.insert(key.clone(), TypeCfg::default());
         self.current = Some(CurrentDecl::Data(key));
         self
@@ -237,7 +257,13 @@ impl Cbindgen {
     /// Root-level modifier: suppresses the registry's "skipping undeclared"
     /// warning for that type without scanning or emitting it.
     pub fn ignore_type(mut self, ty: syn::Type) -> Self {
-        self.ignored_types.insert(TypeKey::from_type(&ty));
+        let key = TypeKey::from_type(&ty);
+        assert!(
+            !self.opaque.contains_key(&key) && !self.data.contains_key(&key) && !self.enums.contains_key(&key),
+            "Cbindgen::ignore_type cannot ignore `{}` because it is already declared",
+            key
+        );
+        self.ignored_types.insert(key);
         self.current = None;
         self
     }
@@ -318,6 +344,11 @@ impl Cbindgen {
     /// `enum_class`.)
     pub fn enum_type(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
+        assert!(
+            !self.ignored_types.contains(&key),
+            "Cbindgen::enum_type cannot declare `{}` because it is already ignored",
+            key
+        );
         self.enums.insert(key.clone(), TypeCfg::default());
         self.current = Some(CurrentDecl::Enum(key));
         self
@@ -2014,6 +2045,24 @@ mod tests {
             let _ = Cbindgen::new()
                 .source_module(syn::parse_quote!(zenoh_flat))
                 .name("x");
+        }));
+    }
+
+    #[test]
+    fn function_and_ignore_function_conflict_panics() {
+        assert!(catch(|| {
+            let _ = Cbindgen::new()
+                .function(syn::parse_quote!(z_open))
+                .ignore_function(syn::parse_quote!(z_open));
+        }));
+    }
+
+    #[test]
+    fn data_struct_and_ignore_type_conflict_panics() {
+        assert!(catch(|| {
+            let _ = Cbindgen::new()
+                .data_struct(syn::parse_quote!(Error))
+                .ignore_type(syn::parse_quote!(Error));
         }));
     }
 

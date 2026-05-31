@@ -188,6 +188,12 @@ pub enum ScanError {
         first: SourceLocation,
         second: SourceLocation,
     },
+    ConflictingFunctionIntent {
+        name: syn::Ident,
+    },
+    ConflictingTypeIntent {
+        key: TypeKey,
+    },
     DisallowedImplTrait {
         ty: String,
         loc: SourceLocation,
@@ -207,6 +213,16 @@ impl fmt::Display for ScanError {
                 f,
                 "duplicate prebindgen name `{}`: first at {}, second at {}",
                 name, first, second
+            ),
+            ScanError::ConflictingFunctionIntent { name } => write!(
+                f,
+                "function `{}` cannot be both declared and ignored",
+                name
+            ),
+            ScanError::ConflictingTypeIntent { key } => write!(
+                f,
+                "type `{}` cannot be both declared and ignored",
+                key
             ),
             ScanError::DisallowedImplTrait { ty, loc } => write!(
                 f,
@@ -315,6 +331,21 @@ impl<M> Registry<M> {
         let ignored_fns = ext.ignored_functions();
         let declared_types = ext.declared_types();
         let ignored_types = ext.ignored_types();
+
+        if let Some(name) = declared_fns
+            .intersection(&ignored_fns)
+            .map(|ident| ident.clone())
+            .min_by_key(|ident| ident.to_string())
+        {
+            return Err(ScanError::ConflictingFunctionIntent { name });
+        }
+        if let Some(key) = declared_types
+            .intersection(&ignored_types)
+            .map(|key| key.clone())
+            .min_by_key(|key| key.as_str().to_owned())
+        {
+            return Err(ScanError::ConflictingTypeIntent { key });
+        }
 
         // Scan declared functions.
         for ident in &declared_fns {
@@ -850,7 +881,9 @@ mod tests {
     #[derive(Default)]
     struct StubExt {
         functions: HashSet<syn::Ident>,
+        ignored_functions: HashSet<syn::Ident>,
         types: HashSet<TypeKey>,
+        ignored_types: HashSet<TypeKey>,
     }
 
     impl Prebindgen for StubExt {
@@ -859,8 +892,14 @@ mod tests {
         fn declared_functions(&self) -> HashSet<syn::Ident> {
             self.functions.clone()
         }
+        fn ignored_functions(&self) -> HashSet<syn::Ident> {
+            self.ignored_functions.clone()
+        }
         fn declared_types(&self) -> HashSet<TypeKey> {
             self.types.clone()
+        }
+        fn ignored_types(&self) -> HashSet<TypeKey> {
+            self.ignored_types.clone()
         }
 
         fn on_function(&self, _f: &syn::ItemFn, _registry: &Registry<()>) -> TokenStream {
@@ -1012,6 +1051,37 @@ mod tests {
         match reg.scan_declared(&ext) {
             Err(ScanError::DisallowedImplTrait { .. }) => (),
             other => panic!("expected DisallowedImplTrait, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn scan_declared_rejects_function_declared_and_ignored_overlap() {
+        let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+        let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+        let ident: syn::Ident = syn::parse_str("good").unwrap();
+        let mut ext = StubExt::default();
+        ext.functions.insert(ident.clone());
+        ext.ignored_functions.insert(ident.clone());
+
+        match reg.scan_declared(&ext) {
+            Err(ScanError::ConflictingFunctionIntent { name }) if name == ident => (),
+            other => panic!("expected ConflictingFunctionIntent, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn scan_declared_rejects_type_declared_and_ignored_overlap() {
+        let item: syn::ItemStruct = syn::parse_str("struct Thing { value: u64 }").unwrap();
+        let items = vec![(syn::Item::Struct(item), SourceLocation::default())];
+        let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+        let key = TypeKey::parse("Thing");
+        let mut ext = StubExt::default();
+        ext.types.insert(key.clone());
+        ext.ignored_types.insert(key.clone());
+
+        match reg.scan_declared(&ext) {
+            Err(ScanError::ConflictingTypeIntent { key: actual }) if actual == key => (),
+            other => panic!("expected ConflictingTypeIntent, got {:?}", other),
         }
     }
 }
