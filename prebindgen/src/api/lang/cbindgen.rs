@@ -822,6 +822,73 @@ impl Prebindgen for Cbindgen {
         t1: &syn::Type,
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
+        // `Option<T>` input: a single nullable C param, NULL = `None` (the input
+        // mirror of the output null-niche rule). A pointer-wire inner (opaque
+        // handle, `char*`) reuses its wire directly; a value/scalar inner is
+        // boxed behind a `*const` pointer. The inner's own converter does the
+        // non-null decode, so its fallibility is preserved.
+        if is_option(pat) {
+            let inner = _r.input_entry(t1)?;
+            let inner_wire = inner.destination.clone();
+            let inner_conv = inner.function.sig.ident.clone();
+            // Inner Ok type + fallibility from its converter's return type.
+            let (inner_ok, fallible): (syn::Type, bool) = match &inner.function.sig.output {
+                syn::ReturnType::Type(_, ty) if is_result(ty) => {
+                    let (ok, _e) = result_parts(ty).expect("is_result ⇒ result_parts");
+                    (ok, true)
+                }
+                syn::ReturnType::Type(_, ty) => ((**ty).clone(), false),
+                syn::ReturnType::Default => (syn::parse_quote!(()), false),
+            };
+            let is_ptr = matches!(inner_wire, syn::Type::Ptr(_));
+            let wire: syn::Type = if is_ptr {
+                inner_wire.clone()
+            } else {
+                syn::parse_quote!(*const #inner_wire)
+            };
+            // Read the inner wire value out of `v` for the non-null branch.
+            let read = if is_ptr { quote!(v) } else { quote!(*v) };
+            let name = format_ident!("__cbg_in_option_{}", sanitize(&TypeKey::from_type(t1)));
+            let function: syn::ItemFn = if fallible {
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name(
+                        v: #wire,
+                    ) -> ::core::result::Result<::core::option::Option<#inner_ok>, ::std::string::String> {
+                        if v.is_null() {
+                            return ::core::result::Result::Ok(::core::option::Option::None);
+                        }
+                        match #inner_conv(#read) {
+                            ::core::result::Result::Ok(__x) => {
+                                ::core::result::Result::Ok(::core::option::Option::Some(__x))
+                            }
+                            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
+                        }
+                    }
+                )
+            } else {
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name(
+                        v: #wire,
+                    ) -> ::core::option::Option<#inner_ok> {
+                        if v.is_null() {
+                            ::core::option::Option::None
+                        } else {
+                            ::core::option::Option::Some(#inner_conv(#read))
+                        }
+                    }
+                )
+            };
+            return Some(ConverterImpl {
+                destination: wire,
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         // `&str`: borrow a UTF-8 C string directly from the caller.
         let syn::Type::Reference(r) = pat else {
             return None;
@@ -2377,6 +2444,81 @@ mod tests {
         assert!(compact.contains("::core::slice::from_raw_parts(bytes,bytes_len)"), "{src}");
         // Returns the opaque handle (Box::into_raw).
         assert!(compact.contains("->*mutz_zbytes"), "{src}");
+    }
+
+    /// `Option<ZZBytes>` input (opaque, pointer-wire inner) reuses the handle
+    /// wire `z_zbytes_t*`: NULL ⇒ `None`, non-NULL is consumed via the inner
+    /// converter. The inner is fallible, so the decode routes through the
+    /// `Result<(), Error>` error channel.
+    #[test]
+    fn option_opaque_input_reuses_pointer() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_op(attachment: Option<ZZBytes>) -> Result<(), Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZZBytes))
+            .name("z_zbytes")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_op));
+
+        let src = write(&cbindgen, &mut registry, "option_in_opaque");
+        let compact: String = src.split_whitespace().collect();
+
+        // Param reuses the bare handle pointer; NULL ⇒ None.
+        assert!(compact.contains("attachment:*mutz_zbytes"), "{src}");
+        assert!(
+            compact.contains("ifv.is_null(){return::core::result::Result::Ok(::core::option::Option::None);}"),
+            "{src}"
+        );
+        // Non-null path consumes through the inner handle converter.
+        assert!(compact.contains("match__cbg_in_ZZBytes(v)"), "{src}");
+        // Fallible inner decode routes its error through the Result channel (`*e`).
+        assert!(compact.contains("e:*mutz_error"), "{src}");
+        assert!(compact.contains("__cbg_out_Error"), "{src}");
+    }
+
+    /// `Option<i64>` input (scalar inner, no niche) is boxed behind a `*const`
+    /// pointer: NULL ⇒ `None`, else `*v`. Infallible.
+    #[test]
+    fn option_scalar_input_boxed_pointer() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_op(timestamp_ntp64: Option<i64>) {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .function(syn::parse_quote!(z_op));
+
+        let src = write(&cbindgen, &mut registry, "option_in_scalar");
+        let compact: String = src.split_whitespace().collect();
+
+        // Boxed behind a const pointer; NULL ⇒ None, else `Some(*v)`.
+        assert!(compact.contains("timestamp_ntp64:*consti64"), "{src}");
+        assert!(
+            compact.contains("ifv.is_null(){::core::option::Option::None}"),
+            "{src}"
+        );
+        assert!(compact.contains("::core::option::Option::Some"), "{src}");
+        // Infallible ⇒ no error param.
+        assert!(!compact.contains("e:*mut"), "{src}");
     }
 
     /// `&str` inputs decode directly from `const char *` and can be used by
