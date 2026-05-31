@@ -62,6 +62,10 @@ struct TypeCfg {
     /// the destructor is `<c_name>_drop`). Set by [`Cbindgen::name`]. Defaults
     /// to the Rust short name when `None`.
     c_name: Option<String>,
+    /// Pinned **full** destructor symbol, independent of `c_name`. Set by
+    /// [`Cbindgen::destructor_name`] (opaque handles only). When `None` the
+    /// destructor defaults to `<c_drop_base>_drop`.
+    drop_name: Option<String>,
 }
 
 /// Per-declared-function configuration.
@@ -214,6 +218,30 @@ impl Cbindgen {
         self
     }
 
+    /// Pin the **full** destructor symbol of the current declaration (which must
+    /// be a [`Self::ptr_struct`]), independently of its C type name. E.g.
+    /// `.ptr_struct(ZKeyExpr).name("z_keyexpr_t").destructor_name("z_keyexpr_drop")`
+    /// emits type `z_keyexpr_t` with destructor `z_keyexpr_drop` (no `_drop`
+    /// auto-appended). Defaults to `<c_drop_base>_drop`. Panics if not chained
+    /// directly after a `ptr_struct(...)` declaration.
+    pub fn destructor_name(mut self, c_name: impl Into<String>) -> Self {
+        match &self.current {
+            Some(CurrentDecl::Ptr(key)) => {
+                let key = key.clone();
+                self.opaque
+                    .get_mut(&key)
+                    .expect("entry vanished")
+                    .drop_name = Some(c_name.into());
+            }
+            other => panic!(
+                "Cbindgen::destructor_name must be chained after a `ptr_struct(...)` \
+                 call, not after {}",
+                describe_current(other)
+            ),
+        }
+        self
+    }
+
     /// Mark the current declaration (which must be a [`Self::data_struct`]) as an
     /// error type: it may appear as the `E` of a `Result<_, E>` return. The type
     /// must implement `From<String>`. Panics if the current declaration is not a
@@ -355,7 +383,10 @@ impl Prebindgen for Cbindgen {
                 }
             ));
             let src = self.src_ty(&ty);
-            let drop_ident = format_ident!("{}_drop", self.c_drop_base(&ty));
+            let drop_ident = match self.opaque.get(key).and_then(|c| c.drop_name.clone()) {
+                Some(full) => format_ident!("{}", full),
+                None => format_ident!("{}_drop", self.c_drop_base(&ty)),
+            };
             items.push(syn::parse_quote!(
                 #[no_mangle]
                 #[allow(non_snake_case, unused_variables)]
@@ -1248,6 +1279,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
             .name("z_keyexpr")
+            .destructor_name("z_keyexpr_free")
             .data_struct(syn::parse_quote!(Error))
             .name("z_error")
             .error()
@@ -1265,7 +1297,10 @@ mod tests {
         // repr(C) wrapper structs (renamed) + pinned destructors.
         assert!(compact.contains("structz_keyexpr"), "{src}");
         assert!(compact.contains("structz_error"), "{src}");
-        assert!(compact.contains("fnz_keyexpr_drop"), "{src}");
+        // `.destructor_name()` pins the full drop symbol independently of the
+        // type name (`z_keyexpr` type → `z_keyexpr_free` drop, not `z_keyexpr_drop`).
+        assert!(compact.contains("fnz_keyexpr_free"), "{src}");
+        assert!(!compact.contains("fnz_keyexpr_drop"), "{src}");
         assert!(compact.contains("fnz_error_drop"), "{src}");
         // Source call fully qualified.
         assert!(compact.contains("zenoh_flat::z_keyexpr_try_from"), "{src}");
@@ -1444,6 +1479,15 @@ mod tests {
             let _ = Cbindgen::new()
                 .data_struct(syn::parse_quote!(Error))
                 .panic();
+        }));
+    }
+
+    #[test]
+    fn destructor_name_after_data_struct_panics() {
+        assert!(catch(|| {
+            let _ = Cbindgen::new()
+                .data_struct(syn::parse_quote!(Error))
+                .destructor_name("x");
         }));
     }
 
