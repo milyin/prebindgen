@@ -999,11 +999,36 @@ impl Prebindgen for Cbindgen {
 
     fn on_output_type_rank_1(
         &self,
-        _pat: &syn::Type,
-        _t1: &syn::Type,
+        pat: &syn::Type,
+        t1: &syn::Type,
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
-        None
+        // `&'static T` → `*const <C struct>`: a const (non-owning) pointer.
+        // Signals to C callers that the value must NOT be freed.
+        let syn::Type::Reference(r) = pat else { return None };
+        let is_static = matches!(&r.lifetime, Some(lt) if lt.ident == "static");
+        if !is_static || r.mutability.is_some() {
+            return None;
+        }
+        let key = TypeKey::from_type(t1);
+        self.opaque.get(&key)?;
+
+        let c_struct = self.c_type_ident(t1);
+        let src = self.src_ty(t1);
+        let name = Self::out_name(pat);
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused)]
+            pub(crate) unsafe fn #name(v: &'static #src) -> *const #c_struct {
+                v as *const #src as *const #c_struct
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(*const #c_struct),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
     fn on_output_type_rank_2(
@@ -1200,14 +1225,20 @@ impl Cbindgen {
             });
             let ok_wire = ok_entry.destination.clone();
             let ok_conv = ok_entry.function.sig.ident.clone();
-            if matches!(ok_wire, syn::Type::Ptr(_)) {
+            if let syn::Type::Ptr(ok_ptr) = &ok_wire {
                 // Pointer-wire success: return the pointer, NULL on error.
+                // Use null() for *const (borrowed/static) and null_mut() for *mut (owned).
+                let null = if ok_ptr.mutability.is_some() {
+                    quote!(::core::ptr::null_mut())
+                } else {
+                    quote!(::core::ptr::null())
+                };
                 (
                     quote!(#ok_wire),
                     quote!(),
                     quote!(::core::result::Result::Ok(__v) => #ok_conv(__v),),
-                    quote!(::core::ptr::null_mut()),
-                    quote!(::core::ptr::null_mut()),
+                    null.clone(),
+                    null,
                 )
             } else {
                 // Value-wire success: caller-allocated `*out`, `bool` return.
