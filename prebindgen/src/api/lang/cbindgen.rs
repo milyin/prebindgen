@@ -55,21 +55,36 @@ use crate::api::core::niches::Niches;
 use crate::api::core::prebindgen::{ConverterImpl, Prebindgen};
 use crate::api::core::registry::{Registry, TypeKey};
 
-/// Per-opaque-handle / per-data-struct configuration.
+/// Per-opaque-handle / per-data-struct / per-enum configuration.
 #[derive(Clone, Default)]
 struct TypeCfg {
-    /// Pinned C base name for the generated `<name>_drop` destructor. Defaults
-    /// to `snake_case(short)` when `None`.
+    /// Pinned C type name (the emitted `#[repr(C)]` struct/enum identifier;
+    /// the destructor is `<c_name>_drop`). Set by [`Cbindgen::name`]. Defaults
+    /// to the Rust short name when `None`.
     c_name: Option<String>,
 }
 
 /// Per-declared-function configuration.
 #[derive(Clone, Default)]
 struct FnCfg {
+    /// Pinned C export symbol (the `#[no_mangle]` wrapper name). Set by
+    /// [`Cbindgen::name`]. Defaults to the Rust ident when `None`.
+    c_name: Option<String>,
     /// Allow the generated wrapper to `panic!` on an internal error message
     /// (set by [`Cbindgen::panic`]). Only meaningful for non-`Result` functions
     /// that have a fallible input.
     panic: bool,
+}
+
+/// The declaration a chained modifier ([`Cbindgen::name`] / [`Cbindgen::error`]
+/// / [`Cbindgen::panic`]) applies to. Set by each declaration method, reset to
+/// `None` by root-level modifiers (e.g. [`Cbindgen::source_module`]).
+#[derive(Clone)]
+enum CurrentDecl {
+    Ptr(TypeKey),
+    Data(TypeKey),
+    Enum(TypeKey),
+    Function(syn::Ident),
 }
 
 /// Where a fallible input-decode failure is routed in a generated wrapper.
@@ -102,10 +117,9 @@ pub struct Cbindgen {
     /// Data structs additionally marked as error types (allowlist for the
     /// "Result error type must be declared" rule).
     error: HashSet<TypeKey>,
-    /// Cursor for [`Self::error`] — the last `data_struct`/`opaque`/`enum_`.
-    last_declared: Option<TypeKey>,
-    /// Cursor for [`Self::panic`] — the last `function`.
-    last_fn: Option<syn::Ident>,
+    /// The declaration that chained modifiers apply to. Set by declaration
+    /// methods; reset to `None` by root-level modifiers.
+    current: Option<CurrentDecl>,
 }
 
 impl Cbindgen {
@@ -115,16 +129,18 @@ impl Cbindgen {
     }
 
     /// Set the module path the original `#[prebindgen]` items live under
-    /// (e.g. `syn::parse_quote!(zenoh_flat)`).
+    /// (e.g. `syn::parse_quote!(zenoh_flat)`). Root-level modifier: resets the
+    /// current declaration, so it can't be followed by `.name()`/`.error()`/etc.
     pub fn source_module(mut self, p: syn::Path) -> Self {
         self.source_module = Some(p);
+        self.current = None;
         self
     }
 
     /// Declare a `#[prebindgen]` function to convert into the C layer.
     pub fn function(mut self, ident: syn::Ident) -> Self {
-        self.last_fn = Some(ident.clone());
-        self.functions.insert(ident, FnCfg::default());
+        self.functions.insert(ident.clone(), FnCfg::default());
+        self.current = Some(CurrentDecl::Function(ident));
         self
     }
 
@@ -132,14 +148,20 @@ impl Cbindgen {
     /// internal error message. Required when a non-`Result` function has a
     /// fallible input (otherwise that's a build error).
     pub fn panic(mut self) -> Self {
-        let ident = self
-            .last_fn
-            .clone()
-            .expect("Cbindgen::panic must be chained after a function(...) call");
-        self.functions
-            .get_mut(&ident)
-            .expect("function entry vanished")
-            .panic = true;
+        match &self.current {
+            Some(CurrentDecl::Function(ident)) => {
+                let ident = ident.clone();
+                self.functions
+                    .get_mut(&ident)
+                    .expect("function entry vanished")
+                    .panic = true;
+            }
+            other => panic!(
+                "Cbindgen::panic must be chained after a `function(...)` call, \
+                 not after {}",
+                describe_current(other)
+            ),
+        }
         self
     }
 
@@ -150,7 +172,7 @@ impl Cbindgen {
     pub fn ptr_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         self.opaque.insert(key.clone(), TypeCfg::default());
-        self.last_declared = Some(key);
+        self.current = Some(CurrentDecl::Ptr(key));
         self
     }
 
@@ -158,50 +180,55 @@ impl Cbindgen {
     pub fn data_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         self.data.insert(key.clone(), TypeCfg::default());
-        self.last_declared = Some(key);
+        self.current = Some(CurrentDecl::Data(key));
         self
     }
 
-    /// Pin the C base name of the most recently declared type
-    /// ([`Self::ptr_struct`] / [`Self::data_struct`] / [`Self::enum_type`]),
-    /// used for its generated `<name>_drop` destructor — e.g.
-    /// `.ptr_struct(syn::parse_quote!(ZKeyExpr)).name("z_keyexpr")` →
-    /// `z_keyexpr_drop` (naive snake_case of `ZKeyExpr` is `z_key_expr`).
-    /// Default (without `.name(...)`) is `snake_case(short)`. (Mirrors
-    /// `JniExt`'s `name`.)
+    /// Pin the C-facing name of the **current declaration** (universal modifier):
+    /// a type's emitted `#[repr(C)]` struct/enum identifier (its destructor
+    /// becomes `<name>_drop`), or a function's exported `#[no_mangle]` symbol.
+    /// E.g. `.ptr_struct(syn::parse_quote!(ZKeyExpr)).name("z_keyexpr")` →
+    /// `typedef struct {…} z_keyexpr;` + `z_keyexpr_drop`. Defaults: a type's C
+    /// name is the Rust short name, a function's is its Rust ident. Panics if not
+    /// chained directly after a declaration. (Mirrors `JniExt`'s `name`.)
     pub fn name(mut self, c_name: impl Into<String>) -> Self {
-        let key = self.last_declared.clone().expect(
-            "Cbindgen::name must be chained after a `ptr_struct` / `data_struct` / \
-             `enum_type` call",
-        );
         let name = c_name.into();
-        if let Some(cfg) = self.opaque.get_mut(&key) {
-            cfg.c_name = Some(name);
-        } else if let Some(cfg) = self.data.get_mut(&key) {
-            cfg.c_name = Some(name);
-        } else if let Some(cfg) = self.enums.get_mut(&key) {
-            cfg.c_name = Some(name);
-        } else {
-            panic!("Cbindgen::name: last declared type `{}` vanished", key.as_str());
+        match self.current.clone() {
+            Some(CurrentDecl::Ptr(key)) => {
+                self.opaque.get_mut(&key).expect("entry vanished").c_name = Some(name);
+            }
+            Some(CurrentDecl::Data(key)) => {
+                self.data.get_mut(&key).expect("entry vanished").c_name = Some(name);
+            }
+            Some(CurrentDecl::Enum(key)) => {
+                self.enums.get_mut(&key).expect("entry vanished").c_name = Some(name);
+            }
+            Some(CurrentDecl::Function(ident)) => {
+                self.functions.get_mut(&ident).expect("entry vanished").c_name = Some(name);
+            }
+            None => panic!(
+                "Cbindgen::name must be chained directly after a declaration \
+                 (`ptr_struct` / `data_struct` / `enum_type` / `function`)"
+            ),
         }
         self
     }
 
-    /// Mark the most recently declared [`Self::data_struct`] as an error type:
-    /// it may appear as the `E` of a `Result<_, E>` return. The type must
-    /// implement `From<String>`.
+    /// Mark the current declaration (which must be a [`Self::data_struct`]) as an
+    /// error type: it may appear as the `E` of a `Result<_, E>` return. The type
+    /// must implement `From<String>`. Panics if the current declaration is not a
+    /// data struct.
     pub fn error(mut self) -> Self {
-        let key = self
-            .last_declared
-            .clone()
-            .expect("Cbindgen::error must be chained after a data_struct(...) call");
-        assert!(
-            self.data.contains_key(&key),
-            "Cbindgen::error: `{}` must be declared via `data_struct` (error types \
-             are marshalled by value)",
-            key.as_str()
-        );
-        self.error.insert(key);
+        match &self.current {
+            Some(CurrentDecl::Data(key)) => {
+                self.error.insert(key.clone());
+            }
+            other => panic!(
+                "Cbindgen::error must be chained after a `data_struct(...)` call \
+                 (error types are marshalled by value), not after {}",
+                describe_current(other)
+            ),
+        }
         self
     }
 
@@ -210,7 +237,7 @@ impl Cbindgen {
     pub fn enum_type(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         self.enums.insert(key.clone(), TypeCfg::default());
-        self.last_declared = Some(key);
+        self.current = Some(CurrentDecl::Enum(key));
         self
     }
 
@@ -251,12 +278,46 @@ impl Cbindgen {
         format_ident!("__cbg_out_{}", sanitize(&TypeKey::from_type(ty)))
     }
 
-    /// C base name for a declared type's destructor: pinned `c_name`, else
-    /// `snake_case(short)`.
-    fn c_base_name(cfg: &TypeCfg, ty: &syn::Type) -> String {
-        cfg.c_name
-            .clone()
+    /// Config of a declared type (across the opaque/data/enum maps), by key.
+    fn type_cfg(&self, ty: &syn::Type) -> Option<&TypeCfg> {
+        let key = TypeKey::from_type(ty);
+        self.opaque
+            .get(&key)
+            .or_else(|| self.data.get(&key))
+            .or_else(|| self.enums.get(&key))
+    }
+
+    /// Emitted C type name of a declared type: pinned `c_name`, else the Rust
+    /// short name.
+    fn c_type_name(&self, ty: &syn::Type) -> String {
+        self.type_cfg(ty)
+            .and_then(|c| c.c_name.clone())
+            .unwrap_or_else(|| type_short(ty))
+    }
+
+    /// C type identifier (the `#[repr(C)]` struct/enum name + the wire type used
+    /// across converters and wrappers).
+    fn c_type_ident(&self, ty: &syn::Type) -> syn::Ident {
+        format_ident!("{}", self.c_type_name(ty))
+    }
+
+    /// Base name of a declared type's destructor: pinned `c_name`, else
+    /// `snake_case(short)`. The destructor is `<base>_drop`.
+    fn c_drop_base(&self, ty: &syn::Type) -> String {
+        self.type_cfg(ty)
+            .and_then(|c| c.c_name.clone())
             .unwrap_or_else(|| snake_case(&type_short(ty)))
+    }
+}
+
+/// Human-readable description of the current declaration, for panic messages.
+fn describe_current(current: &Option<CurrentDecl>) -> String {
+    match current {
+        None => "no declaration".to_string(),
+        Some(CurrentDecl::Ptr(k)) => format!("ptr_struct `{}`", k.as_str()),
+        Some(CurrentDecl::Data(k)) => format!("data_struct `{}`", k.as_str()),
+        Some(CurrentDecl::Enum(k)) => format!("enum_type `{}`", k.as_str()),
+        Some(CurrentDecl::Function(i)) => format!("function `{i}`"),
     }
 }
 
@@ -280,20 +341,21 @@ impl Prebindgen for Cbindgen {
         let mut items: Vec<syn::Item> = Vec::new();
 
         // Opaque handles: `#[repr(C)] struct T { _0: *mut c_void }` + `_drop`.
-        for (key, cfg) in sorted_by_key(&self.opaque) {
+        for (key, _cfg) in sorted_by_key(&self.opaque) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
                 continue;
             }
-            let c_struct = format_ident!("{}", type_short(&ty));
+            let c_struct = self.c_type_ident(&ty);
             items.push(syn::parse_quote!(
                 #[repr(C)]
+                #[allow(non_camel_case_types)]
                 pub struct #c_struct {
                     _0: *mut ::core::ffi::c_void,
                 }
             ));
             let src = self.src_ty(&ty);
-            let drop_ident = format_ident!("{}_drop", Self::c_base_name(cfg, &ty));
+            let drop_ident = format_ident!("{}_drop", self.c_drop_base(&ty));
             items.push(syn::parse_quote!(
                 #[no_mangle]
                 #[allow(non_snake_case, unused_variables)]
@@ -307,7 +369,7 @@ impl Prebindgen for Cbindgen {
         }
 
         // Data structs: `#[repr(C)]` mirror + `_drop` for heap fields.
-        for (key, cfg) in sorted_by_key(&self.data) {
+        for (key, _cfg) in sorted_by_key(&self.data) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
                 continue;
@@ -315,7 +377,7 @@ impl Prebindgen for Cbindgen {
             let Some(fields) = self.struct_fields(registry, &ty) else {
                 continue;
             };
-            let c_struct = format_ident!("{}", type_short(&ty));
+            let c_struct = self.c_type_ident(&ty);
             let mut field_defs: Vec<TokenStream> = Vec::new();
             let mut drop_stmts: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
@@ -339,12 +401,13 @@ impl Prebindgen for Cbindgen {
             }
             items.push(syn::parse_quote!(
                 #[repr(C)]
+                #[allow(non_camel_case_types)]
                 pub struct #c_struct {
                     #(#field_defs,)*
                 }
             ));
             if !drop_stmts.is_empty() {
-                let drop_ident = format_ident!("{}_drop", Self::c_base_name(cfg, &ty));
+                let drop_ident = format_ident!("{}_drop", self.c_drop_base(&ty));
                 items.push(syn::parse_quote!(
                     #[no_mangle]
                     #[allow(non_snake_case, unused_variables)]
@@ -367,7 +430,7 @@ impl Prebindgen for Cbindgen {
                 continue;
             };
             assert_unit_variants(e);
-            let cname = format_ident!("{}", type_short(&ty));
+            let cname = self.c_type_ident(&ty);
             let variants = e.variants.iter().map(|v| {
                 let id = &v.ident;
                 match &v.discriminant {
@@ -377,6 +440,7 @@ impl Prebindgen for Cbindgen {
             });
             items.push(syn::parse_quote!(
                 #[repr(C)]
+                #[allow(non_camel_case_types)]
                 pub enum #cname {
                     #(#variants),*
                 }
@@ -411,7 +475,7 @@ impl Prebindgen for Cbindgen {
         // (null handle → message).
         if self.opaque.contains_key(&key) {
             let name = Self::in_name(ty);
-            let c_struct = format_ident!("{}", type_short(ty));
+            let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -439,7 +503,7 @@ impl Prebindgen for Cbindgen {
         if self.data.contains_key(&key) {
             let fields = self.struct_fields(_r, ty)?;
             let name = Self::in_name(ty);
-            let c_struct = format_ident!("{}", type_short(ty));
+            let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let mut inits: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
@@ -473,7 +537,7 @@ impl Prebindgen for Cbindgen {
             let e = enum_item(_r, ty)?;
             assert_unit_variants(e);
             let name = Self::in_name(ty);
-            let cname = format_ident!("{}", type_short(ty));
+            let cname = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let arms = e.variants.iter().map(|v| {
                 let id = &v.ident;
@@ -549,7 +613,7 @@ impl Prebindgen for Cbindgen {
         }
         let ref_ty: syn::Type = syn::parse_quote!(&#t1);
         let name = Self::in_name(&ref_ty);
-        let c_struct = format_ident!("{}", type_short(t1));
+        let c_struct = self.c_type_ident(t1);
         let src = self.src_ty(t1);
         let short = type_short(t1);
         let null_ptr_msg = format!("null {short} pointer");
@@ -626,7 +690,7 @@ impl Prebindgen for Cbindgen {
         // Opaque handle output: `Box::into_raw` into the wire struct.
         if self.opaque.contains_key(&key) {
             let name = Self::out_name(ty);
-            let c_struct = format_ident!("{}", type_short(ty));
+            let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -650,7 +714,7 @@ impl Prebindgen for Cbindgen {
         if self.data.contains_key(&key) {
             let fields = self.struct_fields(_r, ty)?;
             let name = Self::out_name(ty);
-            let c_struct = format_ident!("{}", type_short(ty));
+            let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let mut inits: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
@@ -682,7 +746,7 @@ impl Prebindgen for Cbindgen {
             let e = enum_item(_r, ty)?;
             assert_unit_variants(e);
             let name = Self::out_name(ty);
-            let cname = format_ident!("{}", type_short(ty));
+            let cname = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let arms = e.variants.iter().map(|v| {
                 let id = &v.ident;
@@ -736,7 +800,7 @@ impl Prebindgen for Cbindgen {
         );
         // Destination is the success wire (only used if some outer wrapper reads
         // it; `on_function` does not).
-        let t_short = format_ident!("{}", type_short(t1));
+        let t_short = self.c_type_ident(t1);
         Some(ConverterImpl {
             destination: syn::parse_quote!(#t_short),
             function,
@@ -782,10 +846,21 @@ impl Cbindgen {
         }
     }
 
+    /// Exported `#[no_mangle]` symbol for a declared function: pinned `c_name`,
+    /// else the Rust ident.
+    fn fn_symbol(&self, orig: &syn::Ident) -> syn::Ident {
+        self.functions
+            .get(orig)
+            .and_then(|c| c.c_name.clone())
+            .map(|n| format_ident!("{}", n))
+            .unwrap_or_else(|| orig.clone())
+    }
+
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
     fn emit_function_wrapper(&self, f: &syn::ItemFn, registry: &Registry<()>) -> TokenStream {
         let orig = &f.sig.ident;
         let call_path = self.src_fn(orig);
+        let sym = self.fn_symbol(orig);
 
         let return_ty: syn::Type = match &f.sig.output {
             syn::ReturnType::Default => syn::parse_quote!(()),
@@ -811,7 +886,7 @@ impl Cbindgen {
                 TypeKey::from_type(&err_ty),
                 TypeKey::from_type(&err_ty),
             );
-            self.emit_fallible_wrapper(orig, &call_path, f, &ok_ty, &err_ty, registry)
+            self.emit_fallible_wrapper(orig, &sym, &call_path, f, &ok_ty, &err_ty, registry)
         } else {
             // Rule 3: a fallible input with no Result channel needs `.panic()`.
             let allows_panic = self.functions.get(orig).map(|c| c.panic).unwrap_or(false);
@@ -823,7 +898,7 @@ impl Cbindgen {
                  on the internal error, or change its signature",
                 orig,
             );
-            self.emit_infallible_wrapper(orig, &call_path, f, &return_ty, registry)
+            self.emit_infallible_wrapper(orig, &sym, &call_path, f, &return_ty, registry)
         }
     }
 
@@ -831,6 +906,7 @@ impl Cbindgen {
     fn emit_fallible_wrapper(
         &self,
         orig: &syn::Ident,
+        sym: &syn::Ident,
         call_path: &syn::Path,
         f: &syn::ItemFn,
         ok_ty: &syn::Type,
@@ -865,7 +941,7 @@ impl Cbindgen {
         quote! {
             #[no_mangle]
             #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-            pub unsafe extern "C" fn #orig(
+            pub unsafe extern "C" fn #sym(
                 out: *mut #ok_wire,
                 #(#params,)*
                 e: *mut #err_wire,
@@ -893,6 +969,7 @@ impl Cbindgen {
     fn emit_infallible_wrapper(
         &self,
         orig: &syn::Ident,
+        sym: &syn::Ident,
         call_path: &syn::Path,
         f: &syn::ItemFn,
         return_ty: &syn::Type,
@@ -905,7 +982,7 @@ impl Cbindgen {
             quote! {
                 #[no_mangle]
                 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-                pub unsafe extern "C" fn #orig(#(#params),*) {
+                pub unsafe extern "C" fn #sym(#(#params),*) {
                     #(#decodes)*
                     #call;
                 }
@@ -923,7 +1000,7 @@ impl Cbindgen {
             quote! {
                 #[no_mangle]
                 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-                pub unsafe extern "C" fn #orig(#(#params),*) -> #wire {
+                pub unsafe extern "C" fn #sym(#(#params),*) -> #wire {
                     #(#decodes)*
                     #conv(#call)
                 }
@@ -1180,13 +1257,14 @@ mod tests {
         // Whitespace-insensitive haystack (the file is prettyplease-formatted).
         let compact: String = src.split_whitespace().collect();
 
-        // Wrapper signature.
+        // Wrapper signature — `.name()` sets the C type names (z_keyexpr/z_error).
         assert!(compact.contains("extern\"C\"fnz_keyexpr_try_from"), "{src}");
-        assert!(compact.contains("out:*mutZKeyExpr"), "{src}");
+        assert!(compact.contains("out:*mutz_keyexpr"), "{src}");
+        assert!(compact.contains("e:*mutz_error"), "{src}");
         assert!(compact.contains("->bool"), "{src}");
-        // repr(C) wrapper structs + pinned destructors.
-        assert!(compact.contains("structZKeyExpr"), "{src}");
-        assert!(compact.contains("structError"), "{src}");
+        // repr(C) wrapper structs (renamed) + pinned destructors.
+        assert!(compact.contains("structz_keyexpr"), "{src}");
+        assert!(compact.contains("structz_error"), "{src}");
         assert!(compact.contains("fnz_keyexpr_drop"), "{src}");
         assert!(compact.contains("fnz_error_drop"), "{src}");
         // Source call fully qualified.
@@ -1232,26 +1310,27 @@ mod tests {
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
             .name("z_keyexpr")
             .enum_type(syn::parse_quote!(SetIntersectionLevel))
+            .name("z_intersection")
             .function(syn::parse_quote!(z_keyexpr_relation_to))
             .panic();
 
         let src = write(&cbindgen, &mut registry, "relation_to");
         let compact: String = src.split_whitespace().collect();
 
-        // repr(C) enum mirror with discriminants.
+        // repr(C) enum mirror with discriminants — renamed via `.name()`.
         assert!(compact.contains("#[repr(C)]"), "{src}");
-        assert!(compact.contains("pubenumSetIntersectionLevel"), "{src}");
+        assert!(compact.contains("pubenumz_intersection"), "{src}");
         assert!(compact.contains("Disjoint=0"), "{src}");
-        // Wrapper: borrow params + enum return.
-        assert!(compact.contains("externfnz_keyexpr_relation_to") || compact.contains("extern\"C\"fnz_keyexpr_relation_to"), "{src}");
-        assert!(compact.contains("a:*constZKeyExpr"), "{src}");
-        assert!(compact.contains("b:*constZKeyExpr"), "{src}");
-        assert!(compact.contains("->SetIntersectionLevel"), "{src}");
+        // Wrapper: borrow params (renamed type) + enum return.
+        assert!(compact.contains("extern\"C\"fnz_keyexpr_relation_to"), "{src}");
+        assert!(compact.contains("a:*constz_keyexpr"), "{src}");
+        assert!(compact.contains("b:*constz_keyexpr"), "{src}");
+        assert!(compact.contains("->z_intersection"), "{src}");
         // Fallible borrow decode aborts (no Result channel).
         assert!(compact.contains("panic!("), "{src}");
-        // Enum output converter matches by variant name.
+        // Enum output converter matches by variant name (src enum → C enum).
         assert!(
-            compact.contains("zenoh_flat::SetIntersectionLevel::Disjoint=>SetIntersectionLevel::Disjoint"),
+            compact.contains("zenoh_flat::SetIntersectionLevel::Disjoint=>z_intersection::Disjoint"),
             "{src}"
         );
     }
@@ -1320,5 +1399,60 @@ mod tests {
         let compact: String = src.split_whitespace().collect();
         assert!(compact.contains("extern\"C\"fnz_log"), "{src}");
         assert!(compact.contains("panic!("), "{src}");
+    }
+
+    /// `.name()` on a function renames the exported `#[no_mangle]` symbol while
+    /// still calling the original Rust fn.
+    #[test]
+    fn function_name_renames_symbol() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn rust_init() {
+                unimplemented!()
+            }
+        );
+        let mut reg = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
+            .expect("index items");
+        let cb = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .function(syn::parse_quote!(rust_init))
+            .name("z_init");
+        let src = write(&cb, &mut reg, "fnname");
+        let compact: String = src.split_whitespace().collect();
+        assert!(compact.contains("extern\"C\"fnz_init("), "{src}");
+        assert!(compact.contains("zenoh_flat::rust_init("), "{src}");
+    }
+
+    // ── Strict modifier rules (misapplied modifiers are build errors) ──────
+
+    fn catch<F: FnOnce()>(f: F) -> bool {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err()
+    }
+
+    #[test]
+    fn error_after_ptr_struct_panics() {
+        assert!(catch(|| {
+            let _ = Cbindgen::new()
+                .ptr_struct(syn::parse_quote!(ZKeyExpr))
+                .error();
+        }));
+    }
+
+    #[test]
+    fn panic_after_data_struct_panics() {
+        assert!(catch(|| {
+            let _ = Cbindgen::new()
+                .data_struct(syn::parse_quote!(Error))
+                .panic();
+        }));
+    }
+
+    #[test]
+    fn name_with_no_declaration_panics() {
+        // `source_module` is a root modifier — it resets the current declaration,
+        // so a trailing `.name()` has nothing to apply to.
+        assert!(catch(|| {
+            let _ = Cbindgen::new().source_module(syn::parse_quote!(zenoh_flat)).name("x");
+        }));
     }
 }
