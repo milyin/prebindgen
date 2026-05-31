@@ -718,8 +718,9 @@ impl Prebindgen for Cbindgen {
 
     fn on_output_type_rank_0(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
-        // Void-returning wrappers ignore it; `Result<(), _>` keeps an out-param
-        // of unit type for now (refinement: drop the out-param — future work).
+        // Never actually called — void-returning wrappers ignore it, and
+        // `emit_fallible_wrapper` special-cases `Result<(), E>` to drop the
+        // out-param entirely (it exists only to satisfy the resolver).
         if is_unit(ty) {
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, dead_code, unused_variables)]
@@ -980,13 +981,6 @@ impl Cbindgen {
         err_ty: &syn::Type,
         registry: &Registry<()>,
     ) -> TokenStream {
-        let ok_entry = registry.output_entry(ok_ty).unwrap_or_else(|| {
-            panic!(
-                "Cbindgen::on_function: success type `{}` of `{}` has no output converter",
-                TypeKey::from_type(ok_ty),
-                orig
-            )
-        });
         let err_entry = registry.output_entry(err_ty).unwrap_or_else(|| {
             panic!(
                 "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
@@ -994,10 +988,32 @@ impl Cbindgen {
                 orig
             )
         });
-        let ok_wire = ok_entry.destination.clone();
-        let ok_conv = ok_entry.function.sig.ident.clone();
         let err_wire = err_entry.destination.clone();
         let err_conv = err_entry.function.sig.ident.clone();
+
+        // A `Result<(), E>` carries no success value, so the natural C shape is
+        // `bool f(<inputs>, E *e)` — no `out` parameter, just `true` on `Ok`.
+        // Otherwise lower the success type through its output converter into `*out`.
+        let (out_param, ok_arm) = if is_unit(ok_ty) {
+            (quote!(), quote!(::core::result::Result::Ok(_) => true,))
+        } else {
+            let ok_entry = registry.output_entry(ok_ty).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen::on_function: success type `{}` of `{}` has no output converter",
+                    TypeKey::from_type(ok_ty),
+                    orig
+                )
+            });
+            let ok_wire = ok_entry.destination.clone();
+            let ok_conv = ok_entry.function.sig.ident.clone();
+            (
+                quote!(out: *mut #ok_wire,),
+                quote!(::core::result::Result::Ok(__v) => {
+                    *out = #ok_conv(__v);
+                    true
+                }),
+            )
+        };
 
         let route = ErrRoute::Result {
             e_conv: &err_conv,
@@ -1009,16 +1025,13 @@ impl Cbindgen {
             #[no_mangle]
             #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
             pub unsafe extern "C" fn #sym(
-                out: *mut #ok_wire,
+                #out_param
                 #(#params,)*
                 e: *mut #err_wire,
             ) -> bool {
                 #(#decodes)*
                 match #call_path(#(#call_args),*) {
-                    ::core::result::Result::Ok(__v) => {
-                        *out = #ok_conv(__v);
-                        true
-                    }
+                    #ok_arm
                     ::core::result::Result::Err(__err) => {
                         if !e.is_null() {
                             *e = #err_conv(__err);
@@ -1371,6 +1384,42 @@ mod tests {
             "{src}"
         );
         assert!(compact.contains("__cbg_out_Error"), "{src}");
+    }
+
+    /// A `Result<(), E>` function lowers to `bool f(<inputs>, E *e)` — no
+    /// out-param, just `true` on `Ok`.
+    #[test]
+    fn result_unit_omits_out_param() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_unit_op(s: String) -> Result<(), Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_unit_op));
+
+        let src = write(&cbindgen, &mut registry, "resultunit");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("extern\"C\"fnz_unit_op"), "{src}");
+        assert!(compact.contains("->bool"), "{src}");
+        // Out-param dropped; error param kept.
+        assert!(!compact.contains("out:*mut"), "{src}");
+        assert!(compact.contains("e:*mutz_error"), "{src}");
+        // Ok arm is a bare `true`, with no write through `out`.
+        assert!(compact.contains("Result::Ok(_)=>true"), "{src}");
+        assert!(!compact.contains("*out="), "{src}");
     }
 
     /// `z_keyexpr_relation_to(a: &ZKeyExpr, b: &ZKeyExpr) -> SetIntersectionLevel`
