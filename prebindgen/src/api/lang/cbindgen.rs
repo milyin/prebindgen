@@ -464,7 +464,11 @@ impl Prebindgen for Cbindgen {
 
         // C-string data memory (string returns + `String` fields of data structs)
         // is malloc'd raw and freed by the single universal `free_memory_function`.
-        if self.needs_free(registry) {
+        // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
+        // same function (per element through the `z_free_array` macro), so the
+        // allocator/freer prelude is needed for them too.
+        let produces_array = self.produces_array(registry);
+        if self.needs_free(registry) || produces_array {
             let free_ident = match &self.free_fn {
                 Some(name) => format_ident!("{}", name),
                 None => panic!(
@@ -505,6 +509,31 @@ impl Prebindgen for Cbindgen {
                 #[allow(non_snake_case, unused_variables)]
                 pub unsafe extern "C" fn #free_ident(p: *mut ::core::ffi::c_void) {
                     free(p);
+                }
+            ));
+        }
+
+        // Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W` and
+        // return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed C-side
+        // via the `z_free_array` macro (per-element drop + the universal freer).
+        if produces_array {
+            items.push(syn::parse_quote!(
+                #[allow(non_snake_case, dead_code)]
+                pub(crate) unsafe fn __cbg_alloc_array<W>(
+                    v: ::std::vec::Vec<W>,
+                ) -> (*mut W, usize) {
+                    let n = v.len();
+                    if n == 0 {
+                        return (::core::ptr::null_mut(), 0);
+                    }
+                    let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+                    if p.is_null() {
+                        return (::core::ptr::null_mut(), 0);
+                    }
+                    for (i, e) in v.into_iter().enumerate() {
+                        ::core::ptr::write(p.add(i), e);
+                    }
+                    (p, n)
                 }
             ));
         }
@@ -797,6 +826,28 @@ impl Prebindgen for Cbindgen {
         let syn::Type::Reference(r) = pat else {
             return None;
         };
+        // `&[E]` slice (scalar `E`): marker only — the two-param (`*const E`,
+        // `usize`) lowering is done structurally in `emit_inputs`. `pat` is the
+        // wildcard `&[_]`; `t1` is the element type.
+        if r.mutability.is_none() {
+            if let syn::Type::Slice(s) = &*r.elem {
+                if matches!(&*s.elem, syn::Type::Infer(_)) && is_scalar(t1) {
+                    let name =
+                        format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(t1)));
+                    let function: syn::ItemFn = syn::parse_quote!(
+                        #[allow(non_snake_case, dead_code, unused)]
+                        pub(crate) fn #name() {}
+                    );
+                    return Some(ConverterImpl {
+                        destination: syn::parse_quote!(*const #t1),
+                        function,
+                        pre_stages: vec![],
+                        niches: Niches::empty(),
+                        metadata: (),
+                    });
+                }
+            }
+        }
         if r.mutability.is_none() && is_str(t1) {
             let name = Self::in_name(pat);
             let function: syn::ItemFn = syn::parse_quote!(
@@ -1065,45 +1116,21 @@ impl Prebindgen for Cbindgen {
         t1: &syn::Type,
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
-        // `Option<T>` → the inner pointer wire, with `None` encoded as NULL.
-        // NULL is a *value* here (`None`), not an error signal — so this is only
-        // supported when the inner converter is itself a pointer wire (opaque
-        // handle, `char*`, `*const` static borrow). A value-wire inner has no
-        // free NULL bit pattern and is left unhandled (returns `None`).
-        if is_option(pat) {
-            let inner = _r.output_entry(t1)?;
-            let syn::Type::Ptr(p) = &inner.destination else {
-                return None;
-            };
-            let null = if p.mutability.is_some() {
-                quote!(::core::ptr::null_mut())
-            } else {
-                quote!(::core::ptr::null())
-            };
-            let inner_wire = inner.destination.clone();
-            let inner_conv = inner.function.sig.ident.clone();
-            // The native value the wrapped fn yields inside the `Option` is
-            // exactly what the inner rank-0 converter consumes — reuse its input
-            // type rather than recomputing it (`src_ty` would mis-qualify e.g.
-            // `String` as `zenoh_flat::String`).
-            let inner_src = match inner.function.sig.inputs.first() {
-                Some(syn::FnArg::Typed(pt)) => (*pt.ty).clone(),
-                _ => return None,
-            };
-            // `pat` is the wildcard `Option<_>` (same for every inner type), so
-            // name the converter off the concrete inner `t1` to stay unique.
-            let name = format_ident!("__cbg_out_option_{}", sanitize(&TypeKey::from_type(t1)));
+        // Composite output layers (`Option<T>`, `Vec<T>`): the structural
+        // lowering happens in `emit_function_wrapper` via `lower_value`. These
+        // markers exist only so the resolver marks the composite type resolved
+        // and propagates required-ness to the inner/element type (resolved here
+        // first, deepest-first). The marker fn is never called.
+        if is_option(pat) || is_vec(pat) {
+            _r.output_entry(t1)?;
+            let kind = if is_option(pat) { "option" } else { "vec" };
+            let name = format_ident!("__cbg_outmark_{}_{}", kind, sanitize(&TypeKey::from_type(t1)));
             let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: ::core::option::Option<#inner_src>) -> #inner_wire {
-                    match v {
-                        ::core::option::Option::Some(__x) => #inner_conv(__x),
-                        ::core::option::Option::None => #null,
-                    }
-                }
+                #[allow(non_snake_case, dead_code, unused)]
+                pub(crate) fn #name() {}
             );
             return Some(ConverterImpl {
-                destination: inner_wire,
+                destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -1153,16 +1180,17 @@ impl Prebindgen for Cbindgen {
         if !is_result(pat) {
             return None;
         }
+        let _ = t1;
         let name = format_ident!("__cbg_result_{}", sanitize(&TypeKey::from_type(pat)));
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, dead_code, unused)]
             pub(crate) fn #name() {}
         );
-        // Destination is the success wire (only used if some outer wrapper reads
-        // it; `on_function` does not).
-        let t_short = self.c_type_ident(t1);
+        // Marker only — `emit_function_wrapper` does the real lowering via
+        // `lower_value`. Destination is unused (the success type may itself be a
+        // composite like `Option<Vec<_>>` with no single C type).
         Some(ConverterImpl {
-            destination: syn::parse_quote!(#t_short),
+            destination: syn::parse_quote!(()),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
@@ -1198,6 +1226,21 @@ impl Cbindgen {
                     .struct_fields(registry, &ty)
                     .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
                     .unwrap_or(false)
+        })
+    }
+
+    /// Whether any declared function returns a `Vec<_>` (possibly nested under
+    /// `Result`/`Option`), so the array builder/freer prelude must be emitted.
+    fn produces_array(&self, registry: &Registry<()>) -> bool {
+        self.functions.keys().any(|orig| {
+            registry
+                .functions
+                .get(orig)
+                .map(|(f, _)| match &f.sig.output {
+                    syn::ReturnType::Type(_, ty) => type_contains_vec(ty),
+                    syn::ReturnType::Default => false,
+                })
+                .unwrap_or(false)
         })
     }
 
@@ -1255,20 +1298,40 @@ impl Cbindgen {
                 .unwrap_or(false)
         });
 
-        if let Some((ok_ty, err_ty)) = result_parts(&return_ty) {
-            // Rule 1: the Result error type must be declared via `.error()`.
+        // Peel an outer `Result<_, E>`; `value_ty` is the success/return value.
+        let (value_ty, err_ty): (syn::Type, Option<syn::Type>) =
+            match result_parts(&return_ty) {
+                Some((ok, e)) => (ok, Some(e)),
+                None => (return_ty.clone(), None),
+            };
+
+        // Error wiring: the error type must be declared via `.error()`.
+        let err_bits = err_ty.as_ref().map(|err_ty| {
             assert!(
-                self.error.contains(&TypeKey::from_type(&err_ty)),
+                self.error.contains(&TypeKey::from_type(err_ty)),
                 "Cbindgen: function `{}` returns `Result<_, {}>` but `{}` is not a \
                  declared error type — add `.data_struct({}).error()`",
                 orig,
-                TypeKey::from_type(&err_ty),
-                TypeKey::from_type(&err_ty),
-                TypeKey::from_type(&err_ty),
+                TypeKey::from_type(err_ty),
+                TypeKey::from_type(err_ty),
+                TypeKey::from_type(err_ty),
             );
-            self.emit_fallible_wrapper(orig, &sym, &call_path, f, &ok_ty, &err_ty, registry)
-        } else {
-            // Rule 3: a fallible input with no Result channel needs `.panic()`.
+            let entry = registry.output_entry(err_ty).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
+                    TypeKey::from_type(err_ty),
+                    orig
+                )
+            });
+            (
+                entry.destination.clone(),
+                entry.function.sig.ident.clone(),
+                self.src_ty(err_ty),
+            )
+        });
+
+        // No `Result` channel ⇒ a fallible input must be declared `.panic()`.
+        if err_ty.is_none() {
             let allows_panic = self.functions.get(orig).map(|c| c.panic).unwrap_or(false);
             assert!(
                 !has_fallible_input || allows_panic,
@@ -1278,170 +1341,263 @@ impl Cbindgen {
                  on the internal error, or change its signature",
                 orig,
             );
-            self.emit_infallible_wrapper(orig, &sym, &call_path, f, &return_ty, registry)
         }
-    }
 
-    /// `Result<T, E>` → one of three C shapes by the success wire kind:
-    /// * pointer wire (opaque handle, `char*`) → `T *f(<inputs>, E *e)`, NULL = err;
-    /// * unit → `bool f(<inputs>, E *e)`;
-    /// * value wire (data struct, scalar, enum) → `bool f(T *out, <inputs>, E *e)`.
-    fn emit_fallible_wrapper(
-        &self,
-        orig: &syn::Ident,
-        sym: &syn::Ident,
-        call_path: &syn::Path,
-        f: &syn::ItemFn,
-        ok_ty: &syn::Type,
-        err_ty: &syn::Type,
-        registry: &Registry<()>,
-    ) -> TokenStream {
-        let err_entry = registry.output_entry(err_ty).unwrap_or_else(|| {
-            panic!(
-                "Cbindgen::on_function: error type `{}` of `{}` has no output converter",
-                TypeKey::from_type(err_ty),
-                orig
-            )
-        });
-        let err_wire = err_entry.destination.clone();
-        let err_conv = err_entry.function.sig.ident.clone();
+        // Structural lowering of the (present/ok) value, then the null-niche rule:
+        //   * Result + a free pointer niche  → NULL marks `Err` (value in-band);
+        //   * Result without a free niche     → `bool` status, value to out-params;
+        //   * no Result                       → field 0 is the C return, rest out.
+        let shape = self.lower_shape(&value_ty, registry);
+        let result_in_band = err_ty.is_some() && shape.has_niche; // value rides the return
+        let field0_is_return = result_in_band || err_ty.is_none();
 
-        // Choose the success shape. Each arm sets: the wrapper return type, the
-        // (optional) leading out-param, the `Ok` match arm, the `Err` tail, and
-        // the value an input-decode failure returns.
-        let (ret_ty, out_param, ok_arm, err_tail, fail_return): (
-            TokenStream,
-            TokenStream,
-            TokenStream,
-            TokenStream,
-            TokenStream,
-        ) = if is_unit(ok_ty) {
-            (
-                quote!(bool),
-                quote!(),
-                quote!(::core::result::Result::Ok(_) => true,),
-                quote!(false),
-                quote!(false),
-            )
+        // Partition fields into the (optional) C return value + out-parameters,
+        // and pick C names for the out-params (see `out_param_name`).
+        let mut targets: Vec<TokenStream> = Vec::new();
+        let mut out_fields: Vec<&WireField> = Vec::new();
+        // `field0_wire` is the wire of the value's primary field when that field
+        // is carried by the C return slot (modes A/D); `None` for mode B and unit.
+        let field0_wire: Option<syn::Type> = if field0_is_return {
+            shape.fields.first().map(|f| f.wire.clone())
         } else {
-            let ok_entry = registry.output_entry(ok_ty).unwrap_or_else(|| {
-                panic!(
-                    "Cbindgen::on_function: success type `{}` of `{}` has no output converter",
-                    TypeKey::from_type(ok_ty),
-                    orig
-                )
-            });
-            let ok_wire = ok_entry.destination.clone();
-            let ok_conv = ok_entry.function.sig.ident.clone();
-            // An `Option<T>` success wire is itself a pointer, but its NULL is a
-            // *value* (`None`), so it cannot also signal an error — force the
-            // value-wire shape (out-param + `bool`) instead of the pointer arm.
-            let ptr_wire = match &ok_wire {
-                syn::Type::Ptr(p) if !is_option(ok_ty) => Some(p),
-                _ => None,
-            };
-            if let Some(ok_ptr) = ptr_wire {
-                // Pointer-wire success: return the pointer, NULL on error.
-                // Use null() for *const (borrowed/static) and null_mut() for *mut (owned).
-                let null = if ok_ptr.mutability.is_some() {
-                    quote!(::core::ptr::null_mut())
+            None
+        };
+        if field0_is_return {
+            if !shape.fields.is_empty() {
+                targets.push(quote!(__ret));
+                out_fields.extend(shape.fields[1..].iter());
+            }
+        } else {
+            out_fields.extend(shape.fields.iter());
+        }
+        let prefixed = out_fields.iter().any(|wf| wf.suffix.is_empty());
+        let out_names: Vec<syn::Ident> = out_fields
+            .iter()
+            .map(|wf| out_param_name(wf.suffix, prefixed))
+            .collect();
+        for name in &out_names {
+            targets.push(quote!(*#name));
+        }
+        let out_param_decls: Vec<TokenStream> = out_fields
+            .iter()
+            .zip(&out_names)
+            .map(|(wf, name)| {
+                let wire = &wf.wire;
+                quote!(#name: *mut #wire)
+            })
+            .collect();
+
+        // C wrapper return type: the payload's field 0 (modes A/D), `bool` status
+        // (mode B), or `void` (a unit value with no `Result`).
+        let c_return: Option<syn::Type> = if field0_is_return {
+            field0_wire.clone()
+        } else {
+            Some(syn::parse_quote!(bool))
+        };
+
+        // Input decode: route a fallible-input failure to the error out-param
+        // (with the wrapper's fail value) when there is a `Result`, else panic.
+        let fail_return = if result_in_band {
+            null_for(field0_wire.as_ref().expect("in-band ⇒ pointer return"))
+        } else {
+            quote!(false)
+        };
+        let input_route = match &err_bits {
+            Some((_, e_conv, e_ty_src)) => ErrRoute::Result {
+                e_conv,
+                e_ty_src: e_ty_src.clone(),
+                fail_return: fail_return.clone(),
+            },
+            None => ErrRoute::Panic,
+        };
+        let (in_params, decodes, call_args) = self.emit_inputs(orig, f, registry, &input_route);
+        let call = quote!(#call_path(#(#call_args),*));
+
+        let e_param = err_bits
+            .as_ref()
+            .map(|(err_wire, _, _)| quote!(e: *mut #err_wire));
+        let ret_arrow = c_return.as_ref().map(|w| quote!(-> #w));
+
+        // Assemble the body per the three structural modes.
+        let body = match (&err_bits, field0_is_return) {
+            // No `Result`: straight-line. `void` when there are no fields.
+            (None, _) => {
+                if field0_wire.is_none() {
+                    quote!( #(#decodes)* #call; )
                 } else {
-                    quote!(::core::ptr::null())
-                };
-                (
-                    quote!(#ok_wire),
-                    quote!(),
-                    quote!(::core::result::Result::Ok(__v) => #ok_conv(__v),),
-                    null.clone(),
-                    null,
+                    let field0_wire = field0_wire.as_ref().unwrap();
+                    let enc =
+                        self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                    quote!(
+                        #(#decodes)*
+                        let __v = #call;
+                        let __ret: #field0_wire;
+                        #enc
+                        __ret
+                    )
+                }
+            }
+            // `Result` with a free niche: value in-band, NULL marks `Err`.
+            (Some((_, e_conv, _)), true) => {
+                let field0_wire = field0_wire.as_ref().expect("in-band ⇒ pointer return");
+                let null = null_for(field0_wire);
+                let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                quote!(
+                    #(#decodes)*
+                    match #call {
+                        ::core::result::Result::Ok(__v) => { let __ret: #field0_wire; #enc __ret }
+                        ::core::result::Result::Err(__err) => {
+                            if !e.is_null() { *e = #e_conv(__err); }
+                            #null
+                        }
+                    }
                 )
-            } else {
-                // Value-wire success: caller-allocated `*out`, `bool` return.
-                (
-                    quote!(bool),
-                    quote!(out: *mut #ok_wire,),
-                    quote!(::core::result::Result::Ok(__v) => {
-                        *out = #ok_conv(__v);
-                        true
-                    }),
-                    quote!(false),
-                    quote!(false),
+            }
+            // `Result` without a free niche: `bool` status, value to out-params.
+            (Some((_, e_conv, _)), false) => {
+                let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                quote!(
+                    #(#decodes)*
+                    match #call {
+                        ::core::result::Result::Ok(__v) => { #enc true }
+                        ::core::result::Result::Err(__err) => {
+                            if !e.is_null() { *e = #e_conv(__err); }
+                            false
+                        }
+                    }
                 )
             }
         };
-
-        let route = ErrRoute::Result {
-            e_conv: &err_conv,
-            e_ty_src: self.src_ty(err_ty),
-            fail_return,
-        };
-        let (params, decodes, call_args) = self.emit_inputs(orig, f, registry, &route);
 
         quote! {
             #[no_mangle]
             #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
             pub unsafe extern "C" fn #sym(
-                #out_param
-                #(#params,)*
-                e: *mut #err_wire,
-            ) -> #ret_ty {
-                #(#decodes)*
-                match #call_path(#(#call_args),*) {
-                    #ok_arm
-                    ::core::result::Result::Err(__err) => {
-                        if !e.is_null() {
-                            *e = #err_conv(__err);
-                        }
-                        #err_tail
-                    }
-                }
+                #(#in_params,)*
+                #(#out_param_decls,)*
+                #e_param
+            ) #ret_arrow {
+                #body
             }
         }
     }
 
-    /// Non-`Result` return: natural shape (`void` for unit, wire by value
-    /// otherwise). A fallible input here only reaches this point when the fn is
-    /// declared `.panic()`, so decode failures `panic!`.
-    fn emit_infallible_wrapper(
-        &self,
-        orig: &syn::Ident,
-        sym: &syn::Ident,
-        call_path: &syn::Path,
-        f: &syn::ItemFn,
-        return_ty: &syn::Type,
-        registry: &Registry<()>,
-    ) -> TokenStream {
-        let (params, decodes, call_args) = self.emit_inputs(orig, f, registry, &ErrRoute::Panic);
-        let call = quote!(#call_path(#(#call_args),*));
-
-        if is_unit(return_ty) {
-            quote! {
-                #[no_mangle]
-                #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-                pub unsafe extern "C" fn #sym(#(#params),*) {
-                    #(#decodes)*
-                    #call;
-                }
-            }
-        } else {
-            let out_entry = registry.output_entry(return_ty).unwrap_or_else(|| {
+    /// Lower how a *present / ok* value of `ty` is carried over the C ABI: an
+    /// ordered list of wire components, plus whether `fields[0]` is a pointer
+    /// whose NULL bit-pattern is still free for an enclosing `Option`/`Result`
+    /// layer to claim. Mirrors the niche-stacking model in `core::niches`.
+    fn lower_shape(&self, ty: &syn::Type, registry: &Registry<()>) -> ValueShape {
+        if is_unit(ty) {
+            return ValueShape { fields: vec![], has_niche: false };
+        }
+        // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
+        // value (one converter); a composite element is unsupported.
+        if is_vec(ty) {
+            let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
+            assert!(
+                !is_option(&elem) && !is_vec(&elem) && !is_result(&elem),
+                "Cbindgen: `Vec<{}>` element must be a single-value type \
+                 (scalar, data struct, String, or handle), not a composite",
+                TypeKey::from_type(&elem),
+            );
+            let entry = registry.output_entry(&elem).unwrap_or_else(|| {
                 panic!(
-                    "Cbindgen::on_function: return type `{}` of `{}` has no output converter",
-                    TypeKey::from_type(return_ty),
-                    orig
+                    "Cbindgen: `Vec` element `{}` has no output converter",
+                    TypeKey::from_type(&elem)
                 )
             });
-            let wire = out_entry.destination.clone();
-            let conv = out_entry.function.sig.ident.clone();
-            quote! {
-                #[no_mangle]
-                #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-                pub unsafe extern "C" fn #sym(#(#params),*) -> #wire {
-                    #(#decodes)*
-                    #conv(#call)
-                }
-            }
+            let elem_wire = entry.destination.clone();
+            return ValueShape {
+                fields: vec![
+                    WireField { suffix: "", wire: syn::parse_quote!(*mut #elem_wire) },
+                    WireField { suffix: "_len", wire: syn::parse_quote!(usize) },
+                ],
+                has_niche: false,
+            };
         }
+        // `Option<T>` consumes one discriminant. If the inner value still has a
+        // free pointer niche, reuse it (NULL = `None`); otherwise prepend an
+        // explicit `present: bool`. Either way the result exposes no niche.
+        if is_option(ty) {
+            let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
+            let inner = self.lower_shape(&inner_ty, registry);
+            if inner.has_niche {
+                return ValueShape { fields: inner.fields, has_niche: false };
+            }
+            let mut fields = vec![WireField { suffix: "_present", wire: syn::parse_quote!(bool) }];
+            fields.extend(inner.fields);
+            return ValueShape { fields, has_niche: false };
+        }
+        // Base value: one wire component from its rank-0/1 converter. A pointer
+        // wire (String, opaque handle, `&'static`) carries a free NULL niche.
+        let entry = registry.output_entry(ty).unwrap_or_else(|| {
+            panic!(
+                "Cbindgen::on_function: type `{}` has no output converter",
+                TypeKey::from_type(ty)
+            )
+        });
+        let wire = entry.destination.clone();
+        let has_niche = matches!(wire, syn::Type::Ptr(_));
+        ValueShape { fields: vec![WireField { suffix: "", wire }], has_niche }
+    }
+
+    /// Emit the statements that write a native value `val` of type `ty` into the
+    /// `targets` lvalues (one per field of `lower_shape(ty)`, in order).
+    fn encode_value(
+        &self,
+        ty: &syn::Type,
+        val: TokenStream,
+        targets: &[TokenStream],
+        registry: &Registry<()>,
+    ) -> TokenStream {
+        if is_unit(ty) {
+            return quote!();
+        }
+        if is_vec(ty) {
+            let elem = first_type_arg(ty).expect("Vec<T> has a type argument");
+            let entry = registry.output_entry(&elem).expect("Vec element converter");
+            let elem_conv = entry.function.sig.ident.clone();
+            let elem_wire = entry.destination.clone();
+            let t_ptr = &targets[0];
+            let t_len = &targets[1];
+            return quote!(
+                let __arr: ::std::vec::Vec<#elem_wire> =
+                    #val.into_iter().map(#elem_conv).collect();
+                let (__p, __n) = __cbg_alloc_array(__arr);
+                #t_ptr = __p;
+                #t_len = __n;
+            );
+        }
+        if is_option(ty) {
+            let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
+            let inner = self.lower_shape(&inner_ty, registry);
+            if inner.has_niche {
+                // None reuses the inner pointer's NULL; Some encodes inline.
+                let inner_enc = self.encode_value(&inner_ty, quote!(__x), targets, registry);
+                let null = null_for(&inner.fields[0].wire);
+                let t0 = &targets[0];
+                return quote!(
+                    match #val {
+                        ::core::option::Option::Some(__x) => { #inner_enc }
+                        ::core::option::Option::None => { #t0 = #null; }
+                    }
+                );
+            }
+            // Explicit `present` flag in targets[0]; inner value follows.
+            let present = &targets[0];
+            let inner_enc = self.encode_value(&inner_ty, quote!(__x), &targets[1..], registry);
+            return quote!(
+                match #val {
+                    ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
+                    ::core::option::Option::None => { #present = false; }
+                }
+            );
+        }
+        // Base value: run its output converter into the single target.
+        let entry = registry.output_entry(ty).expect("base value converter");
+        let conv = entry.function.sig.ident.clone();
+        let t0 = &targets[0];
+        quote!( #t0 = #conv(#val); )
     }
 
     /// Build the wire param list, per-input decode statements, and call-site
@@ -1468,6 +1624,23 @@ impl Cbindgen {
             };
             let ident = &pat_id.ident;
             let arg_ty = &*pt.ty;
+
+            // `&[E]` slice (scalar `E`): two wire params (`*const E`, `usize`),
+            // decoded zero-copy. NULL pointer ⇒ empty slice (not an error).
+            if let Some(elem) = scalar_slice_elem(arg_ty) {
+                let len_id = format_ident!("{}_len", ident);
+                params.push(quote!(#ident: *const #elem));
+                params.push(quote!(#len_id: usize));
+                decodes.push(quote!(
+                    let #ident: &[#elem] = if #ident.is_null() {
+                        &[]
+                    } else {
+                        ::core::slice::from_raw_parts(#ident, #len_id)
+                    };
+                ));
+                call_args.push(quote!(#ident));
+                continue;
+            }
 
             let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
                 panic!(
@@ -1622,6 +1795,80 @@ fn is_result(ty: &syn::Type) -> bool {
 
 fn is_option(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "Option").unwrap_or(false)
+}
+
+fn is_vec(ty: &syn::Type) -> bool {
+    type_path_tail(ty).map(|i| i == "Vec").unwrap_or(false)
+}
+
+/// Whether `Vec<_>` appears anywhere in `ty` (including nested under
+/// `Result`/`Option`/references).
+fn type_contains_vec(ty: &syn::Type) -> bool {
+    is_vec(ty)
+        || crate::api::core::registry::immediate_subtype_positions(ty)
+            .iter()
+            .any(type_contains_vec)
+}
+
+/// First angle-bracketed type argument of a path type (e.g. `T` of `Option<T>`
+/// or `Vec<T>`). `None` if there is none.
+fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let seg = tp.path.segments.last()?;
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    ab.args.iter().find_map(|a| match a {
+        syn::GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    })
+}
+
+/// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
+fn scalar_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Reference(r) = ty else { return None };
+    if r.mutability.is_some() {
+        return None;
+    }
+    let syn::Type::Slice(s) = &*r.elem else { return None };
+    let elem = (*s.elem).clone();
+    is_scalar(&elem).then_some(elem)
+}
+
+/// C name for an out-parameter field. When the value's primary field (suffix
+/// `""`) is itself an out-param the whole group is `out`-prefixed (`out`,
+/// `out_len`, `out_present`); otherwise the accompanying fields use bare names
+/// (`len`, `present`).
+fn out_param_name(suffix: &str, prefixed: bool) -> syn::Ident {
+    if prefixed {
+        format_ident!("out{}", suffix)
+    } else {
+        format_ident!("{}", suffix.trim_start_matches('_'))
+    }
+}
+
+/// NULL literal matching a raw-pointer wire: `null_mut()` for `*mut`, else `null()`.
+fn null_for(wire: &syn::Type) -> TokenStream {
+    match wire {
+        syn::Type::Ptr(p) if p.mutability.is_some() => quote!(::core::ptr::null_mut()),
+        _ => quote!(::core::ptr::null()),
+    }
+}
+
+/// One C-ABI wire component of a lowered return value. `suffix` names it
+/// relative to a base (`""` → `out`, `"_len"` → `len`, `"_present"` → `present`).
+struct WireField {
+    suffix: &'static str,
+    wire: syn::Type,
+}
+
+/// How a *present / ok* value of a return type is carried over the C ABI:
+/// an ordered list of wire components, plus whether `fields[0]` is a pointer
+/// whose NULL bit-pattern is still free for an enclosing `Option`/`Result`
+/// layer to claim (the niche).
+struct ValueShape {
+    fields: Vec<WireField>,
+    has_niche: bool,
 }
 
 /// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
@@ -1790,8 +2037,8 @@ mod tests {
         // Out-param dropped; error param kept.
         assert!(!compact.contains("out:*mut"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
-        // Ok arm is a bare `true`, with no write through `out`.
-        assert!(compact.contains("Result::Ok(_)=>true"), "{src}");
+        // Ok arm yields `true`, with no write through `out`.
+        assert!(compact.contains("Result::Ok(__v)=>true"), "{src}");
         assert!(!compact.contains("*out="), "{src}");
     }
 
@@ -1829,8 +2076,9 @@ mod tests {
         assert!(!compact.contains("out:*mut"), "{src}");
         assert!(compact.contains("__cbg_alloc_cstr(v)"), "{src}");
         assert!(compact.contains("fnz_free(p:*mut::core::ffi::c_void)"), "{src}");
-        // Ok arm returns the pointer directly; error → NULL.
-        assert!(compact.contains("=>__cbg_out_String(__v),"), "{src}");
+        // Ok arm encodes the pointer into the return slot; error → NULL.
+        assert!(compact.contains("__ret=__cbg_out_String(__v);"), "{src}");
+        assert!(compact.contains("=>{if!e.is_null(){*e=__cbg_out_Error(__err);}::core::ptr::null_mut()}"), "{src}");
     }
 
     /// `z_encoding_schema(e: &ZEncoding) -> Option<String>` lowers to a bare
@@ -1863,13 +2111,13 @@ mod tests {
         assert!(compact.contains("->*mut::core::ffi::c_char"), "{src}");
         assert!(!compact.contains("out:*mut"), "{src}");
         assert!(!compact.contains("e:*mut"), "{src}");
-        // The Option output converter: Some → inner wire, None → NULL.
+        // Inline Option encoding into the return slot: Some → inner wire, None → NULL.
         assert!(
-            compact.contains("::core::option::Option::Some(__x)=>__cbg_out_String(__x)"),
+            compact.contains("::core::option::Option::Some(__x)=>{__ret=__cbg_out_String(__x);}"),
             "{src}"
         );
         assert!(
-            compact.contains("::core::option::Option::None=>::core::ptr::null_mut()"),
+            compact.contains("::core::option::Option::None=>{__ret=::core::ptr::null_mut();}"),
             "{src}"
         );
         // Fallible borrow decode aborts (no Result channel).
@@ -1912,11 +2160,223 @@ mod tests {
         assert!(compact.contains("out:*mut*mutz_thing"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
         // Ok arm writes the Option (pointer-or-NULL) through `out`, returns true.
-        assert!(compact.contains("*out="), "{src}");
+        assert!(compact.contains("*out=__cbg_out_ZThing(__x);"), "{src}");
         assert!(
-            compact.contains("::core::option::Option::None=>::core::ptr::null_mut()"),
+            compact.contains("::core::option::Option::None=>{*out=::core::ptr::null_mut();}"),
             "{src}"
         );
+        assert!(compact.contains("=>{") && compact.contains("true}"), "{src}");
+    }
+
+    /// `Vec<String>` lowers to `char** f(<inputs>, size_t* len)`: the malloc'd
+    /// array pointer is returned, the element count goes to `*len`. Each element
+    /// is encoded via the inner `String` converter.
+    #[test]
+    fn vec_string_returns_ptr_and_len() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_hello_locators(h: &ZHello) -> Vec<String> {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZHello))
+            .name("z_hello")
+            .function(syn::parse_quote!(z_hello_locators))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "vec_string");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("extern\"C\"fnz_hello_locators"), "{src}");
+        // Returns `char**`, with a trailing `len` out-param; no `out`/`e`.
+        assert!(compact.contains("->*mut*mut::core::ffi::c_char"), "{src}");
+        assert!(compact.contains("len:*mutusize"), "{src}");
+        assert!(!compact.contains("e:*mut"), "{src}");
+        // Built from the element converter via the malloc'd array helper.
+        assert!(compact.contains(".map(__cbg_out_String).collect()"), "{src}");
+        assert!(compact.contains("let(__p,__n)=__cbg_alloc_array(__arr);"), "{src}");
+        assert!(compact.contains("__ret=__p;") && compact.contains("*len=__n;"), "{src}");
+        // The array builder prelude is emitted.
+        assert!(compact.contains("fn__cbg_alloc_array<W>"), "{src}");
+        // Fallible borrow decode aborts (no Result channel).
+        assert!(compact.contains("panic!("), "{src}");
+    }
+
+    /// `Vec<u8>` lowers to a scalar array `uint8_t* f(<inputs>, size_t* len)` —
+    /// elements pass through (no per-element pointer).
+    #[test]
+    fn vec_u8_returns_scalar_array() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZZBytes))
+            .name("z_zbytes")
+            .function(syn::parse_quote!(z_zbytes_to_bytes))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "vec_u8");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("->*mutu8"), "{src}");
+        assert!(compact.contains("len:*mutusize"), "{src}");
+        assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
+    }
+
+    /// `Result<Vec<T>, E>` has no free niche (the array NULL means *empty*), so
+    /// it takes `bool f(T** out, size_t* out_len, <inputs>, E* e)`.
+    #[test]
+    fn result_vec_uses_out_params() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_things(key: String) -> Result<Vec<ZThing>, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZThing))
+            .name("z_thing")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_things));
+
+        let src = write(&cbindgen, &mut registry, "result_vec");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("->bool"), "{src}");
+        assert!(compact.contains("out:*mut*mut*mutz_thing"), "{src}");
+        assert!(compact.contains("out_len:*mutusize"), "{src}");
+        assert!(compact.contains("e:*mutz_error"), "{src}");
+        // Ok writes both out-params; Err writes `*e` and returns false.
+        assert!(compact.contains("*out=__p;") && compact.contains("*out_len=__n;"), "{src}");
+    }
+
+    /// `Option<Vec<T>>` (no `Result`): the inner `Vec` has no niche, so an
+    /// explicit `present` flag rides the `bool` return while the array goes to
+    /// `out`/`out_len`.
+    #[test]
+    fn option_vec_uses_present_and_out() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_maybe_things(h: &ZHello) -> Option<Vec<ZThing>> {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZHello))
+            .name("z_hello")
+            .ptr_struct(syn::parse_quote!(ZThing))
+            .name("z_thing")
+            .function(syn::parse_quote!(z_maybe_things))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "option_vec");
+        let compact: String = src.split_whitespace().collect();
+
+        // `bool` return is the `present` flag; the array rides `out`/`out_len`.
+        assert!(compact.contains("->bool"), "{src}");
+        assert!(compact.contains("out:*mut*mut*mutz_thing"), "{src}");
+        assert!(compact.contains("out_len:*mutusize"), "{src}");
+        assert!(!compact.contains("e:*mut"), "{src}");
+        assert!(compact.contains("__ret=true;") && compact.contains("__ret=false;"), "{src}");
+    }
+
+    /// `Result<Option<Vec<T>>, E>`: full stack — `Result` finds no niche (Option
+    /// consumed it), so `bool` status; the `present` flag and the array all ride
+    /// out-params: `bool f(bool* out_present, T** out, size_t* out_len, …, E* e)`.
+    #[test]
+    fn result_option_vec_full() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_full(key: String) -> Result<Option<Vec<ZThing>>, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZThing))
+            .name("z_thing")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_full));
+
+        let src = write(&cbindgen, &mut registry, "result_option_vec");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("->bool"), "{src}");
+        assert!(compact.contains("out_present:*mutbool"), "{src}");
+        assert!(compact.contains("out:*mut*mut*mutz_thing"), "{src}");
+        assert!(compact.contains("out_len:*mutusize"), "{src}");
+        assert!(compact.contains("e:*mutz_error"), "{src}");
+        // present flag set inside the Ok arm; array filled when Some.
+        assert!(compact.contains("*out_present=true;") && compact.contains("*out_present=false;"), "{src}");
+    }
+
+    /// A scalar slice input `&[u8]` lowers to two wire params (`*const u8`,
+    /// `usize`) decoded zero-copy; a NULL pointer is an empty slice.
+    #[test]
+    fn slice_u8_input_two_params() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_zbytes_from_bytes(bytes: &[u8]) -> ZZBytes {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .ptr_struct(syn::parse_quote!(ZZBytes))
+            .name("z_zbytes")
+            .function(syn::parse_quote!(z_zbytes_from_bytes));
+
+        let src = write(&cbindgen, &mut registry, "slice_u8");
+        let compact: String = src.split_whitespace().collect();
+
+        // Two params: pointer + length.
+        assert!(compact.contains("bytes:*constu8"), "{src}");
+        assert!(compact.contains("bytes_len:usize"), "{src}");
+        // Zero-copy decode, NULL ⇒ empty slice.
+        assert!(compact.contains("::core::slice::from_raw_parts(bytes,bytes_len)"), "{src}");
+        // Returns the opaque handle (Box::into_raw).
+        assert!(compact.contains("->*mutz_zbytes"), "{src}");
     }
 
     /// `&str` inputs decode directly from `const char *` and can be used by
