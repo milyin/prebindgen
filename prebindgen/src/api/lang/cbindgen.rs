@@ -11,16 +11,29 @@
 //!
 //! ## C ABI conventions
 //!
-//! * **Pointer struct** (declared with [`Cbindgen::ptr_struct`]): a Rust value
-//!   whose lifecycle is owned by the C side. Represented as
-//!   `#[repr(C)] struct T { _0: *mut c_void }` wrapping a `Box::into_raw`
-//!   pointer. A `<name>_drop` destructor is generated per handle.
+//! * **Pointer struct** (declared with [`Cbindgen::ptr_struct`]): a `Box`-owned
+//!   Rust value whose lifecycle is owned by the C side. The C type `T` is
+//!   **opaque/incomplete** and the handle is a bare `T *` = `Box::into_raw`. A
+//!   typed `<name>_drop(T *)` destructor (running the Rust `Drop`) is generated
+//!   per handle.
 //! * **Data struct** (declared with [`Cbindgen::data_struct`]): a by-value
 //!   `#[repr(C)]` struct whose fields are mapped to C-ABI wire types
-//!   (`String` → `*mut c_char`). Heap-owning structs get a `<name>_drop` too.
-//! * **`Result<T, E>` return**: lowered to the C out-param idiom —
-//!   `bool fn(T *out, <inputs>, E *e)`. `e` may be `NULL`, in which case the
-//!   error value is dropped. Returns `true` on `Ok`, `false` on `Err`.
+//!   (`String` → `*mut c_char`). No per-struct destructor — each `char*` field
+//!   is released individually via the [`Cbindgen::free_memory_function`].
+//! * **Direct `String` output**: a bare `char *` — a `malloc`'d, null-terminated
+//!   raw block (no wrapper struct), freed via the `free_memory_function`.
+//! * **[`Cbindgen::free_memory_function`]**: the single, type-agnostic raw memory
+//!   freer (C `free`) for every `char*` the layer hands out (string returns and
+//!   data-struct `String` fields). It runs no destructor and needs no length.
+//!   Required whenever such string memory is produced.
+//! * **`Result<T, E>` return** lowers by the success wire kind:
+//!   - **pointer wire** (opaque handle, `char*`) → `T f(<inputs>, E *e)`, where a
+//!     **NULL return signals error** (details written to `*e`);
+//!   - **unit** → `bool f(<inputs>, E *e)`;
+//!   - **value wire** (data struct, scalar, enum) → `bool f(T *out, <inputs>, E *e)`
+//!     filling a caller-allocated `*out`.
+//!   `e` may be `NULL`, in which case the error value is dropped. Infallible
+//!   producers return the value/pointer directly (no out-param).
 //!
 //! ## Error handling (multiple error types)
 //!
@@ -93,10 +106,13 @@ enum CurrentDecl {
 
 /// Where a fallible input-decode failure is routed in a generated wrapper.
 enum ErrRoute<'a> {
-    /// `Result<T, E>` function: convert the message to `E` and write `*e`.
+    /// `Result<T, E>` function: convert the message to `E`, write `*e`, and
+    /// return `fail_return` (`false` for a `bool`/out-param wrapper,
+    /// `::core::ptr::null_mut()` for a pointer-returning wrapper).
     Result {
         e_conv: &'a syn::Ident,
         e_ty_src: syn::Type,
+        fail_return: TokenStream,
     },
     /// Non-`Result` function declared `.panic()`: abort via `panic!`.
     Panic,
@@ -121,6 +137,10 @@ pub struct Cbindgen {
     /// Data structs additionally marked as error types (allowlist for the
     /// "Result error type must be declared" rule).
     error: HashSet<TypeKey>,
+    /// Name of the universal raw-memory freer (C `free`) for `char*` data the
+    /// generated code hands out. Set by [`Self::free_memory_function`]. Required
+    /// (build error otherwise) whenever string memory is produced.
+    free_fn: Option<String>,
     /// The declaration that chained modifiers apply to. Set by declaration
     /// methods; reset to `None` by root-level modifiers.
     current: Option<CurrentDecl>,
@@ -137,6 +157,17 @@ impl Cbindgen {
     /// current declaration, so it can't be followed by `.name()`/`.error()`/etc.
     pub fn source_module(mut self, p: syn::Path) -> Self {
         self.source_module = Some(p);
+        self.current = None;
+        self
+    }
+
+    /// Set the name of the universal memory-freeing function (a type-agnostic C
+    /// `free`) the generated layer exports for releasing `char*` data it hands to
+    /// C — string returns and `String` fields of data structs. Root-level
+    /// modifier: resets the current declaration. Required whenever the adapter
+    /// produces such string memory; otherwise that's a build error.
+    pub fn free_memory_function(mut self, name: impl Into<String>) -> Self {
+        self.free_fn = Some(name.into());
         self.current = None;
         self
     }
@@ -208,7 +239,10 @@ impl Cbindgen {
                 self.enums.get_mut(&key).expect("entry vanished").c_name = Some(name);
             }
             Some(CurrentDecl::Function(ident)) => {
-                self.functions.get_mut(&ident).expect("entry vanished").c_name = Some(name);
+                self.functions
+                    .get_mut(&ident)
+                    .expect("entry vanished")
+                    .c_name = Some(name);
             }
             None => panic!(
                 "Cbindgen::name must be chained directly after a declaration \
@@ -228,10 +262,7 @@ impl Cbindgen {
         match &self.current {
             Some(CurrentDecl::Ptr(key)) => {
                 let key = key.clone();
-                self.opaque
-                    .get_mut(&key)
-                    .expect("entry vanished")
-                    .drop_name = Some(c_name.into());
+                self.opaque.get_mut(&key).expect("entry vanished").drop_name = Some(c_name.into());
             }
             other => panic!(
                 "Cbindgen::destructor_name must be chained after a `ptr_struct(...)` \
@@ -277,7 +308,8 @@ impl Cbindgen {
     /// unchanged.
     fn src_ty(&self, ty: &syn::Type) -> syn::Type {
         if let (Some(m), syn::Type::Path(tp)) = (&self.source_module, ty) {
-            if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1 {
+            if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1
+            {
                 let mut path = m.clone();
                 path.segments.push(tp.path.segments[0].clone());
                 return syn::Type::Path(syn::TypePath { qself: None, path });
@@ -368,18 +400,68 @@ impl Prebindgen for Cbindgen {
     fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
 
-        // Opaque handles: `#[repr(C)] struct T { _0: *mut c_void }` + `_drop`.
+        // C-string data memory (string returns + `String` fields of data structs)
+        // is malloc'd raw and freed by the single universal `free_memory_function`.
+        if self.needs_free(registry) {
+            let free_ident = match &self.free_fn {
+                Some(name) => format_ident!("{}", name),
+                None => panic!(
+                    "Cbindgen: the generated layer hands `char*` string memory to C \
+                     (a `String` return or a `String` data-struct field) but no \
+                     memory-freeing function is declared — add \
+                     `.free_memory_function(\"z_free\")`"
+                ),
+            };
+            // C allocator (linked from the C runtime; no crate dependency).
+            items.push(syn::parse_quote!(
+                extern "C" {
+                    fn malloc(size: usize) -> *mut ::core::ffi::c_void;
+                    fn free(ptr: *mut ::core::ffi::c_void);
+                }
+            ));
+            // Raw, destructor-free C-string block. `CString::new` drops interior
+            // NULs so the terminator marks the true end for C consumers.
+            items.push(syn::parse_quote!(
+                #[allow(non_snake_case, dead_code)]
+                pub(crate) fn __cbg_alloc_cstr(s: ::std::string::String) -> *mut ::core::ffi::c_char {
+                    let c = ::std::ffi::CString::new(s).unwrap_or_default();
+                    let bytes = c.as_bytes_with_nul();
+                    unsafe {
+                        let p = malloc(bytes.len()) as *mut u8;
+                        if p.is_null() {
+                            return ::core::ptr::null_mut();
+                        }
+                        ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
+                        p as *mut ::core::ffi::c_char
+                    }
+                }
+            ));
+            // Universal raw memory freer: type-agnostic C `free`, no length, no
+            // destructor (NULL-safe via C `free`).
+            items.push(syn::parse_quote!(
+                #[no_mangle]
+                #[allow(non_snake_case, unused_variables)]
+                pub unsafe extern "C" fn #free_ident(p: *mut ::core::ffi::c_void) {
+                    free(p);
+                }
+            ));
+        }
+
+        // Opaque handles: bare-pointer C type (`z_*_t*` = `Box::into_raw`) + typed
+        // `_drop`. The C type is an opaque/incomplete struct.
         for (key, _cfg) in sorted_by_key(&self.opaque) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
                 continue;
             }
             let c_struct = self.c_type_ident(&ty);
+            // Opaque/incomplete C type: the handle is `#c_struct *`, which IS the
+            // `Box::into_raw` pointer to the source value.
             items.push(syn::parse_quote!(
                 #[repr(C)]
                 #[allow(non_camel_case_types)]
                 pub struct #c_struct {
-                    _0: *mut ::core::ffi::c_void,
+                    _private: [u8; 0],
                 }
             ));
             let src = self.src_ty(&ty);
@@ -391,15 +473,16 @@ impl Prebindgen for Cbindgen {
                 #[no_mangle]
                 #[allow(non_snake_case, unused_variables)]
                 pub unsafe extern "C" fn #drop_ident(this_: *mut #c_struct) {
-                    if !this_.is_null() && !(*this_)._0.is_null() {
-                        drop(::std::boxed::Box::from_raw((*this_)._0 as *mut #src));
-                        (*this_)._0 = ::core::ptr::null_mut();
+                    if !this_.is_null() {
+                        drop(::std::boxed::Box::from_raw(this_ as *mut #src));
                     }
                 }
             ));
         }
 
-        // Data structs: `#[repr(C)]` mirror + `_drop` for heap fields.
+        // Data structs: `#[repr(C)]` mirror only. Heap (`String`) fields are
+        // `char*` raw blocks the C user releases individually via the
+        // `free_memory_function` — no per-struct destructor.
         for (key, _cfg) in sorted_by_key(&self.data) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
@@ -410,7 +493,6 @@ impl Prebindgen for Cbindgen {
             };
             let c_struct = self.c_type_ident(&ty);
             let mut field_defs: Vec<TokenStream> = Vec::new();
-            let mut drop_stmts: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
                 let wire = c_field_wire(fty).unwrap_or_else(|| {
                     panic!(
@@ -421,14 +503,6 @@ impl Prebindgen for Cbindgen {
                     )
                 });
                 field_defs.push(quote!(pub #fname: #wire));
-                if is_string(fty) {
-                    drop_stmts.push(quote!(
-                        if !(*this_).#fname.is_null() {
-                            drop(::std::ffi::CString::from_raw((*this_).#fname));
-                            (*this_).#fname = ::core::ptr::null_mut();
-                        }
-                    ));
-                }
             }
             items.push(syn::parse_quote!(
                 #[repr(C)]
@@ -437,18 +511,6 @@ impl Prebindgen for Cbindgen {
                     #(#field_defs,)*
                 }
             ));
-            if !drop_stmts.is_empty() {
-                let drop_ident = format_ident!("{}_drop", self.c_drop_base(&ty));
-                items.push(syn::parse_quote!(
-                    #[no_mangle]
-                    #[allow(non_snake_case, unused_variables)]
-                    pub unsafe extern "C" fn #drop_ident(this_: *mut #c_struct) {
-                        if !this_.is_null() {
-                            #(#drop_stmts)*
-                        }
-                    }
-                ));
-            }
         }
 
         // Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
@@ -502,27 +564,29 @@ impl Prebindgen for Cbindgen {
     fn on_input_type_rank_0(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
 
-        // Opaque handle, by-value consume: `*Box::from_raw(v._0)` — fallible
-        // (null handle → message).
+        // Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
+        // handle → message). The wire is the bare handle pointer `*mut #c_struct`.
         if self.opaque.contains_key(&key) {
             let name = Self::in_name(ty);
             let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
+            let short = type_short(ty);
+            let null_msg = format!("null {short} handle passed by value");
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) unsafe fn #name(
-                    v: #c_struct,
+                    v: *mut #c_struct,
                 ) -> ::core::result::Result<#src, ::std::string::String> {
-                    if v._0.is_null() {
+                    if v.is_null() {
                         return ::core::result::Result::Err(
-                            ::std::string::String::from("null opaque handle passed by value"),
+                            ::std::string::String::from(#null_msg),
                         );
                     }
-                    ::core::result::Result::Ok(*::std::boxed::Box::from_raw(v._0 as *mut #src))
+                    ::core::result::Result::Ok(*::std::boxed::Box::from_raw(v as *mut #src))
                 }
             );
             return Some(ConverterImpl {
-                destination: syn::parse_quote!(#c_struct),
+                destination: syn::parse_quote!(*mut #c_struct),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -623,6 +687,23 @@ impl Prebindgen for Cbindgen {
             });
         }
 
+        // Bare `str` never crosses the C ABI directly, but resolving `&str`
+        // inputs requires its inner node to have a filled rank-0 cell.
+        if is_str(ty) {
+            let name = Self::in_name(ty);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused_variables)]
+                pub(crate) fn #name() {}
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(*const ::core::ffi::c_char),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
         if is_scalar(ty) {
             let name = Self::in_name(ty);
@@ -650,13 +731,79 @@ impl Prebindgen for Cbindgen {
         t1: &syn::Type,
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
+        // `&str`: borrow a UTF-8 C string directly from the caller.
+        let syn::Type::Reference(r) = pat else {
+            return None;
+        };
+        if r.mutability.is_none() && is_str(t1) {
+            let name = Self::in_name(pat);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: *const ::core::ffi::c_char,
+                ) -> ::core::result::Result<&'a str, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from("null pointer passed for str argument"),
+                        );
+                    }
+                    match ::std::ffi::CStr::from_ptr(v).to_str() {
+                        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
+                        ::core::result::Result::Err(_) => {
+                            ::core::result::Result::Err(
+                                ::std::string::String::from("invalid UTF-8 in str argument"),
+                            )
+                        }
+                    }
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(*const ::core::ffi::c_char),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
+        // `&mut T` (mutable borrow) of an opaque handle: wire `*mut <C struct>`,
+        // decode to `&mut <src>` borrowed from the C-owned `Box`. Fallible
+        // (null checks).
+        if r.mutability.is_some() {
+            if !self.opaque.contains_key(&TypeKey::from_type(t1)) {
+                return None;
+            }
+            let ref_ty: syn::Type = syn::parse_quote!(&mut #t1);
+            let name = Self::in_name(&ref_ty);
+            let c_struct = self.c_type_ident(t1);
+            let src = self.src_ty(t1);
+            let short = type_short(t1);
+            let null_ptr_msg = format!("null {short} pointer");
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: *mut #c_struct,
+                ) -> ::core::result::Result<&'a mut #src, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_ptr_msg),
+                        );
+                    }
+                    ::core::result::Result::Ok(&mut *(v as *mut #src))
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(*mut #c_struct),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         // `&T` (shared borrow) of an opaque handle: wire `*const <C struct>`,
         // decode to `&<src>` borrowed from the C-owned `Box`. Fallible (null
-        // checks). Mutable borrows / non-opaque inners fall through.
-        let syn::Type::Reference(r) = pat else { return None };
-        if r.mutability.is_some() {
-            return None;
-        }
+        // checks). Non-opaque inners fall through.
         if !self.opaque.contains_key(&TypeKey::from_type(t1)) {
             return None;
         }
@@ -666,7 +813,6 @@ impl Prebindgen for Cbindgen {
         let src = self.src_ty(t1);
         let short = type_short(t1);
         let null_ptr_msg = format!("null {short} pointer");
-        let null_handle_msg = format!("null {short} handle");
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name<'a>(
@@ -675,13 +821,7 @@ impl Prebindgen for Cbindgen {
                 if v.is_null() {
                     return ::core::result::Result::Err(::std::string::String::from(#null_ptr_msg));
                 }
-                let __h = &*v;
-                if __h._0.is_null() {
-                    return ::core::result::Result::Err(
-                        ::std::string::String::from(#null_handle_msg),
-                    );
-                }
-                ::core::result::Result::Ok(&*(__h._0 as *const #src))
+                ::core::result::Result::Ok(&*(v as *const #src))
             }
         );
         Some(ConverterImpl {
@@ -716,7 +856,11 @@ impl Prebindgen for Cbindgen {
 
     // ── Output direction (rust → wire) ─────────────────────────────────
 
-    fn on_output_type_rank_0(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    fn on_output_type_rank_0(
+        &self,
+        ty: &syn::Type,
+        _r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
         // `emit_fallible_wrapper` special-cases `Result<(), E>` to drop the
@@ -728,6 +872,25 @@ impl Prebindgen for Cbindgen {
             );
             return Some(ConverterImpl {
                 destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
+        // `String` output: encode into the owning `cbg_string_t` helper so C
+        // callers get an explicit destructor instead of a raw `char **`.
+        if is_string(ty) {
+            let name = Self::out_name(ty);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: ::std::string::String) -> *mut ::core::ffi::c_char {
+                    __cbg_alloc_cstr(v)
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(*mut ::core::ffi::c_char),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -755,22 +918,19 @@ impl Prebindgen for Cbindgen {
 
         let key = TypeKey::from_type(ty);
 
-        // Opaque handle output: `Box::into_raw` into the wire struct.
+        // Opaque handle output: `Box::into_raw` → the bare `*mut #c_struct` handle.
         if self.opaque.contains_key(&key) {
             let name = Self::out_name(ty);
             let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #src) -> #c_struct {
-                    #c_struct {
-                        _0: ::std::boxed::Box::into_raw(::std::boxed::Box::new(v))
-                            as *mut ::core::ffi::c_void,
-                    }
+                pub(crate) fn #name(v: #src) -> *mut #c_struct {
+                    ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut #c_struct
                 }
             );
             return Some(ConverterImpl {
-                destination: syn::parse_quote!(#c_struct),
+                destination: syn::parse_quote!(*mut #c_struct),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -778,7 +938,8 @@ impl Prebindgen for Cbindgen {
             });
         }
 
-        // Data struct output: encode each field into its C wire.
+        // Data struct output: encode each field into its C wire (`String` →
+        // malloc'd `char*` raw block, freed by the `free_memory_function`).
         if self.data.contains_key(&key) {
             let fields = self.struct_fields(_r, ty)?;
             let name = Self::out_name(ty);
@@ -787,9 +948,7 @@ impl Prebindgen for Cbindgen {
             let mut inits: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
                 if is_string(fty) {
-                    inits.push(quote!(#fname: ::std::ffi::CString::new(v.#fname)
-                        .unwrap_or_default()
-                        .into_raw()));
+                    inits.push(quote!(#fname: __cbg_alloc_cstr(v.#fname)));
                 } else {
                     inits.push(quote!(#fname: v.#fname));
                 }
@@ -891,6 +1050,24 @@ impl Prebindgen for Cbindgen {
 }
 
 impl Cbindgen {
+    /// Whether the generated layer hands `char*` data memory to C — a `String`
+    /// return value, or a declared data struct that is produced as output and has
+    /// a `String` field. When true, a `free_memory_function` must be declared.
+    fn needs_free(&self, registry: &Registry<()>) -> bool {
+        let string_ty: syn::Type = syn::parse_quote!(String);
+        if registry.output_entry(&string_ty).is_some() {
+            return true;
+        }
+        self.data.keys().any(|key| {
+            let ty = key.to_type();
+            registry.output_entry(&ty).is_some()
+                && self
+                    .struct_fields(registry, &ty)
+                    .map(|fields| fields.iter().any(|(_, fty)| is_string(fty)))
+                    .unwrap_or(false)
+        })
+    }
+
     /// Fields (`name`, `type`) of a declared data struct, looked up from the
     /// registry's indexed structs. `None` if the type isn't an indexed named
     /// struct.
@@ -936,7 +1113,9 @@ impl Cbindgen {
         };
 
         let has_fallible_input = f.sig.inputs.iter().any(|input| {
-            let syn::FnArg::Typed(pt) = input else { return false };
+            let syn::FnArg::Typed(pt) = input else {
+                return false;
+            };
             registry
                 .input_entry(&pt.ty)
                 .map(|e| returns_result(&e.function.sig.output))
@@ -970,7 +1149,10 @@ impl Cbindgen {
         }
     }
 
-    /// `Result<T, E>` → `bool fn(T *out, <inputs>, E *e)`.
+    /// `Result<T, E>` → one of three C shapes by the success wire kind:
+    /// * pointer wire (opaque handle, `char*`) → `T *f(<inputs>, E *e)`, NULL = err;
+    /// * unit → `bool f(<inputs>, E *e)`;
+    /// * value wire (data struct, scalar, enum) → `bool f(T *out, <inputs>, E *e)`.
     fn emit_fallible_wrapper(
         &self,
         orig: &syn::Ident,
@@ -991,11 +1173,23 @@ impl Cbindgen {
         let err_wire = err_entry.destination.clone();
         let err_conv = err_entry.function.sig.ident.clone();
 
-        // A `Result<(), E>` carries no success value, so the natural C shape is
-        // `bool f(<inputs>, E *e)` — no `out` parameter, just `true` on `Ok`.
-        // Otherwise lower the success type through its output converter into `*out`.
-        let (out_param, ok_arm) = if is_unit(ok_ty) {
-            (quote!(), quote!(::core::result::Result::Ok(_) => true,))
+        // Choose the success shape. Each arm sets: the wrapper return type, the
+        // (optional) leading out-param, the `Ok` match arm, the `Err` tail, and
+        // the value an input-decode failure returns.
+        let (ret_ty, out_param, ok_arm, err_tail, fail_return): (
+            TokenStream,
+            TokenStream,
+            TokenStream,
+            TokenStream,
+            TokenStream,
+        ) = if is_unit(ok_ty) {
+            (
+                quote!(bool),
+                quote!(),
+                quote!(::core::result::Result::Ok(_) => true,),
+                quote!(false),
+                quote!(false),
+            )
         } else {
             let ok_entry = registry.output_entry(ok_ty).unwrap_or_else(|| {
                 panic!(
@@ -1006,18 +1200,34 @@ impl Cbindgen {
             });
             let ok_wire = ok_entry.destination.clone();
             let ok_conv = ok_entry.function.sig.ident.clone();
-            (
-                quote!(out: *mut #ok_wire,),
-                quote!(::core::result::Result::Ok(__v) => {
-                    *out = #ok_conv(__v);
-                    true
-                }),
-            )
+            if matches!(ok_wire, syn::Type::Ptr(_)) {
+                // Pointer-wire success: return the pointer, NULL on error.
+                (
+                    quote!(#ok_wire),
+                    quote!(),
+                    quote!(::core::result::Result::Ok(__v) => #ok_conv(__v),),
+                    quote!(::core::ptr::null_mut()),
+                    quote!(::core::ptr::null_mut()),
+                )
+            } else {
+                // Value-wire success: caller-allocated `*out`, `bool` return.
+                (
+                    quote!(bool),
+                    quote!(out: *mut #ok_wire,),
+                    quote!(::core::result::Result::Ok(__v) => {
+                        *out = #ok_conv(__v);
+                        true
+                    }),
+                    quote!(false),
+                    quote!(false),
+                )
+            }
         };
 
         let route = ErrRoute::Result {
             e_conv: &err_conv,
             e_ty_src: self.src_ty(err_ty),
+            fail_return,
         };
         let (params, decodes, call_args) = self.emit_inputs(orig, f, registry, &route);
 
@@ -1028,7 +1238,7 @@ impl Cbindgen {
                 #out_param
                 #(#params,)*
                 e: *mut #err_wire,
-            ) -> bool {
+            ) -> #ret_ty {
                 #(#decodes)*
                 match #call_path(#(#call_args),*) {
                     #ok_arm
@@ -1036,7 +1246,7 @@ impl Cbindgen {
                         if !e.is_null() {
                             *e = #err_conv(__err);
                         }
-                        false
+                        #err_tail
                     }
                 }
             }
@@ -1104,8 +1314,12 @@ impl Cbindgen {
         let mut call_args = Vec::new();
 
         for input in &f.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else { continue };
-            let syn::Pat::Ident(pat_id) = &*pt.pat else { continue };
+            let syn::FnArg::Typed(pt) = input else {
+                continue;
+            };
+            let syn::Pat::Ident(pat_id) = &*pt.pat else {
+                continue;
+            };
             let ident = &pat_id.ident;
             let arg_ty = &*pt.ty;
 
@@ -1123,11 +1337,11 @@ impl Cbindgen {
 
             if returns_result(&entry.function.sig.output) {
                 let on_err = match route {
-                    ErrRoute::Result { e_conv, e_ty_src } => quote!(
+                    ErrRoute::Result { e_conv, e_ty_src, fail_return } => quote!(
                         if !e.is_null() {
                             *e = #e_conv(<#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg));
                         }
-                        return false;
+                        return #fail_return;
                     ),
                     ErrRoute::Panic => quote!(panic!("{}", __msg);),
                 };
@@ -1223,6 +1437,10 @@ fn is_string(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
 }
 
+fn is_str(ty: &syn::Type) -> bool {
+    type_path_tail(ty).map(|i| i == "str").unwrap_or(false)
+}
+
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
 /// (`bool`, the fixed-width / pointer-width integers, and floats).
 fn is_scalar(ty: &syn::Type) -> bool {
@@ -1301,11 +1519,7 @@ mod tests {
     use crate::SourceLocation;
 
     fn write(cbindgen: &Cbindgen, registry: &mut Registry<()>, tag: &str) -> String {
-        let dir = std::env::temp_dir().join(format!(
-            "cbindgen_{}_{}",
-            tag,
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("cbindgen_{}_{}", tag, std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join(format!("{tag}.rs"));
         let path = registry.write_rust(cbindgen, &out).expect("write_rust");
@@ -1329,9 +1543,9 @@ mod tests {
         assert!(src.trim().is_empty(), "expected empty output, got:\n{src}");
     }
 
-    /// `z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error>` lowers to the
-    /// C out-param + bool convention; decode failures route through `From<String>`
-    /// into the declared error type; no `__CErr` alias is emitted.
+    /// `z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error>` lowers to a
+    /// **pointer-returning** wrapper (opaque handle, NULL on error); decode
+    /// failures route through `From<String>` into the declared error type.
     #[test]
     fn keyexpr_try_from_lowering() {
         let loc = SourceLocation::default();
@@ -1349,6 +1563,7 @@ mod tests {
 
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
             .name("z_keyexpr")
             .destructor_name("z_keyexpr_free")
@@ -1361,29 +1576,36 @@ mod tests {
         // Whitespace-insensitive haystack (the file is prettyplease-formatted).
         let compact: String = src.split_whitespace().collect();
 
-        // Wrapper signature — `.name()` sets the C type names (z_keyexpr/z_error).
+        // Pointer-return wrapper: returns the opaque handle, no `out` param.
         assert!(compact.contains("extern\"C\"fnz_keyexpr_try_from"), "{src}");
-        assert!(compact.contains("out:*mutz_keyexpr"), "{src}");
+        assert!(compact.contains("->*mutz_keyexpr"), "{src}");
+        assert!(!compact.contains("out:*mut"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
-        assert!(compact.contains("->bool"), "{src}");
-        // repr(C) wrapper structs (renamed) + pinned destructors.
-        assert!(compact.contains("structz_keyexpr"), "{src}");
+        // Opaque handle marker struct + typed (pinned) destructor on the bare ptr.
+        assert!(compact.contains("structz_keyexpr{_private"), "{src}");
         assert!(compact.contains("structz_error"), "{src}");
-        // `.destructor_name()` pins the full drop symbol independently of the
-        // type name (`z_keyexpr` type → `z_keyexpr_free` drop, not `z_keyexpr_drop`).
-        assert!(compact.contains("fnz_keyexpr_free"), "{src}");
-        assert!(!compact.contains("fnz_keyexpr_drop"), "{src}");
-        assert!(compact.contains("fnz_error_drop"), "{src}");
+        assert!(compact.contains("fnz_keyexpr_free(this_:*mutz_keyexpr"), "{src}");
+        assert!(
+            compact.contains("Box::from_raw(this_as*mutzenoh_flat::ZKeyExpr)"),
+            "{src}"
+        );
+        // String memory ⇒ malloc/free decls + a single `z_free`; no per-type
+        // string/error destructors.
+        assert!(compact.contains("fnmalloc(size:usize)"), "{src}");
+        assert!(compact.contains("fnz_free(p:*mut::core::ffi::c_void)"), "{src}");
+        assert!(!compact.contains("z_error_drop"), "{src}");
+        assert!(!compact.contains("cbg_string_t"), "{src}");
         // Source call fully qualified.
         assert!(compact.contains("zenoh_flat::z_keyexpr_try_from"), "{src}");
-        // Error model: no global alias; decode failure routes via From<String>
-        // through the declared error's output converter.
+        // Error model: decode failure routes via From<String> through the declared
+        // error's output converter, and the failing return is NULL.
         assert!(!compact.contains("__CErr"), "{src}");
         assert!(
             compact.contains("as::core::convert::From<::std::string::String"),
             "{src}"
         );
         assert!(compact.contains("__cbg_out_Error"), "{src}");
+        assert!(compact.contains("return::core::ptr::null_mut()"), "{src}");
     }
 
     /// A `Result<(), E>` function lowers to `bool f(<inputs>, E *e)` — no
@@ -1404,6 +1626,7 @@ mod tests {
 
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
             .data_struct(syn::parse_quote!(Error))
             .name("z_error")
             .error()
@@ -1420,6 +1643,74 @@ mod tests {
         // Ok arm is a bare `true`, with no write through `out`.
         assert!(compact.contains("Result::Ok(_)=>true"), "{src}");
         assert!(!compact.contains("*out="), "{src}");
+    }
+
+    /// `Result<String, E>` returns a bare `char*` (a `malloc`'d raw block, freed
+    /// by `z_free`), NULL on error — no `cbg_string_t` wrapper.
+    #[test]
+    fn result_string_uses_owned_string_wire() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_config_get_json(key: String) -> Result<String, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_config_get_json));
+
+        let src = write(&cbindgen, &mut registry, "result_string");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(!compact.contains("cbg_string_t"), "{src}");
+        assert!(compact.contains("extern\"C\"fnz_config_get_json"), "{src}");
+        // Returns char*, no out-param; string built via the raw malloc'd block.
+        assert!(compact.contains("->*mut::core::ffi::c_char"), "{src}");
+        assert!(!compact.contains("out:*mut"), "{src}");
+        assert!(compact.contains("__cbg_alloc_cstr(v)"), "{src}");
+        assert!(compact.contains("fnz_free(p:*mut::core::ffi::c_void)"), "{src}");
+        // Ok arm returns the pointer directly; error → NULL.
+        assert!(compact.contains("=>__cbg_out_String(__v),"), "{src}");
+    }
+
+    /// `&str` inputs decode directly from `const char *` and can be used by
+    /// non-`Result` wrappers when `.panic()` is enabled.
+    #[test]
+    fn str_borrow_input_lowering() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_init_logs(filter: &str) {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .function(syn::parse_quote!(z_init_logs))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "str_borrow");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("extern\"C\"fnz_init_logs"), "{src}");
+        assert!(
+            compact.contains("filter:*const::core::ffi::c_char"),
+            "{src}"
+        );
+        assert!(compact.contains("CStr::from_ptr(v).to_str()"), "{src}");
+        assert!(compact.contains("panic!("), "{src}");
     }
 
     /// `z_keyexpr_relation_to(a: &ZKeyExpr, b: &ZKeyExpr) -> SetIntersectionLevel`
@@ -1465,7 +1756,10 @@ mod tests {
         assert!(compact.contains("pubenumz_intersection"), "{src}");
         assert!(compact.contains("Disjoint=0"), "{src}");
         // Wrapper: borrow params (renamed type) + enum return.
-        assert!(compact.contains("extern\"C\"fnz_keyexpr_relation_to"), "{src}");
+        assert!(
+            compact.contains("extern\"C\"fnz_keyexpr_relation_to"),
+            "{src}"
+        );
         assert!(compact.contains("a:*constz_keyexpr"), "{src}");
         assert!(compact.contains("b:*constz_keyexpr"), "{src}");
         assert!(compact.contains("->z_intersection"), "{src}");
@@ -1473,7 +1767,54 @@ mod tests {
         assert!(compact.contains("panic!("), "{src}");
         // Enum output converter matches by variant name (src enum → C enum).
         assert!(
-            compact.contains("zenoh_flat::SetIntersectionLevel::Disjoint=>z_intersection::Disjoint"),
+            compact
+                .contains("zenoh_flat::SetIntersectionLevel::Disjoint=>z_intersection::Disjoint"),
+            "{src}"
+        );
+    }
+
+    /// A mutable borrow of an opaque handle lowers to `*mut <handle>` and
+    /// decodes back to `&mut T`.
+    #[test]
+    fn mutable_opaque_borrow_input_lowering() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_config_insert_json5(
+                c: &mut ZConfig,
+                key: String,
+                value: String,
+            ) -> Result<(), Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZConfig))
+            .name("z_config")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_config_insert_json5));
+
+        let src = write(&cbindgen, &mut registry, "mut_opaque_borrow");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(
+            compact.contains("extern\"C\"fnz_config_insert_json5"),
+            "{src}"
+        );
+        assert!(compact.contains("c:*mutz_config"), "{src}");
+        // The handle pointer IS the box — decode directly, no `_0` indirection.
+        assert!(!compact.contains("__h._0"), "{src}");
+        assert!(
+            compact.contains("Result::Ok(&mut*(vas*mutzenoh_flat::ZConfig))"),
             "{src}"
         );
     }
@@ -1497,6 +1838,7 @@ mod tests {
         // Error declared as data_struct but NOT marked `.error()`.
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
             .name("z_keyexpr")
             .data_struct(syn::parse_quote!(Error))
@@ -1506,7 +1848,10 @@ mod tests {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _ = registry.write_rust(&cbindgen, std::env::temp_dir().join("nope.rs"));
         }));
-        assert!(result.is_err(), "expected a build error for undeclared error type");
+        assert!(
+            result.is_err(),
+            "expected a build error for undeclared error type"
+        );
     }
 
     /// A non-`Result` fn with a fallible (`String`) input needs `.panic()`;
@@ -1532,8 +1877,8 @@ mod tests {
         assert!(err.is_err(), "expected a build error without .panic()");
 
         // With `.panic()` → wrapper aborts on decode failure.
-        let mut reg2 = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
-            .expect("index items");
+        let mut reg2 =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
         let cb2 = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .function(syn::parse_quote!(z_log))
@@ -1554,8 +1899,8 @@ mod tests {
                 unimplemented!()
             }
         );
-        let mut reg = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
-            .expect("index items");
+        let mut reg =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
         let cb = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .function(syn::parse_quote!(rust_init))
@@ -1604,7 +1949,79 @@ mod tests {
         // `source_module` is a root modifier — it resets the current declaration,
         // so a trailing `.name()` has nothing to apply to.
         assert!(catch(|| {
-            let _ = Cbindgen::new().source_module(syn::parse_quote!(zenoh_flat)).name("x");
+            let _ = Cbindgen::new()
+                .source_module(syn::parse_quote!(zenoh_flat))
+                .name("x");
         }));
+    }
+
+    /// A `Result<ptr, E>` wrapper returns the pointer and signals errors with
+    /// NULL — both the `Err(E)` arm and an input-decode failure return null.
+    #[test]
+    fn result_pointer_returns_null_on_error() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZKeyExpr))
+            .name("z_keyexpr")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_keyexpr_try_from));
+
+        let src = write(&cbindgen, &mut registry, "ptr_null");
+        let compact: String = src.split_whitespace().collect();
+
+        assert!(compact.contains("->*mutz_keyexpr"), "{src}");
+        // Err(E) arm: write *e then return null.
+        assert!(compact.contains("null_mut()"), "{src}");
+        // Decode failure also returns null (not `false`).
+        assert!(compact.contains("return::core::ptr::null_mut()"), "{src}");
+        assert!(!compact.contains("returnfalse"), "{src}");
+    }
+
+    /// Producing `char*` string memory without declaring a
+    /// `free_memory_function` is a build error.
+    #[test]
+    fn free_memory_function_required() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_describe(key: String) -> Result<String, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        // String output (and an Error with a String field) but no free fn declared.
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_describe));
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = registry.write_rust(&cbindgen, std::env::temp_dir().join("nofree.rs"));
+        }));
+        assert!(
+            result.is_err(),
+            "expected a build error when string memory is produced without a free fn"
+        );
     }
 }
