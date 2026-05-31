@@ -212,6 +212,16 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Idents of `#[prebindgen]` functions the ext explicitly knows about but
+    /// intentionally does not emit. These suppress the registry's
+    /// "skipping undeclared" warning while still leaving the items out of the
+    /// scan and write pipelines.
+    ///
+    /// Default: empty.
+    fn ignored_functions(&self) -> HashSet<syn::Ident> {
+        HashSet::new()
+    }
+
     /// Canonical keys of types (structs / enums) the ext claims for
     /// emission. Matched against `Registry::structs` and `Registry::enums`
     /// by bare-ident lookup. Anything not in this set is left in the
@@ -220,6 +230,16 @@ pub trait Prebindgen {
     ///
     /// Default: empty (strict allowlist).
     fn declared_types(&self) -> HashSet<TypeKey> {
+        HashSet::new()
+    }
+
+    /// Canonical keys of types the ext explicitly knows about but
+    /// intentionally does not emit. These suppress the registry's
+    /// "skipping undeclared" warning while still leaving the items out of the
+    /// scan and write pipelines.
+    ///
+    /// Default: empty.
+    fn ignored_types(&self) -> HashSet<TypeKey> {
         HashSet::new()
     }
 

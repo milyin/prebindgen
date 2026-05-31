@@ -128,12 +128,16 @@ pub struct Cbindgen {
     source_module: Option<syn::Path>,
     /// `#[prebindgen]` functions explicitly declared for conversion.
     functions: HashMap<syn::Ident, FnCfg>,
+    /// `#[prebindgen]` functions intentionally not exported by this adapter.
+    ignored_functions: HashSet<syn::Ident>,
     /// Opaque-handle types (`Box` + `void*` lifecycle, auto `_drop`).
     opaque: HashMap<TypeKey, TypeCfg>,
     /// By-value `#[repr(C)]` data structs.
     data: HashMap<TypeKey, TypeCfg>,
     /// Enum types.
     enums: HashMap<TypeKey, TypeCfg>,
+    /// Types intentionally not exported by this adapter.
+    ignored_types: HashSet<TypeKey>,
     /// Data structs additionally marked as error types (allowlist for the
     /// "Result error type must be declared" rule).
     error: HashSet<TypeKey>,
@@ -179,6 +183,16 @@ impl Cbindgen {
         self
     }
 
+    /// Mark a `#[prebindgen]` function as intentionally ignored by this
+    /// adapter. Root-level modifier: suppresses the registry's
+    /// "skipping undeclared" warning for that function without scanning or
+    /// emitting it.
+    pub fn ignore_function(mut self, ident: syn::Ident) -> Self {
+        self.ignored_functions.insert(ident);
+        self.current = None;
+        self
+    }
+
     /// Allow the most recently declared [`Self::function`] to `panic!` on an
     /// internal error message. Required when a non-`Result` function has a
     /// fallible input (otherwise that's a build error).
@@ -216,6 +230,15 @@ impl Cbindgen {
         let key = TypeKey::from_type(&ty);
         self.data.insert(key.clone(), TypeCfg::default());
         self.current = Some(CurrentDecl::Data(key));
+        self
+    }
+
+    /// Mark a `#[prebindgen]` type as intentionally ignored by this adapter.
+    /// Root-level modifier: suppresses the registry's "skipping undeclared"
+    /// warning for that type without scanning or emitting it.
+    pub fn ignore_type(mut self, ty: syn::Type) -> Self {
+        self.ignored_types.insert(TypeKey::from_type(&ty));
+        self.current = None;
         self
     }
 
@@ -388,6 +411,10 @@ impl Prebindgen for Cbindgen {
         self.functions.keys().cloned().collect()
     }
 
+    fn ignored_functions(&self) -> HashSet<syn::Ident> {
+        self.ignored_functions.clone()
+    }
+
     fn declared_types(&self) -> HashSet<TypeKey> {
         self.opaque
             .keys()
@@ -395,6 +422,10 @@ impl Prebindgen for Cbindgen {
             .chain(self.enums.keys())
             .cloned()
             .collect()
+    }
+
+    fn ignored_types(&self) -> HashSet<TypeKey> {
+        self.ignored_types.clone()
     }
 
     fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {

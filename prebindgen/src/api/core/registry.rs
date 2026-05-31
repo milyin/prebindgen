@@ -298,17 +298,23 @@ impl<M> Registry<M> {
     ///   struct/enum, also scan its body so field types are registered
     ///   (still `required: false` — propagation later promotes them
     ///   through `subs`).
+    /// * Idents / types returned by `ext.ignored_functions()` /
+    ///   `ext.ignored_types()` are treated as intentional skips: they are
+    ///   neither scanned nor emitted, but they do suppress the "skipping
+    ///   undeclared" warnings.
     ///
     /// Declared items that don't match any indexed body get a build
     /// warning (likely a typo in the build script). Indexed items that
-    /// were never declared also get a `cargo:warning=` skip line so the
-    /// user sees the full skip list per build.
+    /// were neither declared nor ignored also get a `cargo:warning=` skip
+    /// line so the user sees the remaining unexpected skips per build.
     pub fn scan_declared<E>(&mut self, ext: &E) -> Result<(), ScanError>
     where
         E: crate::api::core::prebindgen::Prebindgen<Metadata = M>,
     {
         let declared_fns = ext.declared_functions();
+        let ignored_fns = ext.ignored_functions();
         let declared_types = ext.declared_types();
+        let ignored_types = ext.ignored_types();
 
         // Scan declared functions.
         for ident in &declared_fns {
@@ -317,6 +323,15 @@ impl<M> Registry<M> {
             } else {
                 println!(
                     "cargo:warning=prebindgen-ext: declared function `{}` not found among #[prebindgen] items",
+                    ident
+                );
+            }
+        }
+
+        for ident in &ignored_fns {
+            if !self.functions.contains_key(ident) {
+                println!(
+                    "cargo:warning=prebindgen-ext: ignored function `{}` not found among #[prebindgen] items",
                     ident
                 );
             }
@@ -350,11 +365,24 @@ impl<M> Registry<M> {
             }
         }
 
+        for key in &ignored_types {
+            let ty = key.to_type();
+            let matched = type_path_tail_ident(&ty).is_some_and(|ident| {
+                self.structs.contains_key(&ident) || self.enums.contains_key(&ident)
+            });
+            if !matched {
+                println!(
+                    "cargo:warning=prebindgen-ext: ignored type `{}` not found among #[prebindgen] items",
+                    key.as_str()
+                );
+            }
+        }
+
         // Warn about indexed items that the ext never claimed.
         let mut skipped_fns: Vec<String> = self
             .functions
             .keys()
-            .filter(|k| !declared_fns.contains(*k))
+            .filter(|k| !declared_fns.contains(*k) && !ignored_fns.contains(*k))
             .map(|k| k.to_string())
             .collect();
         skipped_fns.sort();
@@ -368,13 +396,13 @@ impl<M> Registry<M> {
         let mut skipped_types: Vec<String> = Vec::new();
         for ident in self.structs.keys() {
             let key = TypeKey::parse(&ident.to_string());
-            if !declared_types.contains(&key) {
+            if !declared_types.contains(&key) && !ignored_types.contains(&key) {
                 skipped_types.push(ident.to_string());
             }
         }
         for ident in self.enums.keys() {
             let key = TypeKey::parse(&ident.to_string());
-            if !declared_types.contains(&key) {
+            if !declared_types.contains(&key) && !ignored_types.contains(&key) {
                 skipped_types.push(ident.to_string());
             }
         }
