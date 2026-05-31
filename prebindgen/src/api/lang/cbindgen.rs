@@ -623,6 +623,24 @@ impl Prebindgen for Cbindgen {
             });
         }
 
+        // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
+        if is_scalar(ty) {
+            let name = Self::in_name(ty);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #ty) -> #ty {
+                    v
+                }
+            );
+            return Some(ConverterImpl {
+                destination: ty.clone(),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         None
     }
 
@@ -709,6 +727,24 @@ impl Prebindgen for Cbindgen {
             );
             return Some(ConverterImpl {
                 destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
+        // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
+        if is_scalar(ty) {
+            let name = Self::out_name(ty);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #ty) -> #ty {
+                    v
+                }
+            );
+            return Some(ConverterImpl {
+                destination: ty.clone(),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -1174,6 +1210,31 @@ fn is_string(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "String").unwrap_or(false)
 }
 
+/// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
+/// (`bool`, the fixed-width / pointer-width integers, and floats).
+fn is_scalar(ty: &syn::Type) -> bool {
+    type_path_tail(ty)
+        .map(|i| {
+            matches!(
+                i.to_string().as_str(),
+                "bool"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "isize"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "usize"
+                    | "f32"
+                    | "f64"
+            )
+        })
+        .unwrap_or(false)
+}
+
 fn is_unit(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
@@ -1215,12 +1276,10 @@ fn c_field_wire(ty: &syn::Type) -> Option<syn::Type> {
     if is_string(ty) {
         return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
     }
-    let short = type_path_tail(ty)?.to_string();
-    match short.as_str() {
-        "bool" | "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64"
-        | "usize" | "f32" | "f64" => Some(ty.clone()),
-        _ => None,
+    if is_scalar(ty) {
+        return Some(ty.clone());
     }
+    None
 }
 
 #[cfg(test)]
