@@ -5,15 +5,16 @@
 //! parse into a C header plus a static / dynamic library.
 //!
 //! Items are **opt-in**: nothing is converted unless it is explicitly declared
-//! with [`Cbindgen::function`] / [`Cbindgen::opaque`] / [`Cbindgen::data_struct`]
-//! / [`Cbindgen::enum_`].
+//! with [`Cbindgen::function`] / [`Cbindgen::ptr_struct`] /
+//! [`Cbindgen::data_struct`] / [`Cbindgen::enum_type`]. The C name of a declared
+//! type's generated destructor can be pinned by chaining [`Cbindgen::name`].
 //!
 //! ## C ABI conventions
 //!
-//! * **Opaque handle** (declared with [`Cbindgen::opaque`]): a Rust value whose
-//!   lifecycle is owned by the C side. Represented as `#[repr(C)] struct T { _0:
-//!   *mut c_void }` wrapping a `Box::into_raw` pointer. A `<name>_drop`
-//!   destructor is generated per handle.
+//! * **Pointer struct** (declared with [`Cbindgen::ptr_struct`]): a Rust value
+//!   whose lifecycle is owned by the C side. Represented as
+//!   `#[repr(C)] struct T { _0: *mut c_void }` wrapping a `Box::into_raw`
+//!   pointer. A `<name>_drop` destructor is generated per handle.
 //! * **Data struct** (declared with [`Cbindgen::data_struct`]): a by-value
 //!   `#[repr(C)]` struct whose fields are mapped to C-ABI wire types
 //!   (`String` → `*mut c_char`). Heap-owning structs get a `<name>_drop` too.
@@ -142,22 +143,13 @@ impl Cbindgen {
         self
     }
 
-    /// Declare an opaque-handle type. Its C struct + `snake_case(short)_drop`
-    /// destructor are generated.
-    pub fn opaque(mut self, ty: syn::Type) -> Self {
+    /// Declare a pointer-struct (opaque-handle) type — a `Box`-owned Rust value
+    /// the C side holds as `#[repr(C)] struct T { _0: *mut c_void }`. Its C
+    /// struct + `<name>_drop` destructor are generated. (Mirrors `JniExt`'s
+    /// `ptr_class`.)
+    pub fn ptr_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         self.opaque.insert(key.clone(), TypeCfg::default());
-        self.last_declared = Some(key);
-        self
-    }
-
-    /// Like [`Self::opaque`] but pins the C base name for the destructor
-    /// (e.g. `.opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")` →
-    /// `z_keyexpr_drop`), since naive snake_case of `ZKeyExpr` is `z_key_expr`.
-    pub fn opaque_named(mut self, ty: syn::Type, c_name: &str) -> Self {
-        let key = TypeKey::from_type(&ty);
-        self.opaque
-            .insert(key.clone(), TypeCfg { c_name: Some(c_name.to_string()) });
         self.last_declared = Some(key);
         self
     }
@@ -170,13 +162,28 @@ impl Cbindgen {
         self
     }
 
-    /// Like [`Self::data_struct`] but pins the C base name used for the
-    /// generated `_drop` destructor of heap-owning structs.
-    pub fn data_struct_named(mut self, ty: syn::Type, c_name: &str) -> Self {
-        let key = TypeKey::from_type(&ty);
-        self.data
-            .insert(key.clone(), TypeCfg { c_name: Some(c_name.to_string()) });
-        self.last_declared = Some(key);
+    /// Pin the C base name of the most recently declared type
+    /// ([`Self::ptr_struct`] / [`Self::data_struct`] / [`Self::enum_type`]),
+    /// used for its generated `<name>_drop` destructor — e.g.
+    /// `.ptr_struct(syn::parse_quote!(ZKeyExpr)).name("z_keyexpr")` →
+    /// `z_keyexpr_drop` (naive snake_case of `ZKeyExpr` is `z_key_expr`).
+    /// Default (without `.name(...)`) is `snake_case(short)`. (Mirrors
+    /// `JniExt`'s `name`.)
+    pub fn name(mut self, c_name: impl Into<String>) -> Self {
+        let key = self.last_declared.clone().expect(
+            "Cbindgen::name must be chained after a `ptr_struct` / `data_struct` / \
+             `enum_type` call",
+        );
+        let name = c_name.into();
+        if let Some(cfg) = self.opaque.get_mut(&key) {
+            cfg.c_name = Some(name);
+        } else if let Some(cfg) = self.data.get_mut(&key) {
+            cfg.c_name = Some(name);
+        } else if let Some(cfg) = self.enums.get_mut(&key) {
+            cfg.c_name = Some(name);
+        } else {
+            panic!("Cbindgen::name: last declared type `{}` vanished", key.as_str());
+        }
         self
     }
 
@@ -198,8 +205,9 @@ impl Cbindgen {
         self
     }
 
-    /// Declare an enum (by type) to convert. (Codegen for enums is future work.)
-    pub fn enum_(mut self, ty: syn::Type) -> Self {
+    /// Declare a C-like (fieldless) enum type to convert. (Mirrors `JniExt`'s
+    /// `enum_class`.)
+    pub fn enum_type(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         self.enums.insert(key.clone(), TypeCfg::default());
         self.last_declared = Some(key);
@@ -1161,8 +1169,10 @@ mod tests {
 
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
-            .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
-            .data_struct_named(syn::parse_quote!(Error), "z_error")
+            .ptr_struct(syn::parse_quote!(ZKeyExpr))
+            .name("z_keyexpr")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
             .error()
             .function(syn::parse_quote!(z_keyexpr_try_from));
 
@@ -1219,8 +1229,9 @@ mod tests {
 
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
-            .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
-            .enum_(syn::parse_quote!(SetIntersectionLevel))
+            .ptr_struct(syn::parse_quote!(ZKeyExpr))
+            .name("z_keyexpr")
+            .enum_type(syn::parse_quote!(SetIntersectionLevel))
             .function(syn::parse_quote!(z_keyexpr_relation_to))
             .panic();
 
@@ -1264,8 +1275,10 @@ mod tests {
         // Error declared as data_struct but NOT marked `.error()`.
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
-            .opaque_named(syn::parse_quote!(ZKeyExpr), "z_keyexpr")
-            .data_struct_named(syn::parse_quote!(Error), "z_error")
+            .ptr_struct(syn::parse_quote!(ZKeyExpr))
+            .name("z_keyexpr")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
             .function(syn::parse_quote!(z_keyexpr_try_from));
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
