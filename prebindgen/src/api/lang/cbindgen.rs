@@ -1065,6 +1065,52 @@ impl Prebindgen for Cbindgen {
         t1: &syn::Type,
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
+        // `Option<T>` → the inner pointer wire, with `None` encoded as NULL.
+        // NULL is a *value* here (`None`), not an error signal — so this is only
+        // supported when the inner converter is itself a pointer wire (opaque
+        // handle, `char*`, `*const` static borrow). A value-wire inner has no
+        // free NULL bit pattern and is left unhandled (returns `None`).
+        if is_option(pat) {
+            let inner = _r.output_entry(t1)?;
+            let syn::Type::Ptr(p) = &inner.destination else {
+                return None;
+            };
+            let null = if p.mutability.is_some() {
+                quote!(::core::ptr::null_mut())
+            } else {
+                quote!(::core::ptr::null())
+            };
+            let inner_wire = inner.destination.clone();
+            let inner_conv = inner.function.sig.ident.clone();
+            // The native value the wrapped fn yields inside the `Option` is
+            // exactly what the inner rank-0 converter consumes — reuse its input
+            // type rather than recomputing it (`src_ty` would mis-qualify e.g.
+            // `String` as `zenoh_flat::String`).
+            let inner_src = match inner.function.sig.inputs.first() {
+                Some(syn::FnArg::Typed(pt)) => (*pt.ty).clone(),
+                _ => return None,
+            };
+            // `pat` is the wildcard `Option<_>` (same for every inner type), so
+            // name the converter off the concrete inner `t1` to stay unique.
+            let name = format_ident!("__cbg_out_option_{}", sanitize(&TypeKey::from_type(t1)));
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: ::core::option::Option<#inner_src>) -> #inner_wire {
+                    match v {
+                        ::core::option::Option::Some(__x) => #inner_conv(__x),
+                        ::core::option::Option::None => #null,
+                    }
+                }
+            );
+            return Some(ConverterImpl {
+                destination: inner_wire,
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         // `&'static T` → `*const <C struct>`: a const (non-owning) pointer.
         // Signals to C callers that the value must NOT be freed.
         let syn::Type::Reference(r) = pat else { return None };
@@ -1287,7 +1333,14 @@ impl Cbindgen {
             });
             let ok_wire = ok_entry.destination.clone();
             let ok_conv = ok_entry.function.sig.ident.clone();
-            if let syn::Type::Ptr(ok_ptr) = &ok_wire {
+            // An `Option<T>` success wire is itself a pointer, but its NULL is a
+            // *value* (`None`), so it cannot also signal an error — force the
+            // value-wire shape (out-param + `bool`) instead of the pointer arm.
+            let ptr_wire = match &ok_wire {
+                syn::Type::Ptr(p) if !is_option(ok_ty) => Some(p),
+                _ => None,
+            };
+            if let Some(ok_ptr) = ptr_wire {
                 // Pointer-wire success: return the pointer, NULL on error.
                 // Use null() for *const (borrowed/static) and null_mut() for *mut (owned).
                 let null = if ok_ptr.mutability.is_some() {
@@ -1567,6 +1620,10 @@ fn is_result(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "Result").unwrap_or(false)
 }
 
+fn is_option(ty: &syn::Type) -> bool {
+    type_path_tail(ty).map(|i| i == "Option").unwrap_or(false)
+}
+
 /// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
 fn returns_result(output: &syn::ReturnType) -> bool {
     match output {
@@ -1774,6 +1831,92 @@ mod tests {
         assert!(compact.contains("fnz_free(p:*mut::core::ffi::c_void)"), "{src}");
         // Ok arm returns the pointer directly; error → NULL.
         assert!(compact.contains("=>__cbg_out_String(__v),"), "{src}");
+    }
+
+    /// `z_encoding_schema(e: &ZEncoding) -> Option<String>` lowers to a bare
+    /// `char*` return where NULL encodes `None` (a value, not an error). The
+    /// fallible borrow input forces `.panic()`; there is no `out`/`e` param.
+    #[test]
+    fn option_string_returns_pointer_null_for_none() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_encoding_schema(e: &ZEncoding) -> Option<String> {
+                unimplemented!()
+            }
+        );
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZEncoding))
+            .name("z_encoding")
+            .function(syn::parse_quote!(z_encoding_schema))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "option_string");
+        let compact: String = src.split_whitespace().collect();
+
+        // Plain-Option wrapper: `char*` return, no out-param, no error param.
+        assert!(compact.contains("extern\"C\"fnz_encoding_schema"), "{src}");
+        assert!(compact.contains("->*mut::core::ffi::c_char"), "{src}");
+        assert!(!compact.contains("out:*mut"), "{src}");
+        assert!(!compact.contains("e:*mut"), "{src}");
+        // The Option output converter: Some → inner wire, None → NULL.
+        assert!(
+            compact.contains("::core::option::Option::Some(__x)=>__cbg_out_String(__x)"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("::core::option::Option::None=>::core::ptr::null_mut()"),
+            "{src}"
+        );
+        // Fallible borrow decode aborts (no Result channel).
+        assert!(compact.contains("panic!("), "{src}");
+    }
+
+    /// `Result<Option<T>, E>` cannot use NULL for both `None` and error, so it
+    /// takes the value-wire shape: `bool f(T **out, …, E *e)`. `None` writes a
+    /// NULL into `*out` and still returns `true`.
+    #[test]
+    fn result_option_uses_out_param() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_get_opt(key: String) -> Result<Option<ZThing>, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZThing))
+            .name("z_thing")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .function(syn::parse_quote!(z_get_opt));
+
+        let src = write(&cbindgen, &mut registry, "result_option");
+        let compact: String = src.split_whitespace().collect();
+
+        // Value-wire shape: bool return, pointer-to-pointer out-param, error param.
+        assert!(compact.contains("extern\"C\"fnz_get_opt"), "{src}");
+        assert!(compact.contains("->bool"), "{src}");
+        assert!(compact.contains("out:*mut*mutz_thing"), "{src}");
+        assert!(compact.contains("e:*mutz_error"), "{src}");
+        // Ok arm writes the Option (pointer-or-NULL) through `out`, returns true.
+        assert!(compact.contains("*out="), "{src}");
+        assert!(
+            compact.contains("::core::option::Option::None=>::core::ptr::null_mut()"),
+            "{src}"
+        );
     }
 
     /// `&str` inputs decode directly from `const char *` and can be used by
