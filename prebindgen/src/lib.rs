@@ -198,7 +198,7 @@ pub mod core {
 /// a C header plus a static / dynamic library. Items are opt-in via its
 /// declaration builder. (Currently scaffolding — emits an empty library.)
 pub mod lang {
-    pub use crate::api::lang::cbindgen::Cbindgen;
+    pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`

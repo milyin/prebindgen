@@ -167,7 +167,27 @@ pub struct Cbindgen {
     /// The declaration that chained modifiers apply to. Set by declaration
     /// methods; reset to `None` by root-level modifiers.
     current: Option<CurrentDecl>,
+    /// Optional name-mangling rules (all `None` ⇒ the built-in defaults below,
+    /// which carry no target-language convention). A per-declaration `.name()` /
+    /// `.destructor_name()` always wins over a mangler. See [[the builder
+    /// methods]](Self::mangle_rust_type).
+    ///
+    /// Base: Rust short name → canonical token, feeding the three type manglers.
+    mangle_rust_type: Option<Mangle1>,
+    /// Base → C type name (struct / enum / data).
+    mangle_type_name: Option<Mangle1>,
+    /// Base → opaque-handle destructor symbol.
+    mangle_destructor: Option<Mangle1>,
+    /// Callback arg bases → closure-struct name.
+    mangle_callback: Option<MangleN>,
+    /// Rust function ident → exported `#[no_mangle]` symbol.
+    mangle_function: Option<Mangle1>,
 }
+
+/// A mangler over a single name component (Rust short name, base, or fn ident).
+type Mangle1 = Box<dyn Fn(&str) -> String>;
+/// A mangler over a callback's argument bases.
+type MangleN = Box<dyn Fn(&[String]) -> String>;
 
 impl Cbindgen {
     /// Create an adapter with no declarations (emits an empty library).
@@ -191,6 +211,58 @@ impl Cbindgen {
     /// produces such string memory; otherwise that's a build error.
     pub fn free_memory_function(mut self, name: impl Into<String>) -> Self {
         self.free_fn = Some(name.into());
+        self.current = None;
+        self
+    }
+
+    /// Set the **base** Rust-type mangler: maps a type's Rust short name (e.g.
+    /// `ZKeyExpr`) to a canonical token (e.g. `keyexpr`). Its output feeds
+    /// [`Self::mangle_type_name`], [`Self::mangle_destructor`] and
+    /// [`Self::mangle_callback`], so a one-off spelling fix (e.g. `KeyExpr` →
+    /// `keyexpr`) lives in a single place instead of a per-declaration `.name()`
+    /// exception. Root-level modifier (resets the current declaration). The
+    /// adapter ships no default — unset, the base is the Rust short name verbatim.
+    pub fn mangle_rust_type(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
+        self.mangle_rust_type = Some(Box::new(f));
+        self.current = None;
+        self
+    }
+
+    /// Set the type-name mangler: base (see [`Self::mangle_rust_type`]) → the C
+    /// type name emitted for a `ptr_struct` / `data_struct` / `enum_type` (e.g.
+    /// `keyexpr` → `z_keyexpr_t`). Overridden per declaration by `.name(...)`.
+    /// Root-level modifier.
+    pub fn mangle_type_name(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
+        self.mangle_type_name = Some(Box::new(f));
+        self.current = None;
+        self
+    }
+
+    /// Set the destructor mangler: base → an opaque handle's `_drop` symbol (e.g.
+    /// `keyexpr` → `z_keyexpr_drop`). Overridden per declaration by
+    /// `.destructor_name(...)`. Root-level modifier.
+    pub fn mangle_destructor(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
+        self.mangle_destructor = Some(Box::new(f));
+        self.current = None;
+        self
+    }
+
+    /// Set the callback-struct mangler: the bases of a callback's argument types
+    /// → the closure struct's C name (e.g. `["sample"]` → `z_closure_sample_t`,
+    /// `[]` → `z_closure_drop_t`). Overridden per declaration by `.name(...)`.
+    /// Root-level modifier.
+    pub fn mangle_callback(mut self, f: impl Fn(&[String]) -> String + 'static) -> Self {
+        self.mangle_callback = Some(Box::new(f));
+        self.current = None;
+        self
+    }
+
+    /// Set the function mangler: a `#[prebindgen]` function's Rust ident → its
+    /// exported `#[no_mangle]` symbol (e.g. prefix `z_`). Functions are not types,
+    /// so this does not go through the base mangler. Overridden per declaration by
+    /// `.name(...)`. Root-level modifier.
+    pub fn mangle_function(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
+        self.mangle_function = Some(Box::new(f));
         self.current = None;
         self
     }
@@ -442,12 +514,29 @@ impl Cbindgen {
             .or_else(|| self.enums.get(&key))
     }
 
-    /// Emitted C type name of a declared type: pinned `c_name`, else the Rust
-    /// short name.
+    /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
+    /// short name, or the short name verbatim when unset. Feeds the type-name,
+    /// destructor and callback manglers.
+    fn rust_base(&self, ty: &syn::Type) -> String {
+        let short = type_short(ty);
+        match &self.mangle_rust_type {
+            Some(f) => f(&short),
+            None => short,
+        }
+    }
+
+    /// Emitted C type name of a declared type: pinned `c_name`, else
+    /// [`Self::mangle_type_name`] over the base, else the base (which is the Rust
+    /// short name when no base mangler is set).
     fn c_type_name(&self, ty: &syn::Type) -> String {
-        self.type_cfg(ty)
-            .and_then(|c| c.c_name.clone())
-            .unwrap_or_else(|| type_short(ty))
+        if let Some(name) = self.type_cfg(ty).and_then(|c| c.c_name.clone()) {
+            return name;
+        }
+        let base = self.rust_base(ty);
+        match &self.mangle_type_name {
+            Some(f) => f(&base),
+            None => base,
+        }
     }
 
     /// C type identifier (the `#[repr(C)]` struct/enum name + the wire type used
@@ -464,15 +553,32 @@ impl Cbindgen {
             .unwrap_or_else(|| snake_case(&type_short(ty)))
     }
 
+    /// Destructor symbol of an opaque handle: pinned `.destructor_name(...)`,
+    /// else [`Self::mangle_destructor`] over the base, else `<c_drop_base>_drop`.
+    fn destructor_symbol(&self, ty: &syn::Type) -> syn::Ident {
+        let key = TypeKey::from_type(ty);
+        if let Some(full) = self.opaque.get(&key).and_then(|c| c.drop_name.clone()) {
+            return format_ident!("{}", full);
+        }
+        if let Some(f) = &self.mangle_destructor {
+            return format_ident!("{}", f(&self.rust_base(ty)));
+        }
+        format_ident!("{}_drop", self.c_drop_base(ty))
+    }
+
     /// Emitted C type name of a callback's closure struct: pinned `.name(...)`
-    /// override, else a generic default composed from the args' C type names
-    /// (`closure` for zero args, `closure_<arg0>_<arg1>…` otherwise). This is
-    /// the single seam a future pluggable mangler replaces — it carries no
-    /// target-language naming convention of its own.
+    /// override, else [`Self::mangle_callback`] over the args' bases, else a
+    /// generic default composed from the args' C type names (`closure` for zero
+    /// args, `closure_<arg0>_<arg1>…` otherwise). The adapter's own default
+    /// carries no target-language naming convention.
     fn callback_c_name(&self, args: &[syn::Type]) -> String {
         let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
         if let Some(name) = self.callbacks.get(&key).and_then(|c| c.c_name.clone()) {
             return name;
+        }
+        if let Some(f) = &self.mangle_callback {
+            let bases: Vec<String> = args.iter().map(|a| self.rust_base(a)).collect();
+            return f(&bases);
         }
         if args.is_empty() {
             "closure".to_string()
@@ -632,10 +738,7 @@ impl Prebindgen for Cbindgen {
                 }
             ));
             let src = self.src_ty(&ty);
-            let drop_ident = match self.opaque.get(key).and_then(|c| c.drop_name.clone()) {
-                Some(full) => format_ident!("{}", full),
-                None => format_ident!("{}_drop", self.c_drop_base(&ty)),
-            };
+            let drop_ident = self.destructor_symbol(&ty);
             items.push(syn::parse_quote!(
                 #[no_mangle]
                 #[allow(non_snake_case, unused_variables)]
@@ -1569,13 +1672,15 @@ impl Cbindgen {
     }
 
     /// Exported `#[no_mangle]` symbol for a declared function: pinned `c_name`,
-    /// else the Rust ident.
+    /// else [`Self::mangle_function`] over the ident, else the Rust ident.
     fn fn_symbol(&self, orig: &syn::Ident) -> syn::Ident {
-        self.functions
-            .get(orig)
-            .and_then(|c| c.c_name.clone())
-            .map(|n| format_ident!("{}", n))
-            .unwrap_or_else(|| orig.clone())
+        if let Some(n) = self.functions.get(orig).and_then(|c| c.c_name.clone()) {
+            return format_ident!("{}", n);
+        }
+        if let Some(f) = &self.mangle_function {
+            return format_ident!("{}", f(&orig.to_string()));
+        }
+        orig.clone()
     }
 
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
@@ -2038,7 +2143,10 @@ fn type_path_tail(ty: &syn::Type) -> Option<syn::Ident> {
 }
 
 /// PascalCase → snake_case (`ZKeyExpr` → `z_key_expr`).
-fn snake_case(s: &str) -> String {
+/// Convert a `PascalCase` / `camelCase` identifier to `snake_case` (a
+/// convention-free helper, re-exported as `prebindgen::lang::snake_case` for
+/// consumers composing their own [`Cbindgen::mangle_rust_type`] rules).
+pub fn snake_case(s: &str) -> String {
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() {
         if c.is_uppercase() {
@@ -3248,5 +3356,87 @@ mod tests {
         // Composed from the arg's configured C name `z_sample_t`.
         assert!(compact.contains("structclosure_z_sample_t"), "{src}");
         assert!(compact.contains("callback:closure_z_sample_t"), "{src}");
+    }
+
+    /// The five manglers generate every C-facing name from the Rust types — the
+    /// base mangler centralizes per-type spelling (here `ZKeyExpr`→`keyexpr`),
+    /// and the type/destructor/callback/function manglers decorate it. No
+    /// per-declaration `.name(...)` is used.
+    #[test]
+    fn manglers_generate_all_names() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_sub(
+                key_expr: ZKeyExpr,
+                callback: impl Fn(ZSample) + Send + Sync + 'static,
+                on_close: impl Fn() + Send + Sync + 'static,
+            ) -> Result<ZSubscriber, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            // One base rule fixes the `KeyExpr`→`keyexpr` irregular in a single
+            // place; everything else is `snake_case` of the `Z`-stripped name.
+            .mangle_rust_type(|short| {
+                let s = short.strip_prefix('Z').unwrap_or(short);
+                match s {
+                    "KeyExpr" => "keyexpr".to_string(),
+                    other => snake_case(other),
+                }
+            })
+            .mangle_type_name(|base| format!("z_{base}_t"))
+            .mangle_destructor(|base| format!("z_{base}_drop"))
+            .mangle_callback(|bases| {
+                if bases.is_empty() {
+                    "z_closure_drop_t".to_string()
+                } else {
+                    format!("z_closure_{}_t", bases.join("_"))
+                }
+            })
+            .mangle_function(|n| {
+                if n.starts_with("z_") {
+                    n.to_string()
+                } else {
+                    format!("z_{n}")
+                }
+            })
+            // No `.name(...)` / `.destructor_name(...)` anywhere.
+            .ptr_struct(syn::parse_quote!(ZKeyExpr))
+            .ptr_struct(syn::parse_quote!(ZSample))
+            .ptr_struct(syn::parse_quote!(ZSubscriber))
+            .data_struct(syn::parse_quote!(Error))
+            .error()
+            .callback(syn::parse_quote!(impl Fn(ZSample) + Send + Sync + 'static))
+            .callback(syn::parse_quote!(impl Fn() + Send + Sync + 'static))
+            .function(syn::parse_quote!(z_sub));
+
+        let src = write(&cbindgen, &mut registry, "manglers");
+        let compact: String = src.split_whitespace().collect();
+
+        // Type-name mangler over the base (note `keyexpr`, not `key_expr`).
+        assert!(compact.contains("structz_keyexpr_t"), "{src}");
+        assert!(compact.contains("structz_sample_t"), "{src}");
+        assert!(compact.contains("structz_subscriber_t"), "{src}");
+        assert!(compact.contains("structz_error_t"), "{src}");
+        // Destructor mangler.
+        assert!(compact.contains("fnz_keyexpr_drop(this_:*mutz_keyexpr_t"), "{src}");
+        assert!(compact.contains("fnz_sample_drop(this_:*mutz_sample_t"), "{src}");
+        // Callback mangler (arg base + zero-arg).
+        assert!(compact.contains("structz_closure_sample_t"), "{src}");
+        assert!(compact.contains("structz_closure_drop_t"), "{src}");
+        // Callback `call` takes the owned handle wire produced via the manglers.
+        assert!(compact.contains("fn(*mutz_sample_t,*mut::core::ffi::c_void)"), "{src}");
+        // Function mangler leaves the already-`z_`-prefixed symbol unchanged.
+        assert!(compact.contains("extern\"C\"fnz_sub("), "{src}");
+        // Return handle rides the return.
+        assert!(compact.contains("->*mutz_subscriber_t"), "{src}");
     }
 }
