@@ -1542,11 +1542,13 @@ impl Prebindgen for Cbindgen {
             });
         }
 
-        // `&'static T` → `*const <C struct>`: a const (non-owning) pointer.
-        // Signals to C callers that the value must NOT be freed.
+        // `&T` (any shared borrow — `&'static`, `&'a`, or elided) of an opaque
+        // handle → `*const <C struct>`: a const, **non-owning** pointer that
+        // reinterprets the borrow with no allocation. Signals to C callers that
+        // the value must NOT be freed (it is loaned from the receiver / a static).
+        // Composes under `Option<&T>` (NULL niche) for nullable loaned returns.
         let syn::Type::Reference(r) = pat else { return None };
-        let is_static = matches!(&r.lifetime, Some(lt) if lt.ident == "static");
-        if !is_static || r.mutability.is_some() {
+        if r.mutability.is_some() {
             return None;
         }
         let key = TypeKey::from_type(t1);
@@ -1554,10 +1556,14 @@ impl Prebindgen for Cbindgen {
 
         let c_struct = self.c_type_ident(t1);
         let src = self.src_ty(t1);
-        let name = Self::out_name(pat);
+        // Name off the concrete inner `t1` (not the `&_` wildcard pattern), so
+        // distinct borrowed-return types don't collide on one converter ident.
+        let name = format_ident!("__cbg_out_ref_{}", sanitize(&TypeKey::from_type(t1)));
+        // Elided input lifetime: the raw-pointer output carries no lifetime, so
+        // this accepts a borrow of any lifetime (a `&'static` coerces in).
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) unsafe fn #name(v: &'static #src) -> *const #c_struct {
+            pub(crate) unsafe fn #name(v: &#src) -> *const #c_struct {
                 v as *const #src as *const #c_struct
             }
         );
@@ -3438,5 +3444,70 @@ mod tests {
         assert!(compact.contains("extern\"C\"fnz_sub("), "{src}");
         // Return handle rides the return.
         assert!(compact.contains("->*mutz_subscriber_t"), "{src}");
+    }
+
+    /// A borrowed (non-`'static`) `&T` return of an opaque handle lowers to a
+    /// const, **non-owning** `*const z_X_t` (no `Box::into_raw`) — a loaned
+    /// accessor. The converter reinterprets the borrow.
+    #[test]
+    fn borrowed_ref_output_is_const_non_owning() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_sample_payload(s: &ZSample) -> &ZBytes {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
+            .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .ptr_struct(syn::parse_quote!(ZSample))
+            .name("z_sample_t")
+            .ptr_struct(syn::parse_quote!(ZBytes))
+            .name("z_zbytes_t")
+            .function(syn::parse_quote!(z_sample_payload))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "borrow_ret");
+        let compact: String = src.split_whitespace().collect();
+
+        // Const, non-owning return; the return path goes through the reinterpret
+        // (`&` → `*const`) converter, not an owning `Box::into_raw`.
+        assert!(compact.contains("->*constz_zbytes_t"), "{src}");
+        assert!(compact.contains("vas*constzenoh_flat::ZBytesas*constz_zbytes_t"), "{src}");
+        assert!(compact.contains("__ret=__cbg_out_ref_ZBytes(__v);"), "{src}");
+    }
+
+    /// `Option<&T>` borrowed return composes: a nullable const loaned pointer
+    /// (NULL = `None`), via the Option null-niche path over the borrow wire.
+    #[test]
+    fn borrowed_option_ref_output_nullable() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
+            .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .ptr_struct(syn::parse_quote!(ZSample))
+            .name("z_sample_t")
+            .ptr_struct(syn::parse_quote!(ZTimestamp))
+            .name("z_timestamp_t")
+            .function(syn::parse_quote!(z_sample_timestamp))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "borrow_opt_ret");
+        let compact: String = src.split_whitespace().collect();
+
+        // Nullable const loaned pointer rides the return (no out-param needed:
+        // the pointer's NULL niche encodes `None`).
+        assert!(compact.contains("->*constz_timestamp_t"), "{src}");
+        assert!(compact.contains("__cbg_out_ref_ZTimestamp"), "{src}");
+        assert!(!compact.contains("out:*mut*constz_timestamp_t"), "{src}");
     }
 }
