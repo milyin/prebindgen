@@ -66,7 +66,12 @@ use quote::{format_ident, quote, ToTokens};
 
 use crate::api::core::niches::Niches;
 use crate::api::core::prebindgen::{ConverterImpl, Prebindgen};
-use crate::api::core::registry::{Registry, TypeKey};
+use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
+
+/// Identity of a declared callback signature: its argument-type list (the
+/// dedup key, since two `impl Fn` params with the same args share one closure
+/// struct). The return is always unit for the supported callbacks.
+type CallbackKey = Vec<TypeKey>;
 
 /// Per-opaque-handle / per-data-struct / per-enum configuration.
 #[derive(Clone, Default)]
@@ -79,6 +84,15 @@ struct TypeCfg {
     /// [`Cbindgen::destructor_name`] (opaque handles only). When `None` the
     /// destructor defaults to `<c_drop_base>_drop`.
     drop_name: Option<String>,
+}
+
+/// Per-declared-callback configuration.
+#[derive(Clone, Default)]
+struct CbCfg {
+    /// Pinned C type name of the emitted closure struct. Set by
+    /// [`Cbindgen::name`]. Defaults to the generic [`Cbindgen::callback_c_name`]
+    /// composition when `None`.
+    c_name: Option<String>,
 }
 
 /// Per-declared-function configuration.
@@ -101,6 +115,7 @@ enum CurrentDecl {
     Ptr(TypeKey),
     Data(TypeKey),
     Enum(TypeKey),
+    Callback(CallbackKey),
     Function(syn::Ident),
 }
 
@@ -136,6 +151,10 @@ pub struct Cbindgen {
     data: HashMap<TypeKey, TypeCfg>,
     /// Enum types.
     enums: HashMap<TypeKey, TypeCfg>,
+    /// Declared callback signatures (`impl Fn(...) + Send + Sync + 'static`),
+    /// keyed by their argument-type list. Each emits one `#[repr(C)]` closure
+    /// struct.
+    callbacks: HashMap<CallbackKey, CbCfg>,
     /// Types intentionally not exported by this adapter.
     ignored_types: HashSet<TypeKey>,
     /// Data structs additionally marked as error types (allowlist for the
@@ -287,6 +306,9 @@ impl Cbindgen {
             Some(CurrentDecl::Enum(key)) => {
                 self.enums.get_mut(&key).expect("entry vanished").c_name = Some(name);
             }
+            Some(CurrentDecl::Callback(key)) => {
+                self.callbacks.get_mut(&key).expect("entry vanished").c_name = Some(name);
+            }
             Some(CurrentDecl::Function(ident)) => {
                 self.functions
                     .get_mut(&ident)
@@ -295,7 +317,7 @@ impl Cbindgen {
             }
             None => panic!(
                 "Cbindgen::name must be chained directly after a declaration \
-                 (`ptr_struct` / `data_struct` / `enum_type` / `function`)"
+                 (`ptr_struct` / `data_struct` / `enum_type` / `callback` / `function`)"
             ),
         }
         self
@@ -351,6 +373,25 @@ impl Cbindgen {
         );
         self.enums.insert(key.clone(), TypeCfg::default());
         self.current = Some(CurrentDecl::Enum(key));
+        self
+    }
+
+    /// Declare a callback signature so its `impl Fn(...)` parameters resolve and
+    /// a `#[repr(C)]` closure struct (`{ void *context; call; drop }`) is
+    /// emitted for it. `ty` must be `impl Fn(Args...) + Send + Sync + 'static`.
+    /// Identical signatures share one struct. Sets the declaration cursor, so a
+    /// following `.name("...")` overrides the generated struct name (otherwise
+    /// the generic [`Self::callback_c_name`] default is used).
+    pub fn callback(mut self, ty: syn::Type) -> Self {
+        let args = extract_fn_trait_args(&ty).unwrap_or_else(|| {
+            panic!(
+                "Cbindgen::callback expects `impl Fn(Args...) + Send + Sync + 'static`, got `{}`",
+                ty.to_token_stream()
+            )
+        });
+        let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
+        self.callbacks.insert(key.clone(), CbCfg::default());
+        self.current = Some(CurrentDecl::Callback(key));
         self
     }
 
@@ -422,6 +463,37 @@ impl Cbindgen {
             .and_then(|c| c.c_name.clone())
             .unwrap_or_else(|| snake_case(&type_short(ty)))
     }
+
+    /// Emitted C type name of a callback's closure struct: pinned `.name(...)`
+    /// override, else a generic default composed from the args' C type names
+    /// (`closure` for zero args, `closure_<arg0>_<arg1>…` otherwise). This is
+    /// the single seam a future pluggable mangler replaces — it carries no
+    /// target-language naming convention of its own.
+    fn callback_c_name(&self, args: &[syn::Type]) -> String {
+        let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
+        if let Some(name) = self.callbacks.get(&key).and_then(|c| c.c_name.clone()) {
+            return name;
+        }
+        if args.is_empty() {
+            "closure".to_string()
+        } else {
+            let parts: Vec<String> = args.iter().map(|a| self.c_type_name(a)).collect();
+            format!("closure_{}", parts.join("_"))
+        }
+    }
+
+    /// C struct identifier for a callback's closure type (see
+    /// [`Self::callback_c_name`]).
+    fn callback_c_ident(&self, args: &[syn::Type]) -> syn::Ident {
+        format_ident!("{}", self.callback_c_name(args))
+    }
+}
+
+/// Rebuild the canonical `impl Fn(args...) + Send + Sync + 'static` type from an
+/// argument list (matching the source spelling so its [`TypeKey`] round-trips —
+/// see `core::resolve`'s reconstruction).
+fn callback_fn_type(args: &[syn::Type]) -> syn::Type {
+    syn::parse_quote!(impl Fn(#(#args),*) + Send + Sync + 'static)
 }
 
 /// Human-readable description of the current declaration, for panic messages.
@@ -431,6 +503,10 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
         Some(CurrentDecl::Ptr(k)) => format!("ptr_struct `{}`", k.as_str()),
         Some(CurrentDecl::Data(k)) => format!("data_struct `{}`", k.as_str()),
         Some(CurrentDecl::Enum(k)) => format!("enum_type `{}`", k.as_str()),
+        Some(CurrentDecl::Callback(k)) => {
+            let args: Vec<&str> = k.iter().map(|t| t.as_str()).collect();
+            format!("callback `impl Fn({})`", args.join(", "))
+        }
         Some(CurrentDecl::Function(i)) => format!("function `{i}`"),
     }
 }
@@ -631,6 +707,55 @@ impl Prebindgen for Cbindgen {
             ));
         }
 
+        // Callback closure structs: one `#[repr(C)]` `{ context, call, drop }`
+        // per declared signature actually used (its `impl Fn(...)` input
+        // resolved). `call` takes each arg's output wire (the owned handle the
+        // C callback must drop) plus the `void *context`; `drop` releases the
+        // context. Deterministic order by emitted name.
+        let mut cb_keys: Vec<&CallbackKey> = self.callbacks.keys().collect();
+        cb_keys.sort_by_key(|k| {
+            let args: Vec<syn::Type> = k.iter().map(|t| t.to_type()).collect();
+            self.callback_c_name(&args)
+        });
+        for key in cb_keys {
+            let args: Vec<syn::Type> = key.iter().map(|t| t.to_type()).collect();
+            // Emit only if the callback is required (its input resolved); skip a
+            // declared-but-unused signature.
+            if registry.input_entry(&callback_fn_type(&args)).is_none() {
+                continue;
+            }
+            let arg_wires: Vec<syn::Type> = args
+                .iter()
+                .map(|a| {
+                    registry
+                        .output_entry(a)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Cbindgen: callback arg `{}` has no output converter (declare it \
+                                 as a ptr_struct/data_struct/enum_type)",
+                                a.to_token_stream()
+                            )
+                        })
+                        .destination
+                        .clone()
+                })
+                .collect();
+            let c_struct = self.callback_c_ident(&args);
+            items.push(syn::parse_quote!(
+                #[repr(C)]
+                #[allow(non_camel_case_types)]
+                pub struct #c_struct {
+                    pub context: *mut ::core::ffi::c_void,
+                    pub call: ::core::option::Option<
+                        unsafe extern "C" fn(#(#arg_wires,)* *mut ::core::ffi::c_void),
+                    >,
+                    pub drop: ::core::option::Option<
+                        unsafe extern "C" fn(*mut ::core::ffi::c_void),
+                    >,
+                }
+            ));
+        }
+
         items
     }
 
@@ -827,7 +952,15 @@ impl Prebindgen for Cbindgen {
         // handle, `char*`) reuses its wire directly; a value/scalar inner is
         // boxed behind a `*const` pointer. The inner's own converter does the
         // non-null decode, so its fallibility is preserved.
-        if is_option(pat) {
+        //
+        // Only the `Option<_>` pattern (wildcard directly the argument) is
+        // handled here, so `t1` is the full inner type and its own converter
+        // (e.g. the `&T` borrow) is reused verbatim. Patterns like `Option<&_>`
+        // or `Option<Vec<_>>` are rejected — the resolver also enumerates the
+        // `Option<_>` shape with the concrete inner in `t1`, which is the one
+        // that resolves correctly (otherwise an `Option<&ZConfig>` would bind to
+        // the *owned* `ZConfig` converter, dropping the reference).
+        if is_option(pat) && matches!(first_type_arg(pat), Some(syn::Type::Infer(_))) {
             let inner = _r.input_entry(t1)?;
             let inner_wire = inner.destination.clone();
             let inner_conv = inner.function.sig.ident.clone();
@@ -849,10 +982,17 @@ impl Prebindgen for Cbindgen {
             // Read the inner wire value out of `v` for the non-null branch.
             let read = if is_ptr { quote!(v) } else { quote!(*v) };
             let name = format_ident!("__cbg_in_option_{}", sanitize(&TypeKey::from_type(t1)));
+            // A borrow inner (`Option<&T>`) carries the `'a` of its decoded
+            // reference into `inner_ok`, so the wrapper must declare it.
+            let lt: TokenStream = if matches!(t1, syn::Type::Reference(_)) {
+                quote!(<'a>)
+            } else {
+                quote!()
+            };
             let function: syn::ItemFn = if fallible {
                 syn::parse_quote!(
                     #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name(
+                    pub(crate) unsafe fn #name #lt(
                         v: #wire,
                     ) -> ::core::result::Result<::core::option::Option<#inner_ok>, ::std::string::String> {
                         if v.is_null() {
@@ -869,7 +1009,7 @@ impl Prebindgen for Cbindgen {
             } else {
                 syn::parse_quote!(
                     #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name(
+                    pub(crate) unsafe fn #name #lt(
                         v: #wire,
                     ) -> ::core::option::Option<#inner_ok> {
                         if v.is_null() {
@@ -1032,6 +1172,100 @@ impl Prebindgen for Cbindgen {
         _r: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
         None
+    }
+
+    /// `impl Fn(Args...) + Send + Sync + 'static` callback input. The C wire is a
+    /// by-value closure struct (`{ void *context; call; drop }`, emitted in
+    /// `prerequisites`); the converter rebuilds a Rust closure that, on each
+    /// invocation, encodes its args through their **output** converters (the
+    /// args travel Rust→C when the callback fires — they're owned handles the C
+    /// `call` is responsible for dropping) and invokes the C function pointer.
+    /// An `Arc<Ctx>` carries the `void *context` + `drop`, releasing it (once,
+    /// `Send + Sync`) when the Rust closure is dropped. Only signatures declared
+    /// via [`Cbindgen::callback`] are handled.
+    fn dispatch_fn_input(
+        &self,
+        args: &[syn::Type],
+        registry: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
+        let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
+        if !self.callbacks.contains_key(&key) {
+            // Undeclared callback signature: leave unresolved so the registry
+            // reports it (the consumer must `.callback(...)`-declare it).
+            return None;
+        }
+        let c_struct = self.callback_c_ident(args);
+
+        // Per-arg: closure parameter (`__aN: <src>`) + encode statement
+        // (`let __wN = <output_conv>(__aN);`, panicking if the converter is
+        // fallible — a firing callback has no error channel) + the `__wN` passed
+        // to the C `call`.
+        let mut closure_params: Vec<TokenStream> = Vec::new();
+        let mut encode_stmts: Vec<TokenStream> = Vec::new();
+        let mut wire_idents: Vec<syn::Ident> = Vec::new();
+        for (i, arg) in args.iter().enumerate() {
+            let entry = registry.output_entry(arg)?;
+            let conv = entry.function.sig.ident.clone();
+            let fallible = matches!(
+                &entry.function.sig.output,
+                syn::ReturnType::Type(_, ty) if is_result(ty)
+            );
+            let src = self.src_ty(arg);
+            let ai = format_ident!("__a{}", i);
+            let wi = format_ident!("__w{}", i);
+            closure_params.push(quote!(#ai: #src));
+            if fallible {
+                encode_stmts.push(quote!(
+                    let #wi = match #conv(#ai) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
+                        }
+                    };
+                ));
+            } else {
+                encode_stmts.push(quote!(let #wi = #conv(#ai);));
+            }
+            wire_idents.push(wi);
+        }
+
+        let fn_ty = callback_fn_type(
+            &args.iter().map(|a| self.src_ty(a)).collect::<Vec<_>>(),
+        );
+        let name = format_ident!("__cbg_in_{}", self.callback_c_name(args));
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(c: #c_struct) -> #fn_ty {
+                struct __Ctx {
+                    context: *mut ::core::ffi::c_void,
+                    drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
+                }
+                unsafe impl ::core::marker::Send for __Ctx {}
+                unsafe impl ::core::marker::Sync for __Ctx {}
+                impl ::core::ops::Drop for __Ctx {
+                    fn drop(&mut self) {
+                        if let ::core::option::Option::Some(__d) = self.drop {
+                            unsafe { __d(self.context) }
+                        }
+                    }
+                }
+                let __call = c.call;
+                let __ctx = ::std::sync::Arc::new(__Ctx { context: c.context, drop: c.drop });
+                move |#(#closure_params),*| {
+                    #(#encode_stmts)*
+                    if let ::core::option::Option::Some(__f) = __call {
+                        unsafe { __f(#(#wire_idents,)* __ctx.context) }
+                    }
+                }
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(#c_struct),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
     // ── Output direction (rust → wire) ─────────────────────────────────
@@ -2879,5 +3113,140 @@ mod tests {
             result.is_err(),
             "expected a build error when string memory is produced without a free fn"
         );
+    }
+
+    /// A subscriber-shaped fn with an `impl Fn(ZSample)` callback and a zero-arg
+    /// `impl Fn()` on-close: each declared callback emits a by-value `#[repr(C)]`
+    /// closure struct (`context`/`call`/`drop`), `call` taking the arg's **owned**
+    /// output wire (`z_sample_t *`) plus the `void *context`. The trampoline
+    /// rebuilds a Rust closure that encodes args via their output converters and
+    /// invokes the C `call` through an `Arc<Ctx>` that runs `drop(context)` on
+    /// release.
+    #[test]
+    fn callback_subscriber_emits_closure_structs() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_sub(
+                session: &ZSession,
+                callback: impl Fn(ZSample) + Send + Sync + 'static,
+                on_close: impl Fn() + Send + Sync + 'static,
+            ) -> Result<ZSubscriber, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZSession))
+            .name("z_session_t")
+            .ptr_struct(syn::parse_quote!(ZSample))
+            .name("z_sample_t")
+            .ptr_struct(syn::parse_quote!(ZSubscriber))
+            .name("z_subscriber_t")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            .callback(syn::parse_quote!(impl Fn(ZSample) + Send + Sync + 'static))
+            .name("z_closure_sample_t")
+            .callback(syn::parse_quote!(impl Fn() + Send + Sync + 'static))
+            .name("z_closure_drop_t")
+            .function(syn::parse_quote!(z_sub));
+
+        let src = write(&cbindgen, &mut registry, "cb_sub");
+        let compact: String = src.split_whitespace().collect();
+
+        // Closure structs: sample carries the owned handle wire; drop is zero-arg.
+        assert!(compact.contains("structz_closure_sample_t"), "{src}");
+        assert!(
+            compact.contains(
+                "pubcall:::core::option::Option<unsafeextern\"C\"fn(*mutz_sample_t,*mut::core::ffi::c_void),>"
+            ),
+            "{src}"
+        );
+        assert!(compact.contains("structz_closure_drop_t"), "{src}");
+
+        // Trampoline: by-value struct in, `impl Fn(<src arg>)` out; Arc-held ctx.
+        assert!(
+            compact.contains(
+                "fn__cbg_in_z_closure_sample_t(c:z_closure_sample_t,)->implFn(zenoh_flat::ZSample)+Send+Sync+'static"
+            ),
+            "{src}"
+        );
+        assert!(compact.contains("Arc::new(__Ctx{context:c.context,drop:c.drop"), "{src}");
+        // Arg encoded via its OUTPUT converter, then passed (owned) with context.
+        assert!(compact.contains("let__w0=__cbg_out_ZSample(__a0);"), "{src}");
+        assert!(compact.contains("__f(__w0,__ctx.context)"), "{src}");
+        assert!(compact.contains("move|__a0:zenoh_flat::ZSample|"), "{src}");
+        // Zero-arg trampoline.
+        assert!(
+            compact.contains(
+                "fn__cbg_in_z_closure_drop_t(c:z_closure_drop_t,)->implFn()+Send+Sync+'static"
+            ),
+            "{src}"
+        );
+        assert!(compact.contains("move||{"), "{src}");
+        assert!(compact.contains("__f(__ctx.context)"), "{src}");
+        // Drop runs the C `drop(context)` on release.
+        assert!(compact.contains("Some(__d)=self.drop"), "{src}");
+        assert!(compact.contains("__d(self.context)"), "{src}");
+
+        // Wrapper takes both closures by value and decodes them.
+        assert!(compact.contains("callback:z_closure_sample_t"), "{src}");
+        assert!(compact.contains("on_close:z_closure_drop_t"), "{src}");
+        assert!(compact.contains("letcallback=__cbg_in_z_closure_sample_t(callback);"), "{src}");
+        assert!(compact.contains("leton_close=__cbg_in_z_closure_drop_t(on_close);"), "{src}");
+        // Result of an opaque handle rides the return (NULL = Err); `e` out-param.
+        assert!(compact.contains("->*mutz_subscriber_t"), "{src}");
+        assert!(compact.contains("e:*mutz_error"), "{src}");
+    }
+
+    /// Without a `.name(...)` override the closure-struct C name is composed
+    /// generically from the args' configured C type names (`closure_<argCname>`)
+    /// — `lang::Cbindgen` invents no target-language convention of its own.
+    #[test]
+    fn callback_struct_name_defaults_generically() {
+        let loc = SourceLocation::default();
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_sub2(
+                session: &ZSession,
+                callback: impl Fn(ZSample) + Send + Sync + 'static,
+            ) -> Result<ZSubscriber, Error> {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Fn(func), loc.clone()),
+            (syn::Item::Struct(error_struct()), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .free_memory_function("z_free")
+            .ptr_struct(syn::parse_quote!(ZSession))
+            .name("z_session_t")
+            .ptr_struct(syn::parse_quote!(ZSample))
+            .name("z_sample_t")
+            .ptr_struct(syn::parse_quote!(ZSubscriber))
+            .name("z_subscriber_t")
+            .data_struct(syn::parse_quote!(Error))
+            .name("z_error")
+            .error()
+            // No `.name(...)` on the callback ⇒ generic default.
+            .callback(syn::parse_quote!(impl Fn(ZSample) + Send + Sync + 'static))
+            .function(syn::parse_quote!(z_sub2));
+
+        let src = write(&cbindgen, &mut registry, "cb_default");
+        let compact: String = src.split_whitespace().collect();
+
+        // Composed from the arg's configured C name `z_sample_t`.
+        assert!(compact.contains("structclosure_z_sample_t"), "{src}");
+        assert!(compact.contains("callback:closure_z_sample_t"), "{src}");
     }
 }
