@@ -499,6 +499,19 @@ impl Cbindgen {
         }
     }
 
+    /// Like [`Self::src_ty`], but recurses into reference element types so
+    /// `&ZSample` becomes `&zenoh_flat::ZSample`.
+    fn src_ty_deep(&self, ty: &syn::Type) -> syn::Type {
+        match ty {
+            syn::Type::Reference(r) => {
+                let mut out = r.clone();
+                out.elem = Box::new(self.src_ty_deep(&r.elem));
+                syn::Type::Reference(out)
+            }
+            _ => self.src_ty(ty),
+        }
+    }
+
     fn in_name(ty: &syn::Type) -> syn::Ident {
         format_ident!("__cbg_in_{}", sanitize(&TypeKey::from_type(ty)))
     }
@@ -1317,7 +1330,7 @@ impl Prebindgen for Cbindgen {
                 &entry.function.sig.output,
                 syn::ReturnType::Type(_, ty) if is_result(ty)
             );
-            let src = self.src_ty(arg);
+            let src = self.src_ty_deep(arg);
             let ai = format_ident!("__a{}", i);
             let wi = format_ident!("__w{}", i);
             closure_params.push(quote!(#ai: #src));
@@ -1336,7 +1349,7 @@ impl Prebindgen for Cbindgen {
             wire_idents.push(wi);
         }
 
-        let fn_ty = callback_fn_type(&args.iter().map(|a| self.src_ty(a)).collect::<Vec<_>>());
+        let fn_ty = callback_fn_type(&args.iter().map(|a| self.src_ty_deep(a)).collect::<Vec<_>>());
         let name = format_ident!("__cbg_in_{}", self.callback_c_name(args));
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
