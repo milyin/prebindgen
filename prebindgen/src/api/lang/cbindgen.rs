@@ -3669,7 +3669,10 @@ mod tests {
         // message through `From<String>`). Both functions have a fallible `String`
         // input plus a `Result::Err` arm, so the guarded write appears ≥4 times.
         assert!(
-            compact.matches("if!e.is_null(){*e=__cbg_out_Error(").count() >= 4,
+            compact
+                .matches("if!e.is_null(){*e=__cbg_out_Error(")
+                .count()
+                >= 4,
             "expected ≥4 guarded `*e =` writes (2 input-decode + 2 Err arms):\n{src}"
         );
 
