@@ -94,12 +94,16 @@ impl Niches {
 
     /// Convenience for the common single-niche case.
     pub fn one(value: syn::Expr, matches: syn::Expr) -> Self {
-        Self { slots: vec![NicheSlot { value, matches }] }
+        Self {
+            slots: vec![NicheSlot { value, matches }],
+        }
     }
 
     /// Build from any iterable of slots; ordering is preserved.
     pub fn from_slots<I: IntoIterator<Item = NicheSlot>>(slots: I) -> Self {
-        Self { slots: slots.into_iter().collect() }
+        Self {
+            slots: slots.into_iter().collect(),
+        }
     }
 
     /// Take the first slot for use as a wrapper's discriminant. Returns
@@ -160,9 +164,18 @@ mod tests {
     #[test]
     fn from_slots_preserves_order() {
         let n = Niches::from_slots([
-            NicheSlot { value: syn::parse_quote!(0i32),  matches: syn::parse_quote!(*v == 0) },
-            NicheSlot { value: syn::parse_quote!(-1i32), matches: syn::parse_quote!(*v == -1) },
-            NicheSlot { value: syn::parse_quote!(99i32), matches: syn::parse_quote!(*v == 99) },
+            NicheSlot {
+                value: syn::parse_quote!(0i32),
+                matches: syn::parse_quote!(*v == 0),
+            },
+            NicheSlot {
+                value: syn::parse_quote!(-1i32),
+                matches: syn::parse_quote!(*v == -1),
+            },
+            NicheSlot {
+                value: syn::parse_quote!(99i32),
+                matches: syn::parse_quote!(*v == 99),
+            },
         ]);
         assert_eq!(n.len(), 3);
         let (s0, n) = n.carve().unwrap();
@@ -180,8 +193,14 @@ mod tests {
     #[test]
     fn cascading_carve() {
         let n = Niches::from_slots([
-            NicheSlot { value: syn::parse_quote!(i32::MIN), matches: syn::parse_quote!(*v == i32::MIN) },
-            NicheSlot { value: syn::parse_quote!(i32::MAX), matches: syn::parse_quote!(*v == i32::MAX) },
+            NicheSlot {
+                value: syn::parse_quote!(i32::MIN),
+                matches: syn::parse_quote!(*v == i32::MIN),
+            },
+            NicheSlot {
+                value: syn::parse_quote!(i32::MAX),
+                matches: syn::parse_quote!(*v == i32::MAX),
+            },
         ]);
 
         // Outer wrapper takes the first niche.

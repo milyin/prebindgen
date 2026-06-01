@@ -48,7 +48,11 @@ impl std::fmt::Display for ResolveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ResolveError::Unresolved { entries } => {
-                writeln!(f, "{} required type(s) could not be resolved:", entries.len())?;
+                writeln!(
+                    f,
+                    "{} required type(s) could not be resolved:",
+                    entries.len()
+                )?;
                 for e in entries {
                     let dir = match e.direction {
                         Direction::Input => "input",
@@ -58,18 +62,13 @@ impl std::fmt::Display for ResolveError {
                         writeln!(
                             f,
                             "{}:{}:{}: error: unresolved prebindgen-ext {} type `{}`",
-                            loc.file,
-                            loc.line,
-                            loc.column,
-                            dir,
-                            e.key
+                            loc.file, loc.line, loc.column, dir, e.key
                         )?;
                     } else {
                         writeln!(
                             f,
                             "error: unresolved prebindgen-ext {} type `{}`",
-                            dir,
-                            e.key
+                            dir, e.key
                         )?;
                     }
                 }
@@ -139,8 +138,7 @@ fn collect_phase_deltas<E: Prebindgen>(
                 Direction::Input => registry.is_required_input_at_scan(key),
                 Direction::Output => registry.is_required_output_at_scan(key),
             };
-            if let Some(entry) = try_resolve_entry(ext, &key_ty, n, dir, scan_required, registry)
-            {
+            if let Some(entry) = try_resolve_entry(ext, &key_ty, n, dir, scan_required, registry) {
                 deltas.push((bucket_idx, key.clone(), entry));
             }
         }
@@ -357,7 +355,9 @@ fn collect_positions(ty: &syn::Type, prefix: &mut Vec<usize>, out: &mut Vec<Posi
     let positions = positions_for_traversal(ty);
     for (i, sub) in positions.iter().enumerate() {
         prefix.push(i);
-        out.push(PositionPath { path: prefix.clone() });
+        out.push(PositionPath {
+            path: prefix.clone(),
+        });
         collect_positions(sub, prefix, out);
         prefix.pop();
     }
@@ -381,7 +381,8 @@ fn positions_for_traversal(ty: &syn::Type) -> Vec<syn::Type> {
 fn pairwise_non_overlapping(paths: &[&PositionPath]) -> bool {
     for i in 0..paths.len() {
         for j in (i + 1)..paths.len() {
-            if is_prefix(&paths[i].path, &paths[j].path) || is_prefix(&paths[j].path, &paths[i].path)
+            if is_prefix(&paths[i].path, &paths[j].path)
+                || is_prefix(&paths[j].path, &paths[i].path)
             {
                 return false;
             }
@@ -647,18 +648,19 @@ fn collect_unresolved_descendants<M>(
     out: &mut Vec<UnresolvedEntry>,
 ) {
     let mut queue: VecDeque<(Direction, TypeKey)> = VecDeque::new();
-    let enqueue_edges_from = |dir: Direction,
-                                  key: &TypeKey,
-                                  queue: &mut VecDeque<(Direction, TypeKey)>,
-                                  seen: &mut std::collections::HashSet<(Direction, TypeKey)>| {
-        let ty = key.to_type();
-        for (child_dir, sub) in registry.immediate_edges(dir, &ty) {
-            let dep = (child_dir, TypeKey::from_type(&sub));
-            if seen.insert(dep.clone()) {
-                queue.push_back(dep);
+    let enqueue_edges_from =
+        |dir: Direction,
+         key: &TypeKey,
+         queue: &mut VecDeque<(Direction, TypeKey)>,
+         seen: &mut std::collections::HashSet<(Direction, TypeKey)>| {
+            let ty = key.to_type();
+            for (child_dir, sub) in registry.immediate_edges(dir, &ty) {
+                let dep = (child_dir, TypeKey::from_type(&sub));
+                if seen.insert(dep.clone()) {
+                    queue.push_back(dep);
+                }
             }
-        }
-    };
+        };
 
     for (dir, key) in seeds {
         enqueue_edges_from(*dir, key, &mut queue, seen);
@@ -884,9 +886,13 @@ mod tests {
     fn impl_into_recognized_only_with_send_static() {
         use crate::api::core::registry::extract_into_trait_arg;
         // Accepted: bare `Into<T> + Send + 'static`.
-        assert!(extract_into_trait_arg(&ty("impl Into<KeyExpr<'static>> + Send + 'static")).is_some());
+        assert!(
+            extract_into_trait_arg(&ty("impl Into<KeyExpr<'static>> + Send + 'static")).is_some()
+        );
         // Order doesn't matter (parser preserves bound order, but extractor walks all).
-        assert!(extract_into_trait_arg(&ty("impl Send + Into<KeyExpr<'static>> + 'static")).is_some());
+        assert!(
+            extract_into_trait_arg(&ty("impl Send + Into<KeyExpr<'static>> + 'static")).is_some()
+        );
 
         // Rejected: missing Send.
         assert!(extract_into_trait_arg(&ty("impl Into<KeyExpr<'static>> + 'static")).is_none());
@@ -916,10 +922,8 @@ mod tests {
         // build.rs forgot to declare it), but it does appear in the type
         // tables because scan-recursion would have registered it as a field
         // of `Outer`. Simulate the post-scan registry state directly.
-        let outer_struct: syn::ItemStruct = syn::parse_str(
-            "struct Outer { inner: ZKeyExpr }",
-        )
-        .unwrap();
+        let outer_struct: syn::ItemStruct =
+            syn::parse_str("struct Outer { inner: ZKeyExpr }").unwrap();
         reg.structs.insert(
             outer_struct.ident.clone(),
             (outer_struct, SourceLocation::default()),
@@ -985,7 +989,9 @@ mod tests {
             inner_key.clone(),
             Some(TypeEntry {
                 destination: syn::parse_quote!(i64),
-                function: syn::parse_quote!(fn __dummy() {}),
+                function: syn::parse_quote!(
+                    fn __dummy() {}
+                ),
                 pre_stages: vec![],
                 subs: vec![],
                 required: false,

@@ -51,7 +51,10 @@ impl TypeKey {
     /// key was originally constructed from a parseable type.
     pub fn to_type(&self) -> syn::Type {
         syn::parse_str(&self.0).unwrap_or_else(|e| {
-            panic!("TypeKey::to_type: stored key `{}` no longer parses: {}", self.0, e)
+            panic!(
+                "TypeKey::to_type: stored key `{}` no longer parses: {}",
+                self.0, e
+            )
         })
     }
 }
@@ -178,7 +181,6 @@ impl<M> Default for Registry<M> {
         }
     }
 }
-
 
 /// Errors surfaced by the scan phase.
 #[derive(Debug)]
@@ -522,14 +524,26 @@ impl<M> Registry<M> {
     }
 
     fn first_seen_loc(&self, name: &syn::Ident) -> Option<SourceLocation> {
-        if let Some((_, loc)) = self.functions.get(name) { return Some(loc.clone()); }
-        if let Some((_, loc)) = self.structs.get(name)   { return Some(loc.clone()); }
-        if let Some((_, loc)) = self.enums.get(name)     { return Some(loc.clone()); }
-        if let Some((_, loc)) = self.consts.get(name)    { return Some(loc.clone()); }
+        if let Some((_, loc)) = self.functions.get(name) {
+            return Some(loc.clone());
+        }
+        if let Some((_, loc)) = self.structs.get(name) {
+            return Some(loc.clone());
+        }
+        if let Some((_, loc)) = self.enums.get(name) {
+            return Some(loc.clone());
+        }
+        if let Some((_, loc)) = self.consts.get(name) {
+            return Some(loc.clone());
+        }
         None
     }
 
-    fn scan_fn_signature(&mut self, f: &syn::ItemFn, loc: &SourceLocation) -> Result<(), ScanError> {
+    fn scan_fn_signature(
+        &mut self,
+        f: &syn::ItemFn,
+        loc: &SourceLocation,
+    ) -> Result<(), ScanError> {
         // Mechanical: register every fn-signature type as the user wrote it.
         // No semantic transformations (no &T→T strip, no ZResult<T>→T strip,
         // no skip for () / ZResult<()>). The plugin handles those via rank
@@ -652,7 +666,9 @@ impl<M> Registry<M> {
                 Direction::Output => self.required_outputs_scan.insert(key.clone()),
             };
         }
-        self.type_locations.entry(key).or_insert_with(|| loc.clone());
+        self.type_locations
+            .entry(key)
+            .or_insert_with(|| loc.clone());
     }
 
     /// Enumerate the immediate type-graph edges out of `(dir, ty)`:
@@ -726,7 +742,10 @@ pub fn compute_rank(ty: &syn::Type) -> usize {
     if positions.is_empty() {
         return 0;
     }
-    positions.iter().map(|p| std::cmp::max(1, compute_rank(p))).sum()
+    positions
+        .iter()
+        .map(|p| std::cmp::max(1, compute_rank(p)))
+        .sum()
 }
 
 /// Immediate child type positions of `ty` (one level deep).
@@ -763,7 +782,6 @@ pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
         _ => vec![],
     }
 }
-
 
 /// If `ty` is exactly `impl Into<T> + Send + 'static`, return `T`. Any
 /// other bound combination (missing `Send`/`'static`, extra traits, no
@@ -998,14 +1016,14 @@ mod tests {
         // would have failed `from_items` under the old code path
         // (ScanError::DisallowedImplTrait). Now `from_items` is index-
         // only and accepts it without complaint.
-        let items = vec![fn_item(
-            "fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }",
-        )];
+        let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
         let reg: Registry<()> = Registry::from_items(items).expect("from_items must succeed");
         assert!(reg.required_inputs_scan.is_empty());
         assert!(reg.required_outputs_scan.is_empty());
         // The fn is indexed but no types are pre-required.
-        assert!(reg.functions.contains_key(&syn::parse_str("bogus").unwrap()));
+        assert!(reg
+            .functions
+            .contains_key(&syn::parse_str("bogus").unwrap()));
     }
 
     #[test]
@@ -1036,9 +1054,7 @@ mod tests {
 
     #[test]
     fn scan_declared_fails_disallowed_impl_trait_only_when_fn_declared() {
-        let items = vec![fn_item(
-            "fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }",
-        )];
+        let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
         let mut reg: Registry<()> = Registry::from_items(items).unwrap();
 
         // Empty ext: the bogus fn is not scanned, so no error.

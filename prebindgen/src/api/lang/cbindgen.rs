@@ -350,7 +350,9 @@ impl Cbindgen {
     pub fn ignore_type(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(
-            !self.opaque.contains_key(&key) && !self.data.contains_key(&key) && !self.enums.contains_key(&key),
+            !self.opaque.contains_key(&key)
+                && !self.data.contains_key(&key)
+                && !self.enums.contains_key(&key),
             "Cbindgen::ignore_type cannot ignore `{}` because it is already declared",
             key
         );
@@ -671,7 +673,9 @@ impl Prebindgen for Cbindgen {
             // NULs so the terminator marks the true end for C consumers.
             items.push(syn::parse_quote!(
                 #[allow(non_snake_case, dead_code)]
-                pub(crate) fn __cbg_alloc_cstr(s: ::std::string::String) -> *mut ::core::ffi::c_char {
+                pub(crate) fn __cbg_alloc_cstr(
+                    s: ::std::string::String,
+                ) -> *mut ::core::ffi::c_char {
                     let c = ::std::ffi::CString::new(s).unwrap_or_default();
                     let bytes = c.as_bytes_with_nul();
                     unsafe {
@@ -1332,9 +1336,7 @@ impl Prebindgen for Cbindgen {
             wire_idents.push(wi);
         }
 
-        let fn_ty = callback_fn_type(
-            &args.iter().map(|a| self.src_ty(a)).collect::<Vec<_>>(),
-        );
+        let fn_ty = callback_fn_type(&args.iter().map(|a| self.src_ty(a)).collect::<Vec<_>>());
         let name = format_ident!("__cbg_in_{}", self.callback_c_name(args));
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
@@ -1528,7 +1530,11 @@ impl Prebindgen for Cbindgen {
         if is_option(pat) || is_vec(pat) {
             _r.output_entry(t1)?;
             let kind = if is_option(pat) { "option" } else { "vec" };
-            let name = format_ident!("__cbg_outmark_{}_{}", kind, sanitize(&TypeKey::from_type(t1)));
+            let name = format_ident!(
+                "__cbg_outmark_{}_{}",
+                kind,
+                sanitize(&TypeKey::from_type(t1))
+            );
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, dead_code, unused)]
                 pub(crate) fn #name() {}
@@ -1547,7 +1553,9 @@ impl Prebindgen for Cbindgen {
         // reinterprets the borrow with no allocation. Signals to C callers that
         // the value must NOT be freed (it is loaned from the receiver / a static).
         // Composes under `Option<&T>` (NULL niche) for nullable loaned returns.
-        let syn::Type::Reference(r) = pat else { return None };
+        let syn::Type::Reference(r) = pat else {
+            return None;
+        };
         if r.mutability.is_some() {
             return None;
         }
@@ -1711,11 +1719,10 @@ impl Cbindgen {
         });
 
         // Peel an outer `Result<_, E>`; `value_ty` is the success/return value.
-        let (value_ty, err_ty): (syn::Type, Option<syn::Type>) =
-            match result_parts(&return_ty) {
-                Some((ok, e)) => (ok, Some(e)),
-                None => (return_ty.clone(), None),
-            };
+        let (value_ty, err_ty): (syn::Type, Option<syn::Type>) = match result_parts(&return_ty) {
+            Some((ok, e)) => (ok, Some(e)),
+            None => (return_ty.clone(), None),
+        };
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -1838,8 +1845,7 @@ impl Cbindgen {
                     quote!( #(#decodes)* #call; )
                 } else {
                     let field0_wire = field0_wire.as_ref().unwrap();
-                    let enc =
-                        self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                    let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
                     quote!(
                         #(#decodes)*
                         let __v = #call;
@@ -1900,7 +1906,10 @@ impl Cbindgen {
     /// layer to claim. Mirrors the niche-stacking model in `core::niches`.
     fn lower_shape(&self, ty: &syn::Type, registry: &Registry<()>) -> ValueShape {
         if is_unit(ty) {
-            return ValueShape { fields: vec![], has_niche: false };
+            return ValueShape {
+                fields: vec![],
+                has_niche: false,
+            };
         }
         // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
         // value (one converter); a composite element is unsupported.
@@ -1921,8 +1930,14 @@ impl Cbindgen {
             let elem_wire = entry.destination.clone();
             return ValueShape {
                 fields: vec![
-                    WireField { suffix: "", wire: syn::parse_quote!(*mut #elem_wire) },
-                    WireField { suffix: "_len", wire: syn::parse_quote!(usize) },
+                    WireField {
+                        suffix: "",
+                        wire: syn::parse_quote!(*mut #elem_wire),
+                    },
+                    WireField {
+                        suffix: "_len",
+                        wire: syn::parse_quote!(usize),
+                    },
                 ],
                 has_niche: false,
             };
@@ -1934,11 +1949,20 @@ impl Cbindgen {
             let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
             let inner = self.lower_shape(&inner_ty, registry);
             if inner.has_niche {
-                return ValueShape { fields: inner.fields, has_niche: false };
+                return ValueShape {
+                    fields: inner.fields,
+                    has_niche: false,
+                };
             }
-            let mut fields = vec![WireField { suffix: "_present", wire: syn::parse_quote!(bool) }];
+            let mut fields = vec![WireField {
+                suffix: "_present",
+                wire: syn::parse_quote!(bool),
+            }];
             fields.extend(inner.fields);
-            return ValueShape { fields, has_niche: false };
+            return ValueShape {
+                fields,
+                has_niche: false,
+            };
         }
         // Base value: one wire component from its rank-0/1 converter. A pointer
         // wire (String, opaque handle, `&'static`) carries a free NULL niche.
@@ -1950,7 +1974,10 @@ impl Cbindgen {
         });
         let wire = entry.destination.clone();
         let has_niche = matches!(wire, syn::Type::Ptr(_));
-        ValueShape { fields: vec![WireField { suffix: "", wire }], has_niche }
+        ValueShape {
+            fields: vec![WireField { suffix: "", wire }],
+            has_niche,
+        }
     }
 
     /// Emit the statements that write a native value `val` of type `ty` into the
@@ -2068,7 +2095,11 @@ impl Cbindgen {
 
             if returns_result(&entry.function.sig.output) {
                 let on_err = match route {
-                    ErrRoute::Result { e_conv, e_ty_src, fail_return } => quote!(
+                    ErrRoute::Result {
+                        e_conv,
+                        e_ty_src,
+                        fail_return,
+                    } => quote!(
                         if !e.is_null() {
                             *e = #e_conv(<#e_ty_src as ::core::convert::From<::std::string::String>>::from(__msg));
                         }
@@ -2241,11 +2272,15 @@ fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
 
 /// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.
 fn scalar_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Reference(r) = ty else { return None };
+    let syn::Type::Reference(r) = ty else {
+        return None;
+    };
     if r.mutability.is_some() {
         return None;
     }
-    let syn::Type::Slice(s) = &*r.elem else { return None };
+    let syn::Type::Slice(s) = &*r.elem else {
+        return None;
+    };
     let elem = (*s.elem).clone();
     is_scalar(&elem).then_some(elem)
 }
@@ -2396,7 +2431,10 @@ mod tests {
         // Opaque handle marker struct + typed (pinned) destructor on the bare ptr.
         assert!(compact.contains("structz_keyexpr{_private"), "{src}");
         assert!(compact.contains("structz_error"), "{src}");
-        assert!(compact.contains("fnz_keyexpr_free(this_:*mutz_keyexpr"), "{src}");
+        assert!(
+            compact.contains("fnz_keyexpr_free(this_:*mutz_keyexpr"),
+            "{src}"
+        );
         assert!(
             compact.contains("Box::from_raw(this_as*mutzenoh_flat::ZKeyExpr)"),
             "{src}"
@@ -2404,7 +2442,10 @@ mod tests {
         // String memory ⇒ malloc/free decls + a single `z_free`; no per-type
         // string/error destructors.
         assert!(compact.contains("fnmalloc(size:usize)"), "{src}");
-        assert!(compact.contains("fnz_free(p:*mut::core::ffi::c_void)"), "{src}");
+        assert!(
+            compact.contains("fnz_free(p:*mut::core::ffi::c_void)"),
+            "{src}"
+        );
         assert!(!compact.contains("z_error_drop"), "{src}");
         assert!(!compact.contains("cbg_string_t"), "{src}");
         // Source call fully qualified.
@@ -2490,10 +2531,17 @@ mod tests {
         assert!(compact.contains("->*mut::core::ffi::c_char"), "{src}");
         assert!(!compact.contains("out:*mut"), "{src}");
         assert!(compact.contains("__cbg_alloc_cstr(v)"), "{src}");
-        assert!(compact.contains("fnz_free(p:*mut::core::ffi::c_void)"), "{src}");
+        assert!(
+            compact.contains("fnz_free(p:*mut::core::ffi::c_void)"),
+            "{src}"
+        );
         // Ok arm encodes the pointer into the return slot; error → NULL.
         assert!(compact.contains("__ret=__cbg_out_String(__v);"), "{src}");
-        assert!(compact.contains("=>{if!e.is_null(){*e=__cbg_out_Error(__err);}::core::ptr::null_mut()}"), "{src}");
+        assert!(
+            compact
+                .contains("=>{if!e.is_null(){*e=__cbg_out_Error(__err);}::core::ptr::null_mut()}"),
+            "{src}"
+        );
     }
 
     /// `z_encoding_schema(e: &ZEncoding) -> Option<String>` lowers to a bare
@@ -2580,7 +2628,10 @@ mod tests {
             compact.contains("::core::option::Option::None=>{*out=::core::ptr::null_mut();}"),
             "{src}"
         );
-        assert!(compact.contains("=>{") && compact.contains("true}"), "{src}");
+        assert!(
+            compact.contains("=>{") && compact.contains("true}"),
+            "{src}"
+        );
     }
 
     /// `Vec<String>` lowers to `char** f(<inputs>, size_t* len)`: the malloc'd
@@ -2614,9 +2665,18 @@ mod tests {
         assert!(compact.contains("len:*mutusize"), "{src}");
         assert!(!compact.contains("e:*mut"), "{src}");
         // Built from the element converter via the malloc'd array helper.
-        assert!(compact.contains(".map(__cbg_out_String).collect()"), "{src}");
-        assert!(compact.contains("let(__p,__n)=__cbg_alloc_array(__arr);"), "{src}");
-        assert!(compact.contains("__ret=__p;") && compact.contains("*len=__n;"), "{src}");
+        assert!(
+            compact.contains(".map(__cbg_out_String).collect()"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("let(__p,__n)=__cbg_alloc_array(__arr);"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("__ret=__p;") && compact.contains("*len=__n;"),
+            "{src}"
+        );
         // The array builder prelude is emitted.
         assert!(compact.contains("fn__cbg_alloc_array<W>"), "{src}");
         // Fallible borrow decode aborts (no Result channel).
@@ -2686,7 +2746,10 @@ mod tests {
         assert!(compact.contains("out_len:*mutusize"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
         // Ok writes both out-params; Err writes `*e` and returns false.
-        assert!(compact.contains("*out=__p;") && compact.contains("*out_len=__n;"), "{src}");
+        assert!(
+            compact.contains("*out=__p;") && compact.contains("*out_len=__n;"),
+            "{src}"
+        );
     }
 
     /// `Option<Vec<T>>` (no `Result`): the inner `Vec` has no niche, so an
@@ -2721,7 +2784,10 @@ mod tests {
         assert!(compact.contains("out:*mut*mut*mutz_thing"), "{src}");
         assert!(compact.contains("out_len:*mutusize"), "{src}");
         assert!(!compact.contains("e:*mut"), "{src}");
-        assert!(compact.contains("__ret=true;") && compact.contains("__ret=false;"), "{src}");
+        assert!(
+            compact.contains("__ret=true;") && compact.contains("__ret=false;"),
+            "{src}"
+        );
     }
 
     /// `Result<Option<Vec<T>>, E>`: full stack — `Result` finds no niche (Option
@@ -2760,7 +2826,10 @@ mod tests {
         assert!(compact.contains("out_len:*mutusize"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
         // present flag set inside the Ok arm; array filled when Some.
-        assert!(compact.contains("*out_present=true;") && compact.contains("*out_present=false;"), "{src}");
+        assert!(
+            compact.contains("*out_present=true;") && compact.contains("*out_present=false;"),
+            "{src}"
+        );
     }
 
     /// A scalar slice input `&[u8]` lowers to two wire params (`*const u8`,
@@ -2789,7 +2858,10 @@ mod tests {
         assert!(compact.contains("bytes:*constu8"), "{src}");
         assert!(compact.contains("bytes_len:usize"), "{src}");
         // Zero-copy decode, NULL ⇒ empty slice.
-        assert!(compact.contains("::core::slice::from_raw_parts(bytes,bytes_len)"), "{src}");
+        assert!(
+            compact.contains("::core::slice::from_raw_parts(bytes,bytes_len)"),
+            "{src}"
+        );
         // Returns the opaque handle (Box::into_raw).
         assert!(compact.contains("->*mutz_zbytes"), "{src}");
     }
@@ -2828,7 +2900,9 @@ mod tests {
         // Param reuses the bare handle pointer; NULL ⇒ None.
         assert!(compact.contains("attachment:*mutz_zbytes"), "{src}");
         assert!(
-            compact.contains("ifv.is_null(){return::core::result::Result::Ok(::core::option::Option::None);}"),
+            compact.contains(
+                "ifv.is_null(){return::core::result::Result::Ok(::core::option::Option::None);}"
+            ),
             "{src}"
         );
         // Non-null path consumes through the inner handle converter.
@@ -3292,9 +3366,15 @@ mod tests {
             ),
             "{src}"
         );
-        assert!(compact.contains("Arc::new(__Ctx{context:c.context,drop:c.drop"), "{src}");
+        assert!(
+            compact.contains("Arc::new(__Ctx{context:c.context,drop:c.drop"),
+            "{src}"
+        );
         // Arg encoded via its OUTPUT converter, then passed (owned) with context.
-        assert!(compact.contains("let__w0=__cbg_out_ZSample(__a0);"), "{src}");
+        assert!(
+            compact.contains("let__w0=__cbg_out_ZSample(__a0);"),
+            "{src}"
+        );
         assert!(compact.contains("__f(__w0,__ctx.context)"), "{src}");
         assert!(compact.contains("move|__a0:zenoh_flat::ZSample|"), "{src}");
         // Zero-arg trampoline.
@@ -3313,8 +3393,14 @@ mod tests {
         // Wrapper takes both closures by value and decodes them.
         assert!(compact.contains("callback:z_closure_sample_t"), "{src}");
         assert!(compact.contains("on_close:z_closure_drop_t"), "{src}");
-        assert!(compact.contains("letcallback=__cbg_in_z_closure_sample_t(callback);"), "{src}");
-        assert!(compact.contains("leton_close=__cbg_in_z_closure_drop_t(on_close);"), "{src}");
+        assert!(
+            compact.contains("letcallback=__cbg_in_z_closure_sample_t(callback);"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("leton_close=__cbg_in_z_closure_drop_t(on_close);"),
+            "{src}"
+        );
         // Result of an opaque handle rides the return (NULL = Err); `e` out-param.
         assert!(compact.contains("->*mutz_subscriber_t"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
@@ -3433,13 +3519,22 @@ mod tests {
         assert!(compact.contains("structz_subscriber_t"), "{src}");
         assert!(compact.contains("structz_error_t"), "{src}");
         // Destructor mangler.
-        assert!(compact.contains("fnz_keyexpr_drop(this_:*mutz_keyexpr_t"), "{src}");
-        assert!(compact.contains("fnz_sample_drop(this_:*mutz_sample_t"), "{src}");
+        assert!(
+            compact.contains("fnz_keyexpr_drop(this_:*mutz_keyexpr_t"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("fnz_sample_drop(this_:*mutz_sample_t"),
+            "{src}"
+        );
         // Callback mangler (arg base + zero-arg).
         assert!(compact.contains("structz_closure_sample_t"), "{src}");
         assert!(compact.contains("structz_closure_drop_t"), "{src}");
         // Callback `call` takes the owned handle wire produced via the manglers.
-        assert!(compact.contains("fn(*mutz_sample_t,*mut::core::ffi::c_void)"), "{src}");
+        assert!(
+            compact.contains("fn(*mutz_sample_t,*mut::core::ffi::c_void)"),
+            "{src}"
+        );
         // Function mangler leaves the already-`z_`-prefixed symbol unchanged.
         assert!(compact.contains("extern\"C\"fnz_sub("), "{src}");
         // Return handle rides the return.
@@ -3457,8 +3552,8 @@ mod tests {
                 unimplemented!()
             }
         );
-        let mut registry = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
-            .expect("index items");
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
@@ -3475,8 +3570,14 @@ mod tests {
         // Const, non-owning return; the return path goes through the reinterpret
         // (`&` → `*const`) converter, not an owning `Box::into_raw`.
         assert!(compact.contains("->*constz_zbytes_t"), "{src}");
-        assert!(compact.contains("vas*constzenoh_flat::ZBytesas*constz_zbytes_t"), "{src}");
-        assert!(compact.contains("__ret=__cbg_out_ref_ZBytes(__v);"), "{src}");
+        assert!(
+            compact.contains("vas*constzenoh_flat::ZBytesas*constz_zbytes_t"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("__ret=__cbg_out_ref_ZBytes(__v);"),
+            "{src}"
+        );
     }
 
     /// `Option<&T>` borrowed return composes: a nullable const loaned pointer
@@ -3489,8 +3590,8 @@ mod tests {
                 unimplemented!()
             }
         );
-        let mut registry = Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())])
-            .expect("index items");
+        let mut registry =
+            Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))

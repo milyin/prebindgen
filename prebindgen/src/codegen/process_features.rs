@@ -247,7 +247,11 @@ mod tests {
 
         // Disabled → the guarded parameter is removed; the rest is intact.
         let mut item = make();
-        assert!(process_item_features(&mut item, &rules(&[], &["unstable"]), &src));
+        assert!(process_item_features(
+            &mut item,
+            &rules(&[], &["unstable"]),
+            &src
+        ));
         let s = item.to_token_stream().to_string();
         assert!(s.contains("a : i32"), "{s}");
         assert!(!s.contains("b : i64"), "{s}");
@@ -255,11 +259,18 @@ mod tests {
 
         // Enabled → the parameter is kept and its cfg attribute is stripped.
         let mut item = make();
-        assert!(process_item_features(&mut item, &rules(&["unstable"], &[]), &src));
+        assert!(process_item_features(
+            &mut item,
+            &rules(&["unstable"], &[]),
+            &src
+        ));
         let s = item.to_token_stream().to_string();
         assert!(s.contains("a : i32"), "{s}");
         assert!(s.contains("b : i64"), "{s}");
-        assert!(!s.contains("cfg"), "cfg attr should be stripped on keep: {s}");
+        assert!(
+            !s.contains("cfg"),
+            "cfg attr should be stripped on keep: {s}"
+        );
     }
 
     /// Parameters without a cfg attribute are untouched.
@@ -269,8 +280,15 @@ mod tests {
         let mut item: syn::Item = syn::parse_quote! {
             pub fn g(x: u8, y: u16, z: u32) {}
         };
-        assert!(process_item_features(&mut item, &rules(&[], &["unstable"]), &src));
+        assert!(process_item_features(
+            &mut item,
+            &rules(&[], &["unstable"]),
+            &src
+        ));
         let s = item.to_token_stream().to_string();
-        assert!(s.contains("x : u8") && s.contains("y : u16") && s.contains("z : u32"), "{s}");
+        assert!(
+            s.contains("x : u8") && s.contains("y : u16") && s.contains("z : u32"),
+            "{s}"
+        );
     }
 }
