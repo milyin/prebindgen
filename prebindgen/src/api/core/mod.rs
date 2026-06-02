@@ -9,12 +9,14 @@
 //! language adapter that implements [`prebindgen::Prebindgen`] — none are
 //! built in yet (see the staged unification plan).
 
+pub mod gravestone;
 pub mod niches;
 pub mod prebindgen;
 pub mod registry;
 pub(crate) mod resolve;
 pub(crate) mod write;
 
+pub use self::gravestone::Gravestone;
 pub use self::niches::{NicheSlot, Niches};
 pub use self::prebindgen::{ConverterImpl, IntoSource, IntoSourceMode, Prebindgen, Stage};
 pub use self::registry::{Direction, Registry, ScanError, TypeEntry, TypeKey, WriteRustError};

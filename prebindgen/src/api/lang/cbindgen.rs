@@ -86,6 +86,19 @@ struct TypeCfg {
     drop_name: Option<String>,
 }
 
+/// Per-`value_opaque` configuration: the opaque `#[repr(C, align(_))]` counterpart
+/// type the Rust value is transmuted to/from, plus the usual name config.
+#[derive(Clone)]
+struct ValueOpaqueCfg {
+    /// The opaque counterpart type (defined elsewhere — e.g. by a size/align
+    /// probe generator). Used verbatim as the by-value wire type. Must implement
+    /// [`crate::core::Gravestone`] and have identical size+align to the Rust type
+    /// (a `const _` assert is emitted to enforce the latter, fail-closed).
+    opaque: syn::Type,
+    /// Name config (`.name()` override; default naming via the manglers).
+    cfg: TypeCfg,
+}
+
 /// Per-declared-callback configuration.
 #[derive(Clone, Default)]
 struct CbCfg {
@@ -114,6 +127,7 @@ struct FnCfg {
 enum CurrentDecl {
     Ptr(TypeKey),
     Data(TypeKey),
+    ValueOpaque(TypeKey),
     Enum(TypeKey),
     Callback(CallbackKey),
     Function(syn::Ident),
@@ -149,6 +163,10 @@ pub struct Cbindgen {
     opaque: HashMap<TypeKey, TypeCfg>,
     /// By-value `#[repr(C)]` data structs.
     data: HashMap<TypeKey, TypeCfg>,
+    /// Inline-opaque by-value types: the Rust value is transmuted to/from an
+    /// opaque `#[repr(C, align(_))]` counterpart of identical size+align (no
+    /// `Box`). Keyed by the Rust type; the value carries the opaque counterpart.
+    value_opaque: HashMap<TypeKey, ValueOpaqueCfg>,
     /// Enum types.
     enums: HashMap<TypeKey, TypeCfg>,
     /// Declared callback signatures (`impl Fn(...) + Send + Sync + 'static`),
@@ -344,6 +362,32 @@ impl Cbindgen {
         self
     }
 
+    /// Declare an **inline-opaque by-value** type: the Rust value `rust_ty` is
+    /// passed across the C ABI *by value* (no `Box`) by transmuting it to/from
+    /// `opaque_ty`, an opaque `#[repr(C, align(_))]` counterpart of identical
+    /// size+align (typically produced by a size/align probe generator and defined
+    /// elsewhere). `opaque_ty` must implement [`crate::core::Gravestone`]. The
+    /// generated converters `ptr::read`/`write` between the two, emit `const _`
+    /// size+align equality asserts (fail-closed), write a gravestone back on
+    /// consume (safe drop-after-move), and expose an `Option<rust_ty>` null niche.
+    pub fn value_opaque(mut self, rust_ty: syn::Type, opaque_ty: syn::Type) -> Self {
+        let key = TypeKey::from_type(&rust_ty);
+        assert!(
+            !self.ignored_types.contains(&key),
+            "Cbindgen::value_opaque cannot declare `{}` because it is already ignored",
+            key
+        );
+        self.value_opaque.insert(
+            key.clone(),
+            ValueOpaqueCfg {
+                opaque: opaque_ty,
+                cfg: TypeCfg::default(),
+            },
+        );
+        self.current = Some(CurrentDecl::ValueOpaque(key));
+        self
+    }
+
     /// Mark a `#[prebindgen]` type as intentionally ignored by this adapter.
     /// Root-level modifier: suppresses the registry's "skipping undeclared"
     /// warning for that type without scanning or emitting it.
@@ -352,6 +396,7 @@ impl Cbindgen {
         assert!(
             !self.opaque.contains_key(&key)
                 && !self.data.contains_key(&key)
+                && !self.value_opaque.contains_key(&key)
                 && !self.enums.contains_key(&key),
             "Cbindgen::ignore_type cannot ignore `{}` because it is already declared",
             key
@@ -376,6 +421,13 @@ impl Cbindgen {
             }
             Some(CurrentDecl::Data(key)) => {
                 self.data.get_mut(&key).expect("entry vanished").c_name = Some(name);
+            }
+            Some(CurrentDecl::ValueOpaque(key)) => {
+                self.value_opaque
+                    .get_mut(&key)
+                    .expect("entry vanished")
+                    .cfg
+                    .c_name = Some(name);
             }
             Some(CurrentDecl::Enum(key)) => {
                 self.enums.get_mut(&key).expect("entry vanished").c_name = Some(name);
@@ -526,7 +578,15 @@ impl Cbindgen {
         self.opaque
             .get(&key)
             .or_else(|| self.data.get(&key))
+            .or_else(|| self.value_opaque.get(&key).map(|c| &c.cfg))
             .or_else(|| self.enums.get(&key))
+    }
+
+    /// The opaque counterpart type of a declared `value_opaque`, if any.
+    fn value_opaque_ty(&self, ty: &syn::Type) -> Option<&syn::Type> {
+        self.value_opaque
+            .get(&TypeKey::from_type(ty))
+            .map(|c| &c.opaque)
     }
 
     /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
@@ -623,6 +683,7 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
         None => "no declaration".to_string(),
         Some(CurrentDecl::Ptr(k)) => format!("ptr_struct `{}`", k.as_str()),
         Some(CurrentDecl::Data(k)) => format!("data_struct `{}`", k.as_str()),
+        Some(CurrentDecl::ValueOpaque(k)) => format!("value_opaque `{}`", k.as_str()),
         Some(CurrentDecl::Enum(k)) => format!("enum_type `{}`", k.as_str()),
         Some(CurrentDecl::Callback(k)) => {
             let args: Vec<&str> = k.iter().map(|t| t.as_str()).collect();
@@ -647,6 +708,7 @@ impl Prebindgen for Cbindgen {
         self.opaque
             .keys()
             .chain(self.data.keys())
+            .chain(self.value_opaque.keys())
             .chain(self.enums.keys())
             .cloned()
             .collect()
@@ -798,6 +860,47 @@ impl Prebindgen for Cbindgen {
                     #(#field_defs,)*
                 }
             ));
+        }
+
+        // Value-opaque types: the opaque `#[repr(C, align(_))]` counterpart is
+        // defined elsewhere (e.g. a size/align probe generator). Here we emit only
+        // the fail-closed size+align equality asserts and the typed `_drop` (drops
+        // the live Rust value in place; NULL/gravestone ⇒ no-op).
+        {
+            let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
+            vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+            for (key, cfg) in vo {
+                let ty = key.to_type();
+                if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+                    continue;
+                }
+                let src = self.src_ty(&ty);
+                let opaque = &cfg.opaque;
+                items.push(syn::parse_quote!(
+                    const _: () = {
+                        assert!(
+                            ::core::mem::size_of::<#src>() == ::core::mem::size_of::<#opaque>(),
+                            "value_opaque: Rust type and opaque counterpart differ in size"
+                        );
+                        assert!(
+                            ::core::mem::align_of::<#src>() == ::core::mem::align_of::<#opaque>(),
+                            "value_opaque: Rust type and opaque counterpart differ in alignment"
+                        );
+                    };
+                ));
+                let drop_ident = self.destructor_symbol(&ty);
+                items.push(syn::parse_quote!(
+                    #[no_mangle]
+                    #[allow(non_snake_case, unused_variables)]
+                    pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
+                        if !this_.is_null()
+                            && !<#opaque as ::prebindgen::Gravestone>::is_gravestone(&*this_)
+                        {
+                            ::core::ptr::drop_in_place(this_ as *mut #src);
+                        }
+                    }
+                ));
+            }
         }
 
         // Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
@@ -957,6 +1060,46 @@ impl Prebindgen for Cbindgen {
             );
             return Some(ConverterImpl {
                 destination: syn::parse_quote!(#c_struct),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
+        // Value-opaque, by-`*mut` consume: read the live Rust value out by
+        // transmute, then write a gravestone back (safe drop-after-move). NULL ⇒
+        // Err (and the `Option<_>` wrapper maps a NULL pointer wire → None);
+        // gravestone (moved-from) ⇒ Err.
+        if let Some(opaque) = self.value_opaque_ty(ty) {
+            let opaque = opaque.clone();
+            let name = Self::in_name(ty);
+            let src = self.src_ty(ty);
+            let short = type_short(ty);
+            let null_msg = format!("null {short} value passed by value");
+            let moved_msg = format!("moved-from (gravestone) {short} value");
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(
+                    v: *mut #opaque,
+                ) -> ::core::result::Result<#src, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_msg),
+                        );
+                    }
+                    if <#opaque as ::prebindgen::Gravestone>::is_gravestone(&*v) {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#moved_msg),
+                        );
+                    }
+                    let __live = ::core::ptr::read(v as *mut #src);
+                    ::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());
+                    ::core::result::Result::Ok(__live)
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(*mut #opaque),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -1494,6 +1637,29 @@ impl Prebindgen for Cbindgen {
             );
             return Some(ConverterImpl {
                 destination: syn::parse_quote!(#c_struct),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
+        // Value-opaque output: move the Rust value's bytes into the opaque
+        // counterpart, by value (no Box). Size/align equality is asserted at the
+        // type's emission site (fail-closed).
+        if let Some(opaque) = self.value_opaque_ty(ty) {
+            let opaque = opaque.clone();
+            let name = Self::out_name(ty);
+            let src = self.src_ty(ty);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #src) -> #opaque {
+                    let __v = ::core::mem::ManuallyDrop::new(v);
+                    unsafe { ::core::ptr::read(&*__v as *const #src as *const #opaque) }
+                }
+            );
+            return Some(ConverterImpl {
+                destination: opaque,
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -2724,6 +2890,84 @@ mod tests {
         assert!(compact.contains("->*mutu8"), "{src}");
         assert!(compact.contains("len:*mutusize"), "{src}");
         assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
+    }
+
+    /// A `value_opaque` type is passed BY VALUE via transmute to/from an opaque
+    /// counterpart (no `Box`): output `ptr::read`s the bytes, consume reads them
+    /// out by `*mut` and writes a gravestone back, `_drop` runs the live value's
+    /// destructor, and size+align equality is asserted (fail-closed).
+    #[test]
+    fn value_opaque_transmute_by_value() {
+        let loc = SourceLocation::default();
+        let st: syn::ItemStruct = syn::parse_quote!(
+            pub struct Payload {
+                pub inner: Vec<u8>,
+            }
+        );
+        let out_fn: syn::ItemFn = syn::parse_quote!(
+            pub fn z_payload_make() -> Payload {
+                unimplemented!()
+            }
+        );
+        let in_fn: syn::ItemFn = syn::parse_quote!(
+            pub fn z_payload_take(p: Payload) {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Struct(st), loc.clone()),
+            (syn::Item::Fn(out_fn), loc.clone()),
+            (syn::Item::Fn(in_fn), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .value_opaque(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
+            .name("z_payload_t")
+            .function(syn::parse_quote!(z_payload_make))
+            .function(syn::parse_quote!(z_payload_take))
+            .panic();
+
+        let src = write(&cbindgen, &mut registry, "value_opaque");
+        let compact: String = src.split_whitespace().collect();
+
+        // Fail-closed size + align asserts against the opaque counterpart.
+        assert!(
+            compact.contains("size_of::<zenoh_flat::Payload>()==::core::mem::size_of::<OpaquePayload>()"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("align_of::<zenoh_flat::Payload>()==::core::mem::align_of::<OpaquePayload>()"),
+            "{src}"
+        );
+        // Output: by value, transmute via ManuallyDrop + ptr::read (NO Box).
+        assert!(!compact.contains("Box::into_raw"), "{src}");
+        assert!(compact.contains("ManuallyDrop::new(v)"), "{src}");
+        assert!(
+            compact.contains("ptr::read(&*__vas*constzenoh_flat::Payloadas*constOpaquePayload)"),
+            "{src}"
+        );
+        // Consume: `*mut OpaquePayload`, gravestone check + write-back.
+        assert!(compact.contains("v:*mutOpaquePayload"), "{src}");
+        assert!(
+            compact.contains("<OpaquePaylo") && compact.contains("Gravestone>::is_gravestone(&*v)"),
+            "{src}"
+        );
+        assert!(compact.contains("ptr::read(vas*mutzenoh_flat::Payload)"), "{src}");
+        assert!(
+            compact.contains("ptr::write(v,<OpaquePayloadas::prebindgen::Gravestone>::gravestone())"),
+            "{src}"
+        );
+        // Typed drop runs the live value's destructor (gravestone-safe).
+        assert!(
+            compact.contains("fnz_payload_t_drop(this_:*mutOpaquePayload)"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("drop_in_place(this_as*mutzenoh_flat::Payload)"),
+            "{src}"
+        );
     }
 
     /// `Result<Vec<T>, E>` has no free niche (the array NULL means *empty*), so
