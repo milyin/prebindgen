@@ -7,6 +7,33 @@
 //! - `prebindgen_out_dir!()` - Macro that returns the prebindgen output directory path
 //! - `features!()` - Macro that returns the list of features enabled for the crate
 //!
+//! # Crate features
+//!
+//! - **`inline`** *(off by default)* — inject `#[inline]` onto every function
+//!   marked with `#[prebindgen]` (types/consts are unaffected).
+//!
+//!   prebindgen wrappers are usually thin shims that forward to a native API. A
+//!   non-generic `pub fn` in one crate is **not** inlined into a Rust caller in
+//!   another crate unless the function is `#[inline]` *or* the final binary is
+//!   built with link-time optimization. Without inlining, every wrapper call
+//!   costs an extra cross-crate call (measurable on hot paths — e.g. a per-message
+//!   publish loop).
+//!
+//!   Two ways to make the wrappers zero-cost:
+//!   1. Build the final artifact with **LTO** (`[profile.release] lto = "fat"`,
+//!      `codegen-units = 1`). Cross-crate inlining then happens automatically and
+//!      this feature is redundant. This is the recommended setup for an FFI
+//!      `cdylib`/`staticlib` and matches how upstream zenoh builds its release
+//!      profile.
+//!   2. Enable **`inline`** when you cannot rely on LTO — e.g. the wrapper crate is
+//!      consumed as a normal Rust dependency by crates that build *without* LTO.
+//!
+//!   It is opt-in because prebindgen can also wrap non-trivial functions where
+//!   forcing `#[inline]` would only bloat the consumer; enable it only for genuine
+//!   thin-wrapper libraries. The feature affects **only** the Rust function emitted
+//!   into the wrapper crate — the recorded definition used for binding generation
+//!   (and the resulting C ABI) is unchanged.
+//!
 //! See also: [`prebindgen`](https://docs.rs/prebindgen) for the main processing library.
 //!
 use std::{collections::HashMap, fs::OpenOptions};
@@ -197,6 +224,12 @@ fn get_prebindgen_jsonl_path(group: &str) -> std::path::PathBuf {
 /// - Must call `prebindgen::init_prebindgen_out_dir()` in your crate's `build.rs`
 /// - Optionally takes a string literal group name for organization (defaults to "default")
 /// - Optionally takes `cfg = "condition"` to add `#[cfg(condition)]` to generated code
+///
+/// # The `inline` feature
+///
+/// With the crate `inline` feature enabled, this macro prepends `#[inline]` to the
+/// emitted function so thin wrappers stay zero-cost for Rust consumers that do not
+/// build with LTO. Off by default; see the crate-level documentation.
 #[proc_macro_attribute]
 pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
     let input_clone = input.clone();
@@ -257,6 +290,10 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         return unsupported_item_error(item);
     };
 
+    // The `inline` feature adds `#[inline]` to function wrappers only (not to
+    // structs/enums/types/consts). Captured here before `kind` is moved below.
+    let is_function = matches!(kind, RecordKind::Function);
+
     // Extract basic source location information available during compilation
     let source_location = SourceLocation::from_span(&span);
 
@@ -277,22 +314,33 @@ pub fn prebindgen(args: TokenStream, input: TokenStream) -> TokenStream {
         });
     }
 
-    // Apply cfg attribute to the original code if specified
-    if let Some(cfg_value) = &parsed_args.cfg {
+    // Re-emit the original item, optionally prepending `#[cfg(...)]` (from the
+    // macro argument) and `#[inline]` (when the `inline` feature is on, functions
+    // only). When neither applies, the original tokens are returned unchanged.
+    let add_inline = cfg!(feature = "inline") && is_function;
+    if parsed_args.cfg.is_none() && !add_inline {
+        return input_clone;
+    }
+    let inline_attr = if add_inline {
+        quote! { #[inline] }
+    } else {
+        quote! {}
+    };
+    let cfg_attr = if let Some(cfg_value) = &parsed_args.cfg {
         let cfg_tokens: proc_macro2::TokenStream = cfg_value
             .parse()
             .unwrap_or_else(|_| panic!("Invalid cfg condition: {}", cfg_value));
-        let cfg_attr = quote! { #[cfg(#cfg_tokens)] };
-        let original_tokens: proc_macro2::TokenStream = input_clone.into();
-        let result = quote! {
-            #cfg_attr
-            #original_tokens
-        };
-        result.into()
+        quote! { #[cfg(#cfg_tokens)] }
     } else {
-        // Otherwise return the original input unchanged
-        input_clone
+        quote! {}
+    };
+    let original_tokens: proc_macro2::TokenStream = input_clone.into();
+    quote! {
+        #cfg_attr
+        #inline_attr
+        #original_tokens
     }
+    .into()
 }
 
 /// Proc macro that returns the prebindgen output directory path as a string literal.

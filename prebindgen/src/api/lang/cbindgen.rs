@@ -820,6 +820,7 @@ impl Prebindgen for Cbindgen {
             });
             items.push(syn::parse_quote!(
                 #[repr(C)]
+                #[derive(Copy, Clone, Debug, Eq, PartialEq)]
                 #[allow(non_camel_case_types)]
                 pub enum #cname {
                     #(#variants),*
