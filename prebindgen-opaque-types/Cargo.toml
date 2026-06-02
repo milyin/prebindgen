@@ -14,6 +14,13 @@ readme = "README.md"
 
 [dependencies]
 object = { version = "0.36", default-features = false, features = ["read", "std", "archive", "elf", "macho", "pe", "coff"] }
+toml = { workspace = true }
+# Version (crates.io) dependency, NOT a path/workspace dep, so a downstream
+# consumer's `[patch.crates-io]` (added by `cargo prebindgen-project-root install`)
+# can redirect it to the consumer's own in-workspace copy — which is how this
+# crate learns the *destination* project's root. Within this workspace the
+# top-level `[patch.crates-io]` supplies the local copy.
+prebindgen-project-root = "0.4"
 anyhow = "1"
 
 [dev-dependencies]

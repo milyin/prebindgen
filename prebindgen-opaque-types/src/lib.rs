@@ -49,12 +49,20 @@ impl OpaqueType {
 
 /// Builder for an opaque-types generation run.
 ///
+/// The source crate is identified solely by its **manifest directory** — pass
+/// prebindgen's `MANIFEST_DIR` constant (which the source crate exports via
+/// `prebindgen_proc_macro::manifest_dir!()`), so it works wherever the marked
+/// crate actually lives — a path dependency anywhere, a git dependency, or
+/// crates.io — without the consumer assuming any layout. The package name is read
+/// from that directory's `Cargo.toml`.
+///
 /// Sensible defaults for the `build.rs` use case: `build_dir` =
-/// `$OUT_DIR/opaque_probe`, `cargo_lock` = `$CARGO_MANIFEST_DIR/Cargo.lock` (if it
-/// exists), default features on. Typical use:
+/// `$OUT_DIR/opaque_probe`, `cargo_lock` = the destination workspace's `Cargo.lock`
+/// (via [`prebindgen-project-root`]; the consumer must run
+/// `cargo prebindgen-project-root install`), default features on. Typical use:
 ///
 /// ```ignore
-/// let opaque = prebindgen_opaque_types::OpaqueTypes::new("../zenoh-flat", "zenoh-flat")
+/// let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
 ///     .features(zenoh_flat::FEATURES)            // prebindgen's feature string
 ///     .add("zenoh_flat::ZZBytes", "z_zbytes_t")
 ///     .generate()?;
@@ -62,33 +70,26 @@ impl OpaqueType {
 #[derive(Clone, Debug)]
 pub struct OpaqueTypes {
     source_manifest_dir: PathBuf,
-    source_package: String,
     features: Vec<String>,
     no_default_features: bool,
     types: Vec<OpaqueType>,
-    cargo_lock: Option<PathBuf>,
+    cargo_lock: PathBuf,
     build_dir: Option<PathBuf>,
 }
 
 impl OpaqueTypes {
-    /// Start a run probing types from the source crate whose manifest dir is
-    /// `source_manifest_dir` and whose `[dependencies]` key is `source_package`.
-    pub fn new(
-        source_manifest_dir: impl Into<PathBuf>,
-        source_package: impl Into<String>,
-    ) -> Self {
+    /// Start a run probing types from the source crate located at
+    /// `source_manifest_dir` — pass the source crate's `MANIFEST_DIR` constant.
+    /// The package name is read from `<source_manifest_dir>/Cargo.toml`.
+    pub fn new(source_manifest_dir: impl Into<PathBuf>) -> Self {
         let build_dir =
             std::env::var_os("OUT_DIR").map(|o| PathBuf::from(o).join("opaque_probe"));
-        let cargo_lock = std::env::var_os("CARGO_MANIFEST_DIR")
-            .map(|m| PathBuf::from(m).join("Cargo.lock"))
-            .filter(|p| p.exists());
         Self {
             source_manifest_dir: source_manifest_dir.into(),
-            source_package: source_package.into(),
             features: Vec::new(),
             no_default_features: false,
             types: Vec::new(),
-            cargo_lock,
+            cargo_lock: default_cargo_lock(),
             build_dir,
         }
     }
@@ -121,10 +122,10 @@ impl OpaqueTypes {
         self
     }
 
-    /// Override the `Cargo.lock` copied into the probe crate (default:
-    /// `$CARGO_MANIFEST_DIR/Cargo.lock` if present).
+    /// Override the `Cargo.lock` copied into the probe crate (default: the
+    /// destination workspace's lock, located via [`prebindgen-project-root`]).
     pub fn cargo_lock(mut self, path: impl Into<PathBuf>) -> Self {
-        self.cargo_lock = Some(path.into());
+        self.cargo_lock = path.into();
         self
     }
 
@@ -217,11 +218,43 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
     )
 }
 
+/// The **destination project's** `Cargo.lock`, so the probe resolves dependencies
+/// identically to the cdylib build.
+///
+/// The workspace root comes from [`prebindgen_project_root::get_project_root`] —
+/// correct even for a consumer installed from crates.io, because
+/// `prebindgen-project-root` is patched into the *destination* workspace, so every
+/// copy in the graph (including this library's dependency on it) resolves to that
+/// member copy and reports the destination root. The consumer must have run
+/// `cargo prebindgen-project-root install` (otherwise `get_project_root` panics
+/// with guidance — there is intentionally no silent fallback).
+fn default_cargo_lock() -> PathBuf {
+    prebindgen_project_root::get_project_root().join("Cargo.lock")
+}
+
+/// Read the `[package].name` of the crate whose manifest dir is `manifest_dir`.
+/// It is the `[dependencies]` key the probe must use for a path dependency.
+fn read_package_name(manifest_dir: &Path) -> Result<String> {
+    let manifest_path = manifest_dir.join("Cargo.toml");
+    let text = std::fs::read_to_string(&manifest_path)
+        .with_context(|| format!("reading {}", manifest_path.display()))?;
+    let table: toml::Table = text
+        .parse()
+        .with_context(|| format!("parsing {}", manifest_path.display()))?;
+    table
+        .get("package")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow!("no `[package].name` (string) in {}", manifest_path.display()))
+}
+
 /// Write the probe crate (`Cargo.toml` + `src/lib.rs`, and `Cargo.lock` if given).
 fn write_probe_crate(b: &OpaqueTypes, build_dir: &Path) -> Result<()> {
     let src = build_dir.join("src");
     std::fs::create_dir_all(&src)
         .with_context(|| format!("creating probe src dir {}", src.display()))?;
+    let package = read_package_name(&b.source_manifest_dir)?;
 
     let features_toml = if b.features.is_empty() {
         String::new()
@@ -239,17 +272,15 @@ fn write_probe_crate(b: &OpaqueTypes, build_dir: &Path) -> Result<()> {
          publish = false\n\n[lib]\ncrate-type = [\"lib\"]\n\n[dependencies]\n\
          {pkg} = {{ path = {path:?}, default-features = {dflt}{features} }}\n\n\
          [workspace]\n",
-        pkg = b.source_package,
+        pkg = package,
         path = b.source_manifest_dir,
         dflt = !b.no_default_features,
         features = features_toml,
     );
     std::fs::write(build_dir.join("Cargo.toml"), manifest)?;
     std::fs::write(src.join("lib.rs"), render_probe_lib(&b.types))?;
-    if let Some(lock) = &b.cargo_lock {
-        if lock.exists() {
-            let _ = std::fs::copy(lock, build_dir.join("Cargo.lock"));
-        }
+    if b.cargo_lock.exists() {
+        let _ = std::fs::copy(&b.cargo_lock, build_dir.join("Cargo.lock"));
     }
     Ok(())
 }
@@ -363,7 +394,7 @@ mod tests {
 
     #[test]
     fn features_string_parsed_and_disables_defaults() {
-        let b = OpaqueTypes::new("/tmp/src", "zenoh-flat")
+        let b = OpaqueTypes::new("/tmp/src")
             .features("zenoh-flat/unstable zenoh-flat/shared-memory zenoh-flat/transport_tcp")
             .add("zenoh_flat::ZZBytes", "z_zbytes_t");
         assert_eq!(

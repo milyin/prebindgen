@@ -410,3 +410,31 @@ pub fn features(_input: TokenStream) -> TokenStream {
     let lit = syn::LitStr::new(&features, proc_macro2::Span::call_site());
     TokenStream::from(quote! { #lit })
 }
+
+/// Proc macro that returns the **source crate's** manifest directory as a string
+/// literal (its `CARGO_MANIFEST_DIR` at compile time).
+///
+/// Exposing this lets a downstream binding crate locate the marked source crate
+/// *wherever it lives* (a path/git/registry dependency) without guessing layout —
+/// e.g. to compile a size/alignment probe against it. This complements
+/// [`prebindgen_out_dir!`](macro@prebindgen_out_dir) and [`features!`](macro@features).
+///
+/// # Returns
+///
+/// A string literal with the absolute path to the source crate's manifest dir.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use prebindgen_proc_macro::manifest_dir;
+///
+/// // Create a public constant for use by binding crates
+/// pub const MANIFEST_DIR: &str = manifest_dir!();
+/// ```
+#[proc_macro]
+pub fn manifest_dir(_input: TokenStream) -> TokenStream {
+    let dir = std::env::var("CARGO_MANIFEST_DIR")
+        .expect("CARGO_MANIFEST_DIR environment variable not set");
+    let lit = syn::LitStr::new(&dir, proc_macro2::Span::call_site());
+    TokenStream::from(quote! { #lit })
+}
