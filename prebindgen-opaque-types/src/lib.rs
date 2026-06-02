@@ -1,0 +1,311 @@
+//! Build-time generator of **opaque `#[repr(C, align(_))]` counterpart structs**
+//! for prebindgen's inline-by-value FFI (`lang::Cbindgen::value_opaque`).
+//!
+//! For each requested Rust type it emits an opaque struct of byte-identical size
+//! and alignment, e.g.
+//!
+//! ```ignore
+//! #[repr(C, align(8))]
+//! pub struct z_zbytes_t { _0: [u8; 32] }
+//! ```
+//!
+//! The size/alignment are obtained by **symbol extraction**: a tiny probe crate
+//! that depends on the source crate is compiled *for the build's `$TARGET`* (so
+//! the layout is correct under cross-compilation, where the host layout would be
+//! wrong), exporting `#[no_mangle] static` `usize` constants whose values are then
+//! read back from the compiled artifact with the `object` crate — no execution of
+//! target code. The `lang::Cbindgen` `value_opaque` converters additionally emit
+//! `const _` size/align equality asserts, so a wrong probe fails the *consumer's*
+//! build (fail-closed) rather than corrupting memory.
+//!
+//! Usage from a consumer `build.rs`:
+//! ```ignore
+//! let cfg = Config { /* source crate, features, types, build_dir, … */ };
+//! let generated = prebindgen_opaque_types::generate(&cfg)?;
+//! // include! `generated` into the crate AND feed it to cbindgen.
+//! ```
+
+use std::path::PathBuf;
+
+use anyhow::{anyhow, bail, Context, Result};
+
+/// One type to probe and the opaque struct identifier to emit for it.
+#[derive(Clone, Debug)]
+pub struct OpaqueType {
+    /// Rust path as visible from the probe crate, e.g. `"zenoh_flat::ZBytes"`.
+    pub rust_path: String,
+    /// Emitted opaque struct identifier, e.g. `"z_zbytes_t"`.
+    pub opaque_name: String,
+}
+
+impl OpaqueType {
+    pub fn new(rust_path: impl Into<String>, opaque_name: impl Into<String>) -> Self {
+        Self {
+            rust_path: rust_path.into(),
+            opaque_name: opaque_name.into(),
+        }
+    }
+}
+
+/// Configuration for one generation run.
+#[derive(Clone, Debug)]
+pub struct Config {
+    /// Path to the source crate's manifest dir (for the probe's `path` dependency).
+    pub source_manifest_dir: PathBuf,
+    /// The source crate's package name (the `[dependencies]` key), e.g.
+    /// `"zenoh-flat"`.
+    pub source_package: String,
+    /// Cargo features to enable on the source crate (mirror the consumer's, so the
+    /// probed layout matches the final cdylib).
+    pub features: Vec<String>,
+    /// Pass `--no-default-features` to the source dep (usually true, to mirror
+    /// exactly via the explicit feature list).
+    pub no_default_features: bool,
+    /// Types to probe and emit opaque counterparts for.
+    pub types: Vec<OpaqueType>,
+    /// Optional workspace `Cargo.lock` to copy into the probe crate for
+    /// reproducible dependency resolution (strongly recommended; resolve it via
+    /// `prebindgen-project-root`).
+    pub cargo_lock: Option<PathBuf>,
+    /// Directory to materialize and build the probe crate in (e.g.
+    /// `$OUT_DIR/opaque_probe`).
+    pub build_dir: PathBuf,
+}
+
+const PROBE_CRATE: &str = "prebindgen_opaque_probe";
+
+/// Symbol name for a probed quantity (`"SIZE"` / `"ALIGN"`) of an opaque type.
+fn sym_name(kind: &str, opaque_name: &str) -> String {
+    format!("PREBINDGEN_{kind}_{opaque_name}")
+}
+
+/// Render the probe crate's `lib.rs`: one `#[no_mangle] static usize` per quantity.
+pub fn render_probe_lib(types: &[OpaqueType]) -> String {
+    let mut s = String::from(
+        "// @generated probe crate for prebindgen-opaque-types — do not edit.\n\
+         #![allow(non_upper_case_globals, dead_code)]\n",
+    );
+    for t in types {
+        let size_sym = sym_name("SIZE", &t.opaque_name);
+        let align_sym = sym_name("ALIGN", &t.opaque_name);
+        let path = &t.rust_path;
+        s.push_str(&format!(
+            "#[no_mangle]\n#[used]\npub static {size_sym}: usize = ::core::mem::size_of::<{path}>();\n\
+             #[no_mangle]\n#[used]\npub static {align_sym}: usize = ::core::mem::align_of::<{path}>();\n",
+        ));
+    }
+    s
+}
+
+/// Render one opaque counterpart struct.
+///
+/// Only the `#[repr(C, align)]` struct is emitted. The `prebindgen::Gravestone`
+/// impl is the consumer's responsibility (the empty-state is type-specific, and
+/// the opaque type is local to the consumer so the impl is orphan-rule legal):
+///
+/// ```ignore
+/// impl ::prebindgen::Gravestone for z_zbytes_t {
+///     fn gravestone() -> Self { unsafe {
+///         ::core::mem::transmute_copy(&::core::mem::ManuallyDrop::new(
+///             <zenoh_flat::ZZBytes as Default>::default()))
+///     } }
+///     fn is_gravestone(&self) -> bool { unsafe {
+///         (*(self as *const Self as *const zenoh_flat::ZZBytes)).is_empty()
+///     } }
+/// }
+/// ```
+pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
+    // The byte field is `pub` so cbindgen emits a *complete* C type
+    // (`{ uint8_t _0[N]; }`) — required to pass the opaque by value. (It carries
+    // no real fields to access; it is only ever transmuted to/from the Rust type.)
+    format!(
+        "#[repr(C, align({align}))]\n#[allow(non_camel_case_types)]\n\
+         pub struct {opaque_name} {{\n    pub _0: [u8; {size}],\n}}\n\n"
+    )
+}
+
+/// Write the probe crate (`Cargo.toml` + `src/lib.rs`, and `Cargo.lock` if given).
+fn write_probe_crate(cfg: &Config) -> Result<()> {
+    let src = cfg.build_dir.join("src");
+    std::fs::create_dir_all(&src)
+        .with_context(|| format!("creating probe src dir {}", src.display()))?;
+
+    let features_toml = if cfg.features.is_empty() {
+        String::new()
+    } else {
+        let list = cfg
+            .features
+            .iter()
+            .map(|f| format!("\"{f}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(", features = [{list}]")
+    };
+    let manifest = format!(
+        "[package]\nname = \"{PROBE_CRATE}\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\
+         publish = false\n\n[lib]\ncrate-type = [\"lib\"]\n\n[dependencies]\n\
+         {pkg} = {{ path = {path:?}, default-features = {dflt}{features} }}\n\n\
+         [workspace]\n",
+        pkg = cfg.source_package,
+        path = cfg.source_manifest_dir,
+        dflt = !cfg.no_default_features,
+        features = features_toml,
+    );
+    std::fs::write(cfg.build_dir.join("Cargo.toml"), manifest)?;
+    std::fs::write(src.join("lib.rs"), render_probe_lib(&cfg.types))?;
+    if let Some(lock) = &cfg.cargo_lock {
+        if lock.exists() {
+            let _ = std::fs::copy(lock, cfg.build_dir.join("Cargo.lock"));
+        }
+    }
+    Ok(())
+}
+
+/// Build the probe crate for `$TARGET` and return the path to its rlib.
+fn build_probe(cfg: &Config, target: &str) -> Result<PathBuf> {
+    let mut cmd = std::process::Command::new(std::env::var("CARGO").unwrap_or("cargo".into()));
+    cmd.current_dir(&cfg.build_dir)
+        .arg("build")
+        .arg("--offline")
+        .arg("--message-format=json-render-diagnostics")
+        .arg("--manifest-path")
+        .arg(cfg.build_dir.join("Cargo.toml"));
+    if !target.is_empty() {
+        cmd.arg("--target").arg(target);
+    }
+    // Isolate the probe's target dir from the consumer's (avoid lock contention).
+    cmd.arg("--target-dir").arg(cfg.build_dir.join("target"));
+    let out = cmd.output().context("spawning cargo for the probe crate")?;
+    if !out.status.success() {
+        bail!(
+            "probe build failed:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    // Parse cargo JSON for the probe crate's rlib artifact.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let mut rlib: Option<PathBuf> = None;
+    for line in stdout.lines() {
+        // Minimal JSON scan (avoid a serde dep): look for the probe's artifact line.
+        if line.contains("\"compiler-artifact\"") && line.contains(PROBE_CRATE) {
+            if let Some(p) = extract_first_rlib(line) {
+                rlib = Some(PathBuf::from(p));
+            }
+        }
+    }
+    rlib.ok_or_else(|| anyhow!("probe rlib artifact not found in cargo output"))
+}
+
+/// Pull the first `.rlib` path out of a cargo `compiler-artifact` JSON line.
+fn extract_first_rlib(line: &str) -> Option<String> {
+    // `"filenames":["...rlib", ...]` — find the first quoted token ending in .rlib.
+    let idx = line.find("\"filenames\"")?;
+    let rest = &line[idx..];
+    for tok in rest.split('"') {
+        if tok.ends_with(".rlib") {
+            return Some(tok.to_string());
+        }
+    }
+    None
+}
+
+/// Read the `usize` value of a `#[no_mangle] static` named `sym` from a compiled
+/// rlib/object (an `ar` archive of object files). Tries the bare name and the
+/// Mach-O `_`-prefixed variant.
+pub fn read_symbol_usize(artifact: &[u8], sym: &str) -> Result<usize> {
+    use object::{Object, ObjectSection, ObjectSymbol};
+
+    let with_underscore = format!("_{sym}");
+    let matches = |name: &str| name == sym || name == with_underscore;
+
+    let read_from = |obj: &object::File| -> Option<usize> {
+        let ptr_bytes = if obj.is_64() { 8 } else { 4 };
+        let s = obj.symbols().find(|s| s.name().map(matches).unwrap_or(false))?;
+        let sec = obj.section_by_index(s.section_index()?).ok()?;
+        let data = sec.data().ok()?;
+        let off = s.address().checked_sub(sec.address())? as usize;
+        let bytes = data.get(off..off + ptr_bytes)?;
+        let mut v = [0u8; 8];
+        v[..ptr_bytes].copy_from_slice(bytes);
+        Some(u64::from_le_bytes(v) as usize)
+    };
+
+    // rlib / .a is an ar archive of object members; plain .o parses directly.
+    if let Ok(archive) = object::read::archive::ArchiveFile::parse(artifact) {
+        for member in archive.members() {
+            let member = member.map_err(|e| anyhow!("archive member: {e}"))?;
+            let data = member
+                .data(artifact)
+                .map_err(|e| anyhow!("archive member data: {e}"))?;
+            if let Ok(obj) = object::File::parse(data) {
+                if let Some(v) = read_from(&obj) {
+                    return Ok(v);
+                }
+            }
+        }
+    } else if let Ok(obj) = object::File::parse(artifact) {
+        if let Some(v) = read_from(&obj) {
+            return Ok(v);
+        }
+    }
+    bail!("symbol `{sym}` not found in probe artifact")
+}
+
+/// Probe sizes/alignments for `cfg.types` and write the opaque struct definitions
+/// to `<build_dir>/opaque_types.rs`. Returns the emitted Rust source.
+pub fn generate(cfg: &Config) -> Result<String> {
+    let target = std::env::var("TARGET").unwrap_or_default();
+    write_probe_crate(cfg)?;
+    let rlib = build_probe(cfg, &target)?;
+    let data = std::fs::read(&rlib).with_context(|| format!("reading {}", rlib.display()))?;
+
+    let mut out = String::from(
+        "// @generated by prebindgen-opaque-types — do not edit.\n\
+         // Opaque #[repr(C, align)] counterparts for value_opaque inline-by-value FFI.\n\n",
+    );
+    for t in &cfg.types {
+        let size = read_symbol_usize(&data, &sym_name("SIZE", &t.opaque_name))
+            .with_context(|| format!("probing size of `{}`", t.rust_path))?;
+        let align = read_symbol_usize(&data, &sym_name("ALIGN", &t.opaque_name))
+            .with_context(|| format!("probing align of `{}`", t.rust_path))?;
+        out.push_str(&render_opaque(&t.opaque_name, size, align));
+    }
+    let out_path = cfg.build_dir.join("opaque_types.rs");
+    std::fs::write(&out_path, &out).with_context(|| format!("writing {}", out_path.display()))?;
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_lib_emits_size_and_align_statics() {
+        let types = vec![OpaqueType::new("zenoh_flat::ZBytes", "z_zbytes_t")];
+        let s = render_probe_lib(&types);
+        assert!(s.contains(
+            "pub static PREBINDGEN_SIZE_z_zbytes_t: usize = ::core::mem::size_of::<zenoh_flat::ZBytes>();"
+        ));
+        assert!(s.contains(
+            "pub static PREBINDGEN_ALIGN_z_zbytes_t: usize = ::core::mem::align_of::<zenoh_flat::ZBytes>();"
+        ));
+        assert!(s.contains("#[no_mangle]") && s.contains("#[used]"));
+    }
+
+    #[test]
+    fn opaque_struct_renders_repr_c_align() {
+        let s = render_opaque("z_zbytes_t", 32, 8);
+        assert!(s.contains("#[repr(C, align(8))]"));
+        assert!(s.contains("pub struct z_zbytes_t"));
+        assert!(s.contains("pub _0: [u8; 32]"));
+    }
+
+    #[test]
+    fn rlib_artifact_path_parsed_from_cargo_json() {
+        let line = r#"{"reason":"compiler-artifact","package_id":"prebindgen_opaque_probe 0.0.0","filenames":["/tmp/t/target/debug/deps/libprebindgen_opaque_probe-abc.rlib"],"executable":null}"#;
+        assert_eq!(
+            extract_first_rlib(line).as_deref(),
+            Some("/tmp/t/target/debug/deps/libprebindgen_opaque_probe-abc.rlib")
+        );
+    }
+}

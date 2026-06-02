@@ -1,0 +1,20 @@
+[package]
+name = "prebindgen-opaque-types"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+documentation = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+rust-version = { workspace = true }
+description = "Build-time generator of opaque #[repr(C, align)] counterpart structs (size/align probe) for prebindgen's lang::Cbindgen value_opaque"
+readme = "README.md"
+
+[dependencies]
+object = { version = "0.36", default-features = false, features = ["read", "std", "archive", "elf", "macho", "pe", "coff"] }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = { workspace = true }
