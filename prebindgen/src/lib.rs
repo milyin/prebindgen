@@ -187,15 +187,15 @@ pub use crate::api::{
 pub mod core {
     pub use crate::api::core::{
         ConverterImpl, Direction, Gravestone, IntoSource, IntoSourceMode, NicheSlot, Niches,
-        Prebindgen, Registry, ScanError, Stage, TypeEntry, TypeKey, WriteRustError,
+        Prebindgen, Registry, ScanError, Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 
-/// Runtime trait implemented by inline-opaque (`value_opaque`) FFI counterpart
-/// types; see [`core::Gravestone`]. Re-exported at the crate root because the
-/// `extern "C"` converters emitted by [`lang::Cbindgen`] reference it as
-/// `::prebindgen::Gravestone`.
-pub use crate::api::core::gravestone::Gravestone;
+/// Runtime traits implemented by inline-opaque (`value_opaque`) FFI counterpart
+/// types; see [`core::Transmute`] / [`core::Gravestone`]. Re-exported at the crate
+/// root because the `extern "C"` converters emitted by [`lang::Cbindgen`]
+/// reference them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
+pub use crate::api::core::gravestone::{Gravestone, Transmute};
 
 /// Destination-language adapters implementing [`core::Prebindgen`].
 ///

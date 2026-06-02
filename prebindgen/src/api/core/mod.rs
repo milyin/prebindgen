@@ -16,7 +16,7 @@ pub mod registry;
 pub(crate) mod resolve;
 pub(crate) mod write;
 
-pub use self::gravestone::Gravestone;
+pub use self::gravestone::{Gravestone, Transmute};
 pub use self::niches::{NicheSlot, Niches};
 pub use self::prebindgen::{ConverterImpl, IntoSource, IntoSourceMode, Prebindgen, Stage};
 pub use self::registry::{Direction, Registry, ScanError, TypeEntry, TypeKey, WriteRustError};
