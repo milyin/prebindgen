@@ -1068,16 +1068,18 @@ impl Prebindgen for Cbindgen {
         }
 
         // Value-opaque, by-`*mut` consume: read the live Rust value out by
-        // transmute, then write a gravestone back (safe drop-after-move). NULL ⇒
-        // Err (and the `Option<_>` wrapper maps a NULL pointer wire → None);
-        // gravestone (moved-from) ⇒ Err.
+        // transmute (move), then write a gravestone back so a later `_drop` is a
+        // no-op (safe drop-after-move). Only the C pointer is null-checked — NULL ⇒
+        // Err, and the `Option<_>` wrapper maps a NULL pointer wire → None. (We do
+        // NOT reject `is_gravestone` values: for types whose gravestone coincides
+        // with a legitimate value — e.g. an *empty* `ZBytes` — that would wrongly
+        // reject valid inputs; the move + write-back is safe regardless.)
         if let Some(opaque) = self.value_opaque_ty(ty) {
             let opaque = opaque.clone();
             let name = Self::in_name(ty);
             let src = self.src_ty(ty);
             let short = type_short(ty);
             let null_msg = format!("null {short} value passed by value");
-            let moved_msg = format!("moved-from (gravestone) {short} value");
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) unsafe fn #name(
@@ -1086,11 +1088,6 @@ impl Prebindgen for Cbindgen {
                     if v.is_null() {
                         return ::core::result::Result::Err(
                             ::std::string::String::from(#null_msg),
-                        );
-                    }
-                    if <#opaque as ::prebindgen::Gravestone>::is_gravestone(&*v) {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#moved_msg),
                         );
                     }
                     let __live = ::core::ptr::read(v as *mut #src);
@@ -1385,22 +1382,28 @@ impl Prebindgen for Cbindgen {
             });
         }
 
-        // `&T` (shared borrow) of an opaque handle: wire `*const <C struct>`,
-        // decode to `&<src>` borrowed from the C-owned `Box`. Fallible (null
-        // checks). Non-opaque inners fall through.
-        if !self.opaque.contains_key(&TypeKey::from_type(t1)) {
+        // `&T` (shared borrow) of an opaque handle or value-opaque type: wire
+        // `*const <C struct>` (the pointer-target for `ptr_struct`, the opaque
+        // counterpart for `value_opaque`), decode to `&<src>` reinterpreting the
+        // C-owned storage. Fallible (null checks). Other inners fall through.
+        let key1 = TypeKey::from_type(t1);
+        let wire_ty: syn::Type = if self.opaque.contains_key(&key1) {
+            let c_struct = self.c_type_ident(t1);
+            syn::parse_quote!(#c_struct)
+        } else if let Some(op) = self.value_opaque_ty(t1) {
+            op.clone()
+        } else {
             return None;
-        }
+        };
         let ref_ty: syn::Type = syn::parse_quote!(&#t1);
         let name = Self::in_name(&ref_ty);
-        let c_struct = self.c_type_ident(t1);
         let src = self.src_ty(t1);
         let short = type_short(t1);
         let null_ptr_msg = format!("null {short} pointer");
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name<'a>(
-                v: *const #c_struct,
+                v: *const #wire_ty,
             ) -> ::core::result::Result<&'a #src, ::std::string::String> {
                 if v.is_null() {
                     return ::core::result::Result::Err(::std::string::String::from(#null_ptr_msg));
@@ -1409,7 +1412,7 @@ impl Prebindgen for Cbindgen {
             }
         );
         Some(ConverterImpl {
-            destination: syn::parse_quote!(*const #c_struct),
+            destination: syn::parse_quote!(*const #wire_ty),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
@@ -1740,9 +1743,16 @@ impl Prebindgen for Cbindgen {
             return None;
         }
         let key = TypeKey::from_type(t1);
-        self.opaque.get(&key)?;
-
-        let c_struct = self.c_type_ident(t1);
+        // Wire C type: pointer-target for `ptr_struct`, opaque counterpart for
+        // `value_opaque`. Other inners fall through.
+        let wire_ty: syn::Type = if self.opaque.contains_key(&key) {
+            let c_struct = self.c_type_ident(t1);
+            syn::parse_quote!(#c_struct)
+        } else if let Some(op) = self.value_opaque_ty(t1) {
+            op.clone()
+        } else {
+            return None;
+        };
         let src = self.src_ty(t1);
         // Name off the concrete inner `t1` (not the `&_` wildcard pattern), so
         // distinct borrowed-return types don't collide on one converter ident.
@@ -1751,12 +1761,12 @@ impl Prebindgen for Cbindgen {
         // this accepts a borrow of any lifetime (a `&'static` coerces in).
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) unsafe fn #name(v: &#src) -> *const #c_struct {
-                v as *const #src as *const #c_struct
+            pub(crate) unsafe fn #name(v: &#src) -> *const #wire_ty {
+                v as *const #src as *const #wire_ty
             }
         );
         Some(ConverterImpl {
-            destination: syn::parse_quote!(*const #c_struct),
+            destination: syn::parse_quote!(*const #wire_ty),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
@@ -2948,20 +2958,22 @@ mod tests {
             compact.contains("ptr::read(&*__vas*constzenoh_flat::Payloadas*constOpaquePayload)"),
             "{src}"
         );
-        // Consume: `*mut OpaquePayload`, gravestone check + write-back.
+        // Consume: `*mut OpaquePayload`, move out + gravestone write-back (NO
+        // is_gravestone reject — empty/gravestone-coinciding values stay valid).
         assert!(compact.contains("v:*mutOpaquePayload"), "{src}");
-        assert!(
-            compact.contains("<OpaquePaylo") && compact.contains("Gravestone>::is_gravestone(&*v)"),
-            "{src}"
-        );
         assert!(compact.contains("ptr::read(vas*mutzenoh_flat::Payload)"), "{src}");
         assert!(
             compact.contains("ptr::write(v,<OpaquePayloadas::prebindgen::Gravestone>::gravestone())"),
             "{src}"
         );
-        // Typed drop runs the live value's destructor (gravestone-safe).
+        assert!(!compact.contains("is_gravestone(&*v)"), "consume must not reject: {src}");
+        // Typed drop runs the live value's destructor unless it's a gravestone.
         assert!(
             compact.contains("fnz_payload_t_drop(this_:*mutOpaquePayload)"),
+            "{src}"
+        );
+        assert!(
+            compact.contains("is_gravestone(&*this_)"),
             "{src}"
         );
         assert!(
