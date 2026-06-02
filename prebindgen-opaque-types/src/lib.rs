@@ -25,7 +25,7 @@
 //! // include! `generated` into the crate AND feed it to cbindgen.
 //! ```
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -47,29 +47,122 @@ impl OpaqueType {
     }
 }
 
-/// Configuration for one generation run.
+/// Builder for an opaque-types generation run.
+///
+/// Sensible defaults for the `build.rs` use case: `build_dir` =
+/// `$OUT_DIR/opaque_probe`, `cargo_lock` = `$CARGO_MANIFEST_DIR/Cargo.lock` (if it
+/// exists), default features on. Typical use:
+///
+/// ```ignore
+/// let opaque = prebindgen_opaque_types::OpaqueTypes::new("../zenoh-flat", "zenoh-flat")
+///     .features(zenoh_flat::FEATURES)            // prebindgen's feature string
+///     .add("zenoh_flat::ZZBytes", "z_zbytes_t")
+///     .generate()?;
+/// ```
 #[derive(Clone, Debug)]
-pub struct Config {
-    /// Path to the source crate's manifest dir (for the probe's `path` dependency).
-    pub source_manifest_dir: PathBuf,
-    /// The source crate's package name (the `[dependencies]` key), e.g.
-    /// `"zenoh-flat"`.
-    pub source_package: String,
-    /// Cargo features to enable on the source crate (mirror the consumer's, so the
-    /// probed layout matches the final cdylib).
-    pub features: Vec<String>,
-    /// Pass `--no-default-features` to the source dep (usually true, to mirror
-    /// exactly via the explicit feature list).
-    pub no_default_features: bool,
-    /// Types to probe and emit opaque counterparts for.
-    pub types: Vec<OpaqueType>,
-    /// Optional workspace `Cargo.lock` to copy into the probe crate for
-    /// reproducible dependency resolution (strongly recommended; resolve it via
-    /// `prebindgen-project-root`).
-    pub cargo_lock: Option<PathBuf>,
-    /// Directory to materialize and build the probe crate in (e.g.
-    /// `$OUT_DIR/opaque_probe`).
-    pub build_dir: PathBuf,
+pub struct OpaqueTypes {
+    source_manifest_dir: PathBuf,
+    source_package: String,
+    features: Vec<String>,
+    no_default_features: bool,
+    types: Vec<OpaqueType>,
+    cargo_lock: Option<PathBuf>,
+    build_dir: Option<PathBuf>,
+}
+
+impl OpaqueTypes {
+    /// Start a run probing types from the source crate whose manifest dir is
+    /// `source_manifest_dir` and whose `[dependencies]` key is `source_package`.
+    pub fn new(
+        source_manifest_dir: impl Into<PathBuf>,
+        source_package: impl Into<String>,
+    ) -> Self {
+        let build_dir =
+            std::env::var_os("OUT_DIR").map(|o| PathBuf::from(o).join("opaque_probe"));
+        let cargo_lock = std::env::var_os("CARGO_MANIFEST_DIR")
+            .map(|m| PathBuf::from(m).join("Cargo.lock"))
+            .filter(|p| p.exists());
+        Self {
+            source_manifest_dir: source_manifest_dir.into(),
+            source_package: source_package.into(),
+            features: Vec::new(),
+            no_default_features: false,
+            types: Vec::new(),
+            cargo_lock,
+            build_dir,
+        }
+    }
+
+    /// Mirror the source crate's enabled features from prebindgen's `FEATURES`
+    /// string — whitespace-separated `"crate/feature"` items; pass the crate's
+    /// `FEATURES` const directly. Because that is the *complete* resolved set, this
+    /// also switches the probe to `--no-default-features` for an exact mirror.
+    pub fn features(mut self, prebindgen_features: &str) -> Self {
+        self.features = prebindgen_features
+            .split_whitespace()
+            .filter_map(|qf| qf.rsplit_once('/').map(|(_, f)| f.to_string()))
+            .collect();
+        self.no_default_features = true;
+        self
+    }
+
+    /// Override whether the source crate's default features are enabled. Defaults
+    /// to enabled, unless [`Self::features`] already set the complete resolved set.
+    pub fn default_features(mut self, enabled: bool) -> Self {
+        self.no_default_features = !enabled;
+        self
+    }
+
+    /// Add a type to probe: its Rust path as seen from the probe crate (e.g.
+    /// `"zenoh_flat::ZZBytes"`) and the opaque counterpart identifier to emit
+    /// (e.g. `"z_zbytes_t"`).
+    pub fn add(mut self, rust_path: impl Into<String>, opaque_name: impl Into<String>) -> Self {
+        self.types.push(OpaqueType::new(rust_path, opaque_name));
+        self
+    }
+
+    /// Override the `Cargo.lock` copied into the probe crate (default:
+    /// `$CARGO_MANIFEST_DIR/Cargo.lock` if present).
+    pub fn cargo_lock(mut self, path: impl Into<PathBuf>) -> Self {
+        self.cargo_lock = Some(path.into());
+        self
+    }
+
+    /// Override the probe build directory (default: `$OUT_DIR/opaque_probe`).
+    pub fn build_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.build_dir = Some(path.into());
+        self
+    }
+
+    /// Probe each type's `$TARGET` size/alignment and return the generated
+    /// opaque-struct Rust source (also written to `<build_dir>/opaque_types.rs`).
+    pub fn generate(&self) -> Result<String> {
+        let build_dir = self
+            .build_dir
+            .clone()
+            .ok_or_else(|| anyhow!("build_dir not set and OUT_DIR is unavailable"))?;
+        let target = std::env::var("TARGET").unwrap_or_default();
+        write_probe_crate(self, &build_dir)?;
+        let rlib = build_probe(self, &build_dir, &target)?;
+        let data =
+            std::fs::read(&rlib).with_context(|| format!("reading {}", rlib.display()))?;
+
+        let mut out = String::from(
+            "// @generated by prebindgen-opaque-types — do not edit.\n\
+             // Opaque #[repr(C, align)] counterparts for value_opaque inline-by-value FFI.\n\n",
+        );
+        for t in &self.types {
+            let size = read_symbol_usize(&data, &sym_name("SIZE", &t.opaque_name))
+                .with_context(|| format!("probing size of `{}`", t.rust_path))?;
+            let align = read_symbol_usize(&data, &sym_name("ALIGN", &t.opaque_name))
+                .with_context(|| format!("probing align of `{}`", t.rust_path))?;
+            out.push_str(&render_opaque(&t.opaque_name, size, align));
+        }
+        let out_path = build_dir.join("opaque_types.rs");
+        std::fs::write(&out_path, &out)
+            .with_context(|| format!("writing {}", out_path.display()))?;
+        Ok(out)
+    }
 }
 
 const PROBE_CRATE: &str = "prebindgen_opaque_probe";
@@ -125,15 +218,15 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
 }
 
 /// Write the probe crate (`Cargo.toml` + `src/lib.rs`, and `Cargo.lock` if given).
-fn write_probe_crate(cfg: &Config) -> Result<()> {
-    let src = cfg.build_dir.join("src");
+fn write_probe_crate(b: &OpaqueTypes, build_dir: &Path) -> Result<()> {
+    let src = build_dir.join("src");
     std::fs::create_dir_all(&src)
         .with_context(|| format!("creating probe src dir {}", src.display()))?;
 
-    let features_toml = if cfg.features.is_empty() {
+    let features_toml = if b.features.is_empty() {
         String::new()
     } else {
-        let list = cfg
+        let list = b
             .features
             .iter()
             .map(|f| format!("\"{f}\""))
@@ -146,35 +239,35 @@ fn write_probe_crate(cfg: &Config) -> Result<()> {
          publish = false\n\n[lib]\ncrate-type = [\"lib\"]\n\n[dependencies]\n\
          {pkg} = {{ path = {path:?}, default-features = {dflt}{features} }}\n\n\
          [workspace]\n",
-        pkg = cfg.source_package,
-        path = cfg.source_manifest_dir,
-        dflt = !cfg.no_default_features,
+        pkg = b.source_package,
+        path = b.source_manifest_dir,
+        dflt = !b.no_default_features,
         features = features_toml,
     );
-    std::fs::write(cfg.build_dir.join("Cargo.toml"), manifest)?;
-    std::fs::write(src.join("lib.rs"), render_probe_lib(&cfg.types))?;
-    if let Some(lock) = &cfg.cargo_lock {
+    std::fs::write(build_dir.join("Cargo.toml"), manifest)?;
+    std::fs::write(src.join("lib.rs"), render_probe_lib(&b.types))?;
+    if let Some(lock) = &b.cargo_lock {
         if lock.exists() {
-            let _ = std::fs::copy(lock, cfg.build_dir.join("Cargo.lock"));
+            let _ = std::fs::copy(lock, build_dir.join("Cargo.lock"));
         }
     }
     Ok(())
 }
 
 /// Build the probe crate for `$TARGET` and return the path to its rlib.
-fn build_probe(cfg: &Config, target: &str) -> Result<PathBuf> {
+fn build_probe(_b: &OpaqueTypes, build_dir: &Path, target: &str) -> Result<PathBuf> {
     let mut cmd = std::process::Command::new(std::env::var("CARGO").unwrap_or("cargo".into()));
-    cmd.current_dir(&cfg.build_dir)
+    cmd.current_dir(build_dir)
         .arg("build")
         .arg("--offline")
         .arg("--message-format=json-render-diagnostics")
         .arg("--manifest-path")
-        .arg(cfg.build_dir.join("Cargo.toml"));
+        .arg(build_dir.join("Cargo.toml"));
     if !target.is_empty() {
         cmd.arg("--target").arg(target);
     }
     // Isolate the probe's target dir from the consumer's (avoid lock contention).
-    cmd.arg("--target-dir").arg(cfg.build_dir.join("target"));
+    cmd.arg("--target-dir").arg(build_dir.join("target"));
     let out = cmd.output().context("spawning cargo for the probe crate")?;
     if !out.status.success() {
         bail!(
@@ -251,30 +344,6 @@ pub fn read_symbol_usize(artifact: &[u8], sym: &str) -> Result<usize> {
     bail!("symbol `{sym}` not found in probe artifact")
 }
 
-/// Probe sizes/alignments for `cfg.types` and write the opaque struct definitions
-/// to `<build_dir>/opaque_types.rs`. Returns the emitted Rust source.
-pub fn generate(cfg: &Config) -> Result<String> {
-    let target = std::env::var("TARGET").unwrap_or_default();
-    write_probe_crate(cfg)?;
-    let rlib = build_probe(cfg, &target)?;
-    let data = std::fs::read(&rlib).with_context(|| format!("reading {}", rlib.display()))?;
-
-    let mut out = String::from(
-        "// @generated by prebindgen-opaque-types — do not edit.\n\
-         // Opaque #[repr(C, align)] counterparts for value_opaque inline-by-value FFI.\n\n",
-    );
-    for t in &cfg.types {
-        let size = read_symbol_usize(&data, &sym_name("SIZE", &t.opaque_name))
-            .with_context(|| format!("probing size of `{}`", t.rust_path))?;
-        let align = read_symbol_usize(&data, &sym_name("ALIGN", &t.opaque_name))
-            .with_context(|| format!("probing align of `{}`", t.rust_path))?;
-        out.push_str(&render_opaque(&t.opaque_name, size, align));
-    }
-    let out_path = cfg.build_dir.join("opaque_types.rs");
-    std::fs::write(&out_path, &out).with_context(|| format!("writing {}", out_path.display()))?;
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,6 +359,20 @@ mod tests {
             "pub static PREBINDGEN_ALIGN_z_zbytes_t: usize = ::core::mem::align_of::<zenoh_flat::ZBytes>();"
         ));
         assert!(s.contains("#[no_mangle]") && s.contains("#[used]"));
+    }
+
+    #[test]
+    fn features_string_parsed_and_disables_defaults() {
+        let b = OpaqueTypes::new("/tmp/src", "zenoh-flat")
+            .features("zenoh-flat/unstable zenoh-flat/shared-memory zenoh-flat/transport_tcp")
+            .add("zenoh_flat::ZZBytes", "z_zbytes_t");
+        assert_eq!(
+            b.features,
+            vec!["unstable", "shared-memory", "transport_tcp"]
+        );
+        assert!(b.no_default_features, "complete FEATURES set ⇒ no_default_features");
+        assert_eq!(b.types.len(), 1);
+        assert_eq!(b.types[0].opaque_name, "z_zbytes_t");
     }
 
     #[test]
