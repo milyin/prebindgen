@@ -323,14 +323,40 @@ fn build_probe(_b: &OpaqueTypes, build_dir: &Path, target: &str) -> Result<PathB
 /// Pull the first `.rlib` path out of a cargo `compiler-artifact` JSON line.
 fn extract_first_rlib(line: &str) -> Option<String> {
     // `"filenames":["...rlib", ...]` — find the first quoted token ending in .rlib.
+    // Cargo emits JSON, so on Windows the path's backslashes arrive escaped
+    // (`C:\\…\\libprobe.rlib`); unescape the standard JSON sequences before use.
     let idx = line.find("\"filenames\"")?;
     let rest = &line[idx..];
     for tok in rest.split('"') {
         if tok.ends_with(".rlib") {
-            return Some(tok.to_string());
+            return Some(json_unescape(tok));
         }
     }
     None
+}
+
+/// Minimal JSON string unescaping for the path tokens cargo emits (`\\`, `\"`,
+/// `\/`). Sufficient for filesystem paths; not a general JSON unescaper.
+fn json_unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('\\') => out.push('\\'),
+                Some('"') => out.push('"'),
+                Some('/') => out.push('/'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// Read the `usize` value of a `#[no_mangle] static` named `sym` from a compiled
@@ -420,6 +446,16 @@ mod tests {
         assert_eq!(
             extract_first_rlib(line).as_deref(),
             Some("/tmp/t/target/debug/deps/libprebindgen_opaque_probe-abc.rlib")
+        );
+    }
+
+    #[test]
+    fn rlib_artifact_path_windows_backslashes_unescaped() {
+        // Cargo JSON escapes Windows backslashes as `\\`.
+        let line = r#"{"reason":"compiler-artifact","filenames":["C:\\proj\\target\\debug\\deps\\libprebindgen_opaque_probe-abc.rlib"]}"#;
+        assert_eq!(
+            extract_first_rlib(line).as_deref(),
+            Some(r"C:\proj\target\debug\deps\libprebindgen_opaque_probe-abc.rlib")
         );
     }
 }
