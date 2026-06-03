@@ -355,7 +355,7 @@ impl<M> Registry<M> {
                 self.scan_fn_signature(&item_fn, &loc)?;
             } else {
                 println!(
-                    "cargo:warning=prebindgen-ext: declared function `{}` not found among #[prebindgen] items",
+                    "cargo:warning=prebindgen: declared function `{}` not found among #[prebindgen] items",
                     ident
                 );
             }
@@ -364,7 +364,7 @@ impl<M> Registry<M> {
         for ident in &ignored_fns {
             if !self.functions.contains_key(ident) {
                 println!(
-                    "cargo:warning=prebindgen-ext: ignored function `{}` not found among #[prebindgen] items",
+                    "cargo:warning=prebindgen: ignored function `{}` not found among #[prebindgen] items",
                     ident
                 );
             }
@@ -405,7 +405,7 @@ impl<M> Registry<M> {
             });
             if !matched {
                 println!(
-                    "cargo:warning=prebindgen-ext: ignored type `{}` not found among #[prebindgen] items",
+                    "cargo:warning=prebindgen: ignored type `{}` not found among #[prebindgen] items",
                     key.as_str()
                 );
             }
@@ -421,7 +421,7 @@ impl<M> Registry<M> {
         skipped_fns.sort();
         for name in &skipped_fns {
             println!(
-                "cargo:warning=prebindgen-ext: skipping undeclared #[prebindgen] fn `{}`",
+                "cargo:warning=prebindgen: skipping undeclared #[prebindgen] fn `{}`",
                 name
             );
         }
@@ -442,7 +442,7 @@ impl<M> Registry<M> {
         skipped_types.sort();
         for name in &skipped_types {
             println!(
-                "cargo:warning=prebindgen-ext: skipping undeclared #[prebindgen] struct/enum `{}`",
+                "cargo:warning=prebindgen: skipping undeclared #[prebindgen] struct/enum `{}`",
                 name
             );
         }

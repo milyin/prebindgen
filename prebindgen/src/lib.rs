@@ -203,8 +203,17 @@ pub use crate::api::core::gravestone::{Gravestone, Transmute};
 /// `#[prebindgen]` library into a Rust file ready for `cbindgen` to parse into
 /// a C header plus a static / dynamic library. Items are opt-in via its
 /// declaration builder. (Currently scaffolding — emits an empty library.)
+///
+/// [`lang::JniGen`] is the JNI / Kotlin adapter: it turns a flat
+/// `#[prebindgen]` library into a Rust file of JNI `extern "C"` wrappers plus
+/// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
+/// classes, exception classes, callback fun-interfaces).
 pub mod lang {
     pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
+    pub use crate::api::lang::jnigen::{
+        decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
+        null_string, JniBindingError, JniGen, KotlinFile, WriteKotlinError,
+    };
 }
 
 /// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`

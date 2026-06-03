@@ -4,3 +4,4 @@
 //! language-agnostic `core` pipeline.
 
 pub mod cbindgen;
+pub mod jnigen;

@@ -61,13 +61,13 @@ impl std::fmt::Display for ResolveError {
                     if let Some(loc) = e.location.as_ref() {
                         writeln!(
                             f,
-                            "{}:{}:{}: error: unresolved prebindgen-ext {} type `{}`",
+                            "{}:{}:{}: error: unresolved prebindgen {} type `{}`",
                             loc.file, loc.line, loc.column, dir, e.key
                         )?;
                     } else {
                         writeln!(
                             f,
-                            "error: unresolved prebindgen-ext {} type `{}`",
+                            "error: unresolved prebindgen {} type `{}`",
                             dir, e.key
                         )?;
                     }
