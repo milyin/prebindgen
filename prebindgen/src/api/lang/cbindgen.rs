@@ -76,10 +76,11 @@ type CallbackKey = Vec<TypeKey>;
 /// Per-opaque-handle / per-data-struct / per-enum configuration.
 #[derive(Clone, Default)]
 struct TypeCfg {
-    /// Pinned C type name (the emitted `#[repr(C)]` struct/enum identifier;
-    /// the destructor is `<c_name>_drop`). Set by [`Cbindgen::name`]. Defaults
-    /// to the Rust short name when `None`.
-    c_name: Option<String>,
+    /// Per-declaration **base** token override, fed to the name manglers
+    /// (`mangle_type_name` / `mangle_destructor` / `mangle_take`) in place of the
+    /// `mangle_rust_type`-derived base. Set by [`Cbindgen::base_name`]. `None` ⇒
+    /// the base comes from `mangle_rust_type(short)` (or the short name).
+    base: Option<String>,
 }
 
 /// Per-`value_opaque` configuration: the opaque `#[repr(C, align(_))]` counterpart
@@ -91,17 +92,17 @@ struct ValueOpaqueCfg {
     /// [`crate::core::Gravestone`] and have identical size+align to the Rust type
     /// (a `const _` assert is emitted to enforce the latter, fail-closed).
     opaque: syn::Type,
-    /// Name config (`.name()` override; default naming via the manglers).
+    /// Name config (`.base_name()` override; default naming via the manglers).
     cfg: TypeCfg,
 }
 
 /// Per-declared-callback configuration.
 #[derive(Clone, Default)]
 struct CbCfg {
-    /// Pinned C type name of the emitted closure struct. Set by
-    /// [`Cbindgen::name`]. Defaults to the generic [`Cbindgen::callback_c_name`]
-    /// composition when `None`.
-    c_name: Option<String>,
+    /// Per-declaration **base** token override fed to `mangle_callback` (as the
+    /// sole base, replacing the args' derived bases). Set by
+    /// [`Cbindgen::base_name`]. `None` ⇒ bases come from the arguments.
+    base: Option<String>,
     /// Argument indices delivered to the C `call` as a **takeable owned pointer**
     /// (`*mut z_x_t`) instead of by value: the callee may take the value (move it
     /// out via `z_x_take`, leaving a gravestone) or just read it, and the
@@ -114,9 +115,9 @@ struct CbCfg {
 /// Per-declared-function configuration.
 #[derive(Clone, Default)]
 struct FnCfg {
-    /// Pinned C export symbol (the `#[no_mangle]` wrapper name). Set by
-    /// [`Cbindgen::name`]. Defaults to the Rust ident when `None`.
-    c_name: Option<String>,
+    /// Per-declaration **base** token override fed to `mangle_function` in place of
+    /// the Rust fn ident. Set by [`Cbindgen::base_name`]. `None` ⇒ the fn ident.
+    base: Option<String>,
     /// Allow the generated wrapper to `panic!` on an internal error message
     /// (set by [`Cbindgen::panic`]). Only meaningful for non-`Result` functions
     /// that have a fallible input.
@@ -189,9 +190,9 @@ pub struct Cbindgen {
     /// methods; reset to `None` by root-level modifiers.
     current: Option<CurrentDecl>,
     /// Optional name-mangling rules (all `None` ⇒ the built-in defaults below,
-    /// which carry no target-language convention). A per-declaration `.name()`
-    /// always wins over a mangler. See [[the builder
-    /// methods]](Self::mangle_rust_type).
+    /// which carry no target-language convention). A per-declaration
+    /// [`.base_name()`](Self::base_name) replaces the *base* token fed to these
+    /// manglers. See [[the builder methods]](Self::mangle_rust_type).
     ///
     /// Base: Rust short name → canonical token, feeding the three type manglers.
     mangle_rust_type: Option<Mangle1>,
@@ -220,7 +221,7 @@ impl Cbindgen {
 
     /// Set the module path the original `#[prebindgen]` items live under
     /// (e.g. `syn::parse_quote!(zenoh_flat)`). Root-level modifier: resets the
-    /// current declaration, so it can't be followed by `.name()`/`.error()`/etc.
+    /// current declaration, so it can't be followed by `.base_name()`/`.error()`/etc.
     pub fn source_module(mut self, p: syn::Path) -> Self {
         self.source_module = Some(p);
         self.current = None;
@@ -242,9 +243,10 @@ impl Cbindgen {
     /// `ZKeyExpr`) to a canonical token (e.g. `keyexpr`). Its output feeds
     /// [`Self::mangle_type_name`], [`Self::mangle_destructor`] and
     /// [`Self::mangle_callback`], so a one-off spelling fix (e.g. `KeyExpr` →
-    /// `keyexpr`) lives in a single place instead of a per-declaration `.name()`
-    /// exception. Root-level modifier (resets the current declaration). The
-    /// adapter ships no default — unset, the base is the Rust short name verbatim.
+    /// `keyexpr`) lives in a single place instead of a per-declaration
+    /// `.base_name()` exception. Root-level modifier (resets the current
+    /// declaration). The adapter ships no default — unset, the base defaults to the
+    /// `snake_case` of the Rust short name.
     pub fn mangle_rust_type(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_rust_type = Some(Box::new(f));
         self.current = None;
@@ -253,8 +255,8 @@ impl Cbindgen {
 
     /// Set the type-name mangler: base (see [`Self::mangle_rust_type`]) → the C
     /// type name emitted for a `ptr_struct` / `data_struct` / `enum_type` (e.g.
-    /// `keyexpr` → `z_keyexpr_t`). Overridden per declaration by `.name(...)`.
-    /// Root-level modifier.
+    /// `keyexpr` → `z_keyexpr_t`). The base can be overridden per declaration by
+    /// [`.base_name()`](Self::base_name). Root-level modifier.
     pub fn mangle_type_name(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_type_name = Some(Box::new(f));
         self.current = None;
@@ -281,8 +283,8 @@ impl Cbindgen {
 
     /// Set the callback-struct mangler: the bases of a callback's argument types
     /// → the closure struct's C name (e.g. `["sample"]` → `z_closure_sample_t`,
-    /// `[]` → `z_closure_drop_t`). Overridden per declaration by `.name(...)`.
-    /// Root-level modifier.
+    /// `[]` → `z_closure_drop_t`). A per-declaration [`.base_name()`](Self::base_name)
+    /// replaces the args' bases with a single explicit base. Root-level modifier.
     pub fn mangle_callback(mut self, f: impl Fn(&[String]) -> String + 'static) -> Self {
         self.mangle_callback = Some(Box::new(f));
         self.current = None;
@@ -291,8 +293,8 @@ impl Cbindgen {
 
     /// Set the function mangler: a `#[prebindgen]` function's Rust ident → its
     /// exported `#[no_mangle]` symbol (e.g. prefix `z_`). Functions are not types,
-    /// so this does not go through the base mangler. Overridden per declaration by
-    /// `.name(...)`. Root-level modifier.
+    /// so this does not go through the base mangler; the ident can be overridden
+    /// per declaration by [`.base_name()`](Self::base_name). Root-level modifier.
     pub fn mangle_function(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_function = Some(Box::new(f));
         self.current = None;
@@ -423,43 +425,43 @@ impl Cbindgen {
         self
     }
 
-    /// Pin the C-facing name of the **current declaration** (universal modifier):
-    /// a type's emitted `#[repr(C)]` struct/enum identifier (its destructor
-    /// becomes `<name>_drop`), or a function's exported `#[no_mangle]` symbol.
-    /// E.g. `.ptr_struct(syn::parse_quote!(ZKeyExpr)).name("z_keyexpr")` →
-    /// `typedef struct {…} z_keyexpr;` + `z_keyexpr_drop`. Defaults: a type's C
-    /// name is the Rust short name, a function's is its Rust ident. Panics if not
-    /// chained directly after a declaration. (Mirrors `JniExt`'s `name`.)
-    pub fn name(mut self, c_name: impl Into<String>) -> Self {
-        let name = c_name.into();
+    /// Set the **base name** token of the **current declaration** (universal
+    /// modifier): the per-declaration base fed to the name manglers, replacing the
+    /// auto-derived one. For a type it replaces the `mangle_rust_type` base (so
+    /// `mangle_type_name`/`mangle_destructor`/`mangle_take` all see it); for a
+    /// function it replaces the ident fed to `mangle_function`; for a callback it
+    /// is the sole base fed to `mangle_callback` (replacing the args' bases —
+    /// useful to disambiguate e.g. `&T` from `T` closures). E.g.
+    /// `.callback(...).base_name("sample_ref")` with a `|bases| "z_closure_{…}_t"`
+    /// mangler → `z_closure_sample_ref_t`. Panics if not chained directly after a
+    /// declaration.
+    pub fn base_name(mut self, base: impl Into<String>) -> Self {
+        let base = base.into();
         match self.current.clone() {
             Some(CurrentDecl::Ptr(key)) => {
-                self.opaque.get_mut(&key).expect("entry vanished").c_name = Some(name);
+                self.opaque.get_mut(&key).expect("entry vanished").base = Some(base);
             }
             Some(CurrentDecl::Data(key)) => {
-                self.data.get_mut(&key).expect("entry vanished").c_name = Some(name);
+                self.data.get_mut(&key).expect("entry vanished").base = Some(base);
             }
             Some(CurrentDecl::ValueOpaque(key)) => {
                 self.value_opaque
                     .get_mut(&key)
                     .expect("entry vanished")
                     .cfg
-                    .c_name = Some(name);
+                    .base = Some(base);
             }
             Some(CurrentDecl::Enum(key)) => {
-                self.enums.get_mut(&key).expect("entry vanished").c_name = Some(name);
+                self.enums.get_mut(&key).expect("entry vanished").base = Some(base);
             }
             Some(CurrentDecl::Callback(key)) => {
-                self.callbacks.get_mut(&key).expect("entry vanished").c_name = Some(name);
+                self.callbacks.get_mut(&key).expect("entry vanished").base = Some(base);
             }
             Some(CurrentDecl::Function(ident)) => {
-                self.functions
-                    .get_mut(&ident)
-                    .expect("entry vanished")
-                    .c_name = Some(name);
+                self.functions.get_mut(&ident).expect("entry vanished").base = Some(base);
             }
             None => panic!(
-                "Cbindgen::name must be chained directly after a declaration \
+                "Cbindgen::base_name must be chained directly after a declaration \
                  (`ptr_struct` / `data_struct` / `enum_type` / `callback` / `function`)"
             ),
         }
@@ -502,8 +504,8 @@ impl Cbindgen {
     /// a `#[repr(C)]` closure struct (`{ void *context; call; drop }`) is
     /// emitted for it. `ty` must be `impl Fn(Args...) + Send + Sync + 'static`.
     /// Identical signatures share one struct. Sets the declaration cursor, so a
-    /// following `.name("...")` overrides the generated struct name (otherwise
-    /// the generic [`Self::callback_c_name`] default is used).
+    /// following `.base_name("...")` sets the base fed to `mangle_callback` (else
+    /// the args' bases drive [`Self::callback_c_name`]).
     pub fn callback(mut self, ty: syn::Type) -> Self {
         let args = extract_fn_trait_args(&ty).unwrap_or_else(|| {
             panic!(
@@ -624,35 +626,35 @@ impl Cbindgen {
         s
     }
 
-    /// Public "take" (move) symbol for a takeable value_opaque type: pinned
-    /// [`Self::mangle_take`] over the base, else `<c_drop_base>_take` (e.g.
-    /// `z_sample_take`). Symmetric with [`Self::destructor_symbol`], and not
-    /// derived from the destructor string.
+    /// Public "take" (move) symbol for a takeable value_opaque type:
+    /// [`Self::mangle_take`] over the base, else `<base>_take` (e.g.
+    /// `z_sample_take`). Symmetric with [`Self::destructor_symbol`].
     fn take_symbol(&self, ty: &syn::Type) -> syn::Ident {
         if let Some(f) = &self.mangle_take {
             return format_ident!("{}", f(&self.rust_base(ty)));
         }
-        format_ident!("{}_take", self.c_drop_base(ty))
+        format_ident!("{}_take", self.rust_base(ty))
     }
 
     /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
     /// short name, or the short name verbatim when unset. Feeds the type-name,
     /// destructor and callback manglers.
     fn rust_base(&self, ty: &syn::Type) -> String {
+        if let Some(b) = self.type_cfg(ty).and_then(|c| c.base.clone()) {
+            return b;
+        }
         let short = type_short(ty);
         match &self.mangle_rust_type {
             Some(f) => f(&short),
-            None => short,
+            // No mangler: a C-like `snake_case` default (so destructors/take/type
+            // names read e.g. `sample_drop`, not `Sample_drop`).
+            None => snake_case(&short),
         }
     }
 
-    /// Emitted C type name of a declared type: pinned `c_name`, else
-    /// [`Self::mangle_type_name`] over the base, else the base (which is the Rust
-    /// short name when no base mangler is set).
+    /// Emitted C type name of a declared type: [`Self::mangle_type_name`] over the
+    /// base, else the base (which is the `mangle_rust_type`/`.base_name` token).
     fn c_type_name(&self, ty: &syn::Type) -> String {
-        if let Some(name) = self.type_cfg(ty).and_then(|c| c.c_name.clone()) {
-            return name;
-        }
         let base = self.rust_base(ty);
         match &self.mangle_type_name {
             Some(f) => f(&base),
@@ -666,41 +668,40 @@ impl Cbindgen {
         format_ident!("{}", self.c_type_name(ty))
     }
 
-    /// Base name of a declared type's destructor: pinned `c_name`, else
-    /// `snake_case(short)`. The destructor is `<base>_drop`.
-    fn c_drop_base(&self, ty: &syn::Type) -> String {
-        self.type_cfg(ty)
-            .and_then(|c| c.c_name.clone())
-            .unwrap_or_else(|| snake_case(&type_short(ty)))
-    }
-
     /// Destructor symbol of an opaque handle: [`Self::mangle_destructor`] over the
-    /// base, else `<c_drop_base>_drop`.
+    /// base, else `<base>_drop`.
     fn destructor_symbol(&self, ty: &syn::Type) -> syn::Ident {
         if let Some(f) = &self.mangle_destructor {
             return format_ident!("{}", f(&self.rust_base(ty)));
         }
-        format_ident!("{}_drop", self.c_drop_base(ty))
+        format_ident!("{}_drop", self.rust_base(ty))
     }
 
-    /// Emitted C type name of a callback's closure struct: pinned `.name(...)`
-    /// override, else [`Self::mangle_callback`] over the args' bases, else a
-    /// generic default composed from the args' C type names (`closure` for zero
-    /// args, `closure_<arg0>_<arg1>…` otherwise). The adapter's own default
-    /// carries no target-language naming convention.
+    /// Emitted C type name of a callback's closure struct: [`Self::mangle_callback`]
+    /// over the bases — a `.base_name(...)` override (as the sole base) when set,
+    /// else the args' derived bases — or, with no mangler, a generic default
+    /// (`closure` for zero bases, `closure_<base0>_<base1>…` otherwise). The
+    /// adapter's own default carries no target-language naming convention.
     fn callback_c_name(&self, args: &[syn::Type]) -> String {
         let key: CallbackKey = args.iter().map(TypeKey::from_type).collect();
-        if let Some(name) = self.callbacks.get(&key).and_then(|c| c.c_name.clone()) {
-            return name;
-        }
+        let base_override = self.callbacks.get(&key).and_then(|c| c.base.clone());
         if let Some(f) = &self.mangle_callback {
-            let bases: Vec<String> = args.iter().map(|a| self.rust_base(a)).collect();
+            // The override (when set) is the sole base; otherwise the args' bases.
+            let bases: Vec<String> = match &base_override {
+                Some(b) => vec![b.clone()],
+                None => args.iter().map(|a| self.rust_base(a)).collect(),
+            };
             return f(&bases);
+        }
+        // No mangler: an explicit base is the name as-is; otherwise compose from
+        // the args' bases.
+        if let Some(b) = base_override {
+            return b;
         }
         if args.is_empty() {
             "closure".to_string()
         } else {
-            let parts: Vec<String> = args.iter().map(|a| self.c_type_name(a)).collect();
+            let parts: Vec<String> = args.iter().map(|a| self.rust_base(a)).collect();
             format!("closure_{}", parts.join("_"))
         }
     }
@@ -2001,16 +2002,19 @@ impl Cbindgen {
         }
     }
 
-    /// Exported `#[no_mangle]` symbol for a declared function: pinned `c_name`,
-    /// else [`Self::mangle_function`] over the ident, else the Rust ident.
+    /// Exported `#[no_mangle]` symbol for a declared function:
+    /// [`Self::mangle_function`] over the base — a `.base_name(...)` override when
+    /// set, else the Rust fn ident — or that base verbatim when no mangler is set.
     fn fn_symbol(&self, orig: &syn::Ident) -> syn::Ident {
-        if let Some(n) = self.functions.get(orig).and_then(|c| c.c_name.clone()) {
-            return format_ident!("{}", n);
+        let base = self
+            .functions
+            .get(orig)
+            .and_then(|c| c.base.clone())
+            .unwrap_or_else(|| orig.to_string());
+        match &self.mangle_function {
+            Some(f) => format_ident!("{}", f(&base)),
+            None => format_ident!("{}", base),
         }
-        if let Some(f) = &self.mangle_function {
-            return format_ident!("{}", f(&orig.to_string()));
-        }
-        orig.clone()
     }
 
     /// Assemble the `#[no_mangle] extern "C"` wrapper for one declared fn.
@@ -2728,9 +2732,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
-            .name("z_keyexpr")
+            .base_name("z_keyexpr")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_keyexpr_try_from));
 
@@ -2797,7 +2801,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_unit_op));
 
@@ -2834,7 +2838,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_config_get_json));
 
@@ -2878,7 +2882,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZEncoding))
-            .name("z_encoding")
+            .base_name("z_encoding")
             .function(syn::parse_quote!(z_encoding_schema))
             .panic();
 
@@ -2924,9 +2928,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZThing))
-            .name("z_thing")
+            .base_name("z_thing")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_get_opt));
 
@@ -2968,7 +2972,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZHello))
-            .name("z_hello")
+            .base_name("z_hello")
             .function(syn::parse_quote!(z_hello_locators))
             .panic();
 
@@ -3016,7 +3020,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZZBytes))
-            .name("z_zbytes")
+            .base_name("z_zbytes")
             .function(syn::parse_quote!(z_zbytes_to_bytes))
             .panic();
 
@@ -3060,7 +3064,7 @@ mod tests {
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .value_opaque(syn::parse_quote!(Payload), syn::parse_quote!(OpaquePayload))
-            .name("z_payload_t")
+            .base_name("z_payload_t")
             .function(syn::parse_quote!(z_payload_make))
             .function(syn::parse_quote!(z_payload_take))
             .panic();
@@ -3141,7 +3145,7 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .value_opaque(syn::parse_quote!(Sample), syn::parse_quote!(z_sample_t))
             .callback(syn::parse_quote!(impl Fn(Sample) + Send + Sync + 'static))
-            .name("z_closure_sample_t")
+            .base_name("z_closure_sample_t")
             .takeable_param(0)
             .function(syn::parse_quote!(z_declare_sub));
 
@@ -3188,9 +3192,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZThing))
-            .name("z_thing")
+            .base_name("z_thing")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_things));
 
@@ -3226,9 +3230,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZHello))
-            .name("z_hello")
+            .base_name("z_hello")
             .ptr_struct(syn::parse_quote!(ZThing))
-            .name("z_thing")
+            .base_name("z_thing")
             .function(syn::parse_quote!(z_maybe_things))
             .panic();
 
@@ -3267,9 +3271,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZThing))
-            .name("z_thing")
+            .base_name("z_thing")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_full));
 
@@ -3304,7 +3308,7 @@ mod tests {
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .ptr_struct(syn::parse_quote!(ZZBytes))
-            .name("z_zbytes")
+            .base_name("z_zbytes")
             .function(syn::parse_quote!(z_zbytes_from_bytes));
 
         let src = write(&cbindgen, &mut registry, "slice_u8");
@@ -3344,9 +3348,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZZBytes))
-            .name("z_zbytes")
+            .base_name("z_zbytes")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_op));
 
@@ -3458,16 +3462,16 @@ mod tests {
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
-            .name("z_keyexpr")
+            .base_name("z_keyexpr")
             .enum_type(syn::parse_quote!(SetIntersectionLevel))
-            .name("z_intersection")
+            .base_name("z_intersection")
             .function(syn::parse_quote!(z_keyexpr_relation_to))
             .panic();
 
         let src = write(&cbindgen, &mut registry, "relation_to");
         let compact: String = src.split_whitespace().collect();
 
-        // repr(C) enum mirror with discriminants — renamed via `.name()`.
+        // repr(C) enum mirror with discriminants — renamed via `.base_name()`.
         assert!(compact.contains("#[repr(C)]"), "{src}");
         assert!(compact.contains("pubenumz_intersection"), "{src}");
         assert!(compact.contains("Disjoint=0"), "{src}");
@@ -3513,9 +3517,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZConfig))
-            .name("z_config")
+            .base_name("z_config")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_config_insert_json5));
 
@@ -3556,9 +3560,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
-            .name("z_keyexpr")
+            .base_name("z_keyexpr")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .function(syn::parse_quote!(z_keyexpr_try_from));
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -3605,8 +3609,8 @@ mod tests {
         assert!(compact.contains("panic!("), "{src}");
     }
 
-    /// `.name()` on a function renames the exported `#[no_mangle]` symbol while
-    /// still calling the original Rust fn.
+    /// `.base_name()` on a function sets the base for the exported `#[no_mangle]`
+    /// symbol while still calling the original Rust fn.
     #[test]
     fn function_name_renames_symbol() {
         let loc = SourceLocation::default();
@@ -3620,7 +3624,7 @@ mod tests {
         let cb = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .function(syn::parse_quote!(rust_init))
-            .name("z_init");
+            .base_name("z_init");
         let src = write(&cb, &mut reg, "fnname");
         let compact: String = src.split_whitespace().collect();
         assert!(compact.contains("extern\"C\"fnz_init("), "{src}");
@@ -3654,11 +3658,11 @@ mod tests {
     #[test]
     fn name_with_no_declaration_panics() {
         // `source_module` is a root modifier — it resets the current declaration,
-        // so a trailing `.name()` has nothing to apply to.
+        // so a trailing `.base_name()` has nothing to apply to.
         assert!(catch(|| {
             let _ = Cbindgen::new()
                 .source_module(syn::parse_quote!(zenoh_flat))
-                .name("x");
+                .base_name("x");
         }));
     }
 
@@ -3700,9 +3704,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
-            .name("z_keyexpr")
+            .base_name("z_keyexpr")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_keyexpr_try_from));
 
@@ -3737,7 +3741,7 @@ mod tests {
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_describe));
 
@@ -3779,18 +3783,18 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZSession))
-            .name("z_session_t")
+            .base_name("z_session_t")
             .ptr_struct(syn::parse_quote!(ZSample))
-            .name("z_sample_t")
+            .base_name("z_sample_t")
             .ptr_struct(syn::parse_quote!(ZSubscriber))
-            .name("z_subscriber_t")
+            .base_name("z_subscriber_t")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .callback(syn::parse_quote!(impl Fn(ZSample) + Send + Sync + 'static))
-            .name("z_closure_sample_t")
+            .base_name("z_closure_sample_t")
             .callback(syn::parse_quote!(impl Fn() + Send + Sync + 'static))
-            .name("z_closure_drop_t")
+            .base_name("z_closure_drop_t")
             .function(syn::parse_quote!(z_sub));
 
         let src = write(&cbindgen, &mut registry, "cb_sub");
@@ -3877,13 +3881,13 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZSession))
-            .name("z_session_t")
+            .base_name("z_session_t")
             .ptr_struct(syn::parse_quote!(ZSample))
-            .name("z_sample_t")
+            .base_name("z_sample_t")
             .ptr_struct(syn::parse_quote!(ZSubscriber))
-            .name("z_subscriber_t")
+            .base_name("z_subscriber_t")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             // No `.name(...)` on the callback ⇒ generic default.
             .callback(syn::parse_quote!(impl Fn(ZSample) + Send + Sync + 'static))
@@ -4005,9 +4009,9 @@ mod tests {
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .ptr_struct(syn::parse_quote!(ZSample))
-            .name("z_sample_t")
+            .base_name("z_sample_t")
             .ptr_struct(syn::parse_quote!(ZBytes))
-            .name("z_zbytes_t")
+            .base_name("z_zbytes_t")
             .function(syn::parse_quote!(z_sample_payload))
             .panic();
 
@@ -4043,9 +4047,9 @@ mod tests {
         let cbindgen = Cbindgen::new()
             .source_module(syn::parse_quote!(zenoh_flat))
             .ptr_struct(syn::parse_quote!(ZSample))
-            .name("z_sample_t")
+            .base_name("z_sample_t")
             .ptr_struct(syn::parse_quote!(ZTimestamp))
-            .name("z_timestamp_t")
+            .base_name("z_timestamp_t")
             .function(syn::parse_quote!(z_sample_timestamp))
             .panic();
 
@@ -4091,9 +4095,9 @@ mod tests {
             .source_module(syn::parse_quote!(zenoh_flat))
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
-            .name("z_keyexpr")
+            .base_name("z_keyexpr")
             .data_struct(syn::parse_quote!(Error))
-            .name("z_error")
+            .base_name("z_error")
             .error()
             .function(syn::parse_quote!(z_keyexpr_try_from))
             .function(syn::parse_quote!(z_unit_op));
