@@ -64,7 +64,7 @@ impl OpaqueType {
 /// ```ignore
 /// let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
 ///     .features(zenoh_flat::FEATURES)            // prebindgen's feature string
-///     .add("zenoh_flat::ZZBytes", "z_zbytes_t")
+///     .add(syn::parse_quote!(zenoh_flat::ZZBytes), syn::parse_quote!(z_zbytes_t))
 ///     .generate()?;
 /// ```
 #[derive(Clone, Debug)]
@@ -115,10 +115,15 @@ impl OpaqueTypes {
     }
 
     /// Add a type to probe: its Rust path as seen from the probe crate (e.g.
-    /// `"zenoh_flat::ZZBytes"`) and the opaque counterpart identifier to emit
-    /// (e.g. `"z_zbytes_t"`).
-    pub fn add(mut self, rust_path: impl Into<String>, opaque_name: impl Into<String>) -> Self {
-        self.types.push(OpaqueType::new(rust_path, opaque_name));
+    /// `syn::parse_quote!(zenoh_flat::ZZBytes)`) and the opaque counterpart
+    /// identifier to emit (e.g. `syn::parse_quote!(z_zbytes_t)`). Takes `syn::Type`
+    /// (Rust code) like [`crate`]'s sibling builders (`Cbindgen::value_opaque`).
+    pub fn add(mut self, rust_ty: syn::Type, opaque_ty: syn::Type) -> Self {
+        use quote::ToTokens;
+        self.types.push(OpaqueType::new(
+            rust_ty.to_token_stream().to_string(),
+            opaque_ty.to_token_stream().to_string(),
+        ));
         self
     }
 
@@ -418,7 +423,7 @@ mod tests {
     fn features_string_parsed_and_disables_defaults() {
         let b = OpaqueTypes::new("/tmp/src")
             .features("zenoh-flat/unstable zenoh-flat/shared-memory zenoh-flat/transport_tcp")
-            .add("zenoh_flat::ZZBytes", "z_zbytes_t");
+            .add(syn::parse_quote!(zenoh_flat::ZZBytes), syn::parse_quote!(z_zbytes_t));
         assert_eq!(
             b.features,
             vec!["unstable", "shared-memory", "transport_tcp"]
