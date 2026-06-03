@@ -44,31 +44,22 @@ pub trait Transmute: Sized {
 /// An inline-opaque value type with a representable *gravestone* (empty /
 /// moved-from) state.
 ///
-/// The user implements only the **logic** — what an empty value of the Rust type
-/// is ([`Self::rust_gravestone`]) and how to detect it ([`Self::rust_is_gravestone`]).
-/// The opaque-side [`Self::gravestone`] / [`Self::is_gravestone`] (the surface the
-/// generated converters call) are provided automatically via [`Transmute`], so no
+/// The user implements only the **logic** — what an empty, safely-droppable value
+/// of the Rust type is ([`Self::rust_gravestone`]). The opaque-side
+/// [`Self::gravestone`] (the surface the generated consume/take converters call to
+/// write back a moved-from slot) is provided automatically via [`Transmute`], so no
 /// hand-written `unsafe`/transmute is needed.
+///
+/// There is no `is_gravestone`: the generated destructor drops the slot
+/// unconditionally, which is safe precisely because the gravestone is itself a
+/// valid, safely-droppable value (e.g. `Sample::empty()`, an empty `ZBytes`).
 pub trait Gravestone: Transmute {
     /// A freshly-constructed empty, safely-droppable value of the Rust type.
     fn rust_gravestone() -> Self::Rust;
-
-    /// Whether a Rust value currently holds the gravestone (empty) state.
-    ///
-    /// For a sound `Option<Self>` niche this must be a state that **no live value
-    /// ever holds** — otherwise a legitimate value resembling the gravestone is
-    /// misread as `None`.
-    fn rust_is_gravestone(rust: &Self::Rust) -> bool;
 
     /// The opaque gravestone: an empty value written into a source slot after its
     /// live value is moved out. Autoprovided from [`Self::rust_gravestone`].
     fn gravestone() -> Self {
         Self::from_rust(Self::rust_gravestone())
-    }
-
-    /// Whether `self` currently holds the gravestone state. Autoprovided from
-    /// [`Self::rust_is_gravestone`].
-    fn is_gravestone(&self) -> bool {
-        Self::rust_is_gravestone(self.as_rust())
     }
 }

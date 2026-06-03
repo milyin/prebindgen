@@ -106,6 +106,13 @@ struct CbCfg {
     /// [`Cbindgen::name`]. Defaults to the generic [`Cbindgen::callback_c_name`]
     /// composition when `None`.
     c_name: Option<String>,
+    /// Argument indices delivered to the C `call` as a **takeable owned pointer**
+    /// (`*mut z_x_t`) instead of by value: the callee may take the value (move it
+    /// out via `z_x_take`, leaving a gravestone) or just read it, and the
+    /// trampoline drops it after the call (no-op if taken). Set by
+    /// [`Cbindgen::takeable_param`]; each such arg type must be a `value_opaque`
+    /// with a `Gravestone` impl.
+    takeable: std::collections::BTreeSet<usize>,
 }
 
 /// Per-declared-function configuration.
@@ -524,6 +531,30 @@ impl Cbindgen {
         self
     }
 
+    /// Mark argument `idx` of the **current callback declaration** as a *takeable
+    /// owned pointer*: the C `call` receives `*mut z_x_t` (not by value); the
+    /// callee may take the value (`z_x_take` moves it out, leaving a gravestone) or
+    /// just read it; the trampoline drops it after the call (no-op if taken). The
+    /// arg type must be a [`Self::value_opaque`] with a [`crate::core::Gravestone`]
+    /// impl. Chain after `.callback(...)` (and any `.name(...)`).
+    pub fn takeable_param(mut self, idx: usize) -> Self {
+        match &self.current {
+            Some(CurrentDecl::Callback(key)) => {
+                let key = key.clone();
+                self.callbacks
+                    .get_mut(&key)
+                    .expect("entry vanished")
+                    .takeable
+                    .insert(idx);
+            }
+            other => panic!(
+                "Cbindgen::takeable_param must be chained after a `callback(...)` call, not after {}",
+                describe_current(other)
+            ),
+        }
+        self
+    }
+
     // ── Internal helpers ───────────────────────────────────────────────
 
     /// Fully-qualify a bare single-segment source type against
@@ -590,6 +621,33 @@ impl Cbindgen {
         self.value_opaque
             .get(&TypeKey::from_type(ty))
             .map(|c| &c.opaque)
+    }
+
+    /// Type keys used as a takeable callback parameter (any `.takeable_param(idx)`
+    /// across all declared callbacks). These value_opaque types get a public
+    /// `<base>_take(dst, src)` move function.
+    fn takeable_type_keys(&self) -> HashSet<TypeKey> {
+        let mut s = HashSet::new();
+        for (key, cfg) in &self.callbacks {
+            for &idx in &cfg.takeable {
+                if let Some(tk) = key.get(idx) {
+                    s.insert(tk.clone());
+                }
+            }
+        }
+        s
+    }
+
+    /// Public "take" (move) symbol for a takeable value_opaque type: the
+    /// destructor symbol with its `_drop` suffix swapped for `_take` (e.g.
+    /// `z_sample_drop` → `z_sample_take`).
+    fn take_symbol(&self, ty: &syn::Type) -> syn::Ident {
+        let drop_s = self.destructor_symbol(ty).to_string();
+        let take_s = drop_s
+            .strip_suffix("_drop")
+            .map(|b| format!("{b}_take"))
+            .unwrap_or_else(|| format!("{drop_s}_take"));
+        format_ident!("{}", take_s)
     }
 
     /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
@@ -870,6 +928,7 @@ impl Prebindgen for Cbindgen {
         // the fail-closed size+align equality asserts and the typed `_drop` (drops
         // the live Rust value in place; NULL/gravestone ⇒ no-op).
         {
+            let takeable_keys = self.takeable_type_keys();
             let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
             vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
             for (key, cfg) in vo {
@@ -923,19 +982,44 @@ impl Prebindgen for Cbindgen {
                     }
                 ));
                 let drop_ident = self.destructor_symbol(&ty);
+                // Unconditional drop: safe because a moved-from slot holds a
+                // gravestone (a valid, safely-droppable empty value), so dropping
+                // it is a harmless no-op; a live slot drops normally.
                 items.push(syn::parse_quote!(
                     #[no_mangle]
                     #[allow(non_snake_case, unused_variables)]
                     pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
-                        if !this_.is_null()
-                            && !<#opaque as ::prebindgen::Gravestone>::is_gravestone(&*this_)
-                        {
+                        if !this_.is_null() {
                             ::core::ptr::drop_in_place(
                                 <#opaque as ::prebindgen::Transmute>::as_rust_mut(&mut *this_),
                             );
                         }
                     }
                 ));
+                // For a type delivered as a takeable callback param, also emit a
+                // public `<base>_take(dst, src)`: move `src`'s value into `dst` and
+                // leave `src` a gravestone (so the trampoline's post-call drop is a
+                // no-op). This is the C user's "take" operation.
+                if takeable_keys.contains(key) {
+                    let take_ident = self.take_symbol(&ty);
+                    items.push(syn::parse_quote!(
+                        #[no_mangle]
+                        #[allow(non_snake_case, unused_variables)]
+                        pub unsafe extern "C" fn #take_ident(
+                            dst: *mut #opaque,
+                            src: *mut #opaque,
+                        ) {
+                            if dst.is_null() || src.is_null() {
+                                return;
+                            }
+                            ::core::ptr::write(dst, ::core::ptr::read(src));
+                            ::core::ptr::write(
+                                src,
+                                <#opaque as ::prebindgen::Gravestone>::gravestone(),
+                            );
+                        }
+                    ));
+                }
             }
         }
 
@@ -984,10 +1068,12 @@ impl Prebindgen for Cbindgen {
             if registry.input_entry(&callback_fn_type(&args)).is_none() {
                 continue;
             }
+            let takeable = &self.callbacks.get(key).expect("callback cfg").takeable;
             let arg_wires: Vec<syn::Type> = args
                 .iter()
-                .map(|a| {
-                    registry
+                .enumerate()
+                .map(|(i, a)| {
+                    let wire = registry
                         .output_entry(a)
                         .unwrap_or_else(|| {
                             panic!(
@@ -997,7 +1083,13 @@ impl Prebindgen for Cbindgen {
                             )
                         })
                         .destination
-                        .clone()
+                        .clone();
+                    // Takeable params are delivered as an owned pointer.
+                    if takeable.contains(&i) {
+                        syn::parse_quote!(*mut #wire)
+                    } else {
+                        wire
+                    }
                 })
                 .collect();
             let c_struct = self.callback_c_ident(&args);
@@ -1503,14 +1595,19 @@ impl Prebindgen for Cbindgen {
 
         // Per-arg: closure parameter (`__aN: <src>`) + encode statement
         // (`let __wN = <output_conv>(__aN);`, panicking if the converter is
-        // fallible — a firing callback has no error channel) + the `__wN` passed
-        // to the C `call`.
+        // fallible — a firing callback has no error channel). A non-takeable arg
+        // is passed to the C `call` by value (the C side owns + drops it); a
+        // **takeable** arg is passed as `&mut __wN` (`*mut z_x_t`) and dropped here
+        // after the call (no-op if the C side took it, leaving a gravestone).
+        let takeable = &self.callbacks.get(&key).expect("callback cfg").takeable;
         let mut closure_params: Vec<TokenStream> = Vec::new();
         let mut encode_stmts: Vec<TokenStream> = Vec::new();
-        let mut wire_idents: Vec<syn::Ident> = Vec::new();
+        let mut call_args: Vec<TokenStream> = Vec::new();
+        let mut post_drops: Vec<TokenStream> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
             let entry = registry.output_entry(arg)?;
             let conv = entry.function.sig.ident.clone();
+            let opaque = entry.destination.clone();
             let fallible = matches!(
                 &entry.function.sig.output,
                 syn::ReturnType::Type(_, ty) if is_result(ty)
@@ -1519,9 +1616,11 @@ impl Prebindgen for Cbindgen {
             let ai = format_ident!("__a{}", i);
             let wi = format_ident!("__w{}", i);
             closure_params.push(quote!(#ai: #src));
+            let is_takeable = takeable.contains(&i);
+            let mut_kw = if is_takeable { quote!(mut) } else { quote!() };
             if fallible {
                 encode_stmts.push(quote!(
-                    let #wi = match #conv(#ai) {
+                    let #mut_kw #wi = match #conv(#ai) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
                             ::core::panic!("cbindgen: callback argument conversion failed: {}", __e)
@@ -1529,9 +1628,17 @@ impl Prebindgen for Cbindgen {
                     };
                 ));
             } else {
-                encode_stmts.push(quote!(let #wi = #conv(#ai);));
+                encode_stmts.push(quote!(let #mut_kw #wi = #conv(#ai);));
             }
-            wire_idents.push(wi);
+            if is_takeable {
+                call_args.push(quote!(&mut #wi as *mut #opaque));
+                // Always drop after the call (leak-safe): live value if untaken,
+                // gravestone (no-op) if the C side took it via `z_x_take`.
+                post_drops
+                    .push(quote!(let _ = <#opaque as ::prebindgen::Transmute>::into_rust(#wi);));
+            } else {
+                call_args.push(quote!(#wi));
+            }
         }
 
         let fn_ty = callback_fn_type(&args.iter().map(|a| self.src_ty_deep(a)).collect::<Vec<_>>());
@@ -1557,8 +1664,9 @@ impl Prebindgen for Cbindgen {
                 move |#(#closure_params),*| {
                     #(#encode_stmts)*
                     if let ::core::option::Option::Some(__f) = __call {
-                        unsafe { __f(#(#wire_idents,)* __ctx.context) }
+                        unsafe { __f(#(#call_args,)* __ctx.context) }
                     }
+                    #(#post_drops)*
                 }
             }
         );
@@ -3012,19 +3120,69 @@ mod tests {
             compact.contains("ptr::write(v,<OpaquePayloadas::prebindgen::Gravestone>::gravestone())"),
             "{src}"
         );
-        assert!(!compact.contains("is_gravestone(&*v)"), "consume must not reject: {src}");
-        // Typed drop runs the live value's destructor (via as_rust_mut) unless it's
-        // a gravestone.
+        // Typed drop runs the value's destructor (via as_rust_mut) unconditionally
+        // — no `is_gravestone` check (gravestone is itself safe to drop).
         assert!(
             compact.contains("fnz_payload_t_drop(this_:*mutOpaquePayload)"),
             "{src}"
         );
+        assert!(!compact.contains("is_gravestone"), "drop must be unconditional: {src}");
         assert!(
-            compact.contains("is_gravestone(&*this_)"),
+            compact.contains("Transmute>::as_rust_mut(&mut*this_)"),
+            "{src}"
+        );
+    }
+
+    /// A `.takeable_param(idx)` callback arg is delivered as `*mut z_x_t`: the
+    /// closure `call` takes a pointer, the trampoline drops it after the call, and
+    /// a public `z_x_take(dst, src)` move function is emitted.
+    #[test]
+    fn takeable_callback_param() {
+        let loc = SourceLocation::default();
+        let st: syn::ItemStruct = syn::parse_quote!(
+            pub struct Sample {
+                pub _0: u64,
+            }
+        );
+        // A function declaring a subscriber-like callback by value.
+        let func: syn::ItemFn = syn::parse_quote!(
+            pub fn z_declare_sub(cb: impl Fn(Sample) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        );
+        let mut registry = Registry::<()>::from_items([
+            (syn::Item::Struct(st), loc.clone()),
+            (syn::Item::Fn(func), loc.clone()),
+        ])
+        .expect("index items");
+
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .value_opaque(syn::parse_quote!(Sample), syn::parse_quote!(z_sample_t))
+            .callback(syn::parse_quote!(impl Fn(Sample) + Send + Sync + 'static))
+            .name("z_closure_sample_t")
+            .takeable_param(0)
+            .function(syn::parse_quote!(z_declare_sub));
+
+        let src = write(&cbindgen, &mut registry, "takeable");
+        let compact: String = src.split_whitespace().collect();
+
+        // Closure `call` receives the sample as an owned pointer.
+        assert!(compact.contains("call:::core::option::Option<unsafeextern\"C\"fn(*mutz_sample_t,*mut"), "{src}");
+        // Trampoline passes `&mut __w0` and drops it after the call.
+        assert!(compact.contains("&mut__w0as*mutz_sample_t"), "{src}");
+        assert!(
+            compact.contains("<z_sample_tas::prebindgen::Transmute>::into_rust(__w0)"),
+            "{src}"
+        );
+        // Public take (move) function emitted (no name mangler in this test ⇒
+        // `sample_take`; a real adapter mangles to `z_sample_take`).
+        assert!(
+            compact.contains("pubunsafeextern\"C\"fnsample_take(dst:*mutz_sample_t,src:*mutz_sample_t)"),
             "{src}"
         );
         assert!(
-            compact.contains("Transmute>::as_rust_mut(&mut*this_)"),
+            compact.contains("ptr::write(src,<z_sample_tas::prebindgen::Gravestone>::gravestone())"),
             "{src}"
         );
     }
