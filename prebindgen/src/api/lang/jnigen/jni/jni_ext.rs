@@ -102,6 +102,12 @@ pub enum ProjectionKind {
     /// single inner field's converter (the value class is **erased** to it in
     /// field/direct positions); never closeable.
     ValueClass,
+    /// Kotlin `@JvmInline value class` wrapping a **`Copy` value-blob**
+    /// (`value_blob`). Like [`Self::ValueClass`] but its inner is always a raw
+    /// `ByteArray` (`[B`) — there is no Rust struct field to resolve. The typed
+    /// class has a single `bytes: ByteArray` field; the wire is `JByteArray`.
+    /// Never closeable.
+    ValueBlob,
 }
 
 /// Folded description of a Kotlin newtype projection (opaque handle or value
@@ -1461,11 +1467,18 @@ impl JniGen {
     /// with `ptr_class` / `enum_class` / `value_class`.
     pub fn value_blob(mut self, rust_type: syn::Type) -> Self {
         let key = TypeKey::from_type(&rust_type);
+        let short = rust_short_name(&key);
+        // Typed Kotlin FQN for the emitted `@JvmInline value class` — the same
+        // FQN-consumer slot a `ptr_class` / `value_class` uses (typed-class
+        // emission, projection-leaf lookup, `instanceof` imports). The
+        // *value-level* name (`"ByteArray"`) is set separately on the rank-0
+        // converter's metadata, so wire mentions stay `ByteArray` while typed
+        // positions render the value class.
+        let fqn = self.resolve_class_fqn(&self.mangle_data_class(&short));
         let entry = self.types.entry(key.clone()).or_default();
         entry.value_blob = true;
-        // Value-level name is `ByteArray` (no Kotlin class / FQN), mirroring
-        // how an opaque handle's value-level name is `Long`.
-        entry.kotlin_name = Some("ByteArray".to_string());
+        entry.kotlin_name = Some(fqn.clone());
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.last_opaque_key = None;
         self.last_meta_key = Some(key);
         self.last_entry_ref = None;
@@ -2812,7 +2825,15 @@ impl Prebindgen for JniGen {
                 function: self.build_input_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: self.framework_meta(Some("ByteArray".to_string())),
+                metadata: KotlinMeta {
+                    projection: Some(Projection {
+                        leaf_key: key.as_str().to_string(),
+                        owned: false,
+                        strategy: FoldStrategy::Direct,
+                        kind: ProjectionKind::ValueBlob,
+                    }),
+                    ..self.framework_meta(Some("ByteArray".to_string()))
+                },
             });
         }
         // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
@@ -3219,7 +3240,15 @@ impl Prebindgen for JniGen {
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: self.framework_meta(Some("ByteArray".to_string())),
+                metadata: KotlinMeta {
+                    projection: Some(Projection {
+                        leaf_key: key.as_str().to_string(),
+                        owned: false,
+                        strategy: FoldStrategy::Direct,
+                        kind: ProjectionKind::ValueBlob,
+                    }),
+                    ..self.framework_meta(Some("ByteArray".to_string()))
+                },
             });
         }
         // `enum_class`-declared enums: jint wire, `as jni::sys::jint`
@@ -4659,6 +4688,15 @@ fn struct_output_body(
                         let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
                     });
                 }
+                // Value-blob field: wire is `JByteArray`, erased descriptor `[B`,
+                // passed straight through (no boxed wrapper) — same shape as a
+                // `ValueClass` over a byte array.
+                ProjectionKind::ValueBlob => {
+                    ctor_sig.push_str("[B");
+                    field_preludes.push(quote! {
+                        let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
+                    });
+                }
             }
             ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
             continue;
@@ -5277,6 +5315,36 @@ fn value_class_inner_type(
         return None;
     };
     Some(n.named.first()?.ty.clone())
+}
+
+/// Kotlin inline-class field name to unwrap a value-projection param to its
+/// erased inner wire at the `JNINative` call site (`<param>.<field>`):
+/// * `value_blob` → the synthetic `"bytes"` field of the emitted blob value class.
+/// * `value_class` → the Rust struct's single field name (what the value-class
+///   emitter uses as the `@JvmInline` field).
+///
+/// Strips a leading `&` before resolving. `None` for handles / non-projections.
+pub(crate) fn value_projection_field(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    ty: &syn::Type,
+) -> Option<String> {
+    let bare: syn::Type = match ty {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    };
+    let key = TypeKey::from_type(&bare);
+    let cfg = ext.types.get(&key)?;
+    if cfg.value_blob {
+        return Some("bytes".to_string());
+    }
+    if cfg.value_class {
+        let ident = bare_path_ident(&bare)?;
+        let (item_struct, _) = registry.structs.get(&ident)?;
+        let (field_ident, _) = value_class_inner_field(item_struct)?;
+        return Some(field_ident.to_string());
+    }
+    None
 }
 
 /// Decide which [`NullableKind`] to fold for an `Option<_>` wrapper, given
