@@ -354,6 +354,12 @@ pub(crate) struct TypeConfig {
     /// at render time) and is mutually exclusive with
     /// [`Self::throwable`] (value classes cannot extend `Exception`).
     pub value_class: bool,
+    /// Set by [`JniGen::value_blob`]: this is a `Copy` Rust type passed
+    /// **by value as its raw memory blob** in a `JByteArray` (wire), the
+    /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no
+    /// projection — it surfaces as `ByteArray`. Mutually exclusive with
+    /// `opaque` / `enum_cfg` / `value_class`.
+    pub value_blob: bool,
 }
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
@@ -1433,6 +1439,33 @@ impl JniGen {
         entry.kotlin_name = Some(fqn.clone());
         entry.value_class = true;
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
+        self.last_opaque_key = None;
+        self.last_meta_key = Some(key);
+        self.last_entry_ref = None;
+        self
+    }
+
+    /// Declare a **`Copy` value-blob** type: a Rust type passed across the
+    /// JNI boundary **by value as its raw memory bytes** in a `ByteArray`,
+    /// rather than as a closeable `jlong` heap handle. The value-level peer
+    /// of [`Self::ptr_class`] — `ByteArray` is to a blob what `Long` is to a
+    /// handle. Use it for small `Copy` types (e.g. `ZenohId`) so they need no
+    /// `close()` and so `Vec<T>` can surface as `List<ByteArray>` (a
+    /// `Vec<closeable-handle>` is rejected; see the `Vec<_>` handler).
+    ///
+    /// The type **must be `Copy`** — the generator emits a compile-time
+    /// assertion to that effect (a non-`Copy` declaration is a hard build
+    /// error). Conversions reinterpret the bytes (`read_unaligned` on input,
+    /// raw-bytes read on output), so the blob is valid only same-architecture
+    /// in-process, exactly like an opaque handle pointer. Mutually exclusive
+    /// with `ptr_class` / `enum_class` / `value_class`.
+    pub fn value_blob(mut self, rust_type: syn::Type) -> Self {
+        let key = TypeKey::from_type(&rust_type);
+        let entry = self.types.entry(key.clone()).or_default();
+        entry.value_blob = true;
+        // Value-level name is `ByteArray` (no Kotlin class / FQN), mirroring
+        // how an opaque handle's value-level name is `Long`.
+        entry.kotlin_name = Some("ByteArray".to_string());
         self.last_opaque_key = None;
         self.last_meta_key = Some(key);
         self.last_entry_ref = None;
@@ -2688,6 +2721,23 @@ impl Prebindgen for JniGen {
         // non-suppressed opaque handle (the Rust half of the typed-handle
         // `free()` pair the Kotlin emitter generates).
         items.extend(build_handle_destructor_items(self, registry));
+        // Compile-time `Copy` assertion per `value_blob` type — the blob
+        // converters reinterpret raw bytes by value, which is only sound for
+        // `Copy` types. A mis-declared non-`Copy` type fails to compile here
+        // (at the include site) with a clear bound error rather than at a
+        // converter use. The bare type name is qualified against
+        // `source_module` by `post_process_item` like every other body.
+        for (key, cfg) in &self.types {
+            if cfg.value_blob {
+                let ty = key.to_type();
+                items.push(syn::parse_quote!(
+                    const _: () = {
+                        const fn __assert_copy<T: ::core::marker::Copy>() {}
+                        __assert_copy::<#ty>();
+                    };
+                ));
+            }
+        }
         items
     }
 
@@ -2730,6 +2780,40 @@ impl Prebindgen for JniGen {
             if cfg.opaque.is_some() {
                 return Some(self.opaque_handle_input(ty));
             }
+        }
+        // `value_blob`-declared `Copy` types: decode the raw memory blob out
+        // of a `JByteArray` (length-checked, `read_unaligned` since the byte
+        // array isn't aligned to the type). Returns owned `T`, so `&T` /
+        // by-value / `Vec<T>` / `Option<T>` all compose through the existing
+        // handlers. `T: Copy` ⇒ reading the value out is sound (no double
+        // drop); the `Copy` bound itself is enforced by the assertion in
+        // `prerequisites`.
+        if self.types.get(&key).map(|c| c.value_blob).unwrap_or(false) {
+            let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
+            let body: syn::Expr = syn::parse_quote!({
+                let __bytes = env.convert_byte_array(v).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "value-blob decode: {}",
+                        e
+                    ))
+                })?;
+                if __bytes.len() != ::core::mem::size_of::<#ty>() {
+                    return ::core::result::Result::Err(
+                        <__JniErr as ::core::convert::From<String>>::from(
+                            "value-blob decode: wrong byte length".to_string(),
+                        ),
+                    );
+                }
+                unsafe { ::core::ptr::read_unaligned(__bytes.as_ptr() as *const #ty) }
+            });
+            let niches = default_niches_for_wire(&wire);
+            return Some(ConverterImpl {
+                pre_stages: vec![],
+                function: self.build_input_fn(ty, &wire, &body, None),
+                destination: wire,
+                niches,
+                metadata: self.framework_meta(Some("ByteArray".to_string())),
+            });
         }
         // `enum_class`-declared enums: jint wire, `TryFrom<i32>` decode.
         // Registered before the user-wrapper lookup so a stray
@@ -2946,6 +3030,7 @@ impl Prebindgen for JniGen {
         // covered by this handler — extend if needed.
         if pat_match(pat, "Vec < _ >") {
             let inner = registry.input_entry(t1)?;
+            reject_vec_of_handle(&inner.metadata.projection, t1);
             let inner_wire = inner.destination.clone();
             if !is_jobject_shaped_wire(&inner_wire) {
                 return None;
@@ -3105,6 +3190,37 @@ impl Prebindgen for JniGen {
             if cfg.opaque.is_some() {
                 return Some(self.opaque_handle_output(ty));
             }
+        }
+        // `value_blob`-declared `Copy` types: encode the value's raw memory
+        // bytes into a fresh `JByteArray` (the value-level peer of an opaque
+        // handle's `jlong`). `v: #ty` is owned and `Copy`, so reading its
+        // bytes and letting it drop normally is sound. Wire is `JByteArray`
+        // (jobject-shaped), so `Vec<T>` / `Option<T>` compose through the
+        // existing handlers — `Vec<value-blob>` surfaces as `List<ByteArray>`.
+        if self.types.get(&key).map(|c| c.value_blob).unwrap_or(false) {
+            let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
+            let body: syn::Expr = syn::parse_quote!({
+                let __bytes: &[u8] = unsafe {
+                    ::core::slice::from_raw_parts(
+                        (&v as *const #ty) as *const u8,
+                        ::core::mem::size_of::<#ty>(),
+                    )
+                };
+                env.byte_array_from_slice(__bytes).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "value-blob encode: {}",
+                        e
+                    ))
+                })?
+            });
+            let niches = default_niches_for_wire(&wire);
+            return Some(ConverterImpl {
+                pre_stages: vec![],
+                function: self.build_output_fn(ty, &wire, &body, None),
+                destination: wire,
+                niches,
+                metadata: self.framework_meta(Some("ByteArray".to_string())),
+            });
         }
         // `enum_class`-declared enums: jint wire, `as jni::sys::jint`
         // encode. Symmetric to the input arm above; relies on
@@ -3293,6 +3409,7 @@ impl Prebindgen for JniGen {
         // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
         if pat_match(pat, "Vec < _ >") {
             let inner = registry.output_entry(t1)?;
+            reject_vec_of_handle(&inner.metadata.projection, t1);
             let inner_wire = inner.destination.clone();
             if !is_jobject_shaped_wire(&inner_wire) {
                 return None;
@@ -4262,6 +4379,28 @@ fn is_jobject_shaped_wire(wire: &syn::Type) -> bool {
         }
     }
     false
+}
+
+/// Hard-error guard for `Vec<opaque-handle>` element types. A handle's wire is
+/// a `jlong` heap pointer and a `Vec<that>` would yield a collection of
+/// closeable native handles the JVM must free one-by-one — unsupported. Detect
+/// it by the element's folded [`Projection`] being a [`ProjectionKind::Handle`]
+/// and panic with a fix hint, instead of the `Vec<_>` handler silently
+/// `return None`-ing (which surfaces as an opaque "unresolved type" error).
+fn reject_vec_of_handle(inner_projection: &Option<Projection>, elem: &syn::Type) {
+    if let Some(p) = inner_projection {
+        if p.kind == ProjectionKind::Handle {
+            panic!(
+                "JniGen: `Vec<{}>` is unsupported — its elements would be closeable native \
+                 handles (jlong) the JVM must free individually. If `{}` is `Copy`, declare \
+                 it as a value-blob via `.value_blob(...)` so the Vec surfaces as \
+                 `List<ByteArray>`; otherwise expose a per-element accessor instead of \
+                 returning a `Vec` of handles.",
+                elem.to_token_stream(),
+                elem.to_token_stream(),
+            );
+        }
+    }
 }
 
 /// Default niche set for a JNI wrapper wire: every `J*` handle has a
