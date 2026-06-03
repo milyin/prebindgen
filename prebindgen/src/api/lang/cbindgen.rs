@@ -80,10 +80,6 @@ struct TypeCfg {
     /// the destructor is `<c_name>_drop`). Set by [`Cbindgen::name`]. Defaults
     /// to the Rust short name when `None`.
     c_name: Option<String>,
-    /// Pinned **full** destructor symbol, independent of `c_name`. Set by
-    /// [`Cbindgen::destructor_name`] (opaque handles only). When `None` the
-    /// destructor defaults to `<c_drop_base>_drop`.
-    drop_name: Option<String>,
 }
 
 /// Per-`value_opaque` configuration: the opaque `#[repr(C, align(_))]` counterpart
@@ -193,8 +189,8 @@ pub struct Cbindgen {
     /// methods; reset to `None` by root-level modifiers.
     current: Option<CurrentDecl>,
     /// Optional name-mangling rules (all `None` ⇒ the built-in defaults below,
-    /// which carry no target-language convention). A per-declaration `.name()` /
-    /// `.destructor_name()` always wins over a mangler. See [[the builder
+    /// which carry no target-language convention). A per-declaration `.name()`
+    /// always wins over a mangler. See [[the builder
     /// methods]](Self::mangle_rust_type).
     ///
     /// Base: Rust short name → canonical token, feeding the three type manglers.
@@ -266,8 +262,7 @@ impl Cbindgen {
     }
 
     /// Set the destructor mangler: base → an opaque handle's `_drop` symbol (e.g.
-    /// `keyexpr` → `z_keyexpr_drop`). Overridden per declaration by
-    /// `.destructor_name(...)`. Root-level modifier.
+    /// `keyexpr` → `z_keyexpr_drop`). Root-level modifier.
     pub fn mangle_destructor(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_destructor = Some(Box::new(f));
         self.current = None;
@@ -466,27 +461,6 @@ impl Cbindgen {
             None => panic!(
                 "Cbindgen::name must be chained directly after a declaration \
                  (`ptr_struct` / `data_struct` / `enum_type` / `callback` / `function`)"
-            ),
-        }
-        self
-    }
-
-    /// Pin the **full** destructor symbol of the current declaration (which must
-    /// be a [`Self::ptr_struct`]), independently of its C type name. E.g.
-    /// `.ptr_struct(ZKeyExpr).name("z_keyexpr_t").destructor_name("z_keyexpr_drop")`
-    /// emits type `z_keyexpr_t` with destructor `z_keyexpr_drop` (no `_drop`
-    /// auto-appended). Defaults to `<c_drop_base>_drop`. Panics if not chained
-    /// directly after a `ptr_struct(...)` declaration.
-    pub fn destructor_name(mut self, c_name: impl Into<String>) -> Self {
-        match &self.current {
-            Some(CurrentDecl::Ptr(key)) => {
-                let key = key.clone();
-                self.opaque.get_mut(&key).expect("entry vanished").drop_name = Some(c_name.into());
-            }
-            other => panic!(
-                "Cbindgen::destructor_name must be chained after a `ptr_struct(...)` \
-                 call, not after {}",
-                describe_current(other)
             ),
         }
         self
@@ -700,13 +674,9 @@ impl Cbindgen {
             .unwrap_or_else(|| snake_case(&type_short(ty)))
     }
 
-    /// Destructor symbol of an opaque handle: pinned `.destructor_name(...)`,
-    /// else [`Self::mangle_destructor`] over the base, else `<c_drop_base>_drop`.
+    /// Destructor symbol of an opaque handle: [`Self::mangle_destructor`] over the
+    /// base, else `<c_drop_base>_drop`.
     fn destructor_symbol(&self, ty: &syn::Type) -> syn::Ident {
-        let key = TypeKey::from_type(ty);
-        if let Some(full) = self.opaque.get(&key).and_then(|c| c.drop_name.clone()) {
-            return format_ident!("{}", full);
-        }
         if let Some(f) = &self.mangle_destructor {
             return format_ident!("{}", f(&self.rust_base(ty)));
         }
@@ -2759,7 +2729,6 @@ mod tests {
             .free_memory_function("z_free")
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
             .name("z_keyexpr")
-            .destructor_name("z_keyexpr_free")
             .data_struct(syn::parse_quote!(Error))
             .name("z_error")
             .error()
@@ -2774,11 +2743,12 @@ mod tests {
         assert!(compact.contains("->*mutz_keyexpr"), "{src}");
         assert!(!compact.contains("out:*mut"), "{src}");
         assert!(compact.contains("e:*mutz_error"), "{src}");
-        // Opaque handle marker struct + typed (pinned) destructor on the bare ptr.
+        // Opaque handle marker struct + typed destructor (`<name>_drop`) on the
+        // bare ptr.
         assert!(compact.contains("structz_keyexpr{_private"), "{src}");
         assert!(compact.contains("structz_error"), "{src}");
         assert!(
-            compact.contains("fnz_keyexpr_free(this_:*mutz_keyexpr"),
+            compact.contains("fnz_keyexpr_drop(this_:*mutz_keyexpr"),
             "{src}"
         );
         assert!(
@@ -3682,15 +3652,6 @@ mod tests {
     }
 
     #[test]
-    fn destructor_name_after_data_struct_panics() {
-        assert!(catch(|| {
-            let _ = Cbindgen::new()
-                .data_struct(syn::parse_quote!(Error))
-                .destructor_name("x");
-        }));
-    }
-
-    #[test]
     fn name_with_no_declaration_panics() {
         // `source_module` is a root modifier — it resets the current declaration,
         // so a trailing `.name()` has nothing to apply to.
@@ -3986,7 +3947,7 @@ mod tests {
                     format!("z_{n}")
                 }
             })
-            // No `.name(...)` / `.destructor_name(...)` anywhere.
+            // No `.name(...)` anywhere — names come purely from the manglers.
             .ptr_struct(syn::parse_quote!(ZKeyExpr))
             .ptr_struct(syn::parse_quote!(ZSample))
             .ptr_struct(syn::parse_quote!(ZSubscriber))
