@@ -203,6 +203,8 @@ pub struct Cbindgen {
     mangle_type_name: Option<Mangle1>,
     /// Base → opaque-handle destructor symbol.
     mangle_destructor: Option<Mangle1>,
+    /// Base → value_opaque "take" (move) symbol, for takeable callback params.
+    mangle_take: Option<Mangle1>,
     /// Callback arg bases → closure-struct name.
     mangle_callback: Option<MangleN>,
     /// Rust function ident → exported `#[no_mangle]` symbol.
@@ -268,6 +270,16 @@ impl Cbindgen {
     /// `.destructor_name(...)`. Root-level modifier.
     pub fn mangle_destructor(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_destructor = Some(Box::new(f));
+        self.current = None;
+        self
+    }
+
+    /// Set the "take" mangler: base → the public move symbol of a `value_opaque`
+    /// type used as a [`Self::takeable_param`] (e.g. `sample` → `z_sample_take`).
+    /// When unset, the take symbol defaults to `<destructor-base>_take`. Root-level
+    /// modifier.
+    pub fn mangle_take(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
+        self.mangle_take = Some(Box::new(f));
         self.current = None;
         self
     }
@@ -638,16 +650,15 @@ impl Cbindgen {
         s
     }
 
-    /// Public "take" (move) symbol for a takeable value_opaque type: the
-    /// destructor symbol with its `_drop` suffix swapped for `_take` (e.g.
-    /// `z_sample_drop` → `z_sample_take`).
+    /// Public "take" (move) symbol for a takeable value_opaque type: pinned
+    /// [`Self::mangle_take`] over the base, else `<c_drop_base>_take` (e.g.
+    /// `z_sample_take`). Symmetric with [`Self::destructor_symbol`], and not
+    /// derived from the destructor string.
     fn take_symbol(&self, ty: &syn::Type) -> syn::Ident {
-        let drop_s = self.destructor_symbol(ty).to_string();
-        let take_s = drop_s
-            .strip_suffix("_drop")
-            .map(|b| format!("{b}_take"))
-            .unwrap_or_else(|| format!("{drop_s}_take"));
-        format_ident!("{}", take_s)
+        if let Some(f) = &self.mangle_take {
+            return format_ident!("{}", f(&self.rust_base(ty)));
+        }
+        format_ident!("{}_take", self.c_drop_base(ty))
     }
 
     /// Base token for a Rust type: [`Self::mangle_rust_type`] applied to the Rust
