@@ -30,7 +30,9 @@ use quote::ToTokens;
 
 use crate::api::core::prebindgen::{IntoSource, IntoSourceMode, Prebindgen};
 use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
-use crate::api::lang::jnigen::jni::jni_ext::{converter_returns_owned_object, JniGen, KotlinMeta, MethodEntry};
+use crate::api::lang::jnigen::jni::jni_ext::{
+    converter_returns_owned_object, JniGen, KotlinMeta, MethodEntry,
+};
 use crate::api::lang::jnigen::jni::templates;
 use crate::api::lang::jnigen::kotlin::kotlin_ext::{KotlinFile, WriteKotlinError};
 use crate::api::lang::jnigen::kotlin::type_map::KotlinTypeMap;
@@ -122,11 +124,7 @@ impl JniGen {
                 pkg_cfg,
             )?);
         }
-        written.push(self.write_jni_native(
-            registry,
-            &kotlin_types,
-            kotlin_root,
-        )?);
+        written.push(self.write_jni_native(registry, &kotlin_types, kotlin_root)?);
         Ok(written)
     }
 
@@ -189,7 +187,9 @@ impl JniGen {
             if opaque.suppress_kotlin_code {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else { continue };
+            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+                continue;
+            };
             // rust_doc — short last-segment of the Rust type key (best
             // effort; only used in the generated doc comment).
             let rust_doc = key
@@ -466,13 +466,8 @@ impl JniGen {
         } else {
             format!("{}.{}", self.package, subpackage)
         };
-        let contents = render_jni_package_source(
-            self,
-            registry,
-            kotlin_types,
-            &pkg_cfg.functions,
-            &package,
-        );
+        let contents =
+            render_jni_package_source(self, registry, kotlin_types, &pkg_cfg.functions, &package);
         let file = KotlinFile {
             package,
             class_name,
@@ -502,7 +497,8 @@ impl JniGen {
     ) -> Result<PathBuf, WriteKotlinError> {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
-        let contents = render_jni_native_source(self, registry, kotlin_types, &declared, &class_name);
+        let contents =
+            render_jni_native_source(self, registry, kotlin_types, &declared, &class_name);
         let file = KotlinFile {
             package: self.package.clone(),
             class_name,
@@ -595,7 +591,10 @@ impl JniGen {
     /// `impl Fn(args)` type the Registry has resolved. Use this to merge
     /// into a `KotlinTypeMap` consumed by the aggregated-interface
     /// generator (so it can refer to callbacks by their Kotlin FQN).
-    pub(crate) fn collect_kotlin_callback_fqns(&self, registry: &Registry<KotlinMeta>) -> KotlinTypeMap {
+    pub(crate) fn collect_kotlin_callback_fqns(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> KotlinTypeMap {
         let mut map = KotlinTypeMap::new();
         let mut seen: HashSet<TypeKey> = HashSet::new();
         for buckets in [&registry.input_types, &registry.output_types] {
@@ -667,12 +666,8 @@ fn build_callback_kotlin_file(
         params.push(format!("        p{i}: {short}{optional_suffix},"));
     }
 
-    let contents = templates::callback::render_kotlin_interface(
-        &package,
-        &class_name,
-        &params,
-        &used_fqns,
-    );
+    let contents =
+        templates::callback::render_kotlin_interface(&package, &class_name, &params, &used_fqns);
     KotlinFile {
         package,
         class_name,
@@ -718,13 +713,21 @@ fn is_option_type(ty: &syn::Type) -> bool {
 /// Mirrors `option_inner_ref_mutability` in `jni_ext.rs` — kept here too
 /// to avoid a cross-module helper just for one call site.
 fn is_option_ref(ty: &syn::Type) -> bool {
-    let syn::Type::Path(tp) = ty else { return false };
-    let Some(seg) = tp.path.segments.last() else { return false };
+    let syn::Type::Path(tp) = ty else {
+        return false;
+    };
+    let Some(seg) = tp.path.segments.last() else {
+        return false;
+    };
     if seg.ident != "Option" {
         return false;
     }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else { return false };
-    let Some(syn::GenericArgument::Type(inner)) = ab.args.first() else { return false };
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return false;
+    };
+    let Some(syn::GenericArgument::Type(inner)) = ab.args.first() else {
+        return false;
+    };
     matches!(inner, syn::Type::Reference(_))
 }
 
@@ -732,7 +735,10 @@ fn is_option_ref(ty: &syn::Type) -> bool {
 /// folded [`FoldStrategy`] layers, given the leaf typed-handle short
 /// name (e.g. `"ZKeyExpr"`): `Direct → "ZKeyExpr"`,
 /// `Nullable(inner) → "<inner>?"`, `Iterable(inner) → "List<<inner>>"`.
-fn render_handle_type(strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy, leaf: &str) -> String {
+fn render_handle_type(
+    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
+    leaf: &str,
+) -> String {
     use crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::*;
     match strategy {
         Direct => leaf.to_string(),
@@ -748,9 +754,16 @@ fn render_handle_type(strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStr
 /// the folded [`FoldStrategy`] layers. Fresh lambda variable per nesting
 /// level avoids `it` shadowing; the common single-layer cases are
 /// special-cased for readable output (`x?.close()`, `x.forEach { it.close() }`).
-fn render_handle_close(strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy, receiver: &str) -> String {
+fn render_handle_close(
+    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
+    receiver: &str,
+) -> String {
     use crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::*;
-    fn go(strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy, receiver: &str, depth: usize) -> String {
+    fn go(
+        strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
+        receiver: &str,
+        depth: usize,
+    ) -> String {
         match strategy {
             Direct => format!("{receiver}.close()"),
             // The Kotlin-side receiver is already nullable (`render_handle_type`
@@ -765,7 +778,10 @@ fn render_handle_close(strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldSt
             },
             Iterable(inner) => {
                 let v = format!("e{depth}");
-                format!("{receiver}.forEach {{ {v} -> {} }}", go(inner, &v, depth + 1))
+                format!(
+                    "{receiver}.forEach {{ {v} -> {} }}",
+                    go(inner, &v, depth + 1)
+                )
             }
         }
     }
@@ -860,13 +876,15 @@ fn projection_wire_return(
             let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key).unwrap_or_else(|_| {
                 panic!("projection_wire_return: bad leaf_key `{}`", proj.leaf_key)
             });
-            let inner_ty = crate::api::lang::jnigen::jni::jni_ext::value_class_inner_type_for(ext, registry, &vc_ty)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "projection_wire_return: `{}` is not a registered value class",
-                        proj.leaf_key
-                    )
-                });
+            let inner_ty = crate::api::lang::jnigen::jni::jni_ext::value_class_inner_type_for(
+                ext, registry, &vc_ty,
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "projection_wire_return: `{}` is not a registered value class",
+                    proj.leaf_key
+                )
+            });
             let inner_entry = registry.output_entry(&inner_ty).unwrap_or_else(|| {
                 panic!(
                     "projection_wire_return: inner of `{}` has no output converter",
@@ -880,17 +898,15 @@ fn projection_wire_return(
                 )
             });
             let is_prim = matches!(
-                crate::api::lang::jnigen::jni::wire_access::jni_field_access(&inner_entry.destination),
+                crate::api::lang::jnigen::jni::wire_access::jni_field_access(
+                    &inner_entry.destination
+                ),
                 Some((_, _, false))
             );
             (register_fqn(&n, imports), is_prim)
         }
     };
-    fn fold(
-        s: &FoldStrategy,
-        leaf: &str,
-        leaf_is_primitive: bool,
-    ) -> String {
+    fn fold(s: &FoldStrategy, leaf: &str, leaf_is_primitive: bool) -> String {
         match s {
             FoldStrategy::Direct => leaf.to_string(),
             FoldStrategy::Nullable { kind, inner } => {
@@ -926,8 +942,9 @@ fn projection_leaf_sentinel(
         ProjectionKind::Handle => syn::parse_quote!(jni::sys::jlong),
         ProjectionKind::ValueClass => {
             let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key).ok()?;
-            let inner_ty =
-                crate::api::lang::jnigen::jni::jni_ext::value_class_inner_type_for(ext, registry, &vc_ty)?;
+            let inner_ty = crate::api::lang::jnigen::jni::jni_ext::value_class_inner_type_for(
+                ext, registry, &vc_ty,
+            )?;
             registry.output_entry(&inner_ty)?.destination.clone()
         }
     };
@@ -992,24 +1009,31 @@ fn render_enum_source(
     );
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree.
-    let variants: Vec<(String, i64)> = crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
-        .into_iter()
-        .map(|(ident, value)| {
-            (crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()), value)
-        })
-        .collect();
+    let variants: Vec<(String, i64)> =
+        crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
+            .into_iter()
+            .map(|(ident, value)| {
+                (
+                    crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()),
+                    value,
+                )
+            })
+            .collect();
 
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let mut companion_methods = String::new();
     for entry in companion_methods_in {
-        let (item_fn, _loc) = registry.functions.get(&entry.rust_ident).unwrap_or_else(|| {
-            panic!(
-                "render_enum_source: `{class_name}` promotes function `{}` \
+        let (item_fn, _loc) = registry
+            .functions
+            .get(&entry.rust_ident)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_enum_source: `{class_name}` promotes function `{}` \
                  which is not present in `registry.functions` — check the spelling against \
                  the matching `#[prebindgen]` Rust fn name.",
-                entry.rust_ident,
-            )
-        });
+                    entry.rust_ident,
+                )
+            });
         let (block, _kind) = render_wrapper_fn(
             ext,
             item_fn,
@@ -1149,7 +1173,10 @@ fn render_data_class_source(
     let mut field_lines: Vec<String> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
-    let mut destructible_fields: Vec<(String, crate::api::lang::jnigen::jni::jni_ext::FoldStrategy)> = Vec::new();
+    let mut destructible_fields: Vec<(
+        String,
+        crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
+    )> = Vec::new();
     for field in fields_named {
         let field_ident = field.ident.as_ref().unwrap_or_else(|| {
             panic!(
@@ -1199,7 +1226,11 @@ fn render_data_class_source(
                 "    {override_prefix}val {kotlin_field_name}: {},",
                 render_handle_type(&h.strategy, &short)
             ));
-            if matches!(h.kind, crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle) && h.owned {
+            if matches!(
+                h.kind,
+                crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle
+            ) && h.owned
+            {
                 destructible_fields.push((kotlin_field_name, h.strategy));
             }
             continue;
@@ -1232,20 +1263,29 @@ fn render_data_class_source(
             .as_ref()
             .map(|w| crate::api::lang::jnigen::jni::jni_ext::is_jni_primitive(w))
             .unwrap_or(false);
-        let optional_suffix = if is_option_type(&field.ty) && !primitive_wire { "?" } else { "" };
-        field_lines.push(format!("    {override_prefix}val {kotlin_field_name}: {short}{optional_suffix},"));
+        let optional_suffix = if is_option_type(&field.ty) && !primitive_wire {
+            "?"
+        } else {
+            ""
+        };
+        field_lines.push(format!(
+            "    {override_prefix}val {kotlin_field_name}: {short}{optional_suffix},"
+        ));
     }
 
     let mut instance_body = String::new();
     for entry in instance_methods {
-        let (item_fn, _loc) = registry.functions.get(&entry.rust_ident).unwrap_or_else(|| {
-            panic!(
-                "render_data_class_source: `{class_name}` promotes function `{}` \
+        let (item_fn, _loc) = registry
+            .functions
+            .get(&entry.rust_ident)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_data_class_source: `{class_name}` promotes function `{}` \
                  which is not present in `registry.functions` — check the spelling against \
                  the matching `#[prebindgen]` Rust fn name.",
-                entry.rust_ident,
-            )
-        });
+                    entry.rust_ident,
+                )
+            });
         let (block, kind) = render_wrapper_fn(
             ext,
             item_fn,
@@ -1280,14 +1320,17 @@ fn render_data_class_source(
 
     let mut companion_methods = String::new();
     for entry in companion_methods_in {
-        let (item_fn, _loc) = registry.functions.get(&entry.rust_ident).unwrap_or_else(|| {
-            panic!(
-                "render_data_class_source: `{class_name}` promotes function `{}` \
+        let (item_fn, _loc) = registry
+            .functions
+            .get(&entry.rust_ident)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_data_class_source: `{class_name}` promotes function `{}` \
                  which is not present in `registry.functions` — check the spelling against \
                  the matching `#[prebindgen]` Rust fn name.",
-                entry.rust_ident,
-            )
-        });
+                    entry.rust_ident,
+                )
+            });
         let (block, _kind) = render_wrapper_fn(
             ext,
             item_fn,
@@ -1424,7 +1467,10 @@ fn render_data_class_source(
             // don't copy this class.
             s.push_str("    override fun close() {\n");
             for (fname, strategy) in &destructible_fields {
-                s.push_str(&format!("        {}\n", render_handle_close(strategy, fname)));
+                s.push_str(&format!(
+                    "        {}\n",
+                    render_handle_close(strategy, fname)
+                ));
             }
             s.push_str("    }\n\n");
         }
@@ -1560,14 +1606,17 @@ fn render_typed_handle_source(
     let mut instance_body = String::new();
     let mut companion_body = String::new();
     for entry in instance_methods {
-        let (item_fn, _loc) = registry.functions.get(&entry.rust_ident).unwrap_or_else(|| {
-            panic!(
-                "render_typed_handle_source: `{class_name}` promotes function `{}` \
+        let (item_fn, _loc) = registry
+            .functions
+            .get(&entry.rust_ident)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_typed_handle_source: `{class_name}` promotes function `{}` \
                  which is not present in `registry.functions` — check the spelling against \
                  the matching `#[prebindgen]` Rust fn name.",
-                entry.rust_ident,
-            )
-        });
+                    entry.rust_ident,
+                )
+            });
         let (block, kind) = render_wrapper_fn(
             ext,
             item_fn,
@@ -1606,14 +1655,17 @@ fn render_typed_handle_source(
         }
     }
     for entry in companion_methods {
-        let (item_fn, _loc) = registry.functions.get(&entry.rust_ident).unwrap_or_else(|| {
-            panic!(
-                "render_typed_handle_source: `{class_name}` promotes function `{}` \
+        let (item_fn, _loc) = registry
+            .functions
+            .get(&entry.rust_ident)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_typed_handle_source: `{class_name}` promotes function `{}` \
                  which is not present in `registry.functions` — check the spelling against \
                  the matching `#[prebindgen]` Rust fn name.",
-                entry.rust_ident,
-            )
-        });
+                    entry.rust_ident,
+                )
+            });
         let (block, _kind) = render_wrapper_fn(
             ext,
             item_fn,
@@ -1646,9 +1698,7 @@ fn render_typed_handle_source(
 
     // Typed-handle classes emitted into subpackages still need to import
     // the centralized JNINative object for their promoted method bodies.
-    if package != ext.package
-        && (!instance_methods.is_empty() || !companion_methods.is_empty())
-    {
+    if package != ext.package && (!instance_methods.is_empty() || !companion_methods.is_empty()) {
         imports.insert(format!("{}.{}", ext.package, ext.jni_native_class_name()));
     }
 
@@ -1777,14 +1827,17 @@ fn render_jni_package_source(
     let mut body = String::new();
 
     for entry in functions {
-        let (item_fn, _loc) = registry.functions.get(&entry.rust_ident).unwrap_or_else(|| {
-            panic!(
-                "render_jni_package_source: function `{}` registered via .function(...) is \
+        let (item_fn, _loc) = registry
+            .functions
+            .get(&entry.rust_ident)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_jni_package_source: function `{}` registered via .function(...) is \
                  not in the prebindgen registry — check the spelling against the matching \
                  `#[prebindgen]` Rust fn name.",
-                entry.rust_ident,
-            )
-        });
+                    entry.rust_ident,
+                )
+            });
         // Top-level wrappers never carry a `promoted_handle`, so the
         // returned [`MethodKind`] is always `Instance` and can be
         // discarded — there is no companion-object emission here.
@@ -1813,7 +1866,11 @@ fn render_jni_package_source(
         out.push_str(&format!("import {}\n", imp));
     }
     if !ext.package.is_empty() {
-        out.push_str(&format!("import {}.{}\n", ext.package, ext.jni_native_class_name()));
+        out.push_str(&format!(
+            "import {}.{}\n",
+            ext.package,
+            ext.jni_native_class_name()
+        ));
     }
     out.push('\n');
     out.push_str(&body);
@@ -1911,8 +1968,12 @@ pub(crate) fn render_extern_decl(
 
     let mut params: Vec<(String, String)> = Vec::new();
     for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else { continue };
-        let syn::Pat::Ident(pid) = &*pt.pat else { continue };
+        let syn::FnArg::Typed(pt) = input else {
+            continue;
+        };
+        let syn::Pat::Ident(pid) = &*pt.pat else {
+            continue;
+        };
         let name = snake_to_camel(&pid.ident.to_string());
         let arg_ty = &*pt.ty;
 
@@ -1930,8 +1991,7 @@ pub(crate) fn render_extern_decl(
         // uses `metadata.projection.is_some()` because the `Option<OwnedObject<T>>`
         // converter doesn't return `OwnedObject` directly so the local
         // `is_opaque` flag (which checks the return shape) misses it.
-        let is_opt_ref_opaque =
-            entry.metadata.projection.is_some() && is_option_ref(arg_ty);
+        let is_opt_ref_opaque = entry.metadata.projection.is_some() && is_option_ref(arg_ty);
         let optional = is_option_type(arg_ty) && !is_opt_ref_opaque;
 
         let kt_type_raw = if is_opaque || is_opt_ref_opaque {
@@ -1946,8 +2006,7 @@ pub(crate) fn render_extern_decl(
         params.push((name, format!("{short}{suffix}")));
     }
 
-    let (kt_return, projection) =
-        classify_return(ext, &f.sig.output, registry, imports)?;
+    let (kt_return, projection) = classify_return(ext, &f.sig.output, registry, imports)?;
     // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
     // The public wrapper converts back using `EnumType.fromInt(Int)`.
     let is_enum_return = return_is_kotlin_enum(ext, &f.sig.output, registry);
@@ -1972,7 +2031,11 @@ pub(crate) fn render_extern_decl(
     if wire_return.is_empty() {
         write!(&mut line, "external fun {jni_call}({formals})").ok()?;
     } else {
-        write!(&mut line, "external fun {jni_call}({formals}): {wire_return}").ok()?;
+        write!(
+            &mut line,
+            "external fun {jni_call}({formals}): {wire_return}"
+        )
+        .ok()?;
     }
     Some(line)
 }
@@ -2042,8 +2105,7 @@ fn render_wrapper_fn(
 
     // Pre-parse the promoted Rust type-key (if any) so per-param matching
     // is whitespace-normalised against the canonical form.
-    let promoted_key: Option<TypeKey> =
-        promoted_handle.map(|s| TypeKey::parse(s));
+    let promoted_key: Option<TypeKey> = promoted_handle.map(|s| TypeKey::parse(s));
 
     // Classify each parameter.
     struct Param {
@@ -2058,8 +2120,8 @@ fn render_wrapper_fn(
         as_enum_value: bool,
     }
     enum ParamMode {
-        Borrow,      // &T opaque-handle → withPtr
-        Consume,     // T  opaque-handle → consume
+        Borrow,  // &T opaque-handle → withPtr
+        Consume, // T  opaque-handle → consume
         /// `Option<&T>` / `Option<&mut T>` opaque-handle → `withPtrOrZero`.
         /// Nullable typed-handle param; the wrapper runs the body under
         /// the read lock when the handle is non-null and with `0L` when
@@ -2070,7 +2132,9 @@ fn render_wrapper_fn(
         /// fans out into one arm per declared
         /// [`IntoSource`] in `arms`. See
         /// [`DispatchArm`] for the arm shape.
-        Dispatch { arms: Vec<DispatchArm> },
+        Dispatch {
+            arms: Vec<DispatchArm>,
+        },
         PassThrough,
         /// Promoted opaque param: identical lock semantics to
         /// `Borrow` / `Consume` (the inner bool flag chooses), but the
@@ -2094,8 +2158,12 @@ fn render_wrapper_fn(
 
     let mut params: Vec<Param> = Vec::new();
     for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else { continue };
-        let syn::Pat::Ident(pid) = &*pt.pat else { continue };
+        let syn::FnArg::Typed(pt) = input else {
+            continue;
+        };
+        let syn::Pat::Ident(pid) = &*pt.pat else {
+            continue;
+        };
         let name = snake_to_camel(&pid.ident.to_string());
         let arg_ty = &*pt.ty;
 
@@ -2163,7 +2231,11 @@ fn render_wrapper_fn(
                 ParamMode::BorrowNullable
             } else if matches_promoted {
                 promoted_taken = true;
-                if borrow { ParamMode::PromotedBorrow } else { ParamMode::PromotedConsume }
+                if borrow {
+                    ParamMode::PromotedBorrow
+                } else {
+                    ParamMode::PromotedConsume
+                }
             } else if borrow {
                 ParamMode::Borrow
             } else {
@@ -2272,7 +2344,11 @@ fn render_wrapper_fn(
             };
             args.push(arg);
         }
-        let mut call = format!("{}.{jni_call}({})", ext.jni_native_class_name(), args.join(", "));
+        let mut call = format!(
+            "{}.{jni_call}({})",
+            ext.jni_native_class_name(),
+            args.join(", ")
+        );
         if let Some(p) = &projection {
             // Fold the wrap through the projection strategy. The wrap class is
             // the projection leaf's typed short name (Handle's typed-handle
@@ -2383,9 +2459,11 @@ fn render_wrapper_fn(
         .filter_map(|p| {
             let (target, consume_null, nullable) = match p.mode {
                 ParamMode::Borrow => (p.kt_name.clone(), None, false),
-                ParamMode::Consume => {
-                    (p.kt_name.clone(), Some(format!("{}.ptr = 0L", p.kt_name)), false)
-                }
+                ParamMode::Consume => (
+                    p.kt_name.clone(),
+                    Some(format!("{}.ptr = 0L", p.kt_name)),
+                    false,
+                ),
                 ParamMode::BorrowNullable => (p.kt_name.clone(), None, true),
                 ParamMode::PromotedBorrow => ("this".to_string(), None, false),
                 ParamMode::PromotedConsume => {
@@ -2415,7 +2493,11 @@ fn render_wrapper_fn(
             let finally_body = consume_stmts.join("\n        ");
             format!("try {{\n        {body}\n    }} finally {{\n        {finally_body}\n    }}")
         };
-        if is_unit { core } else { format!("return {core}") }
+        if is_unit {
+            core
+        } else {
+            format!("return {core}")
+        }
     };
 
     let is_unit = kt_return.is_empty();
@@ -2468,7 +2550,8 @@ fn render_wrapper_fn(
                     (&o2.name, &o1.name, &o1.target)
                 };
                 // Null branch: only the non-null handle needs locking.
-                let null_inner = make_inner(&body_expr, is_unit, &[if o1.nullable { o2 } else { o1 }]);
+                let null_inner =
+                    make_inner(&body_expr, is_unit, &[if o1.nullable { o2 } else { o1 }]);
                 Some(format!(
                     "if ({n_null} == null) {{\n    val {n_null}_ptr = 0L\n    synchronized({t_other}) {{\n        val {n_other}_ptr = {t_other}.ptr\n        if ({n_other}_ptr == 0L) {throw_stmt}\n        {null_inner}\n    }}\n}} else {{\n    {ordered}\n}}",
                 ))
@@ -2502,7 +2585,9 @@ fn render_wrapper_fn(
     // contribute nothing.
     let mut throws_fqns: BTreeSet<String> = BTreeSet::new();
     for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else { continue };
+        let syn::FnArg::Typed(pt) = input else {
+            continue;
+        };
         let arg_ty = &*pt.ty;
         if let Some(entry) = registry.input_entry(arg_ty) {
             if let Some(fqn) = entry.metadata.throws.clone() {
@@ -2538,7 +2623,14 @@ fn render_wrapper_fn(
     }
     let param_list: Vec<String> = params
         .iter()
-        .filter(|p| !matches!(p.mode, ParamMode::PromotedBorrow | ParamMode::PromotedConsume | ParamMode::PromotedPassThrough))
+        .filter(|p| {
+            !matches!(
+                p.mode,
+                ParamMode::PromotedBorrow
+                    | ParamMode::PromotedConsume
+                    | ParamMode::PromotedPassThrough
+            )
+        })
         .map(|p| format!("{}: {}", p.kt_name, p.kt_type))
         .collect();
     let _ = write!(out, "public fun {kt_name}({})", param_list.join(", "));
@@ -2665,7 +2757,6 @@ fn build_dispatch_arms(
     arms
 }
 
-
 /// Fall-back Kotlin type derived directly from the JNI wire type.
 /// Returns the **non-nullable** Kotlin base name — the use site adds
 /// a `?` suffix when the entry's Rust type is `Option<…>` (via
@@ -2710,7 +2801,10 @@ fn classify_return(
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
-) -> Option<(String, Option<crate::api::lang::jnigen::jni::jni_ext::Projection>)> {
+) -> Option<(
+    String,
+    Option<crate::api::lang::jnigen::jni::jni_ext::Projection>,
+)> {
     let ty = match output {
         syn::ReturnType::Default => return Some((String::new(), None)),
         syn::ReturnType::Type(_, t) => &**t,

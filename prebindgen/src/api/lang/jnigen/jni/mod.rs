@@ -10,8 +10,8 @@ pub mod byte_array_helpers;
 pub mod jni_binding_error;
 pub mod jni_ext;
 pub(crate) mod jni_kotlin_ext;
-pub(crate) mod templates;
 pub mod string_helpers;
+pub(crate) mod templates;
 pub(crate) mod wire_access;
 
 pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};

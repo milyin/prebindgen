@@ -65,11 +65,7 @@ impl std::fmt::Display for ResolveError {
                             loc.file, loc.line, loc.column, dir, e.key
                         )?;
                     } else {
-                        writeln!(
-                            f,
-                            "error: unresolved prebindgen {} type `{}`",
-                            dir, e.key
-                        )?;
+                        writeln!(f, "error: unresolved prebindgen {} type `{}`", dir, e.key)?;
                     }
                 }
                 Ok(())

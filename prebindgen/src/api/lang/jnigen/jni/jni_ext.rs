@@ -287,7 +287,10 @@ pub struct MethodEntry {
 
 impl MethodEntry {
     pub fn new(rust_ident: syn::Ident) -> Self {
-        Self { rust_ident, kotlin_name_override: None }
+        Self {
+            rust_ident,
+            kotlin_name_override: None,
+        }
     }
 }
 
@@ -388,15 +391,14 @@ pub(crate) struct PackageConfig {
 /// Receives `&Registry<KotlinMeta>` so the closure can look up
 /// inner-type entries (`registry.output_entry(t)`).
 pub(crate) type WrapperFn = Arc<
-    dyn Fn(&[syn::Type], &Registry<KotlinMeta>)
-            -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
+    dyn Fn(&[syn::Type], &Registry<KotlinMeta>) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
         + Send
         + Sync,
 >;
 
 /// Closure that transforms a Kotlin short name. Installed via the
 /// per-kind setters ([`JniGen::kotlin_fun_name_mangle`],
-    /// [`JniGen::kotlin_data_class_name_mangle`], etc.); the framework calls
+/// [`JniGen::kotlin_data_class_name_mangle`], etc.); the framework calls
 /// the matching closure wherever it needs to derive a Kotlin/JNI
 /// short name for a generated element. Closure-unset = identity.
 pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
@@ -430,7 +432,9 @@ where
     fn into_wrapper_fn(self) -> WrapperFn {
         Arc::new(move |_args: &[syn::Type], reg: &Registry<KotlinMeta>| self(reg))
     }
-    fn rank() -> usize { 0 }
+    fn rank() -> usize {
+        0
+    }
 }
 
 impl<F> WrapperBuilder<Arity1> for F
@@ -441,16 +445,20 @@ where
         + 'static,
 {
     fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(move |args: &[syn::Type], reg: &Registry<KotlinMeta>| {
-            self(&args[0], reg)
-        })
+        Arc::new(move |args: &[syn::Type], reg: &Registry<KotlinMeta>| self(&args[0], reg))
     }
-    fn rank() -> usize { 1 }
+    fn rank() -> usize {
+        1
+    }
 }
 
 impl<F> WrapperBuilder<Arity2> for F
 where
-    F: Fn(&syn::Type, &syn::Type, &Registry<KotlinMeta>) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
+    F: Fn(
+            &syn::Type,
+            &syn::Type,
+            &Registry<KotlinMeta>,
+        ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
         + Send
         + Sync
         + 'static,
@@ -460,13 +468,19 @@ where
             self(&args[0], &args[1], reg)
         })
     }
-    fn rank() -> usize { 2 }
+    fn rank() -> usize {
+        2
+    }
 }
 
 impl<F> WrapperBuilder<Arity3> for F
 where
-    F: Fn(&syn::Type, &syn::Type, &syn::Type, &Registry<KotlinMeta>)
-            -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
+    F: Fn(
+            &syn::Type,
+            &syn::Type,
+            &syn::Type,
+            &Registry<KotlinMeta>,
+        ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)>
         + Send
         + Sync
         + 'static,
@@ -476,7 +490,9 @@ where
             self(&args[0], &args[1], &args[2], reg)
         })
     }
-    fn rank() -> usize { 3 }
+    fn rank() -> usize {
+        3
+    }
 }
 
 /// JNI back-end. Configure paths in the Rust crate (zresult, throw macro,
@@ -867,7 +883,11 @@ impl JniGen {
         self.last_opaque_key = None;
         self.last_meta_key = None;
         self.last_entry_ref = None;
-        let sub = subpackage.into().trim_matches('.').trim_matches('/').to_string();
+        let sub = subpackage
+            .into()
+            .trim_matches('.')
+            .trim_matches('/')
+            .to_string();
         if sub.is_empty() {
             self.active_subpackage = None;
         } else {
@@ -986,7 +1006,11 @@ impl JniGen {
     /// Derives from the subpackage's last dot-segment so
     /// `package("a.b")` yields a class named after `b`.
     pub(crate) fn jni_package_class_name(&self, subpackage: &str) -> String {
-        let leaf = subpackage.rsplit('.').next().filter(|s| !s.is_empty()).unwrap_or("Package");
+        let leaf = subpackage
+            .rsplit('.')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or("Package");
         match &self.kotlin_package_name_mangle {
             Some(f) => f(leaf),
             None => self.mangle_harness(leaf),
@@ -1059,8 +1083,7 @@ impl JniGen {
         // [`KotlinMeta::kotlin_name`] produced by the rank-0 opaque
         // handler, so wire-level mentions don't collide with the FQN.
         entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), fqn));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.last_opaque_key = Some(key.clone());
         self.last_meta_key = Some(key);
         self.last_entry_ref = None;
@@ -1129,9 +1152,10 @@ impl JniGen {
     /// chain unambiguous after one fn-level declaration. Panics if no
     /// `package` is active.
     pub fn package_fun(mut self, ident: syn::Ident) -> Self {
-        let sub = self.active_subpackage.clone().expect(
-            "JniGen::function must be chained inside a `package(...)` context",
-        );
+        let sub = self
+            .active_subpackage
+            .clone()
+            .expect("JniGen::function must be chained inside a `package(...)` context");
         // Leak any class context back to package level.
         self.last_meta_key = None;
         self.last_opaque_key = None;
@@ -1235,8 +1259,7 @@ impl JniGen {
         );
         entry.enum_cfg = Some(EnumConfig::default());
         entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), fqn));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         // Clear opaque tracker so a stray `.method(...)` doesn't latch onto
         // this entry; `last_meta_key` is what `.suppress_kotlin_code` reads
         // for chained config.
@@ -1265,8 +1288,7 @@ impl JniGen {
         let expr = kotlin_expr.into();
         let entry = self.types.get_mut(&key).expect("meta entry vanished");
         entry.kotlin_name = Some(expr.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), expr));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), expr));
         self
     }
 
@@ -1315,12 +1337,10 @@ impl JniGen {
             } else {
                 syn::parse_quote!(#path(env, &v)?)
             };
-            let exc_ty = exc_str.as_deref().and_then(|s| syn::parse_str::<syn::Type>(s).ok());
-            Some((
-                syn::parse_quote!(jni::objects::JObject),
-                exc_ty,
-                body,
-            ))
+            let exc_ty = exc_str
+                .as_deref()
+                .and_then(|s| syn::parse_str::<syn::Type>(s).ok());
+            Some((syn::parse_quote!(jni::objects::JObject), exc_ty, body))
         };
         // Auto-derive the callback Kotlin FQN via
         // `kotlin_callback_name_mangle` applied to the per-callback name.
@@ -1329,15 +1349,14 @@ impl JniGen {
         // resolved FQN rather than re-deriving it. The presence of
         // `callback_kotlin_fqn` also flags this entry as a callback for
         // emission paths that need to distinguish.
-        let args = crate::api::core::registry::extract_fn_trait_args(&impl_fn_type)
-            .unwrap_or_default();
+        let args =
+            crate::api::core::registry::extract_fn_trait_args(&impl_fn_type).unwrap_or_default();
         let name = crate::api::lang::jnigen::jni::jni_kotlin_ext::derive_callback_name(&args);
         let fqn = self.resolve_callback_fqn(&self.mangle_callback(&name));
         let entry = self.types.entry(key.clone()).or_default();
         entry.callback_kotlin_fqn = Some(fqn.clone());
         entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), fqn));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.input_wrappers[0].insert(key.clone(), builder.into_wrapper_fn());
         self.note_wrapper_registration(key, 0);
         self
@@ -1356,15 +1375,14 @@ impl JniGen {
     /// to chain off.
     pub fn suppress_kotlin_callback_code(mut self, impl_fn_type: syn::Type) -> Self {
         let key = TypeKey::from_type(&impl_fn_type);
-        let args = crate::api::core::registry::extract_fn_trait_args(&impl_fn_type)
-            .unwrap_or_default();
+        let args =
+            crate::api::core::registry::extract_fn_trait_args(&impl_fn_type).unwrap_or_default();
         let name = crate::api::lang::jnigen::jni::jni_kotlin_ext::derive_callback_name(&args);
         let fqn = self.resolve_callback_fqn(&self.mangle_callback(&name));
         let entry = self.types.entry(key.clone()).or_default();
         entry.callback_kotlin_fqn = Some(fqn.clone());
         entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), fqn));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.last_opaque_key = None;
         self.last_meta_key = None;
         self.last_entry_ref = None;
@@ -1382,8 +1400,7 @@ impl JniGen {
         let fqn = self.resolve_class_fqn(&self.mangle_data_class(&short));
         let entry = self.types.entry(key.clone()).or_default();
         entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), fqn));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.last_opaque_key = None;
         self.last_meta_key = Some(key);
         self.last_entry_ref = None;
@@ -1415,8 +1432,7 @@ impl JniGen {
         let entry = self.types.entry(key.clone()).or_default();
         entry.kotlin_name = Some(fqn.clone());
         entry.value_class = true;
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), fqn));
+        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.last_opaque_key = None;
         self.last_meta_key = Some(key);
         self.last_entry_ref = None;
@@ -1518,8 +1534,7 @@ impl JniGen {
                     let fqn = self.resolve_class_fqn(&self.mangle_wrapper(&short));
                     let entry = self.types.get_mut(&key).expect("just-inserted entry");
                     entry.kotlin_name = Some(fqn.clone());
-                    self.kotlin_type_fqns
-                        .push((key.as_str().to_string(), fqn));
+                    self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
                 }
             }
             self.last_meta_key = Some(key);
@@ -1552,9 +1567,9 @@ impl JniGen {
     /// index into the `exceptions` vec on match.
     fn find_exception(&self, ty: &syn::Type) -> Option<usize> {
         let needle = ty.to_token_stream().to_string();
-        self.exceptions.iter().position(|e| {
-            e.rust_type.to_token_stream().to_string() == needle
-        })
+        self.exceptions
+            .iter()
+            .position(|e| e.rust_type.to_token_stream().to_string() == needle)
     }
 
     /// The framework's pre-registered [`crate::api::lang::jnigen::jni::JniBindingError`]
@@ -1634,7 +1649,11 @@ impl JniGen {
         // forcing `()` either way. A non-wire `ty` that isn't yet
         // resolved defers.
         let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(&outer);
-        let inner = if is_self { None } else { registry.input_entry(&ty) };
+        let inner = if is_self {
+            None
+        } else {
+            registry.input_entry(&ty)
+        };
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces `outer`.
@@ -1643,7 +1662,9 @@ impl JniGen {
                         .types
                         .get(&key)
                         .and_then(|c| c.kotlin_name.clone())
-                        .or_else(|| crate::api::lang::jnigen::jni::jni_kotlin_ext::kotlin_for_wire(&ty));
+                        .or_else(|| {
+                            crate::api::lang::jnigen::jni::jni_kotlin_ext::kotlin_for_wire(&ty)
+                        });
                     (Niches::empty(), kn)
                 } else {
                     (default_niches_for_wire(&ty), None)
@@ -1749,7 +1770,11 @@ impl JniGen {
         let throw_exc = exc.unwrap_or_else(|| self.framework_exception());
         // Terminal vs composed — see [`Self::lookup_input`] for the rule.
         let is_self = TypeKey::from_type(&ty) == TypeKey::from_type(&outer);
-        let inner = if is_self { None } else { registry.output_entry(&ty) };
+        let inner = if is_self {
+            None
+        } else {
+            registry.output_entry(&ty)
+        };
         match inner {
             None if is_self || is_wire_type(&ty) => {
                 // Terminal: `ty` is the wire; the body produces it from `outer`.
@@ -1768,7 +1793,9 @@ impl JniGen {
                         .types
                         .get(&key)
                         .and_then(|c| c.kotlin_name.clone())
-                        .or_else(|| crate::api::lang::jnigen::jni::jni_kotlin_ext::kotlin_for_wire(&ty));
+                        .or_else(|| {
+                            crate::api::lang::jnigen::jni::jni_kotlin_ext::kotlin_for_wire(&ty)
+                        });
                     (kn, None)
                 };
                 let niches = if rank == 0 {
@@ -1854,7 +1881,8 @@ impl JniGen {
 /// resolves that ambiguity via the self-check + registered-converter
 /// probe, so `()` flows correctly without being force-classified here.
 fn is_wire_type(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Ptr(_)) || crate::api::lang::jnigen::jni::jni_kotlin_ext::kotlin_for_wire(ty).is_some()
+    matches!(ty, syn::Type::Ptr(_))
+        || crate::api::lang::jnigen::jni::jni_kotlin_ext::kotlin_for_wire(ty).is_some()
 }
 
 /// Bare-ident path to the generated `throw_<short>` free function for
@@ -1913,15 +1941,12 @@ fn build_exception_config(
             rust_type.to_token_stream()
         ),
     };
-    let short = segs
-        .last()
-        .map(|s| s.ident.to_string())
-        .unwrap_or_else(|| {
-            panic!(
-                "throwable: rust type `{}` has no path segments",
-                rust_type.to_token_stream()
-            )
-        });
+    let short = segs.last().map(|s| s.ident.to_string()).unwrap_or_else(|| {
+        panic!(
+            "throwable: rust type `{}` has no path segments",
+            rust_type.to_token_stream()
+        )
+    });
     let kotlin_fqn = if package.is_empty() {
         short.clone()
     } else {
@@ -2022,7 +2047,9 @@ impl JniGen {
         let name = input_name(rust, wire);
         let rust_with_lifetime = annotate_borrow_with_lifetime(rust, "env");
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
-        let err_type = exc.map(|e| e.rust_type.clone()).unwrap_or_else(default_err_type);
+        let err_type = exc
+            .map(|e| e.rust_type.clone())
+            .unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
         if matches!(wire, syn::Type::Ptr(_)) {
             syn::parse_quote!(
@@ -2056,7 +2083,9 @@ impl JniGen {
     ) -> syn::ItemFn {
         let name = output_name(rust, wire);
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        let err_type = exc.map(|e| e.rust_type.clone()).unwrap_or_else(default_err_type);
+        let err_type = exc
+            .map(|e| e.rust_type.clone())
+            .unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
         syn::parse_quote!(
             #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -2065,7 +2094,6 @@ impl JniGen {
             }
         )
     }
-
 
     /// Universal "opaque Box-handle as `jlong`" pair — input side.
     ///
@@ -2120,10 +2148,7 @@ impl JniGen {
             function,
             destination: wire,
             pre_stages: vec![],
-            niches: Niches::one(
-                syn::parse_quote!(0i64),
-                syn::parse_quote!(*v == 0),
-            ),
+            niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
             // Opaque handles' value-context Kotlin name stays `"Long"`
             // (the jlong wire mention); the *typed* Kotlin rendering is
             // derived from `handle` below. The wrapper's `?` path surfaces
@@ -2240,17 +2265,13 @@ impl JniGen {
     /// docs for the full convention.
     pub fn opaque_handle_output(&self, ty: &syn::Type) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-        let body: syn::Expr = syn::parse_quote!(
-            std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64
-        );
+        let body: syn::Expr =
+            syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
         ConverterImpl {
             function: self.build_output_fn(ty, &wire, &body, None),
             destination: wire,
             pre_stages: vec![],
-            niches: Niches::one(
-                syn::parse_quote!(0i64),
-                syn::parse_quote!(*v == 0),
-            ),
+            niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
             // Opaque handles' value-context name `"Long"` + folded
             // `Projection` — see [`Self::opaque_handle_input`] /
             // [`Self::opaque_leaf_meta`]. Framework throws because the
@@ -2402,7 +2423,6 @@ impl JniGen {
             metadata: self.framework_meta(Some("Any".to_string())),
         })
     }
-
 }
 
 /// One `pub(crate) fn throw_<short>(...)` item for an exception.
@@ -2528,10 +2548,7 @@ fn build_throw_fn_item(
 /// emission and keeps feature-gated handles (e.g. `zenoh-ext`-only types
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
-fn build_handle_destructor_items(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-) -> Vec<syn::Item> {
+fn build_handle_destructor_items(ext: &JniGen, registry: &Registry<KotlinMeta>) -> Vec<syn::Item> {
     let free_ptr = ext.mangle_fun("freePtr");
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -2747,9 +2764,12 @@ impl Prebindgen for JniGen {
         if TypeKey::from_type(ty).as_str() == "str" {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
             let body: syn::Expr = syn::parse_quote!({
-                let s = env
-                    .get_string(v)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("decode_string: {}", e)))?;
+                let s = env.get_string(v).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "decode_string: {}",
+                        e
+                    ))
+                })?;
                 s.into()
             });
             let rust_ty: syn::Type = syn::parse_quote!(String);
@@ -2827,20 +2847,19 @@ impl Prebindgen for JniGen {
             // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
             // type's name, unless the user pinned an explicit override
             // on the outer form itself (rare but legal).
-            let kotlin_name = self.override_kotlin_name(
-                &outer_ty,
-                inner.metadata.kotlin_name.clone(),
-            );
+            let kotlin_name =
+                self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
             // The outer form shares T's converter function verbatim, so it
             // inherits T's throws behaviour (whatever exception T's
             // converter is bound to). Copy the inner's throws metadata.
             // A borrowed handle (mut or not) is still opaque (param
             // classification needs to see it), but the holder doesn't own
             // it — mark `owned: false` so `close()` emission skips it.
-            let projection = inner.metadata.projection.clone().map(|h| Projection {
-                owned: false,
-                ..h
-            });
+            let projection = inner
+                .metadata
+                .projection
+                .clone()
+                .map(|h| Projection { owned: false, ..h });
             return Some(ConverterImpl {
                 destination: inner.destination.clone(),
                 function: inner.function.clone(),
@@ -2889,10 +2908,8 @@ impl Prebindgen for JniGen {
                         })
                     }
                 );
-                let kotlin_name = self.override_kotlin_name(
-                    &outer_ty,
-                    inner.metadata.kotlin_name.clone(),
-                );
+                let kotlin_name =
+                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
                 let projection = inner.metadata.projection.clone().map(|h| Projection {
                     owned: false,
                     // `Option<&Handle>` always rides the inner's `*v == 0` niche
@@ -3220,9 +3237,9 @@ impl Prebindgen for JniGen {
                 *ref_ty.elem = t1.clone();
                 let outer_ty = syn::Type::Reference(ref_ty);
                 let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
-                let body: syn::Expr = syn::parse_quote!(
-                    std::boxed::Box::into_raw(std::boxed::Box::new(v.clone())) as i64
-                );
+                let body: syn::Expr = syn::parse_quote!(std::boxed::Box::into_raw(
+                    std::boxed::Box::new(v.clone())
+                ) as i64);
                 return Some(ConverterImpl {
                     function: self.build_output_fn(&outer_ty, &wire, &body, None),
                     destination: wire,
@@ -3311,11 +3328,10 @@ impl Prebindgen for JniGen {
             );
             // Fold an Iterable layer over the inner projection (if any), so
             // `Vec<Handle>` / `Vec<ValueClass>` carry the full strategy.
-            let projection =
-                inner.metadata.projection.clone().map(|h| Projection {
-                    strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
-                    ..h
-                });
+            let projection = inner.metadata.projection.clone().map(|h| Projection {
+                strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
+                ..h
+            });
             return Some(ConverterImpl {
                 pre_stages: vec![],
                 function: self.build_output_fn(&outer_ty, &wire, &body, None),
@@ -3356,10 +3372,7 @@ impl Prebindgen for JniGen {
 
     fn into_sources(&self, target: &syn::Type) -> Vec<IntoSource> {
         let key = TypeKey::from_type(target);
-        self.into_sources_map
-            .get(&key)
-            .cloned()
-            .unwrap_or_default()
+        self.into_sources_map.get(&key).cloned().unwrap_or_default()
     }
 }
 
@@ -3367,7 +3380,11 @@ impl Prebindgen for JniGen {
 // Function-wrapper emission (JNI extern "C")
 // ──────────────────────────────────────────────────────────────────────
 
-fn emit_jni_function_wrapper(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> TokenStream {
+fn emit_jni_function_wrapper(
+    ext: &JniGen,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+) -> TokenStream {
     let original_ident = &f.sig.ident;
     let wrapper_ident = mangle_jni_name(ext, original_ident);
     let source_module = &ext.source_module;
@@ -3413,8 +3430,12 @@ fn emit_jni_function_wrapper(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<
     // `&decoded` only for `&T`-shaped originals; that's a Rust call-
     // convention concern, not a converter concern.
     for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else { continue };
-        let syn::Pat::Ident(pat_id) = &*pt.pat else { continue };
+        let syn::FnArg::Typed(pt) = input else {
+            continue;
+        };
+        let syn::Pat::Ident(pat_id) = &*pt.pat else {
+            continue;
+        };
         let arg_ident = &pat_id.ident;
         let arg_ty = &*pt.ty;
 
@@ -3689,10 +3710,7 @@ struct QualifyEmittedTypes<'a> {
 
 impl<'a> syn::visit_mut::VisitMut for QualifyEmittedTypes<'a> {
     fn visit_type_path_mut(&mut self, tp: &mut syn::TypePath) {
-        if tp.qself.is_none()
-            && tp.path.leading_colon.is_none()
-            && tp.path.segments.len() == 1
-        {
+        if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1 {
             let ident = tp.path.segments[0].ident.to_string();
             if self.source_names.contains(&ident) {
                 let mut qualified = self.source_module.clone();
@@ -3746,13 +3764,27 @@ fn sentinel_for_wire(wire: &syn::Type) -> TokenStream {
 /// segment). Drives the borrow/consume codegen at the call site and the
 /// `NativeHandle`-typed parameter detection in the Kotlin wrapper emitter.
 pub(crate) fn converter_returns_owned_object(output: &syn::ReturnType) -> bool {
-    let syn::ReturnType::Type(_, ty) = output else { return false; };
-    let syn::Type::Path(tp) = &**ty else { return false; };
-    let Some(last) = tp.path.segments.last() else { return false; };
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else { return false; };
-    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else { return false; };
-    let syn::Type::Path(itp) = inner else { return false; };
-    let Some(last_inner) = itp.path.segments.last() else { return false; };
+    let syn::ReturnType::Type(_, ty) = output else {
+        return false;
+    };
+    let syn::Type::Path(tp) = &**ty else {
+        return false;
+    };
+    let Some(last) = tp.path.segments.last() else {
+        return false;
+    };
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return false;
+    };
+    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
+        return false;
+    };
+    let syn::Type::Path(itp) = inner else {
+        return false;
+    };
+    let Some(last_inner) = itp.path.segments.last() else {
+        return false;
+    };
     last_inner.ident == "OwnedObject"
 }
 
@@ -3768,18 +3800,9 @@ fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
             syn::parse_quote!(jni::sys::jboolean),
             syn::parse_quote!(*v != 0),
         ),
-        "i32" => (
-            syn::parse_quote!(jni::sys::jint),
-            syn::parse_quote!(*v),
-        ),
-        "i64" => (
-            syn::parse_quote!(jni::sys::jlong),
-            syn::parse_quote!(*v),
-        ),
-        "f64" => (
-            syn::parse_quote!(jni::sys::jdouble),
-            syn::parse_quote!(*v),
-        ),
+        "i32" => (syn::parse_quote!(jni::sys::jint), syn::parse_quote!(*v)),
+        "i64" => (syn::parse_quote!(jni::sys::jlong), syn::parse_quote!(*v)),
+        "f64" => (syn::parse_quote!(jni::sys::jdouble), syn::parse_quote!(*v)),
         "Duration" | "std :: time :: Duration" => (
             syn::parse_quote!(jni::sys::jlong),
             syn::parse_quote!(std::time::Duration::from_millis(*v as u64)),
@@ -3787,17 +3810,24 @@ fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
         "String" => (
             syn::parse_quote!(jni::objects::JString),
             syn::parse_quote!({
-                let s = env
-                    .get_string(v)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("decode_string: {}", e)))?;
+                let s = env.get_string(v).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "decode_string: {}",
+                        e
+                    ))
+                })?;
                 s.into()
             }),
         ),
         "Vec < u8 >" => (
             syn::parse_quote!(jni::objects::JByteArray),
             syn::parse_quote!({
-                env.convert_byte_array(v)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("decode_byte_array: {}", e)))?
+                env.convert_byte_array(v).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "decode_byte_array: {}",
+                        e
+                    ))
+                })?
             }),
         ),
         _ => return None,
@@ -3828,15 +3858,23 @@ fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> {
         "String" => (
             syn::parse_quote!(jni::objects::JString),
             syn::parse_quote!({
-                env.new_string(v.as_str())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode_string: {}", e)))?
+                env.new_string(v.as_str()).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "encode_string: {}",
+                        e
+                    ))
+                })?
             }),
         ),
         "Vec < u8 >" => (
             syn::parse_quote!(jni::objects::JByteArray),
             syn::parse_quote!({
-                env.byte_array_from_slice(v.as_slice())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode_byte_array: {}", e)))?
+                env.byte_array_from_slice(v.as_slice()).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "encode_byte_array: {}",
+                        e
+                    ))
+                })?
             }),
         ),
         _ => return None,
@@ -4049,7 +4087,8 @@ fn callback_input(
                 // Look up the registered FQN and slash-encode it for the
                 // JVM method descriptor.
                 let arg_key = TypeKey::from_type(arg_ty).as_str().to_string();
-                let arg_fqn = ext.kotlin_type_fqns
+                let arg_fqn = ext
+                    .kotlin_type_fqns
                     .iter()
                     .find(|(k, _)| k == &arg_key)
                     .map(|(_, v)| v.replace('.', "/"))
@@ -4643,10 +4682,12 @@ fn enum_input_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let ident = &e.ident;
     let ident_name = ident.to_string();
-    let arms = crate::api::lang::jnigen::util::enum_discriminant_values(e).into_iter().map(|(variant, value)| {
-        let lit = proc_macro2::Literal::i64_unsuffixed(value);
-        quote! { #lit => #ident::#variant, }
-    });
+    let arms = crate::api::lang::jnigen::util::enum_discriminant_values(e)
+        .into_iter()
+        .map(|(variant, value)| {
+            let lit = proc_macro2::Literal::i64_unsuffixed(value);
+            quote! { #lit => #ident::#variant, }
+        });
     let body: syn::Expr = syn::parse_quote!({
         match *v as i64 {
             #(#arms)*
@@ -4807,7 +4848,10 @@ fn annotate_borrow_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
     if let syn::Type::Reference(r) = ty {
         if r.lifetime.is_none() {
             let mut new = r.clone();
-            new.lifetime = Some(syn::Lifetime::new(&format!("'{}", life), proc_macro2::Span::call_site()));
+            new.lifetime = Some(syn::Lifetime::new(
+                &format!("'{}", life),
+                proc_macro2::Span::call_site(),
+            ));
             return syn::Type::Reference(new);
         }
     }
@@ -4820,17 +4864,27 @@ fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {
     if let syn::Type::Path(tp) = ty {
         if let Some(last) = tp.path.segments.last() {
             let name = last.ident.to_string();
-            if matches!(name.as_str(), "JObject" | "JString" | "JByteArray" | "JClass") {
+            if matches!(
+                name.as_str(),
+                "JObject" | "JString" | "JByteArray" | "JClass"
+            ) {
                 if matches!(last.arguments, syn::PathArguments::None) {
                     let mut new = tp.clone();
                     if let Some(last) = new.path.segments.last_mut() {
-                        let lt = syn::Lifetime::new(&format!("'{}", life), proc_macro2::Span::call_site());
-                        last.arguments = syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
-                            colon2_token: None,
-                            lt_token: syn::token::Lt::default(),
-                            args: syn::punctuated::Punctuated::from_iter(std::iter::once(syn::GenericArgument::Lifetime(lt))),
-                            gt_token: syn::token::Gt::default(),
-                        });
+                        let lt = syn::Lifetime::new(
+                            &format!("'{}", life),
+                            proc_macro2::Span::call_site(),
+                        );
+                        last.arguments = syn::PathArguments::AngleBracketed(
+                            syn::AngleBracketedGenericArguments {
+                                colon2_token: None,
+                                lt_token: syn::token::Lt::default(),
+                                args: syn::punctuated::Punctuated::from_iter(std::iter::once(
+                                    syn::GenericArgument::Lifetime(lt),
+                                )),
+                                gt_token: syn::token::Gt::default(),
+                            },
+                        );
                     }
                     return syn::Type::Path(new);
                 }
@@ -5015,9 +5069,15 @@ fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
     if seg.ident != "Option" {
         return None;
     }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else { return None };
-    let syn::GenericArgument::Type(inner) = ab.args.first()? else { return None };
-    let syn::Type::Reference(r) = inner else { return None };
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    let syn::GenericArgument::Type(inner) = ab.args.first()? else {
+        return None;
+    };
+    let syn::Type::Reference(r) = inner else {
+        return None;
+    };
     Some(r.mutability.is_some())
 }
 
@@ -5185,7 +5245,6 @@ fn value_class_descriptor(
             )
         })
 }
-
 
 // ──────────────────────────────────────────────────────────────────────
 // JNI-internal naming convention. Hand-written code in zenoh-jni
@@ -5398,10 +5457,20 @@ mod tests {
         }
     }
 
-    fn install_input(reg: &mut Registry<KotlinMeta>, ty_str: &str, rank: usize, e: TypeEntry<KotlinMeta>) {
+    fn install_input(
+        reg: &mut Registry<KotlinMeta>,
+        ty_str: &str,
+        rank: usize,
+        e: TypeEntry<KotlinMeta>,
+    ) {
         reg.input_types[rank].insert(TypeKey::parse(ty_str), Some(e));
     }
-    fn install_output(reg: &mut Registry<KotlinMeta>, ty_str: &str, rank: usize, e: TypeEntry<KotlinMeta>) {
+    fn install_output(
+        reg: &mut Registry<KotlinMeta>,
+        ty_str: &str,
+        rank: usize,
+        e: TypeEntry<KotlinMeta>,
+    ) {
         reg.output_types[rank].insert(TypeKey::parse(ty_str), Some(e));
     }
 
@@ -5422,7 +5491,8 @@ mod tests {
         );
 
         let inner_ty: syn::Type = syn::parse_quote!(TestType);
-        let (wire, _body, niches) = option_input(&inner_ty, &reg).expect("Option<TestType> resolves");
+        let (wire, _body, niches) =
+            option_input(&inner_ty, &reg).expect("Option<TestType> resolves");
 
         assert_eq!(
             wire.to_token_stream().to_string(),
@@ -5496,7 +5566,8 @@ mod tests {
         // Layer 3: Option<Option<Option<TestType>>>. No niches left,
         // inner wire is jint (a JNI primitive) → boxed-Long fallback.
         let layer3_ty: syn::Type = syn::parse_quote!(Option<Option<TestType>>);
-        let (w3, _, n3) = option_input(&layer3_ty, &reg).expect("layer 3 resolves via box fallback");
+        let (w3, _, n3) =
+            option_input(&layer3_ty, &reg).expect("layer 3 resolves via box fallback");
         assert_eq!(
             w3.to_token_stream().to_string(),
             "jni :: objects :: JObject",
@@ -5585,7 +5656,10 @@ mod tests {
 
         let ty: syn::Type = syn::parse_quote!(MyStruct);
         let (wire, _, rest) = option_input(&ty, &reg).expect("Option<MyStruct> resolves");
-        assert_eq!(wire.to_token_stream().to_string(), "jni :: objects :: JObject");
+        assert_eq!(
+            wire.to_token_stream().to_string(),
+            "jni :: objects :: JObject"
+        );
         assert!(rest.is_empty(), "JObject's single null niche is consumed");
     }
 
@@ -5627,7 +5701,10 @@ mod tests {
         );
         let ty: syn::Type = syn::parse_quote!(i64);
         let (wire, _, rest) = option_input(&ty, &reg).expect("Option<i64> via box fallback");
-        assert_eq!(wire.to_token_stream().to_string(), "jni :: objects :: JObject");
+        assert_eq!(
+            wire.to_token_stream().to_string(),
+            "jni :: objects :: JObject"
+        );
         assert!(rest.is_empty());
     }
 }
