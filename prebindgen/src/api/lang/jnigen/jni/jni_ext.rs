@@ -2400,6 +2400,56 @@ impl JniGen {
         }
         let target_key = TypeKey::from_type(target).as_str().to_string();
 
+        // Single-source deterministic path: with exactly one declared source
+        // there is nothing to *select* at runtime, so we skip the
+        // `find_class` + `is_instance_of` chain entirely. The param decodes
+        // the one statically-known source directly and (when the source isn't
+        // already the target) converts via `TryInto`. The returned converter
+        // carries the SOURCE's real `kotlin_name` + `projection`, so
+        // `render_wrapper_fn` classifies the param as an ordinary typed /
+        // handle / value param (Borrow/Consume/ValueUnwrap/PassThrough) — no
+        // `Any`, no `instanceof`. Multi-source (`len > 1`) keeps the dispatch
+        // chain below.
+        if sources.len() == 1 {
+            let src_ty = &sources[0].source_type;
+            let src_entry = registry.input_entry(src_ty)?;
+            // Identity (`S == target`): alias the target's own input
+            // converter verbatim — its function already yields `target`.
+            if TypeKey::from_type(src_ty) == TypeKey::from_type(target) {
+                return Some(ConverterImpl {
+                    function: src_entry.function.clone(),
+                    destination: src_entry.destination.clone(),
+                    pre_stages: src_entry.pre_stages.clone(),
+                    niches: src_entry.niches.clone(),
+                    metadata: src_entry.metadata.clone(),
+                });
+            }
+            // Non-identity: decode `S` (wire-facing `function`), then run a
+            // `TryInto::<target>` stage. Mirrors the composed-converter shape
+            // in `lookup_input` (stage first, then the source's own stages).
+            let body: syn::Expr = syn::parse_quote!({
+                ::core::convert::TryInto::try_into(v).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "impl Into conversion failed: {}",
+                        e
+                    ))
+                })?
+            });
+            let stage = Stage {
+                function: self.build_output_fn(src_ty, target, &body, None),
+                metadata: KotlinMeta::default(),
+            };
+            let mut pre_stages = vec![stage];
+            pre_stages.extend(src_entry.pre_stages.iter().cloned());
+            return Some(ConverterImpl {
+                function: src_entry.function.clone(),
+                destination: src_entry.destination.clone(),
+                pre_stages,
+                niches: src_entry.niches.clone(),
+                metadata: src_entry.metadata.clone(),
+            });
+        }
+
         let mut arms: Vec<TokenStream> = Vec::with_capacity(sources.len());
         for src in sources {
             let src_ty = &src.source_type;
@@ -2935,6 +2985,50 @@ impl Prebindgen for JniGen {
         }
         if let Some(name) = bare_path_ident(ty) {
             if let Some((s, _)) = registry.structs.get(&name) {
+                // Value-class leaf (input mirror of the output branch in
+                // `on_output_type_rank_0`): a `@JvmInline value class` is erased
+                // to its single inner field, so decode that field's wire
+                // directly and construct the value class, tagging a `ValueClass`
+                // projection. This makes a value-class *parameter* render as
+                // `ValueUnwrap` (the `external fun` declares the erased inner —
+                // e.g. `ByteArray` — and the wrapper passes `<name>.<field>`),
+                // which is required: a `@JvmInline value class` in an
+                // `external fun` signature triggers Kotlin's value-class name
+                // mangling (`name-<hash>`) and breaks JNI linkage against the
+                // unmangled native symbol.
+                if self.types.get(&key).map(|c| c.value_class).unwrap_or(false) {
+                    if let Some((inner_ident, inner_ty)) = value_class_inner_field(s) {
+                        let inner_entry = registry.input_entry(&inner_ty)?;
+                        let inner_conv = inner_entry.function.sig.ident.clone();
+                        let wire = inner_entry.destination.clone();
+                        // Qualify the struct literal against the source module
+                        // (`zenoh_flat::ZBytes { .. }`) — a struct-literal path is
+                        // an expression, not a type, so `post_process_item`'s
+                        // type-qualifier wouldn't reach it (mirrors
+                        // `struct_input_body`'s `#struct_module::#ident { .. }`).
+                        let struct_module = struct_module_path(self, s);
+                        let struct_ident = &s.ident;
+                        let body: syn::Expr = syn::parse_quote!({
+                            let __inner = #inner_conv(env, v)?;
+                            #struct_module::#struct_ident { #inner_ident: __inner }
+                        });
+                        return Some(ConverterImpl {
+                            pre_stages: vec![],
+                            function: self.build_input_fn(ty, &wire, &body, None),
+                            destination: wire,
+                            niches: inner_entry.niches.clone(),
+                            metadata: KotlinMeta {
+                                projection: Some(Projection {
+                                    leaf_key: key.as_str().to_string(),
+                                    owned: false,
+                                    strategy: FoldStrategy::Direct,
+                                    kind: ProjectionKind::ValueClass,
+                                }),
+                                ..self.framework_meta(inner_entry.metadata.kotlin_name.clone())
+                            },
+                        });
+                    }
+                }
                 let (wire, body) = struct_input_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
                 // Auto-generated struct: the value-context Kotlin name is
@@ -4538,51 +4632,72 @@ fn struct_input_body(
         let field_wire = field_entry.destination.clone();
         let field_conv = field_entry.function.sig.ident.clone();
 
-        // Mirror of the struct_output_body bridge: when the field is a
-        // closeable native handle (folded `Projection` on its converter
-        // metadata), read the JNINativeHandle object from the JVM slot,
-        // `peek()` the raw jlong, then run the per-field input converter
-        // (still jlong-keyed). Null handle ⇒ jlong = 0 ⇒ `None` via the
-        // niche-path. Detection now flows from the type-unfolding metadata,
-        // not a syntactic `Option<T>` peel.
-        if let Some(h) = &field_entry.metadata.projection {
-            let java_path = handle_field_fqn(ext, h).replace('.', "/");
-            let sig = format!("L{};", java_path);
-            let tmp_ident = format_ident!("__{}_jobj", fname_ident);
-            // Struct fields are owned, so a non-`Option` handle field owns
-            // its native object: decode by consuming (`Box::from_raw` → owned
-            // `T`), mirroring `struct_output_body`'s `Box::into_raw`. The
-            // borrow converter would yield `OwnedObject<T>`, which can't
-            // populate an owned field. `Option<_>` handle fields keep the
-            // niche-aware converter (jlong 0 ⇒ `None`).
-            let field_ty = &field.ty;
-            let field_is_option = matches!(
-                field_ty,
-                syn::Type::Path(p) if p.path.segments.last()
-                    .map(|s| s.ident == "Option").unwrap_or(false)
-            );
-            let decode = if field_is_option {
-                quote! { let #fname_ident = #field_conv(env, &#raw_ident)?; }
-            } else {
-                quote! {
-                    let #fname_ident: #field_ty = unsafe {
-                        *std::boxed::Box::from_raw(#raw_ident as *mut #field_ty)
+        // Projection fields — mirror of `struct_output_body`'s kind branch:
+        //  * Handle: read the JNINativeHandle object from the JVM slot,
+        //    `peek()` the raw jlong, then run the per-field input converter
+        //    (jlong-keyed; null handle ⇒ jlong 0 ⇒ `None` via the niche path).
+        //  * ValueClass / ValueBlob: the class is JVM-erased to its inner
+        //    field, so the slot is the erased descriptor (e.g. `[B`); read it
+        //    as a JObject, coerce to the inner wire, and run the per-field
+        //    converter. (Without this branch a value-class field would be
+        //    mis-decoded as a handle — peeking a non-handle object.)
+        if let Some(proj) = &field_entry.metadata.projection {
+            match proj.kind {
+                ProjectionKind::Handle => {
+                    let java_path = handle_field_fqn(ext, proj).replace('.', "/");
+                    let sig = format!("L{};", java_path);
+                    let tmp_ident = format_ident!("__{}_jobj", fname_ident);
+                    // Struct fields are owned, so a non-`Option` handle field
+                    // owns its native object: decode by consuming
+                    // (`Box::from_raw` → owned `T`), mirroring
+                    // `struct_output_body`'s `Box::into_raw`. The borrow
+                    // converter would yield `OwnedObject<T>`, which can't
+                    // populate an owned field. `Option<_>` handle fields keep
+                    // the niche-aware converter (jlong 0 ⇒ `None`).
+                    let field_ty = &field.ty;
+                    let field_is_option = matches!(
+                        field_ty,
+                        syn::Type::Path(p) if p.path.segments.last()
+                            .map(|s| s.ident == "Option").unwrap_or(false)
+                    );
+                    let decode = if field_is_option {
+                        quote! { let #fname_ident = #field_conv(env, &#raw_ident)?; }
+                    } else {
+                        quote! {
+                            let #fname_ident: #field_ty = unsafe {
+                                *std::boxed::Box::from_raw(#raw_ident as *mut #field_ty)
+                            };
+                        }
                     };
+                    field_preludes.push(quote! {
+                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
+                            .and_then(|val| val.l())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                        let #raw_ident: jni::sys::jlong = if #tmp_ident.is_null() {
+                            0
+                        } else {
+                            env.call_method(&#tmp_ident, "peek", "()J", &[])
+                                .and_then(|val| val.j())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
+                        };
+                        #decode
+                    });
                 }
-            };
-            field_preludes.push(quote! {
-                let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                let #raw_ident: jni::sys::jlong = if #tmp_ident.is_null() {
-                    0
-                } else {
-                    env.call_method(&#tmp_ident, "peek", "()J", &[])
-                        .and_then(|val| val.j())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
-                };
-                #decode
-            });
+                ProjectionKind::ValueClass | ProjectionKind::ValueBlob => {
+                    let descriptor = match proj.kind {
+                        ProjectionKind::ValueBlob => "[B".to_string(),
+                        _ => value_class_descriptor(ext, registry, proj),
+                    };
+                    let tmp_ident = format_ident!("__{}_jobj", fname_ident);
+                    field_preludes.push(quote! {
+                        let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #descriptor)
+                            .and_then(|val| val.l())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                        let #raw_ident: #field_wire = #tmp_ident.into();
+                        let #fname_ident = #field_conv(env, &#raw_ident)?;
+                    });
+                }
+            }
             field_init.push(quote!(#fname_ident));
             continue;
         }
@@ -5363,6 +5478,30 @@ pub(crate) fn value_projection_field(
     }
     if cfg.value_class {
         let ident = bare_path_ident(&bare)?;
+        let (item_struct, _) = registry.structs.get(&ident)?;
+        let (field_ident, _) = value_class_inner_field(item_struct)?;
+        return Some(field_ident.to_string());
+    }
+    None
+}
+
+/// Inline-class field name for a value projection identified by its folded
+/// [`Projection::leaf_key`] (e.g. `"ZBytes"`) rather than by a raw param type.
+/// Used for `Option<value-class>` / `impl Into<value-class>` params where the
+/// written type isn't the bare value class but the projection still resolves
+/// the leaf — so the wrapper knows which inline field to unwrap (`<name>.bytes`).
+pub(crate) fn value_projection_field_for_leaf(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    leaf_key: &str,
+) -> Option<String> {
+    let key = TypeKey::parse(leaf_key);
+    let cfg = ext.types.get(&key)?;
+    if cfg.value_blob {
+        return Some("bytes".to_string());
+    }
+    if cfg.value_class {
+        let ident = bare_path_ident(&key.to_type())?;
         let (item_struct, _) = registry.structs.get(&ident)?;
         let (field_ident, _) = value_class_inner_field(item_struct)?;
         return Some(field_ident.to_string());

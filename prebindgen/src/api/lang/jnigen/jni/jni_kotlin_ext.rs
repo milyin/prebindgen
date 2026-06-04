@@ -2319,7 +2319,14 @@ fn render_wrapper_fn(
                 .iter()
                 .find(|(k, _)| k == &h.leaf_key)
                 .map(|(_, v)| v.clone())?;
-            (fqn, is_opt_ref_opaque)
+            // Handle params are nullable only as `Option<&T>` (borrow); value
+            // projections (value_class / value_blob) are plain owned values, so
+            // they're nullable whenever the param is `Option<_>`.
+            let optional = match h.kind {
+                crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle => is_opt_ref_opaque,
+                _ => is_option_type(arg_ty),
+            };
+            (fqn, optional)
         } else {
             // Read the Kotlin name straight off the resolved entry's
             // metadata — the rank-N handler that built this converter
@@ -2392,19 +2399,28 @@ fn render_wrapper_fn(
                 ParamMode::Consume
             }
         } else if is_value_proj {
-            // `@JvmInline value class` param: pass `<name>.<field>` (the erased
-            // inner) to the extern, no lock. Only the Direct shape (`T` / `&T`,
-            // non-`Option`, non-`Vec`) is supported for now — the only shape
-            // any value-projection param currently takes.
-            if is_option_type(arg_ty) {
+            // `@JvmInline value class` param: pass the erased inner field
+            // (`<name>.<field>`, or `<name>?.<field>` when Option) to the
+            // extern, no lock. Supports the Direct (`T` / `&T`) and Nullable
+            // (`Option<T>`) shapes; a collection layer (`Vec<value-class>`,
+            // i.e. an `Iterable` projection) still needs array codegen and is a
+            // loud build-time error. The inline field is resolved off the
+            // folded projection's `leaf_key`, so `Option<_>` / `impl Into<_>`
+            // wrappers around the value class resolve correctly.
+            let proj = entry.metadata.projection.as_ref()?;
+            if matches!(
+                proj.strategy,
+                crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::Iterable(_)
+            ) {
                 panic!(
-                    "render_wrapper_fn: value-class/value-blob `Option<_>` / `Vec<_>` params \
-                     aren't supported yet (param `{name}`); only a direct `T` / `&T` value \
-                     projection param is handled."
+                    "render_wrapper_fn: value-class/value-blob `Vec<_>` params aren't \
+                     supported yet (param `{name}`); add array codegen to lift this guard."
                 );
             }
-            let field = crate::api::lang::jnigen::jni::jni_ext::value_projection_field(
-                ext, registry, arg_ty,
+            let field = crate::api::lang::jnigen::jni::jni_ext::value_projection_field_for_leaf(
+                ext,
+                registry,
+                &proj.leaf_key,
             )
             .unwrap_or_else(|| {
                 panic!(
@@ -2506,8 +2522,13 @@ fn render_wrapper_fn(
                 }
                 ParamMode::ValueUnwrap { field } => {
                     // Inline value class → pass its erased inner field to the
-                    // extern (e.g. `z.bytes`: a `ByteArray`).
-                    format!("{}.{}", p.kt_name, field)
+                    // extern (e.g. `z.bytes`: a `ByteArray`). A nullable value
+                    // class (`ZBytes?`) safe-navigates so it stays `ByteArray?`.
+                    if p.kt_type.ends_with('?') {
+                        format!("{}?.{}", p.kt_name, field)
+                    } else {
+                        format!("{}.{}", p.kt_name, field)
+                    }
                 }
                 ParamMode::PassThrough => {
                     if p.as_enum_value {
