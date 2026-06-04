@@ -800,6 +800,25 @@ fn is_option_type(ty: &syn::Type) -> bool {
     false
 }
 
+/// Peel a leading `&`/`&mut` and an `Option<…>` layer to expose the inner type
+/// used for enum detection. So `&Priority`, `Priority`, and `Option<Priority>`
+/// all probe as `Priority` — letting nullable enum params (`Option<enum>`) wire
+/// as `Int?` + `?.value` just like a non-null enum wires as `Int` + `.value`,
+/// instead of leaking the enum object to the (boxed-int-expecting) Rust converter.
+fn enum_probe_type(ty: &syn::Type) -> syn::Type {
+    let stripped = match ty {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    };
+    match crate::api::lang::jnigen::jni::jni_ext::option_inner_type(&stripped) {
+        Some(inner) => match inner {
+            syn::Type::Reference(r) => (*r.elem).clone(),
+            other => other,
+        },
+        None => stripped,
+    }
+}
+
 /// `true` if `ty` is `Option<&T>` or `Option<&mut T>` (any inner T).
 /// Mirrors `option_inner_ref_mutability` in `jni_ext.rs` — kept here too
 /// to avoid a cross-module helper just for one call site.
@@ -2080,10 +2099,6 @@ pub(crate) fn render_extern_decl(
         let entry = registry.input_entry(arg_ty)?;
 
         let is_opaque = converter_returns_owned_object(&entry.function.sig.output);
-        let arg_no_ref: syn::Type = match arg_ty {
-            syn::Type::Reference(r) => (*r.elem).clone(),
-            _ => arg_ty.clone(),
-        };
         // `Option<&Opaque>` crosses the JNI wire as a primitive `jlong`
         // with `0` encoding `None`; nullability lives in the safe wrapper
         // (`withPtrOrZero`) not the JNI extern. Strip the `?` here so the
@@ -2096,7 +2111,11 @@ pub(crate) fn render_extern_decl(
 
         let kt_type_raw = if is_opaque || is_opt_ref_opaque {
             "Long".to_string()
-        } else if ext.is_kotlin_enum(&arg_no_ref) {
+        } else if ext.is_kotlin_enum(&enum_probe_type(arg_ty)) {
+            // Enum (incl. `Option<enum>`) crosses as jint → Kotlin `Int`; the
+            // wrapper passes `.value` / `?.value`. The Rust converter unboxes a
+            // `java.lang.Integer`, so the extern must declare `Int`/`Int?`, never
+            // the enum object.
             "Int".to_string()
         } else {
             entry.metadata.kotlin_name.clone()?
@@ -2414,11 +2433,9 @@ fn render_wrapper_fn(
         // input converter shares Priority's converter (see the rank-1
         // `& _` arm), and the same `.value` projection applies either
         // way at the call site.
-        let arg_no_ref: syn::Type = match arg_ty {
-            syn::Type::Reference(r) => (*r.elem).clone(),
-            _ => arg_ty.clone(),
-        };
-        let as_enum_value = ext.is_kotlin_enum(&arg_no_ref);
+        // Detect enums through a leading `&` and through `Option<…>`, so a
+        // nullable enum param passes `?.value` to the (Int?-typed) extern.
+        let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(arg_ty));
         params.push(Param {
             kt_name: name,
             kt_type: format!("{short}{suffix}"),
@@ -2491,7 +2508,13 @@ fn render_wrapper_fn(
                 }
                 ParamMode::PassThrough => {
                     if p.as_enum_value {
-                        format!("{}.value", p.kt_name)
+                        // Enum → its `Int` discriminant for the extern. Nullable
+                        // enum (`Enum?`) uses `?.value` so it stays `Int?`.
+                        if p.kt_type.ends_with('?') {
+                            format!("{}?.value", p.kt_name)
+                        } else {
+                            format!("{}.value", p.kt_name)
+                        }
                     } else {
                         p.kt_name.clone()
                     }

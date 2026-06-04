@@ -5273,7 +5273,7 @@ fn bare_path_ident(ty: &syn::Type) -> Option<syn::Ident> {
 /// derive the JVM ctor slot descriptor of an optional field: the value is
 /// encoded as a nullable JObject, but the Kotlin constructor expects `Inner`'s
 /// concrete erased type, not `Ljava/lang/Object;`.
-fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
+pub(crate) fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
     let syn::Type::Path(tp) = ty else { return None };
     let seg = tp.path.segments.last()?;
     if seg.ident != "Option" {
