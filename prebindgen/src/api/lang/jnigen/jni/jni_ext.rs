@@ -4807,24 +4807,19 @@ fn struct_output_body(
         if let Some(proj) = &field_entry.metadata.projection {
             match proj.kind {
                 ProjectionKind::Handle => {
-                    let java_path = handle_field_fqn(ext, proj).replace('.', "/");
-                    ctor_sig.push_str(&format!("L{};", java_path));
-                    let java_path_lit = syn::LitStr::new(&java_path, Span::call_site());
-                    field_preludes.push(quote! {
-                        let #encoded_obj_ident: jni::objects::JObject<'a> = if #encoded_ident == 0 {
-                            jni::objects::JObject::null()
-                        } else {
-                            env
-                                .new_object(#java_path_lit, "(J)V", &[jni::objects::JValue::from(#encoded_ident)])
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?
-                        };
-                    });
+                    // Pass the raw `jlong` to the Kotlin `fromParts` factory,
+                    // which wraps it into the typed handle class in JVM
+                    // bytecode. No native `new_object` — that boundary crossing
+                    // is eliminated.
+                    ctor_sig.push('J');
+                    ctor_args.push(quote!(jni::objects::JValue::from(#encoded_ident)));
                 }
                 ProjectionKind::ValueClass => {
                     ctor_sig.push_str(&value_class_descriptor(ext, registry, proj));
                     field_preludes.push(quote! {
                         let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
                     });
+                    ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
                 }
                 // Value-blob field: wire is `JByteArray`, erased descriptor `[B`,
                 // passed straight through (no boxed wrapper) — same shape as a
@@ -4834,9 +4829,9 @@ fn struct_output_body(
                     field_preludes.push(quote! {
                         let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
                     });
+                    ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
                 }
             }
-            ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
             continue;
         }
         // `enum_class`-declared enum fields: the per-field output
@@ -4848,31 +4843,16 @@ fn struct_output_body(
         // still routes through here against its inner type.
         if ext.is_kotlin_enum(&effective_ty) {
             if let Some(name) = bare_path_ident(&effective_ty) {
-                let enum_fqn = ext
+                let is_enum = ext
                     .kotlin_type_fqns
                     .iter()
-                    .find(|(k, _)| k == &name.to_string())
-                    .map(|(_, v)| v.clone());
-                if let Some(fqn) = enum_fqn {
-                    let java_path = fqn.replace('.', "/");
-                    let ctor_slot = format!("L{};", java_path);
-                    ctor_sig.push_str(&ctor_slot);
-                    let java_path_lit = syn::LitStr::new(&java_path, Span::call_site());
-                    let from_int_sig = format!("(I)L{};", java_path);
-                    let from_int_sig_lit = syn::LitStr::new(&from_int_sig, Span::call_site());
-                    field_preludes.push(quote! {
-                        let #encoded_obj_ident: jni::objects::JObject<'a> = {
-                            let __cls = env
-                                .find_class(#java_path_lit)
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("find enum class {}: {}", #java_path_lit, e)))?;
-                            let __result = env
-                                .call_static_method(&__cls, "fromInt", #from_int_sig_lit, &[jni::objects::JValue::from(#encoded_ident)])
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("call {}.fromInt: {}", #java_path_lit, e)))?;
-                            __result.l()
-                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("{}.fromInt result not an object: {}", #java_path_lit, e)))?
-                        };
-                    });
-                    ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
+                    .any(|(k, _)| k == &name.to_string());
+                if is_enum {
+                    // Pass the `jint` discriminant; the Kotlin `fromParts`
+                    // factory calls `Enum.fromInt(i)` in JVM bytecode. No native
+                    // `find_class` + `fromInt` static call.
+                    ctor_sig.push('I');
+                    ctor_args.push(quote!(jni::objects::JValue::from(#encoded_ident)));
                     continue;
                 }
             }
@@ -4950,17 +4930,26 @@ fn struct_output_body(
             }
         }
     }
-    ctor_sig.push_str(")V");
-    let ctor_sig_lit = syn::LitStr::new(&ctor_sig, Span::call_site());
+    // The object is built by the Kotlin `fromParts` companion factory (a
+    // `@JvmStatic` method on the data class), not natively. `ctor_sig` here is
+    // the FACTORY signature: each field's *leaf wire* slot (handles → `J`,
+    // enums → `I`, value classes → `[B`, nested structs/strings/primitives as
+    // their wire) and the data-class return type. This moves the whole
+    // object-graph assembly to JVM bytecode — one `call_static_method` crossing
+    // instead of N native `new_object`/`find_class`/`fromInt` crossings.
+    ctor_sig.push_str(&format!(")L{};", java_class_name));
+    let factory_sig_lit = syn::LitStr::new(&ctor_sig, Span::call_site());
 
     let body: syn::Expr = syn::parse_quote!({
         #(#field_preludes)*
-        let __obj = env.new_object(
+        let __obj = env.call_static_method(
             #java_class_name,
-            #ctor_sig_lit,
+            "fromParts",
+            #factory_sig_lit,
             &[#(#ctor_args),*],
         )
-        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct: {}", e)))?;
+        .and_then(|__v| __v.l())
+        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct via fromParts: {}", e)))?;
         __obj
     });
     Some((syn::parse_quote!(jni::objects::JObject), body))

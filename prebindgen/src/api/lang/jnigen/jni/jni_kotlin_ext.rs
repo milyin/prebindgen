@@ -863,6 +863,57 @@ fn render_handle_type(
     }
 }
 
+/// For a projection (handle / value-class / value-blob) **struct field**,
+/// compute the `(wire_param_type, wrap_expr)` the data class's `fromParts`
+/// factory uses: the wire param type matches the leaf wire
+/// `struct_output_body` passes (handle → `Long` jlong sentinel, value class /
+/// blob → `ByteArray`), and the wrap reconstructs the typed value in JVM
+/// bytecode (`Short(arg)`, with null mapped from the `0L` sentinel for handles
+/// or JVM null for value classes). Only the `Direct` and `Nullable{Direct}`
+/// shapes a scalar projection field can take are supported — a collection
+/// (`Vec<projection>`) field is rejected (matching the struct bridge's
+/// scalar-only guard).
+fn factory_projection_wire_wrap(
+    kind: &crate::api::lang::jnigen::jni::jni_ext::ProjectionKind,
+    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
+    short: &str,
+    name: &str,
+) -> (String, String) {
+    use crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::*;
+    use crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::*;
+    let direct = |kind: &crate::api::lang::jnigen::jni::jni_ext::ProjectionKind| match kind {
+        Handle => ("Long".to_string(), format!("{short}({name})")),
+        ValueClass | ValueBlob => ("ByteArray".to_string(), format!("{short}({name})")),
+    };
+    match strategy {
+        Direct => direct(kind),
+        Nullable { inner, .. } => {
+            if !matches!(**inner, Direct) {
+                panic!(
+                    "factory_projection_wire_wrap: only `Nullable<Direct>` projection struct \
+                     fields are supported (field `{name}`)"
+                );
+            }
+            match kind {
+                // Handle null rides the `0L` jlong sentinel.
+                Handle => (
+                    "Long".to_string(),
+                    format!("if ({name} == 0L) null else {short}({name})"),
+                ),
+                // Value class/blob null rides JVM-null of the `ByteArray` slot.
+                ValueClass | ValueBlob => (
+                    "ByteArray?".to_string(),
+                    format!("{name}?.let {{ {short}(it) }}"),
+                ),
+            }
+        }
+        Iterable(_) => panic!(
+            "factory_projection_wire_wrap: collection (`Vec<projection>`) struct fields are not \
+             supported by the fromParts factory (field `{name}`)"
+        ),
+    }
+}
+
 /// Render the Kotlin `close()` expression for a handle `receiver` through
 /// the folded [`FoldStrategy`] layers. Fresh lambda variable per nesting
 /// level avoids `it` shadowing; the common single-layer cases are
@@ -1290,6 +1341,12 @@ fn render_data_class_source(
 
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let mut field_lines: Vec<String> = Vec::new();
+    // `fromParts` companion factory: the wire param list (parallel to what
+    // `struct_output_body` passes from Rust) and the per-field wrap exprs that
+    // reconstruct the typed constructor args in JVM bytecode. Built in lockstep
+    // with `field_lines` so the factory signature matches the native call.
+    let mut factory_params: Vec<String> = Vec::new();
+    let mut factory_args: Vec<String> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
     let mut destructible_fields: Vec<(
@@ -1345,6 +1402,10 @@ fn render_data_class_source(
                 "    {override_prefix}val {kotlin_field_name}: {},",
                 render_handle_type(&h.strategy, &short)
             ));
+            let (wire_ty, wrap) =
+                factory_projection_wire_wrap(&h.kind, &h.strategy, &short, &kotlin_field_name);
+            factory_params.push(format!("{kotlin_field_name}: {wire_ty}"));
+            factory_args.push(wrap);
             if matches!(
                 h.kind,
                 crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle
@@ -1390,6 +1451,19 @@ fn render_data_class_source(
         field_lines.push(format!(
             "    {override_prefix}val {kotlin_field_name}: {short}{optional_suffix},"
         ));
+        // Factory param + wrap. Enum fields cross as `Int` (the discriminant
+        // `struct_output_body` passes) and are rebuilt with `Enum.fromInt(i)` in
+        // JVM bytecode — no native `find_class`/`fromInt`. Everything else
+        // (primitives, `String`, nested data classes, `Vec<_>`) crosses as its
+        // own wire and is forwarded to the constructor unchanged. The enum
+        // condition mirrors `struct_output_body`'s `is_kotlin_enum(&effective_ty)`.
+        if ext.is_kotlin_enum(&field.ty) {
+            factory_params.push(format!("{kotlin_field_name}: Int"));
+            factory_args.push(format!("{short}.fromInt({kotlin_field_name})"));
+        } else {
+            factory_params.push(format!("{kotlin_field_name}: {short}{optional_suffix}"));
+            factory_args.push(kotlin_field_name.clone());
+        }
     }
 
     let mut instance_body = String::new();
@@ -1606,6 +1680,26 @@ fn render_data_class_source(
             s.push('\n');
         }
         s.push_str("    public companion object {\n");
+        // `fromParts` factory: native (`struct_output_body`) calls this static
+        // method with each field's leaf wire and lets the JVM assemble the
+        // object graph, instead of building it with native `new_object` /
+        // `find_class` / `fromInt` calls (one JNI crossing vs many).
+        // `public`, not `internal`: an `internal` fun is name-mangled to
+        // `fromParts$<module>` in the bytecode, which the native
+        // `call_static_method("fromParts", …)` can't resolve
+        // (`NoSuchMethodError`). `public` keeps the plain `fromParts` symbol.
+        s.push_str("        @JvmStatic\n");
+        s.push_str("        public fun fromParts(\n");
+        for (i, p) in factory_params.iter().enumerate() {
+            let comma = if i + 1 < factory_params.len() { "," } else { "" };
+            s.push_str(&format!("            {p}{comma}\n"));
+        }
+        s.push_str(&format!("        ): {class_name} = {class_name}(\n"));
+        for (i, a) in factory_args.iter().enumerate() {
+            let comma = if i + 1 < factory_args.len() { "," } else { "" };
+            s.push_str(&format!("            {a}{comma}\n"));
+        }
+        s.push_str("        )\n");
         if !companion_methods.is_empty() {
             for line in companion_methods.lines() {
                 if line.is_empty() {
