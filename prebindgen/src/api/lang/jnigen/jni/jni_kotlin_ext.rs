@@ -737,6 +737,24 @@ fn build_callback_kotlin_file(
     let mut params: Vec<String> = Vec::new();
     let mut used_fqns: BTreeSet<String> = BTreeSet::new();
     for (i, arg) in args.iter().enumerate() {
+        // Data-class arg: flatten into leaf params (mirror of the native
+        // `flatten_struct_encode` that fills the `run` call), so the callback
+        // receives the struct's fields directly — no built `jni.<Struct>`
+        // object crosses the boundary, and the consumer constructs whatever it
+        // wants from the flat params. Prefix `p{i}` matches the native order.
+        if let Some(st) =
+            crate::api::lang::jnigen::jni::jni_ext::callback_arg_data_class(ext, registry, arg)
+        {
+            let prefix = format!("p{i}");
+            if let Some((flat_params, _reconstruct)) =
+                flatten_struct_factory(ext, registry, &st, &prefix, "", &mut used_fqns, 0)
+            {
+                for (name, ty) in &flat_params {
+                    params.push(format!("        {name}: {ty},"));
+                }
+                continue;
+            }
+        }
         let entry = registry.output_entry(arg);
         // Opaque-handle args: the converter's value-name is `"Long"`, but the
         // callback delivers the typed handle class. Prefer its registered FQN

@@ -4308,6 +4308,30 @@ fn callback_input(
             continue;
         }
 
+        // Data-class arg: flatten into the `run` signature so native makes ONE
+        // crossing with leaf wires (no built `jni.<Struct>` object, no
+        // round-trip). The slots' idents/descriptors are access-independent, so
+        // here (sig + JValue list) we use a throwaway access; the matching
+        // preludes that bind those idents are emitted in the second loop from
+        // the closure param. Prefix `cb{i}` keeps idents unique per arg and
+        // distinct from the `__cb_arg{i}` closure params.
+        if let Some(st) = callback_arg_data_class(ext, registry, arg_ty) {
+            let prefix = format!("cb{}", i);
+            let (_pre, slots) =
+                flatten_struct_encode(ext, registry, &st, &quote!(__unused), &prefix, 0, &quote!(env))?;
+            for sl in &slots {
+                sig.push_str(&sl.descriptor);
+                let id = &sl.ident;
+                if sl.is_object {
+                    jvalue_exprs.push(quote!(jni::objects::JValue::Object(&#id)));
+                } else {
+                    jvalue_exprs.push(quote!(jni::objects::JValue::from(#id)));
+                }
+            }
+            arg_idents.push(raw_ident);
+            continue;
+        }
+
         match jni_field_access(&arg_wire) {
             Some((s, _, false)) => {
                 sig.push_str(s);
@@ -4399,6 +4423,18 @@ fn callback_input(
                     .new_object(#java_path_lit, "(J)V", &[jni::objects::JValue::from(#enc_ident)])
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?;
             });
+            let _ = raw_ident;
+            continue;
+        }
+        // Data-class arg: emit the flatten preludes that encode the struct's
+        // leaf wires from the closure param (`#cb_arg`). Same prefix `cb{i}` as
+        // loop 1, so the bound idents match the `JValue` list built there.
+        if let Some(st) = callback_arg_data_class(ext, registry, arg_ty) {
+            let prefix = format!("cb{}", i);
+            let access = quote!(#cb_arg);
+            let (pre, _slots) =
+                flatten_struct_encode(ext, registry, &st, &access, &prefix, 0, &quote!(&mut env))?;
+            fixed_preludes.push(pre);
             let _ = raw_ident;
             continue;
         }
@@ -4788,6 +4824,7 @@ fn flatten_struct_encode(
     access: &TokenStream,
     prefix: &str,
     depth: usize,
+    env_expr: &TokenStream,
 ) -> Option<(TokenStream, Vec<EncSlot>)> {
     assert!(
         depth <= 16,
@@ -4806,7 +4843,7 @@ fn flatten_struct_encode(
         let field_entry = registry.output_entry(&effective_ty)?;
         let field_wire = field_entry.destination.clone();
         let field_conv = field_entry.function.sig.ident.clone();
-        let value_expr = quote! { #field_conv(env, #access.#fname.clone())? };
+        let value_expr = quote! { #field_conv(#env_expr, #access.#fname.clone())? };
         let base = format!("{}_{}", prefix, fname);
         let id = format_ident!("__{}", base);
 
@@ -4899,8 +4936,15 @@ fn flatten_struct_encode(
             }
             if option_inner_type(&effective_ty).is_none() {
                 let child_access = quote! { #access.#fname };
-                let (child_pre, child_slots) =
-                    flatten_struct_encode(ext, registry, &child, &child_access, &base, depth + 1)?;
+                let (child_pre, child_slots) = flatten_struct_encode(
+                    ext,
+                    registry,
+                    &child,
+                    &child_access,
+                    &base,
+                    depth + 1,
+                    env_expr,
+                )?;
                 preludes.extend(child_pre);
                 slots.extend(child_slots);
             } else {
@@ -4908,8 +4952,15 @@ fn flatten_struct_encode(
                 // encoded in the `Some` arm and defaulted in the `None` arm.
                 let cbind = format_ident!("__c{}", depth);
                 let child_access = quote! { #cbind };
-                let (child_pre, child_slots) =
-                    flatten_struct_encode(ext, registry, &child, &child_access, &base, depth + 1)?;
+                let (child_pre, child_slots) = flatten_struct_encode(
+                    ext,
+                    registry,
+                    &child,
+                    &child_access,
+                    &base,
+                    depth + 1,
+                    env_expr,
+                )?;
                 let flag_id = format_ident!("__{}_present", base);
                 let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
                     .map(|i| format_ident!("__{}_o{}", base, i))
@@ -5023,6 +5074,31 @@ fn flatten_struct_encode(
     Some((preludes, slots))
 }
 
+/// If `arg_ty` is a registered **data_class** (not a handle / value class /
+/// enum / external alias like `ZSample`), return its `ItemStruct` so a callback
+/// arg of that type can be flattened into the `run(...)` signature
+/// (`flatten_struct_encode`) instead of crossing as a built object. Returns
+/// `None` for everything else (those keep their single-slot callback path).
+pub(crate) fn callback_arg_data_class(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    arg_ty: &syn::Type,
+) -> Option<syn::ItemStruct> {
+    let name = bare_path_ident(arg_ty)?;
+    if !registry.structs.contains_key(&name) {
+        return None;
+    }
+    let is_vc = ext
+        .types
+        .get(&TypeKey::from_type(arg_ty))
+        .map(|c| c.value_class)
+        .unwrap_or(false);
+    if is_vc || ext.is_kotlin_enum(arg_ty) {
+        return None;
+    }
+    registry.structs.get(&name).map(|(st, _)| st.clone())
+}
+
 fn struct_output_body(
     ext: &JniGen,
     s: &syn::ItemStruct,
@@ -5052,7 +5128,7 @@ fn struct_output_body(
     // crossing. The Kotlin `fromParts` factory (recursively flattened the same
     // way in `render_data_class_source`) reassembles the graph in bytecode.
     let access = quote!(v);
-    let (preludes, slots) = flatten_struct_encode(ext, registry, s, &access, "", 0)?;
+    let (preludes, slots) = flatten_struct_encode(ext, registry, s, &access, "", 0, &quote!(env))?;
 
     let mut sig = String::from("(");
     let mut args: Vec<TokenStream> = Vec::new();
