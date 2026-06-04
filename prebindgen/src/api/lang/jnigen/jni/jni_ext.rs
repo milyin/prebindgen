@@ -193,6 +193,20 @@ impl KotlinMeta {
             projection: None,
         }
     }
+
+    /// True iff this (input-direction) converter decodes a directly-
+    /// consumable owned opaque handle — i.e. its projection is a bare
+    /// `Handle` leaf with no `Option`/`Vec` fold. Replaces the former
+    /// `converter_returns_owned_object` return-type AST sniff; the two are
+    /// equivalent for every input converter this back-end produces (the
+    /// only input converters returning `Result<OwnedObject<_>, _>` are the
+    /// opaque-handle leaf and the `&_`/`&mut _` arm that shares its
+    /// function, both carrying a `Direct` `Handle` projection).
+    pub(crate) fn is_direct_handle(&self) -> bool {
+        self.projection.as_ref().is_some_and(|p| {
+            p.kind == ProjectionKind::Handle && matches!(p.strategy, FoldStrategy::Direct)
+        })
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -2388,7 +2402,7 @@ impl JniGen {
             // Opaque sources branch on the declared mode. Non-opaque
             // sources don't own a `Box` slot, so they just decode
             // normally and `mode` has no effect on the emitted code.
-            let is_opaque = converter_returns_owned_object(&src_entry.function.sig.output);
+            let is_opaque = src_entry.metadata.is_direct_handle();
             let decode_expr: syn::Expr = if is_opaque {
                 match src.mode {
                     // Method-call `.clone()` triggers method auto-deref:
@@ -2992,7 +3006,7 @@ impl Prebindgen for JniGen {
         // adds `.as_ref()` if needed; out of scope here).
         if pat_match(pat, "Option < & _ >") || pat_match(pat, "Option < & mut _ >") {
             let inner = registry.input_entry(t1)?;
-            if converter_returns_owned_object(&inner.function.sig.output) {
+            if inner.metadata.is_direct_handle() {
                 let is_mut = pat_match(pat, "Option < & mut _ >");
                 let inner_wire = inner.destination.clone();
                 let inner_conv = inner.function.sig.ident.clone();
@@ -3620,8 +3634,8 @@ fn emit_jni_function_wrapper(
         // and ensures no live borrow can outlive this point. No
         // `T: Clone` bound, so non-Clone handles (e.g. `Publisher<'a>`)
         // work too. This decode is infallible — no `match` needed.
-        let is_consume = !matches!(arg_ty, syn::Type::Reference(_))
-            && converter_returns_owned_object(&entry.function.sig.output);
+        let is_consume =
+            !matches!(arg_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
         if is_consume {
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
             prelude.push(quote!(
@@ -3905,35 +3919,6 @@ fn sentinel_for_wire(wire: &syn::Type) -> TokenStream {
     quote!(unsafe { std::mem::zeroed::<#wire>() })
 }
 
-/// Detect whether an input converter's return type is `_::ZResult<OwnedObject<_>>`
-/// (or whatever the `zresult` path happens to be — we only inspect the last
-/// segment). Drives the borrow/consume codegen at the call site and the
-/// `NativeHandle`-typed parameter detection in the Kotlin wrapper emitter.
-pub(crate) fn converter_returns_owned_object(output: &syn::ReturnType) -> bool {
-    let syn::ReturnType::Type(_, ty) = output else {
-        return false;
-    };
-    let syn::Type::Path(tp) = &**ty else {
-        return false;
-    };
-    let Some(last) = tp.path.segments.last() else {
-        return false;
-    };
-    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
-        return false;
-    };
-    let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
-        return false;
-    };
-    let syn::Type::Path(itp) = inner else {
-        return false;
-    };
-    let Some(last_inner) = itp.path.segments.last() else {
-        return false;
-    };
-    last_inner.ident == "OwnedObject"
-}
-
 // ──────────────────────────────────────────────────────────────────────
 // Primitive bodies
 // ──────────────────────────────────────────────────────────────────────
@@ -4062,7 +4047,7 @@ fn option_input(
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
         let pred = &slot.matches;
-        let returns_owned_object = converter_returns_owned_object(&inner_entry.function.sig.output);
+        let returns_owned_object = inner_entry.metadata.is_direct_handle();
         let body: syn::Expr = if returns_owned_object {
             // Borrow semantics: the Java side still owns the boxed value
             // (its `close()` will free the original Box later via the typed

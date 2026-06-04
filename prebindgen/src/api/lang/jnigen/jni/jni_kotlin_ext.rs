@@ -30,9 +30,7 @@ use quote::ToTokens;
 
 use crate::api::core::prebindgen::{IntoSource, IntoSourceMode, Prebindgen};
 use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
-use crate::api::lang::jnigen::jni::jni_ext::{
-    converter_returns_owned_object, JniGen, KotlinMeta, MethodEntry,
-};
+use crate::api::lang::jnigen::jni::jni_ext::{JniGen, KotlinMeta, MethodEntry};
 use crate::api::lang::jnigen::jni::templates;
 use crate::api::lang::jnigen::kotlin::kotlin_ext::{KotlinFile, WriteKotlinError};
 use crate::api::lang::jnigen::kotlin::type_map::KotlinTypeMap;
@@ -2098,14 +2096,14 @@ pub(crate) fn render_extern_decl(
 
         let entry = registry.input_entry(arg_ty)?;
 
-        let is_opaque = converter_returns_owned_object(&entry.function.sig.output);
+        let is_opaque = entry.metadata.is_direct_handle();
         // `Option<&Opaque>` crosses the JNI wire as a primitive `jlong`
         // with `0` encoding `None`; nullability lives in the safe wrapper
         // (`withPtrOrZero`) not the JNI extern. Strip the `?` here so the
         // extern signature matches what the JVM will look up. Detection
-        // uses `metadata.projection.is_some()` because the `Option<OwnedObject<T>>`
-        // converter doesn't return `OwnedObject` directly so the local
-        // `is_opaque` flag (which checks the return shape) misses it.
+        // uses `metadata.projection.is_some()` because the `Option<&Opaque>`
+        // converter's projection is a folded `Nullable{ Handle }` (not a
+        // bare `Direct` handle), so the `is_direct_handle` flag above misses it.
         let is_opt_ref_opaque = entry.metadata.projection.is_some() && is_option_ref(arg_ty);
         let optional = is_option_type(arg_ty) && !is_opt_ref_opaque;
 
@@ -2910,7 +2908,7 @@ fn build_dispatch_arms(
         // takes over.
         let is_opaque = registry
             .input_entry(&src.source_type)
-            .map(|e| converter_returns_owned_object(&e.function.sig.output))
+            .map(|e| e.metadata.is_direct_handle())
             .unwrap_or(false);
         if !is_opaque {
             continue;
