@@ -4741,157 +4741,244 @@ fn struct_input_body(
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
 
-fn struct_output_body(
-    ext: &JniGen,
-    s: &syn::ItemStruct,
-    registry: &Registry<KotlinMeta>,
-) -> Option<(syn::Type, syn::Expr)> {
-    let struct_name = s.ident.to_string();
-    // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
-    // mangle closure flows through; fall back to the bare struct ident
-    // qualified with the package when no `data_class` /
-    // `ptr_class` declaration exists for this Rust type.
-    let struct_ident = &s.ident;
-    let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
-    let registered_fqn = ext
-        .types
-        .get(&TypeKey::from_type(&struct_ty))
-        .and_then(|cfg| cfg.kotlin_name.clone());
-    let java_class_name = if let Some(fqn) = registered_fqn {
-        fqn.replace('.', "/")
-    } else if ext.java_class_prefix.is_empty() {
-        struct_name.clone()
-    } else {
-        format!("{}/{}", ext.java_class_prefix, struct_name)
-    };
+/// One flattened leaf wire slot of a struct's recursive `fromParts` encode
+/// (see [`flatten_struct_encode`]). `ident` holds the encoded wire after the
+/// preludes run; `default` is the value used for this slot when it sits under
+/// an absent `Option<nested>` parent.
+struct EncSlot {
+    ident: proc_macro2::Ident,
+    wire_ty: TokenStream,
+    descriptor: String,
+    is_object: bool,
+    default: TokenStream,
+}
 
+/// Zero/null wire value for a JVM descriptor — used to fill an absent
+/// `Option<nested>`'s leaf slots (the Kotlin `present` flag tells the factory
+/// to ignore them).
+fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
+    match sig {
+        "Z" => quote!(0u8),
+        "B" => quote!(0i8),
+        "C" => quote!(0u16),
+        "S" => quote!(0i16),
+        "I" => quote!(0i32),
+        "J" => quote!(0i64),
+        "F" => quote!(0.0f32),
+        "D" => quote!(0.0f64),
+        _ => quote!(jni::objects::JObject::null()),
+    }
+}
+
+/// Recursively flatten a struct's output encode into a list of leaf wire slots
+/// + the preludes that compute them, so the whole object graph can be built by
+/// a **single** Kotlin `fromParts` call (no per-nested-struct
+/// `call_static_method`). Nested non-optional data-class fields are inlined;
+/// nested `Option<data-class>` fields emit a `present` `jboolean` slot followed
+/// by the child's leaves (encoded in the `Some` arm, defaulted in the `None`
+/// arm). Leaves (primitives, handles→`jlong`, value classes/blobs→`ByteArray`,
+/// enums→`jint`, strings, `Vec`) terminate the recursion. `access` is the Rust
+/// expression yielding the current struct value (`v`, `v.field`, or the matched
+/// `__cN` under an Option); `prefix` namespaces the generated idents.
+#[allow(clippy::too_many_arguments)]
+fn flatten_struct_encode(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    s: &syn::ItemStruct,
+    access: &TokenStream,
+    prefix: &str,
+    depth: usize,
+) -> Option<(TokenStream, Vec<EncSlot>)> {
+    assert!(
+        depth <= 16,
+        "flatten_struct_encode: recursion too deep at struct `{}` (cyclic data_class?)",
+        s.ident
+    );
     let syn::Fields::Named(named) = &s.fields else {
         return None;
     };
-
-    let mut field_preludes: Vec<TokenStream> = Vec::new();
-    let mut ctor_args: Vec<TokenStream> = Vec::new();
-    let mut ctor_sig = String::from("(");
+    let mut preludes = TokenStream::new();
+    let mut slots: Vec<EncSlot> = Vec::new();
 
     for field in &named.named {
-        let fname_ident = field.ident.as_ref().unwrap().clone();
-        let field_value_ident = format_ident!("__{}_value", fname_ident);
-        let encoded_ident = format_ident!("__{}_encoded", fname_ident);
-        let encoded_obj_ident = format_ident!("__{}_encoded_obj", fname_ident);
-
-        // Every field — value classes included — uses its own converter. A
-        // value-class field's converter delegates to the inner field and tags
-        // a `ValueClass` projection, so the projection branch below emits the
-        // erased descriptor; no value-class special case is needed here.
+        let fname = field.ident.as_ref().unwrap().clone();
         let effective_ty = field.ty.clone();
-        let field_access = quote! { v.#fname_ident.clone() };
-
-        // Defer if any field's output converter isn't resolved yet.
         let field_entry = registry.output_entry(&effective_ty)?;
         let field_wire = field_entry.destination.clone();
         let field_conv = field_entry.function.sig.ident.clone();
+        let value_expr = quote! { #field_conv(env, #access.#fname.clone())? };
+        let base = format!("{}_{}", prefix, fname);
+        let id = format_ident!("__{}", base);
 
-        field_preludes.push(quote! {
-            let #field_value_ident = #field_access;
-            let #encoded_ident = #field_conv(env, #field_value_ident)?;
-        });
-
-        // Projection fields (opaque handle or value class). The per-field
-        // converter already produced the projection's wire; here we only pick
-        // the JVM ctor slot descriptor and any wrap, branching on kind:
-        //  * Handle: wire is `jlong`; slot is the boxed typed-handle class
-        //    `L<fqn>;`; wrap the jlong into that class (null when 0).
-        //  * ValueClass: the class is JVM-erased to its inner field, so the
-        //    slot is the inner converter's descriptor (e.g. `[B`) and the
-        //    inner wire is passed straight through — no boxed wrapper.
+        // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
         if let Some(proj) = &field_entry.metadata.projection {
             match proj.kind {
                 ProjectionKind::Handle => {
-                    // Pass the raw `jlong` to the Kotlin `fromParts` factory,
-                    // which wraps it into the typed handle class in JVM
-                    // bytecode. No native `new_object` — that boundary crossing
-                    // is eliminated.
-                    ctor_sig.push('J');
-                    ctor_args.push(quote!(jni::objects::JValue::from(#encoded_ident)));
+                    preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
+                    slots.push(EncSlot {
+                        ident: id,
+                        wire_ty: quote!(jni::sys::jlong),
+                        descriptor: "J".to_string(),
+                        is_object: false,
+                        default: quote!(0i64),
+                    });
                 }
                 ProjectionKind::ValueClass => {
-                    ctor_sig.push_str(&value_class_descriptor(ext, registry, proj));
-                    field_preludes.push(quote! {
-                        let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
+                    let d = value_class_descriptor(ext, registry, proj);
+                    preludes
+                        .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
+                    slots.push(EncSlot {
+                        ident: id,
+                        wire_ty: quote!(jni::objects::JObject),
+                        descriptor: d,
+                        is_object: true,
+                        default: quote!(jni::objects::JObject::null()),
                     });
-                    ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
                 }
-                // Value-blob field: wire is `JByteArray`, erased descriptor `[B`,
-                // passed straight through (no boxed wrapper) — same shape as a
-                // `ValueClass` over a byte array.
                 ProjectionKind::ValueBlob => {
-                    ctor_sig.push_str("[B");
-                    field_preludes.push(quote! {
-                        let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
+                    preludes
+                        .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
+                    slots.push(EncSlot {
+                        ident: id,
+                        wire_ty: quote!(jni::objects::JObject),
+                        descriptor: "[B".to_string(),
+                        is_object: true,
+                        default: quote!(jni::objects::JObject::null()),
                     });
-                    ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
                 }
             }
             continue;
         }
-        // `enum_class`-declared enum fields: the per-field output
-        // converter produced a `jint` discriminant, but the Kotlin
-        // data class declares this field as the typed enum class. Wrap
-        // the int via the enum's `fromInt(Int)` companion method so the
-        // ctor slot matches the data-class field type. Uses
-        // `effective_ty` so a hypothetical value class wrapping an enum
-        // still routes through here against its inner type.
+        // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
         if ext.is_kotlin_enum(&effective_ty) {
             if let Some(name) = bare_path_ident(&effective_ty) {
-                let is_enum = ext
+                if ext
                     .kotlin_type_fqns
                     .iter()
-                    .any(|(k, _)| k == &name.to_string());
-                if is_enum {
-                    // Pass the `jint` discriminant; the Kotlin `fromParts`
-                    // factory calls `Enum.fromInt(i)` in JVM bytecode. No native
-                    // `find_class` + `fromInt` static call.
-                    ctor_sig.push('I');
-                    ctor_args.push(quote!(jni::objects::JValue::from(#encoded_ident)));
+                    .any(|(k, _)| k == &name.to_string())
+                {
+                    preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
+                    slots.push(EncSlot {
+                        ident: id,
+                        wire_ty: quote!(jni::sys::jint),
+                        descriptor: "I".to_string(),
+                        is_object: false,
+                        default: quote!(0i32),
+                    });
                     continue;
                 }
             }
         }
-
+        // Nested data-class field (not a projection / not an enum, and its
+        // option-stripped bare type is a registered non-value-class struct):
+        // recurse and inline its leaves instead of building the child via its
+        // own `fromParts` call.
+        let inner_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+        let nested_child = bare_path_ident(&inner_ty).and_then(|name| {
+            let is_struct = registry.structs.contains_key(&name);
+            let is_vc = ext
+                .types
+                .get(&TypeKey::from_type(&inner_ty))
+                .map(|c| c.value_class)
+                .unwrap_or(false);
+            if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
+                registry.structs.get(&name).map(|(st, _)| st.clone())
+            } else {
+                None
+            }
+        });
+        if let Some(child) = nested_child {
+            if pat_match_top(&effective_ty, "Vec") {
+                panic!(
+                    "flatten_struct_encode: `Vec<{}>` data-class field (`{}.{}`) is not \
+                     supported by the fromParts flatten (variable arity)",
+                    inner_ty.to_token_stream(),
+                    s.ident,
+                    fname
+                );
+            }
+            if option_inner_type(&effective_ty).is_none() {
+                let child_access = quote! { #access.#fname };
+                let (child_pre, child_slots) =
+                    flatten_struct_encode(ext, registry, &child, &child_access, &base, depth + 1)?;
+                preludes.extend(child_pre);
+                slots.extend(child_slots);
+            } else {
+                // `Option<nested>`: a `present` flag + the child's leaves,
+                // encoded in the `Some` arm and defaulted in the `None` arm.
+                let cbind = format_ident!("__c{}", depth);
+                let child_access = quote! { #cbind };
+                let (child_pre, child_slots) =
+                    flatten_struct_encode(ext, registry, &child, &child_access, &base, depth + 1)?;
+                let flag_id = format_ident!("__{}_present", base);
+                let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
+                    .map(|i| format_ident!("__{}_o{}", base, i))
+                    .collect();
+                let outer_tys: Vec<TokenStream> =
+                    child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
+                let inner_ids: Vec<proc_macro2::Ident> =
+                    child_slots.iter().map(|sl| sl.ident.clone()).collect();
+                let defaults: Vec<TokenStream> =
+                    child_slots.iter().map(|sl| sl.default.clone()).collect();
+                preludes.extend(quote! {
+                    let #flag_id: jni::sys::jboolean;
+                    #( let #outer_ids: #outer_tys; )*
+                    match &#access.#fname {
+                        Some(#cbind) => {
+                            #child_pre
+                            #flag_id = 1u8;
+                            #( #outer_ids = #inner_ids; )*
+                        }
+                        None => {
+                            #flag_id = 0u8;
+                            #( #outer_ids = #defaults; )*
+                        }
+                    }
+                });
+                slots.push(EncSlot {
+                    ident: flag_id,
+                    wire_ty: quote!(jni::sys::jboolean),
+                    descriptor: "Z".to_string(),
+                    is_object: false,
+                    default: quote!(0u8),
+                });
+                for (i, sl) in child_slots.iter().enumerate() {
+                    slots.push(EncSlot {
+                        ident: outer_ids[i].clone(),
+                        wire_ty: sl.wire_ty.clone(),
+                        descriptor: sl.descriptor.clone(),
+                        is_object: sl.is_object,
+                        default: sl.default.clone(),
+                    });
+                }
+            }
+            continue;
+        }
+        // Leaf primitive / object (string, byte array, Vec, ...).
         match jni_field_access(&field_wire) {
             Some((sig, _, false)) => {
-                ctor_sig.push_str(sig);
-                ctor_args.push(quote!(jni::objects::JValue::from(#encoded_ident)));
+                preludes.extend(quote! { let #id: #field_wire = #value_expr; });
+                slots.push(EncSlot {
+                    ident: id,
+                    wire_ty: quote!(#field_wire),
+                    descriptor: sig.to_string(),
+                    is_object: false,
+                    default: primitive_default_for_descriptor(sig),
+                });
             }
             Some((sig, _, true)) => {
-                ctor_sig.push_str(sig);
-                field_preludes.push(quote! {
-                    let #encoded_obj_ident: jni::objects::JObject = #encoded_ident.into();
+                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr.into(); });
+                slots.push(EncSlot {
+                    ident: id,
+                    wire_ty: quote!(jni::objects::JObject),
+                    descriptor: sig.to_string(),
+                    is_object: true,
+                    default: quote!(jni::objects::JObject::null()),
                 });
-                ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
             }
             None => {
-                // Object-shaped wire (jobject/jstring/jbyteArray/etc.) with no
-                // primitive descriptor. The JVM ctor slot must be the field's
-                // ACTUAL declared type — `Ljava/lang/Object;` won't match
-                // because Kotlin emits the typed class in the constructor
-                // signature.
-                //
-                // For `Option<T>` the per-field converter produces a nullable
-                // JObject, but the Kotlin ctor slot is still `T`'s concrete
-                // type, so unwrap the Option before resolving the descriptor.
-                // (Value-class fields never reach here — they carry a
-                // `ValueClass` projection and are handled above.) Detection
-                // order on the resulting slot type:
-                //   1. Inner wire is a primitive/byte-array descriptor.
-                //   2. Bare data-class/enum (registered): typed FQN from
-                //      `kotlin_type_fqns` (e.g. `Option<Sample>` →
-                //      `Lio/zenoh/jni/sample/Sample;`).
-                //   3. `Vec<T>` → `java/util/List` (the Vec rank-1 handler
-                //      encodes to ArrayList, which implements List).
-                //   4. Anything else (e.g. `String` → `java/lang/String`):
-                //      derive from the inner wire's J* type name.
-                //   5. Fallback → `Ljava/lang/Object;`.
+                // Object-shaped wire with no primitive descriptor; the JVM slot
+                // must be the field's actual declared type (Option-stripped).
                 let slot_ty =
                     option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
                 let typed_slot = registry
@@ -4922,31 +5009,72 @@ fn struct_output_body(
                         }
                     })
                     .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-                ctor_sig.push_str(&typed_slot);
-                field_preludes.push(quote! {
-                    let #encoded_obj_ident: jni::objects::JObject = #encoded_ident;
+                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
+                slots.push(EncSlot {
+                    ident: id,
+                    wire_ty: quote!(jni::objects::JObject),
+                    descriptor: typed_slot,
+                    is_object: true,
+                    default: quote!(jni::objects::JObject::null()),
                 });
-                ctor_args.push(quote!(jni::objects::JValue::Object(&#encoded_obj_ident)));
             }
         }
     }
-    // The object is built by the Kotlin `fromParts` companion factory (a
-    // `@JvmStatic` method on the data class), not natively. `ctor_sig` here is
-    // the FACTORY signature: each field's *leaf wire* slot (handles → `J`,
-    // enums → `I`, value classes → `[B`, nested structs/strings/primitives as
-    // their wire) and the data-class return type. This moves the whole
-    // object-graph assembly to JVM bytecode — one `call_static_method` crossing
-    // instead of N native `new_object`/`find_class`/`fromInt` crossings.
-    ctor_sig.push_str(&format!(")L{};", java_class_name));
-    let factory_sig_lit = syn::LitStr::new(&ctor_sig, Span::call_site());
+    Some((preludes, slots))
+}
+
+fn struct_output_body(
+    ext: &JniGen,
+    s: &syn::ItemStruct,
+    registry: &Registry<KotlinMeta>,
+) -> Option<(syn::Type, syn::Expr)> {
+    let struct_name = s.ident.to_string();
+    // Prefer the registered Kotlin FQN (`io.zenoh.jni.JniSample`) so the
+    // mangle closure flows through; fall back to the bare struct ident
+    // qualified with the package when no `data_class` /
+    // `ptr_class` declaration exists for this Rust type.
+    let struct_ident = &s.ident;
+    let struct_ty: syn::Type = syn::parse_quote!(#struct_ident);
+    let registered_fqn = ext
+        .types
+        .get(&TypeKey::from_type(&struct_ty))
+        .and_then(|cfg| cfg.kotlin_name.clone());
+    let java_class_name = if let Some(fqn) = registered_fqn {
+        fqn.replace('.', "/")
+    } else if ext.java_class_prefix.is_empty() {
+        struct_name.clone()
+    } else {
+        format!("{}/{}", ext.java_class_prefix, struct_name)
+    };
+
+    // Recursively flatten the whole object graph into leaf wires, then build it
+    // with ONE `call_static_method("fromParts", …)` — no per-nested-struct JNI
+    // crossing. The Kotlin `fromParts` factory (recursively flattened the same
+    // way in `render_data_class_source`) reassembles the graph in bytecode.
+    let access = quote!(v);
+    let (preludes, slots) = flatten_struct_encode(ext, registry, s, &access, "", 0)?;
+
+    let mut sig = String::from("(");
+    let mut args: Vec<TokenStream> = Vec::new();
+    for sl in &slots {
+        sig.push_str(&sl.descriptor);
+        let id = &sl.ident;
+        if sl.is_object {
+            args.push(quote!(jni::objects::JValue::Object(&#id)));
+        } else {
+            args.push(quote!(jni::objects::JValue::from(#id)));
+        }
+    }
+    sig.push_str(&format!(")L{};", java_class_name));
+    let factory_sig_lit = syn::LitStr::new(&sig, Span::call_site());
 
     let body: syn::Expr = syn::parse_quote!({
-        #(#field_preludes)*
+        #preludes
         let __obj = env.call_static_method(
             #java_class_name,
             "fromParts",
             #factory_sig_lit,
-            &[#(#ctor_args),*],
+            &[#(#args),*],
         )
         .and_then(|__v| __v.l())
         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("encode struct via fromParts: {}", e)))?;
@@ -5385,7 +5513,7 @@ fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
     Some(r.mutability.is_some())
 }
 
-fn bare_path_ident(ty: &syn::Type) -> Option<syn::Ident> {
+pub(crate) fn bare_path_ident(ty: &syn::Type) -> Option<syn::Ident> {
     if let syn::Type::Path(tp) = ty {
         if let Some(last) = tp.path.segments.last() {
             if matches!(last.arguments, syn::PathArguments::None) {

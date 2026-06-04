@@ -914,6 +914,164 @@ fn factory_projection_wire_wrap(
     }
 }
 
+/// True for the Kotlin types that map to JVM **primitives** (never null over
+/// the JNI boundary). Used to decide which flattened `Option<nested>` leaf
+/// params must be made nullable in the parent factory signature.
+fn is_kotlin_primitive_ty(t: &str) -> bool {
+    matches!(
+        t,
+        "Long" | "Int" | "Boolean" | "Double" | "Float" | "Byte" | "Short" | "Char"
+    )
+}
+
+/// Recursively build the Kotlin `fromParts` factory for a data class — the
+/// mirror of the native [`crate::api::lang::jnigen::jni::jni_ext`]
+/// `flatten_struct_encode`. Returns `(params, reconstruct)`:
+/// * `params` — the flattened `(name, kotlin_type)` list (one per transitive
+///   leaf wire; nested data-class fields are inlined, `Option<nested>` prepends
+///   a `…__present: Boolean` flag). Order/types match the native call's JVM
+///   descriptor positionally.
+/// * `reconstruct` — the Kotlin expression building this struct:
+///   `Class(<part per constructor field>)`, where a nested field reconstructs
+///   via `Child.fromParts(<child param names>)` (`if (present) … else null` when
+///   optional) and a leaf reconstructs with its wrap.
+#[allow(clippy::too_many_arguments)]
+fn flatten_struct_factory(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    s: &syn::ItemStruct,
+    prefix: &str,
+    class_name: &str,
+    imports: &mut BTreeSet<String>,
+    depth: usize,
+) -> Option<(Vec<(String, String)>, String)> {
+    use crate::api::lang::jnigen::jni::jni_ext::{
+        bare_path_ident, is_jni_primitive, option_inner_type,
+    };
+    assert!(
+        depth <= 16,
+        "flatten_struct_factory: recursion too deep at struct `{}` (cyclic data_class?)",
+        s.ident
+    );
+    let fields = match &s.fields {
+        syn::Fields::Named(n) => &n.named,
+        _ => return None,
+    };
+    let mut params: Vec<(String, String)> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
+
+    for field in fields {
+        let fname = field.ident.as_ref()?.to_string();
+        let camel = snake_to_camel(&fname);
+        let base = if prefix.is_empty() {
+            camel.clone()
+        } else {
+            format!("{prefix}_{camel}")
+        };
+        let effective_ty = &field.ty;
+        let field_entry = registry.output_entry(effective_ty)?;
+
+        // Projection leaf (handle / value class / blob).
+        if let Some(h) = field_entry.metadata.projection.clone() {
+            let fqn = ext
+                .kotlin_type_fqns
+                .iter()
+                .find(|(k, _)| k == &h.leaf_key)
+                .map(|(_, v)| v.clone())?;
+            let short = register_fqn(&fqn, imports);
+            let (wire_ty, wrap) = factory_projection_wire_wrap(&h.kind, &h.strategy, &short, &base);
+            params.push((base.clone(), wire_ty));
+            parts.push(wrap);
+            continue;
+        }
+        // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)`.
+        if ext.is_kotlin_enum(effective_ty) {
+            let kt = field_entry.metadata.kotlin_name.clone()?;
+            let short = register_fqn(&kt, imports);
+            params.push((base.clone(), "Int".to_string()));
+            parts.push(format!("{short}.fromInt({base})"));
+            continue;
+        }
+        // Nested data-class field — inline its leaves and reconstruct via the
+        // child's own `fromParts` (in bytecode, no JNI crossing).
+        let inner_ty = option_inner_type(effective_ty).unwrap_or_else(|| effective_ty.clone());
+        let nested = bare_path_ident(&inner_ty).and_then(|name| {
+            let is_struct = registry.structs.contains_key(&name);
+            let is_vc = ext
+                .types
+                .get(&TypeKey::from_type(&inner_ty))
+                .map(|c| c.value_class)
+                .unwrap_or(false);
+            if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
+                registry.structs.get(&name).map(|(st, _)| st.clone())
+            } else {
+                None
+            }
+        });
+        if let Some(child) = nested {
+            let child_name = bare_path_ident(&inner_ty)?;
+            let child_fqn = ext
+                .types
+                .get(&TypeKey::from_type(&inner_ty))
+                .and_then(|c| c.kotlin_name.clone())?;
+            let child_short = register_fqn(&child_fqn, imports);
+            let (child_params, _child_reconstruct) =
+                flatten_struct_factory(ext, registry, &child, &base, &child_short, imports, depth + 1)?;
+            let child_names = child_params
+                .iter()
+                .map(|(n, _)| n.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = child_name;
+            if option_inner_type(effective_ty).is_none() {
+                params.extend(child_params);
+                parts.push(format!("{child_short}.fromParts({child_names})"));
+            } else {
+                // `Option<nested>`: the parent receives default-null object wires
+                // for the child's leaves when absent (the native `None` arm), so
+                // every object-typed child param must be NULLABLE in the parent
+                // signature. Inside the `if (present)` guard the values are
+                // non-null again, so forward them to the child's (non-null)
+                // `fromParts` with `!!`. Primitive params (Long/Int/Boolean)
+                // can't be null and are forwarded as-is; already-nullable params
+                // stay nullable.
+                let flag = format!("{base}__present");
+                let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
+                params.push((flag.clone(), "Boolean".to_string()));
+                for (n, t) in &child_params {
+                    if is_kotlin_primitive_ty(t) || t.ends_with('?') {
+                        params.push((n.clone(), t.clone()));
+                        fwd_names.push(n.clone());
+                    } else {
+                        params.push((n.clone(), format!("{t}?")));
+                        fwd_names.push(format!("{n}!!"));
+                    }
+                }
+                parts.push(format!(
+                    "if ({flag}) {child_short}.fromParts({}) else null",
+                    fwd_names.join(", ")
+                ));
+            }
+            continue;
+        }
+        // Leaf primitive / object (string, byte array, Vec, …) — forwarded
+        // unchanged to the constructor.
+        let kt = field_entry.metadata.kotlin_name.clone()?;
+        let short = register_fqn(&kt, imports);
+        let primitive_wire = is_jni_primitive(&field_entry.destination);
+        let opt = if is_option_type(effective_ty) && !primitive_wire {
+            "?"
+        } else {
+            ""
+        };
+        params.push((base.clone(), format!("{short}{opt}")));
+        parts.push(base);
+    }
+
+    let reconstruct = format!("{class_name}({})", parts.join(", "));
+    Some((params, reconstruct))
+}
+
 /// Render the Kotlin `close()` expression for a handle `receiver` through
 /// the folded [`FoldStrategy`] layers. Fresh lambda variable per nesting
 /// level avoids `it` shadowing; the common single-layer cases are
@@ -1341,12 +1499,6 @@ fn render_data_class_source(
 
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let mut field_lines: Vec<String> = Vec::new();
-    // `fromParts` companion factory: the wire param list (parallel to what
-    // `struct_output_body` passes from Rust) and the per-field wrap exprs that
-    // reconstruct the typed constructor args in JVM bytecode. Built in lockstep
-    // with `field_lines` so the factory signature matches the native call.
-    let mut factory_params: Vec<String> = Vec::new();
-    let mut factory_args: Vec<String> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
     let mut destructible_fields: Vec<(
@@ -1402,10 +1554,6 @@ fn render_data_class_source(
                 "    {override_prefix}val {kotlin_field_name}: {},",
                 render_handle_type(&h.strategy, &short)
             ));
-            let (wire_ty, wrap) =
-                factory_projection_wire_wrap(&h.kind, &h.strategy, &short, &kotlin_field_name);
-            factory_params.push(format!("{kotlin_field_name}: {wire_ty}"));
-            factory_args.push(wrap);
             if matches!(
                 h.kind,
                 crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle
@@ -1451,20 +1599,24 @@ fn render_data_class_source(
         field_lines.push(format!(
             "    {override_prefix}val {kotlin_field_name}: {short}{optional_suffix},"
         ));
-        // Factory param + wrap. Enum fields cross as `Int` (the discriminant
-        // `struct_output_body` passes) and are rebuilt with `Enum.fromInt(i)` in
-        // JVM bytecode — no native `find_class`/`fromInt`. Everything else
-        // (primitives, `String`, nested data classes, `Vec<_>`) crosses as its
-        // own wire and is forwarded to the constructor unchanged. The enum
-        // condition mirrors `struct_output_body`'s `is_kotlin_enum(&effective_ty)`.
-        if ext.is_kotlin_enum(&field.ty) {
-            factory_params.push(format!("{kotlin_field_name}: Int"));
-            factory_args.push(format!("{short}.fromInt({kotlin_field_name})"));
-        } else {
-            factory_params.push(format!("{kotlin_field_name}: {short}{optional_suffix}"));
-            factory_args.push(kotlin_field_name.clone());
-        }
     }
+
+    // `fromParts` companion factory — recursively flattened the same way as the
+    // native `flatten_struct_encode`: nested data-class fields are inlined as
+    // their leaf wires, so native builds the whole object graph with ONE
+    // `call_static_method`. Computed here (before `import_list`) so any nested
+    // child FQN it references is registered into `imports`. Only for non-value
+    // classes (value classes are erased, never built via `fromParts`).
+    let (factory_params, factory_reconstruct) = if value_class {
+        (Vec::new(), String::new())
+    } else {
+        flatten_struct_factory(ext, registry, item_struct, "", class_name, &mut imports, 0)
+            .unwrap_or_else(|| {
+                panic!(
+                    "render_data_class_source: could not build fromParts factory for `{class_name}`"
+                )
+            })
+    };
 
     let mut instance_body = String::new();
     for entry in instance_methods {
@@ -1680,26 +1832,20 @@ fn render_data_class_source(
             s.push('\n');
         }
         s.push_str("    public companion object {\n");
-        // `fromParts` factory: native (`struct_output_body`) calls this static
-        // method with each field's leaf wire and lets the JVM assemble the
-        // object graph, instead of building it with native `new_object` /
-        // `find_class` / `fromInt` calls (one JNI crossing vs many).
-        // `public`, not `internal`: an `internal` fun is name-mangled to
-        // `fromParts$<module>` in the bytecode, which the native
-        // `call_static_method("fromParts", …)` can't resolve
-        // (`NoSuchMethodError`). `public` keeps the plain `fromParts` symbol.
+        // `fromParts` factory: native (`struct_output_body`) makes ONE
+        // `call_static_method` passing the whole graph's flattened leaf wires;
+        // this factory reassembles it (incl. nested `Child.fromParts(...)`) in
+        // JVM bytecode. `public`, not `internal`: an `internal` fun is mangled
+        // to `fromParts$<module>`, unresolvable by native (`NoSuchMethodError`).
         s.push_str("        @JvmStatic\n");
         s.push_str("        public fun fromParts(\n");
-        for (i, p) in factory_params.iter().enumerate() {
+        for (i, (name, ty)) in factory_params.iter().enumerate() {
             let comma = if i + 1 < factory_params.len() { "," } else { "" };
-            s.push_str(&format!("            {p}{comma}\n"));
+            s.push_str(&format!("            {name}: {ty}{comma}\n"));
         }
-        s.push_str(&format!("        ): {class_name} = {class_name}(\n"));
-        for (i, a) in factory_args.iter().enumerate() {
-            let comma = if i + 1 < factory_args.len() { "," } else { "" };
-            s.push_str(&format!("            {a}{comma}\n"));
-        }
-        s.push_str("        )\n");
+        s.push_str(&format!(
+            "        ): {class_name} =\n            {factory_reconstruct}\n"
+        ));
         if !companion_methods.is_empty() {
             for line in companion_methods.lines() {
                 if line.is_empty() {
