@@ -151,17 +151,22 @@ impl JniGen {
             \x20   public fun isClosed(): Boolean = ptr == 0L\n\
             }\n\n",
         );
-        s.push_str(
-            "/** Acquire every handle's monitor in one global order (sorted by raw\n\
-            \x20*  pointer) so concurrent calls touching the same handles can't deadlock,\n\
-            \x20*  then run [body]. Closed handles (`ptr == 0`) are still locked; callers\n\
-            \x20*  re-read and null-check each pointer inside [body]. Scales to any arity. */\n\
-            internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> R): R {\n\
-            \x20   val sorted = handles.sortedBy { it.ptr }\n\
-            \x20   fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }\n\
-            \x20   return rec(0)\n\
-            }\n",
-        );
+        // The N-ary locking helper is only referenced when wrappers are
+        // emitted with locking on; skip it under `handle_locks(false)` so it
+        // doesn't surface as an unused-`internal fun` warning.
+        if self.emit_handle_locks {
+            s.push_str(
+                "/** Acquire every handle's monitor in one global order (sorted by raw\n\
+                \x20*  pointer) so concurrent calls touching the same handles can't deadlock,\n\
+                \x20*  then run [body]. Closed handles (`ptr == 0`) are still locked; callers\n\
+                \x20*  re-read and null-check each pointer inside [body]. Scales to any arity. */\n\
+                internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> R): R {\n\
+                \x20   val sorted = handles.sortedBy { it.ptr }\n\
+                \x20   fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }\n\
+                \x20   return rec(0)\n\
+                }\n",
+            );
+        }
         let file = KotlinFile {
             contents: s,
             package: self.package.clone(),
@@ -2693,7 +2698,50 @@ fn render_wrapper_fn(
     // `>2` panic) pointer-ordered scaffold and the separate per-dispatch-arm
     // `synchronized` nesting with a single mechanism that scales to any arity
     // and puts the dispatch handles under the same global lock order.
-    let scaffold_body: Option<String> = if opaques.is_empty() && dispatch_lockables.is_empty() {
+    let scaffold_body: Option<String> = if !ext.emit_handle_locks {
+        // Lock-free mode (`handle_locks(false)`): emit only the raw `ptr`
+        // read + closed-handle null-check + native call, no
+        // `withSortedHandleLocks` / `__locks` / dispatch `as? NativeHandle`.
+        // The `ptr_binds` and consume `try/finally` below are the same
+        // strings the locked path uses, so closed-handle semantics and the
+        // `JniBindingError` import requirement are unchanged.
+        if opaques.is_empty() {
+            // Dispatch params inline their own `ptr` reads in `build_tree`;
+            // nothing to scaffold — pure expression body.
+            None
+        } else {
+            let mut ptr_binds = String::new();
+            for o in &opaques {
+                if o.nullable {
+                    ptr_binds.push_str(&format!(
+                        "val {n}_ptr = {t}?.ptr ?: 0L\nif ({n} != null && {n}_ptr == 0L) {throw_stmt}\n",
+                        n = o.name,
+                        t = o.target,
+                    ));
+                } else {
+                    ptr_binds.push_str(&format!(
+                        "val {n}_ptr = {t}.ptr\nif ({n}_ptr == 0L) {throw_stmt}\n",
+                        n = o.name,
+                        t = o.target,
+                    ));
+                }
+            }
+            let consume_stmts: Vec<&str> = opaques
+                .iter()
+                .filter_map(|o| o.consume_null.as_deref())
+                .collect();
+            let value_expr = if consume_stmts.is_empty() {
+                body_expr.clone()
+            } else {
+                format!(
+                    "try {{\n{body_expr}\n}} finally {{\n{}\n}}",
+                    consume_stmts.join("\n")
+                )
+            };
+            let ret = if is_unit { "" } else { "return " };
+            Some(format!("{ptr_binds}{ret}{value_expr}"))
+        }
+    } else if opaques.is_empty() && dispatch_lockables.is_empty() {
         None
     } else {
         // Base class + helper live in `ext.package` (the import is filtered

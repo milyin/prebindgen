@@ -671,6 +671,14 @@ pub struct JniGen {
     /// `.function`). Cleared by every other builder call so `.name(...)`
     /// only applies right after a fn-entry registration.
     last_entry_ref: Option<NamedEntryRef>,
+
+    /// When `true` (default), generated wrappers wrap each call that
+    /// touches an opaque handle in the per-call `withSortedHandleLocks`
+    /// scaffold (deadlock-safe N-ary monitor acquisition + atomic
+    /// consume). When `false`, the scaffold is omitted — wrappers emit
+    /// only the raw `ptr` read + closed-handle null-check + native call.
+    /// Toggled via [`Self::handle_locks`].
+    pub(crate) emit_handle_locks: bool,
 }
 
 impl JniGen {
@@ -726,6 +734,7 @@ impl JniGen {
             last_meta_key: None,
             active_subpackage: None,
             last_entry_ref: None,
+            emit_handle_locks: true,
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and throws E on Err. E must be declared throwable via
@@ -743,6 +752,17 @@ impl JniGen {
     }
     pub fn source_module(mut self, p: syn::Path) -> Self {
         self.source_module = p;
+        self
+    }
+
+    /// When `false`, generated wrappers skip the per-call
+    /// `withSortedHandleLocks` scaffold (and the dispatch
+    /// `as? NativeHandle` lock-adds), emitting only the raw `ptr` read +
+    /// closed-handle null-check + native call. Removes per-call lock
+    /// allocations / monitor entry at the cost of thread-safety (no
+    /// deadlock-safe N-ary locking, no atomic consume). Default `true`.
+    pub fn handle_locks(mut self, on: bool) -> Self {
+        self.emit_handle_locks = on;
         self
     }
 
@@ -4318,26 +4338,44 @@ fn callback_input(
                 let mut env = java_vm
                     .attach_current_thread_as_daemon()
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Attach thread for {}: {}", #name_lit, e)))?;
-                #(#fixed_preludes)*
-                let __call_res: ::core::result::Result<(), __JniErr> = env.call_method(
-                    &callback_global_ref,
-                    "run",
-                    #sig_lit,
-                    &[#(#jvalue_exprs),*],
-                )
-                .map(|_| ())
-                .map_err(|e| {
-                    // `exception_describe` also clears the pending exception,
-                    // so subsequent JNI calls (the handle closes below) are safe.
-                    let _ = env.exception_describe();
-                    <__JniErr as ::core::convert::From<String>>::from(e.to_string())
-                });
-                // Free each opaque-handle arg's per-invocation `Box` once the
-                // callback returns — a no-op if the consumer `take()`-ed the
-                // handle (its slot is then already 0). Runs even when the
-                // callback threw, so a throwing consumer never leaks.
-                #(let _ = env.call_method(&#handle_obj_idents, "close", "()V", &[]);)*
-                __call_res?;
+                // The callback fires on a daemon-attached zenoh RX thread that
+                // never returns through a JNI stack frame, so the JNI local
+                // refs each invocation creates (encoded args, wrapped handle
+                // objects, call temporaries) would otherwise accumulate for
+                // the thread's lifetime and exhaust the JVM heap
+                // (OutOfMemoryError). Bracket each invocation in an explicit
+                // local frame so every local is released when the frame pops —
+                // popped unconditionally below so an early `?`/error path
+                // still frees it.
+                env.push_local_frame(16)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("push local frame for {}: {}", #name_lit, e)))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    #(#fixed_preludes)*
+                    let __call_res: ::core::result::Result<(), __JniErr> = env.call_method(
+                        &callback_global_ref,
+                        "run",
+                        #sig_lit,
+                        &[#(#jvalue_exprs),*],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| {
+                        // `exception_describe` also clears the pending exception,
+                        // so subsequent JNI calls (the handle closes below) are safe.
+                        let _ = env.exception_describe();
+                        <__JniErr as ::core::convert::From<String>>::from(e.to_string())
+                    });
+                    // Free each opaque-handle arg's per-invocation `Box` once the
+                    // callback returns — a no-op if the consumer `take()`-ed the
+                    // handle (its slot is then already 0). Runs even when the
+                    // callback threw, so a throwing consumer never leaks.
+                    #(let _ = env.call_method(&#handle_obj_idents, "close", "()V", &[]);)*
+                    __call_res?;
+                    Ok(())
+                })();
+                // Pop the frame unconditionally so locals are freed even when
+                // the body above returned `Err` early.
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
                 Ok(())
             })()
             .map_err(|e| tracing::error!("{} callback error: {e}", #name_lit));
