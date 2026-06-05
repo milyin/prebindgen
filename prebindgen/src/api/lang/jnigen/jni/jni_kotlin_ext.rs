@@ -166,6 +166,44 @@ impl JniGen {
                 \x20   return rec(0)\n\
                 }\n",
             );
+            // Allocation-free fixed-arity overloads for the common cases (1–3
+            // statically-known, non-null handles). `inline` folds both the
+            // helper and [body] into the call site — no `ArrayList`, no
+            // `sortedBy`, no recursion, no lambda object. The ordering key is
+            // `ptr` ascending, IDENTICAL to the `List` overload above, so the
+            // global lock order is consistent whichever overload a wrapper
+            // uses — deadlock-freedom is preserved even across paths.
+            s.push_str(
+                "/** Allocation-free single-handle lock (one monitor, nothing to order). */\n\
+                internal inline fun <R> withSortedHandleLocks(a: NativeHandle, body: () -> R): R =\n\
+                \x20   synchronized(a) { body() }\n\
+                /** Allocation-free two-handle lock: order by `ptr` then nest monitors. */\n\
+                internal inline fun <R> withSortedHandleLocks(\n\
+                \x20   a: NativeHandle,\n\
+                \x20   b: NativeHandle,\n\
+                \x20   body: () -> R,\n\
+                ): R {\n\
+                \x20   val first: NativeHandle\n\
+                \x20   val second: NativeHandle\n\
+                \x20   if (a.ptr <= b.ptr) { first = a; second = b } else { first = b; second = a }\n\
+                \x20   return synchronized(first) { synchronized(second) { body() } }\n\
+                }\n\
+                /** Allocation-free three-handle lock: 3-compare sorting network, then nest. */\n\
+                internal inline fun <R> withSortedHandleLocks(\n\
+                \x20   a: NativeHandle,\n\
+                \x20   b: NativeHandle,\n\
+                \x20   c: NativeHandle,\n\
+                \x20   body: () -> R,\n\
+                ): R {\n\
+                \x20   var x = a\n\
+                \x20   var y = b\n\
+                \x20   var z = c\n\
+                \x20   if (x.ptr > y.ptr) { val t = x; x = y; y = t }\n\
+                \x20   if (y.ptr > z.ptr) { val t = y; y = z; z = t }\n\
+                \x20   if (x.ptr > y.ptr) { val t = x; x = y; y = t }\n\
+                \x20   return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }\n\
+                }\n",
+            );
         }
         let file = KotlinFile {
             contents: s,
@@ -3072,12 +3110,6 @@ fn render_wrapper_fn(
     } else if opaques.is_empty() && dispatch_lockables.is_empty() {
         None
     } else {
-        // Base class + helper live in `ext.package` (the import is filtered
-        // out when this file already is that package).
-        if !ext.package.is_empty() {
-            imports.insert(format!("{}.NativeHandle", ext.package));
-            imports.insert(format!("{}.withSortedHandleLocks", ext.package));
-        }
         let mut adds = String::new();
         let mut ptr_binds = String::new();
         for o in &opaques {
@@ -3118,14 +3150,46 @@ fn render_wrapper_fn(
                 consume_stmts.join("\n")
             )
         };
-        // The lambda's last expression is the call's value; the method
-        // `return`s the helper's result (or ignores it for Unit).
-        // `withSortedHandleLocks` is a plain (recursive, non-inline) fn, so the
-        // body is value-returning rather than using a non-local `return`.
         let ret = if is_unit { "" } else { "return " };
-        Some(format!(
-            "val __locks = ArrayList<NativeHandle>()\n{adds}{ret}withSortedHandleLocks(__locks) {{\n{ptr_binds}{value_expr}\n}}"
-        ))
+
+        // Fast path: a statically-known, small (1–3), all-non-null handle set
+        // with no runtime-dispatch handles. Pass the handles positionally to
+        // the allocation-free fixed-arity `withSortedHandleLocks` overload —
+        // no `ArrayList`, no `sortedBy`, no recursion. The overload orders by
+        // `ptr` ascending (same key as the `List` path), so the global lock
+        // order stays consistent across both paths.
+        let fixed_arity = dispatch_lockables.is_empty()
+            && !opaques.iter().any(|o| o.nullable)
+            && (1..=3).contains(&opaques.len());
+
+        // The fixed overloads need only the `withSortedHandleLocks` import; the
+        // `List` path additionally names `NativeHandle` (the `ArrayList<…>`).
+        if !ext.package.is_empty() {
+            imports.insert(format!("{}.withSortedHandleLocks", ext.package));
+            if !fixed_arity {
+                imports.insert(format!("{}.NativeHandle", ext.package));
+            }
+        }
+
+        if fixed_arity {
+            let targets = opaques
+                .iter()
+                .map(|o| o.target.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!(
+                "{ret}withSortedHandleLocks({targets}) {{\n{ptr_binds}{value_expr}\n}}"
+            ))
+        } else {
+            // The lambda's last expression is the call's value; the method
+            // `return`s the helper's result (or ignores it for Unit).
+            // The `List` `withSortedHandleLocks` is a plain (recursive,
+            // non-inline) fn, so the body is value-returning rather than using
+            // a non-local `return`.
+            Some(format!(
+                "val __locks = ArrayList<NativeHandle>()\n{adds}{ret}withSortedHandleLocks(__locks) {{\n{ptr_binds}{value_expr}\n}}"
+            ))
+        }
     };
 
     let _ = ext; // ext no longer needed here — throws comes from registry metadata
