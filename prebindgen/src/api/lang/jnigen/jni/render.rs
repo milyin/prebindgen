@@ -1,1372 +1,10 @@
-//! `KotlinExt` impl for [`JniGen`].
+//! Kotlin source-file renderers (enum / data-class / typed-handle /
+//! package / native / wrapper-fn) for the JNI back-end.
 //!
-//! [`JniGen::write_kotlin`] is the single entry point for every Kotlin
-//! file the JNI back-end emits. Given one `kotlin_root` it writes:
-//!   * `NativeHandle.kt` (package `io.zenoh.jni`).
-//!   * One typed-handle class per `ptr_class` entry without
-//!     `.suppress_kotlin_code()`.
-//!   * One package-level wrapper file for `package()` (top-level
-//!     safe wrappers for `package_methods` fns).
-//!   * `JNINative.kt` — centralized `external fun` holder.
-//!   * One Kotlin fun-interface file per `impl Fn(args) + Send + Sync
-//!     + 'static` type, named via [`JniGen::kotlin_callback_name_mangle`]
-//!     (default = identity over the `"On"`-prefixed auto-derived name;
-//!     in zenoh-jni: `JNIOn<Args>`). Callback types overridden via
-//!     [`JniGen::callback_input`] are skipped — the override points at
-//!     a hand-written interface.
-//!
-//! Every `#[prebindgen]` function must be assigned a Kotlin home via
-//! `.method(...)` on either a typed-handle / data-class / enum config
-//! or on `package(...)`. Undeclared functions are skipped (see
-//! `Registry::scan_declared` warnings). There is no "orphan" bucket.
-//!
-//! All emitters route through [`KotlinFile::write`], which translates
-//! `package` into a sub-path under `kotlin_root`.
+//! Carved from the former `jni_kotlin_ext.rs`; shares the `jni` namespace
+//! via `use super::*`.
 
-use std::collections::{BTreeSet, HashSet};
-use std::path::{Path, PathBuf};
-
-use quote::ToTokens;
-
-use crate::api::core::prebindgen::{IntoSource, IntoSourceMode, Prebindgen};
-use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
-use crate::api::lang::jnigen::jni::jni_ext::{JniGen, KotlinMeta, MethodEntry};
-use crate::api::lang::jnigen::jni::templates;
-use crate::api::lang::jnigen::kotlin::kotlin_ext::{KotlinFile, WriteKotlinError};
-use crate::api::lang::jnigen::kotlin::type_map::KotlinTypeMap;
-
-/// Declaration of one auto-generated typed `NativeHandle` subclass.
-///
-/// Consumed by [`JniGen::write_typed_handles`] (and forwarded to
-/// [`JniGen::write_jni_wrappers`] so the same promotion list can carve
-/// the matching skip-list). Each entry says "this Kotlin class is the
-/// home for the named `#[prebindgen]` functions"; everything else stays
-/// in the catch-all `JNIWrappers` object.
-#[derive(Clone, Copy)]
-pub(crate) struct TypedHandle<'a> {
-    /// Short Rust name shown in the class doc comment (e.g. `"Publisher"`).
-    /// Pure documentation, doesn't have to match anything in the Registry.
-    pub rust_doc: &'a str,
-    /// Package-qualified Kotlin class name (e.g.
-    /// `"io.zenoh.jni.JNIPublisher"`). The Rust type-key registered for
-    /// this FQN via [`JniGen::kotlin_type_fqn`] identifies which
-    /// parameter of each promoted function becomes `this`.
-    pub kotlin_fqn: &'a str,
-    /// `#[prebindgen]` fns declared as **instance methods** via
-    /// [`JniGen::method`]. The matched first parameter is dropped from
-    /// the Kotlin signature and substituted by inherited `withPtr` /
-    /// `consume` scope. Mismatch (no param matches the class type) is a
-    /// build-time error.
-    pub instance_methods: &'a [MethodEntry],
-    /// `#[prebindgen]` fns declared as **companion-object methods** via
-    /// [`JniGen::companion_method`]. Rendered inside `companion object`
-    /// using the same shape as a package-level wrapper.
-    pub companion_methods: &'a [MethodEntry],
-}
-
-/// Reverse-lookup the Rust type-key registered for a given Kotlin FQN
-/// in [`JniGen::kotlin_type_fqns`]. Used by [`JniGen::write_typed_handles`]
-/// to determine which parameter of each promoted function should be
-/// dropped (becomes `this`).
-fn rust_key_for_fqn<'a>(ext: &'a JniGen, fqn: &str) -> Option<&'a str> {
-    ext.kotlin_type_fqns
-        .iter()
-        .find_map(|(rust, k)| (k == fqn).then_some(rust.as_str()))
-}
-
-impl JniGen {
-    /// Unified Kotlin emission — single public entry point that fans out
-    /// to per-callback fun-interface files, `NativeHandle.kt`, typed-handle
-    /// classes (one per `ptr_class` registration), and
-    /// `JNIWrappers.kt`. Reads all configuration (typed-handle methods,
-    /// callback FQN overrides, Kotlin type names) from internal state set
-    /// during the builder phase. Returns every path written.
-    pub fn write_kotlin(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        kotlin_root: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut written = Vec::new();
-        written.push(self.write_native_handle(kotlin_root)?);
-        written.extend(self.emit_callback_files(registry, kotlin_root)?);
-        written.extend(self.write_exception_classes(kotlin_root)?);
-        written.extend(self.write_enum_classes(registry, kotlin_root)?);
-        written.extend(self.write_data_classes(registry, kotlin_root)?);
-        written.extend(self.write_value_blobs(kotlin_root)?);
-
-        // Build the borrowed `TypedHandle<'_>` view from internal config.
-        let owned = self.collect_typed_handles();
-        let typed_handles: Vec<TypedHandle<'_>> = owned
-            .iter()
-            .map(|h| TypedHandle {
-                rust_doc: &h.rust_doc,
-                kotlin_fqn: &h.kotlin_fqn,
-                instance_methods: h.instance_methods.as_slice(),
-                companion_methods: h.companion_methods.as_slice(),
-            })
-            .collect();
-        let kotlin_types = self.build_kotlin_type_map();
-        written.extend(self.write_typed_handles(
-            &typed_handles,
-            registry,
-            &kotlin_types,
-            kotlin_root,
-        )?);
-        for (subpackage, pkg_cfg) in &self.packages {
-            if pkg_cfg.functions.is_empty() {
-                continue;
-            }
-            written.push(self.write_jni_package(
-                registry,
-                &kotlin_types,
-                kotlin_root,
-                subpackage,
-                pkg_cfg,
-            )?);
-        }
-        written.push(self.write_jni_native(registry, &kotlin_types, kotlin_root)?);
-        Ok(written)
-    }
-
-    /// Emit `NativeHandle.kt` — the shared base class every typed handle
-    /// extends, plus the `withSortedHandleLocks` helper that the generated
-    /// wrappers use to acquire any number of handle monitors in one
-    /// pointer-sorted, deadlock-safe pass.
-    pub(crate) fn write_native_handle(
-        &self,
-        output_dir: &Path,
-    ) -> Result<PathBuf, WriteKotlinError> {
-        let mut s = String::new();
-        s.push_str("// Auto-generated by JniGen — do not edit by hand.\n");
-        if !self.package.is_empty() {
-            s.push_str(&format!("package {}\n\n", self.package));
-        }
-        s.push_str(
-            "/** Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
-            \x20*  slot and its monitor. Subclasses add their type-specific `close()` /\n\
-            \x20*  `take()` / `freePtr`. */\n\
-            public abstract class NativeHandle(initialPtr: Long) : AutoCloseable {\n\
-            \x20   @Volatile internal var ptr: Long = initialPtr\n\
-            \x20   public fun peek(): Long = ptr\n\
-            \x20   public fun isClosed(): Boolean = ptr == 0L\n\
-            }\n\n",
-        );
-        // The N-ary locking helper is only referenced when wrappers are
-        // emitted with locking on; skip it under `handle_locks(false)` so it
-        // doesn't surface as an unused-`internal fun` warning.
-        if self.emit_handle_locks {
-            s.push_str(
-                "/** Acquire every handle's monitor in one global order (sorted by raw\n\
-                \x20*  pointer) so concurrent calls touching the same handles can't deadlock,\n\
-                \x20*  then run [body]. Closed handles (`ptr == 0`) are still locked; callers\n\
-                \x20*  re-read and null-check each pointer inside [body]. Scales to any arity. */\n\
-                internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> R): R {\n\
-                \x20   val sorted = handles.sortedBy { it.ptr }\n\
-                \x20   fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }\n\
-                \x20   return rec(0)\n\
-                }\n",
-            );
-            // Allocation-free fixed-arity overloads for the common cases (1–3
-            // statically-known, non-null handles). `inline` folds both the
-            // helper and [body] into the call site — no `ArrayList`, no
-            // `sortedBy`, no recursion, no lambda object. The ordering key is
-            // `ptr` ascending, IDENTICAL to the `List` overload above, so the
-            // global lock order is consistent whichever overload a wrapper
-            // uses — deadlock-freedom is preserved even across paths.
-            s.push_str(
-                "/** Allocation-free single-handle lock (one monitor, nothing to order). */\n\
-                internal inline fun <R> withSortedHandleLocks(a: NativeHandle, body: () -> R): R =\n\
-                \x20   synchronized(a) { body() }\n\
-                /** Allocation-free two-handle lock: order by `ptr` then nest monitors. */\n\
-                internal inline fun <R> withSortedHandleLocks(\n\
-                \x20   a: NativeHandle,\n\
-                \x20   b: NativeHandle,\n\
-                \x20   body: () -> R,\n\
-                ): R {\n\
-                \x20   val first: NativeHandle\n\
-                \x20   val second: NativeHandle\n\
-                \x20   if (a.ptr <= b.ptr) { first = a; second = b } else { first = b; second = a }\n\
-                \x20   return synchronized(first) { synchronized(second) { body() } }\n\
-                }\n\
-                /** Allocation-free three-handle lock: 3-compare sorting network, then nest. */\n\
-                internal inline fun <R> withSortedHandleLocks(\n\
-                \x20   a: NativeHandle,\n\
-                \x20   b: NativeHandle,\n\
-                \x20   c: NativeHandle,\n\
-                \x20   body: () -> R,\n\
-                ): R {\n\
-                \x20   var x = a\n\
-                \x20   var y = b\n\
-                \x20   var z = c\n\
-                \x20   if (x.ptr > y.ptr) { val t = x; x = y; y = t }\n\
-                \x20   if (y.ptr > z.ptr) { val t = y; y = z; z = t }\n\
-                \x20   if (x.ptr > y.ptr) { val t = x; x = y; y = t }\n\
-                \x20   return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }\n\
-                }\n",
-            );
-        }
-        let file = KotlinFile {
-            contents: s,
-            package: self.package.clone(),
-            class_name: "NativeHandle".to_string(),
-        };
-        Ok(file.write(output_dir)?)
-    }
-
-    /// Emit one `@JvmInline value class <Name>(val bytes: ByteArray)` per
-    /// declared `value_blob` type. The class is the typed wrapper level; it is
-    /// erased to its `ByteArray` field at the JVM/ABI level, so the `JNINative`
-    /// extern (and the wire) stays `ByteArray` while wrappers speak the typed
-    /// class. The single field name `bytes` matches `value_projection_field`.
-    pub(crate) fn write_value_blobs(
-        &self,
-        output_dir: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut written = Vec::new();
-        for (key, cfg) in &self.types {
-            if !cfg.value_blob {
-                continue;
-            }
-            let fqn = cfg.kotlin_name.clone().ok_or_else(|| {
-                WriteKotlinError::Other(format!(
-                    "value_blob `{}` has no Kotlin FQN",
-                    key.as_str()
-                ))
-            })?;
-            let (package, class_name) = match fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), fqn.clone()),
-            };
-            let mut s = String::new();
-            s.push_str("// Auto-generated by JniGen — do not edit by hand.\n");
-            if !package.is_empty() {
-                s.push_str(&format!("package {}\n\n", package));
-            }
-            s.push_str(&format!(
-                "/** Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                \x20*  as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary). */\n\
-                @JvmInline\n\
-                public value class {}(public val bytes: ByteArray)\n",
-                key.as_str(),
-                class_name,
-            ));
-            let file = KotlinFile {
-                contents: s,
-                package,
-                class_name,
-            };
-            written.push(file.write(output_dir)?);
-        }
-        Ok(written)
-    }
-
-    /// Per-callback fun-interface emission (one `<mangle_callback>.kt`
-    /// file per `impl Fn(...)` type encountered in the resolved
-    /// registry). Skips writes for `impl Fn(...)` keys whose Kotlin
-    /// FQN was overridden via [`Self::callback_input`] — the override
-    /// already points at a hand-maintained callback interface, so the
-    /// auto-stub would be dead code. Each emitted file is placed
-    /// under `kotlin_root/<kotlin_callback_package as path>/`.
-    pub(crate) fn emit_callback_files(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        kotlin_root: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut seen: HashSet<TypeKey> = HashSet::new();
-        let mut written = Vec::new();
-        for buckets in [&registry.input_types, &registry.output_types] {
-            for bucket in buckets.iter() {
-                for (key, slot) in bucket {
-                    if slot.is_none() {
-                        continue;
-                    }
-                    if !seen.insert(key.clone()) {
-                        continue;
-                    }
-                    let ty = key.to_type();
-                    if let Some(args) = extract_fn_trait_args(&ty) {
-                        // A `callback_input` registration points the
-                        // Kotlin signature at a hand-written interface
-                        // — skip the auto-stub.
-                        if self
-                            .types
-                            .get(key)
-                            .and_then(|c| c.callback_kotlin_fqn.as_ref())
-                            .is_some()
-                        {
-                            continue;
-                        }
-                        let file = build_callback_kotlin_file(self, &args, registry);
-                        written.push(file.write(kotlin_root)?);
-                    }
-                }
-            }
-        }
-        Ok(written)
-    }
-
-    /// Build the `TypedHandle` slice from internal `types` config.
-    /// Iterates entries where `opaque.is_some()` and emits one
-    /// `TypedHandle` per opaque-handle registration. Stable order by
-    /// canonical Rust type-key — keeps generated output deterministic.
-    fn collect_typed_handles(&self) -> Vec<OwnedTypedHandle> {
-        let mut handles: Vec<OwnedTypedHandle> = Vec::new();
-        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
-        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for key in keys {
-            let cfg = &self.types[key];
-            let Some(opaque) = &cfg.opaque else { continue };
-            if opaque.suppress_kotlin_code {
-                continue;
-            }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
-                continue;
-            };
-            // rust_doc — short last-segment of the Rust type key (best
-            // effort; only used in the generated doc comment).
-            let rust_doc = key
-                .as_str()
-                .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-                .find(|s| !s.is_empty())
-                .unwrap_or(key.as_str())
-                .to_string();
-            handles.push(OwnedTypedHandle {
-                rust_doc,
-                kotlin_fqn: kotlin_fqn.clone(),
-                instance_methods: cfg.instance_methods.clone(),
-                companion_methods: cfg.companion_methods.clone(),
-            });
-        }
-        handles
-    }
-
-    /// Build the `KotlinTypeMap` view consumed by the typed-handle and
-    /// JNIWrappers emitters. Combines callback FQNs from
-    /// [`Self::collect_kotlin_callback_fqns`] (auto-derived or
-    /// override) with `kotlin_name` entries from the structured config.
-    /// Structured-config entries win on conflict.
-    fn build_kotlin_type_map(&self) -> KotlinTypeMap {
-        let mut map = KotlinTypeMap::new().with_primitive_builtins();
-        for (key, cfg) in &self.types {
-            if let Some(name) = &cfg.kotlin_name {
-                map = map.add(key.as_str(), name.clone());
-            }
-        }
-        map
-    }
-}
-
-/// Owned counterpart of [`TypedHandle`] — used internally so the
-/// `collect_typed_handles` helper doesn't have to hand out borrows of
-/// `self.types`.
-pub(crate) struct OwnedTypedHandle {
-    pub rust_doc: String,
-    pub kotlin_fqn: String,
-    pub instance_methods: Vec<MethodEntry>,
-    pub companion_methods: Vec<MethodEntry>,
-}
-
-impl JniGen {
-    /// Emit one Kotlin file per registered
-    /// throwable class (via [`crate::api::lang::jnigen::jni::JniGen::throwable`]) — each becomes a
-    /// `public class <Name>(message: String? = null) : Exception()`
-    /// landing under `<package>/<Name>.kt`. Iterates `self.exceptions`
-    /// in declaration order; returns every path written.
-    pub(crate) fn write_exception_classes(
-        &self,
-        output_dir: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut written = Vec::new();
-        for exc in &self.exceptions {
-            // Skip exceptions whose Rust type already has a data-class (or
-            // ptr/enum) Kotlin emission — those classes carry the `: Exception`
-            // extension themselves (via `cfg.throwable` in
-            // `render_data_class_source`). The stub-template path only runs
-            // for un-registered exception types — in practice that's the
-            // framework's `JniBindingError`, declared inside `JniGen::new`
-            // without going through `.throwable()`.
-            let key = TypeKey::from_type(&exc.rust_type);
-            if self
-                .types
-                .get(&key)
-                .map(|cfg| cfg.kotlin_name.is_some())
-                .unwrap_or(false)
-            {
-                continue;
-            }
-            let (package, class_name) = match exc.kotlin_fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), exc.kotlin_fqn.clone()),
-            };
-            let file = templates::exception::emit_exception(&package, &class_name, &exc.rust_short);
-            written.push(file.write(output_dir)?);
-        }
-        Ok(written)
-    }
-
-    /// Emit one Kotlin `enum class` file per `enum_class`-declared type
-    /// (skipping any flagged with `.suppress_kotlin_code()`). Variants
-    /// render in declaration order using SCREAMING_SNAKE_CASE names; the
-    /// constructor stores the Rust discriminant value (or the ordinal as
-    /// a fallback when the discriminant isn't a bare integer literal).
-    /// A `fromInt(value: Int)` companion mirrors the `Priority.fromInt`
-    /// shape that hand-written enums use today, so adapter code stays
-    /// uniform.
-    pub(crate) fn write_enum_classes(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        output_dir: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut written = Vec::new();
-        let callback_fqns = self.collect_kotlin_callback_fqns(registry);
-        let mut kotlin_types = KotlinTypeMap::new();
-        for (k, v) in callback_fqns.iter() {
-            kotlin_types = kotlin_types.add(k, v.clone());
-        }
-        let configured_types = self.build_kotlin_type_map();
-        for (k, v) in configured_types.iter() {
-            kotlin_types = kotlin_types.add(k, v.clone());
-        }
-        // Deterministic order by canonical Rust type-key.
-        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
-        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for key in keys {
-            let cfg = &self.types[key];
-            let Some(enum_cfg) = &cfg.enum_cfg else {
-                continue;
-            };
-            if enum_cfg.suppress_kotlin_code {
-                continue;
-            }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
-                continue;
-            };
-            // Look up the syn::ItemEnum by the type-key's bare ident.
-            let ty = key.to_type();
-            let Some(ident) = (if let syn::Type::Path(tp) = &ty {
-                tp.path.segments.last().map(|s| s.ident.clone())
-            } else {
-                None
-            }) else {
-                continue;
-            };
-            let Some((item_enum, _)) = registry.enums.get(&ident) else {
-                continue;
-            };
-            let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), kotlin_fqn.clone()),
-            };
-            let file = KotlinFile {
-                contents: render_enum_source(
-                    self,
-                    &package,
-                    &class_name,
-                    item_enum,
-                    &cfg.instance_methods,
-                    &cfg.companion_methods,
-                    registry,
-                    &kotlin_types,
-                ),
-                package,
-                class_name,
-            };
-            written.push(file.write(output_dir)?);
-        }
-        Ok(written)
-    }
-
-    /// Emit one Kotlin `data class` file per `data_class`-declared
-    /// struct. Uses resolved converter metadata to derive Kotlin field
-    /// types, so wrappers and data-class declarations stay in sync.
-    pub(crate) fn write_data_classes(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        output_dir: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut written = Vec::new();
-        let callback_fqns = self.collect_kotlin_callback_fqns(registry);
-        let mut kotlin_types = KotlinTypeMap::new();
-        for (k, v) in callback_fqns.iter() {
-            kotlin_types = kotlin_types.add(k, v.clone());
-        }
-        let configured_types = self.build_kotlin_type_map();
-        for (k, v) in configured_types.iter() {
-            kotlin_types = kotlin_types.add(k, v.clone());
-        }
-        let mut rust_names: Vec<String> = Vec::new();
-        let mut aliases: Vec<(String, String)> = Vec::new();
-        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
-        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-
-        for key in keys {
-            let cfg = &self.types[key];
-            if cfg.opaque.is_some() || cfg.enum_cfg.is_some() || cfg.callback_kotlin_fqn.is_some() {
-                continue;
-            }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
-                continue;
-            };
-
-            let ty = key.to_type();
-            let Some(ident) = (if let syn::Type::Path(tp) = &ty {
-                tp.path.segments.last().map(|s| s.ident.clone())
-            } else {
-                None
-            }) else {
-                continue;
-            };
-            let Some((item_struct, _)) = registry.structs.get(&ident) else {
-                continue;
-            };
-            rust_names.push(item_struct.ident.to_string());
-
-            let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), kotlin_fqn.clone()),
-            };
-            if item_struct.ident.to_string() != class_name {
-                aliases.push((item_struct.ident.to_string(), class_name.clone()));
-            }
-            let file = KotlinFile {
-                contents: render_data_class_source(
-                    self,
-                    &package,
-                    &class_name,
-                    item_struct,
-                    registry,
-                    &kotlin_types,
-                    &cfg.instance_methods,
-                    &cfg.companion_methods,
-                    cfg.throwable,
-                    cfg.value_class,
-                    key.as_str(),
-                ),
-                package: package.clone(),
-                class_name,
-            };
-            written.push(file.write(output_dir)?);
-
-            // If data-class naming changed, remove stale legacy file that
-            // may have been generated under the old class name.
-            let legacy_path = output_dir
-                .join(package.replace('.', "/"))
-                .join(format!("{}.kt", item_struct.ident));
-            if item_struct.ident.to_string() != file.class_name && legacy_path.exists() {
-                let _ = std::fs::remove_file(&legacy_path);
-            }
-        }
-
-        if !rust_names.is_empty() {
-            strip_legacy_jni_native_data_classes(output_dir, &self.package, &rust_names)?;
-        }
-
-        if !aliases.is_empty() {
-            let alias_file = KotlinFile {
-                contents: render_data_class_aliases_source(&self.package, &aliases),
-                package: self.package.clone(),
-                class_name: "JNIDataClassAliases".to_string(),
-            };
-            written.push(alias_file.write(output_dir)?);
-        }
-
-        Ok(written)
-    }
-
-    /// Emit the package-level wrapper file under `output_dir`. One
-    /// Emit one package-level wrapper file for the given subpackage.
-    /// One top-level safe wrapper per `MethodEntry` in `pkg_cfg.functions`.
-    /// Wrappers delegate to the centralized Native object (see
-    /// [`Self::write_jni_native`]). Opaque-handle parameters become
-    /// `NativeHandle`; the wrapper body nests `withPtr` / `consume` per
-    /// the type-conversion rule. Non-opaque parameters pass through with
-    /// the Kotlin type from `kotlin_types`. Opaque-handle return values
-    /// are wrapped in `NativeHandle(...)` before return.
-    pub(crate) fn write_jni_package(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        kotlin_types: &KotlinTypeMap,
-        output_dir: &Path,
-        subpackage: &str,
-        pkg_cfg: &crate::api::lang::jnigen::jni::jni_ext::PackageConfig,
-    ) -> Result<PathBuf, WriteKotlinError> {
-        let class_name = self.jni_package_class_name(subpackage);
-        let package = if self.package.is_empty() {
-            subpackage.to_string()
-        } else if subpackage.is_empty() {
-            self.package.clone()
-        } else {
-            format!("{}.{}", self.package, subpackage)
-        };
-        let contents =
-            render_jni_package_source(self, registry, kotlin_types, &pkg_cfg.functions, &package);
-        let file = KotlinFile {
-            package,
-            class_name,
-            contents,
-        };
-        Ok(file.write(output_dir)?)
-    }
-
-    /// Emit the centralized Native-object Kotlin file under `output_dir`
-    /// (class name from [`JniGen::jni_native_class_name`]). Holds one
-    /// `external fun` per `#[prebindgen]` function — names mangled via
-    /// `kotlin_fun_name_mangle`, parameter and return types rendered at
-    /// the JNI **wire** level so the declarations match the Rust extern
-    /// symbols generated under
-    /// `Java_<package>_<jni_native_class>_<name>`. Loading the native
-    /// library is the wrapper layer's responsibility — the auto-generated
-    /// holder stays free of any reference to higher-layer types so that
-    /// `io.zenoh.jni.*` doesn't depend on `io.zenoh.*`. Trigger
-    /// `System.load` / `System.loadLibrary` from wrapper entry points
-    /// (e.g. via a `companion object { init { ZenohLoad } }` block) so
-    /// the lib is in place before any extern call.
-    pub(crate) fn write_jni_native(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        kotlin_types: &KotlinTypeMap,
-        output_dir: &Path,
-    ) -> Result<PathBuf, WriteKotlinError> {
-        let class_name = self.jni_native_class_name();
-        let declared = self.declared_functions();
-        let contents =
-            render_jni_native_source(self, registry, kotlin_types, &declared, &class_name);
-        let file = KotlinFile {
-            package: self.package.clone(),
-            class_name,
-            contents,
-        };
-        Ok(file.write(output_dir)?)
-    }
-
-    /// Emit one Kotlin file per entry in `handles` — each becomes a
-    /// `public class <ClassName>(initialPtr: Long) : NativeHandle(initialPtr)`
-    /// with the standard `free()` + `private external fun <mangle_fun("freePtr")>(ptr: Long)`
-    /// destructor pair, plus one instance method per `#[prebindgen]` fn
-    /// listed in [`TypedHandle::functions`]. The promoted method's first
-    /// opaque parameter matching the handle's Rust type is dropped — the
-    /// method uses inherited `withPtr` / `consume` from [`NativeHandle`]
-    /// (i.e. `this` scope) for that param, while every remaining
-    /// parameter is emitted exactly as it would appear in the
-    /// `JNIWrappers` top-level wrapper (including `impl Into<T>`
-    /// dispatch arms and opaque-return wrapping).
-    ///
-    /// Functions listed under any [`TypedHandle::functions`] are skipped
-    /// in [`Self::write_jni_wrappers`] — "Not mentioned functions remain
-    /// in `JNIWrapper`" is the assignment rule, exposed by passing the
-    /// same `handles` slice to both methods.
-    ///
-    /// Each handle's `kotlin_fqn` must be registered via
-    /// [`Self::kotlin_type_fqn`] so the generator can map it back to its
-    /// Rust type-key (which identifies the first param to drop in each
-    /// promoted method's signature).
-    pub(crate) fn write_typed_handles(
-        &self,
-        handles: &[TypedHandle<'_>],
-        registry: &Registry<KotlinMeta>,
-        kotlin_types: &KotlinTypeMap,
-        output_dir: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Merged Kotlin type map (callback FQNs + caller-supplied).
-        // Same merge order as `render_jni_wrappers_source` — kotlin_types
-        // entries WIN over the auto-derived callback FQNs.
-        let callback_fqns = self.collect_kotlin_callback_fqns(registry);
-        let mut merged_types = KotlinTypeMap::new();
-        for (k, v) in callback_fqns.iter() {
-            merged_types = merged_types.add(k, v.clone());
-        }
-        for (k, v) in kotlin_types.iter() {
-            merged_types = merged_types.add(k, v.clone());
-        }
-
-        let mut written = Vec::new();
-        for handle in handles {
-            let (package, class_name) = match handle.kotlin_fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), handle.kotlin_fqn.to_string()),
-            };
-            // The typed-handle's Rust type-key is always required — it
-            // identifies which param of each `.method(...)` entry becomes
-            // `this`. Even with no methods declared we resolve it (cheap)
-            // so the wrapper API stays uniform.
-            let rust_key = rust_key_for_fqn(self, handle.kotlin_fqn)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "write_typed_handles: kotlin_fqn `{}` is not registered via \
-                         JniGen::kotlin_type_fqn — required to identify the typed \
-                         handle's Rust type-key for promoted-method param matching.",
-                        handle.kotlin_fqn
-                    )
-                })
-                .to_string();
-            let file = KotlinFile {
-                contents: render_typed_handle_source(
-                    self,
-                    &package,
-                    &class_name,
-                    handle.rust_doc,
-                    handle.instance_methods,
-                    handle.companion_methods,
-                    &rust_key,
-                    registry,
-                    &merged_types,
-                ),
-                package,
-                class_name,
-            };
-            written.push(file.write(output_dir)?);
-        }
-        Ok(written)
-    }
-
-    /// Return the `<rust-type-key> → <kotlin FQN>` map for every
-    /// `impl Fn(args)` type the Registry has resolved. Use this to merge
-    /// into a `KotlinTypeMap` consumed by the aggregated-interface
-    /// generator (so it can refer to callbacks by their Kotlin FQN).
-    pub(crate) fn collect_kotlin_callback_fqns(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> KotlinTypeMap {
-        let mut map = KotlinTypeMap::new();
-        let mut seen: HashSet<TypeKey> = HashSet::new();
-        for buckets in [&registry.input_types, &registry.output_types] {
-            for bucket in buckets.iter() {
-                for (key, slot) in bucket {
-                    if slot.is_none() {
-                        continue;
-                    }
-                    if !seen.insert(key.clone()) {
-                        continue;
-                    }
-                    let ty = key.to_type();
-                    if let Some(args) = extract_fn_trait_args(&ty) {
-                        // Re-use the single source of truth for callback
-                        // FQN derivation — same closure-mangled name the
-                        // converter dispatcher stamps into metadata.
-                        let fqn = self.auto_callback_fqn(&args);
-                        map = map.add(key.as_str(), fqn);
-                    }
-                }
-            }
-        }
-        // Merge in plugin-supplied extra mappings (e.g. data-class FQNs
-        // that aren't reachable from impl-Fn types).
-        for (rust_canon, fqn) in &self.kotlin_type_fqns {
-            map = map.add(rust_canon.as_str(), fqn.clone());
-        }
-        map
-    }
-}
-
-fn build_callback_kotlin_file(
-    ext: &JniGen,
-    args: &[syn::Type],
-    registry: &Registry<KotlinMeta>,
-) -> KotlinFile {
-    let name = derive_callback_name(args);
-    let class_name = ext.mangle_callback(&name);
-    let package = ext.kotlin_callback_package.clone();
-
-    // Resolve each arg's Kotlin type by reading the output-direction
-    // entry's metadata — callback args flow inverse to the callback
-    // (Rust produces them, Java consumes them). Fall back to the bare
-    // last-segment ident when the metadata is missing (matches today's
-    // behavior; preserves the dead-stub compile path).
-    let mut params: Vec<String> = Vec::new();
-    let mut used_fqns: BTreeSet<String> = BTreeSet::new();
-    for (i, arg) in args.iter().enumerate() {
-        // Data-class arg: flatten into leaf params (mirror of the native
-        // `flatten_struct_encode` that fills the `run` call), so the callback
-        // receives the struct's fields directly — no built `jni.<Struct>`
-        // object crosses the boundary, and the consumer constructs whatever it
-        // wants from the flat params. Prefix `p{i}` matches the native order.
-        if let Some(st) =
-            crate::api::lang::jnigen::jni::jni_ext::callback_arg_data_class(ext, registry, arg)
-        {
-            let prefix = format!("p{i}");
-            if let Some((flat_params, _reconstruct)) =
-                flatten_struct_factory(ext, registry, &st, &prefix, "", &mut used_fqns, 0)
-            {
-                for (name, ty) in &flat_params {
-                    params.push(format!("        {name}: {ty},"));
-                }
-                continue;
-            }
-        }
-        let entry = registry.output_entry(arg);
-        // Opaque-handle args: the converter's value-name is `"Long"`, but the
-        // callback delivers the typed handle class. Prefer its registered FQN
-        // so the param type — and the file's import — resolve to e.g.
-        // `io.zenoh.jni.scouting.ZHello`.
-        let kotlin_ty = entry
-            .and_then(|e| e.metadata.projection.as_ref())
-            .map(|h| crate::api::lang::jnigen::jni::jni_ext::handle_field_fqn(ext, h))
-            .or_else(|| entry.and_then(|e| e.metadata.kotlin_name.clone()))
-            .or_else(|| {
-                if let syn::Type::Path(tp) = arg {
-                    if let Some(last) = tp.path.segments.last() {
-                        return Some(last.ident.to_string());
-                    }
-                }
-                None
-            })
-            .unwrap_or_else(|| "Any".to_string());
-        let short = register_fqn(&kotlin_ty, &mut used_fqns);
-        let optional_suffix = if is_option_type(arg) { "?" } else { "" };
-        params.push(format!("        p{i}: {short}{optional_suffix},"));
-    }
-
-    let contents =
-        templates::callback::render_kotlin_interface(&package, &class_name, &params, &used_fqns);
-    KotlinFile {
-        package,
-        class_name,
-        contents,
-    }
-}
-
-/// Derive the auto-callback short Kotlin name for an `impl Fn(args)`
-/// signature. Always starts with the hardcoded `"On"` and appends each
-/// concatenated parameter type Rust short idents + `"Callback"` suffix
-/// (`Fn(Query)` → `"QueryCallback"`, `Fn(Reply)` → `"ReplyCallback"`,
-/// `Fn(K, V)` → `"KVCallback"`, `Fn()` → `"Callback"`). The result
-/// feeds [`JniGen::mangle_callback`] before the FQN is qualified
-/// against [`JniGen::kotlin_callback_package`].
-pub(crate) fn derive_callback_name(args: &[syn::Type]) -> String {
-    let mut s = String::new();
-    for a in args {
-        s.push_str(&type_short_ident(a));
-    }
-    s.push_str("Callback");
-    s
-}
-
-fn type_short_ident(ty: &syn::Type) -> String {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return last.ident.to_string();
-        }
-    }
-    "Unknown".into()
-}
-
-fn is_option_type(ty: &syn::Type) -> bool {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return last.ident == "Option";
-        }
-    }
-    false
-}
-
-/// Peel a leading `&`/`&mut` and an `Option<…>` layer to expose the inner type
-/// used for enum detection. So `&Priority`, `Priority`, and `Option<Priority>`
-/// all probe as `Priority` — letting nullable enum params (`Option<enum>`) wire
-/// as `Int?` + `?.value` just like a non-null enum wires as `Int` + `.value`,
-/// instead of leaking the enum object to the (boxed-int-expecting) Rust converter.
-fn enum_probe_type(ty: &syn::Type) -> syn::Type {
-    let stripped = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    match crate::api::lang::jnigen::jni::jni_ext::option_inner_type(&stripped) {
-        Some(inner) => match inner {
-            syn::Type::Reference(r) => (*r.elem).clone(),
-            other => other,
-        },
-        None => stripped,
-    }
-}
-
-/// `true` if `ty` is `Option<&T>` or `Option<&mut T>` (any inner T).
-/// Mirrors `option_inner_ref_mutability` in `jni_ext.rs` — kept here too
-/// to avoid a cross-module helper just for one call site.
-fn is_option_ref(ty: &syn::Type) -> bool {
-    let syn::Type::Path(tp) = ty else {
-        return false;
-    };
-    let Some(seg) = tp.path.segments.last() else {
-        return false;
-    };
-    if seg.ident != "Option" {
-        return false;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return false;
-    };
-    let Some(syn::GenericArgument::Type(inner)) = ab.args.first() else {
-        return false;
-    };
-    matches!(inner, syn::Type::Reference(_))
-}
-
-/// Render the Kotlin type for a closeable handle reached through the
-/// folded [`FoldStrategy`] layers, given the leaf typed-handle short
-/// name (e.g. `"ZKeyExpr"`): `Direct → "ZKeyExpr"`,
-/// `Nullable(inner) → "<inner>?"`, `Iterable(inner) → "List<<inner>>"`.
-fn render_handle_type(
-    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
-    leaf: &str,
-) -> String {
-    use crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::*;
-    match strategy {
-        Direct => leaf.to_string(),
-        // The declared Kotlin projection type is `T?` regardless of how null
-        // is represented over the wire — the wrap fold and the wire-return
-        // helper read the kind to handle the wire shape separately.
-        Nullable { inner, .. } => format!("{}?", render_handle_type(inner, leaf)),
-        Iterable(inner) => format!("List<{}>", render_handle_type(inner, leaf)),
-    }
-}
-
-/// For a projection (handle / value-class / value-blob) **struct field**,
-/// compute the `(wire_param_type, wrap_expr)` the data class's `fromParts`
-/// factory uses: the wire param type matches the leaf wire
-/// `struct_output_body` passes (handle → `Long` jlong sentinel, value class /
-/// blob → `ByteArray`), and the wrap reconstructs the typed value in JVM
-/// bytecode (`Short(arg)`, with null mapped from the `0L` sentinel for handles
-/// or JVM null for value classes). Only the `Direct` and `Nullable{Direct}`
-/// shapes a scalar projection field can take are supported — a collection
-/// (`Vec<projection>`) field is rejected (matching the struct bridge's
-/// scalar-only guard).
-fn factory_projection_wire_wrap(
-    kind: &crate::api::lang::jnigen::jni::jni_ext::ProjectionKind,
-    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
-    short: &str,
-    name: &str,
-) -> (String, String) {
-    use crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::*;
-    use crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::*;
-    let direct = |kind: &crate::api::lang::jnigen::jni::jni_ext::ProjectionKind| match kind {
-        Handle => ("Long".to_string(), format!("{short}({name})")),
-        ValueClass | ValueBlob => ("ByteArray".to_string(), format!("{short}({name})")),
-    };
-    match strategy {
-        Direct => direct(kind),
-        Nullable { inner, .. } => {
-            if !matches!(**inner, Direct) {
-                panic!(
-                    "factory_projection_wire_wrap: only `Nullable<Direct>` projection struct \
-                     fields are supported (field `{name}`)"
-                );
-            }
-            match kind {
-                // Handle null rides the `0L` jlong sentinel.
-                Handle => (
-                    "Long".to_string(),
-                    format!("if ({name} == 0L) null else {short}({name})"),
-                ),
-                // Value class/blob null rides JVM-null of the `ByteArray` slot.
-                ValueClass | ValueBlob => (
-                    "ByteArray?".to_string(),
-                    format!("{name}?.let {{ {short}(it) }}"),
-                ),
-            }
-        }
-        Iterable(_) => panic!(
-            "factory_projection_wire_wrap: collection (`Vec<projection>`) struct fields are not \
-             supported by the fromParts factory (field `{name}`)"
-        ),
-    }
-}
-
-/// True for the Kotlin types that map to JVM **primitives** (never null over
-/// the JNI boundary). Used to decide which flattened `Option<nested>` leaf
-/// params must be made nullable in the parent factory signature.
-fn is_kotlin_primitive_ty(t: &str) -> bool {
-    matches!(
-        t,
-        "Long" | "Int" | "Boolean" | "Double" | "Float" | "Byte" | "Short" | "Char"
-    )
-}
-
-/// Recursively build the Kotlin `fromParts` factory for a data class — the
-/// mirror of the native [`crate::api::lang::jnigen::jni::jni_ext`]
-/// `flatten_struct_encode`. Returns `(params, reconstruct)`:
-/// * `params` — the flattened `(name, kotlin_type)` list (one per transitive
-///   leaf wire; nested data-class fields are inlined, `Option<nested>` prepends
-///   a `…__present: Boolean` flag). Order/types match the native call's JVM
-///   descriptor positionally.
-/// * `reconstruct` — the Kotlin expression building this struct:
-///   `Class(<part per constructor field>)`, where a nested field reconstructs
-///   via `Child.fromParts(<child param names>)` (`if (present) … else null` when
-///   optional) and a leaf reconstructs with its wrap.
-#[allow(clippy::too_many_arguments)]
-fn flatten_struct_factory(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
-    prefix: &str,
-    class_name: &str,
-    imports: &mut BTreeSet<String>,
-    depth: usize,
-) -> Option<(Vec<(String, String)>, String)> {
-    use crate::api::lang::jnigen::jni::jni_ext::{
-        bare_path_ident, is_jni_primitive, option_inner_type,
-    };
-    assert!(
-        depth <= 16,
-        "flatten_struct_factory: recursion too deep at struct `{}` (cyclic data_class?)",
-        s.ident
-    );
-    let fields = match &s.fields {
-        syn::Fields::Named(n) => &n.named,
-        _ => return None,
-    };
-    let mut params: Vec<(String, String)> = Vec::new();
-    let mut parts: Vec<String> = Vec::new();
-
-    for field in fields {
-        let fname = field.ident.as_ref()?.to_string();
-        let camel = snake_to_camel(&fname);
-        let base = if prefix.is_empty() {
-            camel.clone()
-        } else {
-            format!("{prefix}_{camel}")
-        };
-        let effective_ty = &field.ty;
-        let field_entry = registry.output_entry(effective_ty)?;
-
-        // Projection leaf (handle / value class / blob).
-        if let Some(h) = field_entry.metadata.projection.clone() {
-            let fqn = ext
-                .kotlin_type_fqns
-                .iter()
-                .find(|(k, _)| k == &h.leaf_key)
-                .map(|(_, v)| v.clone())?;
-            let short = register_fqn(&fqn, imports);
-            let (wire_ty, wrap) = factory_projection_wire_wrap(&h.kind, &h.strategy, &short, &base);
-            params.push((base.clone(), wire_ty));
-            parts.push(wrap);
-            continue;
-        }
-        // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)`.
-        if ext.is_kotlin_enum(effective_ty) {
-            let kt = field_entry.metadata.kotlin_name.clone()?;
-            let short = register_fqn(&kt, imports);
-            params.push((base.clone(), "Int".to_string()));
-            parts.push(format!("{short}.fromInt({base})"));
-            continue;
-        }
-        // Nested data-class field — inline its leaves and reconstruct via the
-        // child's own `fromParts` (in bytecode, no JNI crossing).
-        let inner_ty = option_inner_type(effective_ty).unwrap_or_else(|| effective_ty.clone());
-        let nested = bare_path_ident(&inner_ty).and_then(|name| {
-            let is_struct = registry.structs.contains_key(&name);
-            let is_vc = ext
-                .types
-                .get(&TypeKey::from_type(&inner_ty))
-                .map(|c| c.value_class)
-                .unwrap_or(false);
-            if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
-                registry.structs.get(&name).map(|(st, _)| st.clone())
-            } else {
-                None
-            }
-        });
-        if let Some(child) = nested {
-            let child_name = bare_path_ident(&inner_ty)?;
-            let child_fqn = ext
-                .types
-                .get(&TypeKey::from_type(&inner_ty))
-                .and_then(|c| c.kotlin_name.clone())?;
-            let child_short = register_fqn(&child_fqn, imports);
-            let (child_params, _child_reconstruct) =
-                flatten_struct_factory(ext, registry, &child, &base, &child_short, imports, depth + 1)?;
-            let child_names = child_params
-                .iter()
-                .map(|(n, _)| n.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let _ = child_name;
-            if option_inner_type(effective_ty).is_none() {
-                params.extend(child_params);
-                parts.push(format!("{child_short}.fromParts({child_names})"));
-            } else {
-                // `Option<nested>`: the parent receives default-null object wires
-                // for the child's leaves when absent (the native `None` arm), so
-                // every object-typed child param must be NULLABLE in the parent
-                // signature. Inside the `if (present)` guard the values are
-                // non-null again, so forward them to the child's (non-null)
-                // `fromParts` with `!!`. Primitive params (Long/Int/Boolean)
-                // can't be null and are forwarded as-is; already-nullable params
-                // stay nullable.
-                let flag = format!("{base}__present");
-                let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
-                params.push((flag.clone(), "Boolean".to_string()));
-                for (n, t) in &child_params {
-                    if is_kotlin_primitive_ty(t) || t.ends_with('?') {
-                        params.push((n.clone(), t.clone()));
-                        fwd_names.push(n.clone());
-                    } else {
-                        params.push((n.clone(), format!("{t}?")));
-                        fwd_names.push(format!("{n}!!"));
-                    }
-                }
-                parts.push(format!(
-                    "if ({flag}) {child_short}.fromParts({}) else null",
-                    fwd_names.join(", ")
-                ));
-            }
-            continue;
-        }
-        // Leaf primitive / object (string, byte array, Vec, …) — forwarded
-        // unchanged to the constructor.
-        let kt = field_entry.metadata.kotlin_name.clone()?;
-        let short = register_fqn(&kt, imports);
-        let primitive_wire = is_jni_primitive(&field_entry.destination);
-        let opt = if is_option_type(effective_ty) && !primitive_wire {
-            "?"
-        } else {
-            ""
-        };
-        params.push((base.clone(), format!("{short}{opt}")));
-        parts.push(base);
-    }
-
-    let reconstruct = format!("{class_name}({})", parts.join(", "));
-    Some((params, reconstruct))
-}
-
-/// Render the Kotlin `close()` expression for a handle `receiver` through
-/// the folded [`FoldStrategy`] layers. Fresh lambda variable per nesting
-/// level avoids `it` shadowing; the common single-layer cases are
-/// special-cased for readable output (`x?.close()`, `x.forEach { it.close() }`).
-fn render_handle_close(
-    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
-    receiver: &str,
-) -> String {
-    use crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::*;
-    fn go(
-        strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
-        receiver: &str,
-        depth: usize,
-    ) -> String {
-        match strategy {
-            Direct => format!("{receiver}.close()"),
-            // The Kotlin-side receiver is already nullable (`render_handle_type`
-            // emits `T?` for both niche and boxed kinds), so `?.close()` covers
-            // both wire representations.
-            Nullable { inner, .. } => match &**inner {
-                Direct => format!("{receiver}?.close()"),
-                _ => {
-                    let v = format!("e{depth}");
-                    format!("{receiver}?.let {{ {v} -> {} }}", go(inner, &v, depth + 1))
-                }
-            },
-            Iterable(inner) => {
-                let v = format!("e{depth}");
-                format!(
-                    "{receiver}.forEach {{ {v} -> {} }}",
-                    go(inner, &v, depth + 1)
-                )
-            }
-        }
-    }
-    go(strategy, receiver, 0)
-}
-
-/// Fold the projection wrap call `W(receiver)` through the
-/// [`FoldStrategy`] layers:
-/// * `Direct`         → `W(x)`
-/// * `Nullable{Boxed}` → `x?.let { W(it) }` (JVM-null at the wire)
-/// * `Nullable{Niche}` over a primitive wire (e.g. `jlong`) →
-///   `x.let { if (it == <sentinel>) null else W(it) }`
-/// * `Nullable{Niche}` over an object wire (e.g. `JByteArray`) →
-///   `x?.let { W(it) }` (the wire is already a nullable reference)
-/// * `Iterable`       → `x.map { W(it) }`
-///
-/// `niche_sentinel` is the Kotlin literal to compare against for the
-/// `Niche+primitive` arm (e.g. `"0L"` for `jlong`-wired handles). When the
-/// wire is object-shaped the sentinel is unused — `null` is the wire-level
-/// representation and `?.let` is a no-cost null check.
-fn fold_projection_wrap(
-    strategy: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
-    receiver: &str,
-    wrap_class: &str,
-    niche_sentinel: Option<&str>,
-) -> String {
-    use crate::api::lang::jnigen::jni::jni_ext::{FoldStrategy::*, NullableKind};
-    fn go(
-        s: &crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
-        r: &str,
-        w: &str,
-        sentinel: Option<&str>,
-        depth: usize,
-    ) -> String {
-        match s {
-            Direct => format!("{w}({r})"),
-            Nullable { kind, inner } => match (kind, &**inner) {
-                // Primitive-wired niche → can't carry null on the wire, so
-                // compare against the sentinel and synthesize null on the
-                // Kotlin side.
-                (NullableKind::Niche, Direct) if sentinel.is_some() => {
-                    let s = sentinel.unwrap();
-                    format!("{r}.let {{ if (it == {s}) null else {w}(it) }}")
-                }
-                // Object-wired niche or fully boxed Nullable → `?.let { W(it) }`.
-                (_, Direct) => format!("{r}?.let {{ {w}(it) }}"),
-                // Deeper nesting. The niche/boxed distinction is only
-                // observable at the outermost layer covering a `Direct`
-                // leaf; intermediate layers (nullable-of-iterable etc.)
-                // can keep the simple form because Kotlin's `?.` chain
-                // already represents the layered null.
-                _ => {
-                    let v = format!("e{depth}");
-                    format!(
-                        "{r}?.let {{ {v} -> {} }}",
-                        go(inner, &v, w, sentinel, depth + 1)
-                    )
-                }
-            },
-            Iterable(inner) => match &**inner {
-                Direct => format!("{r}.map {{ {w}(it) }}"),
-                _ => {
-                    let v = format!("e{depth}");
-                    format!(
-                        "{r}.map {{ {v} -> {} }}",
-                        go(inner, &v, w, sentinel, depth + 1)
-                    )
-                }
-            },
-        }
-    }
-    go(strategy, receiver, wrap_class, niche_sentinel, 0)
-}
-
-/// JNI extern's declared Kotlin wire-return for a projection. The leaf wire
-/// is the inner converter's destination Kotlin name: `Long` for handles
-/// (boxed jlong), the inner field's converter result for value classes (e.g.
-/// `ByteArray` for `ZenohId`/`ZBytes`). The fold honours
-/// [`NullableKind`] so the declared wire matches the runtime ABI:
-/// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
-/// represents null); `Niche+object` and `Boxed` add `?`.
-fn projection_wire_return(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    proj: &crate::api::lang::jnigen::jni::jni_ext::Projection,
-    imports: &mut BTreeSet<String>,
-) -> String {
-    use crate::api::lang::jnigen::jni::jni_ext::{FoldStrategy, NullableKind, ProjectionKind};
-    let (inner_wire_name, inner_is_primitive) = match proj.kind {
-        ProjectionKind::Handle => ("Long".to_string(), true),
-        ProjectionKind::ValueClass => {
-            let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key).unwrap_or_else(|_| {
-                panic!("projection_wire_return: bad leaf_key `{}`", proj.leaf_key)
-            });
-            let inner_ty = crate::api::lang::jnigen::jni::jni_ext::value_class_inner_type_for(
-                ext, registry, &vc_ty,
-            )
-            .unwrap_or_else(|| {
-                panic!(
-                    "projection_wire_return: `{}` is not a registered value class",
-                    proj.leaf_key
-                )
-            });
-            let inner_entry = registry.output_entry(&inner_ty).unwrap_or_else(|| {
-                panic!(
-                    "projection_wire_return: inner of `{}` has no output converter",
-                    proj.leaf_key
-                )
-            });
-            let n = inner_entry.metadata.kotlin_name.clone().unwrap_or_else(|| {
-                panic!(
-                    "projection_wire_return: inner of `{}` has no Kotlin name",
-                    proj.leaf_key
-                )
-            });
-            let is_prim = matches!(
-                crate::api::lang::jnigen::jni::wire_access::jni_field_access(
-                    &inner_entry.destination
-                ),
-                Some((_, _, false))
-            );
-            (register_fqn(&n, imports), is_prim)
-        }
-        // Value-blob's inner wire is always `ByteArray` (object-shaped).
-        ProjectionKind::ValueBlob => ("ByteArray".to_string(), false),
-    };
-    fn fold(s: &FoldStrategy, leaf: &str, leaf_is_primitive: bool) -> String {
-        match s {
-            FoldStrategy::Direct => leaf.to_string(),
-            FoldStrategy::Nullable { kind, inner } => {
-                let inner_str = fold(inner, leaf, leaf_is_primitive);
-                // A niche layer over a primitive wire keeps the wire
-                // non-nullable — the sentinel value is the null
-                // representation. Object-wired niches and full-boxed
-                // Nullables both add `?` (JVM null on the reference).
-                match (kind, &**inner) {
-                    (NullableKind::Niche, FoldStrategy::Direct) if leaf_is_primitive => inner_str,
-                    _ => format!("{}?", inner_str),
-                }
-            }
-            FoldStrategy::Iterable(inner) => {
-                format!("List<{}>", fold(inner, leaf, leaf_is_primitive))
-            }
-        }
-    }
-    fold(&proj.strategy, &inner_wire_name, inner_is_primitive)
-}
-
-/// Kotlin null-sentinel literal for the *leaf wire* of a projection. Read
-/// at the wrapper-body call site and forwarded to [`fold_projection_wrap`];
-/// `None` for object-wired leaves (e.g. value classes over `ByteArray`),
-/// where `?.let { }` covers the JVM-null case directly.
-fn projection_leaf_sentinel(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    proj: &crate::api::lang::jnigen::jni::jni_ext::Projection,
-) -> Option<String> {
-    use crate::api::lang::jnigen::jni::jni_ext::ProjectionKind;
-    let leaf_wire: syn::Type = match proj.kind {
-        ProjectionKind::Handle => syn::parse_quote!(jni::sys::jlong),
-        ProjectionKind::ValueClass => {
-            let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key).ok()?;
-            let inner_ty = crate::api::lang::jnigen::jni::jni_ext::value_class_inner_type_for(
-                ext, registry, &vc_ty,
-            )?;
-            registry.output_entry(&inner_ty)?.destination.clone()
-        }
-        // Value-blob leaf wire is always `JByteArray` (object-shaped) — no
-        // primitive sentinel; JVM `null` represents the absent value, so
-        // `?.let` covers nullability.
-        ProjectionKind::ValueBlob => syn::parse_quote!(jni::objects::JByteArray),
-    };
-    kotlin_null_sentinel(&leaf_wire).map(|s| s.to_string())
-}
-
-/// Kotlin literal for the null-sentinel of a primitive wire — used by
-/// [`fold_projection_wrap`] when a `Niche` layer covers a primitive wire and
-/// can't carry JVM null. Mirrors `jni_field_access`'s primitive descriptors.
-/// Returns `None` for object-shaped wires (where JVM null *is* the null
-/// representation and `?.let` is the right pattern).
-fn kotlin_null_sentinel(wire: &syn::Type) -> Option<&'static str> {
-    let (_, _, is_object) = crate::api::lang::jnigen::jni::wire_access::jni_field_access(wire)?;
-    if is_object {
-        return None;
-    }
-    let syn::Type::Path(tp) = wire else {
-        return None;
-    };
-    let last = tp.path.segments.last()?;
-    Some(match last.ident.to_string().as_str() {
-        "jlong" => "0L",
-        "jint" | "jshort" | "jbyte" | "jchar" => "0",
-        "jfloat" => "0.0f",
-        "jdouble" => "0.0",
-        "jboolean" => "false",
-        _ => return None,
-    })
-}
-
-fn register_fqn(fqn: &str, used: &mut BTreeSet<String>) -> String {
-    if fqn.contains('.') {
-        used.insert(fqn.to_string());
-        fqn.rsplit('.').next().unwrap_or(fqn).to_string()
-    } else {
-        fqn.to_string()
-    }
-}
+use super::*;
 
 // ── Safe-wrapper emitters ──────────────────────────────────────────────
 
@@ -1375,7 +13,7 @@ fn register_fqn(fqn: &str, used: &mut BTreeSet<String>) -> String {
 /// `val value: Int`, plus a `fromInt(value: Int)` companion. Mirrors
 /// the hand-written `io.zenoh.qos.Priority` shape so adapter code that
 /// already speaks the `.value` / `.fromInt(...)` idiom keeps working.
-fn render_enum_source(
+pub(crate) fn render_enum_source(
     ext: &JniGen,
     package: &str,
     class_name: &str,
@@ -1506,7 +144,7 @@ fn render_enum_source(
 /// One generated Kotlin `data class` (or `@JvmInline value class` when
 /// `value_class` is set) source for a `data_class` /
 /// `value_class`-declared Rust struct.
-fn render_data_class_source(
+pub(crate) fn render_data_class_source(
     ext: &JniGen,
     package: &str,
     class_name: &str,
@@ -1559,7 +197,7 @@ fn render_data_class_source(
     // bottom emitter can produce a matching `close()` body for each.
     let mut destructible_fields: Vec<(
         String,
-        crate::api::lang::jnigen::jni::jni_ext::FoldStrategy,
+        crate::api::lang::jnigen::jni::FoldStrategy,
     )> = Vec::new();
     for field in fields_named {
         let field_ident = field.ident.as_ref().unwrap_or_else(|| {
@@ -1568,7 +206,7 @@ fn render_data_class_source(
                 item_struct.ident
             )
         });
-        let kotlin_field_name = snake_to_camel(&field_ident.to_string());
+        let kotlin_field_name = kt_snake_to_camel(&field_ident.to_string());
         // When the class extends Exception (throwable), the `message`
         // field shadows `Exception.message` — Kotlin requires `override`.
         let override_prefix = if throwable && kotlin_field_name == "message" {
@@ -1594,10 +232,8 @@ fn render_data_class_source(
             });
         if let Some(h) = field_projection {
             let fqn = ext
-                .kotlin_type_fqns
-                .iter()
-                .find(|(k, _)| k == &h.leaf_key)
-                .map(|(_, v)| v.clone())
+                .kotlin_fqn(&h.leaf_key)
+                .map(|v| v.to_string())
                 .unwrap_or_else(|| {
                     panic!(
                         "render_data_class_source: projection field `{}.{}` leaf `{}` has no \
@@ -1612,7 +248,7 @@ fn render_data_class_source(
             ));
             if matches!(
                 h.kind,
-                crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle
+                crate::api::lang::jnigen::jni::ProjectionKind::Handle
             ) && h.owned
             {
                 destructible_fields.push((kotlin_field_name, h.strategy));
@@ -1645,7 +281,7 @@ fn render_data_class_source(
             .map(|e| e.destination.clone());
         let primitive_wire = wire
             .as_ref()
-            .map(|w| crate::api::lang::jnigen::jni::jni_ext::is_jni_primitive(w))
+            .map(|w| crate::api::lang::jnigen::jni::is_jni_primitive(w))
             .unwrap_or(false);
         let optional_suffix = if is_option_type(&field.ty) && !primitive_wire {
             "?"
@@ -1919,7 +555,7 @@ fn render_data_class_source(
     s
 }
 
-fn render_data_class_aliases_source(package: &str, aliases: &[(String, String)]) -> String {
+pub(crate) fn render_data_class_aliases_source(package: &str, aliases: &[(String, String)]) -> String {
     let mut pairs = aliases.to_vec();
     pairs.sort_by(|a, b| a.0.cmp(&b.0));
     pairs.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
@@ -1936,7 +572,7 @@ fn render_data_class_aliases_source(package: &str, aliases: &[(String, String)])
     s
 }
 
-fn strip_legacy_jni_native_data_classes(
+pub(crate) fn strip_legacy_jni_native_data_classes(
     output_dir: &Path,
     package: &str,
     _rust_names: &[String],
@@ -2001,7 +637,7 @@ fn strip_legacy_jni_native_data_classes(
 /// `<mangle_fun("freePtr")>`. Kotlin/JVM's JNI name mangler binds it
 /// to the matching `Java_<pkg>_<class>_<mangle_fun("freePtr")>`
 /// extern on the Rust side (the auto-generated destructor).
-fn render_typed_handle_source(
+pub(crate) fn render_typed_handle_source(
     ext: &JniGen,
     package: &str,
     class_name: &str,
@@ -2221,7 +857,7 @@ fn render_typed_handle_source(
 /// `NativeHandle`; the wrapper body nests `withPtr` / `consume` per the
 /// syntactic shape. Non-opaque parameters pass through with the Kotlin
 /// type from `kotlin_types`.
-fn render_jni_package_source(
+pub(crate) fn render_jni_package_source(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     kotlin_types: &KotlinTypeMap,
@@ -2232,14 +868,7 @@ fn render_jni_package_source(
     // entries WIN — the user (build.rs) may need to override e.g.
     // `impl Fn(Query)` to point at a hand-written
     // `JNIQueryCallback` instead of the auto-derived default.
-    let callback_fqns = ext.collect_kotlin_callback_fqns(registry);
-    let mut merged_types = KotlinTypeMap::new();
-    for (k, v) in callback_fqns.iter() {
-        merged_types = merged_types.add(k, v.clone());
-    }
-    for (k, v) in kotlin_types.iter() {
-        merged_types = merged_types.add(k, v.clone());
-    }
+    let merged_types = ext.merged_kotlin_type_map(registry, kotlin_types);
 
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let mut body = String::new();
@@ -2308,22 +937,12 @@ fn render_jni_package_source(
 /// block is emitted — the holder stays free of any wrapper-layer
 /// reference; the wrapper-layer call sites are responsible for
 /// triggering `System.load` before invoking any extern.
-fn render_jni_native_source(
+pub(crate) fn render_jni_native_source(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
-    kotlin_types: &KotlinTypeMap,
     declared: &HashSet<syn::Ident>,
     class_name: &str,
 ) -> String {
-    let callback_fqns = ext.collect_kotlin_callback_fqns(registry);
-    let mut merged_types = KotlinTypeMap::new();
-    for (k, v) in callback_fqns.iter() {
-        merged_types = merged_types.add(k, v.clone());
-    }
-    for (k, v) in kotlin_types.iter() {
-        merged_types = merged_types.add(k, v.clone());
-    }
-
     let mut imports: BTreeSet<String> = BTreeSet::new();
     let mut body = String::new();
 
@@ -2381,7 +1000,7 @@ pub(crate) fn render_extern_decl(
     use std::fmt::Write;
 
     let rust_name = f.sig.ident.to_string();
-    let kt_name = snake_to_camel(&rust_name);
+    let kt_name = kt_snake_to_camel(&rust_name);
     let jni_call = ext.mangle_fun(&kt_name);
 
     let mut params: Vec<(String, String)> = Vec::new();
@@ -2392,12 +1011,12 @@ pub(crate) fn render_extern_decl(
         let syn::Pat::Ident(pid) = &*pt.pat else {
             continue;
         };
-        let name = snake_to_camel(&pid.ident.to_string());
+        let name = kt_snake_to_camel(&pid.ident.to_string());
         let arg_ty = &*pt.ty;
 
         // Flattenable data_class param → expand into its leaf wire params
         // (same plan the native wrapper + call site use).
-        if let Some(plan) = crate::api::lang::jnigen::jni::jni_ext::build_flat_input_plan(
+        if let Some(plan) = crate::api::lang::jnigen::jni::build_flat_input_plan(
             ext, registry, &pid.ident, arg_ty, "",
         ) {
             for leaf in &plan.leaves {
@@ -2509,7 +1128,7 @@ pub(crate) enum MethodKind {
 /// When `promoted_handle` is `None` (top-level `JNIWrappers` emission),
 /// the returned kind is always [`MethodKind::Instance`] (no
 /// promotion-shape decision is made) and the caller can ignore it.
-fn render_wrapper_fn(
+pub(crate) fn render_wrapper_fn(
     ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
@@ -2522,11 +1141,11 @@ fn render_wrapper_fn(
 
     let rust_name = f.sig.ident.to_string();
     // The Kotlin extern in `JNINative` is keyed on the Rust ident
-    // (`snake_to_camel(rust_name)` → `ext.mangle_fun`). The per-entry
+    // (`kt_snake_to_camel(rust_name)` → `ext.mangle_fun`). The per-entry
     // `.name("...")` override only changes the *user-facing* Kotlin
     // wrapper name; the JNI call still has to hit the one extern that
     // the Rust extern actually emits.
-    let default_kt_name = snake_to_camel(&rust_name);
+    let default_kt_name = kt_snake_to_camel(&rust_name);
     let kt_name = match kotlin_name_override {
         Some(n) => n.to_string(),
         None => default_kt_name.clone(),
@@ -2610,7 +1229,7 @@ fn render_wrapper_fn(
         let syn::Pat::Ident(pid) = &*pt.pat else {
             continue;
         };
-        let name = snake_to_camel(&pid.ident.to_string());
+        let name = kt_snake_to_camel(&pid.ident.to_string());
         let arg_ty = &*pt.ty;
 
         // Strip leading reference for the type-map lookup; the registry's
@@ -2630,16 +1249,12 @@ fn render_wrapper_fn(
         let is_opt_ref_opaque = is_opaque && is_option_ref(arg_ty);
         let (kt_type_raw, optional) = if is_opaque {
             let h = entry.metadata.projection.as_ref()?;
-            let fqn = ext
-                .kotlin_type_fqns
-                .iter()
-                .find(|(k, _)| k == &h.leaf_key)
-                .map(|(_, v)| v.clone())?;
+            let fqn = ext.kotlin_fqn(&h.leaf_key).map(|v| v.to_string())?;
             // Handle params are nullable only as `Option<&T>` (borrow); value
             // projections (value_class / value_blob) are plain owned values, so
             // they're nullable whenever the param is `Option<_>`.
             let optional = match h.kind {
-                crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle => is_opt_ref_opaque,
+                crate::api::lang::jnigen::jni::ProjectionKind::Handle => is_opt_ref_opaque,
                 _ => is_option_type(arg_ty),
             };
             (fqn, optional)
@@ -2682,12 +1297,12 @@ fn render_wrapper_fn(
             .map(|p| p.kind.clone());
         let is_handle = matches!(
             proj_kind,
-            Some(crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::Handle)
+            Some(crate::api::lang::jnigen::jni::ProjectionKind::Handle)
         );
         let is_value_proj = matches!(
             proj_kind,
-            Some(crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::ValueClass)
-                | Some(crate::api::lang::jnigen::jni::jni_ext::ProjectionKind::ValueBlob)
+            Some(crate::api::lang::jnigen::jni::ProjectionKind::ValueClass)
+                | Some(crate::api::lang::jnigen::jni::ProjectionKind::ValueBlob)
         );
 
         // Mode: handle → Borrow/Consume by Rust syntactic shape (locked).
@@ -2705,7 +1320,7 @@ fn render_wrapper_fn(
         // receiver is destructured from `this` and dropped from the public
         // signature (mirrors `PromotedPassThrough`).
         let flat_base = if matches_promoted { "this" } else { name.as_str() };
-        let flat_plan = crate::api::lang::jnigen::jni::jni_ext::build_flat_input_plan(
+        let flat_plan = crate::api::lang::jnigen::jni::build_flat_input_plan(
             ext, registry, &pid.ident, arg_ty, flat_base,
         );
         let mode = if let Some(plan) = flat_plan {
@@ -2746,14 +1361,14 @@ fn render_wrapper_fn(
             let proj = entry.metadata.projection.as_ref()?;
             if matches!(
                 proj.strategy,
-                crate::api::lang::jnigen::jni::jni_ext::FoldStrategy::Iterable(_)
+                crate::api::lang::jnigen::jni::FoldStrategy::Iterable(_)
             ) {
                 panic!(
                     "render_wrapper_fn: value-class/value-blob `Vec<_>` params aren't \
                      supported yet (param `{name}`); add array codegen to lift this guard."
                 );
             }
-            let field = crate::api::lang::jnigen::jni::jni_ext::value_projection_field_for_leaf(
+            let field = crate::api::lang::jnigen::jni::value_projection_field_for_leaf(
                 ext,
                 registry,
                 &proj.leaf_key,
@@ -2902,12 +1517,7 @@ fn render_wrapper_fn(
             // class or value-class wrapper). The sentinel is the Kotlin
             // null-representation literal for the leaf wire — used only by
             // the `Niche+primitive` arm of `fold_projection_wrap`.
-            let leaf_fqn = ext
-                .kotlin_type_fqns
-                .iter()
-                .find(|(k, _)| k == &p.leaf_key)
-                .map(|(_, v)| v.as_str())
-                .unwrap_or(&p.leaf_key);
+            let leaf_fqn = ext.kotlin_fqn(&p.leaf_key).unwrap_or(&p.leaf_key);
             let short = leaf_fqn.rsplit('.').next().unwrap_or(leaf_fqn).to_string();
             let sentinel = projection_leaf_sentinel(ext, registry, p);
             call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
@@ -3291,7 +1901,7 @@ fn render_wrapper_fn(
 /// Produced by [`build_dispatch_arms`] from the
 /// [`IntoSource`] list the resolver stored on
 /// `TypeEntry::into_sources`.
-struct DispatchArm {
+pub(crate) struct DispatchArm {
     /// `is <KotlinShortName>` check, or `None` for the unconditional
     /// catch-all arm placed last. Examples:
     /// * `Some("JNISession")` — typed-FQN arm; the JNI dispatcher's
@@ -3334,7 +1944,7 @@ struct DispatchArm {
 /// `jobject_to_wire_adapter` (it panics with a registration hint),
 /// so this helper never has to emit a generic `is NativeHandle`
 /// fallback arm — every opaque source is either typed or rejected.
-fn build_dispatch_arms(
+pub(crate) fn build_dispatch_arms(
     sources: &[IntoSource],
     registry: &Registry<KotlinMeta>,
     kotlin_types: &KotlinTypeMap,
@@ -3424,14 +2034,14 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<String> {
 ///   and pick the JNI extern's wire return (`Long` for `Handle`,
 ///   the inner wire's Kotlin name for `ValueClass`). `None` for plain
 ///   non-projection returns.
-fn classify_return(
+pub(crate) fn classify_return(
     ext: &JniGen,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<(
     String,
-    Option<crate::api::lang::jnigen::jni::jni_ext::Projection>,
+    Option<crate::api::lang::jnigen::jni::Projection>,
 )> {
     let ty = match output {
         syn::ReturnType::Default => return Some((String::new(), None)),
@@ -3456,10 +2066,8 @@ fn classify_return(
     // the wire return based on `kind`.
     if let Some(h) = outer_meta.as_ref().and_then(|m| m.projection.clone()) {
         let fqn = ext
-            .kotlin_type_fqns
-            .iter()
-            .find(|(k, _)| k == &h.leaf_key)
-            .map(|(_, v)| v.clone())
+            .kotlin_fqn(&h.leaf_key)
+            .map(|v| v.to_string())
             .unwrap_or_else(|| {
                 panic!(
                     "classify_return: projection return type `{}` has no Kotlin FQN registered \
@@ -3486,7 +2094,7 @@ fn classify_return(
 /// Returns `true` when the function's return type resolves to a type registered
 /// via [`JniGen::enum_class`]. Enum returns cross the JNI wire as `jint` (Kotlin
 /// `Int`); the public wrapper must call `EnumType.fromInt(Int)` to convert back.
-fn return_is_kotlin_enum(
+pub(crate) fn return_is_kotlin_enum(
     ext: &JniGen,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
@@ -3504,7 +2112,7 @@ fn return_is_kotlin_enum(
     ext.is_kotlin_enum(&inner)
 }
 
-fn snake_to_camel(s: &str) -> String {
+pub(crate) fn kt_snake_to_camel(s: &str) -> String {
     let mut out = String::new();
     let mut upper = false;
     for c in s.chars() {

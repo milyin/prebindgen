@@ -24,4 +24,4 @@ pub use jni::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
     null_string, JniBindingError, JniGen,
 };
-pub use kotlin::kotlin_ext::{KotlinFile, WriteKotlinError};
+pub use kotlin::file::{KotlinFile, WriteKotlinError};

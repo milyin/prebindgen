@@ -1,10 +1,10 @@
 //! Kotlin emission support for back-ends that produce Kotlin output.
 //!
-//! `kotlin_ext` exposes the shared `KotlinFile` / `WriteKotlinError`
+//! `file` exposes the shared `KotlinFile` / `WriteKotlinError`
 //! types; `type_map` is the internal `KotlinTypeMap` (Rust → Kotlin
-//! name lookup) consumed by `crate::api::lang::jnigen::jni::jni_kotlin_ext`. Both modules
+//! name lookup) consumed by the JNI back-end's Kotlin emitters. Both modules
 //! are `pub(crate)` — Kotlin emission is JniGen-inherent and not
 //! exposed at the crate boundary.
 
-pub(crate) mod kotlin_ext;
+pub(crate) mod file;
 pub(crate) mod type_map;

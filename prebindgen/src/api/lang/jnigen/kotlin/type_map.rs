@@ -1,5 +1,5 @@
 //! Per-type Rust → Kotlin name mapping. Internal helper consumed by the
-//! Kotlin emitters in `jni_kotlin_ext.rs`; not part of the public API.
+//! Kotlin emitters in the JNI back-end's `render` module; not part of the public API.
 
 use std::collections::HashMap;
 

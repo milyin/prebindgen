@@ -1,4 +1,4 @@
-use crate::api::lang::jnigen::kotlin::kotlin_ext::KotlinFile;
+use crate::api::lang::jnigen::kotlin::file::KotlinFile;
 
 pub(crate) fn emit_exception(package: &str, class_name: &str, rust_doc_name: &str) -> KotlinFile {
     KotlinFile {

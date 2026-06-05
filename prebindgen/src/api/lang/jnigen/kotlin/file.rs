@@ -1,5 +1,5 @@
 //! Kotlin emission primitives — `KotlinFile` value and `WriteKotlinError`
-//! shared by the JNI back-end's emitters in `crate::api::lang::jnigen::jni::jni_kotlin_ext`.
+//! shared by the JNI back-end's emitters in the JNI back-end's `render` module.
 //!
 //! Public surface (`KotlinFile`, `WriteKotlinError`) is re-exported by the
 //! `jni` module for back-ends; the trait-based dispatch is gone — Kotlin
