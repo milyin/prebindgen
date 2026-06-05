@@ -3720,8 +3720,6 @@ fn emit_jni_function_wrapper(
                 original_ident,
             )
         });
-        let wire = &entry.destination;
-        let conv = entry.function.sig.ident.clone();
         // Each input converter carries the throw fn for its failures —
         // framework `throw_JniBindingError` by default, or a custom one
         // bound via `Some(parse_quote!(<full path>))` in the input
@@ -3731,6 +3729,29 @@ fn emit_jni_function_wrapper(
             .throws_action
             .clone()
             .unwrap_or_else(|| framework_throw.clone());
+
+        // Flattenable data_class param: cross its fields as separate wire
+        // params and reconstruct the struct inline — no per-call
+        // `env.get_field(...)` reflection. Falls back (None) to the
+        // single-`JObject` path for any shape outside the conservative leaf
+        // set (handles, nested structs, enums, …). The `JNINative` extern and
+        // the Kotlin call-site destructure read the same plan so the three
+        // sites can't drift.
+        if let Some(plan) = build_flat_input_plan(ext, registry, arg_ident, arg_ty, "") {
+            for leaf in &plan.leaves {
+                let pid = &leaf.native_ident;
+                let pty = &leaf.native_wire_ty;
+                wire_params.push(quote!(#pid: #pty));
+            }
+            let (decode, call_arg) =
+                render_flat_input_decode(&plan, arg_ident, &on_err, &input_throw);
+            prelude.push(decode);
+            call_args.push(call_arg);
+            continue;
+        }
+
+        let wire = &entry.destination;
+        let conv = entry.function.sig.ident.clone();
         let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
             format_ident!("{}_ptr", arg_ident)
         } else {
@@ -4775,6 +4796,319 @@ fn struct_input_body(
         #struct_module::#struct_ident { #(#field_init),* }
     });
     Some((syn::parse_quote!(jni::objects::JObject), body))
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Struct input flattening (pass a data_class param as its leaf fields)
+// ──────────────────────────────────────────────────────────────────────
+
+/// One flattened leaf of a struct **input** param. The mirror of
+/// [`EncSlot`] for the input direction: instead of reading the field with
+/// `env.get_field(...)` out of a single `JObject`, the leaf crosses the JNI
+/// boundary as its own wrapper parameter. Carries every fact the three
+/// coordinated sites (native wrapper signature, `JNINative` extern decl,
+/// Kotlin call-site destructure) need so they cannot drift in order, type, or
+/// nullability.
+pub(crate) struct FlatLeaf {
+    /// Native wrapper parameter ident — also the decode source.
+    pub native_ident: syn::Ident,
+    /// Native wire type (lifetime-annotated for object wires).
+    pub native_wire_ty: TokenStream,
+    /// Kotlin `external fun` parameter name (camelCase).
+    pub kt_name: String,
+    /// Kotlin `external fun` parameter type (incl. a trailing `?`).
+    pub kt_wire_ty: String,
+    /// Kotlin call-site destructure expression feeding this leaf.
+    pub kt_access: String,
+    /// Per-field input converter ident (`None` for the synthetic present flag).
+    pub conv: Option<syn::Ident>,
+    /// Struct field this leaf populates (`None` for the present flag).
+    pub field: Option<syn::Ident>,
+    /// `true` for the synthetic `<param>Present: Boolean` gate leaf emitted
+    /// for an `Option<struct>` param.
+    pub is_present_flag: bool,
+}
+
+/// A flattened plan for one struct input parameter. Built once by
+/// [`build_flat_input_plan`] and consumed by all three codegen sites.
+pub(crate) struct FlatInputPlan {
+    pub leaves: Vec<FlatLeaf>,
+    /// Module path the struct lives under (`zenoh_flat`).
+    pub struct_module: syn::Path,
+    /// Struct ident (`Encoding`).
+    pub struct_ident: syn::Ident,
+    /// `true` when the original param was `Option<…>` — leaves are gated on a
+    /// `present` flag and decoded lazily.
+    pub optional: bool,
+    /// `true` when the source fn takes `&Struct` — the call site passes `&arg`.
+    pub by_ref: bool,
+    /// The present-flag param ident (`Some` iff `optional`).
+    pub present_ident: Option<syn::Ident>,
+}
+
+/// Extract `S` from an `impl Into<S> + …` parameter type.
+fn impl_into_target(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::ImplTrait(it) = ty else {
+        return None;
+    };
+    for b in &it.bounds {
+        if let syn::TypeParamBound::Trait(tb) = b {
+            if let Some(seg) = tb.path.segments.last() {
+                if seg.ident == "Into" {
+                    if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                        if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
+                            return Some(t.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Peel a leading `&`/`&mut` then an `Option<…>` to expose the inner type used
+/// for enum/struct detection (`&Priority`, `Option<Priority>` → `Priority`).
+fn flat_probe_inner(ty: &syn::Type) -> syn::Type {
+    let stripped = match ty {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    };
+    option_inner_type(&stripped).unwrap_or(stripped)
+}
+
+/// Kotlin literal that fills a leaf slot when its `Option<struct>` parent is
+/// absent (the `present` flag tells Rust to ignore it). `None` for nullable
+/// leaves, which simply ride a JVM `null`. Mirrors
+/// [`primitive_default_for_descriptor`] on the Rust side.
+fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
+    if nullable {
+        return None;
+    }
+    Some(
+        match sig {
+            "Z" => "false",
+            "B" | "S" | "I" => "0",
+            "C" => "'\\u0000'",
+            "J" => "0L",
+            "F" => "0.0f",
+            "D" => "0.0",
+            "Ljava/lang/String;" => "\"\"",
+            "[B" => "ByteArray(0)",
+            _ => "null",
+        }
+        .to_string(),
+    )
+}
+
+/// Build a [`FlatInputPlan`] for a struct input parameter, or `None` to keep
+/// the existing single-`JObject` path. Returns `None` (safe fallback) for any
+/// shape outside the conservative v1 leaf set — handle/value projections,
+/// enums, nested data classes, boxed `Option<primitive>`, `Vec<non-u8>`,
+/// converters with `pre_stages`, and `impl Into<S>` dispatch (`Any`). This is
+/// the single source of truth shared by the native wrapper signature, the
+/// `JNINative` extern declaration, and the Kotlin call-site destructure.
+pub(crate) fn build_flat_input_plan(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    param_name: &syn::Ident,
+    arg_ty: &syn::Type,
+    kt_base: &str,
+) -> Option<FlatInputPlan> {
+    // 1. Resolve the struct target through `&`, `Option<…>`, and `impl Into<S>`.
+    let (by_ref, t1) = match arg_ty {
+        syn::Type::Reference(r) => (true, (*r.elem).clone()),
+        other => (false, other.clone()),
+    };
+    let (optional, inner) = match option_inner_type(&t1) {
+        Some(i) => (true, i),
+        None => (false, t1.clone()),
+    };
+    let struct_ty = impl_into_target(&inner).unwrap_or_else(|| inner.clone());
+    let name = bare_path_ident(&struct_ty)?;
+    let (st, _) = registry.structs.get(&name)?;
+    let key = TypeKey::from_type(&struct_ty);
+    let cfg = ext.types.get(&key);
+    // Exclude value-class / value-blob / enum structs — they have their own
+    // erasure and are not field-flattened here.
+    if cfg.map(|c| c.value_class || c.value_blob).unwrap_or(false) {
+        return None;
+    }
+    if ext.is_kotlin_enum(&struct_ty) {
+        return None;
+    }
+    // Identity / pass-through guard: the resolved param must decode to the
+    // struct itself, not an opaque handle / value projection (`projection`
+    // present) and not a multi-source / non-identity `impl Into<S>` (which
+    // surfaces as `"Any"` Dispatch or a foreign source type). The resolved
+    // param's Kotlin type (compared by short name, since metadata carries the
+    // FQN) must equal the struct's data-class name.
+    let entry = registry.input_entry(arg_ty)?;
+    if entry.metadata.projection.is_some() {
+        return None;
+    }
+    let dc_short = cfg
+        .and_then(|c| c.kotlin_name.clone())
+        .map(|fqn| fqn.rsplit('.').next().unwrap_or(&fqn).to_string())
+        .unwrap_or_else(|| name.to_string());
+    let entry_short = entry
+        .metadata
+        .kotlin_name
+        .as_deref()
+        .map(|s| s.rsplit('.').next().unwrap_or(s));
+    if entry_short != Some(dc_short.as_str()) {
+        return None;
+    }
+
+    // 2. Named fields only.
+    let syn::Fields::Named(named) = &st.fields else {
+        return None;
+    };
+
+    // 3. Classify every field as a simple leaf, else fall back.
+    let struct_module = struct_module_path(ext, st);
+    // `kt_base` is the Kotlin expression for the object at the call site —
+    // normally the camelCase param name, or `this` for a promoted instance
+    // receiver. The native param idents / extern names stay keyed on
+    // `param_name` so the wire signature is independent of the call form.
+    let kt_param = kt_base.to_string();
+    let mut leaves: Vec<FlatLeaf> = Vec::new();
+
+    // Present gate for `Option<struct>` (first leaf, mirrors the output
+    // `Option<nested>` `present: jboolean` slot).
+    let present_ident = if optional {
+        let id = format_ident!("{}_present", param_name);
+        leaves.push(FlatLeaf {
+            native_ident: id.clone(),
+            native_wire_ty: quote!(jni::sys::jboolean),
+            kt_name: snake_to_camel(&format!("{}_present", param_name)),
+            kt_wire_ty: "Boolean".to_string(),
+            kt_access: format!("{kt_param} != null"),
+            conv: None,
+            field: None,
+            is_present_flag: true,
+        });
+        Some(id)
+    } else {
+        None
+    };
+
+    for field in &named.named {
+        let fident = field.ident.clone()?;
+        let fcamel = snake_to_camel(&fident.to_string());
+        let fentry = registry.input_entry(&field.ty)?;
+        // Reject anything outside the simple-leaf set (keeps the object path).
+        if !fentry.pre_stages.is_empty() {
+            return None;
+        }
+        if fentry.metadata.projection.is_some() {
+            return None;
+        }
+        if ext.is_kotlin_enum(&flat_probe_inner(&field.ty)) {
+            return None;
+        }
+        let wire = &fentry.destination;
+        let (sig, _accessor, _is_obj) = jni_field_access(wire)?;
+        let f_opt = option_inner_type(&field.ty).is_some();
+        let kt = fentry.metadata.kotlin_name.clone()?;
+        let kt_wire_ty = format!("{}{}", kt, if f_opt { "?" } else { "" });
+        let native_ident = format_ident!("{}_{}", param_name, fident);
+        let native_wire_ty = annotate_jobject_with_lifetime(wire, "a").to_token_stream();
+        let kt_name = snake_to_camel(&format!("{}_{}", param_name, fident));
+
+        // Destructure expression. Under an absent `Option<struct>` parent the
+        // leaf still needs a value on the wire (`present` makes Rust ignore
+        // it): nullable leaves ride JVM null, non-null leaves a typed default.
+        let kt_access = if optional {
+            let base = format!("{kt_param}?.{fcamel}");
+            match kt_leaf_default(sig, f_opt) {
+                Some(def) => format!("{base} ?: {def}"),
+                None => base,
+            }
+        } else {
+            format!("{kt_param}.{fcamel}")
+        };
+
+        leaves.push(FlatLeaf {
+            native_ident,
+            native_wire_ty,
+            kt_name,
+            kt_wire_ty,
+            kt_access,
+            conv: Some(fentry.function.sig.ident.clone()),
+            field: Some(fident),
+            is_present_flag: false,
+        });
+    }
+
+    Some(FlatInputPlan {
+        leaves,
+        struct_module,
+        struct_ident: st.ident.clone(),
+        optional,
+        by_ref,
+        present_ident,
+    })
+}
+
+/// Render the native reconstruct for a [`FlatInputPlan`]: decode each leaf
+/// param with its per-field converter (lazily, inside the `present` branch for
+/// an `Option<struct>`) and bind the rebuilt struct to `arg_ident`. Each decode
+/// failure routes through `throw` and returns the function `on_err` sentinel —
+/// the same shape `struct_input_body`'s callers use. Returns the prelude
+/// statements and the call argument (`arg` or `&arg`).
+pub(crate) fn render_flat_input_decode(
+    plan: &FlatInputPlan,
+    arg_ident: &syn::Ident,
+    on_err: &TokenStream,
+    throw: &syn::Path,
+) -> (TokenStream, TokenStream) {
+    let module = &plan.struct_module;
+    let sid = &plan.struct_ident;
+    let mut field_decodes: Vec<TokenStream> = Vec::new();
+    let mut field_inits: Vec<TokenStream> = Vec::new();
+    for leaf in &plan.leaves {
+        if leaf.is_present_flag {
+            continue;
+        }
+        let conv = leaf.conv.as_ref().unwrap();
+        let wid = &leaf.native_ident;
+        let fid = leaf.field.clone().unwrap();
+        let tmp = format_ident!("__{}_{}", arg_ident, fid);
+        field_decodes.push(quote! {
+            let #tmp = match #conv(&mut env, &#wid) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    #throw(&mut env, &__e);
+                    return #on_err;
+                }
+            };
+        });
+        field_inits.push(quote!(#fid: #tmp));
+    }
+    let build = quote!(#module::#sid { #(#field_inits),* });
+    let prelude = if plan.optional {
+        let present = plan.present_ident.as_ref().unwrap();
+        quote! {
+            let #arg_ident = if #present != 0u8 {
+                #(#field_decodes)*
+                Some(#build)
+            } else {
+                None
+            };
+        }
+    } else {
+        quote! {
+            #(#field_decodes)*
+            let #arg_ident = #build;
+        }
+    };
+    let call_arg = if plan.by_ref {
+        quote!(&#arg_ident)
+    } else {
+        quote!(#arg_ident)
+    };
+    (prelude, call_arg)
 }
 
 /// One flattened leaf wire slot of a struct's recursive `fromParts` encode

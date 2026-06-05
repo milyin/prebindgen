@@ -2357,6 +2357,18 @@ pub(crate) fn render_extern_decl(
         let name = snake_to_camel(&pid.ident.to_string());
         let arg_ty = &*pt.ty;
 
+        // Flattenable data_class param → expand into its leaf wire params
+        // (same plan the native wrapper + call site use).
+        if let Some(plan) = crate::api::lang::jnigen::jni::jni_ext::build_flat_input_plan(
+            ext, registry, &pid.ident, arg_ty, "",
+        ) {
+            for leaf in &plan.leaves {
+                let short = register_fqn(&leaf.kt_wire_ty, imports);
+                params.push((leaf.kt_name.clone(), short));
+            }
+            continue;
+        }
+
         let entry = registry.input_entry(arg_ty)?;
 
         let is_opaque = entry.metadata.is_direct_handle();
@@ -2537,6 +2549,14 @@ fn render_wrapper_fn(
         /// dropped from the wrapper signature. Set when `promoted_handle`
         /// matches a non-opaque type.
         PromotedPassThrough,
+        /// Flattenable `data_class` param: the high-level Kotlin signature
+        /// keeps the typed object, but the `JNINative` call destructures it
+        /// into the leaf access expressions (no `JObject` crosses, so the
+        /// Rust side skips `env.get_field(...)`). The strings are the
+        /// per-leaf call-site expressions in plan order. `promoted` marks a
+        /// promoted instance-method receiver — destructured from `this` and
+        /// dropped from the public signature.
+        FlattenStruct { accesses: Vec<String>, promoted: bool },
     }
 
     // Tracks whether we've already consumed the promoted-handle slot —
@@ -2638,7 +2658,27 @@ fn render_wrapper_fn(
         // `IntoSource`. Everything else (primitives, callbacks, data
         // classes) passes through. Promoted variants kick in when this
         // param is the matched-and-not-yet-consumed handle slot.
-        let mode = if is_handle {
+        //
+        // Flattenable data_class params are detected first: the high-level
+        // signature keeps the typed object (`kt_type_raw`), but the
+        // `JNINative` call destructures it into leaf args (same plan the
+        // native wrapper + extern decl consume). The decision is purely
+        // type-based so all three sites agree. A promoted instance-method
+        // receiver is destructured from `this` and dropped from the public
+        // signature (mirrors `PromotedPassThrough`).
+        let flat_base = if matches_promoted { "this" } else { name.as_str() };
+        let flat_plan = crate::api::lang::jnigen::jni::jni_ext::build_flat_input_plan(
+            ext, registry, &pid.ident, arg_ty, flat_base,
+        );
+        let mode = if let Some(plan) = flat_plan {
+            if matches_promoted {
+                promoted_taken = true;
+            }
+            ParamMode::FlattenStruct {
+                accesses: plan.leaves.iter().map(|l| l.kt_access.clone()).collect(),
+                promoted: matches_promoted,
+            }
+        } else if is_handle {
             let borrow = matches!(arg_ty, syn::Type::Reference(_));
             if is_opt_ref_opaque {
                 // Nullable borrow — promoted form not supported (the
@@ -2756,6 +2796,12 @@ fn render_wrapper_fn(
     let build_call = |arm_choice: &[usize]| -> String {
         let mut args: Vec<String> = Vec::with_capacity(params.len());
         for (i, p) in params.iter().enumerate() {
+            // Flattened data_class param expands into multiple call args
+            // (the leaf destructure expressions, in plan order).
+            if let ParamMode::FlattenStruct { accesses, .. } = &p.mode {
+                args.extend(accesses.iter().cloned());
+                continue;
+            }
             let arg = match &p.mode {
                 ParamMode::Borrow
                 | ParamMode::Consume
@@ -2800,6 +2846,9 @@ fn render_wrapper_fn(
                     } else {
                         p.kt_name.clone()
                     }
+                }
+                ParamMode::FlattenStruct { .. } => {
+                    unreachable!("FlattenStruct expanded before the single-arg match")
                 }
             };
             args.push(arg);
@@ -3143,6 +3192,7 @@ fn render_wrapper_fn(
                 ParamMode::PromotedBorrow
                     | ParamMode::PromotedConsume
                     | ParamMode::PromotedPassThrough
+                    | ParamMode::FlattenStruct { promoted: true, .. }
             )
         })
         .map(|p| format!("{}: {}", p.kt_name, p.kt_type))
