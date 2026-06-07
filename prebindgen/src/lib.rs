@@ -186,8 +186,8 @@ pub use crate::api::{
 /// ([`lang::Cbindgen`]) has begun (scaffolding).
 pub mod core {
     pub use crate::api::core::{
-        ConverterImpl, Direction, Gravestone, IntoSource, IntoSourceMode, NicheSlot, Niches,
-        Prebindgen, Registry, ScanError, Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
+        ConverterImpl, Direction, Gravestone, NicheSlot, Niches, Prebindgen, Registry, ScanError,
+        Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 

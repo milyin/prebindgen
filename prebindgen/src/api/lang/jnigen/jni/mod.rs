@@ -586,6 +586,12 @@ pub struct JniGen {
     /// only the raw `ptr` read + closed-handle null-check + native call.
     /// Toggled via [`Self::handle_locks`].
     pub(crate) emit_handle_locks: bool,
+
+    /// Constructor-expansion declarations (`.constructor`,
+    /// `.combined_constructor`, `.expand`, …). Resolved into
+    /// [`crate::api::core::expand::FoldPlan`]s on the registry during
+    /// `write_rust` and consumed at the parameter-emission site.
+    pub(crate) expansions: crate::api::core::expand::Expansions,
 }
 
 

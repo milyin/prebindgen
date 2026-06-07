@@ -23,7 +23,6 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
         subs: vec![],
         required: false,
         niches,
-        into_sources: None,
         metadata: KotlinMeta::default(),
     }
 }

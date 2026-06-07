@@ -20,7 +20,7 @@ use crate::SourceLocation;
 use quote::ToTokens;
 
 use crate::api::core::niches::Niches;
-use crate::api::core::prebindgen::{IntoSource, Stage};
+use crate::api::core::prebindgen::Stage;
 
 /// Canonical type-shape key — the `to_token_stream().to_string()` form of a
 /// `syn::Type`. Whitespace-normalised (`"Vec<u8>"` and `"Vec < u8 >"` produce
@@ -95,14 +95,6 @@ pub struct TypeEntry<M = ()> {
     /// Wrappers (`Option<_>`, sum-typed enums) carve from this set for
     /// their own discriminants. See [`Niches`] for the cascade model.
     pub niches: Niches,
-    /// Source-arm metadata for `impl Into<target>` dispatcher entries —
-    /// `Some(...)` only when this entry was produced by
-    /// [`crate::api::core::prebindgen::Prebindgen::dispatch_into_input`].
-    /// The back-end's language-side emitter reads this to drive per-source
-    /// fan-out — one foreign-side arm per declared
-    /// [`crate::api::core::prebindgen::IntoSource`] with the source's
-    /// borrow/consume mode. `None` for every non-dispatcher entry.
-    pub into_sources: Option<Vec<IntoSource>>,
     /// Back-end-specific extras carried in by the
     /// [`crate::api::core::prebindgen::ConverterImpl`] that filled this
     /// slot. Emitter code reads this directly — the registry is the
@@ -163,6 +155,12 @@ pub struct Registry<M = ()> {
     /// into `TypeEntry::required` once an entry is filled).
     pub required_inputs_scan: HashSet<TypeKey>,
     pub required_outputs_scan: HashSet<TypeKey>,
+
+    /// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
+    /// Filled by [`crate::api::core::expand::apply`] before resolution; read
+    /// by language adapters at the parameter-emission site. Empty unless the
+    /// back-end declared expansions.
+    pub expansion_plans: HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan>,
 }
 
 impl<M> Default for Registry<M> {
@@ -178,6 +176,7 @@ impl<M> Default for Registry<M> {
             type_locations: HashMap::new(),
             required_inputs_scan: HashSet::new(),
             required_outputs_scan: HashSet::new(),
+            expansion_plans: HashMap::new(),
         }
     }
 }
@@ -247,6 +246,7 @@ impl std::error::Error for ScanError {}
 #[derive(Debug)]
 pub enum WriteRustError {
     Scan(ScanError),
+    Expand(crate::api::core::expand::ExpandError),
     Resolve(crate::api::core::resolve::ResolveError),
     Write(crate::api::core::write::WriteError),
 }
@@ -255,6 +255,7 @@ impl fmt::Display for WriteRustError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WriteRustError::Scan(e) => write!(f, "{}", e),
+            WriteRustError::Expand(e) => write!(f, "{}", e),
             WriteRustError::Resolve(e) => write!(f, "{}", e),
             WriteRustError::Write(e) => write!(f, "{}", e),
         }
@@ -266,6 +267,12 @@ impl std::error::Error for WriteRustError {}
 impl From<ScanError> for WriteRustError {
     fn from(e: ScanError) -> Self {
         WriteRustError::Scan(e)
+    }
+}
+
+impl From<crate::api::core::expand::ExpandError> for WriteRustError {
+    fn from(e: crate::api::core::expand::ExpandError) -> Self {
+        WriteRustError::Expand(e)
     }
 }
 
@@ -483,6 +490,15 @@ impl<M> Registry<M> {
         None
     }
 
+    /// Register `ty` (and its nested positions) as a required **input** so
+    /// the resolver produces a converter for it. Used by
+    /// [`crate::api::core::expand`] to pull in the leaf types a fold needs.
+    pub(crate) fn require_input(&mut self, ty: &syn::Type, loc: &SourceLocation) {
+        // Leaf/expansion types are concrete (no disallowed `impl Trait`), so
+        // the recursive registration cannot fail here.
+        let _ = self.register_type_recursive(Direction::Input, ty, true, loc);
+    }
+
     fn index_item(&mut self, item: syn::Item, loc: SourceLocation) -> Result<(), ScanError> {
         match item {
             syn::Item::Fn(f) => {
@@ -622,10 +638,9 @@ impl<M> Registry<M> {
         loc: &SourceLocation,
         visited: &mut HashSet<TypeKey>,
     ) -> Result<(), ScanError> {
-        // Reject `impl Trait` except `impl Fn(...) + Send + Sync + 'static`
-        // and `impl Into<T> + Send + 'static`.
+        // Reject `impl Trait` except `impl Fn(...) + Send + Sync + 'static`.
         if let syn::Type::ImplTrait(it) = ty {
-            if extract_fn_trait_args(ty).is_none() && extract_into_trait_arg(ty).is_none() {
+            if extract_fn_trait_args(ty).is_none() {
                 return Err(ScanError::DisallowedImplTrait {
                     ty: it.to_token_stream().to_string(),
                     loc: loc.clone(),
@@ -727,6 +742,9 @@ impl<M> Registry<M> {
         M: Clone + Default,
     {
         self.scan_declared(ext)?;
+        if let Some(exp) = ext.expansions() {
+            crate::api::core::expand::apply(self, exp)?;
+        }
         crate::api::core::resolve::resolve(self, ext)?;
         Ok(crate::api::core::write::write_rust(self, ext, out_path)?)
     }
@@ -776,61 +794,8 @@ pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
         syn::Type::Ptr(p) => vec![(*p.elem).clone()],
         syn::Type::Group(g) => immediate_subtype_positions(&g.elem),
         syn::Type::Paren(p) => immediate_subtype_positions(&p.elem),
-        syn::Type::ImplTrait(_) => extract_fn_trait_args(ty)
-            .or_else(|| extract_into_trait_arg(ty).map(|t| vec![t]))
-            .unwrap_or_default(),
+        syn::Type::ImplTrait(_) => extract_fn_trait_args(ty).unwrap_or_default(),
         _ => vec![],
-    }
-}
-
-/// If `ty` is exactly `impl Into<T> + Send + 'static`, return `T`. Any
-/// other bound combination (missing `Send`/`'static`, extra traits, no
-/// `Into`) returns `None` — the framework rejects bare `impl Into<T>`
-/// at scan time.
-///
-/// Mirrors [`extract_fn_trait_args`] in shape and intent: a single
-/// well-formed exception to the otherwise-blanket "no `impl Trait`"
-/// rule, picked up by every framework helper that handles parameter
-/// type recognition (scan, rank, wildcard enumeration, rebuild).
-pub fn extract_into_trait_arg(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::ImplTrait(it) = ty else {
-        return None;
-    };
-    let mut target: Option<syn::Type> = None;
-    let mut has_send = false;
-    let mut has_static = false;
-    for bound in &it.bounds {
-        match bound {
-            syn::TypeParamBound::Trait(tb) => {
-                let last = tb.path.segments.last()?;
-                let name = last.ident.to_string();
-                match name.as_str() {
-                    "Into" => {
-                        let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
-                            return None;
-                        };
-                        let mut tys = ab.args.iter().filter_map(|a| match a {
-                            syn::GenericArgument::Type(t) => Some(t.clone()),
-                            _ => None,
-                        });
-                        let t = tys.next()?;
-                        if tys.next().is_some() {
-                            return None;
-                        }
-                        target = Some(t);
-                    }
-                    "Send" => has_send = true,
-                    _ => return None,
-                }
-            }
-            syn::TypeParamBound::Lifetime(lt) if lt.ident == "static" => has_static = true,
-            _ => return None,
-        }
-    }
-    if has_send && has_static {
-        target
-    } else {
-        None
     }
 }
 

@@ -64,6 +64,21 @@ pub(crate) fn emit_jni_function_wrapper(
         let arg_ident = &pat_id.ident;
         let arg_ty = &*pt.ty;
 
+        // Constructor-expansion: this parameter's wire form is the fold plan's
+        // flattened leaves. Decode each leaf with its own converter, run the
+        // (pure-Rust) fold to build the value, then pass it to the call.
+        if let Some(plan) = registry
+            .expansion_plans
+            .get(&(original_ident.clone(), arg_ident.clone()))
+        {
+            let (wp, pre, call_arg) =
+                emit_expanded_param(ext, registry, plan, arg_ident, &on_err);
+            wire_params.extend(wp);
+            prelude.extend(pre);
+            call_args.push(call_arg);
+            continue;
+        }
+
         let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
             panic!(
                 "JniGen::on_function: input type `{}` for `{}` is unresolved",
@@ -275,6 +290,136 @@ pub(crate) fn emit_jni_function_wrapper(
             #output_phase
         }
     }
+}
+
+/// Emit the wire params, decode prelude, and call argument for one
+/// constructor-expanded parameter. Each leaf is decoded with its own resolved
+/// input converter (reusing the by-value-handle consume fast path where the
+/// leaf is a direct owned handle); the leaves then feed
+/// [`crate::api::core::expand::emit_fold`], whose `Result<_, String>` is routed
+/// through the same error sink as any fallible input. The returned call
+/// argument is the built value (`&value` when the original parameter was `&T`).
+pub(crate) fn emit_expanded_param(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    plan: &crate::api::core::expand::FoldPlan,
+    orig_param: &syn::Ident,
+    on_err: &TokenStream,
+) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    let source_module = &ext.source_module;
+    let mut wire_params: Vec<TokenStream> = Vec::new();
+    let mut prelude: Vec<TokenStream> = Vec::new();
+    let mut leaf_locals: Vec<syn::Ident> = Vec::new();
+
+    for leaf in &plan.leaves {
+        let leaf_ty = &leaf.ty;
+        let entry = registry.input_entry(leaf_ty).unwrap_or_else(|| {
+            panic!(
+                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
+                TypeKey::from_type(leaf_ty),
+                orig_param,
+            )
+        });
+        let local = format_ident!("__exp_{}", leaf.name);
+
+        // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
+        // jlong handle inline, mirroring the normal by-value-handle path.
+        let is_consume =
+            !matches!(leaf_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
+        if is_consume {
+            let wire_ident = format_ident!("{}_ptr", leaf.name);
+            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
+            prelude.push(quote!(
+                let #local: #leaf_ty = unsafe {
+                    *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty)
+                };
+            ));
+            leaf_locals.push(local);
+            continue;
+        }
+
+        let wire = &entry.destination;
+        let conv = entry.function.sig.ident.clone();
+        let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
+            format_ident!("{}_ptr", leaf.name)
+        } else {
+            leaf.name.clone()
+        };
+        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
+        wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
+        let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
+            quote!(#conv(&mut env, #wire_ident))
+        } else {
+            quote!(#conv(&mut env, &#wire_ident))
+        };
+        // Compose any pre_stages (rust-side, reverse order) onto the decode.
+        if entry.pre_stages.is_empty() {
+            prelude.push(quote!(
+                let #local = match #decode_call {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        signal_error(&mut env, &__error_sink, &__e);
+                        return #on_err;
+                    }
+                };
+            ));
+        } else {
+            let stage0 = format_ident!("{}_s0", local);
+            prelude.push(quote!(
+                let #stage0 = match #decode_call {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        signal_error(&mut env, &__error_sink, &__e);
+                        return #on_err;
+                    }
+                };
+            ));
+            let n = entry.pre_stages.len();
+            let mut prev = stage0;
+            for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
+                let stage_fn = &stage.function.sig.ident;
+                let out_ident = if idx == 0 {
+                    local.clone()
+                } else {
+                    format_ident!("{}_s{}", local, n - idx)
+                };
+                prelude.push(quote!(
+                    let #out_ident = match #stage_fn(&mut env, #prev) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_error(&mut env, &__error_sink, &__e);
+                            return #on_err;
+                        }
+                    };
+                ));
+                prev = out_ident;
+            }
+        }
+        leaf_locals.push(local);
+    }
+
+    // The fold itself (language-agnostic). Its `Err(String)` is lifted into
+    // `__JniErr` and routed through the same sink as fallible inputs.
+    let qualify = |id: &syn::Ident| -> syn::Path { syn::parse_quote!(#source_module::#id) };
+    let fold_expr = crate::api::core::expand::emit_fold(plan, &leaf_locals, &qualify);
+    let folded = format_ident!("__folded_{}", orig_param);
+    prelude.push(quote!(
+        let #folded = match #fold_expr {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                let __je = <__JniErr as ::core::convert::From<::std::string::String>>::from(__e);
+                signal_error(&mut env, &__error_sink, &__je);
+                return #on_err;
+            }
+        };
+    ));
+
+    let call_arg = if plan.by_ref {
+        quote!(&#folded)
+    } else {
+        quote!(#folded)
+    };
+    (wire_params, prelude, call_arg)
 }
 
 /// Last-segment ident of a `TypeKey` — e.g. `"Publisher<'static>"` →

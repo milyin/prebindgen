@@ -56,6 +56,7 @@ impl JniGen {
             active_subpackage: None,
             last_entry_ref: None,
             emit_handle_locks: true,
+            expansions: crate::api::core::expand::Expansions::default(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. The error type `E` is
@@ -442,6 +443,82 @@ impl JniGen {
         let pkg = self.packages.get_mut(&sub).expect("package entry vanished");
         pkg.functions[idx].kotlin_name_override = Some(name);
         self
+    }
+
+    // ── Constructor expansion ───────────────────────────────────────
+
+    /// Register a single **constructor**: `func` builds a target type from its
+    /// parameters (the target and fallibility are derived from `func`'s
+    /// signature). A parameter of that target type can then be
+    /// [`Self::expand`]ed to accept the constructor's inputs directly.
+    pub fn constructor(mut self, func: syn::Ident) -> Self {
+        self.expansions.add_constructor(func);
+        self
+    }
+
+    /// Begin a **combined constructor** for `target`: a runtime
+    /// selector-dispatched union of variants declared via
+    /// [`Self::combined_variant`] / [`Self::combined_variant_id`].
+    pub fn combined_constructor(mut self, target: syn::Type) -> Self {
+        self.expansions.add_combined(target);
+        self
+    }
+
+    /// Name the current combined constructor so it can be selected by
+    /// [`Self::expand_with`]. Panics without a current `combined_constructor`.
+    pub fn combined_name(mut self, name: impl Into<String>) -> Self {
+        self.expansions.set_combined_name(name);
+        self
+    }
+
+    /// Add a constructor-function arm to the current combined constructor.
+    /// Panics without a current `combined_constructor`.
+    pub fn combined_variant(mut self, func: syn::Ident) -> Self {
+        self.expansions.add_combined_variant(func);
+        self
+    }
+
+    /// Add the identity arm (pass an already-built target value through) to the
+    /// current combined constructor. Panics without a current
+    /// `combined_constructor`.
+    pub fn combined_variant_id(mut self) -> Self {
+        self.expansions.add_combined_variant_id();
+        self
+    }
+
+    /// Expand parameter `param` of the most recent [`Self::package_fun`] using
+    /// its target type's top-level constructor. The generated foreign
+    /// signature receives the constructor's (flattened) inputs and the wrapper
+    /// builds the value before the underlying call. Panics if not chained after
+    /// a fn-level builder.
+    pub fn expand(mut self, param: syn::Ident) -> Self {
+        let func = self.current_fn_ident();
+        self.expansions.add_expand(func, param);
+        self
+    }
+
+    /// Like [`Self::expand`] but selects `ctor` explicitly (a constructor
+    /// function ident or a combined constructor's name).
+    pub fn expand_with(mut self, param: syn::Ident, ctor: syn::Ident) -> Self {
+        let func = self.current_fn_ident();
+        self.expansions.add_expand_with(func, param, ctor);
+        self
+    }
+
+    /// Rust ident of the function the current `.expand*` chain targets,
+    /// resolved from the live [`Self::package_fun`] cursor.
+    fn current_fn_ident(&self) -> syn::Ident {
+        let r = self
+            .last_entry_ref
+            .clone()
+            .expect("JniGen::expand must be chained after `.package_fun(...)`");
+        let NamedEntryRef::Function(sub, idx) = r;
+        self.packages
+            .get(&sub)
+            .expect("package entry vanished")
+            .functions[idx]
+            .rust_ident
+            .clone()
     }
 
     /// Opt out of Kotlin class emission for the most recent

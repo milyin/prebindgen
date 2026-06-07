@@ -563,6 +563,38 @@ pub(crate) fn render_jni_native_source(
 /// Opaque returns become `Long`; every other return uses
 /// [`classify_return`]'s `kt_return` (Unit is empty string).
 /// Returns `None` if any parameter's input converter isn't resolved.
+/// Expand a function's inputs into the effective parameter list seen by the
+/// Kotlin wrapper + extern declaration: a parameter carrying a
+/// constructor-expansion [`FoldPlan`] is replaced by its flattened leaves
+/// (each a normal `(name, type)`); every other parameter passes through. The
+/// Rust extern (`emit_jni_function_wrapper`) folds the leaves back into the
+/// built value separately.
+pub(crate) fn effective_inputs(
+    registry: &Registry<KotlinMeta>,
+    f: &syn::ItemFn,
+) -> Vec<(syn::Ident, syn::Type)> {
+    let mut out = Vec::new();
+    for input in &f.sig.inputs {
+        let syn::FnArg::Typed(pt) = input else {
+            continue;
+        };
+        let syn::Pat::Ident(pid) = &*pt.pat else {
+            continue;
+        };
+        if let Some(plan) = registry
+            .expansion_plans
+            .get(&(f.sig.ident.clone(), pid.ident.clone()))
+        {
+            for leaf in &plan.leaves {
+                out.push((leaf.name.clone(), leaf.ty.clone()));
+            }
+        } else {
+            out.push((pid.ident.clone(), (*pt.ty).clone()));
+        }
+    }
+    out
+}
+
 pub(crate) fn render_extern_decl(
     ext: &JniGen,
     f: &syn::ItemFn,
@@ -576,20 +608,14 @@ pub(crate) fn render_extern_decl(
     let jni_call = ext.mangle_fun(&kt_name);
 
     let mut params: Vec<(String, String)> = Vec::new();
-    for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else {
-            continue;
-        };
-        let syn::Pat::Ident(pid) = &*pt.pat else {
-            continue;
-        };
-        let name = kt_param_name(&pid.ident.to_string());
-        let arg_ty = &*pt.ty;
+    for (eff_ident, eff_ty) in effective_inputs(registry, f) {
+        let name = kt_param_name(&eff_ident.to_string());
+        let arg_ty = &eff_ty;
 
         // Flattenable data_class param → expand into its leaf wire params
         // (same plan the native wrapper + call site use).
         if let Some(plan) = crate::api::lang::jnigen::jni::build_flat_input_plan(
-            ext, registry, &pid.ident, arg_ty, "",
+            ext, registry, &eff_ident, arg_ty, "",
         ) {
             for leaf in &plan.leaves {
                 let short = register_fqn(&leaf.kt_wire_ty, imports);
@@ -744,15 +770,9 @@ pub(crate) fn render_wrapper_fn(
     }
 
     let mut params: Vec<Param> = Vec::new();
-    for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else {
-            continue;
-        };
-        let syn::Pat::Ident(pid) = &*pt.pat else {
-            continue;
-        };
-        let name = kt_param_name(&pid.ident.to_string());
-        let arg_ty = &*pt.ty;
+    for (eff_ident, eff_ty) in effective_inputs(registry, f) {
+        let name = kt_param_name(&eff_ident.to_string());
+        let arg_ty = &eff_ty;
 
         // Strip leading reference for the type-map lookup; the registry's
         // input entry is keyed by the param as-written.
@@ -816,7 +836,7 @@ pub(crate) fn render_wrapper_fn(
         // native wrapper + extern decl consume). The decision is purely
         // type-based so all three sites agree.
         let flat_plan = crate::api::lang::jnigen::jni::build_flat_input_plan(
-            ext, registry, &pid.ident, arg_ty, name.as_str(),
+            ext, registry, &eff_ident, arg_ty, name.as_str(),
         );
         let mode = if let Some(plan) = flat_plan {
             ParamMode::FlattenStruct {

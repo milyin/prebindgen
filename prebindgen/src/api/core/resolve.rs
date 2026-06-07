@@ -199,7 +199,6 @@ fn try_resolve_entry<E: Prebindgen>(
             subs: vec![],
             required: scan_required,
             niches: c.niches,
-            into_sources: None,
             metadata: c.metadata,
         });
     }
@@ -241,54 +240,8 @@ fn try_resolve_entry<E: Prebindgen>(
             }
             ext.dispatch_fn_input(subs.as_slice(), registry)
         });
-        // Last-step fallback for `impl Into<_> + Send + 'static`:
-        // after the implementer's own rank-1 handler returns None,
-        // ask `ext.into_sources(target)` for the source list and
-        // route to the dedicated dispatcher. The caller spells out
-        // every arm (including the identity arm `target → target`
-        // with its own borrow/consume mode) — no implicit prepend
-        // here. Source metadata is captured alongside the converter
-        // so it propagates into `TypeEntry::into_sources` (read by
-        // language-side wrapper emitters for per-arm fan-out).
-        let mut captured_sources: Option<Vec<crate::api::core::prebindgen::IntoSource>> = None;
-        let result = result.or_else(|| {
-            if dir == Direction::Input
-                && n == 1
-                && crate::api::core::registry::extract_into_trait_arg(&pattern).is_some()
-            {
-                let target = &subs[0];
-                let sources = ext.into_sources(target);
-                if sources.is_empty() {
-                    None
-                } else {
-                    let dispatched = ext.dispatch_into_input(target, &sources, registry);
-                    if dispatched.is_some() {
-                        captured_sources = Some(sources);
-                    }
-                    dispatched
-                }
-            } else {
-                None
-            }
-        });
         if let Some(c) = result {
             let sub_keys: Vec<TypeKey> = subs.iter().map(TypeKey::from_type).collect();
-            // Inherit `into_sources` from a single-sub rank-1 wrapper
-            // (e.g. `Option<impl Into<T>>`, `&impl Into<T>`) so the
-            // language emitters still see the Into-dispatch arms after
-            // the outer wrapper transparently passes the value through.
-            // Multi-sub patterns (rank ≥ 2) don't propagate here — there
-            // is no canonical single source, and no current shape needs
-            // it.
-            let inherited_sources = if captured_sources.is_none() && subs.len() == 1 {
-                let inner_lookup = match dir {
-                    Direction::Input => registry.input_entry(&subs[0]),
-                    Direction::Output => registry.output_entry(&subs[0]),
-                };
-                inner_lookup.and_then(|e| e.into_sources.clone())
-            } else {
-                None
-            };
             return Some(TypeEntry {
                 destination: c.destination,
                 function: c.function,
@@ -296,7 +249,6 @@ fn try_resolve_entry<E: Prebindgen>(
                 subs: sub_keys,
                 required: scan_required,
                 niches: c.niches,
-                into_sources: captured_sources.or(inherited_sources),
                 metadata: c.metadata,
             });
         }
@@ -360,14 +312,10 @@ fn collect_positions(ty: &syn::Type, prefix: &mut Vec<usize>, out: &mut Vec<Posi
 }
 
 /// Same as `immediate_subtype_positions` but for the impl-Trait
-/// exceptions (`impl Fn(args)`, `impl Into<T> + Send + 'static`)
-/// returns the substitutable inner positions.
+/// exception (`impl Fn(args)`) returns the substitutable inner positions.
 fn positions_for_traversal(ty: &syn::Type) -> Vec<syn::Type> {
     if let Some(args) = crate::api::core::registry::extract_fn_trait_args(ty) {
         return args;
-    }
-    if let Some(t) = crate::api::core::registry::extract_into_trait_arg(ty) {
-        return vec![t];
     }
     immediate_subtype_positions(ty)
 }
@@ -469,12 +417,6 @@ fn rebuild_type_with_positions(ty: &syn::Type, new_subs: &[syn::Type]) -> syn::T
         let args = new_subs;
         let tokens = quote::quote!(impl Fn(#(#args),*) + Send + Sync + 'static);
         return syn::parse2(tokens).expect("rebuild impl Fn must parse");
-    }
-    if crate::api::core::registry::extract_into_trait_arg(ty).is_some() {
-        // Reconstruct `impl Into<new_subs[0]> + Send + 'static`.
-        let t = &new_subs[0];
-        let tokens = quote::quote!(impl Into<#t> + Send + 'static);
-        return syn::parse2(tokens).expect("rebuild impl Into must parse");
     }
     match ty {
         syn::Type::Path(p) => {
@@ -824,22 +766,6 @@ mod tests {
         assert!(enumerate_wildcard_subs(&t, 1).is_empty());
     }
 
-    #[test]
-    fn impl_into_decomposition_rebuilds_pattern() {
-        let t = ty("impl Into<KeyExpr<'static>> + Send + 'static");
-        let v = enumerate_wildcard_subs(&t, 1);
-        let s = variant_strs(&v);
-        assert_eq!(s.len(), 1);
-        // Pattern keeps the bound triple, with the wildcard at the
-        // Into target slot. tokens-to-string roundtrips with spaces.
-        assert!(
-            s[0].0.contains("impl Into < _ >") && s[0].0.contains("+ Send + 'static"),
-            "expected `impl Into<_> + Send + 'static`, got `{}`",
-            s[0].0,
-        );
-        assert_eq!(s[0].1, vec!["KeyExpr < 'static >"]);
-    }
-
     /// Codifies the canonical-shape detection used by the rank-N
     /// `dispatch_fn_input` fallback in [`try_resolve_entry`]. For
     /// `impl Fn(Option<Sample>)` at rank 1, `enumerate_wildcard_subs`
@@ -876,30 +802,6 @@ mod tests {
             nested_count, 1,
             "exactly one nested `impl Fn(Option<_>)` pattern is expected"
         );
-    }
-
-    #[test]
-    fn impl_into_recognized_only_with_send_static() {
-        use crate::api::core::registry::extract_into_trait_arg;
-        // Accepted: bare `Into<T> + Send + 'static`.
-        assert!(
-            extract_into_trait_arg(&ty("impl Into<KeyExpr<'static>> + Send + 'static")).is_some()
-        );
-        // Order doesn't matter (parser preserves bound order, but extractor walks all).
-        assert!(
-            extract_into_trait_arg(&ty("impl Send + Into<KeyExpr<'static>> + 'static")).is_some()
-        );
-
-        // Rejected: missing Send.
-        assert!(extract_into_trait_arg(&ty("impl Into<KeyExpr<'static>> + 'static")).is_none());
-        // Rejected: missing 'static.
-        assert!(extract_into_trait_arg(&ty("impl Into<KeyExpr<'static>> + Send")).is_none());
-        // Rejected: missing Into entirely.
-        assert!(extract_into_trait_arg(&ty("impl Send + 'static")).is_none());
-        // Rejected: extra unrelated trait.
-        assert!(extract_into_trait_arg(&ty("impl Into<u64> + Send + Sync + 'static")).is_none());
-        // Rejected: not impl-Trait at all.
-        assert!(extract_into_trait_arg(&ty("KeyExpr<'static>")).is_none());
     }
 
     /// Regression: when a required type is itself unresolved AND has fields
@@ -992,7 +894,6 @@ mod tests {
                 subs: vec![],
                 required: false,
                 niches: crate::api::core::niches::Niches::empty(),
-                into_sources: None,
                 metadata: (),
             }),
         );

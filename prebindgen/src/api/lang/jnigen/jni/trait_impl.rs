@@ -397,6 +397,12 @@ impl Prebindgen for JniGen {
     /// typed-handle / `JNIWrappers` signature.
     type Metadata = KotlinMeta;
 
+    /// Hand the registry this back-end's constructor-expansion declarations so
+    /// `write_rust` can resolve `.expand`s into fold plans before resolution.
+    fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
+        Some(&self.expansions)
+    }
+
     /// Union of every `.package_fun(...)` list across all
     /// [`Self::package`] contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the

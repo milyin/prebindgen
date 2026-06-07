@@ -305,7 +305,6 @@ mod tests {
                 subs: vec![],
                 required: true,
                 niches: crate::api::core::niches::Niches::empty(),
-                into_sources: None,
                 metadata: (),
             }),
         );
@@ -322,7 +321,6 @@ mod tests {
                 subs: vec![],
                 required: true,
                 niches: crate::api::core::niches::Niches::empty(),
-                into_sources: None,
                 metadata: (),
             }),
         );

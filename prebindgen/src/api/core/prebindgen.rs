@@ -100,64 +100,6 @@ pub struct ConverterImpl<M = ()> {
     pub metadata: M,
 }
 
-/// Whether a single `impl Into<target>` source arm **borrows** or **takes
-/// ownership of** the foreign-side value when the source maps to an
-/// opaque-handle Rust type (a type whose wire form is a raw owned pointer /
-/// handle the foreign side holds). The mode is a no-op for non-opaque
-/// sources, which own no foreign-side handle slot.
-///
-/// Used by [`IntoSource`] to drive
-/// [`Prebindgen::dispatch_into_input`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IntoSourceMode {
-    /// Borrow: opaque sources are decoded by cloning out of the handle, so
-    /// the foreign side's handle stays valid across the call (requires
-    /// `T: Clone`).
-    Borrow,
-    /// Consume: opaque sources are decoded by taking ownership of the
-    /// handle, so the foreign side's handle is invalidated by the call. No
-    /// `T: Clone` bound.
-    Consume,
-}
-
-/// One source arm in the dispatcher for an
-/// `impl Into<target> + Send + 'static` parameter — the Rust source
-/// type plus the borrow/consume mode that determines how the foreign-side
-/// handle is treated when the source is an opaque-handle type.
-///
-/// Order in [`Prebindgen::into_sources`]'s returned vector
-/// determines the runtime dispatch order in the emitted converter.
-#[derive(Clone)]
-pub struct IntoSource {
-    /// Rust source type the arm decodes from before
-    /// `TryInto::<target>::try_into` runs.
-    pub source_type: syn::Type,
-    /// Borrow vs. Consume — relevant only when `source_type` is an
-    /// opaque-handle type.
-    pub mode: IntoSourceMode,
-}
-
-impl IntoSource {
-    /// Borrow-mode arm — opaque sources keep the foreign-side handle valid;
-    /// non-opaque sources are unaffected.
-    pub fn borrow(ty: syn::Type) -> Self {
-        Self {
-            source_type: ty,
-            mode: IntoSourceMode::Borrow,
-        }
-    }
-
-    /// Consume-mode arm — opaque sources take ownership of the foreign-side
-    /// handle, invalidating the caller's handle. Non-opaque sources are
-    /// unaffected.
-    pub fn consume(ty: syn::Type) -> Self {
-        Self {
-            source_type: ty,
-            mode: IntoSourceMode::Consume,
-        }
-    }
-}
-
 /// The single extension point of the pipeline: implement this trait once per
 /// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
 /// the language-agnostic [`Registry`] how that language represents Rust types
@@ -197,6 +139,17 @@ pub trait Prebindgen {
     /// fn references.
     fn prerequisites(&self, _registry: &Registry<Self::Metadata>) -> Vec<syn::Item> {
         Vec::new()
+    }
+
+    /// Constructor-expansion declarations for this back-end, or `None` if it
+    /// doesn't support expansion. Consulted by `write_rust` after scanning and
+    /// before resolution: each `.expand` is resolved into a
+    /// [`crate::api::core::expand::FoldPlan`] on the registry and its leaf
+    /// types are registered as required inputs.
+    ///
+    /// Default: `None`.
+    fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
+        None
     }
 
     // ── Declaration queries ────────────────────────────────────────
@@ -308,41 +261,6 @@ pub trait Prebindgen {
         t3: &syn::Type,
         registry: &Registry<Self::Metadata>,
     ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    /// Source types accepted at `impl Into<target> + Send + 'static`
-    /// parameters. The caller is fully responsible for the list — if
-    /// the identity arm `target → target` is wanted, spell it out
-    /// with [`IntoSource::borrow`] / [`IntoSource::consume`]. The
-    /// resolver does **not** auto-prepend an identity arm.
-    ///
-    /// Default: no sources. Wrappers override (match on `target`) to
-    /// declare project-specific source types, e.g. `String → KeyExpr`
-    /// via `TryFrom<String>`. The returned vector's order determines
-    /// the runtime dispatch order in the emitted converter.
-    fn into_sources(&self, target: &syn::Type) -> Vec<IntoSource> {
-        let _ = target;
-        Vec::new()
-    }
-
-    /// Build the dispatcher converter for an
-    /// `impl Into<target> + Send + 'static` parameter, given the
-    /// source list returned by [`Self::into_sources`]. The resolver
-    /// calls this only after [`Self::on_input_type_rank_1`] has
-    /// returned `None` for the Into pattern, so wrappers that need
-    /// full custom dispatch can intercept earlier and skip this path.
-    ///
-    /// Default: `None`. Backends that support Into-source dispatch
-    /// (e.g. a future JNI / cbindgen adapter) override this to delegate
-    /// to their own emitter.
-    fn dispatch_into_input(
-        &self,
-        target: &syn::Type,
-        sources: &[IntoSource],
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>> {
-        let _ = (target, sources, registry);
-        None
-    }
 
     /// Build the wrapper converter for an
     /// `impl Fn(args...) + Send + Sync + 'static` parameter, given the
