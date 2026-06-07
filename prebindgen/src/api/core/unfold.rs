@@ -170,8 +170,7 @@ pub enum UnfoldShape {
     /// all [leaves](`UnfoldPlan::leaves`) and invoking the builder once.
     Decompose,
     /// `Option<T>` / `Option<&T>` return: `None` ⇒ a null result (builder
-    /// skipped); `Some` ⇒ decompose the inner. Reserved for M2.
-    #[allow(dead_code)]
+    /// skipped); `Some` ⇒ decompose the inner.
     Optional(Box<UnfoldShape>),
     /// `Vec<T>` return: map the builder over each element ⇒ `List<R>`.
     /// Reserved for M4.
@@ -331,28 +330,33 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
             syn::ReturnType::Type(_, t) => (**t).clone(),
         };
 
-        // Peel `Option<…>` / `Vec<…>` (reserved) then a leading `&` (borrow).
-        // M1 supports only `T` / `&T`.
-        if option_inner_type(&ret_ty).is_some() {
-            return Err(UnfoldError::Unsupported {
-                func: ed.func.clone(),
-                reason: "Option<…> returns (M2)",
-            });
-        }
+        // Peel an outer `Option<…>` (M2 → `UnfoldShape::Optional`); `Vec<…>` is
+        // still reserved (M4). Then peel a leading `&` (borrow) off the core
+        // type. `Vec` is checked on the raw return so `Vec<…>` is rejected even
+        // when not wrapped in `Option`.
         if vec_inner_type(&ret_ty).is_some() {
             return Err(UnfoldError::Unsupported {
                 func: ed.func.clone(),
                 reason: "Vec<…> returns (M4)",
             });
         }
-        let (by_ref, source) = match &ret_ty {
+        let (optional, core_ty) = match option_inner_type(&ret_ty) {
+            Some(inner) => (true, inner),
+            None => (false, ret_ty.clone()),
+        };
+        let (by_ref, source) = match &core_ty {
             syn::Type::Reference(r) => (true, (*r.elem).clone()),
             other => (false, other.clone()),
         };
         let source_key = TypeKey::from_type(&source);
+        let shape = if optional {
+            UnfoldShape::Optional(Box::new(UnfoldShape::Decompose))
+        } else {
+            UnfoldShape::Decompose
+        };
 
         let records = resolve_combined(acc, &source_key, ed)?;
-        let plan = build_plan(registry, ed, by_ref, &source, &records)?;
+        let plan = build_plan(registry, ed, by_ref, &source, shape, &records)?;
 
         for leaf in &plan.leaves {
             registry.require_output(&leaf.out_ty, &loc);
@@ -403,12 +407,16 @@ fn resolve_combined(
     }
 }
 
-/// Build the [`UnfoldPlan`] for a chosen combined accessor (M1: flat).
+/// Build the [`UnfoldPlan`] for a chosen combined accessor. `shape` is the outer
+/// shape over the core decomposition (`Decompose` for `T`/`&T`,
+/// `Optional(Decompose)` for `Option<T>`/`Option<&T>`); leaf flattening is the
+/// same regardless of shape — the leaves describe the *inner* `source`.
 fn build_plan<M>(
     registry: &Registry<M>,
     ed: &ExpandOutputDecl,
     by_ref: bool,
     source: &syn::Type,
+    shape: UnfoldShape,
     records: &[AccRecord],
 ) -> Result<UnfoldPlan, UnfoldError> {
     let source_key = TypeKey::from_type(source);
@@ -456,7 +464,7 @@ fn build_plan<M>(
     Ok(UnfoldPlan {
         source: source.clone(),
         by_ref,
-        shape: UnfoldShape::Decompose,
+        shape,
         leaves,
     })
 }
@@ -559,6 +567,41 @@ mod tests {
             })
             .collect::<Vec<_>>();
         Registry::from_items(items).expect("index")
+    }
+
+    #[test]
+    fn combined_accessor_optional_primitive() {
+        // M2: `z_sample_timestamp(&ZSample) -> Option<&ZTimestamp>` decomposed
+        // into a single primitive leaf `z_timestamp_ntp64(&ZTimestamp) -> i64`
+        // (no identity). Outer shape is `Optional(Decompose)`.
+        let mut reg = reg_with(&[
+            "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+            "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+        ]);
+        let mut acc = Accessors::default();
+        acc.add_combined(syn::parse_quote!(ZTimestamp));
+        acc.add_combined_record(ident("z_timestamp_ntp64"));
+        acc.add_expand_output(ident("z_sample_timestamp"));
+
+        apply(&mut reg, &acc).expect("apply");
+
+        let plan = reg
+            .unfold_plans
+            .get(&ident("z_sample_timestamp"))
+            .expect("plan");
+        assert!(plan.by_ref, "inner was &ZTimestamp");
+        assert_eq!(plan.source.to_token_stream().to_string(), "ZTimestamp");
+        assert!(
+            matches!(&plan.shape, UnfoldShape::Optional(inner) if matches!(**inner, UnfoldShape::Decompose)),
+            "outer shape is Optional(Decompose)"
+        );
+        assert_eq!(plan.leaves.len(), 1);
+        assert!(!plan.leaves[0].identity);
+        assert_eq!(plan.leaves[0].path[0].to_string(), "z_timestamp_ntp64");
+        assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "i64");
+        assert!(reg
+            .required_outputs_scan
+            .contains(&TypeKey::from_type(&syn::parse_quote!(i64))));
     }
 
     #[test]

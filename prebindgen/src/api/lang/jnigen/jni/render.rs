@@ -939,8 +939,15 @@ pub(crate) fn render_wrapper_fn(
             leaf_kts.push(kt);
         }
         builder_param = Some(format!("build: ({}) -> R", leaf_kts.join(", ")));
-        // M1: Decompose → `R`. (Optional → `R?`, Iterable → `List<R>` are M2/M4.)
-        ("R".to_string(), None)
+        // The wrapper return follows the unfold shape: Decompose → `R`,
+        // Optional → `R?` (null source ⇒ null result), Iterable → `List<R>`.
+        use crate::api::core::unfold::UnfoldShape;
+        let kt = match &plan.shape {
+            UnfoldShape::Decompose => "R".to_string(),
+            UnfoldShape::Optional(_) => "R?".to_string(),
+            UnfoldShape::Iterable(_) => "List<R>".to_string(),
+        };
+        (kt, None)
     } else {
         classify_return(ext, &f.sig.output, registry, imports)?
     };
@@ -1020,10 +1027,10 @@ pub(crate) fn render_wrapper_fn(
         } else if is_enum_return {
             call = format!("{kt_return}.fromInt({call})");
         } else if unfold.is_some() {
-            // The extern returns the builder's erased `Any?`; cast to `R`. The
-            // builder always produces `R` (Decompose), so the unchecked cast is
-            // sound — suppressed on the function below.
-            call = format!("({call} as R)");
+            // The extern returns the builder's erased `Any?`; cast to the shape
+            // type (`R` / `R?` / `List<R>`). The builder always produces `R`, so
+            // the unchecked cast is sound — suppressed on the function below.
+            call = format!("({call} as {kt_return})");
         }
         call
     };

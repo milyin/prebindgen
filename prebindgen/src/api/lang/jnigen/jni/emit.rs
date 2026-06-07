@@ -328,10 +328,14 @@ pub(crate) fn emit_jni_function_wrapper(
 /// borrowed-opaque output converter. The builder args are assembled in declared
 /// leaf order regardless of encode order.
 ///
-/// M1 implements [`UnfoldShape::Decompose`] with object-wire leaves only;
-/// primitive-wire accessor leaves (boxing) are M2.
+/// Shape handling: [`UnfoldShape::Decompose`] decomposes the returned value
+/// directly; [`UnfoldShape::Optional`] matches `Some(__inner)` ⇒ decompose the
+/// inner, `None` ⇒ null result (builder skipped). Leaf wires may be object
+/// (JString/JByteArray/JObject — cast via `.into()`) or primitive (boxed to
+/// `java.lang.*` via [`box_class_for_wire`]).
 ///
 /// [`UnfoldShape::Decompose`]: crate::api::core::unfold::UnfoldShape::Decompose
+/// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -341,125 +345,13 @@ pub(crate) fn emit_unfold_delivery(
 ) -> TokenStream {
     use crate::api::core::unfold::UnfoldShape;
 
-    match &plan.shape {
-        UnfoldShape::Decompose => {}
-        _ => panic!(
-            "emit_unfold_delivery: only UnfoldShape::Decompose is implemented (M1); \
-             Option/Vec returns are M2/M4"
-        ),
-    }
-
     let source_module = &ext.source_module;
     let by_ref = plan.by_ref;
     let n = plan.leaves.len();
 
-    let mut stmts: TokenStream = quote! { let __out = #call_expr; };
-
-    // Builder-arg object locals, one per leaf in declared order.
+    // Builder-arg object locals, one per leaf in declared order, plus the
+    // erased all-`Object` `invoke` descriptor — both value-independent.
     let obj_idents: Vec<syn::Ident> = (0..n).map(|i| format_ident!("__obj{}", i)).collect();
-
-    // Encode reference (non-identity) leaves first, identity last.
-    let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
-    order.extend((0..n).filter(|&i| plan.leaves[i].identity));
-
-    for idx in order {
-        let leaf = &plan.leaves[idx];
-        let obj_ident = &obj_idents[idx];
-        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
-            panic!(
-                "emit_unfold_delivery: leaf `{}` has no registered output converter",
-                TypeKey::from_type(&leaf.out_ty)
-            )
-        });
-
-        if leaf.identity {
-            // Handle leaf: clone (`&T` return) or move (owned `T` return) the
-            // value into a fresh Box-handle, then wrap into its typed Kotlin
-            // handle class object via the `(J)V` ctor.
-            let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
-                panic!(
-                    "emit_unfold_delivery: identity leaf `{}` is not an opaque-handle \
-                     projection — `.combined_accessor_record_id()` requires a ptr_class type",
-                    TypeKey::from_type(&plan.source)
-                )
-            });
-            let fqn = handle_field_fqn(ext, proj).replace('.', "/");
-            let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
-            let handle_ident = format_ident!("__h{}", idx);
-            if by_ref {
-                let conv = out_entry.function.sig.ident.clone();
-                stmts.extend(quote! {
-                    let #handle_ident: jni::sys::jlong = match #conv(&mut env, __out) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, &__e);
-                            return #on_err;
-                        }
-                    };
-                });
-            } else {
-                stmts.extend(quote! {
-                    let #handle_ident: jni::sys::jlong =
-                        std::boxed::Box::into_raw(std::boxed::Box::new(__out)) as jni::sys::jlong;
-                });
-            }
-            stmts.extend(quote! {
-                let #obj_ident: jni::objects::JObject = match env.new_object(
-                    #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
-                ) {
-                    ::core::result::Result::Ok(__o) => __o,
-                    ::core::result::Result::Err(__e) => {
-                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                            format!("wrap typed handle {}: {}", #fqn_lit, __e));
-                        signal_error(&mut env, &__error_sink, &__e2);
-                        return #on_err;
-                    }
-                };
-            });
-            continue;
-        }
-
-        // Accessor leaf: call the accessor on the (borrowed) value, then encode
-        // with its output converter (the single JVM copy), then cast to JObject.
-        let conv = out_entry.function.sig.ident.clone();
-        let wire = out_entry.destination.clone();
-        let accessor = leaf.path.last().unwrap_or_else(|| {
-            panic!("emit_unfold_delivery: non-identity leaf has empty accessor path")
-        });
-        let acc_value: TokenStream = if by_ref {
-            quote!(#source_module::#accessor(__out))
-        } else {
-            quote!(#source_module::#accessor(&__out))
-        };
-        let enc_ident = format_ident!("__enc{}", idx);
-        stmts.extend(quote! {
-            let #enc_ident = match #conv(&mut env, #acc_value) {
-                ::core::result::Result::Ok(__w) => __w,
-                ::core::result::Result::Err(__e) => {
-                    signal_error(&mut env, &__error_sink, &__e);
-                    return #on_err;
-                }
-            };
-        });
-        // Cast the wire to a JObject for the erased `invoke`. Object-shaped
-        // wires (JString/JByteArray/JObject) convert via `.into()`. Primitive
-        // wires need boxing (java.lang.Integer …) — deferred to M2.
-        if is_jobject_wire(&wire) {
-            stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident;));
-        } else if matches!(jni_field_access(&wire), Some((_, _, true))) {
-            stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident.into();));
-        } else {
-            panic!(
-                "emit_unfold_delivery: accessor leaf `{}` has primitive wire `{}` — \
-                 primitive-leaf boxing is M2; use an object-wired accessor for now",
-                TypeKey::from_type(&leaf.out_ty),
-                wire.to_token_stream()
-            );
-        }
-    }
-
-    // Invoke the builder lambda. The Kotlin function-type `invoke` is erased to
-    // all-`Object` params and an `Object` return.
     let descriptor = {
         let mut d = String::from("(");
         for _ in 0..n {
@@ -469,30 +361,182 @@ pub(crate) fn emit_unfold_delivery(
         d
     };
     let descr_lit = syn::LitStr::new(&descriptor, Span::call_site());
-    let jvalues = obj_idents
-        .iter()
-        .map(|id| quote!(jni::objects::JValue::Object(&#id)));
-    stmts.extend(quote! {
-        match env.call_method(&__builder, "invoke", #descr_lit, &[#(#jvalues),*]) {
-            ::core::result::Result::Ok(__r) => match __r.l() {
-                ::core::result::Result::Ok(__o) => __o,
+
+    // Decompose a single value expression (`__out` or a `Some`-bound `__inner`)
+    // into its leaf JVM objects, then invoke the builder. Reference
+    // (non-identity) leaves are encoded first — ending their borrow into the
+    // value — and the identity leaf last (move owned / clone `&T`).
+    let emit_decompose = |value: &TokenStream| -> TokenStream {
+        let mut stmts = TokenStream::new();
+        let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
+        order.extend((0..n).filter(|&i| plan.leaves[i].identity));
+
+        for idx in order {
+            let leaf = &plan.leaves[idx];
+            let obj_ident = &obj_idents[idx];
+            let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+                panic!(
+                    "emit_unfold_delivery: leaf `{}` has no registered output converter",
+                    TypeKey::from_type(&leaf.out_ty)
+                )
+            });
+
+            if leaf.identity {
+                // Handle leaf: clone (`&T`) or move (owned `T`) the value into a
+                // fresh Box-handle, then wrap into its typed Kotlin handle class.
+                let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
+                    panic!(
+                        "emit_unfold_delivery: identity leaf `{}` is not an opaque-handle \
+                         projection — `.combined_accessor_record_id()` requires a ptr_class type",
+                        TypeKey::from_type(&plan.source)
+                    )
+                });
+                let fqn = handle_field_fqn(ext, proj).replace('.', "/");
+                let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
+                let handle_ident = format_ident!("__h{}", idx);
+                if by_ref {
+                    let conv = out_entry.function.sig.ident.clone();
+                    stmts.extend(quote! {
+                        let #handle_ident: jni::sys::jlong = match #conv(&mut env, #value) {
+                            ::core::result::Result::Ok(__w) => __w,
+                            ::core::result::Result::Err(__e) => {
+                                signal_error(&mut env, &__error_sink, &__e);
+                                return #on_err;
+                            }
+                        };
+                    });
+                } else {
+                    stmts.extend(quote! {
+                        let #handle_ident: jni::sys::jlong =
+                            std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
+                    });
+                }
+                stmts.extend(quote! {
+                    let #obj_ident: jni::objects::JObject = match env.new_object(
+                        #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
+                    ) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                                format!("wrap typed handle {}: {}", #fqn_lit, __e));
+                            signal_error(&mut env, &__error_sink, &__e2);
+                            return #on_err;
+                        }
+                    };
+                });
+                continue;
+            }
+
+            // Accessor leaf: call the accessor on the (borrowed) value, then
+            // encode with its output converter (the single JVM copy), then cast
+            // to JObject for the erased `invoke`.
+            let conv = out_entry.function.sig.ident.clone();
+            let wire = out_entry.destination.clone();
+            let accessor = leaf.path.last().unwrap_or_else(|| {
+                panic!("emit_unfold_delivery: non-identity leaf has empty accessor path")
+            });
+            let acc_value: TokenStream = if by_ref {
+                quote!(#source_module::#accessor(#value))
+            } else {
+                quote!(#source_module::#accessor(&#value))
+            };
+            let enc_ident = format_ident!("__enc{}", idx);
+            stmts.extend(quote! {
+                let #enc_ident = match #conv(&mut env, #acc_value) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_error(&mut env, &__error_sink, &__e);
+                        return #on_err;
+                    }
+                };
+            });
+            // Object-shaped wires (JString/JByteArray/JObject) cast via `.into()`;
+            // primitive wires box to their `java.lang.*` wrapper.
+            if is_jobject_wire(&wire) {
+                stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident;));
+            } else if matches!(jni_field_access(&wire), Some((_, _, true))) {
+                stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident.into();));
+            } else if let Some((cls, ctor)) = box_class_for_wire(&wire) {
+                let cls_lit = syn::LitStr::new(cls, Span::call_site());
+                let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
+                stmts.extend(quote! {
+                    let #obj_ident: jni::objects::JObject = match env.new_object(
+                        #cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc_ident)]
+                    ) {
+                        ::core::result::Result::Ok(__o) => __o,
+                        ::core::result::Result::Err(__e) => {
+                            let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                                format!("box primitive {}: {}", #cls_lit, __e));
+                            signal_error(&mut env, &__error_sink, &__e2);
+                            return #on_err;
+                        }
+                    };
+                });
+            } else {
+                panic!(
+                    "emit_unfold_delivery: accessor leaf `{}` has unsupported wire `{}`",
+                    TypeKey::from_type(&leaf.out_ty),
+                    wire.to_token_stream()
+                );
+            }
+        }
+
+        // Invoke the builder lambda (erased all-`Object` params + `Object` return).
+        let jvalues = obj_idents
+            .iter()
+            .map(|id| quote!(jni::objects::JValue::Object(&#id)));
+        stmts.extend(quote! {
+            match env.call_method(&__builder, "invoke", #descr_lit, &[#(#jvalues),*]) {
+                ::core::result::Result::Ok(__r) => match __r.l() {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
+                        signal_error(&mut env, &__error_sink, &__e2);
+                        #on_err
+                    }
+                },
                 ::core::result::Result::Err(__e) => {
+                    // Clears the pending JVM exception so the sink call is safe.
+                    let _ = env.exception_describe();
                     let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
                     signal_error(&mut env, &__error_sink, &__e2);
                     #on_err
                 }
-            },
-            ::core::result::Result::Err(__e) => {
-                // Clears the pending JVM exception so the sink call is safe.
-                let _ = env.exception_describe();
-                let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                signal_error(&mut env, &__error_sink, &__e2);
-                #on_err
+            }
+        });
+        stmts
+    };
+
+    match &plan.shape {
+        UnfoldShape::Decompose => {
+            let body = emit_decompose(&quote!(__out));
+            quote! {
+                let __out = #call_expr;
+                #body
             }
         }
-    });
-
-    stmts
+        UnfoldShape::Optional(inner) => {
+            match **inner {
+                UnfoldShape::Decompose => {}
+                _ => panic!(
+                    "emit_unfold_delivery: only Optional(Decompose) is implemented (M2); \
+                     nested Optional/Iterable is M3/M4"
+                ),
+            }
+            // `None` ⇒ null result (builder skipped); `Some` ⇒ decompose inner.
+            let body = emit_decompose(&quote!(__inner));
+            quote! {
+                let __out = #call_expr;
+                match __out {
+                    ::core::option::Option::Some(__inner) => { #body }
+                    ::core::option::Option::None => #on_err,
+                }
+            }
+        }
+        UnfoldShape::Iterable(_) => panic!(
+            "emit_unfold_delivery: UnfoldShape::Iterable (Vec<T> returns) is M4"
+        ),
+    }
 }
 
 /// Emit the wire params, decode prelude, and call argument for one
