@@ -592,6 +592,12 @@ pub struct JniGen {
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
+
+    /// Output-expansion declarations (`.combined_accessor`,
+    /// `.combined_accessor_record*`, `.expand_output`, …). Resolved into
+    /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
+    /// `write_rust` and consumed at the return-emission site.
+    pub(crate) accessors: crate::api::core::unfold::Accessors,
 }
 
 

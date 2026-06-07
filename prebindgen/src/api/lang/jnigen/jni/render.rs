@@ -655,24 +655,35 @@ pub(crate) fn render_extern_decl(
         let suffix = if optional { "?" } else { "" };
         params.push((name, format!("{short}{suffix}")));
     }
+    // Output (data) expansion: the extern takes the builder lambda (`build:
+    // Any` — a JObject wire) just before the error sink, and returns the
+    // builder's erased result (`Any?`) rather than the return type's own wire.
+    let has_unfold = registry.unfold_plans.contains_key(&f.sig.ident);
+    if has_unfold {
+        params.push(("build".to_string(), "Any".to_string()));
+    }
     // Trailing error-sink callback — every extern accepts one (see
     // `signal_error` / the wrapper's default sink). `Any` at the wire level
     // (JObject); the wrapper passes an `ErrorSink` instance.
     params.push(("errorSink".to_string(), "Any".to_string()));
 
-    let (kt_return, projection) = classify_return(ext, &f.sig.output, registry, imports)?;
-    // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
-    // The public wrapper converts back using `EnumType.fromInt(Int)`.
-    let is_enum_return = return_is_kotlin_enum(ext, &f.sig.output, registry);
-    // JNI extern's wire return: handle projections wire as `Long` (the boxed
-    // jlong gets wrapped); value-class projections wire as their inner
-    // converter's Kotlin type folded through the projection's strategy (the
-    // value class is erased to that inner). Enums wire as `Int`; everything
-    // else is the declared return.
-    let wire_return = match &projection {
-        Some(p) => projection_wire_return(p),
-        None if is_enum_return => "Int".to_string(),
-        None => kt_return,
+    let wire_return = if has_unfold {
+        "Any?".to_string()
+    } else {
+        let (kt_return, projection) = classify_return(ext, &f.sig.output, registry, imports)?;
+        // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
+        // The public wrapper converts back using `EnumType.fromInt(Int)`.
+        let is_enum_return = return_is_kotlin_enum(ext, &f.sig.output, registry);
+        // JNI extern's wire return: handle projections wire as `Long` (the boxed
+        // jlong gets wrapped); value-class projections wire as their inner
+        // converter's Kotlin type folded through the projection's strategy (the
+        // value class is erased to that inner). Enums wire as `Int`; everything
+        // else is the declared return.
+        match &projection {
+            Some(p) => projection_wire_return(p),
+            None if is_enum_return => "Int".to_string(),
+            None => kt_return,
+        }
     };
 
     let formals = params
@@ -905,14 +916,37 @@ pub(crate) fn render_wrapper_fn(
         });
     }
 
+    // Output (data) expansion: the return value is decomposed by accessors and
+    // delivered to a foreign builder lambda `build: (L0, …, Ln) -> R`. The
+    // wrapper becomes generic in `R`, returns `R`, and casts the extern's
+    // erased `Any?` result. The leaf Kotlin types `L0…Ln` resolve through the
+    // normal return classification on each leaf's `out_ty` (which also registers
+    // their imports).
+    let unfold = registry.unfold_plans.get(&f.sig.ident);
+    let mut builder_param: Option<String> = None;
+    let generic: &str = if unfold.is_some() { "<R> " } else { "" };
+
     // Return type: peel ZResult<...>; detect projection return (opaque
     // handle or value class). `projection` carries the folded fold
     // strategy + kind the wrap emission and JNINative wire-return code
     // branch on.
-    let (kt_return, projection) = classify_return(ext, &f.sig.output, registry, imports)?;
+    let (kt_return, projection) = if let Some(plan) = unfold {
+        let mut leaf_kts: Vec<String> = Vec::with_capacity(plan.leaves.len());
+        for leaf in &plan.leaves {
+            let out_ty = &leaf.out_ty;
+            let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+            let (kt, _) = classify_return(ext, &rt, registry, imports)?;
+            leaf_kts.push(kt);
+        }
+        builder_param = Some(format!("build: ({}) -> R", leaf_kts.join(", ")));
+        // M1: Decompose → `R`. (Optional → `R?`, Iterable → `List<R>` are M2/M4.)
+        ("R".to_string(), None)
+    } else {
+        classify_return(ext, &f.sig.output, registry, imports)?
+    };
     // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
     // Detect this so `build_call` can wrap the result with `fromInt`.
-    let is_enum_return = return_is_kotlin_enum(ext, &f.sig.output, registry);
+    let is_enum_return = !unfold.is_some() && return_is_kotlin_enum(ext, &f.sig.output, registry);
 
     // Build the JNINative call. Every param maps to exactly one call arg
     // (or several, for a flattened data_class).
@@ -959,6 +993,10 @@ pub(crate) fn render_wrapper_fn(
             };
             args.push(arg);
         }
+        // Output expansion: the builder lambda crosses just before the sink.
+        if unfold.is_some() {
+            args.push("build".to_string());
+        }
         // Every extern takes a trailing error-sink callback; the wrapper
         // installs `__sink` (a capture-then-rethrow default) just before the
         // call. On `Err`, the Rust side invokes `__sink.onError(message)`
@@ -981,6 +1019,11 @@ pub(crate) fn render_wrapper_fn(
             call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
         } else if is_enum_return {
             call = format!("{kt_return}.fromInt({call})");
+        } else if unfold.is_some() {
+            // The extern returns the builder's erased `Any?`; cast to `R`. The
+            // builder always produces `R` (Decompose), so the unchecked cast is
+            // sound — suppressed on the function below.
+            call = format!("({call} as R)");
         }
         call
     };
@@ -1120,11 +1163,17 @@ pub(crate) fn render_wrapper_fn(
     }
 
     let mut out = String::new();
-    let param_list: Vec<String> = params
+    let mut param_list: Vec<String> = params
         .iter()
         .map(|p| format!("{}: {}", p.kt_name, p.kt_type))
         .collect();
-    let _ = write!(out, "public fun {kt_name}({})", param_list.join(", "));
+    // Output expansion: append the builder lambda param and suppress the
+    // unchecked `Any? -> R` cast in `build_call`.
+    if let Some(bp) = &builder_param {
+        param_list.push(bp.clone());
+        let _ = writeln!(out, "@Suppress(\"UNCHECKED_CAST\")");
+    }
+    let _ = write!(out, "public fun {generic}{kt_name}({})", param_list.join(", "));
     if !kt_return.is_empty() {
         let _ = write!(out, ": {kt_return}");
     }

@@ -33,18 +33,29 @@ pub(crate) fn emit_jni_function_wrapper(
         syn::ReturnType::Default => syn::parse_quote!(()),
         syn::ReturnType::Type(_, ty) => (**ty).clone(),
     };
-    let output_entry = registry.output_entry(&return_ty).unwrap_or_else(|| {
-        panic!(
-            "JniGen::on_function: return type `{}` of `{}` has no registered output \
-             converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
-             (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
-              to bind a domain exception)",
-            TypeKey::from_type(&return_ty),
-            original_ident,
-        )
-    });
-    let wire_return_ty = output_entry.destination.clone();
-    let conv_out = output_entry.function.sig.ident.clone();
+    // Output (data) expansion: when `.expand_output()` was declared for this
+    // function, the return value is decomposed by accessors and delivered to a
+    // foreign builder lambda — so the wrapper's wire return is the builder's
+    // `JObject` result, not the return type's own converter wire.
+    let unfold_plan = registry.unfold_plans.get(original_ident);
+    let output_entry = if unfold_plan.is_some() {
+        None
+    } else {
+        Some(registry.output_entry(&return_ty).unwrap_or_else(|| {
+            panic!(
+                "JniGen::on_function: return type `{}` of `{}` has no registered output \
+                 converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
+                 (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
+                  to bind a domain exception)",
+                TypeKey::from_type(&return_ty),
+                original_ident,
+            )
+        }))
+    };
+    let wire_return_ty: syn::Type = match output_entry {
+        Some(e) => e.destination.clone(),
+        None => syn::parse_quote!(jni::objects::JObject),
+    };
     let wire_return_lt = annotate_jobject_with_lifetime(&wire_return_ty, "a");
     let wire_return = wire_return_lt.to_token_stream();
     let on_err: TokenStream = sentinel_for_wire(&wire_return_ty);
@@ -239,44 +250,53 @@ pub(crate) fn emit_jni_function_wrapper(
 
     let call_expr = quote!(#source_module::#original_ident(#(#call_args),*));
 
-    // Output phase. Every output converter now returns
-    // `Result<wire, <err_type>>` — the bare-wire shape is gone.
-    // Unwrap and dispatch to the converter's `throws_action`
-    // (framework `throw_JniBindingError` for plain wrappers, a domain
-    // throw fn for throws-marked wrappers).
-    //
-    // Pre_stages run in forward order BEFORE the wire-facing function:
-    // rust → pre_stages[0] → … → pre_stages[N-1] → function → wire. Each
-    // stage's `Err` arm routes to the per-call `signal_error` sink.
-    let mut output_phase: TokenStream = quote! { let __out = #call_expr; };
-    let mut prev_out: TokenStream = quote!(__out);
-    for (i, stage) in output_entry.pre_stages.iter().enumerate() {
-        let stage_fn = &stage.function.sig.ident;
-        let next_ident = format_ident!("__out_s{}", i);
-        output_phase.extend(quote! {
-            let #next_ident = match #stage_fn(&mut env, #prev_out) {
-                ::core::result::Result::Ok(__v) => __v,
+    // Output phase. Two shapes:
+    //   * Output expansion (`.expand_output`): decompose the return value and
+    //     deliver the leaves to the foreign builder (`__builder`).
+    //   * Normal: every output converter returns `Result<wire, <err_type>>`;
+    //     run pre_stages then the wire-facing converter, routing each `Err`
+    //     through the per-call `signal_error` sink.
+    let mut builder_param: Option<TokenStream> = None;
+    let output_phase: TokenStream = if let Some(plan) = unfold_plan {
+        builder_param = Some(quote!(__builder: jni::objects::JObject<'a>,));
+        emit_unfold_delivery(ext, registry, plan, &call_expr, &on_err)
+    } else {
+        let output_entry = output_entry.expect("normal path has an output entry");
+        let mut phase: TokenStream = quote! { let __out = #call_expr; };
+        let mut prev_out: TokenStream = quote!(__out);
+        // Pre_stages run in forward order BEFORE the wire-facing function:
+        // rust → pre_stages[0] → … → pre_stages[N-1] → function → wire.
+        for (i, stage) in output_entry.pre_stages.iter().enumerate() {
+            let stage_fn = &stage.function.sig.ident;
+            let next_ident = format_ident!("__out_s{}", i);
+            phase.extend(quote! {
+                let #next_ident = match #stage_fn(&mut env, #prev_out) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        signal_error(&mut env, &__error_sink, &__e);
+                        return #on_err;
+                    }
+                };
+            });
+            prev_out = quote!(#next_ident);
+        }
+        let conv_out = output_entry.function.sig.ident.clone();
+        phase.extend(quote! {
+            match #conv_out(&mut env, #prev_out) {
+                ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
                     signal_error(&mut env, &__error_sink, &__e);
-                    return #on_err;
+                    #on_err
                 }
-            };
-        });
-        prev_out = quote!(#next_ident);
-    }
-    output_phase.extend(quote! {
-        match #conv_out(&mut env, #prev_out) {
-            ::core::result::Result::Ok(__w) => __w,
-            ::core::result::Result::Err(__e) => {
-                signal_error(&mut env, &__error_sink, &__e);
-                #on_err
             }
-        }
-    });
+        });
+        phase
+    };
 
     // The trailing error-sink param: a Kotlin `ErrorSink` instance (JObject
     // wire). Declared last so the wire param order matches the Kotlin
-    // `external fun` (which appends `errorSink: Any`).
+    // `external fun` (which appends `errorSink: Any`). For output expansion the
+    // builder lambda's `JObject` is declared just before it.
     quote! {
         #[no_mangle]
         #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
@@ -284,12 +304,195 @@ pub(crate) fn emit_jni_function_wrapper(
             mut env: jni::JNIEnv<'a>,
             _class: jni::objects::JClass<'a>,
             #(#wire_params,)*
+            #builder_param
             __error_sink: jni::objects::JObject<'a>,
         ) -> #wire_return {
             #(#prelude)*
             #output_phase
         }
     }
+}
+
+/// Emit the output-expansion delivery body (output phase) for a function
+/// marked `.expand_output()`. The return value (`__out`) is decomposed by the
+/// plan's accessor leaves, each encoded into a JVM `Object`, and all delivered
+/// to the foreign builder lambda (`__builder`) in a single `invoke` call whose
+/// `JObject` result becomes the wrapper's return.
+///
+/// **Borrow ordering** (the user's zero-copy rationale): the reference
+/// (non-identity) accessor leaves are encoded **first** — each leaf's converter
+/// performs the single JVM copy (`&str -> jstring`), ending its borrow into
+/// `__out` — then the identity/handle leaf is emitted **last**: an owned `T`
+/// return is **moved** into the handle (`Box::into_raw(Box::new(__out))`, no
+/// clone) once the borrows are gone; a `&T` return is **cloned** via the
+/// borrowed-opaque output converter. The builder args are assembled in declared
+/// leaf order regardless of encode order.
+///
+/// M1 implements [`UnfoldShape::Decompose`] with object-wire leaves only;
+/// primitive-wire accessor leaves (boxing) are M2.
+///
+/// [`UnfoldShape::Decompose`]: crate::api::core::unfold::UnfoldShape::Decompose
+pub(crate) fn emit_unfold_delivery(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    plan: &crate::api::core::unfold::UnfoldPlan,
+    call_expr: &TokenStream,
+    on_err: &TokenStream,
+) -> TokenStream {
+    use crate::api::core::unfold::UnfoldShape;
+
+    match &plan.shape {
+        UnfoldShape::Decompose => {}
+        _ => panic!(
+            "emit_unfold_delivery: only UnfoldShape::Decompose is implemented (M1); \
+             Option/Vec returns are M2/M4"
+        ),
+    }
+
+    let source_module = &ext.source_module;
+    let by_ref = plan.by_ref;
+    let n = plan.leaves.len();
+
+    let mut stmts: TokenStream = quote! { let __out = #call_expr; };
+
+    // Builder-arg object locals, one per leaf in declared order.
+    let obj_idents: Vec<syn::Ident> = (0..n).map(|i| format_ident!("__obj{}", i)).collect();
+
+    // Encode reference (non-identity) leaves first, identity last.
+    let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
+    order.extend((0..n).filter(|&i| plan.leaves[i].identity));
+
+    for idx in order {
+        let leaf = &plan.leaves[idx];
+        let obj_ident = &obj_idents[idx];
+        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+            panic!(
+                "emit_unfold_delivery: leaf `{}` has no registered output converter",
+                TypeKey::from_type(&leaf.out_ty)
+            )
+        });
+
+        if leaf.identity {
+            // Handle leaf: clone (`&T` return) or move (owned `T` return) the
+            // value into a fresh Box-handle, then wrap into its typed Kotlin
+            // handle class object via the `(J)V` ctor.
+            let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
+                panic!(
+                    "emit_unfold_delivery: identity leaf `{}` is not an opaque-handle \
+                     projection — `.combined_accessor_record_id()` requires a ptr_class type",
+                    TypeKey::from_type(&plan.source)
+                )
+            });
+            let fqn = handle_field_fqn(ext, proj).replace('.', "/");
+            let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
+            let handle_ident = format_ident!("__h{}", idx);
+            if by_ref {
+                let conv = out_entry.function.sig.ident.clone();
+                stmts.extend(quote! {
+                    let #handle_ident: jni::sys::jlong = match #conv(&mut env, __out) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_error(&mut env, &__error_sink, &__e);
+                            return #on_err;
+                        }
+                    };
+                });
+            } else {
+                stmts.extend(quote! {
+                    let #handle_ident: jni::sys::jlong =
+                        std::boxed::Box::into_raw(std::boxed::Box::new(__out)) as jni::sys::jlong;
+                });
+            }
+            stmts.extend(quote! {
+                let #obj_ident: jni::objects::JObject = match env.new_object(
+                    #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
+                ) {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                            format!("wrap typed handle {}: {}", #fqn_lit, __e));
+                        signal_error(&mut env, &__error_sink, &__e2);
+                        return #on_err;
+                    }
+                };
+            });
+            continue;
+        }
+
+        // Accessor leaf: call the accessor on the (borrowed) value, then encode
+        // with its output converter (the single JVM copy), then cast to JObject.
+        let conv = out_entry.function.sig.ident.clone();
+        let wire = out_entry.destination.clone();
+        let accessor = leaf.path.last().unwrap_or_else(|| {
+            panic!("emit_unfold_delivery: non-identity leaf has empty accessor path")
+        });
+        let acc_value: TokenStream = if by_ref {
+            quote!(#source_module::#accessor(__out))
+        } else {
+            quote!(#source_module::#accessor(&__out))
+        };
+        let enc_ident = format_ident!("__enc{}", idx);
+        stmts.extend(quote! {
+            let #enc_ident = match #conv(&mut env, #acc_value) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_error(&mut env, &__error_sink, &__e);
+                    return #on_err;
+                }
+            };
+        });
+        // Cast the wire to a JObject for the erased `invoke`. Object-shaped
+        // wires (JString/JByteArray/JObject) convert via `.into()`. Primitive
+        // wires need boxing (java.lang.Integer …) — deferred to M2.
+        if is_jobject_wire(&wire) {
+            stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident;));
+        } else if matches!(jni_field_access(&wire), Some((_, _, true))) {
+            stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident.into();));
+        } else {
+            panic!(
+                "emit_unfold_delivery: accessor leaf `{}` has primitive wire `{}` — \
+                 primitive-leaf boxing is M2; use an object-wired accessor for now",
+                TypeKey::from_type(&leaf.out_ty),
+                wire.to_token_stream()
+            );
+        }
+    }
+
+    // Invoke the builder lambda. The Kotlin function-type `invoke` is erased to
+    // all-`Object` params and an `Object` return.
+    let descriptor = {
+        let mut d = String::from("(");
+        for _ in 0..n {
+            d.push_str("Ljava/lang/Object;");
+        }
+        d.push_str(")Ljava/lang/Object;");
+        d
+    };
+    let descr_lit = syn::LitStr::new(&descriptor, Span::call_site());
+    let jvalues = obj_idents
+        .iter()
+        .map(|id| quote!(jni::objects::JValue::Object(&#id)));
+    stmts.extend(quote! {
+        match env.call_method(&__builder, "invoke", #descr_lit, &[#(#jvalues),*]) {
+            ::core::result::Result::Ok(__r) => match __r.l() {
+                ::core::result::Result::Ok(__o) => __o,
+                ::core::result::Result::Err(__e) => {
+                    let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
+                    signal_error(&mut env, &__error_sink, &__e2);
+                    #on_err
+                }
+            },
+            ::core::result::Result::Err(__e) => {
+                // Clears the pending JVM exception so the sink call is safe.
+                let _ = env.exception_describe();
+                let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
+                signal_error(&mut env, &__error_sink, &__e2);
+                #on_err
+            }
+        }
+    });
+
+    stmts
 }
 
 /// Emit the wire params, decode prelude, and call argument for one

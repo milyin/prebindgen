@@ -57,6 +57,7 @@ impl JniGen {
             last_entry_ref: None,
             emit_handle_locks: true,
             expansions: crate::api::core::expand::Expansions::default(),
+            accessors: crate::api::core::unfold::Accessors::default(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. The error type `E` is
@@ -502,6 +503,68 @@ impl JniGen {
     pub fn expand_with(mut self, param: syn::Ident, ctor: syn::Ident) -> Self {
         let func = self.current_fn_ident();
         self.expansions.add_expand_with(func, param, ctor);
+        self
+    }
+
+    // ── Output (data) expansion ─────────────────────────────────────
+
+    /// Begin a **combined accessor** for `target`: a deterministic product of
+    /// records (declared via [`Self::combined_accessor_record`] /
+    /// [`Self::combined_accessor_record_id`] /
+    /// [`Self::combined_accessor_record_nested`]). When a function returning
+    /// `target` (or `&target`) is [`Self::expand_output`]ed, every record
+    /// contributes a leaf delivered to the foreign builder lambda.
+    pub fn combined_accessor(mut self, target: syn::Type) -> Self {
+        self.accessors.add_combined(target);
+        self
+    }
+
+    /// Name the current combined accessor so it can be selected by
+    /// [`Self::expand_output_with`]. Panics without a current
+    /// `combined_accessor`.
+    pub fn combined_accessor_name(mut self, name: impl Into<String>) -> Self {
+        self.accessors.set_combined_name(name);
+        self
+    }
+
+    /// Add an accessor-function record `func` (`f(&T) -> &F`) to the current
+    /// combined accessor. Panics without a current `combined_accessor`.
+    pub fn combined_accessor_record(mut self, func: syn::Ident) -> Self {
+        self.accessors.add_combined_record(func);
+        self
+    }
+
+    /// Add the identity/handle record (the value itself — cloned for a `&T`
+    /// return, moved for an owned `T`) to the current combined accessor. Panics
+    /// without a current `combined_accessor`.
+    pub fn combined_accessor_record_id(mut self) -> Self {
+        self.accessors.add_combined_record_id();
+        self
+    }
+
+    /// Add a nested combined-accessor record: splice `target`'s combined
+    /// accessor leaves into the current one (M3). Panics without a current
+    /// `combined_accessor`.
+    pub fn combined_accessor_record_nested(mut self, target: syn::Type) -> Self {
+        self.accessors.add_combined_record_nested(target);
+        self
+    }
+
+    /// Decompose the return value of the most recent [`Self::package_fun`] using
+    /// its return type's combined accessor. The generated foreign signature
+    /// drops the handle return and instead takes a builder lambda receiving the
+    /// (flattened) accessor leaves; the wrapper invokes it after the call.
+    /// Panics if not chained after a fn-level builder.
+    pub fn expand_output(mut self) -> Self {
+        let func = self.current_fn_ident();
+        self.accessors.add_expand_output(func);
+        self
+    }
+
+    /// Like [`Self::expand_output`] but selects the combined accessor by name.
+    pub fn expand_output_with(mut self, name: impl Into<String>) -> Self {
+        let func = self.current_fn_ident();
+        self.accessors.add_expand_output_with(func, name);
         self
     }
 

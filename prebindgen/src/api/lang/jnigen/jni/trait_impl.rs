@@ -78,6 +78,35 @@ impl JniGen {
         )
     }
 
+    /// Borrowed string-slice output converter (`&str → jstring`, a single
+    /// copy — the dual of the `str` input arm). Shared by two resolver arms so
+    /// they emit the SAME-named fn (write.rs dedups by `sig.ident`):
+    /// * the rank-1 `&str` arm — the converter actually used for a reference
+    ///   accessor leaf (`f(&T) -> &str`, output expansion);
+    /// * the rank-0 `str` arm — resolves the unsized `str` reached as the sub
+    ///   of `&str` (so required-propagation doesn't flag `str` unresolved).
+    ///
+    /// Surfaces as Kotlin `String`. Built from a normalized (lifetime-free)
+    /// `&str` so both arms produce an identical [`output_name`].
+    fn str_ref_output(&self) -> ConverterImpl<KotlinMeta> {
+        let outer_ty: syn::Type = syn::parse_quote!(&str);
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+        let body: syn::Expr = syn::parse_quote!({
+            env.new_string(v).map_err(|e| {
+                <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
+            })?
+        });
+        let kotlin_name = self.override_kotlin_name(&outer_ty, Some("String".to_string()));
+        let niches = default_niches_for_wire(&wire);
+        ConverterImpl {
+            pre_stages: vec![],
+            function: self.build_output_fn(&outer_ty, &wire, &body, None),
+            destination: wire,
+            niches,
+            metadata: self.framework_meta(kotlin_name),
+        }
+    }
+
     /// Universal "opaque Box-handle as `jlong`" pair — input side.
     ///
     /// Use for any Rust type whose lifecycle is owned by the Java side:
@@ -401,6 +430,13 @@ impl Prebindgen for JniGen {
     /// `write_rust` can resolve `.expand`s into fold plans before resolution.
     fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
         Some(&self.expansions)
+    }
+
+    /// Hand the registry this back-end's output-expansion declarations so
+    /// `write_rust` can resolve `.expand_output`s into unfold plans before
+    /// resolution.
+    fn accessors(&self) -> Option<&crate::api::core::unfold::Accessors> {
+        Some(&self.accessors)
     }
 
     /// Union of every `.package_fun(...)` list across all
@@ -1035,6 +1071,13 @@ impl Prebindgen for JniGen {
         if let Some(conv) = self.lookup_output(ty, &[], registry) {
             return Some(conv);
         }
+        // `str` is unsized, so it has no by-value output converter — but it is
+        // reached as the sub of a `&str` reference accessor leaf. Resolve it to
+        // the same `&str → jstring` fn the rank-1 `&str` arm uses (deduped by
+        // name) so required-propagation doesn't flag it unresolved.
+        if TypeKey::from_type(ty).as_str() == "str" {
+            return Some(self.str_ref_output());
+        }
         // `()` — identity converter so `fn foo()` and `fn foo() -> ()`
         // funnel through the same uniform output path as everything else.
         // Wire is `()`. Body just returns `v`. No Kotlin name — Unit
@@ -1119,6 +1162,16 @@ impl Prebindgen for JniGen {
                     niches: Niches::one(syn::parse_quote!(0i64), syn::parse_quote!(*v == 0)),
                     metadata: self.opaque_leaf_meta(t1),
                 });
+            }
+        }
+        // Borrowed string slice output (`&str` / `&'a str`): the converter used
+        // for a zero-copy reference accessor return (`f(&T) -> &str`, output
+        // expansion). The single copy into the JVM is `&str → jstring` (no
+        // intermediate owned `String`). The unsized `str` sub resolves via the
+        // rank-0 arm to the same fn (see [`Self::str_ref_output`]).
+        if let syn::Type::Reference(r) = pat {
+            if r.mutability.is_none() && TypeKey::from_type(t1).as_str() == "str" {
+                return Some(self.str_ref_output());
             }
         }
         // `Result<_, _>` is handled as a built-in rank-2 wrapper registered

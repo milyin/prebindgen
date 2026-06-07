@@ -161,6 +161,12 @@ pub struct Registry<M = ()> {
     /// by language adapters at the parameter-emission site. Empty unless the
     /// back-end declared expansions.
     pub expansion_plans: HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan>,
+
+    /// Resolved output-expansion plans, keyed by function ident. Filled by
+    /// [`crate::api::core::unfold::apply`] before resolution; read by language
+    /// adapters at the return-emission site. Empty unless the back-end declared
+    /// accessors.
+    pub unfold_plans: HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>,
 }
 
 impl<M> Default for Registry<M> {
@@ -177,6 +183,7 @@ impl<M> Default for Registry<M> {
             required_inputs_scan: HashSet::new(),
             required_outputs_scan: HashSet::new(),
             expansion_plans: HashMap::new(),
+            unfold_plans: HashMap::new(),
         }
     }
 }
@@ -247,6 +254,7 @@ impl std::error::Error for ScanError {}
 pub enum WriteRustError {
     Scan(ScanError),
     Expand(crate::api::core::expand::ExpandError),
+    Unfold(crate::api::core::unfold::UnfoldError),
     Resolve(crate::api::core::resolve::ResolveError),
     Write(crate::api::core::write::WriteError),
 }
@@ -256,6 +264,7 @@ impl fmt::Display for WriteRustError {
         match self {
             WriteRustError::Scan(e) => write!(f, "{}", e),
             WriteRustError::Expand(e) => write!(f, "{}", e),
+            WriteRustError::Unfold(e) => write!(f, "{}", e),
             WriteRustError::Resolve(e) => write!(f, "{}", e),
             WriteRustError::Write(e) => write!(f, "{}", e),
         }
@@ -273,6 +282,12 @@ impl From<ScanError> for WriteRustError {
 impl From<crate::api::core::expand::ExpandError> for WriteRustError {
     fn from(e: crate::api::core::expand::ExpandError) -> Self {
         WriteRustError::Expand(e)
+    }
+}
+
+impl From<crate::api::core::unfold::UnfoldError> for WriteRustError {
+    fn from(e: crate::api::core::unfold::UnfoldError) -> Self {
+        WriteRustError::Unfold(e)
     }
 }
 
@@ -497,6 +512,14 @@ impl<M> Registry<M> {
         // Leaf/expansion types are concrete (no disallowed `impl Trait`), so
         // the recursive registration cannot fail here.
         let _ = self.register_type_recursive(Direction::Input, ty, true, loc);
+    }
+
+    /// Register `ty` (and its nested positions) as a required **output** so the
+    /// resolver produces a converter for it. The output-side peer of
+    /// [`Self::require_input`]; used by [`crate::api::core::unfold`] to pull in
+    /// the leaf types a decomposition delivers.
+    pub(crate) fn require_output(&mut self, ty: &syn::Type, loc: &SourceLocation) {
+        let _ = self.register_type_recursive(Direction::Output, ty, true, loc);
     }
 
     fn index_item(&mut self, item: syn::Item, loc: SourceLocation) -> Result<(), ScanError> {
@@ -744,6 +767,9 @@ impl<M> Registry<M> {
         self.scan_declared(ext)?;
         if let Some(exp) = ext.expansions() {
             crate::api::core::expand::apply(self, exp)?;
+        }
+        if let Some(acc) = ext.accessors() {
+            crate::api::core::unfold::apply(self, acc)?;
         }
         crate::api::core::resolve::resolve(self, ext)?;
         Ok(crate::api::core::write::write_rust(self, ext, out_path)?)

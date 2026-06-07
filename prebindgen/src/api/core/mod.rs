@@ -15,6 +15,7 @@ pub mod niches;
 pub mod prebindgen;
 pub mod registry;
 pub(crate) mod resolve;
+pub mod unfold;
 pub(crate) mod write;
 
 pub use self::gravestone::{Gravestone, Transmute};
