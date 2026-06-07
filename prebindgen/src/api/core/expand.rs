@@ -167,8 +167,13 @@ impl Expansions {
 pub struct FoldPlan {
     /// Owned type the fold produces — what the underlying call needs.
     pub target: syn::Type,
-    /// True when the original parameter was `&T`: the call receives `&folded`.
+    /// True when the original parameter was `&T` / `Option<&T>`: the call
+    /// receives `&folded` (or `folded.as_ref()` when also optional).
     pub by_ref: bool,
+    /// True when the original parameter was `Option<T>` / `Option<&T>`: the fold
+    /// produces `Option<Target>` (absent inputs ⇒ `None`). Only supported for a
+    /// single, single-argument constructor.
+    pub optional: bool,
     /// Flattened wire leaves, in foreign-signature order.
     pub leaves: Vec<FoldLeaf>,
     /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
@@ -234,6 +239,11 @@ pub enum ExpandError {
         produces: String,
         expected: String,
     },
+    UnsupportedOptional {
+        func: syn::Ident,
+        param: syn::Ident,
+        reason: &'static str,
+    },
 }
 
 impl std::fmt::Display for ExpandError {
@@ -285,6 +295,15 @@ impl std::fmt::Display for ExpandError {
                 "expand: constructor `{}` produces `{}` but the parameter expects `{}`",
                 ctor, produces, expected
             ),
+            ExpandError::UnsupportedOptional {
+                func,
+                param,
+                reason,
+            } => write!(
+                f,
+                "expand: optional parameter `{}` of `{}` is not supported: {}",
+                param, func, reason
+            ),
         }
     }
 }
@@ -317,14 +336,20 @@ pub fn apply<M>(registry: &mut Registry<M>, exp: &Expansions) -> Result<(), Expa
         let param_ty = find_param_type(&item_fn, &ed.param)
             .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
 
-        let (by_ref, target) = match &param_ty {
+        // Peel `Option<…>` (whole param optional) then a leading `&` (borrow):
+        // `Option<&T>` → optional + by_ref, `Option<T>` → optional, `&T` → by_ref.
+        let (optional, inner) = match option_inner_type(&param_ty) {
+            Some(i) => (true, i),
+            None => (false, param_ty.clone()),
+        };
+        let (by_ref, target) = match &inner {
             syn::Type::Reference(r) => (true, (*r.elem).clone()),
             other => (false, other.clone()),
         };
         let target_key = TypeKey::from_type(&target);
 
         let chosen = resolve_ctor(exp, registry, &target_key, ed)?;
-        let plan = build_plan(registry, &ed.param, by_ref, &target, chosen)?;
+        let plan = build_plan(registry, ed, optional, by_ref, &target, chosen)?;
 
         for leaf in &plan.leaves {
             registry.require_input(&leaf.ty, &loc);
@@ -455,11 +480,13 @@ struct CtorSig {
 /// Build the [`FoldPlan`] for a chosen construction.
 fn build_plan<M>(
     registry: &Registry<M>,
-    param: &syn::Ident,
+    ed: &ExpandDecl,
+    optional: bool,
     by_ref: bool,
     target: &syn::Type,
     chosen: Chosen,
 ) -> Result<FoldPlan, ExpandError> {
+    let param = &ed.param;
     let mut leaves: Vec<FoldLeaf> = Vec::new();
 
     match chosen {
@@ -467,6 +494,15 @@ fn build_plan<M>(
             let sig = ctor_signature(registry, &func)?;
             check_target(&func, &sig.target, target)?;
             let n = sig.params.len();
+            // Optional (`Option<T>`/`Option<&T>`) is only well-defined for a
+            // single-argument constructor: one nullable leaf decides presence.
+            if optional && n != 1 {
+                return Err(ExpandError::UnsupportedOptional {
+                    func: ed.func.clone(),
+                    param: ed.param.clone(),
+                    reason: "constructor must take exactly one argument",
+                });
+            }
             let mut inputs = Vec::new();
             for (pname, pty) in &sig.params {
                 let name = if n == 1 {
@@ -477,12 +513,15 @@ fn build_plan<M>(
                 inputs.push(leaves.len());
                 leaves.push(FoldLeaf {
                     name,
-                    ty: pty.clone(),
+                    // Optional param ⇒ the (single) leaf is nullable so the
+                    // foreign side encodes `None` as a null wire value.
+                    ty: if optional { opt(pty) } else { pty.clone() },
                 });
             }
             Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
+                optional,
                 leaves,
                 selector: None,
                 variants: vec![FoldVariant {
@@ -494,6 +533,13 @@ fn build_plan<M>(
             })
         }
         Chosen::Combined(decl_variants) => {
+            if optional {
+                return Err(ExpandError::UnsupportedOptional {
+                    func: ed.func.clone(),
+                    param: ed.param.clone(),
+                    reason: "combined constructors cannot be optional",
+                });
+            }
             // Selector leaf first.
             leaves.push(FoldLeaf {
                 name: ident(&format!("{}_sel", param)),
@@ -555,6 +601,7 @@ fn build_plan<M>(
             Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
+                optional: false,
                 leaves,
                 selector,
                 variants,
@@ -594,6 +641,11 @@ pub fn emit_fold(
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
+    if plan.optional {
+        // `Option<T>` / `Option<&T>` param: the single nullable leaf decides
+        // presence. Produces `Result<Option<Target>, String>`.
+        return optional_single_fold(&plan.variants[0], leaf_locals, qualify);
+    }
     match plan.selector {
         None => variant_result_expr(&plan.variants[0], leaf_locals, qualify, /*optional=*/ false),
         Some(si) => {
@@ -696,6 +748,35 @@ fn variant_result_expr(
     }
 }
 
+/// Fold for an optional single-argument constructor: the nullable leaf decides
+/// presence. Produces `Result<Option<Target>, String>` — `None` ⇒ `Ok(None)`,
+/// `Some(p)` ⇒ the constructor result wrapped in `Some`.
+fn optional_single_fold(
+    v: &FoldVariant,
+    leaf_locals: &[syn::Ident],
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+) -> syn::Expr {
+    let loc = &leaf_locals[v.inputs[0]];
+    let func = v
+        .ctor
+        .as_ref()
+        .expect("optional expansion is single-constructor (never identity)");
+    let path = qualify(func);
+    let some_arm: syn::Expr = if v.fallible {
+        syn::parse_quote!(
+            #path(__p)
+                .map(::core::option::Option::Some)
+                .map_err(|__e| ::std::format!("{}", __e))
+        )
+    } else {
+        syn::parse_quote!(::core::result::Result::Ok(::core::option::Option::Some(#path(__p))))
+    };
+    syn::parse_quote!(match #loc {
+        ::core::option::Option::Some(__p) => #some_arm,
+        ::core::option::Option::None => ::core::result::Result::Ok(::core::option::Option::None),
+    })
+}
+
 /// `path(args…)` lifted to `Result<Target, String>` (mapping a fallible
 /// constructor's error via `Display`).
 fn ctor_call_result<I: quote::ToTokens>(
@@ -725,6 +806,24 @@ fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Typ
         }
     }
     None
+}
+
+/// If `ty` is `Option<Inner>` (by last path segment), return `Inner`.
+fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(tp) = ty else {
+        return None;
+    };
+    let last = tp.path.segments.last()?;
+    if last.ident != "Option" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
+        return None;
+    };
+    ab.args.iter().find_map(|a| match a {
+        syn::GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    })
 }
 
 /// If `ty` is `Result<Ok, Err>` (by last path segment), return `Ok`.
@@ -922,5 +1021,86 @@ mod tests {
             plan.variants[0].ctor.as_ref().unwrap().to_string(),
             "z_keyexpr_autocanonize"
         );
+    }
+
+    #[test]
+    fn optional_byvalue_single_ctor() {
+        // `attachment: Option<ZZBytes>` with single `z_zbytes_from_vec(Vec<u8>)`.
+        let mut reg = reg_with(&[
+            "fn z_zbytes_from_vec(bytes: Vec<u8>) -> ZZBytes { todo!() }",
+            "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
+        ]);
+        let mut exp = Expansions::default();
+        exp.add_constructor(ident("z_zbytes_from_vec"));
+        exp.add_expand(ident("z_session_delete"), ident("attachment"));
+
+        apply(&mut reg, &exp).expect("apply optional by-value");
+        let plan = reg
+            .expansion_plans
+            .get(&(ident("z_session_delete"), ident("attachment")))
+            .unwrap();
+        assert!(plan.optional);
+        assert!(!plan.by_ref);
+        assert_eq!(plan.leaves.len(), 1);
+        // nullable leaf wrapping the ctor param
+        assert_eq!(
+            plan.leaves[0].ty.to_token_stream().to_string(),
+            "Option < Vec < u8 > >"
+        );
+
+        let locals = vec![ident("att")];
+        let s = emit_fold(plan, &locals, &src_qualify)
+            .to_token_stream()
+            .to_string();
+        assert!(s.contains("z_zbytes_from_vec"), "fold calls ctor: {}", s);
+        assert!(s.contains("Some") && s.contains("None"), "maps Option: {}", s);
+    }
+
+    #[test]
+    fn optional_byref_single_ctor() {
+        // `encoding: Option<&ZEncoding>` with single, infallible
+        // `z_encoding_from_string(String) -> ZEncoding`.
+        let mut reg = reg_with(&[
+            "fn z_encoding_from_string(s: String) -> ZEncoding { todo!() }",
+            "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+        ]);
+        let mut exp = Expansions::default();
+        exp.add_constructor(ident("z_encoding_from_string"));
+        exp.add_expand(ident("z_session_put"), ident("encoding"));
+
+        apply(&mut reg, &exp).expect("apply optional by-ref");
+        let plan = reg
+            .expansion_plans
+            .get(&(ident("z_session_put"), ident("encoding")))
+            .unwrap();
+        assert!(plan.optional);
+        assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
+        assert_eq!(
+            plan.leaves[0].ty.to_token_stream().to_string(),
+            "Option < String >"
+        );
+        assert_eq!(
+            plan.target.to_token_stream().to_string(),
+            "ZEncoding",
+            "target peeled through Option<&_>"
+        );
+    }
+
+    #[test]
+    fn optional_combined_rejected() {
+        let mut reg = reg_with(&[
+            "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+            "fn z_session_get(s: &ZSession, ke: Option<ZKeyExpr>) -> bool { todo!() }",
+        ]);
+        let mut exp = Expansions::default();
+        exp.add_combined(syn::parse_quote!(ZKeyExpr));
+        exp.add_combined_variant(ident("z_keyexpr_try_from"));
+        exp.add_combined_variant_id();
+        exp.add_expand(ident("z_session_get"), ident("ke"));
+
+        match apply(&mut reg, &exp) {
+            Err(ExpandError::UnsupportedOptional { .. }) => {}
+            other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
+        }
     }
 }

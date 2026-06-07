@@ -414,10 +414,12 @@ pub(crate) fn emit_expanded_param(
         };
     ));
 
-    let call_arg = if plan.by_ref {
-        quote!(&#folded)
-    } else {
-        quote!(#folded)
+    // `Option<&T>` ⇒ `folded.as_ref()`; `&T` ⇒ `&folded`; by-value (incl.
+    // `Option<T>`) ⇒ `folded`.
+    let call_arg = match (plan.optional, plan.by_ref) {
+        (true, true) => quote!(#folded.as_ref()),
+        (false, true) => quote!(&#folded),
+        (_, false) => quote!(#folded),
     };
     (wire_params, prelude, call_arg)
 }
