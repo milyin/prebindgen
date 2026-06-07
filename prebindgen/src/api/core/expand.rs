@@ -162,18 +162,41 @@ impl Expansions {
 // Resolved plan (stored on the registry, read at emission time)
 // ──────────────────────────────────────────────────────────────────────
 
+/// Outer shape wrapping the [core construct](`FoldShape::Construct`). The
+/// value-side analog of how the rank-1 `Option<_>` / `Vec<_>` handlers compose
+/// converters at the wire — mirrors jnigen's `FoldStrategy` (`jni/fold.rs`).
+/// The innermost `Construct` builds the target from the decoded leaves; each
+/// wrapping layer lifts that construction over `Option` / `Vec`.
+#[derive(Clone)]
+pub enum FoldShape {
+    /// Innermost: build the target directly from the leaves — a single
+    /// constructor (any arity) or a combined-selector dispatch.
+    Construct,
+    /// `Option<T>` / `Option<&T>` param: the single leaf is `Option<ctor_arg>`;
+    /// `Some` ⇒ run the inner shape on the unwrapped value and re-wrap `Some`,
+    /// `None` ⇒ `None`. Inner is always [`Self::Construct`] today (single,
+    /// single-arg constructor; combined-under-`Optional` is rejected in `apply`).
+    Optional(Box<FoldShape>),
+    /// `Vec<T>` param: map the inner shape over each element and collect.
+    /// Emit-ready and unit-tested, but not yet produced by `apply` (no `Vec<_>`
+    /// param expansion is declared) — kept so the fold composes for future Vec.
+    Iterable(Box<FoldShape>),
+}
+
 /// A resolved expansion for one `(function, parameter)`.
 #[derive(Clone)]
 pub struct FoldPlan {
-    /// Owned type the fold produces — what the underlying call needs.
+    /// Owned type the core construct produces — what the underlying call needs
+    /// (before any [`Self::shape`] wrapping).
     pub target: syn::Type,
     /// True when the original parameter was `&T` / `Option<&T>`: the call
-    /// receives `&folded` (or `folded.as_ref()` when also optional).
+    /// receives `&folded` (or `folded.as_ref()` when also optional). A
+    /// call-site concern (the resolver's `&_` handler shares the inner
+    /// converter the same way), not part of the fold.
     pub by_ref: bool,
-    /// True when the original parameter was `Option<T>` / `Option<&T>`: the fold
-    /// produces `Option<Target>` (absent inputs ⇒ `None`). Only supported for a
-    /// single, single-argument constructor.
-    pub optional: bool,
+    /// Outer shape over the core construct (`Construct` for a plain `T`/`&T`
+    /// param; `Optional(Construct)` for `Option<T>`/`Option<&T>`).
+    pub shape: FoldShape,
     /// Flattened wire leaves, in foreign-signature order.
     pub leaves: Vec<FoldLeaf>,
     /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
@@ -182,6 +205,14 @@ pub struct FoldPlan {
     /// Dispatch arms — one for a single constructor, selector order for a
     /// combined one.
     pub variants: Vec<FoldVariant>,
+}
+
+impl FoldPlan {
+    /// True when the fold produces an `Option<_>` (outermost shape layer is
+    /// `Optional`) — drives the by-ref call-site form (`folded.as_ref()`).
+    pub fn produces_option(&self) -> bool {
+        matches!(self.shape, FoldShape::Optional(_))
+    }
 }
 
 /// One flattened wire leaf of an expanded parameter.
@@ -521,7 +552,11 @@ fn build_plan<M>(
             Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
-                optional,
+                shape: if optional {
+                    FoldShape::Optional(Box::new(FoldShape::Construct))
+                } else {
+                    FoldShape::Construct
+                },
                 leaves,
                 selector: None,
                 variants: vec![FoldVariant {
@@ -601,7 +636,7 @@ fn build_plan<M>(
             Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
-                optional: false,
+                shape: FoldShape::Construct,
                 leaves,
                 selector,
                 variants,
@@ -634,20 +669,84 @@ fn check_target(
 /// already-decoded Rust locals (1:1 with `plan.leaves`); `qualify` maps a
 /// constructor ident to its call path (e.g. prefixing the source module).
 ///
-/// The returned expression has type `Result<plan.target, String>`. The
-/// back-end routes its `Err(String)` through its own error channel.
+/// The returned expression has type `Result<<shaped> plan.target, String>`
+/// (`Result<Target>`, `Result<Option<Target>>`, …). The back-end routes its
+/// `Err(String)` through its own error channel. Folds the [`FoldShape`] layers
+/// top-down over the shared [core construct](`emit_core_construct`) — the value
+/// analog of how the rank-1 `Option<_>`/`Vec<_>` handlers compose at the wire.
 pub fn emit_fold(
     plan: &FoldPlan,
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
-    if plan.optional {
-        // `Option<T>` / `Option<&T>` param: the single nullable leaf decides
-        // presence. Produces `Result<Option<Target>, String>`.
-        return optional_single_fold(&plan.variants[0], leaf_locals, qualify);
+    fold_shape(&plan.shape, plan, leaf_locals, None, qualify)
+}
+
+/// Recurse over one [`FoldShape`] layer. `bound` is `Some(var)` when an
+/// enclosing `Optional`/`Iterable` layer has unwrapped the structured leaf and
+/// bound its element to `var` — the inner construct then builds from `var`
+/// instead of reading `leaf_locals`.
+fn fold_shape(
+    shape: &FoldShape,
+    plan: &FoldPlan,
+    leaf_locals: &[syn::Ident],
+    bound: Option<&syn::Ident>,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+) -> syn::Expr {
+    match shape {
+        FoldShape::Construct => emit_core_construct(plan, leaf_locals, bound, qualify),
+        FoldShape::Optional(inner) => {
+            // The structured value is the enclosing bound var, or — at the top —
+            // the single shaped leaf's decoded local (`leaf_locals[0]`).
+            let value = bound.unwrap_or(&leaf_locals[0]);
+            let inner_ident = ident("__inner");
+            let inner_expr = fold_shape(inner, plan, leaf_locals, Some(&inner_ident), qualify);
+            syn::parse_quote!(match #value {
+                ::core::option::Option::Some(#inner_ident) => {
+                    (#inner_expr).map(::core::option::Option::Some)
+                }
+                ::core::option::Option::None => {
+                    ::core::result::Result::Ok(::core::option::Option::None)
+                }
+            })
+        }
+        FoldShape::Iterable(inner) => {
+            let value = bound.unwrap_or(&leaf_locals[0]);
+            let elem_ident = ident("__elem");
+            let inner_expr = fold_shape(inner, plan, leaf_locals, Some(&elem_ident), qualify);
+            syn::parse_quote!(
+                #value
+                    .into_iter()
+                    .map(|#elem_ident| #inner_expr)
+                    .collect::<::core::result::Result<::std::vec::Vec<_>, _>>()
+            )
+        }
+    }
+}
+
+/// Emit the innermost construct → `Result<Target, String>`. With `bound =
+/// Some(v)` (under an `Optional`/`Iterable` layer ⇒ single, single-arg ctor)
+/// the ctor is applied to `v`; with `bound = None` (top level) it reads the
+/// leaves — a single constructor (any arity) or a combined-selector dispatch.
+fn emit_core_construct(
+    plan: &FoldPlan,
+    leaf_locals: &[syn::Ident],
+    bound: Option<&syn::Ident>,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
+) -> syn::Expr {
+    if let Some(v) = bound {
+        // Shaped construct: a single, single-arg constructor applied to the
+        // unwrapped element. (`apply` guarantees this shape — never identity,
+        // never combined, never multi-arg under a shape layer.)
+        let var = &plan.variants[0];
+        let func = var
+            .ctor
+            .as_ref()
+            .expect("shaped expansion is single-constructor (never identity)");
+        return ctor_call_result(&qualify(func), std::slice::from_ref(v), var.fallible);
     }
     match plan.selector {
-        None => variant_result_expr(&plan.variants[0], leaf_locals, qualify, /*optional=*/ false),
+        None => variant_result_expr(&plan.variants[0], leaf_locals, qualify, /*dispatched=*/ false),
         Some(si) => {
             let sel = &leaf_locals[si];
             let arms: Vec<TokenStream> = plan
@@ -656,7 +755,7 @@ pub fn emit_fold(
                 .enumerate()
                 .map(|(vi, v)| {
                     let lit = vi as i32;
-                    let body = variant_result_expr(v, leaf_locals, qualify, /*optional=*/ true);
+                    let body = variant_result_expr(v, leaf_locals, qualify, /*dispatched=*/ true);
                     quote!(#lit => #body,)
                 })
                 .collect();
@@ -673,14 +772,18 @@ pub fn emit_fold(
     }
 }
 
-/// Build a `Result<Target, String>` expression for one variant. When
-/// `optional`, the variant's input leaves are `Option<_>` and are unwrapped
-/// (a missing input yields `Err`); otherwise they are passed directly.
+/// Build a `Result<Target, String>` expression for one core variant. When
+/// `dispatched` (a combined-selector arm), the variant's input leaves are
+/// `Option<_>` — only the selected arm's inputs are present — so they are
+/// unwrapped (a missing input yields `Err`); otherwise they are passed
+/// directly. (This `Option`-ness is *selector presence*, distinct from
+/// [`FoldShape::Optional`], which is whole-param presence handled by the
+/// enclosing fold.)
 fn variant_result_expr(
     v: &FoldVariant,
     leaf_locals: &[syn::Ident],
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-    optional: bool,
+    dispatched: bool,
 ) -> syn::Expr {
     let input_locals: Vec<&syn::Ident> = v.inputs.iter().map(|&i| &leaf_locals[i]).collect();
 
@@ -698,7 +801,7 @@ fn variant_result_expr(
             } else {
                 syn::parse_quote!(::core::result::Result::Ok(__v))
             };
-            if optional {
+            if dispatched {
                 syn::parse_quote!(match #loc {
                     ::core::option::Option::Some(__v) => #some_val,
                     ::core::option::Option::None => ::core::result::Result::Err(
@@ -713,7 +816,7 @@ fn variant_result_expr(
         }
         Some(func) => {
             let path = qualify(func);
-            if optional {
+            if dispatched {
                 let bind: Vec<syn::Ident> = (0..input_locals.len())
                     .map(|i| ident(&format!("__p{}", i)))
                     .collect();
@@ -746,35 +849,6 @@ fn variant_result_expr(
             }
         }
     }
-}
-
-/// Fold for an optional single-argument constructor: the nullable leaf decides
-/// presence. Produces `Result<Option<Target>, String>` — `None` ⇒ `Ok(None)`,
-/// `Some(p)` ⇒ the constructor result wrapped in `Some`.
-fn optional_single_fold(
-    v: &FoldVariant,
-    leaf_locals: &[syn::Ident],
-    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
-) -> syn::Expr {
-    let loc = &leaf_locals[v.inputs[0]];
-    let func = v
-        .ctor
-        .as_ref()
-        .expect("optional expansion is single-constructor (never identity)");
-    let path = qualify(func);
-    let some_arm: syn::Expr = if v.fallible {
-        syn::parse_quote!(
-            #path(__p)
-                .map(::core::option::Option::Some)
-                .map_err(|__e| ::std::format!("{}", __e))
-        )
-    } else {
-        syn::parse_quote!(::core::result::Result::Ok(::core::option::Option::Some(#path(__p))))
-    };
-    syn::parse_quote!(match #loc {
-        ::core::option::Option::Some(__p) => #some_arm,
-        ::core::option::Option::None => ::core::result::Result::Ok(::core::option::Option::None),
-    })
 }
 
 /// `path(args…)` lifted to `Result<Target, String>` (mapping a fallible
@@ -1039,7 +1113,8 @@ mod tests {
             .expansion_plans
             .get(&(ident("z_session_delete"), ident("attachment")))
             .unwrap();
-        assert!(plan.optional);
+        assert!(matches!(plan.shape, FoldShape::Optional(_)));
+        assert!(plan.produces_option());
         assert!(!plan.by_ref);
         assert_eq!(plan.leaves.len(), 1);
         // nullable leaf wrapping the ctor param
@@ -1073,7 +1148,8 @@ mod tests {
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
             .unwrap();
-        assert!(plan.optional);
+        assert!(matches!(plan.shape, FoldShape::Optional(_)));
+        assert!(plan.produces_option());
         assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
         assert_eq!(
             plan.leaves[0].ty.to_token_stream().to_string(),
@@ -1102,5 +1178,41 @@ mod tests {
             Err(ExpandError::UnsupportedOptional { .. }) => {}
             other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
         }
+    }
+
+    #[test]
+    fn iterable_emit_shape() {
+        // `Iterable(Construct)` is not yet produced by `apply` (no `Vec<_>`
+        // param expansion is declared), but the fold is emit-ready: a hand-built
+        // plan must produce the `into_iter().map(...).collect::<Result<Vec<_>,_>>()`
+        // form, with the inner single-arg ctor applied per element.
+        let plan = FoldPlan {
+            target: syn::parse_quote!(ZKeyExpr),
+            by_ref: false,
+            shape: FoldShape::Iterable(Box::new(FoldShape::Construct)),
+            leaves: vec![FoldLeaf {
+                name: ident("kes"),
+                ty: syn::parse_quote!(Vec<String>),
+            }],
+            selector: None,
+            variants: vec![FoldVariant {
+                ctor: Some(ident("z_keyexpr_try_from")),
+                fallible: true,
+                clone: false,
+                inputs: vec![0],
+            }],
+        };
+        let locals = vec![ident("kes")];
+        let s = emit_fold(&plan, &locals, &src_qualify)
+            .to_token_stream()
+            .to_string();
+        assert!(s.contains("into_iter"), "iterates: {}", s);
+        assert!(s.contains("collect"), "collects: {}", s);
+        assert!(
+            s.contains("Vec") && s.contains("z_keyexpr_try_from"),
+            "collects Result<Vec<_>> via per-elem ctor: {}",
+            s
+        );
+        assert!(!plan.produces_option());
     }
 }

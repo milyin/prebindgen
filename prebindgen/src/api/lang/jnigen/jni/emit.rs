@@ -416,7 +416,7 @@ pub(crate) fn emit_expanded_param(
 
     // `Option<&T>` ⇒ `folded.as_ref()`; `&T` ⇒ `&folded`; by-value (incl.
     // `Option<T>`) ⇒ `folded`.
-    let call_arg = match (plan.optional, plan.by_ref) {
+    let call_arg = match (plan.produces_option(), plan.by_ref) {
         (true, true) => quote!(#folded.as_ref()),
         (false, true) => quote!(&#folded),
         (_, false) => quote!(#folded),
