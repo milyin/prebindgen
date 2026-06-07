@@ -124,7 +124,7 @@ pub(crate) fn factory_projection_wire_wrap(
     use crate::api::lang::jnigen::jni::ProjectionKind::*;
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
         Handle => ("Long".to_string(), format!("{short}({name})")),
-        ValueClass | ValueBlob => ("ByteArray".to_string(), format!("{short}({name})")),
+        ValueBlob => ("ByteArray".to_string(), format!("{short}({name})")),
     };
     match strategy {
         Direct => direct(kind),
@@ -141,8 +141,8 @@ pub(crate) fn factory_projection_wire_wrap(
                     "Long".to_string(),
                     format!("if ({name} == 0L) null else {short}({name})"),
                 ),
-                // Value class/blob null rides JVM-null of the `ByteArray` slot.
-                ValueClass | ValueBlob => (
+                // Value-blob null rides JVM-null of the `ByteArray` slot.
+                ValueBlob => (
                     "ByteArray?".to_string(),
                     format!("{name}?.let {{ {short}(it) }}"),
                 ),
@@ -237,7 +237,7 @@ pub(crate) fn flatten_struct_factory(
             let is_vc = ext
                 .types
                 .get(&TypeKey::from_type(&inner_ty))
-                .map(|c| c.value_class)
+                .map(|c| c.value_blob)
                 .unwrap_or(false);
             if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
                 registry.structs.get(&name).map(|(st, _)| st.clone())
@@ -423,47 +423,11 @@ pub(crate) fn fold_projection_wrap(
 /// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
 /// represents null); `Niche+object` and `Boxed` add `?`.
 pub(crate) fn projection_wire_return(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
     proj: &crate::api::lang::jnigen::jni::Projection,
-    imports: &mut BTreeSet<String>,
 ) -> String {
     use crate::api::lang::jnigen::jni::{FoldStrategy, NullableKind, ProjectionKind};
     let (inner_wire_name, inner_is_primitive) = match proj.kind {
         ProjectionKind::Handle => ("Long".to_string(), true),
-        ProjectionKind::ValueClass => {
-            let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key).unwrap_or_else(|_| {
-                panic!("projection_wire_return: bad leaf_key `{}`", proj.leaf_key)
-            });
-            let inner_ty = crate::api::lang::jnigen::jni::value_class_inner_type_for(
-                ext, registry, &vc_ty,
-            )
-            .unwrap_or_else(|| {
-                panic!(
-                    "projection_wire_return: `{}` is not a registered value class",
-                    proj.leaf_key
-                )
-            });
-            let inner_entry = registry.output_entry(&inner_ty).unwrap_or_else(|| {
-                panic!(
-                    "projection_wire_return: inner of `{}` has no output converter",
-                    proj.leaf_key
-                )
-            });
-            let n = inner_entry.metadata.kotlin_name.clone().unwrap_or_else(|| {
-                panic!(
-                    "projection_wire_return: inner of `{}` has no Kotlin name",
-                    proj.leaf_key
-                )
-            });
-            let is_prim = matches!(
-                crate::api::lang::jnigen::jni::wire_access::jni_field_access(
-                    &inner_entry.destination
-                ),
-                Some((_, _, false))
-            );
-            (register_fqn(&n, imports), is_prim)
-        }
         // Value-blob's inner wire is always `ByteArray` (object-shaped).
         ProjectionKind::ValueBlob => ("ByteArray".to_string(), false),
     };
@@ -488,20 +452,11 @@ pub(crate) fn projection_wire_return(
 /// `None` for object-wired leaves (e.g. value classes over `ByteArray`),
 /// where `?.let { }` covers the JVM-null case directly.
 pub(crate) fn projection_leaf_sentinel(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
     proj: &crate::api::lang::jnigen::jni::Projection,
 ) -> Option<String> {
     use crate::api::lang::jnigen::jni::ProjectionKind;
     let leaf_wire: syn::Type = match proj.kind {
         ProjectionKind::Handle => syn::parse_quote!(jni::sys::jlong),
-        ProjectionKind::ValueClass => {
-            let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key).ok()?;
-            let inner_ty = crate::api::lang::jnigen::jni::value_class_inner_type_for(
-                ext, registry, &vc_ty,
-            )?;
-            registry.output_entry(&inner_ty)?.destination.clone()
-        }
         // Value-blob leaf wire is always `JByteArray` (object-shaped) — no
         // primitive sentinel; JVM `null` represents the absent value, so
         // `?.let` covers nullability.

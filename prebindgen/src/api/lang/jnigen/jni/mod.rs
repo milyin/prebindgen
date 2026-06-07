@@ -38,9 +38,7 @@ pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
 
 pub(crate) use crate::api::core::niches::Niches;
-pub(crate) use crate::api::core::prebindgen::{
-    ConverterImpl, IntoSource, IntoSourceMode, Prebindgen, Stage,
-};
+pub(crate) use crate::api::core::prebindgen::{ConverterImpl, Prebindgen, Stage};
 pub(crate) use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
 pub(crate) use crate::api::lang::jnigen::jni::wire_access::jni_field_access;
 pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
@@ -49,7 +47,6 @@ pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
 pub(crate) use std::collections::{BTreeSet, HashSet};
 pub(crate) use std::path::{Path, PathBuf};
 pub(crate) use crate::api::lang::jnigen::kotlin::file::{KotlinFile, WriteKotlinError};
-pub(crate) use crate::api::lang::jnigen::kotlin::type_map::KotlinTypeMap;
 
 // ──────────────────────────────────────────────────────────────────────
 // Language metadata (Prebindgen::Metadata for JniGen)
@@ -113,15 +110,10 @@ pub enum ProjectionKind {
     /// Opaque native handle (`ptr_class`). Wire is `jlong`; a struct field
     /// stores the **boxed** handle object (`L<fqn>;`); closeable when owned.
     Handle,
-    /// Kotlin `@JvmInline value class`. Wire + JVM descriptor come from the
-    /// single inner field's converter (the value class is **erased** to it in
-    /// field/direct positions); never closeable.
-    ValueClass,
     /// Kotlin `@JvmInline value class` wrapping a **`Copy` value-blob**
-    /// (`value_blob`). Like [`Self::ValueClass`] but its inner is always a raw
-    /// `ByteArray` (`[B`) — there is no Rust struct field to resolve. The typed
-    /// class has a single `bytes: ByteArray` field; the wire is `JByteArray`.
-    /// Never closeable.
+    /// (`value_blob`). Its inner is always a raw `ByteArray` (`[B`) — there is
+    /// no Rust struct field to resolve. The typed class has a single
+    /// `bytes: ByteArray` field; the wire is `JByteArray`. Never closeable.
     ValueBlob,
 }
 
@@ -140,7 +132,7 @@ pub struct Projection {
     pub leaf_key: String,
     /// `false` for `&T` borrows of a handle — still a projection (param
     /// classification needs this), but not the holder's to close, so
-    /// `close()` emission skips it. Always `false` for [`ProjectionKind::ValueClass`].
+    /// `close()` emission skips it. Always `false` for [`ProjectionKind::ValueBlob`].
     pub owned: bool,
     /// Nullability / collection layers.
     pub strategy: FoldStrategy,
@@ -163,21 +155,6 @@ pub struct KotlinMeta {
     /// inner. `None` only for entries that must not appear in any
     /// Kotlin signature — the emitter treats that as a hard error.
     pub kotlin_name: Option<String>,
-    /// Kotlin fully-qualified exception class this converter can raise
-    /// when used as a function's return-type output converter. Populated
-    /// by [`JniGen::throws`]; the Kotlin emitter uses this for
-    /// `@Throws` annotations on the corresponding wrappers. `None` means
-    /// "non-throwing converter" (no `@Throws` emitted).
-    pub throws: Option<String>,
-    /// Rust path of the generated `throw_<RustShortName>` free function
-    /// the framework invokes as `<throws_action>(&mut env, &err)` for
-    /// wrapper-internal failures (e.g. input-decode `?` propagation) that
-    /// surface above this converter. Populated alongside
-    /// [`Self::throws`] by [`JniGen::throws`]; `None` when no
-    /// throwing behavior is configured for this converter. Replaces the
-    /// earlier `throw_exception!` macro path with a direct function call
-    /// emitted by [`JniGen::write_exceptions_rust`].
-    pub throws_action: Option<syn::Path>,
     /// For wrapper converters whose Kotlin projection is the *inner*
     /// type's projection (e.g. `ZResult<Publisher>` → `Publisher`),
     /// this carries the inner Rust type's canonical key so downstream
@@ -185,10 +162,10 @@ pub struct KotlinMeta {
     /// `classify_return`) can find the
     /// wrapped value's identity without baking in any specific shape
     /// (no `peel_zresult` / `peel_result`-style framework hardcoding).
-    /// Populated by [`JniGen::throws`] with `args[0]`'s canonical
-    /// key for arity-1 wrappers, and inherited by the built-in
-    /// `Option<_>` / `Vec<_>` / `&_` rank-1 handlers from their inner
-    /// type's metadata. `None` for plain values and arity-0 converters.
+    /// Populated with `args[0]`'s canonical key for arity-1 wrappers, and
+    /// inherited by the built-in `Option<_>` / `Vec<_>` / `&_` rank-1
+    /// handlers from their inner type's metadata. `None` for plain values
+    /// and arity-0 converters.
     pub value_rust_key: Option<String>,
     /// Present iff this (possibly wrapped) value is an opaque native
     /// handle. Set at the opaque-handle leaf and folded outward by the
@@ -202,8 +179,6 @@ impl KotlinMeta {
     pub fn from_name(name: impl Into<String>) -> Self {
         Self {
             kotlin_name: Some(name.into()),
-            throws: None,
-            throws_action: None,
             value_rust_key: None,
             projection: None,
         }
@@ -227,44 +202,6 @@ impl KotlinMeta {
 // ──────────────────────────────────────────────────────────────────────
 // Structured type-conversion configuration
 // ──────────────────────────────────────────────────────────────────────
-
-/// Per-exception-class configuration (driven by
-/// [`JniGen::throwable`]).
-///
-/// One entry per Rust error type the binding surfaces to the JVM as a
-/// Java exception. Declaration order matters: `exceptions[0]` is the
-/// *primary* — its `From<String>` impl is the universal converter-failure
-/// path and its Kotlin FQN is used for `NativeHandle`'s closed-handle
-/// exception. The throw function emitted into the generated file
-/// (`throw_<rust_short>`) does the `find_class`/`throw_new` dance and
-/// is referenced by the throws-marked wrapper code through
-/// [`KotlinMeta::throws_action`].
-#[derive(Clone)]
-pub(crate) struct ExceptionConfig {
-    /// Absolute Rust path of the error type, as a `syn::Type::Path`
-    /// (e.g. `zenoh_flat::errors::ZError`). Used both to splice the
-    /// `pub(crate) type __JniErr = ...` alias and as the function-
-    /// argument type of the generated `throw_<short>`. Stored as a
-    /// `syn::Type` so it round-trips identically with the
-    /// closure-slot exception bindings in [`WrapperFn`] — both ends
-    /// spell the type the same way.
-    pub rust_type: syn::Type,
-    /// Last path segment of `rust_type` (e.g. `"ZError"`). Used to
-    /// derive the `throw_<short>` function name and to provide the
-    /// Kotlin class name (relative; qualified against
-    /// [`JniGen::package`]). Exception class names are not currently
-    /// routed through any `kotlin_*_name_mangle` closure — the
-    /// short-name lands in the FQN verbatim.
-    pub rust_short: String,
-    /// Kotlin fully-qualified exception class name (e.g.
-    /// `"io.zenoh.jni.ZError"`) — `<package>.<rust_short>`. Used for the
-    /// Kotlin class file path, `@Throws` annotations, and the JNI
-    /// `find_class("io/zenoh/jni/ZError")` literal inside the generated
-    /// `throw_<short>` body.
-    pub kotlin_fqn: String,
-    /// Identifier of the generated `throw_<short>` function.
-    pub throw_fn_name: syn::Ident,
-}
 
 /// Per-opaque-handle configuration (driven by `JniGen::ptr_class`).
 ///
@@ -303,10 +240,9 @@ pub(crate) struct EnumConfig {
     pub suppress_kotlin_code: bool,
 }
 
-/// One registered `.method(...)` / `.companion_method(...)` /
-/// `.function(...)` entry. The Rust identifier is captured at build-script
-/// time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the optional
-/// override sets the Kotlin-side name when the default
+/// One registered `.package_fun(...)` entry. The Rust identifier is captured
+/// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
+/// optional override sets the Kotlin-side name when the default
 /// `snake_to_camel(rust_ident)` derivation isn't what the user wants.
 #[derive(Clone, Debug)]
 pub struct MethodEntry {
@@ -329,15 +265,10 @@ impl MethodEntry {
     }
 }
 
-/// Back-pointer to the last entry added via `.method` / `.companion_method`
-/// / `.function`, used by `.name(...)` to find what to mutate. Cleared by
-/// every other builder call.
+/// Back-pointer to the last entry added via `.package_fun`, used by
+/// `.name(...)` to find what to mutate. Cleared by every other builder call.
 #[derive(Clone, Debug)]
 pub(crate) enum NamedEntryRef {
-    /// Index into `types[key].instance_methods`.
-    Method(TypeKey, usize),
-    /// Index into `types[key].companion_methods`.
-    Companion(TypeKey, usize),
     /// Index into `packages[subpackage].functions`.
     Function(String, usize),
 }
@@ -364,36 +295,11 @@ pub(crate) struct TypeConfig {
     /// closure-mangled callback name, e.g. zenoh-jni stamps `JNIOn...`
     /// here via [`JniGen::auto_callback_fqn`]).
     pub callback_kotlin_fqn: Option<String>,
-    /// `#[prebindgen]` fns declared as **instance methods** on this type
-    /// via [`JniGen::method`]. The fn's first parameter must syntactically
-    /// match this type (modulo `&T` / `&mut T`) — validation happens at
-    /// render time in `render_wrapper_fn`. Param-promotion drops the
-    /// matched param from the Kotlin signature and substitutes inherited
-    /// `withPtr` / `consume` scope (opaque handles) or `this` (data /
-    /// value classes).
-    pub instance_methods: Vec<MethodEntry>,
-    /// `#[prebindgen]` fns declared as **companion-object methods** on
-    /// this type via [`JniGen::companion_method`]. No first-param
-    /// constraint; the wrapper is emitted inside `companion object { ... }`
-    /// using the same body shape as the package-level wrapper form (all
-    /// params present, no `this` substitution).
-    pub companion_methods: Vec<MethodEntry>,
-    /// Set by [`JniGen::throwable`]: the emitted Kotlin class extends
-    /// `Exception` and a structured `throw_<short>` is generated that
-    /// constructs the JVM object via this type's own output converter.
-    /// `Result<_, ThisType>` Err arms route through that throw fn.
-    pub throwable: bool,
-    /// Set by [`JniGen::value_class`]: emit the Kotlin class as
-    /// `@JvmInline public value class` instead of `public data class`.
-    /// Requires exactly one field on the underlying struct (validated
-    /// at render time) and is mutually exclusive with
-    /// [`Self::throwable`] (value classes cannot extend `Exception`).
-    pub value_class: bool,
     /// Set by [`JniGen::value_blob`]: this is a `Copy` Rust type passed
     /// **by value as its raw memory blob** in a `JByteArray` (wire), the
     /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no
     /// projection — it surfaces as `ByteArray`. Mutually exclusive with
-    /// `opaque` / `enum_cfg` / `value_class`.
+    /// `opaque` / `enum_cfg`.
     pub value_blob: bool,
 }
 
@@ -545,17 +451,6 @@ pub struct JniGen {
     /// the host crate of `#[prebindgen]` items). The wrapper body calls
     /// `<source_module>::<fn>(args)`.
     pub source_module: syn::Path,
-    /// Registered exception classes in declaration order. The first entry
-    /// (`exceptions[0]`) is the framework `JniBindingError` — emitted as
-    /// the `__JniErr` alias by [`Self::prerequisites`] and used for
-    /// `NativeHandle`'s closed-handle exception. Populated by repeated
-    /// [`Self::throwable`] calls; consumed by:
-    /// [`Self::prerequisites`] (framework error type → `__JniErr`),
-    /// [`Self::write_exceptions_rust`] (one `throw_<short>` per entry),
-    /// [`Self::write_native_handle`] (framework FQN), and
-    /// [`Self::lookup_input`] / [`Self::lookup_output`] (per-converter
-    /// bound-exception FQN + throw fn).
-    pub(crate) exceptions: Vec<ExceptionConfig>,
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
     /// Drives every derived form: slash-separated for `FindClass`,
@@ -645,9 +540,6 @@ pub struct JniGen {
     /// entry to be emitted). Populated by [`Self::function`] under the
     /// currently-active [`Self::active_subpackage`].
     pub(crate) packages: BTreeMap<String, PackageConfig>,
-
-    /// `impl Into<target> + Send + 'static` source arms per target type.
-    pub(crate) into_sources_map: HashMap<TypeKey, Vec<IntoSource>>,
 
     /// Per-rank input converters — index `n` holds rank-`n` registrations
     /// keyed by the pattern's `TypeKey`. Rank 0 is non-wildcard (e.g.

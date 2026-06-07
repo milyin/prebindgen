@@ -19,16 +19,11 @@ pub(crate) fn emit_jni_function_wrapper(
     let wrapper_ident = mangle_jni_name(ext, original_ident);
     let source_module = &ext.source_module;
 
-    // Throw fn for framework binding failures — the fallback when a
-    // converter carries no explicit bound exception (non-throwing).
-    let framework_throw = exception_throw_path(ext.framework_exception());
-
     let mut wire_params: Vec<TokenStream> = Vec::new();
     // Each entry is a per-input decode statement. Fallible decodes are
-    // `match`-arms that dispatch to the input converter's own throw fn
-    // on `Err` and `return <sentinel>;` — so a malformed `Encoding`
-    // JObject raises `JniBindingError`, while a throwing input wrapper
-    // raises whatever exception it bound via `Some(parse_quote!(...))` in the closure.
+    // `match`-arms that, on `Err`, call `signal_error(&mut env,
+    // &__error_sink, &__e)` (invoking the caller's Kotlin sink instead of
+    // throwing a JVM exception) and `return <sentinel>;`.
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut call_args: Vec<TokenStream> = Vec::new();
 
@@ -76,15 +71,6 @@ pub(crate) fn emit_jni_function_wrapper(
                 original_ident,
             )
         });
-        // Each input converter carries the throw fn for its failures —
-        // framework `throw_JniBindingError` by default, or a custom one
-        // bound via `Some(parse_quote!(<full path>))` in the input
-        // wrapper's closure.
-        let input_throw = entry
-            .metadata
-            .throws_action
-            .clone()
-            .unwrap_or_else(|| framework_throw.clone());
 
         // Flattenable data_class param: cross its fields as separate wire
         // params and reconstruct the struct inline — no per-call
@@ -99,8 +85,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let pty = &leaf.native_wire_ty;
                 wire_params.push(quote!(#pid: #pty));
             }
-            let (decode, call_arg) =
-                render_flat_input_decode(&plan, arg_ident, &on_err, &input_throw);
+            let (decode, call_arg) = render_flat_input_decode(&plan, arg_ident, &on_err);
             prelude.push(decode);
             call_args.push(call_arg);
             continue;
@@ -169,7 +154,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #arg_mut #arg_ident = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        #input_throw(&mut env, &__e);
+                        signal_error(&mut env, &__error_sink, &__e);
                         return #on_err;
                     }
                 };
@@ -182,7 +167,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #stage0_ident = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        #input_throw(&mut env, &__e);
+                        signal_error(&mut env, &__error_sink, &__e);
                         return #on_err;
                     }
                 };
@@ -193,12 +178,6 @@ pub(crate) fn emit_jni_function_wrapper(
             let n = entry.pre_stages.len();
             for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
                 let stage_fn = &stage.function.sig.ident;
-                let __stage_throw = stage
-                    .metadata
-                    .throws_action
-                    .clone()
-                    .expect("converter stage missing throws_action");
-                let stage_throw = &__stage_throw;
                 let is_last = idx == 0;
                 let out_ident = if is_last {
                     arg_ident.clone()
@@ -211,7 +190,7 @@ pub(crate) fn emit_jni_function_wrapper(
                     let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            #stage_throw(&mut env, &__e);
+                            signal_error(&mut env, &__error_sink, &__e);
                             return #on_err;
                         }
                     };
@@ -251,31 +230,19 @@ pub(crate) fn emit_jni_function_wrapper(
     // (framework `throw_JniBindingError` for plain wrappers, a domain
     // throw fn for throws-marked wrappers).
     //
-    // Pre_stages (rust-side throw stages) run in forward order BEFORE
-    // the wire-facing function: rust → pre_stages[0] → … →
-    // pre_stages[N-1] → function → wire. Each stage's match-throw
-    // dispatches to its own configured exception class.
-    let out_throw = output_entry
-        .metadata
-        .throws_action
-        .clone()
-        .unwrap_or_else(|| framework_throw.clone());
+    // Pre_stages run in forward order BEFORE the wire-facing function:
+    // rust → pre_stages[0] → … → pre_stages[N-1] → function → wire. Each
+    // stage's `Err` arm routes to the per-call `signal_error` sink.
     let mut output_phase: TokenStream = quote! { let __out = #call_expr; };
     let mut prev_out: TokenStream = quote!(__out);
     for (i, stage) in output_entry.pre_stages.iter().enumerate() {
         let stage_fn = &stage.function.sig.ident;
-        let __stage_throw = stage
-            .metadata
-            .throws_action
-            .clone()
-            .expect("converter stage missing throws_action");
-        let stage_throw = &__stage_throw;
         let next_ident = format_ident!("__out_s{}", i);
         output_phase.extend(quote! {
             let #next_ident = match #stage_fn(&mut env, #prev_out) {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    #stage_throw(&mut env, &__e);
+                    signal_error(&mut env, &__error_sink, &__e);
                     return #on_err;
                 }
             };
@@ -286,19 +253,23 @@ pub(crate) fn emit_jni_function_wrapper(
         match #conv_out(&mut env, #prev_out) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                #out_throw(&mut env, &__e);
+                signal_error(&mut env, &__error_sink, &__e);
                 #on_err
             }
         }
     });
 
+    // The trailing error-sink param: a Kotlin `ErrorSink` instance (JObject
+    // wire). Declared last so the wire param order matches the Kotlin
+    // `external fun` (which appends `errorSink: Any`).
     quote! {
         #[no_mangle]
         #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
         pub unsafe extern "C" fn #wrapper_ident<'a>(
             mut env: jni::JNIEnv<'a>,
             _class: jni::objects::JClass<'a>,
-            #(#wire_params),*
+            #(#wire_params,)*
+            __error_sink: jni::objects::JObject<'a>,
         ) -> #wire_return {
             #(#prelude)*
             #output_phase
@@ -340,14 +311,6 @@ pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {
     None
 }
 
-pub(crate) fn type_last_ident(ty: &syn::Type) -> Option<syn::Ident> {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return Some(last.ident.clone());
-        }
-    }
-    None
-}
 
 /// `VisitMut` that prefixes every bare single-segment `Type::Path` whose
 /// ident lives in `source_names` with `source_module`. Walks the full
@@ -1045,11 +1008,11 @@ pub(crate) fn struct_input_body(
         //  * Handle: read the JNINativeHandle object from the JVM slot,
         //    `peek()` the raw jlong, then run the per-field input converter
         //    (jlong-keyed; null handle ⇒ jlong 0 ⇒ `None` via the niche path).
-        //  * ValueClass / ValueBlob: the class is JVM-erased to its inner
-        //    field, so the slot is the erased descriptor (e.g. `[B`); read it
-        //    as a JObject, coerce to the inner wire, and run the per-field
-        //    converter. (Without this branch a value-class field would be
-        //    mis-decoded as a handle — peeking a non-handle object.)
+        //  * ValueBlob: the class is JVM-erased to its `bytes: ByteArray`, so
+        //    the slot is the `[B` descriptor; read it as a JObject, coerce to
+        //    the inner wire, and run the per-field converter. (Without this
+        //    branch a value-blob field would be mis-decoded as a handle —
+        //    peeking a non-handle object.)
         if let Some(proj) = &field_entry.metadata.projection {
             match proj.kind {
                 ProjectionKind::Handle => {
@@ -1092,11 +1055,8 @@ pub(crate) fn struct_input_body(
                         #decode
                     });
                 }
-                ProjectionKind::ValueClass | ProjectionKind::ValueBlob => {
-                    let descriptor = match proj.kind {
-                        ProjectionKind::ValueBlob => "[B".to_string(),
-                        _ => value_class_descriptor(ext, registry, proj),
-                    };
+                ProjectionKind::ValueBlob => {
+                    let descriptor = "[B";
                     let tmp_ident = format_ident!("__{}_jobj", fname_ident);
                     field_preludes.push(quote! {
                         let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #descriptor)
@@ -1281,9 +1241,9 @@ pub(crate) fn build_flat_input_plan(
     let (st, _) = registry.structs.get(&name)?;
     let key = TypeKey::from_type(&struct_ty);
     let cfg = ext.types.get(&key);
-    // Exclude value-class / value-blob / enum structs — they have their own
+    // Exclude value-blob / enum structs — they have their own
     // erasure and are not field-flattened here.
-    if cfg.map(|c| c.value_class || c.value_blob).unwrap_or(false) {
+    if cfg.map(|c| c.value_blob).unwrap_or(false) {
         return None;
     }
     if ext.is_kotlin_enum(&struct_ty) {
@@ -1406,14 +1366,13 @@ pub(crate) fn build_flat_input_plan(
 /// Render the native reconstruct for a [`FlatInputPlan`]: decode each leaf
 /// param with its per-field converter (lazily, inside the `present` branch for
 /// an `Option<struct>`) and bind the rebuilt struct to `arg_ident`. Each decode
-/// failure routes through `throw` and returns the function `on_err` sentinel —
-/// the same shape `struct_input_body`'s callers use. Returns the prelude
-/// statements and the call argument (`arg` or `&arg`).
+/// failure routes through `signal_error` (the per-call sink) and returns the
+/// function `on_err` sentinel. Returns the prelude statements and the call
+/// argument (`arg` or `&arg`).
 pub(crate) fn render_flat_input_decode(
     plan: &FlatInputPlan,
     arg_ident: &syn::Ident,
     on_err: &TokenStream,
-    throw: &syn::Path,
 ) -> (TokenStream, TokenStream) {
     let module = &plan.struct_module;
     let sid = &plan.struct_ident;
@@ -1431,7 +1390,7 @@ pub(crate) fn render_flat_input_decode(
             let #tmp = match #conv(&mut env, &#wid) {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    #throw(&mut env, &__e);
+                    signal_error(&mut env, &__error_sink, &__e);
                     return #on_err;
                 }
             };
@@ -1546,18 +1505,6 @@ pub(crate) fn flatten_struct_encode(
                         default: quote!(0i64),
                     });
                 }
-                ProjectionKind::ValueClass => {
-                    let d = value_class_descriptor(ext, registry, proj);
-                    preludes
-                        .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
-                    slots.push(EncSlot {
-                        ident: id,
-                        wire_ty: quote!(jni::objects::JObject),
-                        descriptor: d,
-                        is_object: true,
-                        default: quote!(jni::objects::JObject::null()),
-                    });
-                }
                 ProjectionKind::ValueBlob => {
                     preludes
                         .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
@@ -1598,7 +1545,7 @@ pub(crate) fn flatten_struct_encode(
             let is_vc = ext
                 .types
                 .get(&TypeKey::from_type(&inner_ty))
-                .map(|c| c.value_class)
+                .map(|c| c.value_blob)
                 .unwrap_or(false);
             if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
                 registry.structs.get(&name).map(|(st, _)| st.clone())
@@ -1771,7 +1718,7 @@ pub(crate) fn callback_arg_data_class(
     let is_vc = ext
         .types
         .get(&TypeKey::from_type(arg_ty))
-        .map(|c| c.value_class)
+        .map(|c| c.value_blob)
         .unwrap_or(false);
     if is_vc || ext.is_kotlin_enum(arg_ty) {
         return None;
@@ -1977,152 +1924,6 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
 // Helpers
 // ──────────────────────────────────────────────────────────────────────
 
-/// Given a source type's wire shape, return the Java class to test via
-/// `instanceof` and a prelude that narrows the dispatcher's
-/// `v: &jni::objects::JObject` into something the source's existing
-/// decoder accepts. The third element is the `decoded_ref` expression
-/// passed as the decoder's `v` argument — typically `&__narrowed`,
-/// except `JObject` is identity (`v` directly).
-///
-/// `jlong`-wired sources (opaque handles) **require** a typed FQN in
-/// `kotlin_type_fqns`. The generated arm does `instanceof <FQN>` +
-/// `peek()` — each opaque source has its own Java class, so multiple
-/// opaque sources in one `impl Into<T>` dispatcher are distinguishable.
-/// Works for both Borrow (read lock keeps `ptr` valid) and Consume
-/// (write lock + null-after-action keeps `ptr` valid during the JNI
-/// call). Missing-FQN panics at build time — register a typed FQN
-/// (see `JniGen::kotlin_type_fqn`) and ensure the corresponding
-/// Kotlin class exists.
-///
-/// Returns `None` for wires not covered by the table — caller treats it
-/// as a hard error (the source type can't participate in
-/// `impl Into<T>` dispatch via this generic builder).
-pub(crate) fn jobject_to_wire_adapter(
-    wire: &syn::Type,
-    src_ty: &syn::Type,
-    kotlin_type_fqns: &[(String, String)],
-) -> Option<(String, TokenStream, TokenStream)> {
-    let key = TypeKey::from_type(wire).as_str().to_string();
-    match key.as_str() {
-        // ── Boxed primitives: unbox via the standard Java accessor ────
-        "jni :: sys :: jlong" => {
-            let src_key = TypeKey::from_type(src_ty).as_str().to_string();
-            let fqn = kotlin_type_fqns
-                .iter()
-                .find(|(k, _)| k == &src_key)
-                .map(|(_, v)| v.replace('.', "/"))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "jobject_to_wire_adapter: opaque source `{}` (jlong wire) has no \
-                         typed Kotlin FQN registered. Register one via \
-                         `JniGen::kotlin_type_fqn(\"{}\", \"<package>.JNI<Type>\")` and \
-                         ensure the corresponding Kotlin class exists.",
-                        src_key, src_key
-                    )
-                });
-            Some((
-                fqn,
-                quote!(
-                    let __narrowed: jni::sys::jlong = env
-                        .call_method(v, "peek", "()J", &[])
-                        .and_then(|val| val.j())
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("NativeHandle.peek: {}", e)))?;
-                ),
-                quote!(&__narrowed),
-            ))
-        }
-        "jni :: sys :: jint" => Some((
-            "java/lang/Integer".to_string(),
-            quote!(
-                let __narrowed: jni::sys::jint = env
-                    .call_method(v, "intValue", "()I", &[])
-                    .and_then(|val| val.i())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Integer.intValue: {}", e)))?;
-            ),
-            quote!(&__narrowed),
-        )),
-        "jni :: sys :: jshort" => Some((
-            "java/lang/Short".to_string(),
-            quote!(
-                let __narrowed: jni::sys::jshort = env
-                    .call_method(v, "shortValue", "()S", &[])
-                    .and_then(|val| val.s())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Short.shortValue: {}", e)))?;
-            ),
-            quote!(&__narrowed),
-        )),
-        "jni :: sys :: jbyte" => Some((
-            "java/lang/Byte".to_string(),
-            quote!(
-                let __narrowed: jni::sys::jbyte = env
-                    .call_method(v, "byteValue", "()B", &[])
-                    .and_then(|val| val.b())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Byte.byteValue: {}", e)))?;
-            ),
-            quote!(&__narrowed),
-        )),
-        "jni :: sys :: jboolean" => Some((
-            "java/lang/Boolean".to_string(),
-            quote!(
-                let __narrowed: jni::sys::jboolean = env
-                    .call_method(v, "booleanValue", "()Z", &[])
-                    .and_then(|val| val.z())
-                    .map(|b| if b { 1u8 } else { 0u8 })
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Boolean.booleanValue: {}", e)))?;
-            ),
-            quote!(&__narrowed),
-        )),
-        "jni :: sys :: jfloat" => Some((
-            "java/lang/Float".to_string(),
-            quote!(
-                let __narrowed: jni::sys::jfloat = env
-                    .call_method(v, "floatValue", "()F", &[])
-                    .and_then(|val| val.f())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Float.floatValue: {}", e)))?;
-            ),
-            quote!(&__narrowed),
-        )),
-        "jni :: sys :: jdouble" => Some((
-            "java/lang/Double".to_string(),
-            quote!(
-                let __narrowed: jni::sys::jdouble = env
-                    .call_method(v, "doubleValue", "()D", &[])
-                    .and_then(|val| val.d())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Double.doubleValue: {}", e)))?;
-            ),
-            quote!(&__narrowed),
-        )),
-        // ── Reference wrappers — wrap `v.as_raw()`, release after use ─
-        "jni :: objects :: JString" => Some((
-            "java/lang/String".to_string(),
-            quote!(
-                let __narrowed: jni::objects::JString =
-                    unsafe { jni::objects::JString::from_raw(v.as_raw()) };
-            ),
-            quote!(&__narrowed),
-        )),
-        "jni :: objects :: JByteArray" => Some((
-            "[B".to_string(),
-            quote!(
-                let __narrowed: jni::objects::JByteArray =
-                    unsafe { jni::objects::JByteArray::from_raw(v.as_raw()) };
-            ),
-            quote!(&__narrowed),
-        )),
-        // ── JObject ───────────────────────────────────────────────────
-        "jni :: objects :: JObject" | "jni :: sys :: jobject" => {
-            // Need an explicit Java class — pull from kotlin_type_fqns.
-            let src_key = TypeKey::from_type(src_ty).as_str().to_string();
-            let fqn = kotlin_type_fqns
-                .iter()
-                .find(|(k, _)| k == &src_key)
-                .map(|(_, v)| v.replace('.', "/"))?;
-            Some((fqn, quote!(), quote!(v)))
-        }
-        _ => None,
-    }
-}
-
 pub(crate) fn pat_match(ty: &syn::Type, pat: &str) -> bool {
     ty.to_token_stream().to_string() == pat
 }
@@ -2190,85 +1991,16 @@ pub(crate) fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
     }
 }
 
-/// If `ty` is a registered `value_class`, return its single wrapped inner field
-/// type (e.g. `ZBytes` → the `bytes` field type). Value classes are JVM-erased
-/// to this inner type, so the struct encoder must resolve the ctor descriptor
-/// against it rather than the boxed value-class name.
-pub(crate) fn value_class_inner_type_for(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    ty: &syn::Type,
-) -> Option<syn::Type> {
-    value_class_inner_type(ext, registry, ty)
-}
-
-pub(crate) fn value_class_inner_type(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    ty: &syn::Type,
-) -> Option<syn::Type> {
-    let key = TypeKey::from_type(ty);
-    if !ext.types.get(&key).map(|c| c.value_class).unwrap_or(false) {
-        return None;
-    }
-    let ident = bare_path_ident(ty)?;
-    let (item_struct, _) = registry.structs.get(&ident)?;
-    let syn::Fields::Named(n) = &item_struct.fields else {
-        return None;
-    };
-    Some(n.named.first()?.ty.clone())
-}
-
-/// Kotlin inline-class field name to unwrap a value-projection param to its
-/// erased inner wire at the `JNINative` call site (`<param>.<field>`):
-/// * `value_blob` → the synthetic `"bytes"` field of the emitted blob value class.
-/// * `value_class` → the Rust struct's single field name (what the value-class
-///   emitter uses as the `@JvmInline` field).
-///
-/// Strips a leading `&` before resolving. `None` for handles / non-projections.
-pub(crate) fn value_projection_field(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    ty: &syn::Type,
-) -> Option<String> {
-    let bare: syn::Type = match ty {
-        syn::Type::Reference(r) => (*r.elem).clone(),
-        other => other.clone(),
-    };
-    let key = TypeKey::from_type(&bare);
-    let cfg = ext.types.get(&key)?;
-    if cfg.value_blob {
-        return Some("bytes".to_string());
-    }
-    if cfg.value_class {
-        let ident = bare_path_ident(&bare)?;
-        let (item_struct, _) = registry.structs.get(&ident)?;
-        let (field_ident, _) = value_class_inner_field(item_struct)?;
-        return Some(field_ident.to_string());
-    }
-    None
-}
-
 /// Inline-class field name for a value projection identified by its folded
-/// [`Projection::leaf_key`] (e.g. `"ZBytes"`) rather than by a raw param type.
-/// Used for `Option<value-class>` / `impl Into<value-class>` params where the
-/// written type isn't the bare value class but the projection still resolves
-/// the leaf — so the wrapper knows which inline field to unwrap (`<name>.bytes`).
-pub(crate) fn value_projection_field_for_leaf(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    leaf_key: &str,
-) -> Option<String> {
+/// [`Projection::leaf_key`] (e.g. `"ZZenohId"`) rather than by a raw param type.
+/// Used for `Option<value-blob>` params where the written type isn't the bare
+/// value class but the projection still resolves the leaf — so the wrapper
+/// knows which inline field to unwrap (`<name>.bytes`).
+pub(crate) fn value_projection_field_for_leaf(ext: &JniGen, leaf_key: &str) -> Option<String> {
     let key = TypeKey::parse(leaf_key);
     let cfg = ext.types.get(&key)?;
     if cfg.value_blob {
         return Some("bytes".to_string());
-    }
-    if cfg.value_class {
-        let ident = bare_path_ident(&key.to_type())?;
-        let (item_struct, _) = registry.structs.get(&ident)?;
-        let (field_ident, _) = value_class_inner_field(item_struct)?;
-        return Some(field_ident.to_string());
     }
     None
 }
@@ -2319,64 +2051,6 @@ pub(crate) fn nullable_kind_for_output(
     } else {
         NullableKind::Boxed
     }
-}
-
-/// The single named field of a `value_class` struct — `(ident, type)`. Used by
-/// the rank-0 value-class leaf to delegate to the inner field's converter.
-pub(crate) fn value_class_inner_field(s: &syn::ItemStruct) -> Option<(syn::Ident, syn::Type)> {
-    let syn::Fields::Named(n) = &s.fields else {
-        return None;
-    };
-    let f = n.named.first()?;
-    Some((f.ident.clone()?, f.ty.clone()))
-}
-
-/// JVM data-class ctor-slot descriptor for a `ValueClass` projection field. The
-/// value class is erased to its inner field, so the slot is the inner
-/// converter's descriptor (`[B` for byte-backed classes like `ZenohId`/`ZBytes`);
-/// a `Vec<value-class>` field folds to `List`.
-pub(crate) fn value_class_descriptor(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    proj: &Projection,
-) -> String {
-    fn is_iterable(s: &FoldStrategy) -> bool {
-        match s {
-            FoldStrategy::Iterable(_) => true,
-            FoldStrategy::Nullable { inner, .. } => is_iterable(inner),
-            FoldStrategy::Direct => false,
-        }
-    }
-    if is_iterable(&proj.strategy) {
-        return "Ljava/util/List;".to_string();
-    }
-    let vc_ty: syn::Type = syn::parse_str(&proj.leaf_key)
-        .unwrap_or_else(|_| panic!("value_class_descriptor: bad leaf_key `{}`", proj.leaf_key));
-    let inner_ty = value_class_inner_type(ext, registry, &vc_ty).unwrap_or_else(|| {
-        panic!(
-            "value_class_descriptor: `{}` is not a registered value class",
-            proj.leaf_key
-        )
-    });
-    let inner_wire = registry
-        .output_entry(&inner_ty)
-        .unwrap_or_else(|| {
-            panic!(
-                "value_class_descriptor: inner of `{}` has no output converter",
-                proj.leaf_key
-            )
-        })
-        .destination
-        .clone();
-    jni_field_access(&inner_wire)
-        .map(|(sig, _, _)| sig.to_string())
-        .unwrap_or_else(|| {
-            panic!(
-                "value_class_descriptor: inner wire of `{}` has no scalar field descriptor \
-                 — value classes over non-primitive inners need a descriptor rule here",
-                proj.leaf_key
-            )
-        })
 }
 
 // ──────────────────────────────────────────────────────────────────────

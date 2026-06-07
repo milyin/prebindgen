@@ -38,30 +38,8 @@ pub(crate) struct TypedHandle<'a> {
     /// Pure documentation, doesn't have to match anything in the Registry.
     pub rust_doc: &'a str,
     /// Package-qualified Kotlin class name (e.g.
-    /// `"io.zenoh.jni.JNIPublisher"`). The Rust type-key registered for
-    /// this FQN via [`JniGen::kotlin_type_fqn`] identifies which
-    /// parameter of each promoted function becomes `this`.
+    /// `"io.zenoh.jni.JNIPublisher"`).
     pub kotlin_fqn: &'a str,
-    /// `#[prebindgen]` fns declared as **instance methods** via
-    /// [`JniGen::method`]. The matched first parameter is dropped from
-    /// the Kotlin signature and substituted by inherited `withPtr` /
-    /// `consume` scope. Mismatch (no param matches the class type) is a
-    /// build-time error.
-    pub instance_methods: &'a [MethodEntry],
-    /// `#[prebindgen]` fns declared as **companion-object methods** via
-    /// [`JniGen::companion_method`]. Rendered inside `companion object`
-    /// using the same shape as a package-level wrapper.
-    pub companion_methods: &'a [MethodEntry],
-}
-
-/// Reverse-lookup the Rust type-key registered for a given Kotlin FQN
-/// in [`JniGen::kotlin_type_fqns`]. Used by [`JniGen::write_typed_handles`]
-/// to determine which parameter of each promoted function should be
-/// dropped (becomes `this`).
-pub(crate) fn rust_key_for_fqn<'a>(ext: &'a JniGen, fqn: &str) -> Option<&'a str> {
-    ext.kotlin_type_fqns
-        .iter()
-        .find_map(|(rust, k)| (k == fqn).then_some(rust.as_str()))
 }
 
 impl JniGen {
@@ -79,7 +57,6 @@ impl JniGen {
         let mut written = Vec::new();
         written.push(self.write_native_handle(kotlin_root)?);
         written.extend(self.emit_callback_files(registry, kotlin_root)?);
-        written.extend(self.write_exception_classes(kotlin_root)?);
         written.extend(self.write_enum_classes(registry, kotlin_root)?);
         written.extend(self.write_data_classes(registry, kotlin_root)?);
         written.extend(self.write_value_blobs(kotlin_root)?);
@@ -91,28 +68,14 @@ impl JniGen {
             .map(|h| TypedHandle {
                 rust_doc: &h.rust_doc,
                 kotlin_fqn: &h.kotlin_fqn,
-                instance_methods: h.instance_methods.as_slice(),
-                companion_methods: h.companion_methods.as_slice(),
             })
             .collect();
-        let kotlin_types = self.build_kotlin_type_map();
-        written.extend(self.write_typed_handles(
-            &typed_handles,
-            registry,
-            &kotlin_types,
-            kotlin_root,
-        )?);
+        written.extend(self.write_typed_handles(&typed_handles, kotlin_root)?);
         for (subpackage, pkg_cfg) in &self.packages {
             if pkg_cfg.functions.is_empty() {
                 continue;
             }
-            written.push(self.write_jni_package(
-                registry,
-                &kotlin_types,
-                kotlin_root,
-                subpackage,
-                pkg_cfg,
-            )?);
+            written.push(self.write_jni_package(registry, kotlin_root, subpackage, pkg_cfg)?);
         }
         written.push(self.write_jni_native(registry, kotlin_root)?);
         Ok(written)
@@ -195,6 +158,29 @@ impl JniGen {
                 }\n",
             );
         }
+        // Error-sink channel. Every generated extern takes a trailing
+        // `ErrorSink`; on a native error the Rust side calls
+        // `onError(message)` (no JVM throw on the Rust side). The generated
+        // wrappers install a default sink that captures the message into an
+        // `ErrorHolder` and rethrow it as a `ZException` after the call
+        // returns and any handle locks release — so caller `try/catch` keeps
+        // working. A caller may pass a custom sink to the `JNINative` extern
+        // directly and do something else. This is the seed of the unified
+        // callback return-channel (a later step can add an `onValue` leg).
+        s.push_str(
+            "\n/** Error callback invoked by native code instead of throwing. */\n\
+            public fun interface ErrorSink {\n\
+            \x20   public fun onError(message: String)\n\
+            }\n\n\
+            /** Mutable holder a default [ErrorSink] writes into; the wrapper\n\
+            \x20*  rethrows after the native call returns. */\n\
+            public class ErrorHolder {\n\
+            \x20   @JvmField public var message: String? = null\n\
+            }\n\n\
+            /** Exception a generated wrapper raises when native code reported an\n\
+            \x20*  error via the [ErrorSink] channel. */\n\
+            public class ZException(message: String?) : Exception(message)\n",
+        );
         let file = KotlinFile {
             contents: s,
             package: self.package.clone(),
@@ -323,46 +309,9 @@ impl JniGen {
             handles.push(OwnedTypedHandle {
                 rust_doc,
                 kotlin_fqn: kotlin_fqn.clone(),
-                instance_methods: cfg.instance_methods.clone(),
-                companion_methods: cfg.companion_methods.clone(),
             });
         }
         handles
-    }
-
-    /// Build the `KotlinTypeMap` view consumed by the typed-handle and
-    /// JNIWrappers emitters. Combines callback FQNs from
-    /// [`Self::collect_kotlin_callback_fqns`] (auto-derived or
-    /// override) with `kotlin_name` entries from the structured config.
-    /// Structured-config entries win on conflict.
-    fn build_kotlin_type_map(&self) -> KotlinTypeMap {
-        let mut map = KotlinTypeMap::new().with_primitive_builtins();
-        for (key, cfg) in &self.types {
-            if let Some(name) = &cfg.kotlin_name {
-                map = map.add(key.as_str(), name.clone());
-            }
-        }
-        map
-    }
-
-    /// Build a `KotlinTypeMap` with the registry's callback FQNs prepended
-    /// onto `base` (callback entries first, `base` entries win on conflict).
-    /// Single home for the "merge callbacks onto a type map" step the Kotlin
-    /// emitters used to open-code at five call sites.
-    pub(crate) fn merged_kotlin_type_map(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        base: &KotlinTypeMap,
-    ) -> KotlinTypeMap {
-        let callback_fqns = self.collect_kotlin_callback_fqns(registry);
-        let mut map = KotlinTypeMap::new();
-        for (k, v) in callback_fqns.iter() {
-            map = map.add(k, v.clone());
-        }
-        for (k, v) in base.iter() {
-            map = map.add(k, v.clone());
-        }
-        map
     }
 }
 
@@ -372,48 +321,9 @@ impl JniGen {
 pub(crate) struct OwnedTypedHandle {
     pub rust_doc: String,
     pub kotlin_fqn: String,
-    pub instance_methods: Vec<MethodEntry>,
-    pub companion_methods: Vec<MethodEntry>,
 }
 
 impl JniGen {
-    /// Emit one Kotlin file per registered
-    /// throwable class (via [`crate::api::lang::jnigen::jni::JniGen::throwable`]) — each becomes a
-    /// `public class <Name>(message: String? = null) : Exception()`
-    /// landing under `<package>/<Name>.kt`. Iterates `self.exceptions`
-    /// in declaration order; returns every path written.
-    pub(crate) fn write_exception_classes(
-        &self,
-        output_dir: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut written = Vec::new();
-        for exc in &self.exceptions {
-            // Skip exceptions whose Rust type already has a data-class (or
-            // ptr/enum) Kotlin emission — those classes carry the `: Exception`
-            // extension themselves (via `cfg.throwable` in
-            // `render_data_class_source`). The stub-template path only runs
-            // for un-registered exception types — in practice that's the
-            // framework's `JniBindingError`, declared inside `JniGen::new`
-            // without going through `.throwable()`.
-            let key = TypeKey::from_type(&exc.rust_type);
-            if self
-                .types
-                .get(&key)
-                .map(|cfg| cfg.kotlin_name.is_some())
-                .unwrap_or(false)
-            {
-                continue;
-            }
-            let (package, class_name) = match exc.kotlin_fqn.rsplit_once('.') {
-                Some((p, c)) => (p.to_string(), c.to_string()),
-                None => (String::new(), exc.kotlin_fqn.clone()),
-            };
-            let file = templates::exception::emit_exception(&package, &class_name, &exc.rust_short);
-            written.push(file.write(output_dir)?);
-        }
-        Ok(written)
-    }
-
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type
     /// (skipping any flagged with `.suppress_kotlin_code()`). Variants
     /// render in declaration order using SCREAMING_SNAKE_CASE names; the
@@ -428,7 +338,6 @@ impl JniGen {
         output_dir: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         let mut written = Vec::new();
-        let kotlin_types = self.merged_kotlin_type_map(registry, &self.build_kotlin_type_map());
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -460,16 +369,7 @@ impl JniGen {
                 None => (String::new(), kotlin_fqn.clone()),
             };
             let file = KotlinFile {
-                contents: render_enum_source(
-                    self,
-                    &package,
-                    &class_name,
-                    item_enum,
-                    &cfg.instance_methods,
-                    &cfg.companion_methods,
-                    registry,
-                    &kotlin_types,
-                ),
+                contents: render_enum_source(&package, &class_name, item_enum),
                 package,
                 class_name,
             };
@@ -487,7 +387,6 @@ impl JniGen {
         output_dir: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         let mut written = Vec::new();
-        let kotlin_types = self.merged_kotlin_type_map(registry, &self.build_kotlin_type_map());
         let mut rust_names: Vec<String> = Vec::new();
         let mut aliases: Vec<(String, String)> = Vec::new();
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -529,12 +428,6 @@ impl JniGen {
                     &class_name,
                     item_struct,
                     registry,
-                    &kotlin_types,
-                    &cfg.instance_methods,
-                    &cfg.companion_methods,
-                    cfg.throwable,
-                    cfg.value_class,
-                    key.as_str(),
                 ),
                 package: package.clone(),
                 class_name,
@@ -579,7 +472,6 @@ impl JniGen {
     pub(crate) fn write_jni_package(
         &self,
         registry: &Registry<KotlinMeta>,
-        kotlin_types: &KotlinTypeMap,
         output_dir: &Path,
         subpackage: &str,
         pkg_cfg: &crate::api::lang::jnigen::jni::PackageConfig,
@@ -592,8 +484,7 @@ impl JniGen {
         } else {
             format!("{}.{}", self.package, subpackage)
         };
-        let contents =
-            render_jni_package_source(self, registry, kotlin_types, &pkg_cfg.functions, &package);
+        let contents = render_jni_package_source(self, registry, &pkg_cfg.functions, &package);
         let file = KotlinFile {
             package,
             class_name,
@@ -655,46 +546,20 @@ impl JniGen {
     pub(crate) fn write_typed_handles(
         &self,
         handles: &[TypedHandle<'_>],
-        registry: &Registry<KotlinMeta>,
-        kotlin_types: &KotlinTypeMap,
         output_dir: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Merged Kotlin type map (callback FQNs + caller-supplied).
-        // Same merge order as `render_jni_wrappers_source` — kotlin_types
-        // entries WIN over the auto-derived callback FQNs.
-        let merged_types = self.merged_kotlin_type_map(registry, kotlin_types);
-
         let mut written = Vec::new();
         for handle in handles {
             let (package, class_name) = match handle.kotlin_fqn.rsplit_once('.') {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), handle.kotlin_fqn.to_string()),
             };
-            // The typed-handle's Rust type-key is always required — it
-            // identifies which param of each `.method(...)` entry becomes
-            // `this`. Even with no methods declared we resolve it (cheap)
-            // so the wrapper API stays uniform.
-            let rust_key = rust_key_for_fqn(self, handle.kotlin_fqn)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "write_typed_handles: kotlin_fqn `{}` is not registered via \
-                         JniGen::kotlin_type_fqn — required to identify the typed \
-                         handle's Rust type-key for promoted-method param matching.",
-                        handle.kotlin_fqn
-                    )
-                })
-                .to_string();
             let file = KotlinFile {
                 contents: render_typed_handle_source(
                     self,
                     &package,
                     &class_name,
                     handle.rust_doc,
-                    handle.instance_methods,
-                    handle.companion_methods,
-                    &rust_key,
-                    registry,
-                    &merged_types,
                 ),
                 package,
                 class_name,
@@ -704,43 +569,6 @@ impl JniGen {
         Ok(written)
     }
 
-    /// Return the `<rust-type-key> → <kotlin FQN>` map for every
-    /// `impl Fn(args)` type the Registry has resolved. Use this to merge
-    /// into a `KotlinTypeMap` consumed by the aggregated-interface
-    /// generator (so it can refer to callbacks by their Kotlin FQN).
-    pub(crate) fn collect_kotlin_callback_fqns(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> KotlinTypeMap {
-        let mut map = KotlinTypeMap::new();
-        let mut seen: HashSet<TypeKey> = HashSet::new();
-        for buckets in [&registry.input_types, &registry.output_types] {
-            for bucket in buckets.iter() {
-                for (key, slot) in bucket {
-                    if slot.is_none() {
-                        continue;
-                    }
-                    if !seen.insert(key.clone()) {
-                        continue;
-                    }
-                    let ty = key.to_type();
-                    if let Some(args) = extract_fn_trait_args(&ty) {
-                        // Re-use the single source of truth for callback
-                        // FQN derivation — same closure-mangled name the
-                        // converter dispatcher stamps into metadata.
-                        let fqn = self.auto_callback_fqn(&args);
-                        map = map.add(key.as_str(), fqn);
-                    }
-                }
-            }
-        }
-        // Merge in plugin-supplied extra mappings (e.g. data-class FQNs
-        // that aren't reachable from impl-Fn types).
-        for (rust_canon, fqn) in &self.kotlin_type_fqns {
-            map = map.add(rust_canon.as_str(), fqn.clone());
-        }
-        map
-    }
 }
 
 pub(crate) fn build_callback_kotlin_file(

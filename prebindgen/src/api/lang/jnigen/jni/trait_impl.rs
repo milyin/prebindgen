@@ -18,26 +18,23 @@ impl JniGen {
     /// wires); produces a value of `rust`. Returned function has its name
     /// already set per the JNI plugin's naming convention.
     ///
-    /// `exc` ties the body convention to the bound exception:
-    /// * `None` (non-throwing) → signature `Result<rust, __JniErr>` and
-    ///   the body is wrapped `Ok(<body>)`; `?` inside propagates the
-    ///   framework error.
-    /// * `Some(X)` (throwing) → signature `Result<rust, X::rust_type>`
-    ///   and the body is emitted as-is — `<body>` already evaluates to
-    ///   that `Result`, so no `Ok` wrap (and no cross-type `From`).
+    /// `exc` ties the body convention to the `Result`'s Rust error type:
+    /// * `None` → signature `Result<rust, __JniErr>` and the body is
+    ///   wrapped `Ok(<body>)`; `?` inside propagates the framework error.
+    /// * `Some(E)` → signature `Result<rust, E>` and the body is emitted
+    ///   as-is — `<body>` already evaluates to that `Result`, so no `Ok`
+    ///   wrap. `E` is the raw error type peeled from a `Result<T, E>`.
     pub(crate) fn build_input_fn(
         &self,
         rust: &syn::Type,
         wire: &syn::Type,
         body: &syn::Expr,
-        exc: Option<&ExceptionConfig>,
+        exc: Option<&syn::Type>,
     ) -> syn::ItemFn {
         let name = input_name(rust, wire);
         let rust_with_lifetime = annotate_borrow_with_lifetime(rust, "env");
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
-        let err_type = exc
-            .map(|e| e.rust_type.clone())
-            .unwrap_or_else(default_err_type);
+        let err_type = exc.cloned().unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
         if matches!(wire, syn::Type::Ptr(_)) {
             syn::parse_quote!(
@@ -67,13 +64,11 @@ impl JniGen {
         rust: &syn::Type,
         wire: &syn::Type,
         body: &syn::Expr,
-        exc: Option<&ExceptionConfig>,
+        exc: Option<&syn::Type>,
     ) -> syn::ItemFn {
         let name = output_name(rust, wire);
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        let err_type = exc
-            .map(|e| e.rust_type.clone())
-            .unwrap_or_else(default_err_type);
+        let err_type = exc.cloned().unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
         syn::parse_quote!(
             #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -223,11 +218,6 @@ impl JniGen {
                 names.insert(short);
             }
         }
-        for exc in self.exceptions.iter().skip(1) {
-            if let Some(short) = type_last_ident(&exc.rust_type) {
-                names.insert(short.to_string());
-            }
-        }
         names
     }
 
@@ -269,291 +259,43 @@ impl JniGen {
         }
     }
 
-    /// Emit the JObject-typed dispatching input converter for
-    /// `impl Into<target> + Send + 'static` given an already-assembled
-    /// source list. The caller — typically a
-    /// [`Prebindgen::dispatch_into_input`] implementation —
-    /// supplies every arm explicitly (including the identity arm
-    /// `target → target` if wanted) with each source's borrow/consume
-    /// mode.
-    ///
-    /// Emits an `instanceof` chain over each source `S`: every arm
-    /// calls `S`'s already-registered input decoder (wire-narrowed
-    /// from the parameter's `JObject`) and converts to `target` via
-    /// `TryInto`, so both `From<S> for target` (zero-cost) and
-    /// `TryFrom<S> for target` (fallible) work uniformly.
-    ///
-    /// Per-source mode handling (only relevant for opaque sources —
-    /// non-opaque sources have no `Box` slot, so mode is moot):
-    /// * [`IntoSourceMode::Borrow`] → decode via
-    ///   `OwnedObject::from_raw(...).clone()`. Java's `Box` slot stays
-    ///   live; requires `T: Clone`.
-    /// * [`IntoSourceMode::Consume`] → bypass `OwnedObject` and inline
-    ///   `*Box::from_raw(ptr as *mut T)`. Java's `Box` slot is taken;
-    ///   the caller's typed handle must be invalidated (the Kotlin
-    ///   wrapper does this via `NativeHandle.consume`). No `T: Clone`
-    ///   bound.
-    ///
-    /// Returns `None` when `sources` is empty or any source lacks a
-    /// registered input decoder; the resolver iterates to a fixed
-    /// point and will retry on a later round once all decoders exist.
-    pub fn emit_into_dispatcher(
-        &self,
-        target: &syn::Type,
-        sources: &[IntoSource],
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        if sources.is_empty() {
-            return None;
-        }
-        let target_key = TypeKey::from_type(target).as_str().to_string();
-
-        // Single-source deterministic path: with exactly one declared source
-        // there is nothing to *select* at runtime, so we skip the
-        // `find_class` + `is_instance_of` chain entirely. The param decodes
-        // the one statically-known source directly and (when the source isn't
-        // already the target) converts via `TryInto`. The returned converter
-        // carries the SOURCE's real `kotlin_name` + `projection`, so
-        // `render_wrapper_fn` classifies the param as an ordinary typed /
-        // handle / value param (Borrow/Consume/ValueUnwrap/PassThrough) — no
-        // `Any`, no `instanceof`. Multi-source (`len > 1`) keeps the dispatch
-        // chain below.
-        if sources.len() == 1 {
-            let src_ty = &sources[0].source_type;
-            let src_entry = registry.input_entry(src_ty)?;
-            // Identity (`S == target`): alias the target's own input
-            // converter verbatim — its function already yields `target`.
-            if TypeKey::from_type(src_ty) == TypeKey::from_type(target) {
-                return Some(ConverterImpl {
-                    function: src_entry.function.clone(),
-                    destination: src_entry.destination.clone(),
-                    pre_stages: src_entry.pre_stages.clone(),
-                    niches: src_entry.niches.clone(),
-                    metadata: src_entry.metadata.clone(),
-                });
-            }
-            // Non-identity: decode `S` (wire-facing `function`), then run a
-            // `TryInto::<target>` stage. Mirrors the composed-converter shape
-            // in `lookup_input` (stage first, then the source's own stages).
-            let body: syn::Expr = syn::parse_quote!({
-                ::core::convert::TryInto::try_into(v).map_err(|e| {
-                    <__JniErr as ::core::convert::From<String>>::from(format!(
-                        "impl Into conversion failed: {}",
-                        e
-                    ))
-                })?
-            });
-            let stage = Stage {
-                function: self.build_output_fn(src_ty, target, &body, None),
-                metadata: KotlinMeta::default(),
-            };
-            let mut pre_stages = vec![stage];
-            pre_stages.extend(src_entry.pre_stages.iter().cloned());
-            return Some(ConverterImpl {
-                function: src_entry.function.clone(),
-                destination: src_entry.destination.clone(),
-                pre_stages,
-                niches: src_entry.niches.clone(),
-                metadata: src_entry.metadata.clone(),
-            });
-        }
-
-        let mut arms: Vec<TokenStream> = Vec::with_capacity(sources.len());
-        for src in sources {
-            let src_ty = &src.source_type;
-            let src_key = TypeKey::from_type(src_ty).as_str().to_string();
-            let src_entry = registry.input_entry(src_ty)?;
-            let decoder = src_entry.function.sig.ident.clone();
-            let wire = src_entry.destination.clone();
-            let (java_class, prelude, decoded_ref) =
-                jobject_to_wire_adapter(&wire, src_ty, &self.kotlin_type_fqns).unwrap_or_else(
-                    || {
-                        panic!(
-                            "emit_into_dispatcher: source `{}` has wire `{}` which is not a \
-                             supported Into-source wire shape (target = `{}`)",
-                            src_key,
-                            wire.to_token_stream(),
-                            target_key
-                        )
-                    },
-                );
-            // Opaque sources branch on the declared mode. Non-opaque
-            // sources don't own a `Box` slot, so they just decode
-            // normally and `mode` has no effect on the emitted code.
-            let is_opaque = src_entry.metadata.is_direct_handle();
-            let decode_expr: syn::Expr = if is_opaque {
-                match src.mode {
-                    // Method-call `.clone()` triggers method auto-deref:
-                    // OwnedObject<T> has no Clone impl, so dispatch
-                    // derefs to `&T` and calls `T::clone`. Requires
-                    // `T: Clone`. Java's `Box` slot stays live.
-                    IntoSourceMode::Borrow => syn::parse_quote!(
-                        unsafe { #decoder(env, #decoded_ref)? }.clone()
-                    ),
-                    // Bypass the decoder entirely: reconstruct the
-                    // unique `Box<T>` from Java's pointer and move `T`
-                    // out, freeing the heap allocation. Mirrors the
-                    // direct-by-value consume codegen at
-                    // `emit_jni_function_wrapper`. Unique-ownership
-                    // invariant is upheld by `NativeHandle.consume`
-                    // (write lock + atomic null) on the Kotlin side.
-                    // `#decoded_ref` is `&__narrowed` for jlong wires;
-                    // dereference to recover the `jlong` value.
-                    IntoSourceMode::Consume => syn::parse_quote!(
-                        unsafe { *std::boxed::Box::from_raw(*#decoded_ref as *mut #src_ty) }
-                    ),
-                }
-            } else {
-                syn::parse_quote!(unsafe { #decoder(env, #decoded_ref)? })
-            };
-            arms.push(quote! {
-                {
-                    let __class = env
-                        .find_class(#java_class)
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("find {}: {}", #java_class, e)))?;
-                    let __is = env
-                        .is_instance_of(v, &__class)
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("instanceof {}: {}", #java_class, e)))?;
-                    if __is {
-                        #prelude
-                        let __decoded: #src_ty = #decode_expr;
-                        let __converted: #target = ::core::convert::TryInto::try_into(__decoded)
-                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(
-                                "convert {} -> {}: {}", #src_key, #target_key, e)))?;
-                        return Ok(__converted);
-                    }
-                }
-            });
-        }
-
-        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
-        let pat: syn::Type = syn::parse_quote!(impl Into<#target> + Send + 'static);
-        let name = input_name(&pat, &wire);
-        let target_label = target_key.clone();
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-            pub(crate) unsafe fn #name<'env, 'v>(
-                env: &mut jni::JNIEnv<'env>,
-                v: &jni::objects::JObject<'v>,
-            ) -> ::core::result::Result<#target, __JniErr> {
-                #(#arms)*
-                Err(<__JniErr as ::core::convert::From<String>>::from(format!(
-                    "impl Into<{}>: no matching source arm for runtime class", #target_label)))
-            }
-        );
-
-        // JObject wire carries a genuine `null` value that no live
-        // source-arm decode ever produces — expose it as a niche so an
-        // outer `Option<impl Into<T>>` can carve it (null = None) and
-        // stay on the JObject wire (no boxing).
-        let niches = default_niches_for_wire(&wire);
-        Some(ConverterImpl {
-            function,
-            destination: wire,
-            pre_stages: vec![],
-            niches,
-            // `impl Into<T>` parameters surface as Kotlin `Any` — the
-            // safe wrapper does an `is JNI<X>` chain on the value, and
-            // the JNI dispatcher's matching arm uses each source's
-            // typed FQN under the hood. The dispatcher's per-arm `?`
-            // decode + no-match `Err` fallthrough can fail, so it
-            // carries the framework throws.
-            metadata: self.framework_meta(Some("Any".to_string())),
-        })
-    }
 }
 
-/// One `pub(crate) fn throw_<short>(...)` item for an exception.
-/// Emitted from [`Prebindgen::prerequisites`] so it lands at the
-/// top of the same generated file as every other converter — wrapper
-/// code below can call it by bare name (`throw_<short>(env, &err)`);
-/// hand-written modules in the binding crate reach it via the include
-/// module path (e.g. `crate::generated::throw_<short>`). The body
-/// finds the JVM class by slash-form FQN and `throw_new`s with
-/// `err.to_string()`, logging on either failure.
+/// The single `signal_error` free function: the one error channel every
+/// generated extern uses. Instead of throwing a JVM exception, it invokes
+/// the per-call Kotlin `ErrorSink.onError(message: String)` callback with the
+/// error's `Display` string. The caller's wrapper installs a default sink
+/// that captures the message and rethrows it as a Kotlin exception after the
+/// native call returns (so SDK `try/catch` keeps working), but a caller may
+/// pass any sink and do anything else. This is the seed of the unified
+/// callback return-channel: a later step can add an `onValue(...)` leg so
+/// success values flow through the same sink.
 ///
-/// The error parameter is generic over `Display` rather than the
-/// exception's own Rust type. This decouples the *thrown JVM class*
-/// from the *Rust error value*: the unified converter error type
-/// (`__JniErr`, the binding's primary domain error) flows through
-/// every converter, but each converter chooses which `throw_<short>`
-/// to call — so a built-in decode failure carries the domain error
-/// value yet surfaces on the JVM as `JniBindingError`. (It also avoids
-/// any cross-crate `From` bridge between the framework error type and
-/// the domain error type, which the crate layering forbids.)
-pub(crate) fn build_throw_fn_item(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    exc: &ExceptionConfig,
-) -> syn::Item {
-    let throw_fn = &exc.throw_fn_name;
-    let class_path_slashes = exc.kotlin_fqn.replace('.', "/");
-    // Structured path: when the exception's Rust type has its own
-    // registered output converter (i.e. `.data_class(...).throwable()`),
-    // construct the JVM object via that converter and throw it as the
-    // type's own JVM class — so a structured error carries its fields
-    // across the boundary, not just `Display::to_string`. Requires the
-    // type to be `Clone` (the converter consumes `v` by value).
-    let key = TypeKey::from_type(&exc.rust_type);
-    let is_data_class = ext
-        .types
-        .get(&key)
-        .map(|cfg| {
-            cfg.kotlin_name.is_some()
-                && cfg.opaque.is_none()
-                && cfg.enum_cfg.is_none()
-                && cfg.callback_kotlin_fqn.is_none()
-                && cfg.throwable
-        })
-        .unwrap_or(false);
-    let output_conv = if is_data_class {
-        registry
-            .output_entry(&exc.rust_type)
-            .map(|e| e.function.sig.ident.clone())
-    } else {
-        None
-    };
-    if let Some(conv) = output_conv {
-        let rust_ty = &exc.rust_type;
-        let class_short = &exc.rust_short;
-        return syn::parse_quote!(
-            #[allow(non_snake_case)]
-            pub(crate) fn #throw_fn(env: &mut jni::JNIEnv, err: &#rust_ty) {
-                let jobj = match unsafe { #conv(env, err.clone()) } {
-                    Ok(o) => o,
-                    Err(e) => {
-                        tracing::error!(
-                            "Failed to encode {} for throw: {}",
-                            #class_short,
-                            e
-                        );
-                        return;
-                    }
-                };
-                let throwable = jni::objects::JThrowable::from(jobj);
-                if let Err(e) = env.throw(throwable) {
-                    tracing::error!("Failed to throw exception: {}", e);
-                }
-            }
-        );
-    }
-    // Display path: framework `JniBindingError` (no `#[prebindgen]`,
-    // no data class — just a class name + a Display message).
+/// `err` is generic over `Display`, so both the framework `__JniErr`
+/// (`JniBindingError`, a `String` wrapper) and a domain `Result<T, E>`'s `E`
+/// funnel through one function with no per-type routing.
+pub(crate) fn build_signal_error_item() -> syn::Item {
     syn::parse_quote!(
-        #[allow(non_snake_case)]
-        pub(crate) fn #throw_fn(
+        #[allow(non_snake_case, dead_code)]
+        pub(crate) fn signal_error(
             env: &mut jni::JNIEnv,
+            sink: &jni::objects::JObject,
             err: &(impl ::core::fmt::Display + ?Sized),
         ) {
-            let exception_class = match env.find_class(#class_path_slashes) {
-                Ok(c) => c,
+            let __msg = match env.new_string(err.to_string()) {
+                Ok(s) => s,
                 Err(e) => {
-                    tracing::error!("Failed to retrieve exception class: {}", e);
+                    tracing::error!("signal_error: new_string failed: {}", e);
                     return;
                 }
             };
-            if let Err(e) = env.throw_new(exception_class, err.to_string()) {
-                tracing::error!("Failed to throw exception: {}", e);
+            if let Err(e) = env.call_method(
+                sink,
+                "onError",
+                "(Ljava/lang/String;)V",
+                &[jni::objects::JValue::Object(&__msg)],
+            ) {
+                tracing::error!("signal_error: onError call failed: {}", e);
             }
         }
     )
@@ -655,22 +397,13 @@ impl Prebindgen for JniGen {
     /// typed-handle / `JNIWrappers` signature.
     type Metadata = KotlinMeta;
 
-    /// Union of every per-class `.method(...)` / `.companion_method(...)`
-    /// list and every `.function(...)` list across all
+    /// Union of every `.package_fun(...)` list across all
     /// [`Self::package`] contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
     /// binding; functions not in this set are skipped by the registry's
     /// signature scan and by the per-item emitter.
     fn declared_functions(&self) -> std::collections::HashSet<syn::Ident> {
         let mut out = std::collections::HashSet::new();
-        for cfg in self.types.values() {
-            for m in &cfg.instance_methods {
-                out.insert(m.rust_ident.clone());
-            }
-            for m in &cfg.companion_methods {
-                out.insert(m.rust_ident.clone());
-            }
-        }
         for pkg in self.packages.values() {
             for m in &pkg.functions {
                 out.insert(m.rust_ident.clone());
@@ -695,33 +428,23 @@ impl Prebindgen for JniGen {
     /// crate's source tree.
     fn prerequisites(&self, registry: &Registry<KotlinMeta>) -> Vec<syn::Item> {
         // `__JniErr` is the **framework** error type alias — always the
-        // pre-registered `JniBindingError`, never a user-declared
-        // application exception. Built-in converter bodies compose
-        // their `?` failures into this type via its `From<String>`
-        // impl, so a built-in decode failure surfaces as
-        // `JniBindingError` on the JVM. Throwing converters
-        // (closures returning `Some(parse_quote!(<full path>))` in the middle slot of
-        // `input_wrapper` / `output_wrapper`) instead emit functions
-        // typed `Result<…, X>` — they bypass `__JniErr` entirely so no
-        // cross-type bridge between the framework error and a domain
-        // error is needed (the orphan rule forbids one).
-        let error_type = &self.framework_exception().rust_type;
+        // `JniBindingError` String-wrapper. Built-in converter bodies compose
+        // their `?` failures into this type via its `From<String>` impl. A
+        // `Result<T, E>` return instead binds its own raw `E`; both funnel to
+        // the per-call `signal_error` sink (generic over `Display`).
+        let error_type = framework_error_type();
         let alias: syn::Item = syn::parse_quote!(
             #[allow(dead_code)]
             pub(crate) type __JniErr = #error_type;
         );
         let mut items = vec![alias];
         items.extend(owned_object_prerequisite_items());
-        // Throw fns — one `pub(crate) fn throw_<short>(env, &err)` per
-        // registered throwable class (via `.throwable()`). Emitted as prerequisites
-        // (above the converters) so the wrappers below can reference
-        // them by bare name; the binding crate references them as
-        // `<include_module>::throw_<short>` from outside the file.
-        items.extend(
-            self.exceptions
-                .iter()
-                .map(|exc| build_throw_fn_item(self, registry, exc)),
-        );
+        // The single `signal_error` channel fn the extern bodies call on any
+        // `Err`. Emitted above the converters so wrapper code references it by
+        // bare name; the binding crate reaches it as
+        // `<include_module>::signal_error` from outside the file.
+        items.push(build_signal_error_item());
+        let _ = registry;
         // Handle destructors — one `extern "C" freePtr<suffix>` per
         // non-suppressed opaque handle (the Rust half of the typed-handle
         // `free()` pair the Kotlin emitter generates).
@@ -893,50 +616,6 @@ impl Prebindgen for JniGen {
         }
         if let Some(name) = bare_path_ident(ty) {
             if let Some((s, _)) = registry.structs.get(&name) {
-                // Value-class leaf (input mirror of the output branch in
-                // `on_output_type_rank_0`): a `@JvmInline value class` is erased
-                // to its single inner field, so decode that field's wire
-                // directly and construct the value class, tagging a `ValueClass`
-                // projection. This makes a value-class *parameter* render as
-                // `ValueUnwrap` (the `external fun` declares the erased inner —
-                // e.g. `ByteArray` — and the wrapper passes `<name>.<field>`),
-                // which is required: a `@JvmInline value class` in an
-                // `external fun` signature triggers Kotlin's value-class name
-                // mangling (`name-<hash>`) and breaks JNI linkage against the
-                // unmangled native symbol.
-                if self.types.get(&key).map(|c| c.value_class).unwrap_or(false) {
-                    if let Some((inner_ident, inner_ty)) = value_class_inner_field(s) {
-                        let inner_entry = registry.input_entry(&inner_ty)?;
-                        let inner_conv = inner_entry.function.sig.ident.clone();
-                        let wire = inner_entry.destination.clone();
-                        // Qualify the struct literal against the source module
-                        // (`zenoh_flat::ZBytes { .. }`) — a struct-literal path is
-                        // an expression, not a type, so `post_process_item`'s
-                        // type-qualifier wouldn't reach it (mirrors
-                        // `struct_input_body`'s `#struct_module::#ident { .. }`).
-                        let struct_module = struct_module_path(self, s);
-                        let struct_ident = &s.ident;
-                        let body: syn::Expr = syn::parse_quote!({
-                            let __inner = #inner_conv(env, v)?;
-                            #struct_module::#struct_ident { #inner_ident: __inner }
-                        });
-                        return Some(ConverterImpl {
-                            pre_stages: vec![],
-                            function: self.build_input_fn(ty, &wire, &body, None),
-                            destination: wire,
-                            niches: inner_entry.niches.clone(),
-                            metadata: KotlinMeta {
-                                projection: Some(Projection {
-                                    leaf_key: key.as_str().to_string(),
-                                    owned: false,
-                                    strategy: FoldStrategy::Direct,
-                                    kind: ProjectionKind::ValueClass,
-                                }),
-                                ..self.framework_meta(inner_entry.metadata.kotlin_name.clone())
-                            },
-                        });
-                    }
-                }
                 let (wire, body) = struct_input_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
                 // Auto-generated struct: the value-context Kotlin name is
@@ -1008,8 +687,6 @@ impl Prebindgen for JniGen {
                 niches: inner.niches.clone(),
                 metadata: KotlinMeta {
                     kotlin_name,
-                    throws: inner.metadata.throws.clone(),
-                    throws_action: inner.metadata.throws_action.clone(),
                     value_rust_key: None,
                     projection,
                 },
@@ -1069,8 +746,6 @@ impl Prebindgen for JniGen {
                     niches: Niches::empty(),
                     metadata: KotlinMeta {
                         kotlin_name,
-                        throws: inner.metadata.throws.clone(),
-                        throws_action: inner.metadata.throws_action.clone(),
                         value_rust_key: None,
                         projection,
                     },
@@ -1125,12 +800,63 @@ impl Prebindgen for JniGen {
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
                     kotlin_name,
-                    throws: inner.metadata.throws.clone(),
-                    throws_action: inner.metadata.throws_action.clone(),
                     value_rust_key: None,
                     projection: None,
                 },
             });
+        }
+        // `Option<T>` for a direct opaque handle, BY VALUE (consume): wire is
+        // `jlong` with `0` = `None`; when present the `Box` is reconstructed
+        // and `T` moved out (owned), mirroring the by-value `T` consume path.
+        // Produces `Option<T>` (not `Option<OwnedObject<T>>`) so the source
+        // fn's `Option<T>` parameter type matches. The Kotlin side nulls the
+        // handle's `ptr` slot after the call (see `ConsumeNullable`).
+        if pat_match(pat, "Option < _ >") {
+            let inner = registry.input_entry(t1)?;
+            if inner.metadata.is_direct_handle() {
+                let inner_wire = inner.destination.clone();
+                let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
+                let name = input_name(&outer_ty, &inner_wire);
+                let function: syn::ItemFn = syn::parse_quote!(
+                    #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+                    pub(crate) unsafe fn #name<'env, 'v>(
+                        env: &mut jni::JNIEnv<'env>,
+                        v: &#inner_wire,
+                    ) -> ::core::result::Result<Option<#t1>, __JniErr> {
+                        Ok({
+                            if *v == 0 {
+                                None
+                            } else {
+                                Some(*std::boxed::Box::from_raw(*v as *mut #t1))
+                            }
+                        })
+                    }
+                );
+                let kotlin_name =
+                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+                let projection = inner.metadata.projection.clone().map(|h| Projection {
+                    owned: true,
+                    // Rides the inner's `*v == 0` niche, so the wire stays
+                    // `jlong` and `None` is the `0` sentinel (never JVM boxed).
+                    strategy: FoldStrategy::Nullable {
+                        kind: NullableKind::Niche,
+                        inner: Box::new(h.strategy),
+                    },
+                    ..h
+                });
+                return Some(ConverterImpl {
+                    pre_stages: vec![],
+                    function,
+                    destination: inner_wire,
+                    niches: Niches::empty(),
+                    metadata: KotlinMeta {
+                        kotlin_name,
+                        value_rust_key: None,
+                        projection,
+                    },
+                });
+            }
+            // Non-opaque inner: fall through to the general Option handler.
         }
         if pat_match(pat, "Option < _ >") {
             let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
@@ -1172,15 +898,6 @@ impl Prebindgen for JniGen {
             });
         }
         None
-    }
-
-    fn dispatch_into_input(
-        &self,
-        target: &syn::Type,
-        sources: &[IntoSource],
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.emit_into_dispatcher(target, sources, registry)
     }
 
     fn dispatch_fn_input(
@@ -1341,38 +1058,6 @@ impl Prebindgen for JniGen {
         }
         if let Some(name) = bare_path_ident(ty) {
             if let Some((s, _)) = registry.structs.get(&name) {
-                // Value-class leaf: a `@JvmInline value class` is erased to its
-                // single inner field, so the converter delegates to the inner
-                // field's converter (wire + descriptor + value-context Kotlin
-                // name all come from it) and tags a `ValueClass` projection.
-                // Every typed-surface emitter then wraps `W(inner)` and folds
-                // through Option/Vec uniformly — same machinery opaque handles
-                // ride, no value-class special cases in the struct encoder.
-                if self.types.get(&key).map(|c| c.value_class).unwrap_or(false) {
-                    if let Some(inner) = value_class_inner_field(s) {
-                        let (inner_ident, inner_ty) = inner;
-                        let inner_entry = registry.output_entry(&inner_ty)?;
-                        let inner_conv = inner_entry.function.sig.ident.clone();
-                        let wire = inner_entry.destination.clone();
-                        let body: syn::Expr =
-                            syn::parse_quote!({ #inner_conv(env, v.#inner_ident)? });
-                        return Some(ConverterImpl {
-                            pre_stages: vec![],
-                            function: self.build_output_fn(ty, &wire, &body, None),
-                            destination: wire,
-                            niches: inner_entry.niches.clone(),
-                            metadata: KotlinMeta {
-                                projection: Some(Projection {
-                                    leaf_key: key.as_str().to_string(),
-                                    owned: false,
-                                    strategy: FoldStrategy::Direct,
-                                    kind: ProjectionKind::ValueClass,
-                                }),
-                                ..self.framework_meta(inner_entry.metadata.kotlin_name.clone())
-                            },
-                        });
-                    }
-                }
                 let (wire, body) = struct_output_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
                 let kotlin_name = self.types.get(&key).and_then(|c| c.kotlin_name.clone());
@@ -1521,8 +1206,6 @@ impl Prebindgen for JniGen {
                 niches: Niches::empty(),
                 metadata: KotlinMeta {
                     kotlin_name,
-                    throws: inner.metadata.throws.clone(),
-                    throws_action: inner.metadata.throws_action.clone(),
                     value_rust_key: None,
                     projection,
                 },
@@ -1552,8 +1235,4 @@ impl Prebindgen for JniGen {
         self.lookup_output(pat, &[t1.clone(), t2.clone(), t3.clone()], registry)
     }
 
-    fn into_sources(&self, target: &syn::Type) -> Vec<IntoSource> {
-        let key = TypeKey::from_type(target);
-        self.into_sources_map.get(&key).cloned().unwrap_or_default()
-    }
 }

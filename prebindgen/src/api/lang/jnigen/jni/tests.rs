@@ -288,8 +288,8 @@ fn option_box_fallback_exposes_no_niches() {
 // ────────────────────────────────────────────────────────────────────────
 
 /// Build the representative config: an opaque handle (`ZThing`) with a
-/// companion constructor returning `Result<ZThing, Error>` (exception
-/// routing) and an instance accessor, a C-like enum (`Color`, mixed
+/// free-function constructor returning `Result<ZThing, Error>` (exception
+/// routing) and a free-function accessor, a C-like enum (`Color`, mixed
 /// discriminants), and a throwable data class (`Error`).
 #[cfg(test)]
 fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
@@ -337,12 +337,11 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         .source_module(syn::parse_quote!(myflat))
         .package_prefix("io.test.jni")
         .data_class(syn::parse_quote!(Error))
-        .throwable()
-        .package("thing")
         .ptr_class(syn::parse_quote!(ZThing))
-        .class_object_fun(syn::parse_quote!(z_thing_new))
-        .class_fun(syn::parse_quote!(z_thing_name))
-        .enum_class(syn::parse_quote!(Color));
+        .enum_class(syn::parse_quote!(Color))
+        .package("thing")
+        .package_fun(syn::parse_quote!(z_thing_new))
+        .package_fun(syn::parse_quote!(z_thing_name));
 
     let dir = std::env::temp_dir().join(format!("jnigen_snap_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -373,8 +372,15 @@ fn snapshot_rust_side() {
     // Opaque handle round-trips as a boxed pointer of the source type.
     assert!(rc.contains("myflat::ZThing"), "{rust}");
     assert!(rc.contains("Box::from_raw"), "{rust}");
-    // `.throwable()` on Error emits a `throw_Error` routing fn.
-    assert!(rc.contains("throw_Error"), "{rust}");
+    // Errors funnel to the single `signal_error` sink fn (no JVM throw).
+    assert!(rc.contains("fnsignal_error"), "{rust}");
+    assert!(
+        rc.contains("signal_error(&mutenv,&__error_sink,&__e)"),
+        "{rust}"
+    );
+    // The extern takes the trailing error-sink param; no throw fn exists.
+    assert!(rc.contains("__error_sink:jni::objects::JObject"), "{rust}");
+    assert!(!rc.contains("throw_Error"), "{rust}");
     // JNI extern wrappers.
     assert!(rc.contains("externfn") || rc.contains("extern\"C\""), "{rust}");
 }
@@ -388,8 +394,16 @@ fn snapshot_kotlin_side() {
     assert!(kotlin.contains_key("NativeHandle.kt"), "files: {names:?}");
     assert!(kotlin.contains_key("JNINative.kt"), "files: {names:?}");
 
+    // The error-sink channel lives in NativeHandle.kt; no exception classes.
+    let nh: String = kotlin["NativeHandle.kt"].split_whitespace().collect();
+    assert!(nh.contains("funinterfaceErrorSink"), "{}", kotlin["NativeHandle.kt"]);
+    assert!(nh.contains("classZException"), "{}", kotlin["NativeHandle.kt"]);
+    assert!(!kotlin.contains_key("Error.kt") || !kotlin["Error.kt"].contains(": Exception"));
+
     let native: String = kotlin["JNINative.kt"].split_whitespace().collect();
     assert!(native.contains("externalfun"), "{}", kotlin["JNINative.kt"]);
+    // Each extern declares the trailing `errorSink: Any` param.
+    assert!(native.contains("errorSink:Any"), "{}", kotlin["JNINative.kt"]);
 
     // Enum class with mixed discriminants 0 / 5 / 6 and a `fromInt` factory.
     let color = kotlin.get("Color.kt").expect("Color.kt");
@@ -406,4 +420,15 @@ fn snapshot_kotlin_side() {
         thing.split_whitespace().collect::<String>().contains(":NativeHandle"),
         "{thing}"
     );
+
+    // The free-function wrappers live in the namespace package object, install
+    // a default sink, and rethrow.
+    let pkg = kotlin
+        .values()
+        .find(|v| v.contains("public fun zThingNew"))
+        .cloned()
+        .unwrap_or_default();
+    let pc: String = pkg.split_whitespace().collect();
+    assert!(pc.contains("ErrorSink{"), "package wrappers: {pkg}");
+    assert!(pc.contains("throwZException(it)"), "package wrappers: {pkg}");
 }
