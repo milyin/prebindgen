@@ -258,7 +258,15 @@ pub(crate) fn emit_jni_function_wrapper(
     //     through the per-call `signal_error` sink.
     let mut builder_param: Option<TokenStream> = None;
     let output_phase: TokenStream = if let Some(plan) = unfold_plan {
-        builder_param = Some(quote!(__builder: jni::objects::JObject<'a>,));
+        // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
+        // Decompose/Optional: a single `__builder` callback.
+        builder_param = Some(
+            if matches!(plan.shape, crate::api::core::unfold::UnfoldShape::Iterable(_)) {
+                quote!(__acc: jni::objects::JObject<'a>, __fold: jni::objects::JObject<'a>,)
+            } else {
+                quote!(__builder: jni::objects::JObject<'a>,)
+            },
+        );
         emit_unfold_delivery(ext, registry, plan, &call_expr, &on_err)
     } else {
         let output_entry = output_entry.expect("normal path has an output entry");
@@ -580,9 +588,64 @@ pub(crate) fn emit_unfold_delivery(
                 }
             }
         }
-        UnfoldShape::Iterable(_) => panic!(
-            "emit_unfold_delivery: UnfoldShape::Iterable (Vec<T> returns) is M4"
-        ),
+        UnfoldShape::Iterable(_) => {
+            // `Vec<T>` fold: iterate the elements, deliver each WHOLE via its
+            // own output converter to `__fold(acc, element)`, threading `acc`.
+            // No decomposition — `leaves` is empty; the projection wrap to the
+            // typed Kotlin element happens caller-side (the generated wrapper's
+            // fold adapter), so here we just hand over the element's raw wire.
+            let element = plan
+                .element
+                .as_ref()
+                .expect("Iterable plan carries an element type");
+            let out_entry = registry.output_entry(element).unwrap_or_else(|| {
+                panic!(
+                    "emit_unfold_delivery: Vec element `{}` has no registered output converter",
+                    TypeKey::from_type(element)
+                )
+            });
+            let elem_conv = out_entry.function.sig.ident.clone();
+            let elem_wire = out_entry.destination.clone();
+            let cast = cast_to_jobject(&format_ident!("__enc"), &elem_wire);
+            // `into_iter()` yields the element type exactly as written (owned
+            // `T`, or `&T` for a borrowed element) — matching `elem_conv`'s arg.
+            quote! {
+                let __out = #call_expr;
+                let mut __acc = __acc;
+                for __elem in __out.into_iter() {
+                    let __enc = match #elem_conv(&mut env, __elem) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_error(&mut env, &__error_sink, &__e);
+                            return #on_err;
+                        }
+                    };
+                    let __obj: jni::objects::JObject = #cast;
+                    __acc = match env.call_method(
+                        &__fold,
+                        "invoke",
+                        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                        &[jni::objects::JValue::Object(&__acc), jni::objects::JValue::Object(&__obj)],
+                    ) {
+                        ::core::result::Result::Ok(__r) => match __r.l() {
+                            ::core::result::Result::Ok(__o) => __o,
+                            ::core::result::Result::Err(__e) => {
+                                let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
+                                signal_error(&mut env, &__error_sink, &__e2);
+                                return #on_err;
+                            }
+                        },
+                        ::core::result::Result::Err(__e) => {
+                            let _ = env.exception_describe();
+                            let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
+                            signal_error(&mut env, &__error_sink, &__e2);
+                            return #on_err;
+                        }
+                    };
+                }
+                __acc
+            }
+        }
     }
 }
 

@@ -655,12 +655,21 @@ pub(crate) fn render_extern_decl(
         let suffix = if optional { "?" } else { "" };
         params.push((name, format!("{short}{suffix}")));
     }
-    // Output (data) expansion: the extern takes the builder lambda (`build:
-    // Any` — a JObject wire) just before the error sink, and returns the
-    // builder's erased result (`Any?`) rather than the return type's own wire.
-    let has_unfold = registry.unfold_plans.contains_key(&f.sig.ident);
-    if has_unfold {
-        params.push(("build".to_string(), "Any".to_string()));
+    // Output (data) expansion: the extern takes the callback(s) just before the
+    // error sink and returns the erased result (`Any?`) rather than the return
+    // type's own wire. `Iterable` takes `acc` + `fold`; the others a single
+    // `build`. All `Any` (JObject) at the wire level.
+    let unfold = registry.unfold_plans.get(&f.sig.ident);
+    let has_unfold = unfold.is_some();
+    if let Some(plan) = unfold {
+        if matches!(plan.shape, crate::api::core::unfold::UnfoldShape::Iterable(_)) {
+            // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
+            // `fold` is the non-null adapter callback.
+            params.push(("acc".to_string(), "Any?".to_string()));
+            params.push(("fold".to_string(), "Any".to_string()));
+        } else {
+            params.push(("build".to_string(), "Any".to_string()));
+        }
     }
     // Trailing error-sink callback — every extern accepts one (see
     // `signal_error` / the wrapper's default sink). `Any` at the wire level
@@ -922,46 +931,94 @@ pub(crate) fn render_wrapper_fn(
     // erased `Any?` result. The leaf Kotlin types `L0…Ln` resolve through the
     // normal return classification on each leaf's `out_ty` (which also registers
     // their imports).
+    // Output (data) expansion. Two delivery shapes:
+    //   * `Decompose`/`Optional` (M1–M3): decompose the value into leaves and
+    //     hand them to `build: (L0, …) -> R` once; wrapper is `<R>`, returns
+    //     `R` / `R?`, casts the extern's erased `Any?` result.
+    //   * `Iterable` (M4): deliver each element WHOLE to a fold
+    //     `(acc, element) -> acc`; wrapper is `<A>`, returns `A`, threads the
+    //     caller's accumulator. The element's projection wrap (e.g.
+    //     `ZZenohId(raw)`) is applied caller-side in an adapter the wrapper
+    //     installs (Rust hands over the raw element wire).
     let unfold = registry.unfold_plans.get(&f.sig.ident);
     let mut builder_param: Option<String> = None;
-    let generic: &str = if unfold.is_some() { "<R> " } else { "" };
+    let mut generic: String = String::new();
+    // Extra call-site args injected before `__sink` (e.g. `build`, or
+    // `acc` + the fold adapter for `Iterable`).
+    let mut unfold_call_args: Vec<String> = Vec::new();
 
-    // Return type: peel ZResult<...>; detect projection return (opaque
-    // handle or value class). `projection` carries the folded fold
-    // strategy + kind the wrap emission and JNINative wire-return code
-    // branch on.
     let (kt_return, projection) = if let Some(plan) = unfold {
-        let mut leaf_kts: Vec<String> = Vec::with_capacity(plan.leaves.len());
-        for leaf in &plan.leaves {
-            let out_ty = &leaf.out_ty;
-            // Enum leaves cross the wire as `jint` (boxed `Integer`); the builder
-            // receives an `Int` and zenoh-java rebuilds the enum (`fromInt`).
-            // Otherwise classify as usual (handle class / String / ByteArray /
-            // Long …).
-            let mut kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
-                "Int".to_string()
-            } else {
-                let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-                let (kt, _) = classify_return(ext, &rt, registry, imports)?;
-                kt
-            };
-            // A nullable leaf (an `Option` nesting step on its path) may be
-            // `null` ⇒ the builder param is nullable.
-            if leaf.nullable {
-                kt.push('?');
-            }
-            leaf_kts.push(kt);
-        }
-        builder_param = Some(format!("build: ({}) -> R", leaf_kts.join(", ")));
-        // The wrapper return follows the unfold shape: Decompose → `R`,
-        // Optional → `R?` (null source ⇒ null result), Iterable → `List<R>`.
         use crate::api::core::unfold::UnfoldShape;
-        let kt = match &plan.shape {
-            UnfoldShape::Decompose => "R".to_string(),
-            UnfoldShape::Optional(_) => "R?".to_string(),
-            UnfoldShape::Iterable(_) => "List<R>".to_string(),
-        };
-        (kt, None)
+        match &plan.shape {
+            UnfoldShape::Iterable(_) => {
+                let element = plan.element.as_ref().expect("Iterable plan has element");
+                let proj = registry
+                    .output_entry(element)
+                    .and_then(|e| e.metadata.projection.clone());
+                let (elem_kt, raw_kt, wrap) = if let Some(p) = &proj {
+                    let fqn = ext.kotlin_fqn(&p.leaf_key).map(|v| v.to_string())
+                        .unwrap_or_else(|| p.leaf_key.clone());
+                    let short = register_fqn(&fqn, imports);
+                    let sentinel = projection_leaf_sentinel(p);
+                    (
+                        render_handle_type(&p.strategy, &short),
+                        projection_wire_return(p),
+                        fold_projection_wrap(&p.strategy, "__raw", &short, sentinel.as_deref()),
+                    )
+                } else {
+                    // No projection: the raw element wire already IS the Kotlin
+                    // element type; the fold is passed through unadapted.
+                    let rt: syn::ReturnType = syn::parse_quote!(-> #element);
+                    let (kt, _) = classify_return(ext, &rt, registry, imports)?;
+                    (kt.clone(), kt, "__raw".to_string())
+                };
+                generic = "<A> ".to_string();
+                builder_param = Some(format!("acc: A, fold: (A, {elem_kt}) -> A"));
+                // Adapter applies the projection wrap before the user fold; when
+                // there is no wrap (`wrap == "__raw"`) pass `fold` directly.
+                if wrap == "__raw" {
+                    unfold_call_args.push("acc".to_string());
+                    unfold_call_args.push("fold".to_string());
+                } else {
+                    unfold_call_args.push("acc".to_string());
+                    unfold_call_args.push(format!(
+                        "{{ __a: A, __raw: {raw_kt} -> fold(__a, {wrap}) }}"
+                    ));
+                }
+                ("A".to_string(), None)
+            }
+            _ => {
+                generic = "<R> ".to_string();
+                let mut leaf_kts: Vec<String> = Vec::with_capacity(plan.leaves.len());
+                for leaf in &plan.leaves {
+                    let out_ty = &leaf.out_ty;
+                    // Enum leaves cross the wire as `jint` (boxed `Integer`); the
+                    // builder receives an `Int` and zenoh-java rebuilds the enum
+                    // (`fromInt`). Otherwise classify as usual (handle class /
+                    // String / ByteArray / Long …).
+                    let mut kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+                        "Int".to_string()
+                    } else {
+                        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+                        let (kt, _) = classify_return(ext, &rt, registry, imports)?;
+                        kt
+                    };
+                    // A nullable leaf (an `Option` nesting step on its path) may
+                    // be `null` ⇒ the builder param is nullable.
+                    if leaf.nullable {
+                        kt.push('?');
+                    }
+                    leaf_kts.push(kt);
+                }
+                builder_param = Some(format!("build: ({}) -> R", leaf_kts.join(", ")));
+                unfold_call_args.push("build".to_string());
+                let kt = match &plan.shape {
+                    UnfoldShape::Optional(_) => "R?".to_string(),
+                    _ => "R".to_string(),
+                };
+                (kt, None)
+            }
+        }
     } else {
         classify_return(ext, &f.sig.output, registry, imports)?
     };
@@ -1014,10 +1071,8 @@ pub(crate) fn render_wrapper_fn(
             };
             args.push(arg);
         }
-        // Output expansion: the builder lambda crosses just before the sink.
-        if unfold.is_some() {
-            args.push("build".to_string());
-        }
+        // Output expansion: the builder / (acc, fold) cross just before the sink.
+        args.extend(unfold_call_args.iter().cloned());
         // Every extern takes a trailing error-sink callback; the wrapper
         // installs `__sink` (a capture-then-rethrow default) just before the
         // call. On `Err`, the Rust side invokes `__sink.onError(message)`
