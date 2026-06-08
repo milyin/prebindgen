@@ -448,42 +448,35 @@ impl JniGen {
 
     // ── Constructor expansion ───────────────────────────────────────
 
-    /// Register a single **constructor**: `func` builds a target type from its
-    /// parameters (the target and fallibility are derived from `func`'s
-    /// signature). A parameter of that target type can then be
-    /// [`Self::expand`]ed to accept the constructor's inputs directly.
-    pub fn constructor(mut self, func: syn::Ident) -> Self {
-        self.expansions.add_constructor(func);
+    /// Begin a **constructor** for `target`. A single
+    /// [`Self::constructor_variant`] makes it a plain constructor (its inputs
+    /// flatten into the expanded parameter directly); add more variants /
+    /// [`Self::constructor_variant_id`] for a runtime selector-dispatched union.
+    /// A parameter of `target` type is then [`Self::expand`]ed to accept the
+    /// constructor's inputs.
+    pub fn constructor(mut self, target: syn::Type) -> Self {
+        self.expansions.add_constructor(target);
         self
     }
 
-    /// Begin a **combined constructor** for `target`: a runtime
-    /// selector-dispatched union of variants declared via
-    /// [`Self::combined_variant`] / [`Self::combined_variant_id`].
-    pub fn combined_constructor(mut self, target: syn::Type) -> Self {
-        self.expansions.add_combined(target);
+    /// Name the current constructor so it can be selected by
+    /// [`Self::expand_with`]. Panics without a current `constructor`.
+    pub fn constructor_name(mut self, name: impl Into<String>) -> Self {
+        self.expansions.set_constructor_name(name);
         self
     }
 
-    /// Name the current combined constructor so it can be selected by
-    /// [`Self::expand_with`]. Panics without a current `combined_constructor`.
-    pub fn combined_name(mut self, name: impl Into<String>) -> Self {
-        self.expansions.set_combined_name(name);
-        self
-    }
-
-    /// Add a constructor-function arm to the current combined constructor.
-    /// Panics without a current `combined_constructor`.
-    pub fn combined_variant(mut self, func: syn::Ident) -> Self {
-        self.expansions.add_combined_variant(func);
+    /// Add a constructor-function arm to the current constructor. Panics without
+    /// a current `constructor`.
+    pub fn constructor_variant(mut self, func: syn::Ident) -> Self {
+        self.expansions.add_constructor_variant(func);
         self
     }
 
     /// Add the identity arm (pass an already-built target value through) to the
-    /// current combined constructor. Panics without a current
-    /// `combined_constructor`.
-    pub fn combined_variant_id(mut self) -> Self {
-        self.expansions.add_combined_variant_id();
+    /// current constructor. Panics without a current `constructor`.
+    pub fn constructor_variant_id(mut self) -> Self {
+        self.expansions.add_constructor_variant_id();
         self
     }
 
@@ -498,8 +491,8 @@ impl JniGen {
         self
     }
 
-    /// Like [`Self::expand`] but selects `ctor` explicitly (a constructor
-    /// function ident or a combined constructor's name).
+    /// Like [`Self::expand`] but selects the constructor named (via
+    /// [`Self::constructor_name`]) by `ctor`.
     pub fn expand_with(mut self, param: syn::Ident, ctor: syn::Ident) -> Self {
         let func = self.current_fn_ident();
         self.expansions.add_expand_with(func, param, ctor);
@@ -508,53 +501,51 @@ impl JniGen {
 
     // ── Output (data) expansion ─────────────────────────────────────
 
-    /// Begin a **combined accessor** for `target`: a deterministic product of
-    /// records (declared via [`Self::combined_accessor_record`] /
-    /// [`Self::combined_accessor_record_id`] /
-    /// [`Self::combined_accessor_record_nested`]). When a function returning
-    /// `target` (or `&target`) is [`Self::expand_output`]ed, every record
-    /// contributes a leaf delivered to the foreign builder lambda.
-    pub fn combined_accessor(mut self, target: syn::Type) -> Self {
-        self.accessors.add_combined(target);
+    /// Begin an **accessor** for `target`: a deterministic product of records
+    /// (declared via [`Self::accessor_record`] / [`Self::accessor_record_id`] /
+    /// [`Self::accessor_record_nested`]). When a function returning `target` (or
+    /// `&target`) is [`Self::expand_output`]ed, every record contributes a leaf
+    /// delivered to the foreign builder. A single [`Self::accessor_record`] is
+    /// the degenerate one-field form.
+    pub fn accessor(mut self, target: syn::Type) -> Self {
+        self.accessors.add_accessor(target);
         self
     }
 
-    /// Name the current combined accessor so it can be selected by
-    /// [`Self::expand_output_with`]. Panics without a current
-    /// `combined_accessor`.
-    pub fn combined_accessor_name(mut self, name: impl Into<String>) -> Self {
-        self.accessors.set_combined_name(name);
+    /// Name the current accessor so it can be selected by
+    /// [`Self::expand_output_with`]. Panics without a current `accessor`.
+    pub fn accessor_name(mut self, name: impl Into<String>) -> Self {
+        self.accessors.set_accessor_name(name);
         self
     }
 
     /// Add an accessor-function record `func` (`f(&T) -> &F`) to the current
-    /// combined accessor. Panics without a current `combined_accessor`.
-    pub fn combined_accessor_record(mut self, func: syn::Ident) -> Self {
-        self.accessors.add_combined_record(func);
+    /// accessor. Panics without a current `accessor`.
+    pub fn accessor_record(mut self, func: syn::Ident) -> Self {
+        self.accessors.add_accessor_record(func);
         self
     }
 
-    /// Add the identity/handle record (the value itself — cloned for a `&T`
-    /// return, moved for an owned `T`) to the current combined accessor. Panics
-    /// without a current `combined_accessor`.
-    pub fn combined_accessor_record_id(mut self) -> Self {
-        self.accessors.add_combined_record_id();
+    /// Add the identity record (the value itself — for a `ptr_class` cloned for
+    /// a `&T` return / moved for an owned `T`; for a `value_blob` delivered by
+    /// copy) to the current accessor. Panics without a current `accessor`.
+    pub fn accessor_record_id(mut self) -> Self {
+        self.accessors.add_accessor_record_id();
         self
     }
 
-    /// Add a nested combined-accessor record via the accessor `func`
-    /// (`f(&T) -> &Child` or `-> Option<&Child>`): splice `Child`'s combined
-    /// accessor leaves into the current one, path-prefixed by `func` (nullable
-    /// when `func` returns `Option`). Panics without a current
-    /// `combined_accessor`.
-    pub fn combined_accessor_record_nested(mut self, func: syn::Ident) -> Self {
-        self.accessors.add_combined_record_nested(func);
+    /// Add a nested accessor record via the accessor `func` (`f(&T) -> &Child`
+    /// or `-> Option<&Child>`): splice `Child`'s accessor leaves into the
+    /// current one, path-prefixed by `func` (nullable when `func` returns
+    /// `Option`). Panics without a current `accessor`.
+    pub fn accessor_record_nested(mut self, func: syn::Ident) -> Self {
+        self.accessors.add_accessor_record_nested(func);
         self
     }
 
     /// Decompose the return value of the most recent [`Self::package_fun`] using
-    /// its return type's combined accessor. The generated foreign signature
-    /// drops the handle return and instead takes a builder lambda receiving the
+    /// its return type's accessor. The generated foreign signature drops the
+    /// handle return and instead takes a builder lambda receiving the
     /// (flattened) accessor leaves; the wrapper invokes it after the call.
     /// Panics if not chained after a fn-level builder.
     pub fn expand_output(mut self) -> Self {
@@ -563,7 +554,7 @@ impl JniGen {
         self
     }
 
-    /// Like [`Self::expand_output`] but selects the combined accessor by name.
+    /// Like [`Self::expand_output`] but selects the accessor by name.
     pub fn expand_output_with(mut self, name: impl Into<String>) -> Self {
         let func = self.current_fn_ident();
         self.accessors.add_expand_output_with(func, name);

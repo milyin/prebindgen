@@ -9,13 +9,13 @@
 //! generated wrapper decodes those inputs, runs the constructor Rust-side
 //! (the **fold**), and passes the built value to the underlying call.
 //!
-//! Two flavours:
-//! * **Single** (`.constructor(f)`): the parameter becomes `f`'s parameters
-//!   directly.
-//! * **Combined** (`.combined_constructor(T)` + `.combined_variant(f)` /
-//!   `.combined_variant_id()`): the parameter becomes a runtime selector
-//!   (`i32`) plus one `Option`-wrapped input group per variant. The identity
-//!   variant passes an already-built `T` straight through.
+//! A constructor is declared `.constructor(T)` + one or more
+//! `.constructor_variant(f)` / `.constructor_variant_id()`:
+//! * **One `Ctor` variant** (no identity): the parameter becomes `f`'s
+//!   parameters directly (no selector) — the plain "single" form.
+//! * **Two or more variants** (or an identity arm): the parameter becomes a
+//!   runtime selector (`i32`) plus one `Option`-wrapped input group per variant.
+//!   The identity variant passes an already-built `T` straight through.
 //!
 //! Everything here is **language-agnostic**: the fold is pure Rust and the
 //! per-leaf wire encode/decode is delegated to the back-end's existing
@@ -23,8 +23,6 @@
 //! the registry, keyed by `(fn, param)`) and registers each leaf type as a
 //! required input so the resolver produces its converter. [`emit_fold`]
 //! emits the dispatch expression at the parameter-emission site.
-
-use std::collections::HashSet;
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -35,12 +33,10 @@ use crate::api::core::registry::{Registry, TypeKey};
 // Declarations (populated by the language builder)
 // ──────────────────────────────────────────────────────────────────────
 
-#[derive(Clone)]
-struct SingleDecl {
-    func: syn::Ident,
-}
-
-/// One arm of a combined constructor.
+/// One variant of a constructor — a selector-dispatched alternative for the
+/// expanded parameter. A constructor with a single `Ctor` variant (and no
+/// `Identity`) is the degenerate "single" form: applied unconditionally with no
+/// selector. Two or more variants (or an `Identity` arm) get a runtime selector.
 #[derive(Clone)]
 enum Variant {
     /// Build the target by calling this constructor function.
@@ -50,7 +46,7 @@ enum Variant {
 }
 
 #[derive(Clone)]
-struct CombinedDecl {
+struct ConstructorDecl {
     name: Option<String>,
     target: syn::Type,
     variants: Vec<Variant>,
@@ -61,8 +57,7 @@ struct CombinedDecl {
 enum ExpandSel {
     /// Use the target's unique top-level constructor (error if ambiguous).
     TopLevel,
-    /// Use the constructor named by this ident — a single constructor's
-    /// function ident, or a combined constructor's `name`.
+    /// Use the constructor named (via `.constructor_name`) by this ident.
     Explicit(syn::Ident),
 }
 
@@ -78,55 +73,49 @@ struct ExpandDecl {
 /// via [`crate::api::core::prebindgen::Prebindgen::expansions`].
 #[derive(Clone, Default)]
 pub struct Expansions {
-    singles: Vec<SingleDecl>,
-    combined: Vec<CombinedDecl>,
+    constructors: Vec<ConstructorDecl>,
     expands: Vec<ExpandDecl>,
-    /// Cursor for the combined-constructor builder (`.combined_variant*`).
-    cur_combined: Option<usize>,
+    /// Cursor for the constructor builder (`.constructor_variant*`).
+    cur_constructor: Option<usize>,
 }
 
 impl Expansions {
-    /// `.constructor(func)` — register a single constructor. Its target and
-    /// fallibility are derived from `func`'s signature at [`apply`] time.
-    pub fn add_constructor(&mut self, func: syn::Ident) {
-        self.singles.push(SingleDecl { func });
-        self.cur_combined = None;
-    }
-
-    /// `.combined_constructor(target)` — begin a combined constructor.
-    pub fn add_combined(&mut self, target: syn::Type) {
-        self.combined.push(CombinedDecl {
+    /// `.constructor(target)` — begin a constructor for `target`. A single
+    /// `.constructor_variant` makes it a plain (unconditional) constructor; add
+    /// more variants / `.constructor_variant_id` for a selector-dispatched one.
+    pub fn add_constructor(&mut self, target: syn::Type) {
+        self.constructors.push(ConstructorDecl {
             name: None,
             target,
             variants: Vec::new(),
         });
-        self.cur_combined = Some(self.combined.len() - 1);
+        self.cur_constructor = Some(self.constructors.len() - 1);
     }
 
-    /// `.combined_name(name)` — name the current combined constructor so it
-    /// can be selected via `.expand_with`.
-    pub fn set_combined_name(&mut self, name: impl Into<String>) {
+    /// `.constructor_name(name)` — name the current constructor so it can be
+    /// selected via `.expand_with`.
+    pub fn set_constructor_name(&mut self, name: impl Into<String>) {
         let i = self
-            .cur_combined
-            .expect(".combined_name called without a current .combined_constructor");
-        self.combined[i].name = Some(name.into());
+            .cur_constructor
+            .expect(".constructor_name called without a current .constructor");
+        self.constructors[i].name = Some(name.into());
     }
 
-    /// `.combined_variant(func)` — add a constructor-function arm.
-    pub fn add_combined_variant(&mut self, func: syn::Ident) {
+    /// `.constructor_variant(func)` — add a constructor-function arm.
+    pub fn add_constructor_variant(&mut self, func: syn::Ident) {
         let i = self
-            .cur_combined
-            .expect(".combined_variant called without a current .combined_constructor");
-        self.combined[i].variants.push(Variant::Ctor(func));
+            .cur_constructor
+            .expect(".constructor_variant called without a current .constructor");
+        self.constructors[i].variants.push(Variant::Ctor(func));
     }
 
-    /// `.combined_variant_id()` — add the identity arm (pass the target
+    /// `.constructor_variant_id()` — add the identity arm (pass the target
     /// value straight through).
-    pub fn add_combined_variant_id(&mut self) {
+    pub fn add_constructor_variant_id(&mut self) {
         let i = self
-            .cur_combined
-            .expect(".combined_variant_id called without a current .combined_constructor");
-        self.combined[i].variants.push(Variant::Identity);
+            .cur_constructor
+            .expect(".constructor_variant_id called without a current .constructor");
+        self.constructors[i].variants.push(Variant::Identity);
     }
 
     /// `.expand(param)` on the function `func` — expand `param` using the
@@ -137,19 +126,18 @@ impl Expansions {
             param,
             sel: ExpandSel::TopLevel,
         });
-        self.cur_combined = None;
+        self.cur_constructor = None;
     }
 
-    /// `.expand_with(param, ctor)` — expand `param` using the explicitly
-    /// named constructor (a single constructor's fn ident or a combined
-    /// constructor's name).
+    /// `.expand_with(param, ctor)` — expand `param` using the constructor named
+    /// `ctor` (via `.constructor_name`).
     pub fn add_expand_with(&mut self, func: syn::Ident, param: syn::Ident, ctor: syn::Ident) {
         self.expands.push(ExpandDecl {
             func,
             param,
             sel: ExpandSel::Explicit(ctor),
         });
-        self.cur_combined = None;
+        self.cur_constructor = None;
     }
 
     /// True iff nothing has been declared (lets `write_rust` skip [`apply`]).
@@ -345,12 +333,6 @@ impl std::error::Error for ExpandError {}
 // apply
 // ──────────────────────────────────────────────────────────────────────
 
-/// What an `.expand` resolved to.
-enum Chosen {
-    Single(syn::Ident),
-    Combined(Vec<Variant>),
-}
-
 /// Resolve every `.expand` declaration into a [`FoldPlan`], register each
 /// plan's leaf types as required inputs, and store the plans on the registry.
 ///
@@ -379,8 +361,8 @@ pub fn apply<M>(registry: &mut Registry<M>, exp: &Expansions) -> Result<(), Expa
         };
         let target_key = TypeKey::from_type(&target);
 
-        let chosen = resolve_ctor(exp, registry, &target_key, ed)?;
-        let plan = build_plan(registry, ed, optional, by_ref, &target, chosen)?;
+        let variants = resolve_constructor(exp, registry, &target_key, ed)?;
+        let plan = build_plan(registry, ed, optional, by_ref, &target, &variants)?;
 
         for leaf in &plan.leaves {
             registry.require_input(&leaf.ty, &loc);
@@ -392,64 +374,30 @@ pub fn apply<M>(registry: &mut Registry<M>, exp: &Expansions) -> Result<(), Expa
     Ok(())
 }
 
-/// Pick the constructor for one `.expand`/`.expand_with` declaration.
-fn resolve_ctor<M>(
+/// Pick the constructor (its variants) for one `.expand`/`.expand_with`
+/// declaration. A constructor is keyed by its declared `target`; `TopLevel`
+/// requires it to be unique for the parameter's target type.
+fn resolve_constructor<M>(
     exp: &Expansions,
-    registry: &Registry<M>,
+    _registry: &Registry<M>,
     target_key: &TypeKey,
     ed: &ExpandDecl,
-) -> Result<Chosen, ExpandError> {
+) -> Result<Vec<Variant>, ExpandError> {
     match &ed.sel {
-        ExpandSel::Explicit(ident) => {
-            // A single constructor by fn ident …
-            if exp.singles.iter().any(|s| &s.func == ident) {
-                return Ok(Chosen::Single(ident.clone()));
-            }
-            // … or a combined constructor by name.
-            if let Some(c) = exp
-                .combined
-                .iter()
-                .find(|c| c.name.as_deref() == Some(ident.to_string().as_str()))
-            {
-                return Ok(Chosen::Combined(c.variants.clone()));
-            }
-            Err(ExpandError::UnknownConstructor(ident.clone()))
-        }
+        ExpandSel::Explicit(ident) => exp
+            .constructors
+            .iter()
+            .find(|c| c.name.as_deref() == Some(ident.to_string().as_str()))
+            .map(|c| c.variants.clone())
+            .ok_or_else(|| ExpandError::UnknownConstructor(ident.clone())),
         ExpandSel::TopLevel => {
-            // Combined constructors for this target are always roots.
-            let combineds: Vec<&CombinedDecl> = exp
-                .combined
+            let matches: Vec<&ConstructorDecl> = exp
+                .constructors
                 .iter()
                 .filter(|c| TypeKey::from_type(&c.target) == *target_key)
                 .collect();
-            // Single constructors referenced as a combined variant are subsumed.
-            let subsumed: HashSet<String> = combineds
-                .iter()
-                .flat_map(|c| c.variants.iter())
-                .filter_map(|v| match v {
-                    Variant::Ctor(f) => Some(f.to_string()),
-                    Variant::Identity => None,
-                })
-                .collect();
-
-            let mut roots: Vec<Chosen> = Vec::new();
-            let mut names: Vec<String> = Vec::new();
-            for c in &combineds {
-                roots.push(Chosen::Combined(c.variants.clone()));
-                names.push(c.name.clone().unwrap_or_else(|| "<combined>".to_string()));
-            }
-            for s in &exp.singles {
-                let sig = ctor_signature(registry, &s.func)?;
-                if TypeKey::from_type(&sig.target) == *target_key
-                    && !subsumed.contains(&s.func.to_string())
-                {
-                    roots.push(Chosen::Single(s.func.clone()));
-                    names.push(s.func.to_string());
-                }
-            }
-
-            match roots.len() {
-                1 => Ok(roots.into_iter().next().unwrap()),
+            match matches.len() {
+                1 => Ok(matches[0].variants.clone()),
                 0 => Err(ExpandError::NoConstructor {
                     func: ed.func.clone(),
                     param: ed.param.clone(),
@@ -459,7 +407,10 @@ fn resolve_ctor<M>(
                     func: ed.func.clone(),
                     param: ed.param.clone(),
                     target: target_key.to_string(),
-                    candidates: names,
+                    candidates: matches
+                        .iter()
+                        .map(|c| c.name.clone().unwrap_or_else(|| "<constructor>".to_string()))
+                        .collect(),
                 }),
             }
         }
@@ -508,22 +459,25 @@ struct CtorSig {
     fallible: bool,
 }
 
-/// Build the [`FoldPlan`] for a chosen construction.
+/// Build the [`FoldPlan`] for a chosen construction. A single `Ctor` variant
+/// (no identity) is the plain/unconditional form (no selector); anything else is
+/// selector-dispatched — so a "single" constructor and a 1-variant combined emit
+/// identical code.
 fn build_plan<M>(
     registry: &Registry<M>,
     ed: &ExpandDecl,
     optional: bool,
     by_ref: bool,
     target: &syn::Type,
-    chosen: Chosen,
+    variants: &[Variant],
 ) -> Result<FoldPlan, ExpandError> {
     let param = &ed.param;
     let mut leaves: Vec<FoldLeaf> = Vec::new();
 
-    match chosen {
-        Chosen::Single(func) => {
-            let sig = ctor_signature(registry, &func)?;
-            check_target(&func, &sig.target, target)?;
+    if let [Variant::Ctor(func)] = variants {
+        {
+            let sig = ctor_signature(registry, func)?;
+            check_target(func, &sig.target, target)?;
             let n = sig.params.len();
             // Optional (`Option<T>`/`Option<&T>`) is only well-defined for a
             // single-argument constructor: one nullable leaf decides presence.
@@ -560,19 +514,20 @@ fn build_plan<M>(
                 leaves,
                 selector: None,
                 variants: vec![FoldVariant {
-                    ctor: Some(func),
+                    ctor: Some(func.clone()),
                     fallible: sig.fallible,
                     clone: false,
                     inputs,
                 }],
             })
         }
-        Chosen::Combined(decl_variants) => {
+    } else {
+        {
             if optional {
                 return Err(ExpandError::UnsupportedOptional {
                     func: ed.func.clone(),
                     param: ed.param.clone(),
-                    reason: "combined constructors cannot be optional",
+                    reason: "selector-dispatched constructors cannot be optional",
                 });
             }
             // Selector leaf first.
@@ -582,8 +537,8 @@ fn build_plan<M>(
             });
             let selector = Some(0usize);
 
-            let mut variants: Vec<FoldVariant> = Vec::new();
-            for (vi, v) in decl_variants.iter().enumerate() {
+            let mut fold_variants: Vec<FoldVariant> = Vec::new();
+            for (vi, v) in variants.iter().enumerate() {
                 match v {
                     Variant::Ctor(func) => {
                         let sig = ctor_signature(registry, func)?;
@@ -602,7 +557,7 @@ fn build_plan<M>(
                                 ty: opt(pty),
                             });
                         }
-                        variants.push(FoldVariant {
+                        fold_variants.push(FoldVariant {
                             ctor: Some(func.clone()),
                             fallible: sig.fallible,
                             clone: false,
@@ -623,7 +578,7 @@ fn build_plan<M>(
                             name: ident(&format!("{}_{}", param, vi)),
                             ty: leaf_ty,
                         });
-                        variants.push(FoldVariant {
+                        fold_variants.push(FoldVariant {
                             ctor: None,
                             fallible: false,
                             clone: by_ref,
@@ -639,7 +594,7 @@ fn build_plan<M>(
                 shape: FoldShape::Construct,
                 leaves,
                 selector,
-                variants,
+                variants: fold_variants,
             })
         }
     }
@@ -954,7 +909,9 @@ mod tests {
             "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_constructor(ident("z_keyexpr_try_from"));
+        // Single-method constructor = one Ctor variant (no selector).
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
 
         apply(&mut reg, &exp).expect("apply");
@@ -977,15 +934,15 @@ mod tests {
     }
 
     #[test]
-    fn combined_constructor_plan_and_fold() {
+    fn constructor_plan_and_fold() {
         let mut reg = reg_with(&[
             "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
             "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_combined(syn::parse_quote!(ZKeyExpr));
-        exp.add_combined_variant(ident("z_keyexpr_try_from"));
-        exp.add_combined_variant_id();
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp.add_constructor_variant_id();
         exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
 
         apply(&mut reg, &exp).expect("apply");
@@ -1034,8 +991,11 @@ mod tests {
             "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_constructor(ident("z_keyexpr_try_from"));
-        exp.add_constructor(ident("z_keyexpr_autocanonize"));
+        // Two constructors for the same target ⇒ TopLevel is ambiguous.
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
         exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
 
         match apply(&mut reg, &exp) {
@@ -1047,42 +1007,24 @@ mod tests {
     }
 
     #[test]
-    fn combined_subsumes_single_so_unique_root() {
-        let mut reg = reg_with(&[
-            "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
-            "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
-        ]);
-        let mut exp = Expansions::default();
-        // Both a single and a combined that references it: the combined subsumes
-        // the single, leaving exactly one root.
-        exp.add_constructor(ident("z_keyexpr_try_from"));
-        exp.add_combined(syn::parse_quote!(ZKeyExpr));
-        exp.add_combined_variant(ident("z_keyexpr_try_from"));
-        exp.add_combined_variant_id();
-        exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
-
-        apply(&mut reg, &exp).expect("subsumed single → unique root");
-        let plan = reg
-            .expansion_plans
-            .get(&(ident("z_keyexpr_intersects"), ident("a")))
-            .unwrap();
-        assert_eq!(plan.selector, Some(0), "resolved to the combined root");
-    }
-
-    #[test]
-    fn explicit_selection_picks_named_single() {
+    fn explicit_selection_picks_named_constructor() {
         let mut reg = reg_with(&[
             "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
             "fn z_keyexpr_autocanonize(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
             "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_constructor(ident("z_keyexpr_try_from"));
-        exp.add_constructor(ident("z_keyexpr_autocanonize"));
+        // Two constructors for ZKeyExpr, disambiguated by name via `.expand_with`.
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp.set_constructor_name("tryfrom");
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
+        exp.set_constructor_name("autocanon");
         exp.add_expand_with(
             ident("z_keyexpr_intersects"),
             ident("a"),
-            ident("z_keyexpr_autocanonize"),
+            ident("autocanon"),
         );
 
         apply(&mut reg, &exp).expect("explicit selection resolves");
@@ -1105,7 +1047,8 @@ mod tests {
             "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_constructor(ident("z_zbytes_from_vec"));
+        exp.add_constructor(syn::parse_quote!(ZZBytes));
+        exp.add_constructor_variant(ident("z_zbytes_from_vec"));
         exp.add_expand(ident("z_session_delete"), ident("attachment"));
 
         apply(&mut reg, &exp).expect("apply optional by-value");
@@ -1140,7 +1083,8 @@ mod tests {
             "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_constructor(ident("z_encoding_from_string"));
+        exp.add_constructor(syn::parse_quote!(ZEncoding));
+        exp.add_constructor_variant(ident("z_encoding_from_string"));
         exp.add_expand(ident("z_session_put"), ident("encoding"));
 
         apply(&mut reg, &exp).expect("apply optional by-ref");
@@ -1169,9 +1113,9 @@ mod tests {
             "fn z_session_get(s: &ZSession, ke: Option<ZKeyExpr>) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        exp.add_combined(syn::parse_quote!(ZKeyExpr));
-        exp.add_combined_variant(ident("z_keyexpr_try_from"));
-        exp.add_combined_variant_id();
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp.add_constructor_variant_id();
         exp.add_expand(ident("z_session_get"), ident("ke"));
 
         match apply(&mut reg, &exp) {

@@ -455,7 +455,7 @@ pub(crate) fn emit_unfold_delivery(
                 let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: identity leaf `{}` has no projection — \
-                         `.combined_accessor_record_id()` requires a ptr_class or value_blob type",
+                         `.accessor_record_id()` requires a ptr_class or value_blob type",
                         TypeKey::from_type(&leaf.out_ty)
                     )
                 });

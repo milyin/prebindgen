@@ -588,13 +588,13 @@ pub struct JniGen {
     pub(crate) emit_handle_locks: bool,
 
     /// Constructor-expansion declarations (`.constructor`,
-    /// `.combined_constructor`, `.expand`, …). Resolved into
+    /// `.constructor`, `.expand`, …). Resolved into
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
-    /// Output-expansion declarations (`.combined_accessor`,
-    /// `.combined_accessor_record*`, `.expand_output`, …). Resolved into
+    /// Output-expansion declarations (`.accessor`,
+    /// `.accessor_record*`, `.expand_output`, …). Resolved into
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) accessors: crate::api::core::unfold::Accessors,

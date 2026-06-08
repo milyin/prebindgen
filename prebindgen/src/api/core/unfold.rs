@@ -5,13 +5,13 @@
 //! the delivery mechanism — jnigen passes a Kotlin function-type lambda).
 //!
 //! An *accessor* is a `#[prebindgen]` function `f(&T) -> &F` (a reference
-//! return where possible, for zero-copy). A **combined accessor**
-//! (`.combined_accessor(T)` + `.combined_accessor_record(f)` /
-//! `.combined_accessor_record_id()`) is a **deterministic product**: every
+//! return where possible, for zero-copy). A **accessor**
+//! (`.accessor(T)` + `.accessor_record(f)` /
+//! `.accessor_record_id()`) is a **deterministic product**: every
 //! record always runs and contributes its leaf — there is no selector (unlike
 //! a combined *constructor*, whose selector picks one variant). Marking a
 //! function `.expand_output()` replaces its return — in the generated foreign
-//! signature only — with the builder plus the combined accessor's flattened
+//! signature only — with the builder plus the accessor's flattened
 //! leaves.
 //!
 //! Resolution is language-agnostic: [`apply`] turns declarations into
@@ -37,36 +37,36 @@ use crate::api::core::registry::{Registry, TypeKey};
 // Declarations (populated by the language builder)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One record (field) of a combined accessor. A combined accessor is a
+/// One record (field) of an accessor. A accessor is a
 /// product: every record contributes a leaf.
 #[derive(Clone)]
 enum AccRecord {
     /// Read this field by calling the accessor function `f(&T) -> &F`.
     Acc(syn::Ident),
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
-    /// moved for an owned `T`). At most one per combined accessor.
+    /// moved for an owned `T`). At most one per accessor.
     Identity,
-    /// Splice in another type's combined accessor via the accessor function
+    /// Splice in another type's accessor via the accessor function
     /// `f(&T) -> &Child` (or `-> Option<&Child>`): the child type's
-    /// combined-accessor leaves are flattened with the access path prefixed by
+    /// accessor leaves are flattened with the access path prefixed by
     /// `f` (and marked nullable when `f` returns `Option`).
     Nested(syn::Ident),
 }
 
 #[derive(Clone)]
-struct CombinedAccessorDecl {
+struct AccessorDecl {
     name: Option<String>,
     target: syn::Type,
     records: Vec<AccRecord>,
 }
 
-/// How an `.expand_output`/`.expand_output_with` chooses the combined accessor
+/// How an `.expand_output`/`.expand_output_with` chooses the accessor
 /// for a function's return type.
 #[derive(Clone)]
 enum AccSel {
-    /// Use the return type's unique combined accessor (error if ambiguous).
+    /// Use the return type's unique accessor (error if ambiguous).
     TopLevel,
-    /// Use the combined accessor named by this string.
+    /// Use the accessor named by this string.
     Explicit(String),
 }
 
@@ -82,68 +82,68 @@ struct ExpandOutputDecl {
 /// [`crate::api::core::prebindgen::Prebindgen::accessors`].
 #[derive(Clone, Default)]
 pub struct Accessors {
-    combined: Vec<CombinedAccessorDecl>,
+    accessors: Vec<AccessorDecl>,
     expands: Vec<ExpandOutputDecl>,
-    /// Cursor for the combined-accessor builder (`.combined_accessor_record*`).
-    cur_combined: Option<usize>,
+    /// Cursor for the accessor builder (`.accessor_record*`).
+    cur_accessor: Option<usize>,
 }
 
 impl Accessors {
-    /// `.combined_accessor(target)` — begin a combined accessor for `target`.
-    pub fn add_combined(&mut self, target: syn::Type) {
-        self.combined.push(CombinedAccessorDecl {
+    /// `.accessor(target)` — begin an accessor for `target`.
+    pub fn add_accessor(&mut self, target: syn::Type) {
+        self.accessors.push(AccessorDecl {
             name: None,
             target,
             records: Vec::new(),
         });
-        self.cur_combined = Some(self.combined.len() - 1);
+        self.cur_accessor = Some(self.accessors.len() - 1);
     }
 
-    /// `.combined_accessor_name(name)` — name the current combined accessor so
+    /// `.accessor_name(name)` — name the current accessor so
     /// it can be selected via `.expand_output_with`.
-    pub fn set_combined_name(&mut self, name: impl Into<String>) {
+    pub fn set_accessor_name(&mut self, name: impl Into<String>) {
         let i = self
-            .cur_combined
-            .expect(".combined_accessor_name called without a current .combined_accessor");
-        self.combined[i].name = Some(name.into());
+            .cur_accessor
+            .expect(".accessor_name called without a current .accessor");
+        self.accessors[i].name = Some(name.into());
     }
 
-    /// `.combined_accessor_record(func)` — add an accessor-function record.
-    pub fn add_combined_record(&mut self, func: syn::Ident) {
+    /// `.accessor_record(func)` — add an accessor-function record.
+    pub fn add_accessor_record(&mut self, func: syn::Ident) {
         let i = self
-            .cur_combined
-            .expect(".combined_accessor_record called without a current .combined_accessor");
-        self.combined[i].records.push(AccRecord::Acc(func));
+            .cur_accessor
+            .expect(".accessor_record called without a current .accessor");
+        self.accessors[i].records.push(AccRecord::Acc(func));
     }
 
-    /// `.combined_accessor_record_id()` — add the identity/handle record (the
+    /// `.accessor_record_id()` — add the identity/handle record (the
     /// value itself).
-    pub fn add_combined_record_id(&mut self) {
+    pub fn add_accessor_record_id(&mut self) {
         let i = self
-            .cur_combined
-            .expect(".combined_accessor_record_id called without a current .combined_accessor");
-        self.combined[i].records.push(AccRecord::Identity);
+            .cur_accessor
+            .expect(".accessor_record_id called without a current .accessor");
+        self.accessors[i].records.push(AccRecord::Identity);
     }
 
-    /// `.combined_accessor_record_nested(func)` — splice another type's
-    /// combined accessor via the accessor `func` (`f(&T) -> &Child` or
-    /// `-> Option<&Child>`); `Child`'s combined-accessor leaves are flattened
+    /// `.accessor_record_nested(func)` — splice another type's
+    /// accessor via the accessor `func` (`f(&T) -> &Child` or
+    /// `-> Option<&Child>`); `Child`'s accessor leaves are flattened
     /// with the access path prefixed by `func`.
-    pub fn add_combined_record_nested(&mut self, func: syn::Ident) {
+    pub fn add_accessor_record_nested(&mut self, func: syn::Ident) {
         let i = self
-            .cur_combined
-            .expect(".combined_accessor_record_nested called without a current .combined_accessor");
-        self.combined[i].records.push(AccRecord::Nested(func));
+            .cur_accessor
+            .expect(".accessor_record_nested called without a current .accessor");
+        self.accessors[i].records.push(AccRecord::Nested(func));
     }
 
     /// `.expand_output()` on the function `func` — decompose its return value
-    /// using the return type's unique combined accessor.
+    /// using the return type's unique accessor.
     pub fn add_expand_output(&mut self, func: syn::Ident) {
         self.expands.push(ExpandOutputDecl {
             func,
             sel: AccSel::TopLevel,
         });
-        self.cur_combined = None;
+        self.cur_accessor = None;
     }
 
     /// `.expand_output_with(name)` — decompose using the named combined
@@ -153,7 +153,7 @@ impl Accessors {
             func,
             sel: AccSel::Explicit(name.into()),
         });
-        self.cur_combined = None;
+        self.cur_accessor = None;
     }
 
     /// True iff no `.expand_output` was declared (lets `write_rust` skip
@@ -171,7 +171,7 @@ impl Accessors {
 /// The output-side analog of [`crate::api::core::expand::FoldShape`].
 #[derive(Clone)]
 pub enum UnfoldShape {
-    /// Innermost: run the combined accessor's records on the value, producing
+    /// Innermost: run the accessor's records on the value, producing
     /// all [leaves](`UnfoldPlan::leaves`) and invoking the builder once.
     Decompose,
     /// `Option<T>` / `Option<&T>` return: `None` ⇒ a null result (builder
@@ -181,7 +181,7 @@ pub enum UnfoldShape {
     /// converter + projection — see [`UnfoldPlan::element`]) to a caller-supplied
     /// **fold** `(acc, element) -> acc`, threading the accumulator. The inner
     /// shape is `Decompose` (a degenerate single whole-element step; per-element
-    /// combined-accessor decomposition is future work).
+    /// accessor decomposition is future work).
     Iterable(Box<UnfoldShape>),
 }
 
@@ -198,7 +198,7 @@ pub struct UnfoldPlan {
     /// `T`/`&T` return).
     pub shape: UnfoldShape,
     /// Flattened output leaves, in builder-argument order. Populated for
-    /// `Decompose`/`Optional` (combined-accessor decomposition); **empty** for
+    /// `Decompose`/`Optional` (accessor decomposition); **empty** for
     /// `Iterable`, which delivers each element whole (see [`Self::element`]).
     pub leaves: Vec<UnfoldLeaf>,
     /// For an `Iterable` plan: the owned/ref element type, delivered to the fold
@@ -258,7 +258,7 @@ pub enum UnfoldError {
     MultipleIdentity {
         target: String,
     },
-    /// A nested combined accessor recurses back into a type already on the
+    /// A nested accessor recurses back into a type already on the
     /// nesting chain (`A → … → A`).
     Cycle {
         target: String,
@@ -285,7 +285,7 @@ impl std::fmt::Display for UnfoldError {
             ),
             UnfoldError::NoCombinedAccessor { func, target } => write!(
                 f,
-                "expand_output: no combined accessor registered for `{}` (return of `{}`)",
+                "expand_output: no accessor registered for `{}` (return of `{}`)",
                 target, func
             ),
             UnfoldError::AmbiguousCombinedAccessor {
@@ -294,14 +294,14 @@ impl std::fmt::Display for UnfoldError {
                 candidates,
             } => write!(
                 f,
-                "expand_output: multiple combined accessors for `{}` (return of `{}`): {} — disambiguate with `.expand_output_with`",
+                "expand_output: multiple accessors for `{}` (return of `{}`): {} — disambiguate with `.expand_output_with`",
                 target,
                 func,
                 candidates.join(", ")
             ),
             UnfoldError::UnknownCombinedAccessor { func, name } => write!(
                 f,
-                "expand_output: no combined accessor named `{}` (for `{}`)",
+                "expand_output: no accessor named `{}` (for `{}`)",
                 name, func
             ),
             UnfoldError::AccessorTargetMismatch {
@@ -310,17 +310,17 @@ impl std::fmt::Display for UnfoldError {
                 expected,
             } => write!(
                 f,
-                "expand_output: accessor `{}` takes `{}` but the combined accessor decomposes `{}`",
+                "expand_output: accessor `{}` takes `{}` but the accessor decomposes `{}`",
                 accessor, takes, expected
             ),
             UnfoldError::MultipleIdentity { target } => write!(
                 f,
-                "expand_output: combined accessor for `{}` has more than one identity record",
+                "expand_output: accessor for `{}` has more than one identity record",
                 target
             ),
             UnfoldError::Cycle { target } => write!(
                 f,
-                "expand_output: nested combined accessors form a cycle through `{}`",
+                "expand_output: nested accessors form a cycle through `{}`",
                 target
             ),
             UnfoldError::Unsupported { func, reason } => write!(
@@ -358,11 +358,11 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
         };
 
         // `Vec<T>` return → `Iterable`. Two element-delivery modes:
-        //   * **decomposed** (M5): the element type has a combined accessor →
+        //   * **decomposed** (M5): the element type has an accessor →
         //     flatten it into leaves, fold `(acc, leaf0, …) -> acc`.
-        //   * **whole** (M4): no combined accessor → deliver each element whole
+        //   * **whole** (M4): no accessor → deliver each element whole
         //     via its own output converter + projection, fold `(acc, T) -> acc`.
-        // The other shapes (`Option`/scalar) decompose via a combined accessor
+        // The other shapes (`Option`/scalar) decompose via an accessor
         // (M1–M3). `Vec<Option<…>>` is not supported.
         let plan = if let Some(inner) = vec_inner_type(&ret_ty) {
             if option_inner_type(&inner).is_some() {
@@ -378,9 +378,9 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
                 other => (false, other.clone()),
             };
             let ekey = TypeKey::from_type(&element);
-            if find_combined_by_type(acc, &ekey).is_ok() {
+            if find_accessor_by_type(acc, &ekey).is_ok() {
                 // Decomposed: reuse the shared flatten (M3 nesting composes).
-                let records = find_combined_by_type(acc, &ekey)
+                let records = find_accessor_by_type(acc, &ekey)
                     .expect("checked is_ok")
                     .to_vec();
                 let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records)?;
@@ -416,7 +416,7 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
             } else {
                 UnfoldShape::Decompose
             };
-            let records = resolve_combined(acc, &source_key, ed)?;
+            let records = resolve_accessor(acc, &source_key, ed)?;
             let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records)?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty, &loc);
@@ -428,15 +428,15 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
     Ok(())
 }
 
-/// Pick the combined accessor (its records) for one `.expand_output`.
-fn resolve_combined(
+/// Pick the accessor (its records) for one `.expand_output`.
+fn resolve_accessor(
     acc: &Accessors,
     source_key: &TypeKey,
     ed: &ExpandOutputDecl,
 ) -> Result<Vec<AccRecord>, UnfoldError> {
     match &ed.sel {
         AccSel::Explicit(name) => acc
-            .combined
+            .accessors
             .iter()
             .find(|c| c.name.as_deref() == Some(name.as_str()))
             .map(|c| c.records.clone())
@@ -444,7 +444,7 @@ fn resolve_combined(
                 func: ed.func.clone(),
                 name: name.clone(),
             }),
-        AccSel::TopLevel => find_combined_by_type(acc, source_key).map(<[AccRecord]>::to_vec).map_err(
+        AccSel::TopLevel => find_accessor_by_type(acc, source_key).map(<[AccRecord]>::to_vec).map_err(
             |candidates| match candidates {
                 None => UnfoldError::NoCombinedAccessor {
                     func: ed.func.clone(),
@@ -460,15 +460,15 @@ fn resolve_combined(
     }
 }
 
-/// Find the unique combined accessor whose target is `type_key`. `Err(None)` =
+/// Find the unique accessor whose target is `type_key`. `Err(None)` =
 /// none registered; `Err(Some(candidates))` = ambiguous (>1). Used for both the
 /// top-level `.expand_output` and nested-record resolution.
-fn find_combined_by_type<'a>(
+fn find_accessor_by_type<'a>(
     acc: &'a Accessors,
     type_key: &TypeKey,
 ) -> Result<&'a [AccRecord], Option<Vec<String>>> {
-    let matches: Vec<&CombinedAccessorDecl> = acc
-        .combined
+    let matches: Vec<&AccessorDecl> = acc
+        .accessors
         .iter()
         .filter(|c| TypeKey::from_type(&c.target) == *type_key)
         .collect();
@@ -484,10 +484,10 @@ fn find_combined_by_type<'a>(
     }
 }
 
-/// Build the [`UnfoldPlan`] for a chosen combined accessor. `shape` is the outer
+/// Build the [`UnfoldPlan`] for a chosen accessor. `shape` is the outer
 /// shape over the core decomposition (`Decompose` for `T`/`&T`,
 /// `Optional(Decompose)` for `Option<T>`/`Option<&T>`). The records are
-/// recursively flattened ([`flatten`]) — nested combined accessors contribute
+/// recursively flattened ([`flatten`]) — nested accessors contribute
 /// their leaves with the access path prefixed.
 fn build_plan<M>(
     acc: &Accessors,
@@ -523,9 +523,9 @@ fn build_plan<M>(
     })
 }
 
-/// Recursively flatten a combined accessor's records into [`UnfoldLeaf`]s.
+/// Recursively flatten an accessor's records into [`UnfoldLeaf`]s.
 ///
-/// * `source` — the type whose combined accessor `records` belong to (the root
+/// * `source` — the type whose accessor `records` belong to (the root
 ///   on the first call, a nested child type on recursion).
 /// * `path_prefix` — accessor chain from the root value to `source` (empty at
 ///   the root; `[…, nesting_accessor]` when recursing into a nested child).
@@ -551,7 +551,7 @@ fn flatten<M>(
     leaves: &mut Vec<UnfoldLeaf>,
 ) -> Result<(), UnfoldError> {
     let source_key = TypeKey::from_type(source);
-    // Identity uniqueness is per combined accessor (one move/clone of the value
+    // Identity uniqueness is per accessor (one move/clone of the value
     // at this level); nested levels each get their own identity budget.
     let mut seen_identity = false;
 
@@ -613,7 +613,7 @@ fn flatten<M>(
                     });
                 }
                 let child_records =
-                    find_combined_by_type(acc, &child_key).map_err(|_| {
+                    find_accessor_by_type(acc, &child_key).map_err(|_| {
                         UnfoldError::NoCombinedAccessor {
                             func: top_func.clone(),
                             target: child_key.to_string(),
@@ -743,7 +743,7 @@ mod tests {
     }
 
     #[test]
-    fn combined_accessor_optional_primitive() {
+    fn accessor_optional_primitive() {
         // M2: `z_sample_timestamp(&ZSample) -> Option<&ZTimestamp>` decomposed
         // into a single primitive leaf `z_timestamp_ntp64(&ZTimestamp) -> i64`
         // (no identity). Outer shape is `Optional(Decompose)`.
@@ -752,8 +752,8 @@ mod tests {
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZTimestamp));
-        acc.add_combined_record(ident("z_timestamp_ntp64"));
+        acc.add_accessor(syn::parse_quote!(ZTimestamp));
+        acc.add_accessor_record(ident("z_timestamp_ntp64"));
         acc.add_expand_output(ident("z_sample_timestamp"));
 
         apply(&mut reg, &acc).expect("apply");
@@ -778,7 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn combined_accessor_plan_byref() {
+    fn accessor_plan_byref() {
         // `z_sample_key_expr(&ZSample) -> &ZKeyExpr` decomposed into the keyexpr
         // handle (identity) + its string form (`z_keyexpr_as_str`).
         let mut reg = reg_with(&[
@@ -786,9 +786,9 @@ mod tests {
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZKeyExpr));
-        acc.add_combined_record_id();
-        acc.add_combined_record(ident("z_keyexpr_as_str"));
+        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
+        acc.add_accessor_record_id();
+        acc.add_accessor_record(ident("z_keyexpr_as_str"));
         acc.add_expand_output(ident("z_sample_key_expr"));
 
         apply(&mut reg, &acc).expect("apply");
@@ -826,13 +826,13 @@ mod tests {
     }
 
     #[test]
-    fn ambiguous_combined_accessor_errors() {
+    fn ambiguous_accessor_errors() {
         let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZKeyExpr));
-        acc.add_combined_record_id();
-        acc.add_combined(syn::parse_quote!(ZKeyExpr));
-        acc.add_combined_record_id();
+        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
+        acc.add_accessor_record_id();
+        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
+        acc.add_accessor_record_id();
         acc.add_expand_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::AmbiguousCombinedAccessor { .. }));
@@ -840,14 +840,14 @@ mod tests {
 
     #[test]
     fn accessor_target_mismatch_errors() {
-        // Accessor takes a different type than the combined accessor's target.
+        // Accessor takes a different type than the accessor's target.
         let mut reg = reg_with(&[
             "fn z_foo() -> ZKeyExpr { todo!() }",
             "fn wrong(x: &ZSample) -> &str { todo!() }",
         ]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZKeyExpr));
-        acc.add_combined_record(ident("wrong"));
+        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
+        acc.add_accessor_record(ident("wrong"));
         acc.add_expand_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::AccessorTargetMismatch { .. }));
@@ -857,16 +857,16 @@ mod tests {
     fn multiple_identity_errors() {
         let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZKeyExpr));
-        acc.add_combined_record_id();
-        acc.add_combined_record_id();
+        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
+        acc.add_accessor_record_id();
+        acc.add_accessor_record_id();
         acc.add_expand_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::MultipleIdentity { .. }));
     }
 
     #[test]
-    fn nested_combined_accessor_flatten() {
+    fn nested_accessor_flatten() {
         // M3: `z_reply_sample -> Option<&ZSample>` whose ZSample combined
         // accessor nests ZKeyExpr (handle+string), ZZBytes (bytes), and a
         // nullable ZTimestamp (Option<&ZTimestamp> → ntp64), plus a direct enum
@@ -882,20 +882,20 @@ mod tests {
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
         let mut acc = Accessors::default();
-        // Child combined accessors (reused via nesting).
-        acc.add_combined(syn::parse_quote!(ZKeyExpr));
-        acc.add_combined_record_id();
-        acc.add_combined_record(ident("z_keyexpr_as_str"));
-        acc.add_combined(syn::parse_quote!(ZZBytes));
-        acc.add_combined_record(ident("z_zbytes_to_bytes"));
-        acc.add_combined(syn::parse_quote!(ZTimestamp));
-        acc.add_combined_record(ident("z_timestamp_ntp64"));
-        // Parent combined accessor with nested + direct records.
-        acc.add_combined(syn::parse_quote!(ZSample));
-        acc.add_combined_record_nested(ident("z_sample_key_expr"));
-        acc.add_combined_record_nested(ident("z_sample_payload"));
-        acc.add_combined_record(ident("z_sample_kind"));
-        acc.add_combined_record_nested(ident("z_sample_timestamp"));
+        // Child accessors (reused via nesting).
+        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
+        acc.add_accessor_record_id();
+        acc.add_accessor_record(ident("z_keyexpr_as_str"));
+        acc.add_accessor(syn::parse_quote!(ZZBytes));
+        acc.add_accessor_record(ident("z_zbytes_to_bytes"));
+        acc.add_accessor(syn::parse_quote!(ZTimestamp));
+        acc.add_accessor_record(ident("z_timestamp_ntp64"));
+        // Parent accessor with nested + direct records.
+        acc.add_accessor(syn::parse_quote!(ZSample));
+        acc.add_accessor_record_nested(ident("z_sample_key_expr"));
+        acc.add_accessor_record_nested(ident("z_sample_payload"));
+        acc.add_accessor_record(ident("z_sample_kind"));
+        acc.add_accessor_record_nested(ident("z_sample_timestamp"));
         acc.add_expand_output(ident("z_reply_sample"));
 
         apply(&mut reg, &acc).expect("apply");
@@ -935,10 +935,10 @@ mod tests {
             "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
         ]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZA));
-        acc.add_combined_record_nested(ident("a_to_b"));
-        acc.add_combined(syn::parse_quote!(ZB));
-        acc.add_combined_record_nested(ident("b_to_a"));
+        acc.add_accessor(syn::parse_quote!(ZA));
+        acc.add_accessor_record_nested(ident("a_to_b"));
+        acc.add_accessor(syn::parse_quote!(ZB));
+        acc.add_accessor_record_nested(ident("b_to_a"));
         acc.add_expand_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::Cycle { .. }));
@@ -947,7 +947,7 @@ mod tests {
     #[test]
     fn iterable_whole_element_plan() {
         // M4: `z_session_peers_zid(&ZSession) -> Vec<ZZenohId>` → Iterable;
-        // each element delivered WHOLE (no combined accessor, no leaves).
+        // each element delivered WHOLE (no accessor, no leaves).
         let mut reg = reg_with(&[
             "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
         ]);
@@ -985,9 +985,9 @@ mod tests {
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
         let mut acc = Accessors::default();
-        acc.add_combined(syn::parse_quote!(ZZenohId));
-        acc.add_combined_record(ident("z_zenoh_id_to_string"));
-        acc.add_combined_record_id();
+        acc.add_accessor(syn::parse_quote!(ZZenohId));
+        acc.add_accessor_record(ident("z_zenoh_id_to_string"));
+        acc.add_accessor_record_id();
         acc.add_expand_output(ident("z_session_peers_zid"));
 
         apply(&mut reg, &acc).expect("apply");
