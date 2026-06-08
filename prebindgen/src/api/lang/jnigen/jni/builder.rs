@@ -542,11 +542,13 @@ impl JniGen {
         self
     }
 
-    /// Add a nested combined-accessor record: splice `target`'s combined
-    /// accessor leaves into the current one (M3). Panics without a current
+    /// Add a nested combined-accessor record via the accessor `func`
+    /// (`f(&T) -> &Child` or `-> Option<&Child>`): splice `Child`'s combined
+    /// accessor leaves into the current one, path-prefixed by `func` (nullable
+    /// when `func` returns `Option`). Panics without a current
     /// `combined_accessor`.
-    pub fn combined_accessor_record_nested(mut self, target: syn::Type) -> Self {
-        self.accessors.add_combined_record_nested(target);
+    pub fn combined_accessor_record_nested(mut self, func: syn::Ident) -> Self {
+        self.accessors.add_combined_record_nested(func);
         self
     }
 

@@ -362,10 +362,64 @@ pub(crate) fn emit_unfold_delivery(
     };
     let descr_lit = syn::LitStr::new(&descriptor, Span::call_site());
 
+    // Fold an accessor chain over a base value: `a_n( … a_1(base) … )`. Each
+    // accessor takes `&T` and returns `&F` (so references chain); only the base
+    // needs a `&` when it is owned (`base_is_ref == false`).
+    let compose = |path: &[syn::Ident], base: TokenStream, base_is_ref: bool| -> TokenStream {
+        let mut e = if base_is_ref { base } else { quote!(&#base) };
+        for a in path {
+            e = quote!(#source_module::#a(#e));
+        }
+        e
+    };
+    // True when accessor `acc`'s return type is `Option<…>` (a nullable nesting
+    // step on a leaf's path).
+    let returns_option = |acc: &syn::Ident| -> bool {
+        registry.functions.get(acc).is_some_and(|(f, _)| match &f.sig.output {
+            syn::ReturnType::Type(_, t) => matches!(
+                &**t,
+                syn::Type::Path(tp) if tp.path.segments.last().is_some_and(|s| s.ident == "Option")
+            ),
+            _ => false,
+        })
+    };
+    // Cast an encoded wire local to a `JObject` for the erased `invoke`:
+    // object wires pass through / `.into()`; primitive wires box to `java.lang.*`
+    // (the box-failure arm early-returns the null sentinel). Returns an
+    // expression yielding `JObject`.
+    let cast_to_jobject = |enc: &syn::Ident, wire: &syn::Type| -> TokenStream {
+        if is_jobject_wire(wire) {
+            quote!(#enc)
+        } else if matches!(jni_field_access(wire), Some((_, _, true))) {
+            quote!(#enc.into())
+        } else if let Some((cls, ctor)) = box_class_for_wire(wire) {
+            let cls_lit = syn::LitStr::new(cls, Span::call_site());
+            let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
+            quote! {
+                match env.new_object(#cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc)]) {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                            format!("box primitive {}: {}", #cls_lit, __e));
+                        signal_error(&mut env, &__error_sink, &__e2);
+                        return #on_err;
+                    }
+                }
+            }
+        } else {
+            panic!(
+                "emit_unfold_delivery: leaf has unsupported wire `{}`",
+                wire.to_token_stream()
+            )
+        }
+    };
+
     // Decompose a single value expression (`__out` or a `Some`-bound `__inner`)
     // into its leaf JVM objects, then invoke the builder. Reference
     // (non-identity) leaves are encoded first — ending their borrow into the
-    // value — and the identity leaf last (move owned / clone `&T`).
+    // value — and the identity leaf last (move owned / clone `&T`). Each leaf's
+    // value is reached by folding its accessor `path` over `value`; a nullable
+    // leaf (an `Option` nesting step) wraps the encode in a `match Some/None`.
     let emit_decompose = |value: &TokenStream| -> TokenStream {
         let mut stmts = TokenStream::new();
         let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
@@ -380,35 +434,37 @@ pub(crate) fn emit_unfold_delivery(
                     TypeKey::from_type(&leaf.out_ty)
                 )
             });
+            let conv = out_entry.function.sig.ident.clone();
 
             if leaf.identity {
-                // Handle leaf: clone (`&T`) or move (owned `T`) the value into a
-                // fresh Box-handle, then wrap into its typed Kotlin handle class.
+                // Handle leaf: clone (`&T`, reached by the path) or — only at the
+                // root of an owned return — move the value into a fresh
+                // Box-handle, then wrap into its typed Kotlin handle class.
                 let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: identity leaf `{}` is not an opaque-handle \
                          projection — `.combined_accessor_record_id()` requires a ptr_class type",
-                        TypeKey::from_type(&plan.source)
+                        TypeKey::from_type(&leaf.out_ty)
                     )
                 });
                 let fqn = handle_field_fqn(ext, proj).replace('.', "/");
                 let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
                 let handle_ident = format_ident!("__h{}", idx);
-                if by_ref {
-                    let conv = out_entry.function.sig.ident.clone();
+                if leaf.path.is_empty() && !by_ref {
                     stmts.extend(quote! {
-                        let #handle_ident: jni::sys::jlong = match #conv(&mut env, #value) {
+                        let #handle_ident: jni::sys::jlong =
+                            std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
+                    });
+                } else {
+                    let reached = compose(&leaf.path, value.clone(), by_ref);
+                    stmts.extend(quote! {
+                        let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
                             ::core::result::Result::Ok(__w) => __w,
                             ::core::result::Result::Err(__e) => {
                                 signal_error(&mut env, &__error_sink, &__e);
                                 return #on_err;
                             }
                         };
-                    });
-                } else {
-                    stmts.extend(quote! {
-                        let #handle_ident: jni::sys::jlong =
-                            std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
                     });
                 }
                 stmts.extend(quote! {
@@ -427,57 +483,48 @@ pub(crate) fn emit_unfold_delivery(
                 continue;
             }
 
-            // Accessor leaf: call the accessor on the (borrowed) value, then
-            // encode with its output converter (the single JVM copy), then cast
-            // to JObject for the erased `invoke`.
-            let conv = out_entry.function.sig.ident.clone();
+            // Accessor leaf: walk the path, encode with the leaf's output
+            // converter (the single JVM copy), then cast to JObject. A nullable
+            // leaf (an `Option` step on the path) wraps the encode in a match so
+            // `None` ⇒ a null leaf.
             let wire = out_entry.destination.clone();
-            let accessor = leaf.path.last().unwrap_or_else(|| {
-                panic!("emit_unfold_delivery: non-identity leaf has empty accessor path")
-            });
-            let acc_value: TokenStream = if by_ref {
-                quote!(#source_module::#accessor(#value))
-            } else {
-                quote!(#source_module::#accessor(&#value))
-            };
             let enc_ident = format_ident!("__enc{}", idx);
-            stmts.extend(quote! {
-                let #enc_ident = match #conv(&mut env, #acc_value) {
-                    ::core::result::Result::Ok(__w) => __w,
-                    ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, &__e);
-                        return #on_err;
-                    }
-                };
-            });
-            // Object-shaped wires (JString/JByteArray/JObject) cast via `.into()`;
-            // primitive wires box to their `java.lang.*` wrapper.
-            if is_jobject_wire(&wire) {
-                stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident;));
-            } else if matches!(jni_field_access(&wire), Some((_, _, true))) {
-                stmts.extend(quote!(let #obj_ident: jni::objects::JObject = #enc_ident.into();));
-            } else if let Some((cls, ctor)) = box_class_for_wire(&wire) {
-                let cls_lit = syn::LitStr::new(cls, Span::call_site());
-                let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
-                stmts.extend(quote! {
-                    let #obj_ident: jni::objects::JObject = match env.new_object(
-                        #cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc_ident)]
-                    ) {
-                        ::core::result::Result::Ok(__o) => __o,
-                        ::core::result::Result::Err(__e) => {
-                            let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                                format!("box primitive {}: {}", #cls_lit, __e));
-                            signal_error(&mut env, &__error_sink, &__e2);
-                            return #on_err;
-                        }
-                    };
-                });
-            } else {
-                panic!(
-                    "emit_unfold_delivery: accessor leaf `{}` has unsupported wire `{}`",
-                    TypeKey::from_type(&leaf.out_ty),
-                    wire.to_token_stream()
-                );
+            let cast = cast_to_jobject(&enc_ident, &wire);
+            match leaf.path.iter().position(|a| returns_option(a)) {
+                Some(k) => {
+                    let recv = compose(&leaf.path[..k], value.clone(), by_ref);
+                    let opt_acc = &leaf.path[k];
+                    let inner_val = compose(&leaf.path[k + 1..], quote!(__inner), true);
+                    stmts.extend(quote! {
+                        let #obj_ident: jni::objects::JObject =
+                            match #source_module::#opt_acc(#recv) {
+                                ::core::option::Option::Some(__inner) => {
+                                    let #enc_ident = match #conv(&mut env, #inner_val) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            signal_error(&mut env, &__error_sink, &__e);
+                                            return #on_err;
+                                        }
+                                    };
+                                    #cast
+                                }
+                                ::core::option::Option::None => jni::objects::JObject::null(),
+                            };
+                    });
+                }
+                None => {
+                    let acc_value = compose(&leaf.path, value.clone(), by_ref);
+                    stmts.extend(quote! {
+                        let #enc_ident = match #conv(&mut env, #acc_value) {
+                            ::core::result::Result::Ok(__w) => __w,
+                            ::core::result::Result::Err(__e) => {
+                                signal_error(&mut env, &__error_sink, &__e);
+                                return #on_err;
+                            }
+                        };
+                        let #obj_ident: jni::objects::JObject = #cast;
+                    });
+                }
             }
         }
 

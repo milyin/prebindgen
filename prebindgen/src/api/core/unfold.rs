@@ -27,6 +27,8 @@
 //!
 //! [`Iterable`]: UnfoldShape::Iterable
 
+use std::collections::HashSet;
+
 use proc_macro2::Span;
 
 use crate::api::core::registry::{Registry, TypeKey};
@@ -44,10 +46,11 @@ enum AccRecord {
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
     /// moved for an owned `T`). At most one per combined accessor.
     Identity,
-    /// Splice in another combined accessor's leaves (recursive flatten).
-    /// Reserved for M3; rejected by [`apply`] for now.
-    #[allow(dead_code)]
-    Nested(syn::Type),
+    /// Splice in another type's combined accessor via the accessor function
+    /// `f(&T) -> &Child` (or `-> Option<&Child>`): the child type's
+    /// combined-accessor leaves are flattened with the access path prefixed by
+    /// `f` (and marked nullable when `f` returns `Option`).
+    Nested(syn::Ident),
 }
 
 #[derive(Clone)]
@@ -122,13 +125,15 @@ impl Accessors {
         self.combined[i].records.push(AccRecord::Identity);
     }
 
-    /// `.combined_accessor_record_nested(target)` — splice another combined
-    /// accessor's leaves (M3).
-    pub fn add_combined_record_nested(&mut self, target: syn::Type) {
+    /// `.combined_accessor_record_nested(func)` — splice another type's
+    /// combined accessor via the accessor `func` (`f(&T) -> &Child` or
+    /// `-> Option<&Child>`); `Child`'s combined-accessor leaves are flattened
+    /// with the access path prefixed by `func`.
+    pub fn add_combined_record_nested(&mut self, func: syn::Ident) {
         let i = self
             .cur_combined
             .expect(".combined_accessor_record_nested called without a current .combined_accessor");
-        self.combined[i].records.push(AccRecord::Nested(target));
+        self.combined[i].records.push(AccRecord::Nested(func));
     }
 
     /// `.expand_output()` on the function `func` — decompose its return value
@@ -209,6 +214,10 @@ pub struct UnfoldLeaf {
     /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,
+    /// `true` when a nesting accessor on [`Self::path`] returns `Option` (M3):
+    /// the reached value may be absent, so the leaf is `null` (Kotlin type gets
+    /// a `?`; emit wraps the encode in a `match Some/None`).
+    pub nullable: bool,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -241,7 +250,12 @@ pub enum UnfoldError {
     MultipleIdentity {
         target: String,
     },
-    /// A shape / record kind not yet implemented (staged for M2–M4).
+    /// A nested combined accessor recurses back into a type already on the
+    /// nesting chain (`A → … → A`).
+    Cycle {
+        target: String,
+    },
+    /// A shape / record kind not yet implemented (staged for M4).
     Unsupported {
         func: syn::Ident,
         reason: &'static str,
@@ -294,6 +308,11 @@ impl std::fmt::Display for UnfoldError {
             UnfoldError::MultipleIdentity { target } => write!(
                 f,
                 "expand_output: combined accessor for `{}` has more than one identity record",
+                target
+            ),
+            UnfoldError::Cycle { target } => write!(
+                f,
+                "expand_output: nested combined accessors form a cycle through `{}`",
                 target
             ),
             UnfoldError::Unsupported { func, reason } => write!(
@@ -356,7 +375,7 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
         };
 
         let records = resolve_combined(acc, &source_key, ed)?;
-        let plan = build_plan(registry, ed, by_ref, &source, shape, &records)?;
+        let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records)?;
 
         for leaf in &plan.leaves {
             registry.require_output(&leaf.out_ty, &loc);
@@ -382,36 +401,53 @@ fn resolve_combined(
                 func: ed.func.clone(),
                 name: name.clone(),
             }),
-        AccSel::TopLevel => {
-            let matches: Vec<&CombinedAccessorDecl> = acc
-                .combined
+        AccSel::TopLevel => find_combined_by_type(acc, source_key).map(<[AccRecord]>::to_vec).map_err(
+            |candidates| match candidates {
+                None => UnfoldError::NoCombinedAccessor {
+                    func: ed.func.clone(),
+                    target: source_key.to_string(),
+                },
+                Some(candidates) => UnfoldError::AmbiguousCombinedAccessor {
+                    func: ed.func.clone(),
+                    target: source_key.to_string(),
+                    candidates,
+                },
+            },
+        ),
+    }
+}
+
+/// Find the unique combined accessor whose target is `type_key`. `Err(None)` =
+/// none registered; `Err(Some(candidates))` = ambiguous (>1). Used for both the
+/// top-level `.expand_output` and nested-record resolution.
+fn find_combined_by_type<'a>(
+    acc: &'a Accessors,
+    type_key: &TypeKey,
+) -> Result<&'a [AccRecord], Option<Vec<String>>> {
+    let matches: Vec<&CombinedAccessorDecl> = acc
+        .combined
+        .iter()
+        .filter(|c| TypeKey::from_type(&c.target) == *type_key)
+        .collect();
+    match matches.len() {
+        1 => Ok(&matches[0].records),
+        0 => Err(None),
+        _ => Err(Some(
+            matches
                 .iter()
-                .filter(|c| TypeKey::from_type(&c.target) == *source_key)
-                .collect();
-            match matches.len() {
-                1 => Ok(matches[0].records.clone()),
-                0 => Err(UnfoldError::NoCombinedAccessor {
-                    func: ed.func.clone(),
-                    target: source_key.to_string(),
-                }),
-                _ => Err(UnfoldError::AmbiguousCombinedAccessor {
-                    func: ed.func.clone(),
-                    target: source_key.to_string(),
-                    candidates: matches
-                        .iter()
-                        .map(|c| c.name.clone().unwrap_or_else(|| "<combined>".to_string()))
-                        .collect(),
-                }),
-            }
-        }
+                .map(|c| c.name.clone().unwrap_or_else(|| "<combined>".to_string()))
+                .collect(),
+        )),
     }
 }
 
 /// Build the [`UnfoldPlan`] for a chosen combined accessor. `shape` is the outer
 /// shape over the core decomposition (`Decompose` for `T`/`&T`,
-/// `Optional(Decompose)` for `Option<T>`/`Option<&T>`); leaf flattening is the
-/// same regardless of shape — the leaves describe the *inner* `source`.
+/// `Optional(Decompose)` for `Option<T>`/`Option<&T>`). The records are
+/// recursively flattened ([`flatten`]) — nested combined accessors contribute
+/// their leaves with the access path prefixed.
 fn build_plan<M>(
+    acc: &Accessors,
     registry: &Registry<M>,
     ed: &ExpandOutputDecl,
     by_ref: bool,
@@ -419,11 +455,57 @@ fn build_plan<M>(
     shape: UnfoldShape,
     records: &[AccRecord],
 ) -> Result<UnfoldPlan, UnfoldError> {
-    let source_key = TypeKey::from_type(source);
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
+    let mut visited: HashSet<TypeKey> = HashSet::new();
+    visited.insert(TypeKey::from_type(source));
+    flatten(
+        acc,
+        registry,
+        &ed.func,
+        records,
+        source,
+        &[],
+        false,
+        &mut visited,
+        &mut leaves,
+    )?;
+
+    Ok(UnfoldPlan {
+        source: source.clone(),
+        by_ref,
+        shape,
+        leaves,
+    })
+}
+
+/// Recursively flatten a combined accessor's records into [`UnfoldLeaf`]s.
+///
+/// * `source` — the type whose combined accessor `records` belong to (the root
+///   on the first call, a nested child type on recursion).
+/// * `path_prefix` — accessor chain from the root value to `source` (empty at
+///   the root; `[…, nesting_accessor]` when recursing into a nested child).
+/// * `nullable` — `true` once any nesting accessor on the path returned
+///   `Option` (the reached value may be absent ⇒ the leaf is `null`).
+/// * `visited` — type keys on the current nesting chain (cycle guard; entries
+///   are removed after each nested recursion so sibling records may reuse a type).
+#[allow(clippy::too_many_arguments)]
+fn flatten<M>(
+    acc: &Accessors,
+    registry: &Registry<M>,
+    top_func: &syn::Ident,
+    records: &[AccRecord],
+    source: &syn::Type,
+    path_prefix: &[syn::Ident],
+    nullable: bool,
+    visited: &mut HashSet<TypeKey>,
+    leaves: &mut Vec<UnfoldLeaf>,
+) -> Result<(), UnfoldError> {
+    let source_key = TypeKey::from_type(source);
+    // Identity uniqueness is per combined accessor (one move/clone of the value
+    // at this level); nested levels each get their own identity budget.
     let mut seen_identity = false;
 
-    for (i, rec) in records.iter().enumerate() {
+    for rec in records {
         match rec {
             AccRecord::Identity => {
                 if seen_identity {
@@ -432,41 +514,77 @@ fn build_plan<M>(
                     });
                 }
                 seen_identity = true;
-                // The identity leaf's Kotlin type + projection come from the
-                // `&Source` output converter (borrowed-opaque → cloned handle);
-                // emit special-cases the owned-`T` move.
+                // The value reached by `path_prefix` (the root itself when
+                // empty). Its Kotlin type + projection come from the `&source`
+                // output converter (borrowed-opaque → cloned handle); emit
+                // special-cases the owned-`T` move at the root.
                 leaves.push(UnfoldLeaf {
-                    name: ident(&format!("__leaf{}", i)),
-                    path: vec![],
+                    name: ident(&format!("__leaf{}", leaves.len())),
+                    path: path_prefix.to_vec(),
                     out_ty: syn::parse_quote!(&#source),
                     identity: true,
+                    nullable,
                 });
             }
             AccRecord::Acc(func) => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
+                let mut path = path_prefix.to_vec();
+                path.push(func.clone());
                 leaves.push(UnfoldLeaf {
-                    name: ident(&format!("__leaf{}", i)),
-                    path: vec![func.clone()],
+                    name: ident(&format!("__leaf{}", leaves.len())),
+                    path,
                     out_ty: ret,
                     identity: false,
+                    nullable,
                 });
             }
-            AccRecord::Nested(_) => {
-                return Err(UnfoldError::Unsupported {
-                    func: ed.func.clone(),
-                    reason: "nested combined accessors (M3)",
-                });
+            AccRecord::Nested(func) => {
+                let (takes, ret) = accessor_signature(registry, func)?;
+                check_takes(func, &takes, source)?;
+                // Peel an `Option` (nested value may be absent) then a leading
+                // `&` to reach the nested child type.
+                let (opt, core) = match option_inner_type(&ret) {
+                    Some(inner) => (true, inner),
+                    None => (false, ret),
+                };
+                let child_ty = match &core {
+                    syn::Type::Reference(r) => (*r.elem).clone(),
+                    other => other.clone(),
+                };
+                let child_key = TypeKey::from_type(&child_ty);
+                if !visited.insert(child_key.clone()) {
+                    return Err(UnfoldError::Cycle {
+                        target: child_key.to_string(),
+                    });
+                }
+                let child_records =
+                    find_combined_by_type(acc, &child_key).map_err(|_| {
+                        UnfoldError::NoCombinedAccessor {
+                            func: top_func.clone(),
+                            target: child_key.to_string(),
+                        }
+                    })?;
+                let mut child_path = path_prefix.to_vec();
+                child_path.push(func.clone());
+                flatten(
+                    acc,
+                    registry,
+                    top_func,
+                    child_records,
+                    &child_ty,
+                    &child_path,
+                    nullable || opt,
+                    visited,
+                    leaves,
+                )?;
+                // Chain-scoped: let a sibling record reuse the same child type.
+                visited.remove(&child_key);
             }
         }
     }
 
-    Ok(UnfoldPlan {
-        source: source.clone(),
-        by_ref,
-        shape,
-        leaves,
-    })
+    Ok(())
 }
 
 /// An accessor `f(&T) -> R`: returns the (peeled) `T` it takes and its return
@@ -690,5 +808,84 @@ mod tests {
         acc.add_expand_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::MultipleIdentity { .. }));
+    }
+
+    #[test]
+    fn nested_combined_accessor_flatten() {
+        // M3: `z_reply_sample -> Option<&ZSample>` whose ZSample combined
+        // accessor nests ZKeyExpr (handle+string), ZZBytes (bytes), and a
+        // nullable ZTimestamp (Option<&ZTimestamp> → ntp64), plus a direct enum
+        // leaf. Verifies path prefixes + nullable propagation.
+        let mut reg = reg_with(&[
+            "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
+            "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+            "fn z_sample_payload(s: &ZSample) -> &ZZBytes { todo!() }",
+            "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+            "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+            "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+            "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
+            "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+        ]);
+        let mut acc = Accessors::default();
+        // Child combined accessors (reused via nesting).
+        acc.add_combined(syn::parse_quote!(ZKeyExpr));
+        acc.add_combined_record_id();
+        acc.add_combined_record(ident("z_keyexpr_as_str"));
+        acc.add_combined(syn::parse_quote!(ZZBytes));
+        acc.add_combined_record(ident("z_zbytes_to_bytes"));
+        acc.add_combined(syn::parse_quote!(ZTimestamp));
+        acc.add_combined_record(ident("z_timestamp_ntp64"));
+        // Parent combined accessor with nested + direct records.
+        acc.add_combined(syn::parse_quote!(ZSample));
+        acc.add_combined_record_nested(ident("z_sample_key_expr"));
+        acc.add_combined_record_nested(ident("z_sample_payload"));
+        acc.add_combined_record(ident("z_sample_kind"));
+        acc.add_combined_record_nested(ident("z_sample_timestamp"));
+        acc.add_expand_output(ident("z_reply_sample"));
+
+        apply(&mut reg, &acc).expect("apply");
+        let plan = reg.unfold_plans.get(&ident("z_reply_sample")).expect("plan");
+        assert!(plan.by_ref);
+        assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
+        assert!(matches!(&plan.shape, UnfoldShape::Optional(_)));
+
+        let path = |l: &UnfoldLeaf| {
+            l.path
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(".")
+        };
+        // keyexpr identity (path [z_sample_key_expr]) + string + payload bytes
+        // + kind enum + nullable timestamp ntp64.
+        assert_eq!(plan.leaves.len(), 5);
+        assert!(plan.leaves[0].identity);
+        assert_eq!(path(&plan.leaves[0]), "z_sample_key_expr");
+        assert_eq!(path(&plan.leaves[1]), "z_sample_key_expr.z_keyexpr_as_str");
+        assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
+        assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
+        assert_eq!(plan.leaves[3].out_ty.to_token_stream().to_string(), "SampleKind");
+        assert_eq!(path(&plan.leaves[4]), "z_sample_timestamp.z_timestamp_ntp64");
+        // Only the timestamp leaf (Option nesting accessor) is nullable.
+        assert!(!plan.leaves[1].nullable && !plan.leaves[2].nullable);
+        assert!(plan.leaves[4].nullable);
+    }
+
+    #[test]
+    fn nested_cycle_errors() {
+        // A → B → A nesting is rejected.
+        let mut reg = reg_with(&[
+            "fn z_foo() -> ZA { todo!() }",
+            "fn a_to_b(a: &ZA) -> &ZB { todo!() }",
+            "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
+        ]);
+        let mut acc = Accessors::default();
+        acc.add_combined(syn::parse_quote!(ZA));
+        acc.add_combined_record_nested(ident("a_to_b"));
+        acc.add_combined(syn::parse_quote!(ZB));
+        acc.add_combined_record_nested(ident("b_to_a"));
+        acc.add_expand_output(ident("z_foo"));
+        let err = apply(&mut reg, &acc).unwrap_err();
+        assert!(matches!(err, UnfoldError::Cycle { .. }));
     }
 }

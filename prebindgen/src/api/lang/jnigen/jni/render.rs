@@ -934,8 +934,22 @@ pub(crate) fn render_wrapper_fn(
         let mut leaf_kts: Vec<String> = Vec::with_capacity(plan.leaves.len());
         for leaf in &plan.leaves {
             let out_ty = &leaf.out_ty;
-            let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-            let (kt, _) = classify_return(ext, &rt, registry, imports)?;
+            // Enum leaves cross the wire as `jint` (boxed `Integer`); the builder
+            // receives an `Int` and zenoh-java rebuilds the enum (`fromInt`).
+            // Otherwise classify as usual (handle class / String / ByteArray /
+            // Long …).
+            let mut kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+                "Int".to_string()
+            } else {
+                let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+                let (kt, _) = classify_return(ext, &rt, registry, imports)?;
+                kt
+            };
+            // A nullable leaf (an `Option` nesting step on its path) may be
+            // `null` ⇒ the builder param is nullable.
+            if leaf.nullable {
+                kt.push('?');
+            }
             leaf_kts.push(kt);
         }
         builder_param = Some(format!("build: ({}) -> R", leaf_kts.join(", ")));
