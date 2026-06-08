@@ -240,7 +240,7 @@ pub(crate) struct EnumConfig {
     pub suppress_kotlin_code: bool,
 }
 
-/// One registered `.package_fun(...)` entry. The Rust identifier is captured
+/// One registered `.fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
 /// optional override sets the Kotlin-side name when the default
 /// `snake_to_camel(rust_ident)` derivation isn't what the user wants.
@@ -254,6 +254,11 @@ pub struct MethodEntry {
     /// the entry's registration. `None` = derive from `rust_ident` via
     /// `snake_to_camel`.
     pub kotlin_name_override: Option<String>,
+    /// `true` when declared via `.fun_accessor(...)` (a read accessor): the
+    /// parameter composer (constructor `.default()` / explicit `.construct`) is
+    /// never applied to it, and it is the only kind of function a decomposer
+    /// record (`.deconstructor_record`/`.converter`/`_nested`) may reference.
+    pub is_accessor: bool,
 }
 
 impl MethodEntry {
@@ -261,11 +266,21 @@ impl MethodEntry {
         Self {
             rust_ident,
             kotlin_name_override: None,
+            is_accessor: false,
+        }
+    }
+
+    /// A `.fun_accessor(...)` entry — see [`Self::is_accessor`].
+    pub fn new_accessor(rust_ident: syn::Ident) -> Self {
+        Self {
+            rust_ident,
+            kotlin_name_override: None,
+            is_accessor: true,
         }
     }
 }
 
-/// Back-pointer to the last entry added via `.package_fun`, used by
+/// Back-pointer to the last entry added via `.fun` / `.fun_accessor`, used by
 /// `.name(...)` to find what to mutate. Cleared by every other builder call.
 #[derive(Clone, Debug)]
 pub(crate) enum NamedEntryRef {

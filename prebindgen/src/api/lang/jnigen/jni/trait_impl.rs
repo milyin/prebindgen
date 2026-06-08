@@ -453,7 +453,7 @@ impl Prebindgen for JniGen {
         Some(&self.deconstructors)
     }
 
-    /// Union of every `.package_fun(...)` list across all
+    /// Union of every `.fun(...)` / `.fun_accessor(...)` list across all
     /// [`Self::package`] contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
     /// binding; functions not in this set are skipped by the registry's
@@ -463,6 +463,21 @@ impl Prebindgen for JniGen {
         for pkg in self.packages.values() {
             for m in &pkg.functions {
                 out.insert(m.rust_ident.clone());
+            }
+        }
+        out
+    }
+
+    /// Subset of [`Self::declared_functions`] declared via `.fun_accessor(...)`
+    /// — read accessors excluded from the parameter composer and required for
+    /// decomposer records.
+    fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        let mut out = std::collections::HashSet::new();
+        for pkg in self.packages.values() {
+            for m in &pkg.functions {
+                if m.is_accessor {
+                    out.insert(m.rust_ident.clone());
+                }
             }
         }
         out

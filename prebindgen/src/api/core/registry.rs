@@ -774,13 +774,16 @@ impl<M> Registry<M> {
         self.scan_declared(ext)?;
         // The set of `#[prebindgen]` fns the back-end claims — drives the
         // `.default()` auto-apply (a defaulted constructor/deconstructor is
-        // synthesized for every matching declared fn).
+        // synthesized for every matching declared fn). `accessor_fns` is the
+        // `.fun_accessor` subset: excluded from constructor composition and the
+        // only fns a decomposer record may reference.
         let declared_fns = ext.declared_functions();
+        let accessor_fns = ext.accessor_functions();
         if let Some(exp) = ext.expansions() {
-            crate::api::core::expand::apply(self, exp, &declared_fns)?;
+            crate::api::core::expand::apply(self, exp, &declared_fns, &accessor_fns)?;
         }
         if let Some(dec) = ext.deconstructors() {
-            crate::api::core::unfold::apply(self, dec, &declared_fns)?;
+            crate::api::core::unfold::apply(self, dec, &declared_fns, &accessor_fns)?;
         }
         crate::api::core::resolve::resolve(self, ext)?;
         Ok(crate::api::core::write::write_rust(self, ext, out_path)?)

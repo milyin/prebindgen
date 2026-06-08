@@ -339,8 +339,8 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         .ptr_class(syn::parse_quote!(ZThing))
         .enum_class(syn::parse_quote!(Color))
         .package("thing")
-        .package_fun(syn::parse_quote!(z_thing_new))
-        .package_fun(syn::parse_quote!(z_thing_name));
+        .fun(syn::parse_quote!(z_thing_new))
+        .fun(syn::parse_quote!(z_thing_name));
 
     let dir = std::env::temp_dir().join(format!("jnigen_snap_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

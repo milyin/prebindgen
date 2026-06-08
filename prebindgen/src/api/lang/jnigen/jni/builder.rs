@@ -412,32 +412,48 @@ impl JniGen {
 
     /// Declare a `#[prebindgen]` function as a free-standing wrapper
     /// under the currently-active [`Self::package`] context. If a
-    /// class context is also live, calling `function` clears it — the
+    /// class context is also live, calling `fun` clears it — the
     /// idea being that "leak class context to package level" makes the
     /// chain unambiguous after one fn-level declaration. Panics if no
     /// `package` is active.
-    pub fn package_fun(mut self, ident: syn::Ident) -> Self {
+    pub fn fun(mut self, ident: syn::Ident) -> Self {
+        self.push_fun(MethodEntry::new(ident))
+    }
+
+    /// Declare a `#[prebindgen]` **read accessor** (`f(&T) -> …`) — like
+    /// [`Self::fun`] (exported wrapper) but flagged
+    /// [`MethodEntry::is_accessor`]: the parameter composer is never applied to
+    /// it (explicit [`Self::construct`] on its params is a build error, and
+    /// constructor [`Self::default`] auto-apply skips it), and it is the only
+    /// kind of function a decomposer record ([`Self::deconstructor_record`] /
+    /// [`Self::converter`] / [`Self::deconstructor_record_nested`]) may reference.
+    pub fn fun_accessor(mut self, ident: syn::Ident) -> Self {
+        self.push_fun(MethodEntry::new_accessor(ident))
+    }
+
+    /// Shared body of [`Self::fun`] / [`Self::fun_accessor`].
+    fn push_fun(mut self, entry: MethodEntry) -> Self {
         let sub = self
             .active_subpackage
             .clone()
-            .expect("JniGen::function must be chained inside a `package(...)` context");
+            .expect("JniGen::fun must be chained inside a `package(...)` context");
         // Leak any class context back to package level.
         self.last_meta_key = None;
         self.last_opaque_key = None;
         let pkg = self.packages.entry(sub.clone()).or_default();
         let idx = pkg.functions.len();
-        pkg.functions.push(MethodEntry::new(ident));
+        pkg.functions.push(entry);
         self.last_entry_ref = Some(NamedEntryRef::Function(sub, idx));
         self
     }
 
-    /// Override the Kotlin-side name for the most recent [`Self::package_fun`]
-    /// entry. Default (without `.name(...)`) is
+    /// Override the Kotlin-side name for the most recent [`Self::fun`] /
+    /// [`Self::fun_accessor`] entry. Default (without `.name(...)`) is
     /// `snake_to_camel(rust_ident)` (e.g. `z_hello_whatami` → `zHelloWhatami`).
     /// Panics if not chained immediately after a fn-level builder.
     pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
         let r = self.last_entry_ref.clone().expect(
-            "JniGen::name must be chained immediately after `.package_fun(...)`",
+            "JniGen::name must be chained immediately after `.fun(...)` / `.fun_accessor(...)`",
         );
         let name = kotlin_name.into();
         let NamedEntryRef::Function(sub, idx) = r;
@@ -483,7 +499,7 @@ impl JniGen {
         self
     }
 
-    /// Construct parameter `param` of the most recent [`Self::package_fun`] from
+    /// Construct parameter `param` of the most recent [`Self::fun`] from
     /// its target type's top-level constructor. The generated foreign signature
     /// receives the constructor's (flattened) inputs and the wrapper builds the
     /// value before the underlying call. Panics if not chained after a fn-level
@@ -562,7 +578,7 @@ impl JniGen {
         self
     }
 
-    /// Decompose the return value of the most recent [`Self::package_fun`] via
+    /// Decompose the return value of the most recent [`Self::fun`] via
     /// its return type's deconstructor and deliver the (flattened) leaves to a
     /// foreign **callback** (builder / fold). Panics if not chained after a
     /// fn-level builder.
@@ -579,7 +595,7 @@ impl JniGen {
         self
     }
 
-    /// Decompose the return value of the most recent [`Self::package_fun`] via a
+    /// Decompose the return value of the most recent [`Self::fun`] via a
     /// single-value deconstructor (converter) and make the wrapper **return** the
     /// converted value directly (no callback). Errors at resolution if the
     /// deconstructor is not single-leaf. Panics if not chained after a fn-level
@@ -597,7 +613,7 @@ impl JniGen {
         self
     }
 
-    /// Decompose the most recent [`Self::package_fun`]'s `Result<_, E>` **domain
+    /// Decompose the most recent [`Self::fun`]'s `Result<_, E>` **domain
     /// error** `E` via a single-value deconstructor (converter) and deliver it as
     /// the single `ze` leaf after the fixed `je: String?` error-callback param.
     pub fn convert_error(mut self) -> Self {
@@ -613,7 +629,7 @@ impl JniGen {
         self
     }
 
-    /// Decompose the most recent [`Self::package_fun`]'s `Result<_, E>` domain
+    /// Decompose the most recent [`Self::fun`]'s `Result<_, E>` domain
     /// error `E` and deliver its leaves as the `ze` params after `je`.
     pub fn deconstruct_error(mut self) -> Self {
         let func = self.current_fn_ident();
@@ -646,7 +662,7 @@ impl JniGen {
         self
     }
 
-    /// Opt the current [`Self::package_fun`]'s `param` out of constructor
+    /// Opt the current [`Self::fun`]'s `param` out of constructor
     /// `.default()` auto-apply.
     pub fn skip_default_construct(mut self, param: syn::Ident) -> Self {
         let func = self.current_fn_ident();
@@ -654,7 +670,7 @@ impl JniGen {
         self
     }
 
-    /// Opt the current [`Self::package_fun`] out of output-position
+    /// Opt the current [`Self::fun`] out of output-position
     /// (`deconstruct_output`/`convert_output`) `.default()` auto-apply.
     pub fn skip_default_output(mut self) -> Self {
         let func = self.current_fn_ident();
@@ -662,7 +678,7 @@ impl JniGen {
         self
     }
 
-    /// Opt the current [`Self::package_fun`] out of error-position
+    /// Opt the current [`Self::fun`] out of error-position
     /// (`convert_error`/`deconstruct_error`) `.default()` auto-apply.
     pub fn skip_default_convert_error(mut self) -> Self {
         let func = self.current_fn_ident();
@@ -671,12 +687,12 @@ impl JniGen {
     }
 
     /// Rust ident of the function the current `.construct*` / output-expansion
-    /// chain targets, resolved from the live [`Self::package_fun`] cursor.
+    /// chain targets, resolved from the live [`Self::fun`] cursor.
     fn current_fn_ident(&self) -> syn::Ident {
         let r = self
             .last_entry_ref
             .clone()
-            .expect("JniGen::expand must be chained after `.package_fun(...)`");
+            .expect("JniGen::expand must be chained after `.fun(...)`");
         let NamedEntryRef::Function(sub, idx) = r;
         self.packages
             .get(&sub)

@@ -111,7 +111,7 @@ impl Expansions {
         self.constructors[i].default = true;
     }
 
-    /// `.skip_default_construct(param)` on the current `.package_fun` — exclude
+    /// `.skip_default_construct(param)` on the current `.fun` — exclude
     /// `(func, param)` from constructor `.default()` auto-apply.
     pub fn add_skip_default_construct(&mut self, func: syn::Ident, param: syn::Ident) {
         self.skip_construct.insert((func, param));
@@ -296,6 +296,11 @@ pub enum ExpandError {
         param: syn::Ident,
         reason: &'static str,
     },
+    /// `.construct(param)` (explicit) targeted a `.fun_accessor` — read
+    /// accessors are never parameter-composed.
+    ConstructOnAccessor {
+        func: syn::Ident,
+    },
 }
 
 impl std::fmt::Display for ExpandError {
@@ -305,6 +310,12 @@ impl std::fmt::Display for ExpandError {
                 f,
                 "expand: function `{}` is not a #[prebindgen] item",
                 name
+            ),
+            ExpandError::ConstructOnAccessor { func } => write!(
+                f,
+                "expand: `.construct` on accessor fn `{}` — a `.fun_accessor` is never \
+                 parameter-composed (remove the `.construct`, or declare it as `.fun`)",
+                func
             ),
             ExpandError::UnknownParam(func, param) => write!(
                 f,
@@ -378,9 +389,17 @@ pub fn apply<M>(
     registry: &mut Registry<M>,
     exp: &Expansions,
     declared_fns: &std::collections::HashSet<syn::Ident>,
+    accessor_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), ExpandError> {
     let mut done: HashSet<(String, String)> = HashSet::new();
     for ed in &exp.expands {
+        // A `.fun_accessor` is never parameter-composed — an explicit
+        // `.construct(param)` on one is a build error.
+        if accessor_fns.contains(&ed.func) {
+            return Err(ExpandError::ConstructOnAccessor {
+                func: ed.func.clone(),
+            });
+        }
         process_expand(registry, exp, ed)?;
         done.insert((ed.func.to_string(), ed.param.to_string()));
     }
@@ -393,6 +412,10 @@ pub fn apply<M>(
         }
         let ckey = TypeKey::from_type(&c.target);
         for func in declared_fns {
+            // Read accessors are excluded from the composer.
+            if accessor_fns.contains(func) {
+                continue;
+            }
             let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
                 continue;
             };
@@ -1018,7 +1041,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp, &Default::default()).expect("apply");
+        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1049,7 +1072,7 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp, &Default::default()).expect("apply");
+        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1102,7 +1125,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        match apply(&mut reg, &exp, &Default::default()) {
+        match apply(&mut reg, &exp, &Default::default(), &Default::default()) {
             Err(ExpandError::AmbiguousConstructor { candidates, .. }) => {
                 assert_eq!(candidates.len(), 2);
             }
@@ -1131,7 +1154,7 @@ mod tests {
             ident("autocanon"),
         );
 
-        apply(&mut reg, &exp, &Default::default()).expect("explicit selection resolves");
+        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("explicit selection resolves");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_keyexpr_intersects"), ident("a")))
@@ -1155,7 +1178,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_zbytes_from_vec"));
         exp.add_construct(ident("z_session_delete"), ident("attachment"));
 
-        apply(&mut reg, &exp, &Default::default()).expect("apply optional by-value");
+        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply optional by-value");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_delete"), ident("attachment")))
@@ -1191,7 +1214,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_string"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp, &Default::default()).expect("apply optional by-ref");
+        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply optional by-ref");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
@@ -1222,7 +1245,7 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_session_get"), ident("ke"));
 
-        match apply(&mut reg, &exp, &Default::default()) {
+        match apply(&mut reg, &exp, &Default::default(), &Default::default()) {
             Err(ExpandError::UnsupportedOptional { .. }) => {}
             other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
         }
@@ -1281,7 +1304,7 @@ mod tests {
         exp.add_skip_default_construct(ident("z_session_undeclare"), ident("k"));
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_intersects", "z_session_undeclare"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &exp, &declared).expect("apply");
+        apply(&mut reg, &exp, &declared, &Default::default()).expect("apply");
 
         // Both `&ZKeyExpr` params of intersects are constructed.
         assert!(reg
@@ -1294,5 +1317,39 @@ mod tests {
         assert!(!reg
             .expansion_plans
             .contains_key(&(ident("z_session_undeclare"), ident("k"))));
+    }
+
+    #[test]
+    fn default_constructor_skips_accessor_and_explicit_construct_errors() {
+        let mut reg = reg_with(&[
+            "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+            "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+            "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
+        ]);
+        let accessor: std::collections::HashSet<syn::Ident> =
+            ["z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_keyexpr_intersects", "z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
+
+        // `.default()` skips the accessor's `ke`, constructs the consumer's a/b.
+        let mut exp = Expansions::default();
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp.set_default();
+        apply(&mut reg, &exp, &declared, &accessor).expect("apply");
+        assert!(reg.expansion_plans.contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
+        assert!(!reg.expansion_plans.contains_key(&(ident("z_keyexpr_clone"), ident("ke"))));
+
+        // Explicit `.construct` on an accessor is a build error.
+        let mut reg2 = reg_with(&[
+            "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+            "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
+        ]);
+        let mut exp2 = Expansions::default();
+        exp2.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp2.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp2.add_construct(ident("z_keyexpr_clone"), ident("ke"));
+        let err = apply(&mut reg2, &exp2, &declared, &accessor).unwrap_err();
+        assert!(matches!(err, ExpandError::ConstructOnAccessor { .. }));
     }
 }

@@ -386,6 +386,11 @@ pub enum UnfoldError {
         func: syn::Ident,
         reason: &'static str,
     },
+    /// A decomposer record references a function that was not declared via
+    /// `.fun_accessor`.
+    RecordNotAccessor {
+        func: syn::Ident,
+    },
     /// A shape / record kind not yet implemented.
     Unsupported {
         func: syn::Ident,
@@ -451,6 +456,12 @@ impl std::fmt::Display for UnfoldError {
                 "convert_output: `{}` is not a single-value deconstructor: {}",
                 func, reason
             ),
+            UnfoldError::RecordNotAccessor { func } => write!(
+                f,
+                "deconstructor record `{}` is not a `.fun_accessor` — decomposer records may only \
+                 reference functions declared via `.fun_accessor(...)`",
+                func
+            ),
             UnfoldError::Unsupported { func, reason } => write!(
                 f,
                 "output expansion: `{}` not yet supported: {}",
@@ -472,7 +483,9 @@ impl std::error::Error for UnfoldError {}
 /// `Output`, `error_plans` for `Error`).
 ///
 /// `declared_fns` is the back-end's claimed `#[prebindgen]` fn set — the domain
-/// over which `.default()` deconstructors are auto-applied.
+/// over which `.default()` deconstructors are auto-applied. `accessor_fns` is
+/// the `.fun_accessor` subset — the only functions a decomposer record may
+/// reference.
 ///
 /// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
 /// converters resolve through the normal rank machinery.
@@ -480,7 +493,22 @@ pub fn apply<M>(
     registry: &mut Registry<M>,
     acc: &Deconstructors,
     declared_fns: &std::collections::HashSet<syn::Ident>,
+    accessor_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
+    // Gate: every accessor-function record of every declared deconstructor must
+    // be a `.fun_accessor` (the single source of truth for "accessor").
+    for d in &acc.deconstructors {
+        for rec in &d.records {
+            let func = match rec {
+                DeconRecord::Acc(f) | DeconRecord::Nested(f) => f,
+                DeconRecord::Identity => continue,
+            };
+            if !accessor_fns.contains(func) {
+                return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+            }
+        }
+    }
+
     // Explicit decls first; they take precedence over (and suppress) a default
     // for the same `(fn, target)`.
     let mut done: std::collections::HashSet<(syn::Ident, DeconTarget)> = Default::default();
@@ -1027,6 +1055,25 @@ mod tests {
         Registry::from_items(items).expect("index")
     }
 
+    /// A generous `.fun_accessor` set covering every function used as a
+    /// deconstructor record across these tests (a superset is fine — `apply`
+    /// only checks records are members). The `nested_record_*` tests that
+    /// exercise the gate's *rejection* pass an explicit smaller set instead.
+    fn acc_set() -> std::collections::HashSet<syn::Ident> {
+        [
+            "a_to_b", "b_to_a", "wrong",
+            "z_error_message", "z_keyexpr_as_str",
+            "z_sample_key_expr", "z_sample_payload", "z_sample_encoding",
+            "z_sample_kind", "z_sample_timestamp", "z_sample_express",
+            "z_sample_priority", "z_sample_congestion_control", "z_sample_attachment",
+            "z_timestamp_ntp64", "z_zbytes_to_bytes", "z_zenoh_id_to_string",
+            "z_encoding_to_string",
+        ]
+        .iter()
+        .map(|s| ident(s))
+        .collect()
+    }
+
     #[test]
     fn accessor_optional_primitive() {
         // M2: `z_sample_timestamp(&ZSample) -> Option<&ZTimestamp>` decomposed
@@ -1041,7 +1088,7 @@ mod tests {
         acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
         acc.add_deconstruct_output(ident("z_sample_timestamp"));
 
-        apply(&mut reg, &acc, &Default::default()).expect("apply");
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
 
         let plan = reg
             .unfold_plans
@@ -1076,7 +1123,7 @@ mod tests {
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
         acc.add_deconstruct_output(ident("z_sample_key_expr"));
 
-        apply(&mut reg, &acc, &Default::default()).expect("apply");
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
 
         let plan = reg
             .unfold_plans
@@ -1119,7 +1166,7 @@ mod tests {
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::AmbiguousDeconstructor { .. }));
     }
 
@@ -1134,7 +1181,7 @@ mod tests {
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record(ident("wrong"));
         acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::AccessorTargetMismatch { .. }));
     }
 
@@ -1146,8 +1193,29 @@ mod tests {
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record_id();
         acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::MultipleIdentity { .. }));
+    }
+
+    #[test]
+    fn record_must_be_fun_accessor() {
+        // A deconstructor record referencing a non-`.fun_accessor` fn errors.
+        let mut reg = reg_with(&[
+            "fn z_foo(s: &ZSample) -> &ZKeyExpr { todo!() }",
+            "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstruct_output(ident("z_foo"));
+        // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
+        let err = apply(&mut reg, &acc, &Default::default(), &Default::default()).unwrap_err();
+        assert!(matches!(err, UnfoldError::RecordNotAccessor { .. }));
+        // With it declared as an accessor, the gate passes.
+        let accset: std::collections::HashSet<syn::Ident> =
+            ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &Default::default(), &accset).expect("gate passes");
     }
 
     #[test]
@@ -1183,7 +1251,7 @@ mod tests {
         acc.add_deconstructor_record_nested(ident("z_sample_timestamp"));
         acc.add_deconstruct_output(ident("z_reply_sample"));
 
-        apply(&mut reg, &acc, &Default::default()).expect("apply");
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg.unfold_plans.get(&ident("z_reply_sample")).expect("plan");
         assert!(plan.by_ref);
         assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
@@ -1225,7 +1293,7 @@ mod tests {
         acc.add_deconstructor(syn::parse_quote!(ZB));
         acc.add_deconstructor_record_nested(ident("b_to_a"));
         acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::Cycle { .. }));
     }
 
@@ -1239,7 +1307,7 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
-        apply(&mut reg, &acc, &Default::default()).expect("apply");
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_session_peers_zid"))
@@ -1275,7 +1343,7 @@ mod tests {
         acc.add_deconstructor_record_id();
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
-        apply(&mut reg, &acc, &Default::default()).expect("apply");
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_session_peers_zid"))
@@ -1305,7 +1373,7 @@ mod tests {
         acc.add_converter(syn::parse_quote!(ZTimestamp), ident("z_timestamp_ntp64"));
         acc.add_convert_output(ident("z_sample_timestamp"));
 
-        apply(&mut reg, &acc, &Default::default()).expect("apply");
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_sample_timestamp"))
@@ -1335,7 +1403,7 @@ mod tests {
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
         acc.add_convert_output(ident("z_sample_key_expr"));
-        let err = apply(&mut reg, &acc, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::ConvertNotSingle { .. }));
     }
 
@@ -1349,7 +1417,7 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"));
         acc.add_convert_output(ident("z_session_peers_zid"));
-        let err = apply(&mut reg, &acc, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::ConvertNotSingle { .. }));
     }
 
@@ -1368,7 +1436,7 @@ mod tests {
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_try_from", "z_infallible"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &acc, &declared).expect("apply");
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
 
         let plan = reg
             .error_plans
@@ -1400,7 +1468,7 @@ mod tests {
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_sample_key_expr", "z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &acc, &declared).expect("apply");
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
 
         assert!(reg.unfold_plans.contains_key(&ident("z_sample_key_expr")), "borrow return");
         assert!(
@@ -1421,7 +1489,7 @@ mod tests {
         acc.add_skip_default_error(ident("z_fallible"));
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_fallible"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &acc, &declared).expect("apply");
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
         assert!(reg.error_plans.is_empty(), "skipped fn gets no error plan");
     }
 }

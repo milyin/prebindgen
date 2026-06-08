@@ -177,6 +177,16 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Subset of [`Self::declared_functions`] declared as **read accessors**:
+    /// the parameter composer (constructor expansion) is never applied to them,
+    /// and a decomposer record may only reference one. Back-ends without the
+    /// concept return empty (then no fn is treated as an accessor).
+    ///
+    /// Default: empty.
+    fn accessor_functions(&self) -> HashSet<syn::Ident> {
+        HashSet::new()
+    }
+
     /// Idents of `#[prebindgen]` functions the ext explicitly knows about but
     /// intentionally does not emit. These suppress the registry's
     /// "skipping undeclared" warning while still leaving the items out of the
