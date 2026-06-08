@@ -69,6 +69,8 @@ enum DeconSel {
     TopLevel,
     /// Use the deconstructor named by this string.
     Explicit(String),
+    /// Per-fn override (`.fun_output`): use exactly these accessor-fn records.
+    Inline(Vec<DeconRecord>),
 }
 
 /// Which value of a function the deconstructor decomposes: its success return
@@ -156,6 +158,29 @@ impl Deconstructors {
         self.deconstructors[i].default = Some((DeconTarget::Output, Delivery::Callback));
     }
 
+    /// Find-or-create the canonical (always-`default`) deconstructor for `target`
+    /// and set the cursor to it. Idempotent across a `.ptr_class_output*` chain.
+    /// Delivery is derived from leaf count at emit time (1 ⇒ return, N ⇒ callback),
+    /// so the stored `Delivery` is just a marker.
+    pub fn ensure_canonical_deconstructor(&mut self, target: syn::Type) {
+        let key = TypeKey::from_type(&target);
+        if let Some(i) = self
+            .deconstructors
+            .iter()
+            .position(|d| TypeKey::from_type(&d.target) == key)
+        {
+            self.cur_deconstructor = Some(i);
+        } else {
+            self.deconstructors.push(DeconstructorDecl {
+                name: None,
+                target,
+                records: Vec::new(),
+                default: Some((DeconTarget::Output, Delivery::Callback)),
+            });
+            self.cur_deconstructor = Some(self.deconstructors.len() - 1);
+        }
+    }
+
     /// `.skip_default_deconstruct_output()` / `.skip_default_convert_output()` —
     /// exclude `func` from output-position `.default()` auto-apply.
     pub fn add_skip_default_output(&mut self, func: syn::Ident) {
@@ -224,6 +249,14 @@ impl Deconstructors {
     /// leaves to a foreign **callback**.
     pub fn add_deconstruct_output(&mut self, func: syn::Ident) {
         self.push_output(func, DeconSel::TopLevel, DeconTarget::Output, Delivery::Callback);
+    }
+
+    /// `.fun_output(funcs)` — per-fn override: decompose the return via exactly
+    /// these accessor-fn records (each unwrapped per its return type's canonical
+    /// output). Recorded as an explicit decl so the auto-`default` skips it.
+    pub fn add_output_inline(&mut self, func: syn::Ident, funcs: Vec<syn::Ident>) {
+        let records = funcs.into_iter().map(DeconRecord::Acc).collect();
+        self.push_output(func, DeconSel::Inline(records), DeconTarget::Output, Delivery::Callback);
     }
 
     /// `.deconstruct_output_with(name)` — by named deconstructor.
@@ -517,19 +550,21 @@ pub fn apply<M>(
         done.insert((ed.func.clone(), ed.target));
     }
 
-    // `.default()` auto-apply: synthesize the missing decls over declared fns.
+    // Canonical auto-apply: a type's deconstructor (`.ptr_class_output*`) is
+    // applied to every declared fn that returns it (Output) or has it as a
+    // `Result<_, E>` error (Error), unless the fn is `fun_accessor` or has a
+    // per-fn override. `Delivery` is recomputed from leaf count inside
+    // `process_decl` for Output (1 ⇒ Return, N ⇒ Callback).
     for d in &acc.deconstructors {
         if d.default.is_none() {
             continue;
         }
         let dkey = TypeKey::from_type(&d.target);
-        // A converter (single Acc record) ⇒ Return; otherwise Callback.
-        let delivery = if matches!(d.records.as_slice(), [DeconRecord::Acc(_)]) {
-            Delivery::Return
-        } else {
-            Delivery::Callback
-        };
         for func in declared_fns {
+            // Read accessors are never output-decomposed (they ARE the records).
+            if accessor_fns.contains(func) {
+                continue;
+            }
             let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
                 continue;
             };
@@ -540,29 +575,34 @@ pub fn apply<M>(
                     && !acc.skip_error.contains(func)
                     && done.insert((func.clone(), DeconTarget::Error))
                 {
-                    let ed = OutputDecl {
-                        func: func.clone(),
-                        sel: DeconSel::TopLevel,
-                        target: DeconTarget::Error,
-                        delivery,
-                    };
-                    process_decl(registry, acc, &ed)?;
+                    process_decl(
+                        registry,
+                        acc,
+                        &OutputDecl {
+                            func: func.clone(),
+                            sel: DeconSel::TopLevel,
+                            target: DeconTarget::Error,
+                            delivery: Delivery::Callback,
+                        },
+                    )?;
                 }
             }
-            // Output position: fn returns a **borrow** of `d.target`
-            // (`&T` / `Option<&T>`) — the accessor pattern; owned-`T` returns are
-            // constructors/clones and keep their handle return.
-            if returns_borrow_of(&ret, &dkey)
+            // Output position: fn returns `T` / `&T` / `Option<T|&T>` / `Vec<T>`
+            // with `T == d.target` (Result returns keep a handle — factories).
+            if returns_type(&ret, &dkey)
                 && !acc.skip_output.contains(func)
                 && done.insert((func.clone(), DeconTarget::Output))
             {
-                let ed = OutputDecl {
-                    func: func.clone(),
-                    sel: DeconSel::TopLevel,
-                    target: DeconTarget::Output,
-                    delivery,
-                };
-                process_decl(registry, acc, &ed)?;
+                process_decl(
+                    registry,
+                    acc,
+                    &OutputDecl {
+                        func: func.clone(),
+                        sel: DeconSel::TopLevel,
+                        target: DeconTarget::Output,
+                        delivery: Delivery::Callback,
+                    },
+                )?;
             }
         }
     }
@@ -596,16 +636,23 @@ fn result_err_type(ty: &syn::Type) -> Option<syn::Type> {
         .nth(1)
 }
 
-/// True when `ret` is `&T` / `Option<&T>` with `T == key` — the borrow/accessor
-/// pattern an output deconstructor decomposes. Owned `T` (constructor/clone
-/// returns) is excluded.
-fn returns_borrow_of(ret: &syn::Type, key: &TypeKey) -> bool {
-    let core = option_inner_type(ret).unwrap_or_else(|| ret.clone());
-    if let syn::Type::Reference(r) = &core {
-        TypeKey::from_type(&r.elem) == *key
-    } else {
-        false
+/// True when `ret` is `T` / `&T` / `Option<T|&T>` / `Vec<T|&T>` with
+/// `T == key` — the canonical-output match. `Result<_, _>` is NOT peeled, so a
+/// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
+/// position is matched separately on `E`.
+fn returns_type(ret: &syn::Type, key: &TypeKey) -> bool {
+    // Peel Vec / Option (one layer each, in either order) then a leading `&`.
+    let mut core = ret.clone();
+    if let Some(inner) = vec_inner_type(&core) {
+        core = inner;
+    } else if let Some(inner) = option_inner_type(&core) {
+        core = inner;
     }
+    let bare = match &core {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    };
+    TypeKey::from_type(&bare) == *key
 }
 
 /// Build one output/error plan for `ed` and store it in the right registry map.
@@ -701,22 +748,16 @@ fn process_decl<M>(
             }
             plan
         };
-        // `convert_output` (return delivery): require a single leaf + non-Iterable
-        // shape, then resolve the leaf's `out_ty` lifted through the shape as a
-        // required output so the wrapper can return it via its ordinary converter.
-        let plan = if ed.delivery == Delivery::Return {
-            if matches!(plan.shape, UnfoldShape::Iterable(_)) {
-                return Err(UnfoldError::ConvertNotSingle {
-                    func: ed.func.clone(),
-                    reason: "Vec<…> returns must use .deconstruct_output() (a fold callback)",
-                });
-            }
-            if plan.leaves.len() != 1 {
-                return Err(UnfoldError::ConvertNotSingle {
-                    func: ed.func.clone(),
-                    reason: "a converter must flatten to exactly one leaf",
-                });
-            }
+        // Delivery is by **leaf count**, not a per-decl flag:
+        //   * Output, single leaf, non-Iterable ⇒ Return (wrapper returns the
+        //     value via its ordinary output converter — `convert_out_ty`).
+        //   * Output, multiple leaves or Iterable ⇒ Callback (builder / fold).
+        //   * Error ⇒ always Callback-shaped: every leaf is a `ze` arg after the
+        //     fixed `je` (no return-value path; `convert_out_ty` stays None).
+        let single_return = ed.target == DeconTarget::Output
+            && !matches!(plan.shape, UnfoldShape::Iterable(_))
+            && plan.leaves.len() == 1;
+        let plan = if single_return {
             let leaf_ty = plan.leaves[0].out_ty.clone();
             let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional(_)) {
                 syn::parse_quote!(Option<#leaf_ty>)
@@ -725,11 +766,15 @@ fn process_decl<M>(
             };
             registry.require_output(&cv_ty, &loc);
             UnfoldPlan {
+                delivery: Delivery::Return,
                 convert_out_ty: Some(cv_ty),
                 ..plan
             }
         } else {
-            plan
+            UnfoldPlan {
+                delivery: Delivery::Callback,
+                ..plan
+            }
         };
         match ed.target {
             DeconTarget::Output => registry.unfold_plans.insert(ed.func.clone(), plan),
@@ -746,6 +791,7 @@ fn resolve_deconstructor(
     ed: &OutputDecl,
 ) -> Result<Vec<DeconRecord>, UnfoldError> {
     match &ed.sel {
+        DeconSel::Inline(records) => Ok(records.clone()),
         DeconSel::Explicit(name) => acc
             .deconstructors
             .iter()
@@ -896,15 +942,55 @@ fn flatten<M>(
             DeconRecord::Acc(func) => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
-                let mut path = path_prefix.to_vec();
-                path.push(func.clone());
-                leaves.push(UnfoldLeaf {
-                    name: ident(&format!("__leaf{}", leaves.len())),
-                    path,
-                    out_ty: ret,
-                    identity: false,
-                    nullable,
-                });
+                // Canonical unwrap: if the return type has its own deconstructor,
+                // splice it (recurse); otherwise the return is one leaf. Peel an
+                // `Option` (value may be absent) + leading `&` to reach the child.
+                let (opt, core) = match option_inner_type(&ret) {
+                    Some(inner) => (true, inner),
+                    None => (false, ret.clone()),
+                };
+                let child_ty = match &core {
+                    syn::Type::Reference(r) => (*r.elem).clone(),
+                    other => other.clone(),
+                };
+                let child_key = TypeKey::from_type(&child_ty);
+                let has_canonical = find_deconstructor_by_type(acc, &child_key).is_ok();
+                if has_canonical {
+                    if !visited.insert(child_key.clone()) {
+                        return Err(UnfoldError::Cycle {
+                            target: child_key.to_string(),
+                        });
+                    }
+                    let child_records = find_deconstructor_by_type(acc, &child_key)
+                        .expect("checked is_ok")
+                        .to_vec();
+                    let mut child_path = path_prefix.to_vec();
+                    child_path.push(func.clone());
+                    flatten(
+                        acc,
+                        registry,
+                        top_func,
+                        &child_records,
+                        &child_ty,
+                        &child_path,
+                        by_ref,
+                        nullable || opt,
+                        visited,
+                        leaves,
+                    )?;
+                    visited.remove(&child_key);
+                } else {
+                    // Leaf: the return value as written (`&str`, enum, `i64`, …).
+                    let mut path = path_prefix.to_vec();
+                    path.push(func.clone());
+                    leaves.push(UnfoldLeaf {
+                        name: ident(&format!("__leaf{}", leaves.len())),
+                        path,
+                        out_ty: ret,
+                        identity: false,
+                        nullable,
+                    });
+                }
             }
             DeconRecord::Nested(func) => {
                 let (takes, ret) = accessor_signature(registry, func)?;
@@ -1392,8 +1478,8 @@ mod tests {
     }
 
     #[test]
-    fn convert_output_multi_leaf_rejected() {
-        // A two-record deconstructor (handle + string) cannot be `convert_output`.
+    fn multi_leaf_output_is_callback() {
+        // A two-record deconstructor (handle + string) ⇒ Callback delivery (>1 leaf).
         let mut reg = reg_with(&[
             "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
@@ -1402,30 +1488,35 @@ mod tests {
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
-        acc.add_convert_output(ident("z_sample_key_expr"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
-        assert!(matches!(err, UnfoldError::ConvertNotSingle { .. }));
+        acc.add_deconstruct_output(ident("z_sample_key_expr"));
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        let plan = reg.unfold_plans.get(&ident("z_sample_key_expr")).expect("plan");
+        assert_eq!(plan.delivery, Delivery::Callback);
+        assert_eq!(plan.leaves.len(), 2);
+        assert!(plan.convert_out_ty.is_none());
     }
 
     #[test]
-    fn convert_output_vec_rejected() {
-        // `convert_output` on a `Vec` return is rejected (use deconstruct_output).
+    fn vec_output_is_iterable_callback() {
+        // A `Vec` return ⇒ Iterable + Callback (a fold), never a single Return.
         let mut reg = reg_with(&[
             "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
         acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"));
-        acc.add_convert_output(ident("z_session_peers_zid"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
-        assert!(matches!(err, UnfoldError::ConvertNotSingle { .. }));
+        acc.add_deconstruct_output(ident("z_session_peers_zid"));
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        let plan = reg.unfold_plans.get(&ident("z_session_peers_zid")).expect("plan");
+        assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
+        assert_eq!(plan.delivery, Delivery::Callback);
     }
 
     #[test]
     fn convert_error_decomposes_result_e() {
-        // `.converter(ZError, z_error_message).default()` auto-applies a
-        // convert_error to every fn returning `Result<_, ZError>`, storing the
-        // plan in `error_plans` (not `unfold_plans`).
+        // The ZError deconstructor (`z_error_message`) auto-applies to every fn
+        // returning `Result<_, ZError>`, storing the plan in `error_plans`. Error
+        // delivery is always Callback (its leaves are the `ze` callback args).
         let mut reg = reg_with(&[
             "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, ZError> { todo!() }",
             "fn z_error_message(e: &ZError) -> String { todo!() }",
@@ -1436,29 +1527,33 @@ mod tests {
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_try_from", "z_infallible"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+        let accset: std::collections::HashSet<syn::Ident> =
+            ["z_error_message"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &accset).expect("apply");
 
         let plan = reg
             .error_plans
             .get(&ident("z_keyexpr_try_from"))
             .expect("error plan for the fallible fn");
-        assert_eq!(plan.delivery, Delivery::Return);
+        assert_eq!(plan.delivery, Delivery::Callback);
         assert_eq!(plan.leaves.len(), 1);
         assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "String");
         assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
         // The infallible fn gets no error plan.
         assert!(!reg.error_plans.contains_key(&ident("z_infallible")));
-        // No output plans created (no output deconstructor declared).
+        // No output plans created (no ZKeyExpr return among the declared fns; the
+        // ZError deconstructor only matches the Result error position).
         assert!(reg.unfold_plans.is_empty());
     }
 
     #[test]
-    fn default_output_only_on_borrow_returns() {
-        // A `.default()` deconstructor for ZKeyExpr auto-applies to `&ZKeyExpr`
-        // (borrow) returns but NOT to owned `ZKeyExpr` (constructor/clone) returns.
+    fn canonical_output_applies_to_owned_and_borrow_returns() {
+        // Canonical-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
+        // `&ZKeyExpr` (borrow) and an owned `ZKeyExpr` return. (`Result<…>` returns
+        // are excluded — they keep a handle — and `fun_accessor`s are skipped.)
         let mut reg = reg_with(&[
-            "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
-            "fn z_keyexpr_clone(k: &ZKeyExpr) -> ZKeyExpr { todo!() }",
+            "fn z_borrow_keyexpr(s: &ZSession) -> &ZKeyExpr { todo!() }",
+            "fn z_make_keyexpr(s: &ZSession) -> ZKeyExpr { todo!() }",
             "fn z_keyexpr_as_str(k: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
@@ -1466,15 +1561,15 @@ mod tests {
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
         acc.set_default();
+        // Only the record fn is an accessor; the two return fns are plain.
+        let accset: std::collections::HashSet<syn::Ident> =
+            ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
         let declared: std::collections::HashSet<syn::Ident> =
-            ["z_sample_key_expr", "z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+            ["z_borrow_keyexpr", "z_make_keyexpr"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &accset).expect("apply");
 
-        assert!(reg.unfold_plans.contains_key(&ident("z_sample_key_expr")), "borrow return");
-        assert!(
-            !reg.unfold_plans.contains_key(&ident("z_keyexpr_clone")),
-            "owned return stays a handle (not auto-deconstructed)"
-        );
+        assert!(reg.unfold_plans.contains_key(&ident("z_borrow_keyexpr")), "borrow return");
+        assert!(reg.unfold_plans.contains_key(&ident("z_make_keyexpr")), "owned return");
     }
 
     #[test]

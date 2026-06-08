@@ -56,13 +56,15 @@ struct ConstructorDecl {
     default: bool,
 }
 
-/// How an `.expand`/`.expand_with` chooses the constructor for a parameter.
+/// How a construct declaration chooses the variants for a parameter.
 #[derive(Clone)]
 enum ExpandSel {
-    /// Use the target's unique top-level constructor (error if ambiguous).
+    /// Use the target type's canonical constructor (error if none/ambiguous).
     TopLevel,
     /// Use the constructor named (via `.constructor_name`) by this ident.
     Explicit(syn::Ident),
+    /// Per-fn override (`.fun_input`): use exactly these build-from variant fns.
+    Subset(Vec<syn::Ident>),
 }
 
 #[derive(Clone)]
@@ -109,6 +111,28 @@ impl Expansions {
             .cur_constructor
             .expect(".default called without a current .constructor");
         self.constructors[i].default = true;
+    }
+
+    /// Find-or-create the canonical (always-`default`) constructor for `target`
+    /// and set the cursor to it. Idempotent across a `.ptr_class_input*` chain —
+    /// the first call creates it, subsequent ones reuse it so variants accumulate.
+    pub fn ensure_canonical_constructor(&mut self, target: syn::Type) {
+        let key = TypeKey::from_type(&target);
+        if let Some(i) = self
+            .constructors
+            .iter()
+            .position(|c| TypeKey::from_type(&c.target) == key)
+        {
+            self.cur_constructor = Some(i);
+        } else {
+            self.constructors.push(ConstructorDecl {
+                name: None,
+                target,
+                variants: Vec::new(),
+                default: true,
+            });
+            self.cur_constructor = Some(self.constructors.len() - 1);
+        }
     }
 
     /// `.skip_default_construct(param)` on the current `.fun` — exclude
@@ -168,6 +192,18 @@ impl Expansions {
             func,
             param,
             sel: ExpandSel::Explicit(ctor),
+        });
+        self.cur_constructor = None;
+    }
+
+    /// `.fun_input(param, funcs)` — per-fn override: construct `param` from
+    /// exactly the listed build-from variant fns (a subset of the canonical
+    /// input). Recorded as an explicit decl so the auto-`default` skips it.
+    pub fn add_construct_subset(&mut self, func: syn::Ident, param: syn::Ident, funcs: Vec<syn::Ident>) {
+        self.expands.push(ExpandDecl {
+            func,
+            param,
+            sel: ExpandSel::Subset(funcs),
         });
         self.cur_constructor = None;
     }
@@ -511,6 +547,7 @@ fn resolve_constructor<M>(
     ed: &ExpandDecl,
 ) -> Result<Vec<Variant>, ExpandError> {
     match &ed.sel {
+        ExpandSel::Subset(funcs) => Ok(funcs.iter().cloned().map(Variant::Ctor).collect()),
         ExpandSel::Explicit(ident) => exp
             .constructors
             .iter()
