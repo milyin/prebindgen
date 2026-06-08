@@ -118,9 +118,9 @@ impl Expansions {
         self.constructors[i].variants.push(Variant::Identity);
     }
 
-    /// `.expand(param)` on the function `func` — expand `param` using the
+    /// `.construct(param)` on the function `func` — construct `param` from the
     /// target's top-level constructor.
-    pub fn add_expand(&mut self, func: syn::Ident, param: syn::Ident) {
+    pub fn add_construct(&mut self, func: syn::Ident, param: syn::Ident) {
         self.expands.push(ExpandDecl {
             func,
             param,
@@ -129,9 +129,9 @@ impl Expansions {
         self.cur_constructor = None;
     }
 
-    /// `.expand_with(param, ctor)` — expand `param` using the constructor named
-    /// `ctor` (via `.constructor_name`).
-    pub fn add_expand_with(&mut self, func: syn::Ident, param: syn::Ident, ctor: syn::Ident) {
+    /// `.construct_with(param, ctor)` — construct `param` from the constructor
+    /// named `ctor` (via `.constructor_name`).
+    pub fn add_construct_with(&mut self, func: syn::Ident, param: syn::Ident, ctor: syn::Ident) {
         self.expands.push(ExpandDecl {
             func,
             param,
@@ -912,7 +912,7 @@ mod tests {
         // Single-method constructor = one Ctor variant (no selector).
         exp.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
-        exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
+        exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
         apply(&mut reg, &exp).expect("apply");
 
@@ -943,7 +943,7 @@ mod tests {
         exp.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_constructor_variant_id();
-        exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
+        exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
         apply(&mut reg, &exp).expect("apply");
 
@@ -996,7 +996,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
-        exp.add_expand(ident("z_keyexpr_intersects"), ident("a"));
+        exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
         match apply(&mut reg, &exp) {
             Err(ExpandError::AmbiguousConstructor { candidates, .. }) => {
@@ -1021,7 +1021,7 @@ mod tests {
         exp.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
         exp.set_constructor_name("autocanon");
-        exp.add_expand_with(
+        exp.add_construct_with(
             ident("z_keyexpr_intersects"),
             ident("a"),
             ident("autocanon"),
@@ -1049,7 +1049,7 @@ mod tests {
         let mut exp = Expansions::default();
         exp.add_constructor(syn::parse_quote!(ZZBytes));
         exp.add_constructor_variant(ident("z_zbytes_from_vec"));
-        exp.add_expand(ident("z_session_delete"), ident("attachment"));
+        exp.add_construct(ident("z_session_delete"), ident("attachment"));
 
         apply(&mut reg, &exp).expect("apply optional by-value");
         let plan = reg
@@ -1085,7 +1085,7 @@ mod tests {
         let mut exp = Expansions::default();
         exp.add_constructor(syn::parse_quote!(ZEncoding));
         exp.add_constructor_variant(ident("z_encoding_from_string"));
-        exp.add_expand(ident("z_session_put"), ident("encoding"));
+        exp.add_construct(ident("z_session_put"), ident("encoding"));
 
         apply(&mut reg, &exp).expect("apply optional by-ref");
         let plan = reg
@@ -1116,7 +1116,7 @@ mod tests {
         exp.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_constructor_variant_id();
-        exp.add_expand(ident("z_session_get"), ident("ke"));
+        exp.add_construct(ident("z_session_get"), ident("ke"));
 
         match apply(&mut reg, &exp) {
             Err(ExpandError::UnsupportedOptional { .. }) => {}

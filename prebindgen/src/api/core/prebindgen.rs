@@ -152,15 +152,15 @@ pub trait Prebindgen {
         None
     }
 
-    /// Output-expansion (accessor / `expand_output`) declarations for this
+    /// Output-expansion (deconstructor / converter) declarations for this
     /// back-end, or `None` if it doesn't support output expansion. Consulted by
     /// `write_rust` after `expansions` and before resolution: each
-    /// `.expand_output` is resolved into a
+    /// `.deconstruct_output` / `.convert_output` is resolved into a
     /// [`crate::api::core::unfold::UnfoldPlan`] on the registry and its leaf
     /// types are registered as required outputs.
     ///
     /// Default: `None`.
-    fn accessors(&self) -> Option<&crate::api::core::unfold::Accessors> {
+    fn deconstructors(&self) -> Option<&crate::api::core::unfold::Deconstructors> {
         None
     }
 

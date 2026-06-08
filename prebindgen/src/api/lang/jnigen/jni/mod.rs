@@ -593,11 +593,12 @@ pub struct JniGen {
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
-    /// Output-expansion declarations (`.accessor`,
-    /// `.accessor_record*`, `.expand_output`, …). Resolved into
+    /// Output-expansion declarations (`.deconstructor`,
+    /// `.deconstructor_record*`, `.converter`, `.deconstruct_output`,
+    /// `.convert_output`, …). Resolved into
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
-    pub(crate) accessors: crate::api::core::unfold::Accessors,
+    pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
 }
 
 

@@ -433,10 +433,9 @@ impl Prebindgen for JniGen {
     }
 
     /// Hand the registry this back-end's output-expansion declarations so
-    /// `write_rust` can resolve `.expand_output`s into unfold plans before
-    /// resolution.
-    fn accessors(&self) -> Option<&crate::api::core::unfold::Accessors> {
-        Some(&self.accessors)
+    /// `write_rust` can resolve them into unfold plans before resolution.
+    fn deconstructors(&self) -> Option<&crate::api::core::unfold::Deconstructors> {
+        Some(&self.deconstructors)
     }
 
     /// Union of every `.package_fun(...)` list across all
@@ -1202,6 +1201,16 @@ impl Prebindgen for JniGen {
                     },
                     ..h
                 });
+            // A **non-projection** `Option<T>` return (`Option<String>`,
+            // `Option<i64>`, …) surfaces directly as a nullable Kotlin type, so
+            // its value-context name carries the `?`. Projection options get the
+            // `?` from `render_handle_type(Nullable …)` at the use site instead,
+            // so leave those untouched here.
+            let kotlin_name = if projection.is_none() {
+                kotlin_name.map(|n| if n.ends_with('?') { n } else { format!("{n}?") })
+            } else {
+                kotlin_name
+            };
             return Some(ConverterImpl {
                 pre_stages: vec![],
                 function: self.build_output_fn(&outer_ty, &wire, &body, None),

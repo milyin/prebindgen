@@ -57,7 +57,7 @@ impl JniGen {
             last_entry_ref: None,
             emit_handle_locks: true,
             expansions: crate::api::core::expand::Expansions::default(),
-            accessors: crate::api::core::unfold::Accessors::default(),
+            deconstructors: crate::api::core::unfold::Deconstructors::default(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. The error type `E` is
@@ -480,89 +480,118 @@ impl JniGen {
         self
     }
 
-    /// Expand parameter `param` of the most recent [`Self::package_fun`] using
-    /// its target type's top-level constructor. The generated foreign
-    /// signature receives the constructor's (flattened) inputs and the wrapper
-    /// builds the value before the underlying call. Panics if not chained after
-    /// a fn-level builder.
-    pub fn expand(mut self, param: syn::Ident) -> Self {
+    /// Construct parameter `param` of the most recent [`Self::package_fun`] from
+    /// its target type's top-level constructor. The generated foreign signature
+    /// receives the constructor's (flattened) inputs and the wrapper builds the
+    /// value before the underlying call. Panics if not chained after a fn-level
+    /// builder.
+    pub fn construct(mut self, param: syn::Ident) -> Self {
         let func = self.current_fn_ident();
-        self.expansions.add_expand(func, param);
+        self.expansions.add_construct(func, param);
         self
     }
 
-    /// Like [`Self::expand`] but selects the constructor named (via
+    /// Like [`Self::construct`] but selects the constructor named (via
     /// [`Self::constructor_name`]) by `ctor`.
-    pub fn expand_with(mut self, param: syn::Ident, ctor: syn::Ident) -> Self {
+    pub fn construct_with(mut self, param: syn::Ident, ctor: syn::Ident) -> Self {
         let func = self.current_fn_ident();
-        self.expansions.add_expand_with(func, param, ctor);
+        self.expansions.add_construct_with(func, param, ctor);
         self
     }
 
     // ── Output (data) expansion ─────────────────────────────────────
 
-    /// Begin an **accessor** for `target`: a deterministic product of records
-    /// (declared via [`Self::accessor_record`] / [`Self::accessor_record_id`] /
-    /// [`Self::accessor_record_nested`]). When a function returning `target` (or
-    /// `&target`) is [`Self::expand_output`]ed, every record contributes a leaf
-    /// delivered to the foreign builder. A single [`Self::accessor_record`] is
-    /// the degenerate one-field form.
-    pub fn accessor(mut self, target: syn::Type) -> Self {
-        self.accessors.add_accessor(target);
+    /// Begin a **deconstructor** for `target`: a deterministic product of records
+    /// (declared via [`Self::deconstructor_record`] /
+    /// [`Self::deconstructor_record_id`] / [`Self::deconstructor_record_nested`]).
+    /// When a function returning `target` (or `&target`) is
+    /// [`Self::deconstruct_output`]ed, every record contributes a leaf delivered
+    /// to the foreign builder. A single-record deconstructor is a
+    /// [`Self::converter`].
+    pub fn deconstructor(mut self, target: syn::Type) -> Self {
+        self.deconstructors.add_deconstructor(target);
         self
     }
 
-    /// Name the current accessor so it can be selected by
-    /// [`Self::expand_output_with`]. Panics without a current `accessor`.
-    pub fn accessor_name(mut self, name: impl Into<String>) -> Self {
-        self.accessors.set_accessor_name(name);
+    /// Declare a **converter** for `target`: the single-value deconstructor with
+    /// the one accessor record `func` (`f(&target) -> F`). Usable via
+    /// [`Self::convert_output`] (return the value directly) and as a nested
+    /// record source.
+    pub fn converter(mut self, target: syn::Type, func: syn::Ident) -> Self {
+        self.deconstructors.add_converter(target, func);
+        self
+    }
+
+    /// Name the current deconstructor so it can be selected by
+    /// [`Self::deconstruct_output_with`] / [`Self::convert_output_with`]. Panics
+    /// without a current `deconstructor`.
+    pub fn deconstructor_name(mut self, name: impl Into<String>) -> Self {
+        self.deconstructors.set_deconstructor_name(name);
         self
     }
 
     /// Add an accessor-function record `func` (`f(&T) -> &F`) to the current
-    /// accessor. Panics without a current `accessor`.
-    pub fn accessor_record(mut self, func: syn::Ident) -> Self {
-        self.accessors.add_accessor_record(func);
+    /// deconstructor. Panics without a current `deconstructor`.
+    pub fn deconstructor_record(mut self, func: syn::Ident) -> Self {
+        self.deconstructors.add_deconstructor_record(func);
         self
     }
 
     /// Add the identity record (the value itself — for a `ptr_class` cloned for
     /// a `&T` return / moved for an owned `T`; for a `value_blob` delivered by
-    /// copy) to the current accessor. Panics without a current `accessor`.
-    pub fn accessor_record_id(mut self) -> Self {
-        self.accessors.add_accessor_record_id();
+    /// copy) to the current deconstructor. Panics without a current
+    /// `deconstructor`.
+    pub fn deconstructor_record_id(mut self) -> Self {
+        self.deconstructors.add_deconstructor_record_id();
         self
     }
 
-    /// Add a nested accessor record via the accessor `func` (`f(&T) -> &Child`
-    /// or `-> Option<&Child>`): splice `Child`'s accessor leaves into the
-    /// current one, path-prefixed by `func` (nullable when `func` returns
-    /// `Option`). Panics without a current `accessor`.
-    pub fn accessor_record_nested(mut self, func: syn::Ident) -> Self {
-        self.accessors.add_accessor_record_nested(func);
+    /// Add a nested deconstructor record via the accessor `func` (`f(&T) ->
+    /// &Child` or `-> Option<&Child>`): splice `Child`'s leaves into the current
+    /// one, path-prefixed by `func` (nullable when `func` returns `Option`).
+    /// Panics without a current `deconstructor`.
+    pub fn deconstructor_record_nested(mut self, func: syn::Ident) -> Self {
+        self.deconstructors.add_deconstructor_record_nested(func);
         self
     }
 
-    /// Decompose the return value of the most recent [`Self::package_fun`] using
-    /// its return type's accessor. The generated foreign signature drops the
-    /// handle return and instead takes a builder lambda receiving the
-    /// (flattened) accessor leaves; the wrapper invokes it after the call.
-    /// Panics if not chained after a fn-level builder.
-    pub fn expand_output(mut self) -> Self {
+    /// Decompose the return value of the most recent [`Self::package_fun`] via
+    /// its return type's deconstructor and deliver the (flattened) leaves to a
+    /// foreign **callback** (builder / fold). Panics if not chained after a
+    /// fn-level builder.
+    pub fn deconstruct_output(mut self) -> Self {
         let func = self.current_fn_ident();
-        self.accessors.add_expand_output(func);
+        self.deconstructors.add_deconstruct_output(func);
         self
     }
 
-    /// Like [`Self::expand_output`] but selects the accessor by name.
-    pub fn expand_output_with(mut self, name: impl Into<String>) -> Self {
+    /// Like [`Self::deconstruct_output`] but selects the deconstructor by name.
+    pub fn deconstruct_output_with(mut self, name: impl Into<String>) -> Self {
         let func = self.current_fn_ident();
-        self.accessors.add_expand_output_with(func, name);
+        self.deconstructors.add_deconstruct_output_with(func, name);
         self
     }
 
-    /// Rust ident of the function the current `.expand*` chain targets,
-    /// resolved from the live [`Self::package_fun`] cursor.
+    /// Decompose the return value of the most recent [`Self::package_fun`] via a
+    /// single-value deconstructor (converter) and make the wrapper **return** the
+    /// converted value directly (no callback). Errors at resolution if the
+    /// deconstructor is not single-leaf. Panics if not chained after a fn-level
+    /// builder.
+    pub fn convert_output(mut self) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_convert_output(func);
+        self
+    }
+
+    /// Like [`Self::convert_output`] but selects the deconstructor by name.
+    pub fn convert_output_with(mut self, name: impl Into<String>) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_convert_output_with(func, name);
+        self
+    }
+
+    /// Rust ident of the function the current `.construct*` / output-expansion
+    /// chain targets, resolved from the live [`Self::package_fun`] cursor.
     fn current_fn_ident(&self) -> syn::Ident {
         let r = self
             .last_entry_ref

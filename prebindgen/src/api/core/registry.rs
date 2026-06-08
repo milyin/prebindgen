@@ -768,8 +768,8 @@ impl<M> Registry<M> {
         if let Some(exp) = ext.expansions() {
             crate::api::core::expand::apply(self, exp)?;
         }
-        if let Some(acc) = ext.accessors() {
-            crate::api::core::unfold::apply(self, acc)?;
+        if let Some(dec) = ext.deconstructors() {
+            crate::api::core::unfold::apply(self, dec)?;
         }
         crate::api::core::resolve::resolve(self, ext)?;
         Ok(crate::api::core::write::write_rust(self, ext, out_path)?)

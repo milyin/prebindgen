@@ -655,13 +655,15 @@ pub(crate) fn render_extern_decl(
         let suffix = if optional { "?" } else { "" };
         params.push((name, format!("{short}{suffix}")));
     }
-    // Output (data) expansion: the extern takes the callback(s) just before the
-    // error sink and returns the erased result (`Any?`) rather than the return
-    // type's own wire. `Iterable` takes `acc` + `fold`; the others a single
-    // `build`. All `Any` (JObject) at the wire level.
+    // Output (data) expansion: a **callback** delivery (`deconstruct_output`)
+    // appends the lambda(s) before the error sink and returns the erased result
+    // (`Any?`). A **return** delivery (`convert_output`) appends nothing and
+    // returns the real converted wire (handled in `wire_return` below, keyed on
+    // `convert_out_ty`).
+    use crate::api::core::unfold::Delivery;
     let unfold = registry.unfold_plans.get(&f.sig.ident);
-    let has_unfold = unfold.is_some();
-    if let Some(plan) = unfold {
+    let callback_unfold = unfold.filter(|p| p.delivery == Delivery::Callback);
+    if let Some(plan) = callback_unfold {
         if matches!(plan.shape, crate::api::core::unfold::UnfoldShape::Iterable(_)) {
             // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
             // `fold` is the non-null adapter callback.
@@ -676,13 +678,19 @@ pub(crate) fn render_extern_decl(
     // (JObject); the wrapper passes an `ErrorSink` instance.
     params.push(("errorSink".to_string(), "Any".to_string()));
 
-    let wire_return = if has_unfold {
+    let wire_return = if callback_unfold.is_some() {
         "Any?".to_string()
     } else {
-        let (kt_return, projection) = classify_return(ext, &f.sig.output, registry, imports)?;
+        // For a `convert_output` (Return) the wire is the converted single
+        // value's; otherwise the function's own return.
+        let ret_decl: syn::ReturnType = match unfold.and_then(|p| p.convert_out_ty.clone()) {
+            Some(cv) => syn::parse_quote!(-> #cv),
+            None => f.sig.output.clone(),
+        };
+        let (kt_return, projection) = classify_return(ext, &ret_decl, registry, imports)?;
         // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
         // The public wrapper converts back using `EnumType.fromInt(Int)`.
-        let is_enum_return = return_is_kotlin_enum(ext, &f.sig.output, registry);
+        let is_enum_return = return_is_kotlin_enum(ext, &ret_decl, registry);
         // JNI extern's wire return: handle projections wire as `Long` (the boxed
         // jlong gets wrapped); value-class projections wire as their inner
         // converter's Kotlin type folded through the projection's strategy (the
@@ -936,14 +944,28 @@ pub(crate) fn render_wrapper_fn(
     // installs an **adapter** that applies the Kotlin-side projection wrap
     // (`ZZenohId(raw)`) before the user callback. Leaves with no value_blob ⇒
     // the callback is passed directly (M1–M4 unchanged).
+    use crate::api::core::unfold::Delivery;
     let unfold = registry.unfold_plans.get(&f.sig.ident);
+    let is_convert = unfold.map_or(false, |p| p.delivery == Delivery::Return);
     let mut builder_param: Option<String> = None;
     let mut generic: String = String::new();
     // Extra call-site args injected before `__sink` (e.g. `build`/adapter, or
     // `acc` + the fold callback/adapter for `Iterable`).
     let mut unfold_call_args: Vec<String> = Vec::new();
 
-    let (kt_return, projection) = if let Some(plan) = unfold {
+    let (kt_return, projection) = if let Some(plan) = unfold.filter(|p| p.delivery == Delivery::Return) {
+        // `convert_output` (Return): the wrapper returns the single converted
+        // value directly — classify it exactly like a normal function whose
+        // return type is `convert_out_ty`. No callback param, no generic, no
+        // extra call args; the extern returns the real wire and `build_call`
+        // applies the projection wrap (value_blob/handle) below.
+        let cv = plan
+            .convert_out_ty
+            .clone()
+            .expect("Return delivery carries convert_out_ty");
+        let rt: syn::ReturnType = syn::parse_quote!(-> #cv);
+        classify_return(ext, &rt, registry, imports)?
+    } else if let Some(plan) = unfold {
         use crate::api::core::unfold::UnfoldShape;
         // The (out_ty, nullable) of each callback arg: a whole-element Iterable
         // has one (the element); otherwise the decomposed leaves.
@@ -1109,12 +1131,15 @@ pub(crate) fn render_wrapper_fn(
             call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
         } else if is_enum_return {
             call = format!("{kt_return}.fromInt({call})");
-        } else if unfold.is_some() {
-            // The extern returns the builder's erased `Any?`; cast to the shape
-            // type (`R` / `R?` / `List<R>`). The builder always produces `R`, so
-            // the unchecked cast is sound — suppressed on the function below.
+        } else if unfold.is_some() && !is_convert {
+            // Callback delivery: the extern returns the builder's erased `Any?`;
+            // cast to the shape type (`R` / `R?` / `List<R>`). The builder always
+            // produces `R`, so the unchecked cast is sound — suppressed below.
             call = format!("({call} as {kt_return})");
         }
+        // Return delivery (`convert_output`): the extern returns the real typed
+        // wire; the projection wrap above (if any) already produced the value
+        // class / handle — no cast needed.
         call
     };
 

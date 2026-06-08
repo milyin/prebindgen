@@ -33,25 +33,41 @@ pub(crate) fn emit_jni_function_wrapper(
         syn::ReturnType::Default => syn::parse_quote!(()),
         syn::ReturnType::Type(_, ty) => (**ty).clone(),
     };
-    // Output (data) expansion: when `.expand_output()` was declared for this
-    // function, the return value is decomposed by accessors and delivered to a
-    // foreign builder lambda — so the wrapper's wire return is the builder's
-    // `JObject` result, not the return type's own converter wire.
+    // Output (data) expansion: when output expansion was declared for this
+    // function, the return value is decomposed by the deconstructor. Two
+    // deliveries:
+    //   * `Callback` (`deconstruct_output`): the leaves are delivered to a
+    //     foreign builder/fold lambda — the wrapper's wire return is the
+    //     lambda's `JObject` result (no `output_entry`; see `emit_unfold_delivery`).
+    //   * `Return` (`convert_output`): the single decomposed value is **returned**
+    //     directly through its ordinary output converter — the wrapper behaves
+    //     exactly like a normal function whose return type is `convert_out_ty`.
+    use crate::api::core::unfold::Delivery;
     let unfold_plan = registry.unfold_plans.get(original_ident);
-    let output_entry = if unfold_plan.is_some() {
-        None
-    } else {
-        Some(registry.output_entry(&return_ty).unwrap_or_else(|| {
+    let is_convert = unfold_plan.map_or(false, |p| p.delivery == Delivery::Return);
+    // The output converter to route through: the converted single value for
+    // `Return`, the function's own return for a normal fn, none for `Callback`.
+    let output_target_ty: Option<syn::Type> = match unfold_plan {
+        Some(p) if p.delivery == Delivery::Return => Some(
+            p.convert_out_ty
+                .clone()
+                .expect("Return delivery carries convert_out_ty"),
+        ),
+        Some(_) => None,
+        None => Some(return_ty.clone()),
+    };
+    let output_entry = output_target_ty.as_ref().map(|ty| {
+        registry.output_entry(ty).unwrap_or_else(|| {
             panic!(
                 "JniGen::on_function: return type `{}` of `{}` has no registered output \
                  converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
                   to bind a domain exception)",
-                TypeKey::from_type(&return_ty),
+                TypeKey::from_type(ty),
                 original_ident,
             )
-        }))
-    };
+        })
+    });
     let wire_return_ty: syn::Type = match output_entry {
         Some(e) => e.destination.clone(),
         None => syn::parse_quote!(jni::objects::JObject),
@@ -248,16 +264,53 @@ pub(crate) fn emit_jni_function_wrapper(
         }
     }
 
-    let call_expr = quote!(#source_module::#original_ident(#(#call_args),*));
+    let raw_call = quote!(#source_module::#original_ident(#(#call_args),*));
+    // For `convert_output` (Return), the value the output converter sees is the
+    // **deconstructed** single value (the converter's accessor applied to the
+    // raw return, lifted through the shape) — not the raw return. Build that
+    // block so the normal output phase converts it. `Decompose` ⇒ `acc(raw)`;
+    // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
+    let call_expr: TokenStream = if is_convert {
+        use crate::api::core::unfold::UnfoldShape;
+        let plan = unfold_plan.expect("is_convert ⇒ plan");
+        let leaf = &plan.leaves[0];
+        let by_ref = plan.by_ref;
+        let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
+            let mut e = if base_is_ref { base } else { quote!(&#base) };
+            for a in &leaf.path {
+                e = quote!(#source_module::#a(#e));
+            }
+            e
+        };
+        match &plan.shape {
+            UnfoldShape::Optional(_) => {
+                let inner = compose(quote!(__inner), by_ref);
+                quote!({
+                    let __cvsrc = #raw_call;
+                    __cvsrc.map(|__inner| #inner)
+                })
+            }
+            _ => {
+                let v = compose(quote!(__cvsrc), by_ref);
+                quote!({
+                    let __cvsrc = #raw_call;
+                    #v
+                })
+            }
+        }
+    } else {
+        raw_call
+    };
 
-    // Output phase. Two shapes:
-    //   * Output expansion (`.expand_output`): decompose the return value and
-    //     deliver the leaves to the foreign builder (`__builder`).
-    //   * Normal: every output converter returns `Result<wire, <err_type>>`;
-    //     run pre_stages then the wire-facing converter, routing each `Err`
-    //     through the per-call `signal_error` sink.
+    // Output phase. Three shapes:
+    //   * `Callback` output expansion: decompose the return value and deliver the
+    //     leaves to the foreign builder/fold (`__builder` / `__acc`+`__fold`).
+    //   * `Return` output expansion (convert) and normal returns: every output
+    //     converter returns `Result<wire, <err_type>>`; run pre_stages then the
+    //     wire-facing converter, routing each `Err` through `signal_error`. (For
+    //     convert, `call_expr` above already deconstructed the value.)
     let mut builder_param: Option<TokenStream> = None;
-    let output_phase: TokenStream = if let Some(plan) = unfold_plan {
+    let output_phase: TokenStream = if let (Some(plan), false) = (unfold_plan, is_convert) {
         // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
         // Decompose/Optional: a single `__builder` callback.
         builder_param = Some(

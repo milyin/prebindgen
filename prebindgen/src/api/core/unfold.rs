@@ -1,29 +1,26 @@
 //! Output (data) expansion — the dual of constructor expansion
-//! (`api/core/expand.rs`). A function returning a rich type is *decomposed*
-//! by **accessors** into a set of leaf values, all delivered to a
-//! foreign-supplied **builder** in a single FFI crossing (the back-end picks
-//! the delivery mechanism — jnigen passes a Kotlin function-type lambda).
+//! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
+//! **deconstructor** into a set of leaf values.
 //!
-//! An *accessor* is a `#[prebindgen]` function `f(&T) -> &F` (a reference
-//! return where possible, for zero-copy). A **accessor**
-//! (`.accessor(T)` + `.accessor_record(f)` /
-//! `.accessor_record_id()`) is a **deterministic product**: every
-//! record always runs and contributes its leaf — there is no selector (unlike
-//! a combined *constructor*, whose selector picks one variant). Marking a
-//! function `.expand_output()` replaces its return — in the generated foreign
-//! signature only — with the builder plus the accessor's flattened
-//! leaves.
+//! A **deconstructor** (`.deconstructor(T)` + `.deconstructor_record(f)` /
+//! `.deconstructor_record_id()` / `.deconstructor_record_nested(g)`) is a
+//! **deterministic product**: every record always runs and contributes its leaf
+//! — there is no selector (unlike a *constructor*, whose selector picks one
+//! variant). A record's accessor is a `#[prebindgen]` function `f(&T) -> &F` (a
+//! reference return where possible, for zero-copy). A **converter**
+//! (`.converter(T, f)`) is the single-record special case.
+//!
+//! Two **deliveries** (see [`Delivery`]):
+//! * `.deconstruct_output()` — replaces the return with a foreign **callback**
+//!   receiving all the leaves (any leaf count).
+//! * `.convert_output()` — **returns** the single leaf value directly (no
+//!   callback); requires a single-value deconstructor.
 //!
 //! Resolution is language-agnostic: [`apply`] turns declarations into
 //! [`UnfoldPlan`]s (stored on the registry, keyed by function ident) and
 //! registers every leaf's `out_ty` as a required **output** so the resolver
 //! produces its converter (and projection). The jnigen back-end reads the
 //! plan at the return-emission site.
-//!
-//! Scope is staged (see the approved plan): M1 implements the flat
-//! [`UnfoldShape::Decompose`] case (identity + single-accessor records, with
-//! `&T` and owned `T` returns). [`UnfoldShape::Optional`] / [`Iterable`] and
-//! nested records are reserved here and rejected by [`apply`] until M2–M4.
 //!
 //! [`Iterable`]: UnfoldShape::Iterable
 
@@ -37,129 +34,179 @@ use crate::api::core::registry::{Registry, TypeKey};
 // Declarations (populated by the language builder)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One record (field) of an accessor. A accessor is a
-/// product: every record contributes a leaf.
+/// One record (field) of a deconstructor. A deconstructor is a product: every
+/// record contributes a leaf.
 #[derive(Clone)]
-enum AccRecord {
+enum DeconRecord {
     /// Read this field by calling the accessor function `f(&T) -> &F`.
     Acc(syn::Ident),
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
-    /// moved for an owned `T`). At most one per accessor.
+    /// moved for an owned `T`, copied for a `Copy` value_blob). At most one per
+    /// deconstructor.
     Identity,
-    /// Splice in another type's accessor via the accessor function
-    /// `f(&T) -> &Child` (or `-> Option<&Child>`): the child type's
-    /// accessor leaves are flattened with the access path prefixed by
-    /// `f` (and marked nullable when `f` returns `Option`).
+    /// Splice in another type's deconstructor via the accessor function
+    /// `f(&T) -> &Child` (or `-> Option<&Child>`): the child type's records are
+    /// flattened with the access path prefixed by `f` (and marked nullable when
+    /// `f` returns `Option`).
     Nested(syn::Ident),
 }
 
 #[derive(Clone)]
-struct AccessorDecl {
+struct DeconstructorDecl {
     name: Option<String>,
     target: syn::Type,
-    records: Vec<AccRecord>,
+    records: Vec<DeconRecord>,
 }
 
-/// How an `.expand_output`/`.expand_output_with` chooses the accessor
-/// for a function's return type.
+/// How an output-expansion `.deconstruct_output`/`.convert_output` (and their
+/// `_with` variants) chooses the deconstructor for a function's return type.
 #[derive(Clone)]
-enum AccSel {
-    /// Use the return type's unique accessor (error if ambiguous).
+enum DeconSel {
+    /// Use the return type's unique deconstructor (error if ambiguous).
     TopLevel,
-    /// Use the accessor named by this string.
+    /// Use the deconstructor named by this string.
     Explicit(String),
 }
 
+/// How the decomposed value(s) are delivered to the foreign side.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Delivery {
+    /// `.deconstruct_output()` — deliver the leaves to a foreign **callback**
+    /// (builder / fold). Any leaf count.
+    Callback,
+    /// `.convert_output()` — **return** the single decomposed value directly
+    /// (no callback). Requires the plan to flatten to exactly one leaf and a
+    /// non-`Iterable` shape.
+    Return,
+}
+
 #[derive(Clone)]
-struct ExpandOutputDecl {
+struct OutputDecl {
     func: syn::Ident,
-    sel: AccSel,
+    sel: DeconSel,
+    delivery: Delivery,
 }
 
-/// Accessor / output-expansion declarations gathered from a language builder.
-/// Embedded in each adapter that supports output expansion and handed to
-/// [`apply`] via
-/// [`crate::api::core::prebindgen::Prebindgen::accessors`].
+/// Deconstructor / converter / output-expansion declarations gathered from a
+/// language builder. Embedded in each adapter that supports output expansion
+/// and handed to [`apply`] via
+/// [`crate::api::core::prebindgen::Prebindgen::deconstructors`].
 #[derive(Clone, Default)]
-pub struct Accessors {
-    accessors: Vec<AccessorDecl>,
-    expands: Vec<ExpandOutputDecl>,
-    /// Cursor for the accessor builder (`.accessor_record*`).
-    cur_accessor: Option<usize>,
+pub struct Deconstructors {
+    deconstructors: Vec<DeconstructorDecl>,
+    outputs: Vec<OutputDecl>,
+    /// Cursor for the deconstructor builder (`.deconstructor_record*`).
+    cur_deconstructor: Option<usize>,
 }
 
-impl Accessors {
-    /// `.accessor(target)` — begin an accessor for `target`.
-    pub fn add_accessor(&mut self, target: syn::Type) {
-        self.accessors.push(AccessorDecl {
+impl Deconstructors {
+    /// `.deconstructor(target)` — begin a deconstructor for `target`.
+    pub fn add_deconstructor(&mut self, target: syn::Type) {
+        self.deconstructors.push(DeconstructorDecl {
             name: None,
             target,
             records: Vec::new(),
         });
-        self.cur_accessor = Some(self.accessors.len() - 1);
+        self.cur_deconstructor = Some(self.deconstructors.len() - 1);
     }
 
-    /// `.accessor_name(name)` — name the current accessor so
-    /// it can be selected via `.expand_output_with`.
-    pub fn set_accessor_name(&mut self, name: impl Into<String>) {
+    /// `.converter(target, func)` — a single-value deconstructor: one accessor
+    /// record `func` (`f(&target) -> F`). Sugar for `.deconstructor(target)` +
+    /// `.deconstructor_record(func)`; usable via `.convert_output` (return) and
+    /// as a nested record source.
+    pub fn add_converter(&mut self, target: syn::Type, func: syn::Ident) {
+        self.add_deconstructor(target);
+        self.add_deconstructor_record(func);
+        self.cur_deconstructor = None;
+    }
+
+    /// `.deconstructor_name(name)` — name the current deconstructor so it can be
+    /// selected via `.deconstruct_output_with` / `.convert_output_with`.
+    pub fn set_deconstructor_name(&mut self, name: impl Into<String>) {
         let i = self
-            .cur_accessor
-            .expect(".accessor_name called without a current .accessor");
-        self.accessors[i].name = Some(name.into());
+            .cur_deconstructor
+            .expect(".deconstructor_name called without a current .deconstructor");
+        self.deconstructors[i].name = Some(name.into());
     }
 
-    /// `.accessor_record(func)` — add an accessor-function record.
-    pub fn add_accessor_record(&mut self, func: syn::Ident) {
+    /// `.deconstructor_record(func)` — add an accessor-function record.
+    pub fn add_deconstructor_record(&mut self, func: syn::Ident) {
         let i = self
-            .cur_accessor
-            .expect(".accessor_record called without a current .accessor");
-        self.accessors[i].records.push(AccRecord::Acc(func));
+            .cur_deconstructor
+            .expect(".deconstructor_record called without a current .deconstructor");
+        self.deconstructors[i].records.push(DeconRecord::Acc(func));
     }
 
-    /// `.accessor_record_id()` — add the identity/handle record (the
-    /// value itself).
-    pub fn add_accessor_record_id(&mut self) {
+    /// `.deconstructor_record_id()` — add the identity record (the value
+    /// itself).
+    pub fn add_deconstructor_record_id(&mut self) {
         let i = self
-            .cur_accessor
-            .expect(".accessor_record_id called without a current .accessor");
-        self.accessors[i].records.push(AccRecord::Identity);
+            .cur_deconstructor
+            .expect(".deconstructor_record_id called without a current .deconstructor");
+        self.deconstructors[i].records.push(DeconRecord::Identity);
     }
 
-    /// `.accessor_record_nested(func)` — splice another type's
-    /// accessor via the accessor `func` (`f(&T) -> &Child` or
-    /// `-> Option<&Child>`); `Child`'s accessor leaves are flattened
-    /// with the access path prefixed by `func`.
-    pub fn add_accessor_record_nested(&mut self, func: syn::Ident) {
+    /// `.deconstructor_record_nested(func)` — splice another type's
+    /// deconstructor via the accessor `func` (`f(&T) -> &Child` or
+    /// `-> Option<&Child>`); `Child`'s records are flattened with the access
+    /// path prefixed by `func`.
+    pub fn add_deconstructor_record_nested(&mut self, func: syn::Ident) {
         let i = self
-            .cur_accessor
-            .expect(".accessor_record_nested called without a current .accessor");
-        self.accessors[i].records.push(AccRecord::Nested(func));
+            .cur_deconstructor
+            .expect(".deconstructor_record_nested called without a current .deconstructor");
+        self.deconstructors[i].records.push(DeconRecord::Nested(func));
     }
 
-    /// `.expand_output()` on the function `func` — decompose its return value
-    /// using the return type's unique accessor.
-    pub fn add_expand_output(&mut self, func: syn::Ident) {
-        self.expands.push(ExpandOutputDecl {
+    /// `.deconstruct_output()` on the function `func` — decompose its return
+    /// value via the return type's unique deconstructor and deliver the leaves
+    /// to a foreign **callback**.
+    pub fn add_deconstruct_output(&mut self, func: syn::Ident) {
+        self.outputs.push(OutputDecl {
             func,
-            sel: AccSel::TopLevel,
+            sel: DeconSel::TopLevel,
+            delivery: Delivery::Callback,
         });
-        self.cur_accessor = None;
+        self.cur_deconstructor = None;
     }
 
-    /// `.expand_output_with(name)` — decompose using the named combined
-    /// accessor.
-    pub fn add_expand_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.expands.push(ExpandOutputDecl {
+    /// `.deconstruct_output_with(name)` — like [`Self::add_deconstruct_output`]
+    /// but selects the deconstructor by name.
+    pub fn add_deconstruct_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
+        self.outputs.push(OutputDecl {
             func,
-            sel: AccSel::Explicit(name.into()),
+            sel: DeconSel::Explicit(name.into()),
+            delivery: Delivery::Callback,
         });
-        self.cur_accessor = None;
+        self.cur_deconstructor = None;
     }
 
-    /// True iff no `.expand_output` was declared (lets `write_rust` skip
+    /// `.convert_output()` on the function `func` — decompose its return value
+    /// via a single-value deconstructor (converter) and **return** the value
+    /// directly (no callback). Errors at [`apply`] if the plan is not single-leaf.
+    pub fn add_convert_output(&mut self, func: syn::Ident) {
+        self.outputs.push(OutputDecl {
+            func,
+            sel: DeconSel::TopLevel,
+            delivery: Delivery::Return,
+        });
+        self.cur_deconstructor = None;
+    }
+
+    /// `.convert_output_with(name)` — like [`Self::add_convert_output`] but
+    /// selects the deconstructor by name.
+    pub fn add_convert_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
+        self.outputs.push(OutputDecl {
+            func,
+            sel: DeconSel::Explicit(name.into()),
+            delivery: Delivery::Return,
+        });
+        self.cur_deconstructor = None;
+    }
+
+    /// True iff no output expansion was declared (lets `write_rust` skip
     /// [`apply`]).
     pub fn is_empty(&self) -> bool {
-        self.expands.is_empty()
+        self.outputs.is_empty()
     }
 }
 
@@ -205,6 +252,14 @@ pub struct UnfoldPlan {
     /// via its own output converter + projection (not decomposed). `None` for
     /// `Decompose`/`Optional`.
     pub element: Option<syn::Type>,
+    /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
+    /// delivery.
+    pub delivery: Delivery,
+    /// For [`Delivery::Return`]: the single leaf's `out_ty` lifted through the
+    /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option<out_ty>`). The
+    /// wrapper returns this value through its ordinary output converter (no
+    /// callback). `None` for [`Delivery::Callback`].
+    pub convert_out_ty: Option<syn::Type>,
 }
 
 /// One flattened output leaf of a decomposed return value.
@@ -232,21 +287,21 @@ pub struct UnfoldLeaf {
 // Errors
 // ──────────────────────────────────────────────────────────────────────
 
-/// Errors surfaced while resolving [`Accessors`] in [`apply`].
+/// Errors surfaced while resolving [`Deconstructors`] in [`apply`].
 #[derive(Debug)]
 pub enum UnfoldError {
     UnknownFunction(syn::Ident),
     UnknownAccessor(syn::Ident),
-    NoCombinedAccessor {
+    NoDeconstructor {
         func: syn::Ident,
         target: String,
     },
-    AmbiguousCombinedAccessor {
+    AmbiguousDeconstructor {
         func: syn::Ident,
         target: String,
         candidates: Vec<String>,
     },
-    UnknownCombinedAccessor {
+    UnknownDeconstructor {
         func: syn::Ident,
         name: String,
     },
@@ -258,12 +313,18 @@ pub enum UnfoldError {
     MultipleIdentity {
         target: String,
     },
-    /// A nested accessor recurses back into a type already on the
-    /// nesting chain (`A → … → A`).
+    /// A nested deconstructor recurses back into a type already on the nesting
+    /// chain (`A → … → A`).
     Cycle {
         target: String,
     },
-    /// A shape / record kind not yet implemented (staged for M4).
+    /// `.convert_output()` on a deconstructor that does not flatten to exactly
+    /// one leaf, or whose shape is `Iterable` (use `.deconstruct_output()`).
+    ConvertNotSingle {
+        func: syn::Ident,
+        reason: &'static str,
+    },
+    /// A shape / record kind not yet implemented.
     Unsupported {
         func: syn::Ident,
         reason: &'static str,
@@ -275,33 +336,33 @@ impl std::fmt::Display for UnfoldError {
         match self {
             UnfoldError::UnknownFunction(name) => write!(
                 f,
-                "expand_output: function `{}` is not a #[prebindgen] item",
+                "output expansion: function `{}` is not a #[prebindgen] item",
                 name
             ),
             UnfoldError::UnknownAccessor(name) => write!(
                 f,
-                "expand_output: accessor `{}` is not a #[prebindgen] item",
+                "output expansion: accessor `{}` is not a #[prebindgen] item",
                 name
             ),
-            UnfoldError::NoCombinedAccessor { func, target } => write!(
+            UnfoldError::NoDeconstructor { func, target } => write!(
                 f,
-                "expand_output: no accessor registered for `{}` (return of `{}`)",
+                "output expansion: no deconstructor registered for `{}` (return of `{}`)",
                 target, func
             ),
-            UnfoldError::AmbiguousCombinedAccessor {
+            UnfoldError::AmbiguousDeconstructor {
                 func,
                 target,
                 candidates,
             } => write!(
                 f,
-                "expand_output: multiple accessors for `{}` (return of `{}`): {} — disambiguate with `.expand_output_with`",
+                "output expansion: multiple deconstructors for `{}` (return of `{}`): {} — disambiguate with `.deconstruct_output_with` / `.convert_output_with`",
                 target,
                 func,
                 candidates.join(", ")
             ),
-            UnfoldError::UnknownCombinedAccessor { func, name } => write!(
+            UnfoldError::UnknownDeconstructor { func, name } => write!(
                 f,
-                "expand_output: no accessor named `{}` (for `{}`)",
+                "output expansion: no deconstructor named `{}` (for `{}`)",
                 name, func
             ),
             UnfoldError::AccessorTargetMismatch {
@@ -310,22 +371,27 @@ impl std::fmt::Display for UnfoldError {
                 expected,
             } => write!(
                 f,
-                "expand_output: accessor `{}` takes `{}` but the accessor decomposes `{}`",
+                "output expansion: accessor `{}` takes `{}` but the deconstructor decomposes `{}`",
                 accessor, takes, expected
             ),
             UnfoldError::MultipleIdentity { target } => write!(
                 f,
-                "expand_output: accessor for `{}` has more than one identity record",
+                "output expansion: deconstructor for `{}` has more than one identity record",
                 target
             ),
             UnfoldError::Cycle { target } => write!(
                 f,
-                "expand_output: nested accessors form a cycle through `{}`",
+                "output expansion: nested deconstructors form a cycle through `{}`",
                 target
+            ),
+            UnfoldError::ConvertNotSingle { func, reason } => write!(
+                f,
+                "convert_output: `{}` is not a single-value deconstructor: {}",
+                func, reason
             ),
             UnfoldError::Unsupported { func, reason } => write!(
                 f,
-                "expand_output: `{}` not yet supported: {}",
+                "output expansion: `{}` not yet supported: {}",
                 func, reason
             ),
         }
@@ -344,8 +410,8 @@ impl std::error::Error for UnfoldError {}
 ///
 /// Runs inside `write_rust` after `expand::apply` and before `resolve`, so leaf
 /// converters resolve through the normal rank machinery.
-pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), UnfoldError> {
-    for ed in &acc.expands {
+pub fn apply<M>(registry: &mut Registry<M>, acc: &Deconstructors) -> Result<(), UnfoldError> {
+    for ed in &acc.outputs {
         let (item_fn, loc) = registry
             .functions
             .get(&ed.func)
@@ -378,9 +444,9 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
                 other => (false, other.clone()),
             };
             let ekey = TypeKey::from_type(&element);
-            if find_accessor_by_type(acc, &ekey).is_ok() {
+            if find_deconstructor_by_type(acc, &ekey).is_ok() {
                 // Decomposed: reuse the shared flatten (M3 nesting composes).
-                let records = find_accessor_by_type(acc, &ekey)
+                let records = find_deconstructor_by_type(acc, &ekey)
                     .expect("checked is_ok")
                     .to_vec();
                 let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records)?;
@@ -399,6 +465,8 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
                     shape,
                     leaves: vec![],
                     element: Some(inner.clone()),
+                    delivery: ed.delivery,
+                    convert_out_ty: None,
                 }
             }
         } else {
@@ -416,11 +484,41 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
             } else {
                 UnfoldShape::Decompose
             };
-            let records = resolve_accessor(acc, &source_key, ed)?;
+            let records = resolve_deconstructor(acc, &source_key, ed)?;
             let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records)?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty, &loc);
             }
+            plan
+        };
+        // `convert_output` (return delivery): require a single leaf + non-Iterable
+        // shape, then resolve the leaf's `out_ty` lifted through the shape as a
+        // required output so the wrapper can return it via its ordinary converter.
+        let plan = if ed.delivery == Delivery::Return {
+            if matches!(plan.shape, UnfoldShape::Iterable(_)) {
+                return Err(UnfoldError::ConvertNotSingle {
+                    func: ed.func.clone(),
+                    reason: "Vec<…> returns must use .deconstruct_output() (a fold callback)",
+                });
+            }
+            if plan.leaves.len() != 1 {
+                return Err(UnfoldError::ConvertNotSingle {
+                    func: ed.func.clone(),
+                    reason: "a converter must flatten to exactly one leaf",
+                });
+            }
+            let leaf_ty = plan.leaves[0].out_ty.clone();
+            let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional(_)) {
+                syn::parse_quote!(Option<#leaf_ty>)
+            } else {
+                leaf_ty
+            };
+            registry.require_output(&cv_ty, &loc);
+            UnfoldPlan {
+                convert_out_ty: Some(cv_ty),
+                ..plan
+            }
+        } else {
             plan
         };
         registry.unfold_plans.insert(ed.func.clone(), plan);
@@ -428,29 +526,29 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
     Ok(())
 }
 
-/// Pick the accessor (its records) for one `.expand_output`.
-fn resolve_accessor(
-    acc: &Accessors,
+/// Pick the deconstructor (its records) for one output expansion.
+fn resolve_deconstructor(
+    acc: &Deconstructors,
     source_key: &TypeKey,
-    ed: &ExpandOutputDecl,
-) -> Result<Vec<AccRecord>, UnfoldError> {
+    ed: &OutputDecl,
+) -> Result<Vec<DeconRecord>, UnfoldError> {
     match &ed.sel {
-        AccSel::Explicit(name) => acc
-            .accessors
+        DeconSel::Explicit(name) => acc
+            .deconstructors
             .iter()
             .find(|c| c.name.as_deref() == Some(name.as_str()))
             .map(|c| c.records.clone())
-            .ok_or_else(|| UnfoldError::UnknownCombinedAccessor {
+            .ok_or_else(|| UnfoldError::UnknownDeconstructor {
                 func: ed.func.clone(),
                 name: name.clone(),
             }),
-        AccSel::TopLevel => find_accessor_by_type(acc, source_key).map(<[AccRecord]>::to_vec).map_err(
+        DeconSel::TopLevel => find_deconstructor_by_type(acc, source_key).map(<[DeconRecord]>::to_vec).map_err(
             |candidates| match candidates {
-                None => UnfoldError::NoCombinedAccessor {
+                None => UnfoldError::NoDeconstructor {
                     func: ed.func.clone(),
                     target: source_key.to_string(),
                 },
-                Some(candidates) => UnfoldError::AmbiguousCombinedAccessor {
+                Some(candidates) => UnfoldError::AmbiguousDeconstructor {
                     func: ed.func.clone(),
                     target: source_key.to_string(),
                     candidates,
@@ -460,15 +558,15 @@ fn resolve_accessor(
     }
 }
 
-/// Find the unique accessor whose target is `type_key`. `Err(None)` =
+/// Find the unique deconstructor whose target is `type_key`. `Err(None)` =
 /// none registered; `Err(Some(candidates))` = ambiguous (>1). Used for both the
-/// top-level `.expand_output` and nested-record resolution.
-fn find_accessor_by_type<'a>(
-    acc: &'a Accessors,
+/// top-level output expansion and nested-record resolution.
+fn find_deconstructor_by_type<'a>(
+    acc: &'a Deconstructors,
     type_key: &TypeKey,
-) -> Result<&'a [AccRecord], Option<Vec<String>>> {
-    let matches: Vec<&AccessorDecl> = acc
-        .accessors
+) -> Result<&'a [DeconRecord], Option<Vec<String>>> {
+    let matches: Vec<&DeconstructorDecl> = acc
+        .deconstructors
         .iter()
         .filter(|c| TypeKey::from_type(&c.target) == *type_key)
         .collect();
@@ -478,7 +576,7 @@ fn find_accessor_by_type<'a>(
         _ => Err(Some(
             matches
                 .iter()
-                .map(|c| c.name.clone().unwrap_or_else(|| "<combined>".to_string()))
+                .map(|c| c.name.clone().unwrap_or_else(|| "<deconstructor>".to_string()))
                 .collect(),
         )),
     }
@@ -490,13 +588,13 @@ fn find_accessor_by_type<'a>(
 /// recursively flattened ([`flatten`]) — nested accessors contribute
 /// their leaves with the access path prefixed.
 fn build_plan<M>(
-    acc: &Accessors,
+    acc: &Deconstructors,
     registry: &Registry<M>,
-    ed: &ExpandOutputDecl,
+    ed: &OutputDecl,
     by_ref: bool,
     source: &syn::Type,
     shape: UnfoldShape,
-    records: &[AccRecord],
+    records: &[DeconRecord],
 ) -> Result<UnfoldPlan, UnfoldError> {
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
     let mut visited: HashSet<TypeKey> = HashSet::new();
@@ -520,6 +618,8 @@ fn build_plan<M>(
         shape,
         leaves,
         element: None,
+        delivery: ed.delivery,
+        convert_out_ty: None,
     })
 }
 
@@ -539,10 +639,10 @@ fn build_plan<M>(
 ///   are removed after each nested recursion so sibling records may reuse a type).
 #[allow(clippy::too_many_arguments)]
 fn flatten<M>(
-    acc: &Accessors,
+    acc: &Deconstructors,
     registry: &Registry<M>,
     top_func: &syn::Ident,
-    records: &[AccRecord],
+    records: &[DeconRecord],
     source: &syn::Type,
     path_prefix: &[syn::Ident],
     by_ref: bool,
@@ -557,7 +657,7 @@ fn flatten<M>(
 
     for rec in records {
         match rec {
-            AccRecord::Identity => {
+            DeconRecord::Identity => {
                 if seen_identity {
                     return Err(UnfoldError::MultipleIdentity {
                         target: source_key.to_string(),
@@ -580,7 +680,7 @@ fn flatten<M>(
                     nullable,
                 });
             }
-            AccRecord::Acc(func) => {
+            DeconRecord::Acc(func) => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
                 let mut path = path_prefix.to_vec();
@@ -593,7 +693,7 @@ fn flatten<M>(
                     nullable,
                 });
             }
-            AccRecord::Nested(func) => {
+            DeconRecord::Nested(func) => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
                 // Peel an `Option` (nested value may be absent) then a leading
@@ -613,8 +713,8 @@ fn flatten<M>(
                     });
                 }
                 let child_records =
-                    find_accessor_by_type(acc, &child_key).map_err(|_| {
-                        UnfoldError::NoCombinedAccessor {
+                    find_deconstructor_by_type(acc, &child_key).map_err(|_| {
+                        UnfoldError::NoDeconstructor {
                             func: top_func.clone(),
                             target: child_key.to_string(),
                         }
@@ -751,10 +851,10 @@ mod tests {
             "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZTimestamp));
-        acc.add_accessor_record(ident("z_timestamp_ntp64"));
-        acc.add_expand_output(ident("z_sample_timestamp"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
+        acc.add_deconstruct_output(ident("z_sample_timestamp"));
 
         apply(&mut reg, &acc).expect("apply");
 
@@ -785,11 +885,11 @@ mod tests {
             "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
-        acc.add_accessor_record_id();
-        acc.add_accessor_record(ident("z_keyexpr_as_str"));
-        acc.add_expand_output(ident("z_sample_key_expr"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstruct_output(ident("z_sample_key_expr"));
 
         apply(&mut reg, &acc).expect("apply");
 
@@ -828,14 +928,14 @@ mod tests {
     #[test]
     fn ambiguous_accessor_errors() {
         let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
-        acc.add_accessor_record_id();
-        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
-        acc.add_accessor_record_id();
-        acc.add_expand_output(ident("z_foo"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
-        assert!(matches!(err, UnfoldError::AmbiguousCombinedAccessor { .. }));
+        assert!(matches!(err, UnfoldError::AmbiguousDeconstructor { .. }));
     }
 
     #[test]
@@ -845,10 +945,10 @@ mod tests {
             "fn z_foo() -> ZKeyExpr { todo!() }",
             "fn wrong(x: &ZSample) -> &str { todo!() }",
         ]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
-        acc.add_accessor_record(ident("wrong"));
-        acc.add_expand_output(ident("z_foo"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record(ident("wrong"));
+        acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::AccessorTargetMismatch { .. }));
     }
@@ -856,11 +956,11 @@ mod tests {
     #[test]
     fn multiple_identity_errors() {
         let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
-        acc.add_accessor_record_id();
-        acc.add_accessor_record_id();
-        acc.add_expand_output(ident("z_foo"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record_id();
+        acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::MultipleIdentity { .. }));
     }
@@ -881,22 +981,22 @@ mod tests {
             "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
-        let mut acc = Accessors::default();
+        let mut acc = Deconstructors::default();
         // Child accessors (reused via nesting).
-        acc.add_accessor(syn::parse_quote!(ZKeyExpr));
-        acc.add_accessor_record_id();
-        acc.add_accessor_record(ident("z_keyexpr_as_str"));
-        acc.add_accessor(syn::parse_quote!(ZZBytes));
-        acc.add_accessor_record(ident("z_zbytes_to_bytes"));
-        acc.add_accessor(syn::parse_quote!(ZTimestamp));
-        acc.add_accessor_record(ident("z_timestamp_ntp64"));
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor(syn::parse_quote!(ZZBytes));
+        acc.add_deconstructor_record(ident("z_zbytes_to_bytes"));
+        acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
         // Parent accessor with nested + direct records.
-        acc.add_accessor(syn::parse_quote!(ZSample));
-        acc.add_accessor_record_nested(ident("z_sample_key_expr"));
-        acc.add_accessor_record_nested(ident("z_sample_payload"));
-        acc.add_accessor_record(ident("z_sample_kind"));
-        acc.add_accessor_record_nested(ident("z_sample_timestamp"));
-        acc.add_expand_output(ident("z_reply_sample"));
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"));
+        acc.add_deconstructor_record_nested(ident("z_sample_payload"));
+        acc.add_deconstructor_record(ident("z_sample_kind"));
+        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"));
+        acc.add_deconstruct_output(ident("z_reply_sample"));
 
         apply(&mut reg, &acc).expect("apply");
         let plan = reg.unfold_plans.get(&ident("z_reply_sample")).expect("plan");
@@ -934,12 +1034,12 @@ mod tests {
             "fn a_to_b(a: &ZA) -> &ZB { todo!() }",
             "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
         ]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZA));
-        acc.add_accessor_record_nested(ident("a_to_b"));
-        acc.add_accessor(syn::parse_quote!(ZB));
-        acc.add_accessor_record_nested(ident("b_to_a"));
-        acc.add_expand_output(ident("z_foo"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZA));
+        acc.add_deconstructor_record_nested(ident("a_to_b"));
+        acc.add_deconstructor(syn::parse_quote!(ZB));
+        acc.add_deconstructor_record_nested(ident("b_to_a"));
+        acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc).unwrap_err();
         assert!(matches!(err, UnfoldError::Cycle { .. }));
     }
@@ -951,8 +1051,8 @@ mod tests {
         let mut reg = reg_with(&[
             "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
         ]);
-        let mut acc = Accessors::default();
-        acc.add_expand_output(ident("z_session_peers_zid"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
         apply(&mut reg, &acc).expect("apply");
         let plan = reg
@@ -984,11 +1084,11 @@ mod tests {
             "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
-        let mut acc = Accessors::default();
-        acc.add_accessor(syn::parse_quote!(ZZenohId));
-        acc.add_accessor_record(ident("z_zenoh_id_to_string"));
-        acc.add_accessor_record_id();
-        acc.add_expand_output(ident("z_session_peers_zid"));
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZZenohId));
+        acc.add_deconstructor_record(ident("z_zenoh_id_to_string"));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
         apply(&mut reg, &acc).expect("apply");
         let plan = reg
@@ -1005,5 +1105,66 @@ mod tests {
         assert!(plan.leaves[1].identity);
         assert!(plan.leaves[1].path.is_empty());
         assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "ZZenohId");
+    }
+
+    #[test]
+    fn convert_output_single_value() {
+        // `.converter(ZTimestamp, z_timestamp_ntp64)` + `.convert_output()` on
+        // `z_sample_timestamp -> Option<&ZTimestamp>` ⇒ Return delivery, single
+        // leaf, convert_out_ty = Option<i64>.
+        let mut reg = reg_with(&[
+            "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+            "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_converter(syn::parse_quote!(ZTimestamp), ident("z_timestamp_ntp64"));
+        acc.add_convert_output(ident("z_sample_timestamp"));
+
+        apply(&mut reg, &acc).expect("apply");
+        let plan = reg
+            .unfold_plans
+            .get(&ident("z_sample_timestamp"))
+            .expect("plan");
+        assert_eq!(plan.delivery, Delivery::Return);
+        assert!(matches!(&plan.shape, UnfoldShape::Optional(_)));
+        assert_eq!(plan.leaves.len(), 1);
+        assert_eq!(
+            plan.convert_out_ty.as_ref().map(|t| t.to_token_stream().to_string()),
+            Some("Option < i64 >".to_string())
+        );
+        // The shaped convert type is registered as a required output.
+        assert!(reg
+            .required_outputs_scan
+            .contains(&TypeKey::from_type(&syn::parse_quote!(Option<i64>))));
+    }
+
+    #[test]
+    fn convert_output_multi_leaf_rejected() {
+        // A two-record deconstructor (handle + string) cannot be `convert_output`.
+        let mut reg = reg_with(&[
+            "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+            "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_convert_output(ident("z_sample_key_expr"));
+        let err = apply(&mut reg, &acc).unwrap_err();
+        assert!(matches!(err, UnfoldError::ConvertNotSingle { .. }));
+    }
+
+    #[test]
+    fn convert_output_vec_rejected() {
+        // `convert_output` on a `Vec` return is rejected (use deconstruct_output).
+        let mut reg = reg_with(&[
+            "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
+            "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"));
+        acc.add_convert_output(ident("z_session_peers_zid"));
+        let err = apply(&mut reg, &acc).unwrap_err();
+        assert!(matches!(err, UnfoldError::ConvertNotSingle { .. }));
     }
 }
