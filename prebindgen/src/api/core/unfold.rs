@@ -508,6 +508,7 @@ fn build_plan<M>(
         records,
         source,
         &[],
+        by_ref,
         false,
         &mut visited,
         &mut leaves,
@@ -528,6 +529,10 @@ fn build_plan<M>(
 ///   on the first call, a nested child type on recursion).
 /// * `path_prefix` — accessor chain from the root value to `source` (empty at
 ///   the root; `[…, nesting_accessor]` when recursing into a nested child).
+/// * `by_ref` — the top-level return/element borrow-ness. The identity leaf is
+///   **owned** (`source`) only at the root of an owned value (`path_prefix`
+///   empty && `!by_ref`) — a `value_blob` (`Copy`) delivers itself by copy and a
+///   `ptr_class` moves; everywhere else it is **borrowed** (`&source`, cloned).
 /// * `nullable` — `true` once any nesting accessor on the path returned
 ///   `Option` (the reached value may be absent ⇒ the leaf is `null`).
 /// * `visited` — type keys on the current nesting chain (cycle guard; entries
@@ -540,6 +545,7 @@ fn flatten<M>(
     records: &[AccRecord],
     source: &syn::Type,
     path_prefix: &[syn::Ident],
+    by_ref: bool,
     nullable: bool,
     visited: &mut HashSet<TypeKey>,
     leaves: &mut Vec<UnfoldLeaf>,
@@ -558,14 +564,18 @@ fn flatten<M>(
                     });
                 }
                 seen_identity = true;
-                // The value reached by `path_prefix` (the root itself when
-                // empty). Its Kotlin type + projection come from the `&source`
-                // output converter (borrowed-opaque → cloned handle); emit
-                // special-cases the owned-`T` move at the root.
+                // Owned at the root of an owned value (`value_blob` copies /
+                // `ptr_class` moves); borrowed (clone) otherwise. The Kotlin type
+                // + projection come from this `out_ty`'s output converter.
+                let out_ty: syn::Type = if path_prefix.is_empty() && !by_ref {
+                    source.clone()
+                } else {
+                    syn::parse_quote!(&#source)
+                };
                 leaves.push(UnfoldLeaf {
                     name: ident(&format!("__leaf{}", leaves.len())),
                     path: path_prefix.to_vec(),
-                    out_ty: syn::parse_quote!(&#source),
+                    out_ty,
                     identity: true,
                     nullable,
                 });
@@ -618,6 +628,7 @@ fn flatten<M>(
                     child_records,
                     &child_ty,
                     &child_path,
+                    by_ref,
                     nullable || opt,
                     visited,
                     leaves,
@@ -966,16 +977,17 @@ mod tests {
     #[test]
     fn iterable_decomposed_plan() {
         // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
-        // accessor → Iterable with per-element leaves (string + self value).
+        // accessor → Iterable with per-element leaves: the string form + the
+        // value itself via `record_id` (a `value_blob` identity, owned at the
+        // root since `Vec<ZZenohId>` owns its elements).
         let mut reg = reg_with(&[
             "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
-            "fn z_zenoh_id_self(z: &ZZenohId) -> ZZenohId { todo!() }",
         ]);
         let mut acc = Accessors::default();
         acc.add_combined(syn::parse_quote!(ZZenohId));
         acc.add_combined_record(ident("z_zenoh_id_to_string"));
-        acc.add_combined_record(ident("z_zenoh_id_self"));
+        acc.add_combined_record_id();
         acc.add_expand_output(ident("z_session_peers_zid"));
 
         apply(&mut reg, &acc).expect("apply");
@@ -988,7 +1000,10 @@ mod tests {
         assert_eq!(plan.leaves.len(), 2);
         assert_eq!(plan.leaves[0].path[0].to_string(), "z_zenoh_id_to_string");
         assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "String");
-        assert_eq!(plan.leaves[1].path[0].to_string(), "z_zenoh_id_self");
+        // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
+        // owns its elements (by_ref = false).
+        assert!(plan.leaves[1].identity);
+        assert!(plan.leaves[1].path.is_empty());
         assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "ZZenohId");
     }
 }

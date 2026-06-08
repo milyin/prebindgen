@@ -445,49 +445,80 @@ pub(crate) fn emit_unfold_delivery(
             let conv = out_entry.function.sig.ident.clone();
 
             if leaf.identity {
-                // Handle leaf: clone (`&T`, reached by the path) or — only at the
-                // root of an owned return — move the value into a fresh
-                // Box-handle, then wrap into its typed Kotlin handle class.
+                // Identity leaf: deliver the value itself. Its projection decides
+                // how: a `ptr_class` Handle is cloned (`&T`, reached by the path)
+                // or — at the root of an owned value — moved into a fresh
+                // Box-handle, then Rust-wrapped into its typed Kotlin handle
+                // class. A `value_blob` (`Copy`) is delivered by copy via its
+                // value-blob converter (→ `JByteArray`); the Kotlin adapter wraps
+                // it (Rust can't box a `@JvmInline value class`).
                 let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
                     panic!(
-                        "emit_unfold_delivery: identity leaf `{}` is not an opaque-handle \
-                         projection — `.combined_accessor_record_id()` requires a ptr_class type",
+                        "emit_unfold_delivery: identity leaf `{}` has no projection — \
+                         `.combined_accessor_record_id()` requires a ptr_class or value_blob type",
                         TypeKey::from_type(&leaf.out_ty)
                     )
                 });
-                let fqn = handle_field_fqn(ext, proj).replace('.', "/");
-                let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
-                let handle_ident = format_ident!("__h{}", idx);
-                if leaf.path.is_empty() && !by_ref {
-                    stmts.extend(quote! {
-                        let #handle_ident: jni::sys::jlong =
-                            std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
-                    });
-                } else {
-                    let reached = compose(&leaf.path, value.clone(), by_ref);
-                    stmts.extend(quote! {
-                        let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
-                            ::core::result::Result::Ok(__w) => __w,
-                            ::core::result::Result::Err(__e) => {
-                                signal_error(&mut env, &__error_sink, &__e);
-                                return #on_err;
-                            }
-                        };
-                    });
-                }
-                stmts.extend(quote! {
-                    let #obj_ident: jni::objects::JObject = match env.new_object(
-                        #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
-                    ) {
-                        ::core::result::Result::Ok(__o) => __o,
-                        ::core::result::Result::Err(__e) => {
-                            let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                                format!("wrap typed handle {}: {}", #fqn_lit, __e));
-                            signal_error(&mut env, &__error_sink, &__e2);
-                            return #on_err;
+                match proj.kind {
+                    ProjectionKind::Handle => {
+                        let fqn = handle_field_fqn(ext, proj).replace('.', "/");
+                        let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
+                        let handle_ident = format_ident!("__h{}", idx);
+                        if leaf.path.is_empty() && !by_ref {
+                            stmts.extend(quote! {
+                                let #handle_ident: jni::sys::jlong =
+                                    std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
+                            });
+                        } else {
+                            let reached = compose(&leaf.path, value.clone(), by_ref);
+                            stmts.extend(quote! {
+                                let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        signal_error(&mut env, &__error_sink, &__e);
+                                        return #on_err;
+                                    }
+                                };
+                            });
                         }
-                    };
-                });
+                        stmts.extend(quote! {
+                            let #obj_ident: jni::objects::JObject = match env.new_object(
+                                #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
+                            ) {
+                                ::core::result::Result::Ok(__o) => __o,
+                                ::core::result::Result::Err(__e) => {
+                                    let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                                        format!("wrap typed handle {}: {}", #fqn_lit, __e));
+                                    signal_error(&mut env, &__error_sink, &__e2);
+                                    return #on_err;
+                                }
+                            };
+                        });
+                    }
+                    ProjectionKind::ValueBlob => {
+                        // The value_blob converter takes the value owned (`Copy`).
+                        // Owned at the root; reached-by-`&` elsewhere ⇒ deref-copy.
+                        let wire = out_entry.destination.clone();
+                        let enc_ident = format_ident!("__enc{}", idx);
+                        let cast = cast_to_jobject(&enc_ident, &wire);
+                        let arg = if leaf.path.is_empty() && !by_ref {
+                            value.clone()
+                        } else {
+                            let r = compose(&leaf.path, value.clone(), by_ref);
+                            quote!(*#r)
+                        };
+                        stmts.extend(quote! {
+                            let #enc_ident = match #conv(&mut env, #arg) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    signal_error(&mut env, &__error_sink, &__e);
+                                    return #on_err;
+                                }
+                            };
+                            let #obj_ident: jni::objects::JObject = #cast;
+                        });
+                    }
+                }
                 continue;
             }
 
