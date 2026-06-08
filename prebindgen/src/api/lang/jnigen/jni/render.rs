@@ -947,7 +947,12 @@ pub(crate) fn render_wrapper_fn(
     use crate::api::core::unfold::Delivery;
     let unfold = registry.unfold_plans.get(&f.sig.ident);
     let is_convert = unfold.map_or(false, |p| p.delivery == Delivery::Return);
+    // `builder_param` is the trailing **lambda** param (build / fold). For the
+    // `Iterable` shape, the non-lambda accumulator (`acc: A`) goes in
+    // `builder_lead` — it must precede `onError` (a defaulted param) so the
+    // positional-`acc` call stays valid; the trailing `fold` lambda follows.
     let mut builder_param: Option<String> = None;
+    let mut builder_lead: Option<String> = None;
     let mut generic: String = String::new();
     // Extra call-site args injected before `__sink` (e.g. `build`/adapter, or
     // `acc` + the fold callback/adapter for `Iterable`).
@@ -1028,7 +1033,8 @@ pub(crate) fn render_wrapper_fn(
         let wrapped_args = wraps.join(", ");
         if is_iterable {
             generic = "<A> ".to_string();
-            builder_param = Some(format!("acc: A, fold: (A, {}) -> A", builder_kts.join(", ")));
+            builder_lead = Some("acc: A".to_string());
+            builder_param = Some(format!("fold: (A, {}) -> A", builder_kts.join(", ")));
             unfold_call_args.push("acc".to_string());
             if needs_adapter {
                 let sep = if adapter_params.is_empty() { "" } else { ", " };
@@ -1107,13 +1113,14 @@ pub(crate) fn render_wrapper_fn(
             };
             args.push(arg);
         }
-        // Output expansion: the builder / (acc, fold) cross just before the sink.
+        // Output expansion: the builder / (acc, fold) cross just before the
+        // error callback.
         args.extend(unfold_call_args.iter().cloned());
-        // Every extern takes a trailing error-sink callback; the wrapper
-        // installs `__sink` (a capture-then-rethrow default) just before the
-        // call. On `Err`, the Rust side invokes `__sink.onError(message)`
-        // instead of throwing; the wrapper rethrows after the call returns.
-        args.push("__sink".to_string());
+        // Every extern takes a trailing error callback. The wrapper passes a
+        // **capture** (`__cap`) that records `(je, ze…)` and sets a flag — no
+        // throw on the Rust upcall. The wrapper calls the user's `onError` after
+        // the native call returns (see the body below).
+        args.push("__cap".to_string());
         let mut call = format!(
             "{}.{jni_call}({})",
             ext.jni_native_class_name(),
@@ -1187,9 +1194,96 @@ pub(crate) fn render_wrapper_fn(
         .collect();
 
     let is_unit = kt_return.is_empty();
-    // Closed-handle guard throws the generated `ZException` (the same Kotlin
-    // exception the default error sink rethrows), so callers see one error type.
-    let throw_stmt = "throw ZException(\"Operation on a closed native handle.\")";
+
+    // Error callback `onError: (je: String?, ze…) -> R`. `je` (binding message)
+    // is fixed; the `ze` params are the fn's `Result<_, E>` domain error
+    // converted/deconstructed (from `error_plans`). The wrapper passes a capture
+    // to the extern, then — after the native call — calls `onError(je, ze…)` and
+    // returns its `R` if a failure was recorded (no throw on the Rust upcall).
+    let r_ty = if is_unit { "Unit".to_string() } else { kt_return.clone() };
+    let error_plan = registry.error_plans.get(&f.sig.ident);
+    // Per ze leaf: (public Kotlin type, default literal for a binding error).
+    let ze_info: Vec<(String, String)> = error_plan
+        .map(|p| {
+            p.leaves
+                .iter()
+                .map(|leaf| {
+                    let out_ty = &leaf.out_ty;
+                    let kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+                        "Int".to_string()
+                    } else {
+                        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+                        classify_return(ext, &rt, registry, imports)
+                            .map(|(k, _)| k)
+                            .unwrap_or_else(|| "Any".to_string())
+                    };
+                    let default = kt_value_default(&kt);
+                    (kt, default)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let n_ze = ze_info.len();
+    // Public `onError` param type list: `String?` then each ze (non-null).
+    let onerr_params = std::iter::once("String?".to_string())
+        .chain(ze_info.iter().map(|(kt, _)| kt.clone()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    // Default handler: throws `ZException(je ?: ze0)` so a caller that doesn't
+    // supply a handler still gets an exception (overridable per call). The lambda
+    // params are named `__de_je, __de_z0, …` to match the arity.
+    let default_lambda = {
+        let lam_params = std::iter::once("__de_je".to_string())
+            .chain((0..n_ze).map(|i| format!("__de_z{i}")))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let thrown = if n_ze >= 1 {
+            "__de_je ?: __de_z0".to_string()
+        } else {
+            "__de_je".to_string()
+        };
+        // For a non-String first ze, fall back to `je` only (the throw takes a
+        // `String?`); `__de_z0` is `String` only when the leaf is String.
+        let thrown = if n_ze >= 1 && ze_info[0].0 == "String" {
+            thrown
+        } else {
+            "__de_je".to_string()
+        };
+        format!("{{ {lam_params} -> throw ZException({thrown}) }}")
+    };
+    let onerr_param = format!("onError: ({onerr_params}) -> {r_ty} = {default_lambda}");
+    // The je/ze argument list to call the user's `onError`, coalescing each
+    // captured (nullable) ze with its default (a binding error leaves ze null).
+    let onerr_call_args = std::iter::once("__cap_je".to_string())
+        .chain(
+            (0..n_ze).map(|i| {
+                let (_, def) = &ze_info[i];
+                format!("(__cap_ze{i} ?: {def})")
+            }),
+        )
+        .collect::<Vec<_>>()
+        .join(", ");
+    // Default-ze args for a synchronous (pre-call) closed-handle guard, which
+    // calls `onError` directly.
+    let onerr_guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
+        .chain(ze_info.iter().map(|(_, def)| def.clone()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    // Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
+    // lock, returning `onError(...)` (function-level return; no throw).
+    let mut prelock_guards = String::new();
+    for o in &opaques {
+        let cond = if o.nullable {
+            format!("{n} != null && {t}.ptr == 0L", n = o.name, t = o.target)
+        } else {
+            format!("{t}.ptr == 0L", t = o.target)
+        };
+        if is_unit {
+            prelock_guards.push_str(&format!("if ({cond}) {{ onError({onerr_guard_args}); return }}\n"));
+        } else {
+            prelock_guards.push_str(&format!("if ({cond}) return onError({onerr_guard_args})\n"));
+        }
+    }
 
     // Build `value_expr`: the (projection-wrapped) JNINative call, wrapped in
     // a consume `try/finally` when any handle is consumed.
@@ -1212,20 +1306,14 @@ pub(crate) fn render_wrapper_fn(
     // expression-shaped (via `run { … }` where statements are needed) so the
     // caller can bind it to `__ret`, rethrow a captured sink error, then
     // return.
+    // Under-lock pointer reads. The closed-handle check is done pre-lock
+    // (`prelock_guards`, → `onError`); these just bind the ptr the call passes.
     let mut ptr_binds = String::new();
     for o in &opaques {
         if o.nullable {
-            ptr_binds.push_str(&format!(
-                "val {n}_ptr = {t}?.ptr ?: 0L\nif ({n} != null && {n}_ptr == 0L) {throw_stmt}\n",
-                n = o.name,
-                t = o.target,
-            ));
+            ptr_binds.push_str(&format!("val {n}_ptr = {t}?.ptr ?: 0L\n", n = o.name, t = o.target));
         } else {
-            ptr_binds.push_str(&format!(
-                "val {n}_ptr = {t}.ptr\nif ({n}_ptr == 0L) {throw_stmt}\n",
-                n = o.name,
-                t = o.target,
-            ));
+            ptr_binds.push_str(&format!("val {n}_ptr = {t}.ptr\n", n = o.name, t = o.target));
         }
     }
 
@@ -1270,10 +1358,8 @@ pub(crate) fn render_wrapper_fn(
         }
     };
 
-    // Pull in the error-sink helpers (emitted in `NativeHandle.kt`).
+    // The `onError` default throws the framework `ZException` (in `NativeHandle.kt`).
     if !ext.package.is_empty() {
-        imports.insert(format!("{}.ErrorSink", ext.package));
-        imports.insert(format!("{}.ErrorHolder", ext.package));
         imports.insert(format!("{}.ZException", ext.package));
     }
 
@@ -1282,32 +1368,57 @@ pub(crate) fn render_wrapper_fn(
         .iter()
         .map(|p| format!("{}: {}", p.kt_name, p.kt_type))
         .collect();
-    // Output expansion: append the builder lambda param and suppress the
-    // unchecked `Any? -> R` cast in `build_call`.
+    // The error callback. When an output-expansion builder/fold lambda exists, it
+    // must remain the **trailing** lambda (Kotlin trailing-lambda call syntax), so
+    // `onError` (which carries a default) is placed *before* it — but *after* any
+    // non-lambda `builder_lead` (`acc: A`), which is passed positionally. Without
+    // a builder lambda, `onError` is the last param.
     if let Some(bp) = &builder_param {
+        if let Some(lead) = &builder_lead {
+            param_list.push(lead.clone());
+        }
+        param_list.push(onerr_param);
         param_list.push(bp.clone());
         let _ = writeln!(out, "@Suppress(\"UNCHECKED_CAST\")");
+    } else {
+        param_list.push(onerr_param);
     }
     let _ = write!(out, "public fun {generic}{kt_name}({})", param_list.join(", "));
     if !kt_return.is_empty() {
         let _ = write!(out, ": {kt_return}");
     }
-    // Every wrapper installs a default capture-then-rethrow error sink: on a
-    // native `Err`, Rust calls `__sink.onError(message)` (no JVM throw on the
-    // Rust side), the holder records it, and the wrapper rethrows it as a
-    // Kotlin `ZException` after the call returns and any handle locks release.
-    // A caller wanting different behaviour can call the `JNINative` extern
-    // directly with its own sink.
+    // No throw from the binding: the wrapper installs a **capture** the extern
+    // invokes on `Err` (recording `(je, ze…)`), then — after the native call —
+    // calls the user's `onError` and returns its `R`. A pre-lock closed-handle
+    // guard short-circuits straight to `onError` (it can't reach the capture).
     let body: String = {
         let mut b = String::new();
-        b.push_str("val __err = ErrorHolder()\n");
-        b.push_str("val __sink = ErrorSink { __m -> __err.message = __m }\n");
+        b.push_str(&prelock_guards);
+        b.push_str("var __cap_failed = false\n");
+        b.push_str("var __cap_je: String? = null\n");
+        for i in 0..n_ze {
+            let (kt, _) = &ze_info[i];
+            b.push_str(&format!("var __cap_ze{i}: {kt}? = null\n"));
+        }
+        // The capture lambda: arity `1 + n_ze`, matching the extern's invoke.
+        let cap_params = std::iter::once("__je: String?".to_string())
+            .chain((0..n_ze).map(|i| {
+                let (kt, _) = &ze_info[i];
+                format!("__ze{i}: {kt}?")
+            }))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut cap_body = String::from("__cap_failed = true; __cap_je = __je");
+        for i in 0..n_ze {
+            cap_body.push_str(&format!("; __cap_ze{i} = __ze{i}"));
+        }
+        b.push_str(&format!("val __cap = {{ {cap_params} -> {cap_body} }}\n"));
         if is_unit {
             b.push_str(&format!("{core_expr}\n"));
-            b.push_str("__err.message?.let { throw ZException(it) }\n");
+            b.push_str(&format!("if (__cap_failed) return onError({onerr_call_args})\n"));
         } else {
             b.push_str(&format!("val __ret = {core_expr}\n"));
-            b.push_str("__err.message?.let { throw ZException(it) }\n");
+            b.push_str(&format!("if (__cap_failed) return onError({onerr_call_args})\n"));
             b.push_str("return __ret\n");
         }
         b
@@ -1322,6 +1433,26 @@ pub(crate) fn render_wrapper_fn(
     }
     let _ = writeln!(out, "}}");
     Some(out)
+}
+
+/// A Kotlin default-value literal for a (non-null) error `ze` leaf type, used
+/// when a **binding** error leaves the `ze` null (the value is ignored — the
+/// caller uses `je`). Covers the realistic leaf types; an unknown type falls
+/// back to a non-null-asserting `null!!` (never reached, since `je` is set).
+fn kt_value_default(kt: &str) -> String {
+    match kt {
+        "String" => "\"\"".to_string(),
+        "Long" => "0L".to_string(),
+        "Int" => "0".to_string(),
+        "Short" => "0".to_string(),
+        "Byte" => "0".to_string(),
+        "Boolean" => "false".to_string(),
+        "Double" => "0.0".to_string(),
+        "Float" => "0.0f".to_string(),
+        "Char" => "'\\u0000'".to_string(),
+        "ByteArray" => "ByteArray(0)".to_string(),
+        _ => "null!!".to_string(),
+    }
 }
 
 /// Fall-back Kotlin type derived directly from the JNI wire type.

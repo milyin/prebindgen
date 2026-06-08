@@ -309,22 +309,37 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
         pub(crate) fn signal_error(
             env: &mut jni::JNIEnv,
             sink: &jni::objects::JObject,
-            err: &(impl ::core::fmt::Display + ?Sized),
+            je: ::core::option::Option<&str>,
+            ze: &[&jni::objects::JObject],
         ) {
-            let __msg = match env.new_string(err.to_string()) {
-                Ok(s) => s,
-                Err(e) => {
-                    tracing::error!("signal_error: new_string failed: {}", e);
-                    return;
-                }
+            // `je` (binding message, `Some` only for a `JniError`) crosses as the
+            // fixed first `String?`; the `ze` library-error leaves follow. The
+            // foreign error callback is a plain function type — invoked via the
+            // erased `invoke` with all-`Object` params and an `Object` return.
+            let __je: jni::objects::JObject = match je {
+                ::core::option::Option::Some(__m) => match env.new_string(__m) {
+                    Ok(s) => s.into(),
+                    Err(e) => {
+                        tracing::error!("signal_error: new_string failed: {}", e);
+                        return;
+                    }
+                },
+                ::core::option::Option::None => jni::objects::JObject::null(),
             };
-            if let Err(e) = env.call_method(
-                sink,
-                "onError",
-                "(Ljava/lang/String;)V",
-                &[jni::objects::JValue::Object(&__msg)],
-            ) {
-                tracing::error!("signal_error: onError call failed: {}", e);
+            let mut __args: ::std::vec::Vec<jni::objects::JValue> =
+                ::std::vec::Vec::with_capacity(1 + ze.len());
+            __args.push(jni::objects::JValue::Object(&__je));
+            for __z in ze {
+                __args.push(jni::objects::JValue::Object(__z));
+            }
+            let mut __descr = ::std::string::String::from("(");
+            for _ in 0..(1 + ze.len()) {
+                __descr.push_str("Ljava/lang/Object;");
+            }
+            __descr.push_str(")Ljava/lang/Object;");
+            if let Err(e) = env.call_method(sink, "invoke", &__descr, &__args) {
+                let _ = env.exception_describe();
+                tracing::error!("signal_error: error-callback invoke failed: {}", e);
             }
         }
     )

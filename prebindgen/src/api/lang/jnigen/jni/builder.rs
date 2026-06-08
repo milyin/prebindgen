@@ -590,6 +590,79 @@ impl JniGen {
         self
     }
 
+    /// Decompose the most recent [`Self::package_fun`]'s `Result<_, E>` **domain
+    /// error** `E` via a single-value deconstructor (converter) and deliver it as
+    /// the single `ze` leaf after the fixed `je: String?` error-callback param.
+    pub fn convert_error(mut self) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_convert_error(func);
+        self
+    }
+
+    /// Like [`Self::convert_error`] but selects the deconstructor by name.
+    pub fn convert_error_with(mut self, name: impl Into<String>) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_convert_error_with(func, name);
+        self
+    }
+
+    /// Decompose the most recent [`Self::package_fun`]'s `Result<_, E>` domain
+    /// error `E` and deliver its leaves as the `ze` params after `je`.
+    pub fn deconstruct_error(mut self) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_deconstruct_error(func);
+        self
+    }
+
+    /// Like [`Self::deconstruct_error`] but selects the deconstructor by name.
+    pub fn deconstruct_error_with(mut self, name: impl Into<String>) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_deconstruct_error_with(func, name);
+        self
+    }
+
+    // ── `.default()` auto-apply + opt-outs ───────────────────────────
+
+    /// `.default()` — auto-apply the most recent `.constructor` /
+    /// `.deconstructor` / `.converter` to every matching declared fn (a param of
+    /// the constructor target → `construct`; a borrow-return of a deconstructor
+    /// target → `deconstruct_output`/`convert_output`; a `Result<_, target>`
+    /// error → `convert_error`). Routes to whichever of the two declaration
+    /// builders is current.
+    pub fn default(mut self) -> Self {
+        // Exactly one of the two cursors is live (the most recent decl).
+        if self.deconstructors.has_current() {
+            self.deconstructors.set_default();
+        } else {
+            self.expansions.set_default();
+        }
+        self
+    }
+
+    /// Opt the current [`Self::package_fun`]'s `param` out of constructor
+    /// `.default()` auto-apply.
+    pub fn skip_default_construct(mut self, param: syn::Ident) -> Self {
+        let func = self.current_fn_ident();
+        self.expansions.add_skip_default_construct(func, param);
+        self
+    }
+
+    /// Opt the current [`Self::package_fun`] out of output-position
+    /// (`deconstruct_output`/`convert_output`) `.default()` auto-apply.
+    pub fn skip_default_output(mut self) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_skip_default_output(func);
+        self
+    }
+
+    /// Opt the current [`Self::package_fun`] out of error-position
+    /// (`convert_error`/`deconstruct_error`) `.default()` auto-apply.
+    pub fn skip_default_convert_error(mut self) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_skip_default_error(func);
+        self
+    }
+
     /// Rust ident of the function the current `.construct*` / output-expansion
     /// chain targets, resolved from the live [`Self::package_fun`] cursor.
     fn current_fn_ident(&self) -> syn::Ident {
@@ -1224,9 +1297,12 @@ pub(crate) fn default_err_type() -> syn::Type {
     syn::parse_quote!(__JniErr)
 }
 
-/// The actual framework error type the `__JniErr` alias resolves to.
+/// The actual framework error type the `__JniErr` alias resolves to: the
+/// E-agnostic `JniBindingError<()>` whose failures are always `JniError`
+/// (binding-layer). A `Result<T, E>` return carries its own raw `E`, surfaced
+/// as `UserError` at the extern's error site.
 pub(crate) fn framework_error_type() -> syn::Type {
-    syn::parse_quote!(::prebindgen::lang::JniBindingError)
+    syn::parse_quote!(::prebindgen::lang::JniBindingError<()>)
 }
 
 /// The body expression to splice into a converter `fn` returning

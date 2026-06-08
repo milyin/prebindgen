@@ -158,28 +158,18 @@ impl JniGen {
                 }\n",
             );
         }
-        // Error-sink channel. Every generated extern takes a trailing
-        // `ErrorSink`; on a native error the Rust side calls
-        // `onError(message)` (no JVM throw on the Rust side). The generated
-        // wrappers install a default sink that captures the message into an
-        // `ErrorHolder` and rethrow it as a `ZException` after the call
-        // returns and any handle locks release — so caller `try/catch` keeps
-        // working. A caller may pass a custom sink to the `JNINative` extern
-        // directly and do something else. This is the seed of the unified
-        // callback return-channel (a later step can add an `onValue` leg).
+        // Error channel: every generated wrapper takes a trailing **error
+        // callback** `onError: (je: String?, ze…) -> R`. On a native error the
+        // Rust side invokes a capture (no JVM throw on the Rust side); the
+        // wrapper calls `onError` after the native call returns. The callback has
+        // a **default** that throws `ZException` (below) — so callers that don't
+        // care still get an exception, while any caller can pass its own handler
+        // (e.g. building a domain object, or throwing its own type).
         s.push_str(
-            "\n/** Error callback invoked by native code instead of throwing. */\n\
-            public fun interface ErrorSink {\n\
-            \x20   public fun onError(message: String)\n\
-            }\n\n\
-            /** Mutable holder a default [ErrorSink] writes into; the wrapper\n\
-            \x20*  rethrows after the native call returns. */\n\
-            public class ErrorHolder {\n\
-            \x20   @JvmField public var message: String? = null\n\
-            }\n\n\
-            /** Exception a generated wrapper raises when native code reported an\n\
-            \x20*  error via the [ErrorSink] channel. */\n\
-            public class ZException(message: String?) : Exception(message)\n",
+            "\n/** Default error raised by a generated wrapper's `onError` when the\n\
+            \x20*  caller doesn't supply a handler. `message` is the binding error\n\
+            \x20*  (`je`) or the library error string (`ze`). */\n\
+            public class ZException(message: String?) : RuntimeException(message)\n",
         );
         let file = KotlinFile {
             contents: s,

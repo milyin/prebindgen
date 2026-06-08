@@ -1,41 +1,56 @@
-//! Framework-owned exception type for JNI binding failures.
+//! Framework error type for the JNI binding's error channel.
 //!
-//! Raised when a built-in converter can't honour the JNI shape it was
-//! given: UTF-8 decode of a JString, `instanceof` check failure, null
-//! JObject where a value was required, struct field read failure, etc.
-//! Distinct from any application exception class declared via
-//! [`crate::api::lang::jnigen::jni::JniGen::throwable`] — application errors
-//! still flow through their own throw fns; binding errors land here.
+//! A fallible `#[prebindgen] fn f(...) -> Result<T, E>` is delivered to the
+//! foreign side as `Result<T, JniBindingError<E>>`:
 //!
-//! `JniGen::new()` pre-registers this type as `exceptions[0]` so it is
-//! always available as `throw_JniBindingError(env, &err)` in the
-//! generated bindings, and its Kotlin class is auto-emitted under the
-//! app's configured package (e.g. `io.zenoh.jni.JniBindingError`).
+//! * [`JniBindingError::JniError`] — a **binding** failure (UTF-8 decode of a
+//!   `JString`, `instanceof`/null check, struct field read, handle wrap, closed
+//!   handle, …). Framework-built converters compose their `?` failures here via
+//!   `From<String>`; they are E-agnostic and use `JniBindingError<()>`.
+//! * [`JniBindingError::UserError`] — the function's **domain** error `E` (e.g.
+//!   `zenoh::Error`). The `Result<T, E>` peel surfaces it on its own arm.
 //!
-//! Implements `From<String>` so framework-generated converter bodies
-//! can keep their existing `<__JniErr as From<String>>::from(...)`
-//! shape — the `__JniErr` alias resolves to this type.
+//! The generated wrapper's error callback receives a fixed first `je: String?`
+//! (the binding message, set only on `JniError`) plus the domain error
+//! converted/deconstructed into one or more leaves (set only on `UserError`).
+//! `JniGen::new()` pre-registers this type so `__JniErr` (= `JniBindingError<()>`)
+//! is always available to framework converter bodies.
 
-/// Universal binding-failure error type raised by framework-built JNI
-/// converters. Carries a single message describing the failure
-/// context (e.g. `"Sample.encodingId: …"`, `"Option unbox: …"`).
+/// Framework error type for the JNI binding's error channel. `T` is the
+/// function's domain error (`()` for the E-agnostic framework converters, whose
+/// failures are always [`Self::JniError`]).
 #[derive(Clone)]
-pub struct JniBindingError(pub String);
+pub enum JniBindingError<T> {
+    /// A binding-layer failure, carrying a context message.
+    JniError(String),
+    /// The wrapped function's domain error.
+    UserError(T),
+}
 
-impl From<String> for JniBindingError {
+impl<T> From<String> for JniBindingError<T> {
     fn from(s: String) -> Self {
-        Self(s)
+        JniBindingError::JniError(s)
     }
 }
 
-impl core::fmt::Display for JniBindingError {
+// `Display`/`Debug` are unconditional in `T` (no `T: Display` bound) so the
+// framework's `__JniErr = JniBindingError<()>` (binding errors only) satisfies
+// them. The `UserError` arm is never displayed in practice — the domain error is
+// decomposed via its `convert_error`/`deconstruct_error` plan, not stringified.
+impl<T> core::fmt::Display for JniBindingError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(&self.0)
+        match self {
+            JniBindingError::JniError(s) => f.write_str(s),
+            JniBindingError::UserError(_) => f.write_str("<user error>"),
+        }
     }
 }
 
-impl core::fmt::Debug for JniBindingError {
+impl<T> core::fmt::Debug for JniBindingError<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "JniBindingError({:?})", self.0)
+        match self {
+            JniBindingError::JniError(s) => write!(f, "JniError({s:?})"),
+            JniBindingError::UserError(_) => f.write_str("UserError(..)"),
+        }
     }
 }

@@ -371,13 +371,14 @@ fn snapshot_rust_side() {
     // Opaque handle round-trips as a boxed pointer of the source type.
     assert!(rc.contains("myflat::ZThing"), "{rust}");
     assert!(rc.contains("Box::from_raw"), "{rust}");
-    // Errors funnel to the single `signal_error` sink fn (no JVM throw).
+    // Errors funnel to the single `signal_error` channel fn (no JVM throw); it
+    // now invokes the error callback with `(je, ze…)`.
     assert!(rc.contains("fnsignal_error"), "{rust}");
     assert!(
-        rc.contains("signal_error(&mutenv,&__error_sink,&__e)"),
+        rc.contains("signal_error(&mutenv,&__error_sink,::core::option::Option::Some(&__e.to_string()),__ze_defaults"),
         "{rust}"
     );
-    // The extern takes the trailing error-sink param; no throw fn exists.
+    // The extern takes the trailing error-callback param; no throw fn exists.
     assert!(rc.contains("__error_sink:jni::objects::JObject"), "{rust}");
     assert!(!rc.contains("throw_Error"), "{rust}");
     // JNI extern wrappers.
@@ -393,11 +394,11 @@ fn snapshot_kotlin_side() {
     assert!(kotlin.contains_key("NativeHandle.kt"), "files: {names:?}");
     assert!(kotlin.contains_key("JNINative.kt"), "files: {names:?}");
 
-    // The error-sink channel lives in NativeHandle.kt; no exception classes.
+    // No framework `ErrorSink` interface — the error channel is a plain function
+    // type passed per call. `ZException` remains as the `onError` default throw.
     let nh: String = kotlin["NativeHandle.kt"].split_whitespace().collect();
-    assert!(nh.contains("funinterfaceErrorSink"), "{}", kotlin["NativeHandle.kt"]);
+    assert!(!nh.contains("funinterfaceErrorSink"), "{}", kotlin["NativeHandle.kt"]);
     assert!(nh.contains("classZException"), "{}", kotlin["NativeHandle.kt"]);
-    assert!(!kotlin.contains_key("Error.kt") || !kotlin["Error.kt"].contains(": Exception"));
 
     let native: String = kotlin["JNINative.kt"].split_whitespace().collect();
     assert!(native.contains("externalfun"), "{}", kotlin["JNINative.kt"]);
@@ -420,14 +421,17 @@ fn snapshot_kotlin_side() {
         "{thing}"
     );
 
-    // The free-function wrappers live in the namespace package object, install
-    // a default sink, and rethrow.
+    // The free-function wrappers live in the namespace package object, take a
+    // trailing `onError` callback, and call it on failure (no throw).
     let pkg = kotlin
         .values()
         .find(|v| v.contains("public fun zThingNew"))
         .cloned()
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
-    assert!(pc.contains("ErrorSink{"), "package wrappers: {pkg}");
-    assert!(pc.contains("throwZException(it)"), "package wrappers: {pkg}");
+    assert!(pc.contains("onError:(String?"), "package wrappers: {pkg}");
+    assert!(pc.contains("if(__cap_failed)returnonError("), "package wrappers: {pkg}");
+    // The throw lives only in the `onError` *default* (overridable per call), not
+    // in the wrapper body itself.
+    assert!(pc.contains("=>throwZException") || pc.contains("->throwZException"), "package wrappers: {pkg}");
 }

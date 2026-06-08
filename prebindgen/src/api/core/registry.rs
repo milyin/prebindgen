@@ -165,8 +165,14 @@ pub struct Registry<M = ()> {
     /// Resolved output-expansion plans, keyed by function ident. Filled by
     /// [`crate::api::core::unfold::apply`] before resolution; read by language
     /// adapters at the return-emission site. Empty unless the back-end declared
-    /// accessors.
+    /// deconstructors.
     pub unfold_plans: HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>,
+
+    /// Resolved **error**-position expansion plans, keyed by function ident: the
+    /// decomposition of a fallible fn's `Result<_, E>` domain error `E` (from
+    /// `.convert_error` / `.deconstruct_error`). Separate from
+    /// [`Self::unfold_plans`] — a fn may have both an output and an error plan.
+    pub error_plans: HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>,
 }
 
 impl<M> Default for Registry<M> {
@@ -184,6 +190,7 @@ impl<M> Default for Registry<M> {
             required_outputs_scan: HashSet::new(),
             expansion_plans: HashMap::new(),
             unfold_plans: HashMap::new(),
+            error_plans: HashMap::new(),
         }
     }
 }
@@ -765,11 +772,15 @@ impl<M> Registry<M> {
         M: Clone + Default,
     {
         self.scan_declared(ext)?;
+        // The set of `#[prebindgen]` fns the back-end claims — drives the
+        // `.default()` auto-apply (a defaulted constructor/deconstructor is
+        // synthesized for every matching declared fn).
+        let declared_fns = ext.declared_functions();
         if let Some(exp) = ext.expansions() {
-            crate::api::core::expand::apply(self, exp)?;
+            crate::api::core::expand::apply(self, exp, &declared_fns)?;
         }
         if let Some(dec) = ext.deconstructors() {
-            crate::api::core::unfold::apply(self, dec)?;
+            crate::api::core::unfold::apply(self, dec, &declared_fns)?;
         }
         crate::api::core::resolve::resolve(self, ext)?;
         Ok(crate::api::core::write::write_rust(self, ext, out_path)?)

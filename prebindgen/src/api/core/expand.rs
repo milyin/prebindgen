@@ -24,6 +24,8 @@
 //! required input so the resolver produces its converter. [`emit_fold`]
 //! emits the dispatch expression at the parameter-emission site.
 
+use std::collections::HashSet;
+
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
@@ -50,6 +52,8 @@ struct ConstructorDecl {
     name: Option<String>,
     target: syn::Type,
     variants: Vec<Variant>,
+    /// `.default()` — auto-`construct` every matching param of every declared fn.
+    default: bool,
 }
 
 /// How an `.expand`/`.expand_with` chooses the constructor for a parameter.
@@ -75,8 +79,11 @@ struct ExpandDecl {
 pub struct Expansions {
     constructors: Vec<ConstructorDecl>,
     expands: Vec<ExpandDecl>,
-    /// Cursor for the constructor builder (`.constructor_variant*`).
+    /// Cursor for the constructor builder (`.constructor_variant*` / `.default`).
     cur_constructor: Option<usize>,
+    /// `.skip_default_construct(param)` opt-outs: `(fn, param)` excluded from a
+    /// constructor `.default()` auto-apply.
+    skip_construct: std::collections::HashSet<(syn::Ident, syn::Ident)>,
 }
 
 impl Expansions {
@@ -88,8 +95,26 @@ impl Expansions {
             name: None,
             target,
             variants: Vec::new(),
+            default: false,
         });
         self.cur_constructor = Some(self.constructors.len() - 1);
+    }
+
+    /// `.default()` — auto-`construct` the current constructor's target on every
+    /// matching param (type peeled of `Option`/`&` == target) of every declared
+    /// fn, unless `.skip_default_construct`'d. Panics without a current
+    /// `.constructor`.
+    pub fn set_default(&mut self) {
+        let i = self
+            .cur_constructor
+            .expect(".default called without a current .constructor");
+        self.constructors[i].default = true;
+    }
+
+    /// `.skip_default_construct(param)` on the current `.package_fun` — exclude
+    /// `(func, param)` from constructor `.default()` auto-apply.
+    pub fn add_skip_default_construct(&mut self, func: syn::Ident, param: syn::Ident) {
+        self.skip_construct.insert((func, param));
     }
 
     /// `.constructor_name(name)` — name the current constructor so it can be
@@ -140,9 +165,10 @@ impl Expansions {
         self.cur_constructor = None;
     }
 
-    /// True iff nothing has been declared (lets `write_rust` skip [`apply`]).
+    /// True iff nothing has been declared (lets `write_rust` skip [`apply`]). A
+    /// `.default()` constructor counts (it synthesizes `construct`s).
     pub fn is_empty(&self) -> bool {
-        self.expands.is_empty()
+        self.expands.is_empty() && !self.constructors.iter().any(|c| c.default)
     }
 }
 
@@ -333,44 +359,115 @@ impl std::error::Error for ExpandError {}
 // apply
 // ──────────────────────────────────────────────────────────────────────
 
-/// Resolve every `.expand` declaration into a [`FoldPlan`], register each
-/// plan's leaf types as required inputs, and store the plans on the registry.
+/// Resolve every `.construct` declaration (explicit + `.default()`
+/// auto-applied) into a [`FoldPlan`], register each plan's leaf types as required
+/// inputs, and store the plans on the registry. `declared_fns` is the back-end's
+/// claimed `#[prebindgen]` fn set — the domain over which `.default()`
+/// constructors auto-apply.
 ///
 /// Runs inside `write_rust` after `scan_declared` and before `resolve`, so
 /// leaf converters resolve through the normal rank machinery.
-pub fn apply<M>(registry: &mut Registry<M>, exp: &Expansions) -> Result<(), ExpandError> {
+pub fn apply<M>(
+    registry: &mut Registry<M>,
+    exp: &Expansions,
+    declared_fns: &std::collections::HashSet<syn::Ident>,
+) -> Result<(), ExpandError> {
+    let mut done: HashSet<(String, String)> = HashSet::new();
     for ed in &exp.expands {
-        let (item_fn, loc) = registry
-            .functions
-            .get(&ed.func)
-            .cloned()
-            .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
-
-        let param_ty = find_param_type(&item_fn, &ed.param)
-            .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
-
-        // Peel `Option<…>` (whole param optional) then a leading `&` (borrow):
-        // `Option<&T>` → optional + by_ref, `Option<T>` → optional, `&T` → by_ref.
-        let (optional, inner) = match option_inner_type(&param_ty) {
-            Some(i) => (true, i),
-            None => (false, param_ty.clone()),
-        };
-        let (by_ref, target) = match &inner {
-            syn::Type::Reference(r) => (true, (*r.elem).clone()),
-            other => (false, other.clone()),
-        };
-        let target_key = TypeKey::from_type(&target);
-
-        let variants = resolve_constructor(exp, registry, &target_key, ed)?;
-        let plan = build_plan(registry, ed, optional, by_ref, &target, &variants)?;
-
-        for leaf in &plan.leaves {
-            registry.require_input(&leaf.ty, &loc);
-        }
-        registry
-            .expansion_plans
-            .insert((ed.func.clone(), ed.param.clone()), plan);
+        process_expand(registry, exp, ed)?;
+        done.insert((ed.func.to_string(), ed.param.to_string()));
     }
+
+    // `.default()` auto-apply: `construct` every matching param of every declared
+    // fn whose type peeled of `Option`/`&` equals a defaulted constructor target.
+    for c in &exp.constructors {
+        if !c.default {
+            continue;
+        }
+        let ckey = TypeKey::from_type(&c.target);
+        for func in declared_fns {
+            let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
+                continue;
+            };
+            for (pname, pty) in fn_params(&item_fn) {
+                let core = option_inner_type(&pty).unwrap_or(pty);
+                let bare = match &core {
+                    syn::Type::Reference(r) => (*r.elem).clone(),
+                    other => other.clone(),
+                };
+                if TypeKey::from_type(&bare) != ckey {
+                    continue;
+                }
+                if exp.skip_construct.contains(&(func.clone(), pname.clone())) {
+                    continue;
+                }
+                if !done.insert((func.to_string(), pname.to_string())) {
+                    continue;
+                }
+                let ed = ExpandDecl {
+                    func: func.clone(),
+                    param: pname,
+                    sel: ExpandSel::TopLevel,
+                };
+                process_expand(registry, exp, &ed)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `(name, type)` of each typed parameter.
+fn fn_params(item_fn: &syn::ItemFn) -> Vec<(syn::Ident, syn::Type)> {
+    item_fn
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|input| match input {
+            syn::FnArg::Typed(pt) => match &*pt.pat {
+                syn::Pat::Ident(pi) => Some((pi.ident.clone(), (*pt.ty).clone())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+/// Build + store the fold plan for one `.construct` declaration.
+fn process_expand<M>(
+    registry: &mut Registry<M>,
+    exp: &Expansions,
+    ed: &ExpandDecl,
+) -> Result<(), ExpandError> {
+    let (item_fn, loc) = registry
+        .functions
+        .get(&ed.func)
+        .cloned()
+        .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
+
+    let param_ty = find_param_type(&item_fn, &ed.param)
+        .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
+
+    // Peel `Option<…>` (whole param optional) then a leading `&` (borrow):
+    // `Option<&T>` → optional + by_ref, `Option<T>` → optional, `&T` → by_ref.
+    let (optional, inner) = match option_inner_type(&param_ty) {
+        Some(i) => (true, i),
+        None => (false, param_ty.clone()),
+    };
+    let (by_ref, target) = match &inner {
+        syn::Type::Reference(r) => (true, (*r.elem).clone()),
+        other => (false, other.clone()),
+    };
+    let target_key = TypeKey::from_type(&target);
+
+    let variants = resolve_constructor(exp, registry, &target_key, ed)?;
+    let plan = build_plan(registry, ed, optional, by_ref, &target, &variants)?;
+
+    for leaf in &plan.leaves {
+        registry.require_input(&leaf.ty, &loc);
+    }
+    registry
+        .expansion_plans
+        .insert((ed.func.clone(), ed.param.clone()), plan);
     Ok(())
 }
 
@@ -914,7 +1011,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp).expect("apply");
+        apply(&mut reg, &exp, &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -945,7 +1042,7 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp).expect("apply");
+        apply(&mut reg, &exp, &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -998,7 +1095,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        match apply(&mut reg, &exp) {
+        match apply(&mut reg, &exp, &Default::default()) {
             Err(ExpandError::AmbiguousConstructor { candidates, .. }) => {
                 assert_eq!(candidates.len(), 2);
             }
@@ -1027,7 +1124,7 @@ mod tests {
             ident("autocanon"),
         );
 
-        apply(&mut reg, &exp).expect("explicit selection resolves");
+        apply(&mut reg, &exp, &Default::default()).expect("explicit selection resolves");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_keyexpr_intersects"), ident("a")))
@@ -1051,7 +1148,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_zbytes_from_vec"));
         exp.add_construct(ident("z_session_delete"), ident("attachment"));
 
-        apply(&mut reg, &exp).expect("apply optional by-value");
+        apply(&mut reg, &exp, &Default::default()).expect("apply optional by-value");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_delete"), ident("attachment")))
@@ -1087,7 +1184,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_string"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp).expect("apply optional by-ref");
+        apply(&mut reg, &exp, &Default::default()).expect("apply optional by-ref");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
@@ -1118,7 +1215,7 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_session_get"), ident("ke"));
 
-        match apply(&mut reg, &exp) {
+        match apply(&mut reg, &exp, &Default::default()) {
             Err(ExpandError::UnsupportedOptional { .. }) => {}
             other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
         }
@@ -1158,5 +1255,37 @@ mod tests {
             s
         );
         assert!(!plan.produces_option());
+    }
+
+    #[test]
+    fn default_constructor_auto_applies_and_skips() {
+        // A `.default()` ZKeyExpr constructor auto-`construct`s every matching
+        // param of every declared fn — except where `.skip_default_construct`'d.
+        let mut reg = reg_with(&[
+            "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
+            "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+            "fn z_session_undeclare(s: &ZSession, k: ZKeyExpr) -> bool { todo!() }",
+        ]);
+        let mut exp = Expansions::default();
+        exp.add_constructor(syn::parse_quote!(ZKeyExpr));
+        exp.add_constructor_variant(ident("z_keyexpr_try_from"));
+        exp.set_default();
+        // Opt the undeclare's `k` out (must stay a handle).
+        exp.add_skip_default_construct(ident("z_session_undeclare"), ident("k"));
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_keyexpr_intersects", "z_session_undeclare"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &exp, &declared).expect("apply");
+
+        // Both `&ZKeyExpr` params of intersects are constructed.
+        assert!(reg
+            .expansion_plans
+            .contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
+        assert!(reg
+            .expansion_plans
+            .contains_key(&(ident("z_keyexpr_intersects"), ident("b"))));
+        // The skipped param is NOT.
+        assert!(!reg
+            .expansion_plans
+            .contains_key(&(ident("z_session_undeclare"), ident("k"))));
     }
 }
