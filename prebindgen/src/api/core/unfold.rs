@@ -357,11 +357,13 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
             syn::ReturnType::Type(_, t) => (**t).clone(),
         };
 
-        // `Vec<T>` return (M4) → `Iterable`: each element is delivered WHOLE via
-        // its own output converter + projection (no combined accessor, no
-        // decomposition). The other shapes (`Option`/scalar) decompose via a
-        // combined accessor (M1–M3). `Option<Vec>` / `Vec<Option>` combinations
-        // are not supported.
+        // `Vec<T>` return → `Iterable`. Two element-delivery modes:
+        //   * **decomposed** (M5): the element type has a combined accessor →
+        //     flatten it into leaves, fold `(acc, leaf0, …) -> acc`.
+        //   * **whole** (M4): no combined accessor → deliver each element whole
+        //     via its own output converter + projection, fold `(acc, T) -> acc`.
+        // The other shapes (`Option`/scalar) decompose via a combined accessor
+        // (M1–M3). `Vec<Option<…>>` is not supported.
         let plan = if let Some(inner) = vec_inner_type(&ret_ty) {
             if option_inner_type(&inner).is_some() {
                 return Err(UnfoldError::Unsupported {
@@ -369,18 +371,35 @@ pub fn apply<M>(registry: &mut Registry<M>, acc: &Accessors) -> Result<(), Unfol
                     reason: "Vec<Option<…>> returns",
                 });
             }
-            // Keep the element type exactly as written (`T` or `&T`): its own
-            // output converter is what `into_iter()` will feed (owned `T`, or
-            // `&T` for a borrowed element). No decomposition / identity, so
-            // `by_ref` is informational only.
-            let by_ref = matches!(&inner, syn::Type::Reference(_));
-            registry.require_output(&inner, &loc);
-            UnfoldPlan {
-                source: inner.clone(),
-                by_ref,
-                shape: UnfoldShape::Iterable(Box::new(UnfoldShape::Decompose)),
-                leaves: vec![],
-                element: Some(inner.clone()),
+            let shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Decompose));
+            // Element type peeled of a leading `&` (accessors take `&Element`).
+            let (by_ref, element) = match &inner {
+                syn::Type::Reference(r) => (true, (*r.elem).clone()),
+                other => (false, other.clone()),
+            };
+            let ekey = TypeKey::from_type(&element);
+            if find_combined_by_type(acc, &ekey).is_ok() {
+                // Decomposed: reuse the shared flatten (M3 nesting composes).
+                let records = find_combined_by_type(acc, &ekey)
+                    .expect("checked is_ok")
+                    .to_vec();
+                let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records)?;
+                for leaf in &plan.leaves {
+                    registry.require_output(&leaf.out_ty, &loc);
+                }
+                plan
+            } else {
+                // Whole element: keep the type exactly as written so the
+                // element's own output converter matches `into_iter()`'s yield.
+                let by_ref = matches!(&inner, syn::Type::Reference(_));
+                registry.require_output(&inner, &loc);
+                UnfoldPlan {
+                    source: inner.clone(),
+                    by_ref,
+                    shape,
+                    leaves: vec![],
+                    element: Some(inner.clone()),
+                }
             }
         } else {
             let (optional, core_ty) = match option_inner_type(&ret_ty) {
@@ -942,5 +961,34 @@ mod tests {
         assert!(reg
             .required_outputs_scan
             .contains(&TypeKey::from_type(&syn::parse_quote!(ZZenohId))));
+    }
+
+    #[test]
+    fn iterable_decomposed_plan() {
+        // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
+        // accessor → Iterable with per-element leaves (string + self value).
+        let mut reg = reg_with(&[
+            "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
+            "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+            "fn z_zenoh_id_self(z: &ZZenohId) -> ZZenohId { todo!() }",
+        ]);
+        let mut acc = Accessors::default();
+        acc.add_combined(syn::parse_quote!(ZZenohId));
+        acc.add_combined_record(ident("z_zenoh_id_to_string"));
+        acc.add_combined_record(ident("z_zenoh_id_self"));
+        acc.add_expand_output(ident("z_session_peers_zid"));
+
+        apply(&mut reg, &acc).expect("apply");
+        let plan = reg
+            .unfold_plans
+            .get(&ident("z_session_peers_zid"))
+            .expect("plan");
+        assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
+        assert!(plan.element.is_none(), "decomposed: element not used");
+        assert_eq!(plan.leaves.len(), 2);
+        assert_eq!(plan.leaves[0].path[0].to_string(), "z_zenoh_id_to_string");
+        assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "String");
+        assert_eq!(plan.leaves[1].path[0].to_string(), "z_zenoh_id_self");
+        assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "ZZenohId");
     }
 }

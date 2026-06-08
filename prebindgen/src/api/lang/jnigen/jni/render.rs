@@ -925,99 +925,113 @@ pub(crate) fn render_wrapper_fn(
         });
     }
 
-    // Output (data) expansion: the return value is decomposed by accessors and
-    // delivered to a foreign builder lambda `build: (L0, …, Ln) -> R`. The
-    // wrapper becomes generic in `R`, returns `R`, and casts the extern's
-    // erased `Any?` result. The leaf Kotlin types `L0…Ln` resolve through the
-    // normal return classification on each leaf's `out_ty` (which also registers
-    // their imports).
-    // Output (data) expansion. Two delivery shapes:
-    //   * `Decompose`/`Optional` (M1–M3): decompose the value into leaves and
-    //     hand them to `build: (L0, …) -> R` once; wrapper is `<R>`, returns
-    //     `R` / `R?`, casts the extern's erased `Any?` result.
-    //   * `Iterable` (M4): deliver each element WHOLE to a fold
-    //     `(acc, element) -> acc`; wrapper is `<A>`, returns `A`, threads the
-    //     caller's accumulator. The element's projection wrap (e.g.
-    //     `ZZenohId(raw)`) is applied caller-side in an adapter the wrapper
-    //     installs (Rust hands over the raw element wire).
+    // Output (data) expansion. The return value is delivered to a caller
+    // callback per shape:
+    //   * `Decompose`/`Optional` (M1–M3): decompose into leaves → `build:
+    //     (L0, …) -> R` once; `<R>`, returns `R` / `R?`.
+    //   * `Iterable` (M4 whole / M5 decomposed): per element, fold
+    //     `(acc, leaves…) -> acc`; `<A>`, returns `A`, threads the accumulator.
+    // Each leaf is delivered with its final Kotlin type; a **value_blob** leaf
+    // (`@JvmInline value class`) can't be constructed Rust-side, so the wrapper
+    // installs an **adapter** that applies the Kotlin-side projection wrap
+    // (`ZZenohId(raw)`) before the user callback. Leaves with no value_blob ⇒
+    // the callback is passed directly (M1–M4 unchanged).
     let unfold = registry.unfold_plans.get(&f.sig.ident);
     let mut builder_param: Option<String> = None;
     let mut generic: String = String::new();
-    // Extra call-site args injected before `__sink` (e.g. `build`, or
-    // `acc` + the fold adapter for `Iterable`).
+    // Extra call-site args injected before `__sink` (e.g. `build`/adapter, or
+    // `acc` + the fold callback/adapter for `Iterable`).
     let mut unfold_call_args: Vec<String> = Vec::new();
 
     let (kt_return, projection) = if let Some(plan) = unfold {
         use crate::api::core::unfold::UnfoldShape;
-        match &plan.shape {
-            UnfoldShape::Iterable(_) => {
-                let element = plan.element.as_ref().expect("Iterable plan has element");
-                let proj = registry
-                    .output_entry(element)
-                    .and_then(|e| e.metadata.projection.clone());
-                let (elem_kt, raw_kt, wrap) = if let Some(p) = &proj {
-                    let fqn = ext.kotlin_fqn(&p.leaf_key).map(|v| v.to_string())
-                        .unwrap_or_else(|| p.leaf_key.clone());
-                    let short = register_fqn(&fqn, imports);
-                    let sentinel = projection_leaf_sentinel(p);
-                    (
-                        render_handle_type(&p.strategy, &short),
-                        projection_wire_return(p),
-                        fold_projection_wrap(&p.strategy, "__raw", &short, sentinel.as_deref()),
-                    )
-                } else {
-                    // No projection: the raw element wire already IS the Kotlin
-                    // element type; the fold is passed through unadapted.
-                    let rt: syn::ReturnType = syn::parse_quote!(-> #element);
-                    let (kt, _) = classify_return(ext, &rt, registry, imports)?;
-                    (kt.clone(), kt, "__raw".to_string())
-                };
-                generic = "<A> ".to_string();
-                builder_param = Some(format!("acc: A, fold: (A, {elem_kt}) -> A"));
-                // Adapter applies the projection wrap before the user fold; when
-                // there is no wrap (`wrap == "__raw"`) pass `fold` directly.
-                if wrap == "__raw" {
-                    unfold_call_args.push("acc".to_string());
-                    unfold_call_args.push("fold".to_string());
-                } else {
-                    unfold_call_args.push("acc".to_string());
-                    unfold_call_args.push(format!(
-                        "{{ __a: A, __raw: {raw_kt} -> fold(__a, {wrap}) }}"
-                    ));
-                }
-                ("A".to_string(), None)
+        // The (out_ty, nullable) of each callback arg: a whole-element Iterable
+        // has one (the element); otherwise the decomposed leaves.
+        let arg_tys: Vec<(syn::Type, bool)> = match (&plan.shape, &plan.element) {
+            (UnfoldShape::Iterable(_), Some(el)) => vec![(el.clone(), false)],
+            _ => plan.leaves.iter().map(|l| (l.out_ty.clone(), l.nullable)).collect(),
+        };
+        // Per arg: (builder_kt seen by the user, wire_kt the extern delivers,
+        // wrap expr `pK`→final). value_blob args carry a real wrap; others are
+        // passthrough.
+        let mut builder_kts: Vec<String> = Vec::with_capacity(arg_tys.len());
+        let mut wire_kts: Vec<String> = Vec::with_capacity(arg_tys.len());
+        let mut wraps: Vec<String> = Vec::with_capacity(arg_tys.len());
+        let mut needs_adapter = false;
+        for (k, (out_ty, nullable)) in arg_tys.iter().enumerate() {
+            let pk = format!("p{k}");
+            let proj = registry
+                .output_entry(out_ty)
+                .and_then(|e| e.metadata.projection.clone());
+            let is_vb = proj
+                .as_ref()
+                .map(|p| p.kind == crate::api::lang::jnigen::jni::ProjectionKind::ValueBlob)
+                .unwrap_or(false);
+            // builder_kt: enum → Int; otherwise the normal classified type
+            // (handle class / value class / String / ByteArray / Long …).
+            let mut builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+                "Int".to_string()
+            } else {
+                let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+                classify_return(ext, &rt, registry, imports)?.0
+            };
+            let (mut wire_kt, wrap) = if is_vb {
+                needs_adapter = true;
+                let p = proj.as_ref().unwrap();
+                let short = builder_kt.clone();
+                let sentinel = projection_leaf_sentinel(p);
+                (
+                    projection_wire_return(p),
+                    fold_projection_wrap(&p.strategy, &pk, &short, sentinel.as_deref()),
+                )
+            } else {
+                (builder_kt.clone(), pk.clone())
+            };
+            if *nullable {
+                builder_kt.push('?');
+                wire_kt.push('?');
             }
-            _ => {
-                generic = "<R> ".to_string();
-                let mut leaf_kts: Vec<String> = Vec::with_capacity(plan.leaves.len());
-                for leaf in &plan.leaves {
-                    let out_ty = &leaf.out_ty;
-                    // Enum leaves cross the wire as `jint` (boxed `Integer`); the
-                    // builder receives an `Int` and zenoh-java rebuilds the enum
-                    // (`fromInt`). Otherwise classify as usual (handle class /
-                    // String / ByteArray / Long …).
-                    let mut kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
-                        "Int".to_string()
-                    } else {
-                        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-                        let (kt, _) = classify_return(ext, &rt, registry, imports)?;
-                        kt
-                    };
-                    // A nullable leaf (an `Option` nesting step on its path) may
-                    // be `null` ⇒ the builder param is nullable.
-                    if leaf.nullable {
-                        kt.push('?');
-                    }
-                    leaf_kts.push(kt);
-                }
-                builder_param = Some(format!("build: ({}) -> R", leaf_kts.join(", ")));
+            builder_kts.push(builder_kt);
+            wire_kts.push(wire_kt);
+            wraps.push(wrap);
+        }
+        let is_iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
+        // Adapter param list `p0: W0, p1: W1, …` and the wrapped-call arg list.
+        let adapter_params = wire_kts
+            .iter()
+            .enumerate()
+            .map(|(k, w)| format!("p{k}: {w}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let wrapped_args = wraps.join(", ");
+        if is_iterable {
+            generic = "<A> ".to_string();
+            builder_param = Some(format!("acc: A, fold: (A, {}) -> A", builder_kts.join(", ")));
+            unfold_call_args.push("acc".to_string());
+            if needs_adapter {
+                let sep = if adapter_params.is_empty() { "" } else { ", " };
+                unfold_call_args.push(format!(
+                    "{{ __a: A{sep}{adapter_params} -> fold(__a, {wrapped_args}) }}"
+                ));
+            } else {
+                unfold_call_args.push("fold".to_string());
+            }
+            ("A".to_string(), None)
+        } else {
+            generic = "<R> ".to_string();
+            builder_param = Some(format!("build: ({}) -> R", builder_kts.join(", ")));
+            if needs_adapter {
+                unfold_call_args.push(format!(
+                    "{{ {adapter_params} -> build({wrapped_args}) }}"
+                ));
+            } else {
                 unfold_call_args.push("build".to_string());
-                let kt = match &plan.shape {
-                    UnfoldShape::Optional(_) => "R?".to_string(),
-                    _ => "R".to_string(),
-                };
-                (kt, None)
             }
+            let kt = match &plan.shape {
+                UnfoldShape::Optional(_) => "R?".to_string(),
+                _ => "R".to_string(),
+            };
+            (kt, None)
         }
     } else {
         classify_return(ext, &f.sig.output, registry, imports)?

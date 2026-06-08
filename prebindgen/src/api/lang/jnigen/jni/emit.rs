@@ -422,13 +422,13 @@ pub(crate) fn emit_unfold_delivery(
         }
     };
 
-    // Decompose a single value expression (`__out` or a `Some`-bound `__inner`)
-    // into its leaf JVM objects, then invoke the builder. Reference
-    // (non-identity) leaves are encoded first — ending their borrow into the
-    // value — and the identity leaf last (move owned / clone `&T`). Each leaf's
-    // value is reached by folding its accessor `path` over `value`; a nullable
-    // leaf (an `Option` nesting step) wraps the encode in a `match Some/None`.
-    let emit_decompose = |value: &TokenStream| -> TokenStream {
+    // Encode a value's leaves (`__out`, a `Some`-bound `__inner`, or a Vec
+    // `__elem`) into `__obj0…__objN`. Reference (non-identity) leaves are encoded
+    // first — ending their borrow into the value — and the identity leaf last
+    // (move owned / clone `&T`). Each leaf's value is reached by folding its
+    // accessor `path` over `value`; a nullable leaf (an `Option` nesting step)
+    // wraps the encode in a `match Some/None`.
+    let encode_leaves = |value: &TokenStream| -> TokenStream {
         let mut stmts = TokenStream::new();
         let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
         order.extend((0..n).filter(|&i| plan.leaves[i].identity));
@@ -535,12 +535,17 @@ pub(crate) fn emit_unfold_delivery(
                 }
             }
         }
+        stmts
+    };
 
-        // Invoke the builder lambda (erased all-`Object` params + `Object` return).
+    // Common builder-invoke (erased all-`Object` params + `Object` return). Used
+    // by `Decompose`/`Optional`; its success arm yields the result `JObject`,
+    // error arms route to the sink + return the wrapper's sentinel.
+    let builder_invoke = {
         let jvalues = obj_idents
             .iter()
             .map(|id| quote!(jni::objects::JValue::Object(&#id)));
-        stmts.extend(quote! {
+        quote! {
             match env.call_method(&__builder, "invoke", #descr_lit, &[#(#jvalues),*]) {
                 ::core::result::Result::Ok(__r) => match __r.l() {
                     ::core::result::Result::Ok(__o) => __o,
@@ -558,8 +563,14 @@ pub(crate) fn emit_unfold_delivery(
                     #on_err
                 }
             }
-        });
-        stmts
+        }
+    };
+
+    // Decompose a value into leaves then invoke the builder once (`Decompose`/
+    // `Optional`).
+    let emit_decompose = |value: &TokenStream| -> TokenStream {
+        let leaves = encode_leaves(value);
+        quote! { #leaves #builder_invoke }
     };
 
     match &plan.shape {
@@ -589,43 +600,28 @@ pub(crate) fn emit_unfold_delivery(
             }
         }
         UnfoldShape::Iterable(_) => {
-            // `Vec<T>` fold: iterate the elements, deliver each WHOLE via its
-            // own output converter to `__fold(acc, element)`, threading `acc`.
-            // No decomposition — `leaves` is empty; the projection wrap to the
-            // typed Kotlin element happens caller-side (the generated wrapper's
-            // fold adapter), so here we just hand over the element's raw wire.
-            let element = plan
-                .element
-                .as_ref()
-                .expect("Iterable plan carries an element type");
-            let out_entry = registry.output_entry(element).unwrap_or_else(|| {
-                panic!(
-                    "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                    TypeKey::from_type(element)
-                )
-            });
-            let elem_conv = out_entry.function.sig.ident.clone();
-            let elem_wire = out_entry.destination.clone();
-            let cast = cast_to_jobject(&format_ident!("__enc"), &elem_wire);
-            // `into_iter()` yields the element type exactly as written (owned
-            // `T`, or `&T` for a borrowed element) — matching `elem_conv`'s arg.
-            quote! {
-                let __out = #call_expr;
-                let mut __acc = __acc;
-                for __elem in __out.into_iter() {
-                    let __enc = match #elem_conv(&mut env, __elem) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, &__e);
-                            return #on_err;
-                        }
-                    };
-                    let __obj: jni::objects::JObject = #cast;
+            // `Vec<T>` fold: iterate the elements and thread `__acc` through
+            // `__fold(acc, …)`, returning the final accumulator. Per element the
+            // fold args are either the element WHOLE (M4: one object) or its
+            // decomposed leaves (M5: N objects).
+            //
+            // Build the fold-invoke given the per-element object args; the
+            // value-class projection wrap happens caller-side (the generated
+            // wrapper's fold adapter), so the extern hands over raw wires.
+            let fold_invoke = |arg_objs: &[syn::Ident]| -> TokenStream {
+                let mut descr = String::from("(Ljava/lang/Object;"); // acc
+                for _ in arg_objs {
+                    descr.push_str("Ljava/lang/Object;");
+                }
+                descr.push_str(")Ljava/lang/Object;");
+                let descr_lit = syn::LitStr::new(&descr, Span::call_site());
+                let jvalues = arg_objs
+                    .iter()
+                    .map(|id| quote!(jni::objects::JValue::Object(&#id)));
+                quote! {
                     __acc = match env.call_method(
-                        &__fold,
-                        "invoke",
-                        "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
-                        &[jni::objects::JValue::Object(&__acc), jni::objects::JValue::Object(&__obj)],
+                        &__fold, "invoke", #descr_lit,
+                        &[jni::objects::JValue::Object(&__acc), #(#jvalues),*],
                     ) {
                         ::core::result::Result::Ok(__r) => match __r.l() {
                             ::core::result::Result::Ok(__o) => __o,
@@ -642,6 +638,48 @@ pub(crate) fn emit_unfold_delivery(
                             return #on_err;
                         }
                     };
+                }
+            };
+
+            let loop_body = if let Some(element) = plan.element.as_ref() {
+                // Whole-element (M4): encode the element via its own converter.
+                let out_entry = registry.output_entry(element).unwrap_or_else(|| {
+                    panic!(
+                        "emit_unfold_delivery: Vec element `{}` has no registered output converter",
+                        TypeKey::from_type(element)
+                    )
+                });
+                let elem_conv = out_entry.function.sig.ident.clone();
+                let elem_wire = out_entry.destination.clone();
+                let cast = cast_to_jobject(&format_ident!("__enc"), &elem_wire);
+                let invoke = fold_invoke(&[format_ident!("__obj")]);
+                quote! {
+                    let __enc = match #elem_conv(&mut env, __elem) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_error(&mut env, &__error_sink, &__e);
+                            return #on_err;
+                        }
+                    };
+                    let __obj: jni::objects::JObject = #cast;
+                    #invoke
+                }
+            } else {
+                // Decomposed (M5): encode each element's leaves, fold over them.
+                let leaves = encode_leaves(&quote!(__elem));
+                let invoke = fold_invoke(&obj_idents);
+                quote! {
+                    #leaves
+                    #invoke
+                }
+            };
+            // `into_iter()` yields the element type exactly as written (owned
+            // `T`, or `&T` for a borrowed element).
+            quote! {
+                let __out = #call_expr;
+                let mut __acc = __acc;
+                for __elem in __out.into_iter() {
+                    #loop_body
                 }
                 __acc
             }
