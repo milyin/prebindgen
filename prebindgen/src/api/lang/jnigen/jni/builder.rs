@@ -456,6 +456,9 @@ impl JniGen {
     /// constructor's inputs.
     pub fn constructor(mut self, target: syn::Type) -> Self {
         self.expansions.add_constructor(target);
+        // Starting a constructor decl ends any open deconstructor decl, so a
+        // chained `.default()` targets this constructor (cursors are exclusive).
+        self.deconstructors.clear_cursor();
         self
     }
 
@@ -510,6 +513,8 @@ impl JniGen {
     /// [`Self::converter`].
     pub fn deconstructor(mut self, target: syn::Type) -> Self {
         self.deconstructors.add_deconstructor(target);
+        // Exclusive with the constructor cursor (see [`Self::constructor`]).
+        self.expansions.clear_cursor();
         self
     }
 
@@ -519,6 +524,8 @@ impl JniGen {
     /// record source.
     pub fn converter(mut self, target: syn::Type, func: syn::Ident) -> Self {
         self.deconstructors.add_converter(target, func);
+        // Exclusive with the constructor cursor (see [`Self::constructor`]).
+        self.expansions.clear_cursor();
         self
     }
 

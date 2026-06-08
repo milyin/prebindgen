@@ -117,6 +117,13 @@ impl Expansions {
         self.skip_construct.insert((func, param));
     }
 
+    /// Clear the constructor cursor so a following `.default()` doesn't route
+    /// here. Called when a *deconstructor* declaration starts (the two cursors
+    /// are mutually exclusive — `.default()` targets the most recent decl).
+    pub fn clear_cursor(&mut self) {
+        self.cur_constructor = None;
+    }
+
     /// `.constructor_name(name)` — name the current constructor so it can be
     /// selected via `.expand_with`.
     pub fn set_constructor_name(&mut self, name: impl Into<String>) {

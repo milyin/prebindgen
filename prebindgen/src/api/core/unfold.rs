@@ -133,6 +133,13 @@ impl Deconstructors {
         self.cur_deconstructor.is_some()
     }
 
+    /// Clear the deconstructor cursor so a following `.default()` doesn't route
+    /// here. Called when a *constructor* declaration starts (the two cursors are
+    /// mutually exclusive — `.default()` targets the most recent decl).
+    pub fn clear_cursor(&mut self) {
+        self.cur_deconstructor = None;
+    }
+
     /// `.default()` — auto-apply the current deconstructor to every declared fn
     /// whose output (`Output`) or `Result` error (`Error`) matches `target`,
     /// unless skipped. The `(target-position, delivery)` is inferred at [`apply`]:
