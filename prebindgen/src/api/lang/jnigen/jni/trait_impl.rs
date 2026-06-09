@@ -312,6 +312,14 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
             je: ::core::option::Option<&str>,
             ze: &[&jni::objects::JObject],
         ) {
+            // If a JVM exception is already pending (a Java upcall threw during a
+            // converter), let it propagate untouched — do NOT invoke the error
+            // callback over it (and do not clear/describe it: that would swallow
+            // the real exception). The extern returns its sentinel and the pending
+            // exception surfaces when control returns to the JVM.
+            if env.exception_check().unwrap_or(false) {
+                return;
+            }
             // `je` (binding message, `Some` only for a `JniError`) crosses as the
             // fixed first `String?`; the `ze` library-error leaves follow. The
             // foreign error callback is a plain function type — invoked via the
@@ -337,8 +345,9 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
                 __descr.push_str("Ljava/lang/Object;");
             }
             __descr.push_str(")Ljava/lang/Object;");
+            // On failure leave any pending exception in place (don't describe/
+            // clear it) so it propagates rather than being swallowed.
             if let Err(e) = env.call_method(sink, "invoke", &__descr, &__args) {
-                let _ = env.exception_describe();
                 tracing::error!("signal_error: error-callback invoke failed: {}", e);
             }
         }
