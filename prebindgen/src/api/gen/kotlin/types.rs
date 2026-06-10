@@ -96,52 +96,29 @@ impl KtType {
         self
     }
 
-    /// Lenient bridge parser for the Kotlin type-name **strings** the
-    /// existing jnigen metadata produces: a builtin / bare name (`Int`,
-    /// `ZKeyExpr`), an FQN (`io.zenoh.jni.ZKeyExpr`), an optional trailing
-    /// `?`, and one level of `<…>` generics with comma-separated arguments
-    /// (`List<io.x.Y>`). A function-type string (`(a: X) -> Y`) or anything
-    /// weirder is kept verbatim as a bare name — it renders exactly as
-    /// written (its member types are expected to be short names already).
-    pub fn from_kotlin_name(s: &str) -> KtType {
-        let s = s.trim();
-        if s.contains("->") || s.starts_with('(') {
-            return KtType::cls(s);
+    /// Whether this type is nullable (`T?` / `((…) -> …)?`).
+    pub fn is_nullable(&self) -> bool {
+        match self {
+            KtType::Named { nullable, .. } | KtType::Function { nullable, .. } => *nullable,
         }
-        let (core, nullable) = match s.strip_suffix('?') {
-            Some(c) => (c.trim_end(), true),
-            None => (s, false),
-        };
-        let ty = if let (Some(lt), true) = (core.find('<'), core.ends_with('>')) {
-            let outer = &core[..lt];
-            let inner = &core[lt + 1..core.len() - 1];
-            // Split on top-level commas only (no nested `<` in practice, but
-            // track depth defensively).
-            let mut args = Vec::new();
-            let mut depth = 0usize;
-            let mut start = 0usize;
-            for (i, c) in inner.char_indices() {
-                match c {
-                    '<' => depth += 1,
-                    '>' => depth = depth.saturating_sub(1),
-                    ',' if depth == 0 => {
-                        args.push(KtType::from_kotlin_name(&inner[start..i]));
-                        start = i + 1;
-                    }
-                    _ => {}
-                }
-            }
-            if start < inner.len() {
-                args.push(KtType::from_kotlin_name(&inner[start..]));
-            }
-            KtType::generic(outer, args)
-        } else {
-            KtType::cls(core)
-        };
-        if nullable {
-            ty.nullable()
-        } else {
-            ty
+    }
+
+    /// The (possibly dotted) name of a non-generic named type — `None` for
+    /// function types and generics. This is the FQN-or-short-name string a
+    /// leaf was constructed from.
+    pub fn leaf_name(&self) -> Option<&str> {
+        match self {
+            KtType::Named { fqn, args, .. } if args.is_empty() => Some(fqn),
+            _ => None,
+        }
+    }
+
+    /// The simple (dot-free) name of a named type: last FQN segment, generic
+    /// arguments ignored. `None` for function types.
+    pub fn simple_name(&self) -> Option<&str> {
+        match self {
+            KtType::Named { fqn, .. } => Some(fqn.rsplit('.').next().unwrap_or(fqn)),
+            KtType::Function { .. } => None,
         }
     }
 
@@ -186,6 +163,61 @@ impl KtType {
                 } else {
                     core
                 }
+            }
+        }
+    }
+}
+
+/// Renders the type with names exactly as constructed (FQNs stay fully
+/// qualified — no import shortening). For diagnostics and any context
+/// without an [`ImportSet`].
+impl std::fmt::Display for KtType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KtType::Named {
+                fqn,
+                args,
+                nullable,
+            } => {
+                f.write_str(fqn)?;
+                if !args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, a) in args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{a}")?;
+                    }
+                    write!(f, ">")?;
+                }
+                if *nullable {
+                    write!(f, "?")?;
+                }
+                Ok(())
+            }
+            KtType::Function {
+                params,
+                ret,
+                nullable,
+            } => {
+                if *nullable {
+                    write!(f, "(")?;
+                }
+                write!(f, "(")?;
+                for (i, (n, t)) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    if !n.is_empty() {
+                        write!(f, "{n}: ")?;
+                    }
+                    write!(f, "{t}")?;
+                }
+                write!(f, ") -> {ret}")?;
+                if *nullable {
+                    write!(f, ")?")?;
+                }
+                Ok(())
             }
         }
     }

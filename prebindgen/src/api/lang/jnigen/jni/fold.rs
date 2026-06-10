@@ -62,7 +62,7 @@ pub(crate) fn is_option_ref(ty: &syn::Type) -> bool {
 /// and the strategy it wraps, so callers can special-case e.g. a `Niche` layer
 /// sitting directly over a `Direct` leaf.
 ///
-/// Shared skeleton for the **type-name** folds ([`render_handle_type`],
+/// Shared skeleton for the **type-name** folds ([`handle_kt_type`],
 /// [`projection_wire_return`]). The **expression** folds
 /// ([`render_handle_close`], [`fold_projection_wrap`]) are deliberately *not*
 /// expressed through this: they fold the other direction (threading a
@@ -88,19 +88,19 @@ pub(crate) fn fold_strategy<T>(
     }
 }
 
-/// Render the Kotlin type for a closeable handle reached through the
-/// folded [`FoldStrategy`] layers, given the leaf typed-handle short
-/// name (e.g. `"ZKeyExpr"`): `Direct → "ZKeyExpr"`,
-/// `Nullable(inner) → "<inner>?"`, `Iterable(inner) → "List<<inner>>"`.
-pub(crate) fn render_handle_type(strategy: &FoldStrategy, leaf: &str) -> String {
+/// The Kotlin type for a closeable handle reached through the folded
+/// [`FoldStrategy`] layers, given the leaf typed-handle type (e.g.
+/// `ZKeyExpr`): `Direct → ZKeyExpr`, `Nullable(inner) → <inner>?`,
+/// `Iterable(inner) → List<<inner>>`.
+pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::KtType {
     fold_strategy(
         strategy,
-        &|| leaf.to_string(),
+        &|| leaf.clone(),
         // The declared Kotlin projection type is `T?` regardless of how null
         // is represented over the wire — the wrap fold and the wire-return
         // helper read the kind to handle the wire shape separately.
-        &|inner, _kind, _inner_strategy| format!("{inner}?"),
-        &|inner| format!("List<{inner}>"),
+        &|inner, _kind, _inner_strategy| inner.nullable(),
+        &|inner| kt::KtType::generic("List", [inner]),
     )
 }
 
@@ -119,12 +119,12 @@ pub(crate) fn factory_projection_wire_wrap(
     strategy: &crate::api::lang::jnigen::jni::FoldStrategy,
     short: &str,
     name: &str,
-) -> (String, String) {
+) -> (kt::KtType, String) {
     use crate::api::lang::jnigen::jni::FoldStrategy::*;
     use crate::api::lang::jnigen::jni::ProjectionKind::*;
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
-        Handle => ("Long".to_string(), format!("{short}({name})")),
-        ValueBlob => ("ByteArray".to_string(), format!("{short}({name})")),
+        Handle => (kt::KtType::long(), format!("{short}({name})")),
+        ValueBlob => (kt::KtType::byte_array(), format!("{short}({name})")),
     };
     match strategy {
         Direct => direct(kind),
@@ -138,12 +138,12 @@ pub(crate) fn factory_projection_wire_wrap(
             match kind {
                 // Handle null rides the `0L` jlong sentinel.
                 Handle => (
-                    "Long".to_string(),
+                    kt::KtType::long(),
                     format!("if ({name} == 0L) null else {short}({name})"),
                 ),
                 // Value-blob null rides JVM-null of the `ByteArray` slot.
                 ValueBlob => (
-                    "ByteArray?".to_string(),
+                    kt::KtType::byte_array().nullable(),
                     format!("{name}?.let {{ {short}(it) }}"),
                 ),
             }
@@ -158,11 +158,14 @@ pub(crate) fn factory_projection_wire_wrap(
 /// True for the Kotlin types that map to JVM **primitives** (never null over
 /// the JNI boundary). Used to decide which flattened `Option<nested>` leaf
 /// params must be made nullable in the parent factory signature.
-pub(crate) fn is_kotlin_primitive_ty(t: &str) -> bool {
-    matches!(
-        t,
-        "Long" | "Int" | "Boolean" | "Double" | "Float" | "Byte" | "Short" | "Char"
-    )
+pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
+    !t.is_nullable()
+        && t.leaf_name().is_some_and(|n| {
+            matches!(
+                n,
+                "Long" | "Int" | "Boolean" | "Double" | "Float" | "Byte" | "Short" | "Char"
+            )
+        })
 }
 
 /// Recursively build the Kotlin `fromParts` factory for a data class — the
@@ -185,7 +188,7 @@ pub(crate) fn flatten_struct_factory(
     class_name: &str,
     imports: &mut BTreeSet<String>,
     depth: usize,
-) -> Option<(Vec<(String, String)>, String)> {
+) -> Option<(Vec<(String, kt::KtType)>, String)> {
     use crate::api::lang::jnigen::jni::{bare_path_ident, is_jni_primitive, option_inner_type};
     assert!(
         depth <= 16,
@@ -196,7 +199,7 @@ pub(crate) fn flatten_struct_factory(
         syn::Fields::Named(n) => &n.named,
         _ => return None,
     };
-    let mut params: Vec<(String, String)> = Vec::new();
+    let mut params: Vec<(String, kt::KtType)> = Vec::new();
     let mut parts: Vec<String> = Vec::new();
 
     for field in fields {
@@ -222,8 +225,8 @@ pub(crate) fn flatten_struct_factory(
         // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)`.
         if ext.is_kotlin_enum(effective_ty) {
             let kt = field_entry.metadata.kotlin_name.clone()?;
-            let short = register_fqn(&kt, imports);
-            params.push((base.clone(), "Int".to_string()));
+            let short = register_kt_type(&kt, imports).to_string();
+            params.push((base.clone(), kt::KtType::int()));
             parts.push(format!("{short}.fromInt({base})"));
             continue;
         }
@@ -279,13 +282,13 @@ pub(crate) fn flatten_struct_factory(
                 // stay nullable.
                 let flag = format!("{base}__present");
                 let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
-                params.push((flag.clone(), "Boolean".to_string()));
+                params.push((flag.clone(), kt::KtType::boolean()));
                 for (n, t) in &child_params {
-                    if is_kotlin_primitive_ty(t) || t.ends_with('?') {
+                    if is_kotlin_primitive_ty(t) || t.is_nullable() {
                         params.push((n.clone(), t.clone()));
                         fwd_names.push(n.clone());
                     } else {
-                        params.push((n.clone(), format!("{t}?")));
+                        params.push((n.clone(), t.clone().nullable()));
                         fwd_names.push(format!("{n}!!"));
                     }
                 }
@@ -299,14 +302,14 @@ pub(crate) fn flatten_struct_factory(
         // Leaf primitive / object (string, byte array, Vec, …) — forwarded
         // unchanged to the constructor.
         let kt = field_entry.metadata.kotlin_name.clone()?;
-        let short = register_fqn(&kt, imports);
+        let ty = register_kt_type(&kt, imports);
         let primitive_wire = is_jni_primitive(&field_entry.destination);
-        let opt = if is_option_type(effective_ty) && !primitive_wire {
-            "?"
+        let ty = if is_option_type(effective_ty) && !primitive_wire {
+            ty.nullable()
         } else {
-            ""
+            ty
         };
-        params.push((base.clone(), format!("{short}{opt}")));
+        params.push((base.clone(), ty));
         parts.push(base);
     }
 
@@ -330,7 +333,7 @@ pub(crate) fn render_handle_close(
     ) -> String {
         match strategy {
             Direct => format!("{receiver}.close()"),
-            // The Kotlin-side receiver is already nullable (`render_handle_type`
+            // The Kotlin-side receiver is already nullable (`handle_kt_type`
             // emits `T?` for both niche and boxed kinds), so `?.close()` covers
             // both wire representations.
             Nullable { inner, .. } => match &**inner {
@@ -498,5 +501,35 @@ pub(crate) fn register_fqn(fqn: &str, used: &mut BTreeSet<String>) -> String {
         fqn.rsplit('.').next().unwrap_or(fqn).to_string()
     } else {
         fqn.to_string()
+    }
+}
+
+/// Structured sibling of [`register_fqn`]: register every dotted FQN leaf of
+/// `t` into the import set and return the type with those leaves shortened —
+/// compositional, so generic arguments and function-type members register
+/// individually instead of the composed text being treated as one name.
+pub(crate) fn register_kt_type(t: &kt::KtType, used: &mut BTreeSet<String>) -> kt::KtType {
+    match t {
+        kt::KtType::Named {
+            fqn,
+            args,
+            nullable,
+        } => kt::KtType::Named {
+            fqn: register_fqn(fqn, used),
+            args: args.iter().map(|a| register_kt_type(a, used)).collect(),
+            nullable: *nullable,
+        },
+        kt::KtType::Function {
+            params,
+            ret,
+            nullable,
+        } => kt::KtType::Function {
+            params: params
+                .iter()
+                .map(|(n, p)| (n.clone(), register_kt_type(p, used)))
+                .collect(),
+            ret: Box::new(register_kt_type(ret, used)),
+            nullable: *nullable,
+        },
     }
 }

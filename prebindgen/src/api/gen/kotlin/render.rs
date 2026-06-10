@@ -252,6 +252,84 @@ fn render_class(c: &KtClass, level: usize, imports: &mut ImportSet, out: &mut St
     out.push_str("}\n");
 }
 
+/// Render one parameter for the multiline signature layout, given the indent
+/// `level` of the parameter line itself. The type renders width-aware (see
+/// [`render_type_wrapped`]). A default value always renders inline and is
+/// deliberately excluded from the width decision: breaking the *type* cannot
+/// shorten a long default expression, so counting it would only force a
+/// pointless wrap.
+fn render_signature_param(p: &KtParam, imports: &mut ImportSet, level: usize) -> String {
+    let name_prefix = format!("{}: ", p.name);
+    let default = p
+        .default
+        .as_ref()
+        .map(|d| format!(" = {d}"))
+        .unwrap_or_default();
+    // Column where the type begins on the parameter line.
+    let type_col = level * 4 + name_prefix.len();
+    format!(
+        "{name_prefix}{}{default}",
+        render_type_wrapped(&p.ty, imports, level, type_col)
+    )
+}
+
+/// Width-aware type rendering: single-line when it fits within
+/// [`MAX_SIGNATURE_WIDTH`] starting at column `start_col`. A function type
+/// that doesn't fit breaks its parameters one-per-line at `level + 1` with
+/// the `) -> Ret` closer back at `level` (a nullable one keeps its `(…)?`
+/// wrapper around the broken form); each parameter type and the return type
+/// recurse at their own columns, so arbitrarily nested function types keep
+/// breaking. Non-function types render single-line regardless of width.
+fn render_type_wrapped(
+    ty: &KtType,
+    imports: &mut ImportSet,
+    level: usize,
+    start_col: usize,
+) -> String {
+    let single = ty.render(imports);
+    if start_col + single.len() <= MAX_SIGNATURE_WIDTH {
+        return single;
+    }
+    let KtType::Function {
+        params,
+        ret,
+        nullable,
+    } = ty
+    else {
+        return single;
+    };
+    if params.is_empty() {
+        return single;
+    }
+    let mut s = String::from(if *nullable { "((" } else { "(" });
+    s.push('\n');
+    for (name, pty) in params {
+        indent(level + 1, &mut s);
+        let prefix = if name.is_empty() {
+            String::new()
+        } else {
+            format!("{name}: ")
+        };
+        s.push_str(&prefix);
+        let col = (level + 1) * 4 + prefix.len();
+        s.push_str(&render_type_wrapped(pty, imports, level + 1, col));
+        s.push_str(",\n");
+    }
+    indent(level, &mut s);
+    let closer = ") -> ";
+    s.push_str(closer);
+    s.push_str(&render_type_wrapped(
+        ret,
+        imports,
+        level,
+        level * 4 + closer.len(),
+    ));
+    if *nullable {
+        s.push_str(")?");
+    }
+    s
+}
+
 fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String) {
     if let Some(doc) = &f.kdoc {
         render_kdoc(doc, level, out);
@@ -301,11 +379,13 @@ fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String
     let single_line = format!("({}){ret_suffix}", ps.join(", "));
     if !ps.is_empty() && header_col + single_line.len() > MAX_SIGNATURE_WIDTH {
         // One parameter per line, indented one level deeper, with a trailing
-        // comma and the closing paren back at the function's indent level.
+        // comma and the closing paren back at the function's indent level. A
+        // parameter whose type is itself a wide function type breaks its own
+        // parameters one-per-line too (see `render_signature_param`).
         out.push_str("(\n");
-        for p in &ps {
+        for p in &f.params {
             indent(level + 1, out);
-            out.push_str(p);
+            out.push_str(&render_signature_param(p, imports, level + 1));
             out.push_str(",\n");
         }
         indent(level, out);

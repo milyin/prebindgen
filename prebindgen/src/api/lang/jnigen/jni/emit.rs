@@ -1987,8 +1987,8 @@ pub(crate) fn build_flat_input_plan(
     let entry_short = entry
         .metadata
         .kotlin_name
-        .as_deref()
-        .map(|s| s.rsplit('.').next().unwrap_or(s));
+        .as_ref()
+        .and_then(|t| t.simple_name());
     if entry_short != Some(dc_short.as_str()) {
         return None;
     }

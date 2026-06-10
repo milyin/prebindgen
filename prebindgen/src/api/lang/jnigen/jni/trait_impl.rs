@@ -95,7 +95,7 @@ impl JniGen {
                 <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
             })?
         });
-        let kotlin_name = self.override_kotlin_name(&outer_ty, Some("String".to_string()));
+        let kotlin_name = self.override_kotlin_name(&outer_ty, Some(kt::KtType::string()));
         let niches = default_niches_for_wire(&wire);
         ConverterImpl {
             pre_stages: vec![],
@@ -182,7 +182,7 @@ impl JniGen {
                 strategy: FoldStrategy::Direct,
                 kind: ProjectionKind::Handle,
             }),
-            ..self.framework_meta(Some("Long".to_string()))
+            ..self.framework_meta(Some(kt::KtType::cls("Long")))
         }
     }
 
@@ -196,8 +196,8 @@ impl JniGen {
     pub(crate) fn override_kotlin_name(
         &self,
         outer_ty: &syn::Type,
-        inherited: Option<String>,
-    ) -> Option<String> {
+        inherited: Option<kt::KtType>,
+    ) -> Option<kt::KtType> {
         let key = TypeKey::from_type(outer_ty);
         if let Some(cfg) = self.types.get(&key) {
             // Opaque-handle entries keep their typed FQN in
@@ -206,7 +206,7 @@ impl JniGen {
             // Don't let that FQN leak into a wrapper's metadata.
             if cfg.opaque.is_none() {
                 if let Some(name) = &cfg.kotlin_name {
-                    return Some(name.clone());
+                    return Some(kt::KtType::cls(name.clone()));
                 }
             }
         }
@@ -616,7 +616,7 @@ impl Prebindgen for JniGen {
                         strategy: FoldStrategy::Direct,
                         kind: ProjectionKind::ValueBlob,
                     }),
-                    ..self.framework_meta(Some("ByteArray".to_string()))
+                    ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
                 },
             });
         }
@@ -631,7 +631,7 @@ impl Prebindgen for JniGen {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_input_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg.kotlin_name.clone();
+                        let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
                         return Some(ConverterImpl {
                             pre_stages: vec![],
                             function: self.build_input_fn(ty, &wire, &body, None),
@@ -662,7 +662,7 @@ impl Prebindgen for JniGen {
                 s.into()
             });
             let rust_ty: syn::Type = syn::parse_quote!(String);
-            let kotlin_name = self.override_kotlin_name(ty, Some("String".to_string()));
+            let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 pre_stages: vec![],
@@ -691,7 +691,11 @@ impl Prebindgen for JniGen {
                 // whatever the user pinned via `data_class`. If
                 // they didn't, leave `kotlin_name = None` — emitter
                 // surfaces this as a build-time hard error.
-                let kotlin_name = self.types.get(&key).and_then(|c| c.kotlin_name.clone());
+                let kotlin_name = self
+                    .types
+                    .get(&key)
+                    .and_then(|c| c.kotlin_name.clone())
+                    .map(kt::KtType::cls);
                 return Some(ConverterImpl {
                     pre_stages: vec![],
                     function: self.build_input_fn(ty, &wire, &body, None),
@@ -857,10 +861,8 @@ impl Prebindgen for JniGen {
             let inner_kotlin = inner.metadata.kotlin_name.clone()?;
             let kotlin_name = self.override_kotlin_name(
                 &outer_ty,
-                // `List` is auto-imported in Kotlin (default imports), so we
-                // skip the FQN to avoid `register_fqn` treating the generic
-                // as part of the import path.
-                Some(format!("List<{}>", inner_kotlin)),
+                // `List` is auto-imported in Kotlin (default imports).
+                Some(kt::KtType::generic("List", [inner_kotlin])),
             );
             return Some(ConverterImpl {
                 pre_stages: vec![],
@@ -986,7 +988,7 @@ impl Prebindgen for JniGen {
             function: self.build_input_fn(&outer_ty, &wire, &body, None),
             destination: wire,
             niches,
-            metadata: self.framework_meta(Some("Any".to_string())),
+            metadata: self.framework_meta(Some(kt::KtType::any())),
         })
     }
 
@@ -1063,7 +1065,7 @@ impl Prebindgen for JniGen {
                         strategy: FoldStrategy::Direct,
                         kind: ProjectionKind::ValueBlob,
                     }),
-                    ..self.framework_meta(Some("ByteArray".to_string()))
+                    ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
                 },
             });
         }
@@ -1077,7 +1079,7 @@ impl Prebindgen for JniGen {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg.kotlin_name.clone();
+                        let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
                         return Some(ConverterImpl {
                             pre_stages: vec![],
                             function: self.build_output_fn(ty, &wire, &body, None),
@@ -1130,7 +1132,11 @@ impl Prebindgen for JniGen {
             if let Some((s, _)) = registry.structs.get(&name) {
                 let (wire, body) = struct_output_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);
-                let kotlin_name = self.types.get(&key).and_then(|c| c.kotlin_name.clone());
+                let kotlin_name = self
+                    .types
+                    .get(&key)
+                    .and_then(|c| c.kotlin_name.clone())
+                    .map(kt::KtType::cls);
                 return Some(ConverterImpl {
                     pre_stages: vec![],
                     function: self.build_output_fn(ty, &wire, &body, None),
@@ -1226,10 +1232,10 @@ impl Prebindgen for JniGen {
             // A **non-projection** `Option<T>` return (`Option<String>`,
             // `Option<i64>`, …) surfaces directly as a nullable Kotlin type, so
             // its value-context name carries the `?`. Projection options get the
-            // `?` from `render_handle_type(Nullable …)` at the use site instead,
+            // `?` from `handle_kt_type(Nullable …)` at the use site instead,
             // so leave those untouched here.
             let kotlin_name = if projection.is_none() {
-                kotlin_name.map(|n| if n.ends_with('?') { n } else { format!("{n}?") })
+                kotlin_name.map(|n| if n.is_nullable() { n } else { n.nullable() })
             } else {
                 kotlin_name
             };
@@ -1274,14 +1280,13 @@ impl Prebindgen for JniGen {
             let inner_kotlin = inner.metadata.kotlin_name.clone()?;
             let kotlin_name = self.override_kotlin_name(
                 &outer_ty,
-                // `List` is auto-imported in Kotlin (default imports), so we
-                // skip the FQN to avoid `register_fqn` treating the generic
-                // as part of the import path. When the inner carries a
-                // projection, this wire-context name still drives non-
-                // projection consumers; projection-aware sites (classify_return,
-                // data-class fields) prefer `projection` and render the typed
-                // `List<TypedShort>` instead.
-                Some(format!("List<{}>", inner_kotlin)),
+                // `List` is auto-imported in Kotlin (default imports). When
+                // the inner carries a projection, this wire-context name
+                // still drives non-projection consumers; projection-aware
+                // sites (classify_return, data-class fields) prefer
+                // `projection` and render the typed `List<TypedShort>`
+                // instead.
+                Some(kt::KtType::generic("List", [inner_kotlin])),
             );
             // Fold an Iterable layer over the inner projection (if any), so
             // `Vec<Handle>` / `Vec<ValueClass>` carry the full strategy.

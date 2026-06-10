@@ -328,6 +328,112 @@ fn long_signature_wraps_params_one_per_line() {
 }
 
 #[test]
+fn long_function_type_param_wraps_its_own_params() {
+    // A `callback` whose function type is itself too wide breaks the lambda's
+    // parameters one-per-line, with the `) -> Ret` closer realigned under the
+    // parameter. A short `onError` lambda on the same function stays inline.
+    let cb = KtType::lambda(
+        [
+            ("keyExpr".to_string(), KtType::cls("ZKeyExpr")),
+            ("payloadToBytes".to_string(), KtType::byte_array()),
+            ("encodingToString".to_string(), KtType::string()),
+            ("kind".to_string(), KtType::int()),
+            ("timestampNtp64".to_string(), KtType::long().nullable()),
+            ("congestionControl".to_string(), KtType::int()),
+            (
+                "attachmentToBytes".to_string(),
+                KtType::byte_array().nullable(),
+            ),
+        ],
+        KtType::unit(),
+    );
+    let f = KtFun::new("declareSubscriber")
+        .vis(Vis::Public)
+        .param(KtParam::new("session", KtType::cls("ZSession")))
+        .param(KtParam::new("callback", cb))
+        .param(
+            KtParam::new(
+                "onError",
+                KtType::lambda(
+                    [("je".to_string(), KtType::string().nullable())],
+                    KtType::cls("ZSubscriber"),
+                ),
+            )
+            .default("{ __de_je -> throw ZException(__de_je) }"),
+        )
+        .returns(KtType::cls("ZSubscriber"))
+        .body(Code::new().line("TODO()"));
+    let src = render::render_one(&f.into(), "p");
+    assert!(
+        src.contains(
+            "public fun declareSubscriber(\n    \
+             session: ZSession,\n    \
+             callback: (\n        \
+                 keyExpr: ZKeyExpr,\n        \
+                 payloadToBytes: ByteArray,\n        \
+                 encodingToString: String,\n        \
+                 kind: Int,\n        \
+                 timestampNtp64: Long?,\n        \
+                 congestionControl: Int,\n        \
+                 attachmentToBytes: ByteArray?,\n    \
+             ) -> Unit,\n    \
+             onError: (je: String?) -> ZSubscriber = { __de_je -> throw ZException(__de_je) },\n\
+             ): ZSubscriber {"
+        ),
+        "{src}"
+    );
+}
+
+#[test]
+fn nested_function_type_params_wrap_recursively() {
+    // A parameter whose function type contains an *inner* function type that
+    // is itself too wide: both levels break, each at its own indent.
+    let inner_cb = KtType::lambda(
+        [
+            ("keyExpression".to_string(), KtType::cls("ZKeyExpr")),
+            ("payloadToBytes".to_string(), KtType::byte_array()),
+            ("encodingToString".to_string(), KtType::string()),
+            (
+                "attachmentToBytes".to_string(),
+                KtType::byte_array().nullable(),
+            ),
+        ],
+        KtType::unit(),
+    );
+    let register = KtType::lambda(
+        [
+            ("callback".to_string(), inner_cb),
+            ("onClose".to_string(), KtType::lambda([], KtType::unit())),
+        ],
+        KtType::cls("ZSubscriber"),
+    );
+    let f = KtFun::new("declareWithNestedCallback")
+        .vis(Vis::Public)
+        .param(KtParam::new("session", KtType::cls("ZSession")))
+        .param(KtParam::new("register", register))
+        .returns(KtType::cls("ZSubscriber"))
+        .body(Code::new().line("TODO()"));
+    let src = render::render_one(&f.into(), "p");
+    assert!(
+        src.contains(
+            "public fun declareWithNestedCallback(\n    \
+             session: ZSession,\n    \
+             register: (\n        \
+                 callback: (\n            \
+                     keyExpression: ZKeyExpr,\n            \
+                     payloadToBytes: ByteArray,\n            \
+                     encodingToString: String,\n            \
+                     attachmentToBytes: ByteArray?,\n        \
+                 ) -> Unit,\n        \
+                 onClose: () -> Unit,\n    \
+                 ) -> ZSubscriber,\n\
+                 ): ZSubscriber {"
+        ),
+        "{src}"
+    );
+}
+
+#[test]
 fn typealias_renders() {
     let d = KtDecl::TypeAlias {
         vis: Vis::Public,
@@ -362,22 +468,66 @@ fn same_package_types_need_no_import() {
 }
 
 #[test]
-fn from_kotlin_name_covers_metadata_strings() {
+fn type_construction_covers_metadata_shapes() {
     let mut imp = ImportSet::new("p");
-    // The shapes the existing jnigen metadata produces.
-    for (input, want) in [
-        ("Int", "Int"),
-        ("String?", "String?"),
-        ("ByteArray", "ByteArray"),
-        ("io.zenoh.jni.keyexpr.ZKeyExpr", "ZKeyExpr"),
-        ("io.zenoh.jni.keyexpr.ZKeyExpr?", "ZKeyExpr?"),
-        ("List<io.zenoh.jni.ZZenohId>", "List<ZZenohId>"),
-        ("List<ByteArray>", "List<ByteArray>"),
-        ("Any?", "Any?"),
-        ("R", "R"),
+    // The structured shapes jnigen metadata carries, rendered with imports.
+    for (ty, want) in [
+        (KtType::int(), "Int"),
+        (KtType::string().nullable(), "String?"),
+        (KtType::cls("io.zenoh.jni.keyexpr.ZKeyExpr"), "ZKeyExpr"),
+        (
+            KtType::cls("io.zenoh.jni.keyexpr.ZKeyExpr").nullable(),
+            "ZKeyExpr?",
+        ),
+        (
+            KtType::generic("List", [KtType::cls("io.zenoh.jni.ZZenohId")]),
+            "List<ZZenohId>",
+        ),
+        (
+            KtType::generic("List", [KtType::byte_array()]),
+            "List<ByteArray>",
+        ),
+        (KtType::any().nullable(), "Any?"),
+        (KtType::var_r(), "R"),
     ] {
-        assert_eq!(KtType::from_kotlin_name(input).render(&mut imp), want);
+        assert_eq!(ty.render(&mut imp), want);
     }
+}
+
+#[test]
+fn display_renders_types_verbatim() {
+    // `Display` keeps FQNs fully qualified (no import shortening) and
+    // renders function types with named params and the nullable wrapper.
+    let fun = KtType::lambda(
+        [
+            ("je".to_string(), KtType::string().nullable()),
+            ("message".to_string(), KtType::string()),
+        ],
+        KtType::cls("ZSubscriber"),
+    );
+    assert_eq!(
+        fun.to_string(),
+        "(je: String?, message: String) -> ZSubscriber"
+    );
+    let nullable_fun =
+        KtType::lambda([("a".to_string(), KtType::cls("X"))], KtType::cls("Y")).nullable();
+    assert_eq!(nullable_fun.to_string(), "((a: X) -> Y)?");
+    assert_eq!(
+        KtType::generic("List", [KtType::cls("io.zenoh.jni.ZZenohId")]).to_string(),
+        "List<io.zenoh.jni.ZZenohId>"
+    );
+    // Unnamed lambda params render bare.
+    assert_eq!(
+        KtType::lambda(
+            [
+                (String::new(), KtType::int()),
+                (String::new(), KtType::string().nullable())
+            ],
+            KtType::boolean()
+        )
+        .to_string(),
+        "(Int, String?) -> Boolean"
+    );
 }
 
 #[test]

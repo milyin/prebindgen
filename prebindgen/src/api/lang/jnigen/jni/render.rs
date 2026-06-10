@@ -116,7 +116,7 @@ pub(crate) fn build_data_class(
             ctor_params.push(
                 kt::KtCtorParam::new(
                     &kotlin_field_name,
-                    kt::KtType::from_kotlin_name(&render_handle_type(&h.strategy, &short)),
+                    handle_kt_type(&h.strategy, &kt::KtType::cls(short)),
                 )
                 .val(),
             );
@@ -141,7 +141,7 @@ pub(crate) fn build_data_class(
                     field_ident
                 )
             });
-        let short = register_fqn(&kotlin_ty, &mut imports);
+        let ty = register_kt_type(&kotlin_ty, &mut imports);
         // `Option<T>` whose wire is a JNI primitive (jlong/jint/jboolean/…)
         // and that *isn't* an opaque handle (handled above) is encoded by
         // the struct emitter as the bare primitive with a sentinel for
@@ -157,18 +157,12 @@ pub(crate) fn build_data_class(
             .as_ref()
             .map(|w| crate::api::lang::jnigen::jni::is_jni_primitive(w))
             .unwrap_or(false);
-        let optional_suffix = if is_option_type(&field.ty) && !primitive_wire {
-            "?"
+        let ty = if is_option_type(&field.ty) && !primitive_wire {
+            ty.nullable()
         } else {
-            ""
+            ty
         };
-        ctor_params.push(
-            kt::KtCtorParam::new(
-                &kotlin_field_name,
-                kt::KtType::from_kotlin_name(&format!("{short}{optional_suffix}")),
-            )
-            .val(),
-        );
+        ctor_params.push(kt::KtCtorParam::new(&kotlin_field_name, ty).val());
     }
 
     // `fromParts` companion factory — recursively flattened the same way as the
@@ -216,7 +210,7 @@ pub(crate) fn build_data_class(
         .returns(kt::KtType::cls(class_name))
         .expr_body(kt::Code::new().line(factory_reconstruct));
     for (name, ty) in &factory_params {
-        factory = factory.param(kt::KtParam::new(name, kt::KtType::from_kotlin_name(ty)));
+        factory = factory.param(kt::KtParam::new(name, ty.clone()));
     }
     class = class.companion(
         kt::KtClass::companion_object()
@@ -399,17 +393,18 @@ pub(crate) fn render_extern_decl(
         let optional = is_option_type(arg_ty) && !proj_is_handle;
 
         let kt_type_raw = if proj_is_handle {
-            "Long".to_string()
+            kt::KtType::long()
         } else if ext.is_kotlin_enum(&enum_probe_type(arg_ty)) {
             // Enum (incl. `Option<enum>`) crosses as jint → Kotlin `Int`; the
             // wrapper passes `.value` / `?.value`. The Rust converter unboxes a
             // `java.lang.Integer`, so the extern must declare `Int`/`Int?`, never
             // the enum object.
-            "Int".to_string()
+            kt::KtType::int()
         } else {
             entry.metadata.kotlin_name.clone()?
         };
-        let short = register_fqn(&kt_type_raw, imports);
+        // The extern block is raw text — render the registered/shortened type.
+        let short = register_kt_type(&kt_type_raw, imports).to_string();
         let suffix = if optional { "?" } else { "" };
         params.push((name, format!("{short}{suffix}")));
     }
@@ -460,7 +455,7 @@ pub(crate) fn render_extern_decl(
         match &projection {
             Some(p) => projection_wire_return(p),
             None if is_enum_return => "Int".to_string(),
-            None => kt_return,
+            None => kt_return.map(|t| t.to_string()).unwrap_or_default(),
         }
     };
 
@@ -524,7 +519,7 @@ pub(crate) fn render_wrapper_fn(
     // Classify each parameter.
     struct Param {
         kt_name: String,
-        kt_type: String,
+        kt_type: kt::KtType,
         mode: ParamMode,
         /// `true` when the param's Rust type is a `enum_class`-declared
         /// enum: the high-level Kotlin signature uses the typed enum
@@ -602,7 +597,7 @@ pub(crate) fn render_wrapper_fn(
             }
             let mut leaf_names: Vec<String> = leaf_tys.iter().map(|(n, _, _)| n.clone()).collect();
             dedup_kt_param_names(&mut leaf_names);
-            let mut builder_kts: Vec<String> = Vec::with_capacity(leaf_tys.len());
+            let mut builder_kts: Vec<kt::KtType> = Vec::with_capacity(leaf_tys.len());
             let mut adapter_params: Vec<String> = Vec::with_capacity(leaf_tys.len());
             let mut wraps: Vec<String> = Vec::with_capacity(leaf_tys.len());
             let mut needs_adapter = false;
@@ -613,9 +608,12 @@ pub(crate) fn render_wrapper_fn(
                 needs_adapter |= is_vb;
                 adapter_params.push(format!("{pk}: {wire_kt}"));
                 wraps.push(wrap);
-                builder_kts.push(format!("{pk}: {builder_kt}"));
+                builder_kts.push(builder_kt);
             }
-            let kt_type = format!("({}) -> Unit", builder_kts.join(", "));
+            let kt_type = kt::KtType::lambda(
+                leaf_names.iter().cloned().zip(builder_kts.iter().cloned()),
+                kt::KtType::unit(),
+            );
             let call_arg = if needs_adapter {
                 format!(
                     "{{ {} -> {}({}) }}",
@@ -657,7 +655,7 @@ pub(crate) fn render_wrapper_fn(
             // `Option<T>`) is nullable; value projections likewise. The handle
             // wire stays `jlong` with `0` = absent, so the `?` is purely the
             // typed-wrapper surface.
-            (fqn, is_option_type(arg_ty))
+            (kt::KtType::cls(fqn), is_option_type(arg_ty))
         } else {
             // Read the Kotlin name straight off the resolved entry's
             // metadata — the rank-N handler that built this converter
@@ -747,8 +745,8 @@ pub(crate) fn render_wrapper_fn(
             ParamMode::PassThrough
         };
 
-        let short = register_fqn(&kt_type_raw, imports);
-        let suffix = if optional { "?" } else { "" };
+        let ty = register_kt_type(&kt_type_raw, imports);
+        let kt_type = if optional { ty.nullable() } else { ty };
         // Strip a leading `&` before the enum check — the `&Priority`
         // input converter shares Priority's converter (see the rank-1
         // `& _` arm), and the same `.value` projection applies either
@@ -758,7 +756,7 @@ pub(crate) fn render_wrapper_fn(
         let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(arg_ty));
         params.push(Param {
             kt_name: name,
-            kt_type: format!("{short}{suffix}"),
+            kt_type,
             mode,
             as_enum_value,
         });
@@ -783,8 +781,8 @@ pub(crate) fn render_wrapper_fn(
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
     // `onError` (a defaulted param) so the positional-`acc` call stays valid;
     // the trailing `fold` lambda follows.
-    let mut builder_param: Option<(String, String)> = None;
-    let mut builder_lead: Option<(String, String)> = None;
+    let mut builder_param: Option<(String, kt::KtType)> = None;
+    let mut builder_lead: Option<(String, kt::KtType)> = None;
     let mut generic: Option<String> = None;
     // Extra call-site args injected before `__sink` (e.g. `build`/adapter, or
     // `acc` + the fold callback/adapter for `Iterable`).
@@ -826,7 +824,7 @@ pub(crate) fn render_wrapper_fn(
         // Per arg: (builder_kt seen by the user, wire_kt the extern delivers,
         // wrap expr name→final). value_blob args carry a real wrap; others are
         // passthrough.
-        let mut builder_kts: Vec<String> = Vec::with_capacity(arg_tys.len());
+        let mut builder_kts: Vec<kt::KtType> = Vec::with_capacity(arg_tys.len());
         let mut wire_kts: Vec<String> = Vec::with_capacity(arg_tys.len());
         let mut wraps: Vec<String> = Vec::with_capacity(arg_tys.len());
         let mut needs_adapter = false;
@@ -835,10 +833,18 @@ pub(crate) fn render_wrapper_fn(
             let (builder_kt, wire_kt, wrap, is_vb) =
                 unfold_leaf_kt(ext, registry, out_ty, *nullable, pk, imports)?;
             needs_adapter |= is_vb;
-            builder_kts.push(format!("{pk}: {builder_kt}"));
+            builder_kts.push(builder_kt);
             wire_kts.push(wire_kt);
             wraps.push(wrap);
         }
+        // The builder lambda's named parameters: `(name0: T0, name1: T1, …)`.
+        let builder_lambda_params = || {
+            arg_names
+                .iter()
+                .cloned()
+                .zip(builder_kts.iter().cloned())
+                .collect::<Vec<_>>()
+        };
         let is_iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
         // Adapter param list `name0: W0, name1: W1, …` and the wrapped-call
         // arg list.
@@ -851,10 +857,14 @@ pub(crate) fn render_wrapper_fn(
         let wrapped_args = wraps.join(", ");
         if is_iterable {
             generic = Some("A".to_string());
-            builder_lead = Some(("acc".to_string(), "A".to_string()));
+            builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
             builder_param = Some((
                 "fold".to_string(),
-                format!("(acc: A, {}) -> A", builder_kts.join(", ")),
+                kt::KtType::lambda(
+                    std::iter::once(("acc".to_string(), kt::KtType::var_("A")))
+                        .chain(builder_lambda_params()),
+                    kt::KtType::var_("A"),
+                ),
             ));
             unfold_call_args.push("acc".to_string());
             if needs_adapter {
@@ -865,12 +875,12 @@ pub(crate) fn render_wrapper_fn(
             } else {
                 unfold_call_args.push("fold".to_string());
             }
-            ("A".to_string(), None)
+            (Some(kt::KtType::var_("A")), None)
         } else {
             generic = Some("R".to_string());
             builder_param = Some((
                 "build".to_string(),
-                format!("({}) -> R", builder_kts.join(", ")),
+                kt::KtType::lambda(builder_lambda_params(), kt::KtType::var_r()),
             ));
             if needs_adapter {
                 unfold_call_args.push(format!("{{ {adapter_params} -> build({wrapped_args}) }}"));
@@ -878,10 +888,10 @@ pub(crate) fn render_wrapper_fn(
                 unfold_call_args.push("build".to_string());
             }
             let kt = match &plan.shape {
-                UnfoldShape::Optional(_) => "R?".to_string(),
-                _ => "R".to_string(),
+                UnfoldShape::Optional(_) => kt::KtType::var_r().nullable(),
+                _ => kt::KtType::var_r(),
             };
-            (kt, None)
+            (Some(kt), None)
         }
     } else {
         classify_return(ext, &f.sig.output, registry, imports)?
@@ -910,7 +920,7 @@ pub(crate) fn render_wrapper_fn(
                     // Inline value class → pass its erased inner field to the
                     // extern (e.g. `z.bytes`: a `ByteArray`). A nullable value
                     // class (`ZBytes?`) safe-navigates so it stays `ByteArray?`.
-                    if p.kt_type.ends_with('?') {
+                    if p.kt_type.is_nullable() {
                         format!("{}?.{}", p.kt_name, field)
                     } else {
                         format!("{}.{}", p.kt_name, field)
@@ -920,7 +930,7 @@ pub(crate) fn render_wrapper_fn(
                     if p.as_enum_value {
                         // Enum → its `Int` discriminant for the extern. Nullable
                         // enum (`Enum?`) uses `?.value` so it stays `Int?`.
-                        if p.kt_type.ends_with('?') {
+                        if p.kt_type.is_nullable() {
                             format!("{}?.value", p.kt_name)
                         } else {
                             format!("{}.value", p.kt_name)
@@ -962,12 +972,14 @@ pub(crate) fn render_wrapper_fn(
             let sentinel = projection_leaf_sentinel(p);
             call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
         } else if is_enum_return {
-            call = format!("{kt_return}.fromInt({call})");
+            let enum_kt = kt_return.as_ref().expect("enum return has a Kotlin type");
+            call = format!("{enum_kt}.fromInt({call})");
         } else if unfold.is_some() && !is_convert {
             // Callback delivery: the extern returns the builder's erased `Any?`;
             // cast to the shape type (`R` / `R?` / `List<R>`). The builder always
             // produces `R`, so the unchecked cast is sound — suppressed below.
-            call = format!("({call} as {kt_return})");
+            let cast_kt = kt_return.as_ref().expect("callback delivery returns R/A");
+            call = format!("({call} as {cast_kt})");
         }
         // Return delivery (`convert_output`): the extern returns the real typed
         // wire; the projection wrap above (if any) already produced the value
@@ -1018,23 +1030,19 @@ pub(crate) fn render_wrapper_fn(
         })
         .collect();
 
-    let is_unit = kt_return.is_empty();
+    let is_unit = kt_return.is_none();
 
     // Error callback `onError: (je: String?, ze…) -> R`. `je` (binding message)
     // is fixed; the `ze` params are the fn's `Result<_, E>` domain error
     // converted/deconstructed (from `error_plans`). The wrapper passes a capture
     // to the extern, then — after the native call — calls `onError(je, ze…)` and
     // returns its `R` if a failure was recorded (no throw on the Rust upcall).
-    let r_ty = if is_unit {
-        "Unit".to_string()
-    } else {
-        kt_return.clone()
-    };
+    let r_ty = kt_return.clone().unwrap_or_else(kt::KtType::unit);
     let error_plan = registry.error_plans.get(&f.sig.ident);
     // Per ze leaf: (param name, public Kotlin type, default literal for a
     // binding error). Names derive from the error plan's accessor paths
     // (`z_error_message` on `&ZError` → `message`).
-    let ze_info: Vec<(String, String, String)> = error_plan
+    let ze_info: Vec<(String, kt::KtType, String)> = error_plan
         .map(|p| {
             let mut names = plan_leaf_names(registry, p);
             dedup_kt_param_names(&mut names);
@@ -1044,12 +1052,12 @@ pub(crate) fn render_wrapper_fn(
                 .map(|(name, leaf)| {
                     let out_ty = &leaf.out_ty;
                     let kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
-                        "Int".to_string()
+                        kt::KtType::int()
                     } else {
                         let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
                         classify_return(ext, &rt, registry, imports)
-                            .map(|(k, _)| k)
-                            .unwrap_or_else(|| "Any".to_string())
+                            .and_then(|(k, _)| k)
+                            .unwrap_or_else(kt::KtType::any)
                     };
                     let default = kt_value_default(&kt);
                     (name, kt, default)
@@ -1058,12 +1066,16 @@ pub(crate) fn render_wrapper_fn(
         })
         .unwrap_or_default();
     let n_ze = ze_info.len();
-    // Public `onError` param list: the fixed binding-error message `je`, then
-    // each named ze leaf (non-null).
-    let onerr_params = std::iter::once("je: String?".to_string())
-        .chain(ze_info.iter().map(|(name, kt, _)| format!("{name}: {kt}")))
-        .collect::<Vec<_>>()
-        .join(", ");
+    // Public `onError` lambda type: the fixed binding-error message `je`, then
+    // each named ze leaf (non-null), returning `R`.
+    let onerr_type = kt::KtType::lambda(
+        std::iter::once(("je".to_string(), kt::KtType::string().nullable())).chain(
+            ze_info
+                .iter()
+                .map(|(name, kt, _)| (name.clone(), kt.clone())),
+        ),
+        r_ty.clone(),
+    );
     // Default handler: throws `ZException(je ?: ze0)` so a caller that doesn't
     // supply a handler still gets an exception (overridable per call). The lambda
     // params are named `__de_je, __de_z0, …` to match the arity.
@@ -1079,14 +1091,13 @@ pub(crate) fn render_wrapper_fn(
         };
         // For a non-String first ze, fall back to `je` only (the throw takes a
         // `String?`); `__de_z0` is `String` only when the leaf is String.
-        let thrown = if n_ze >= 1 && ze_info[0].1 == "String" {
+        let thrown = if n_ze >= 1 && ze_info[0].1 == kt::KtType::string() {
             thrown
         } else {
             "__de_je".to_string()
         };
         format!("{{ {lam_params} -> throw ZException({thrown}) }}")
     };
-    let onerr_type = format!("({onerr_params}) -> {r_ty}");
     // The je/ze argument list to call the user's `onError`, coalescing each
     // captured (nullable) ze with its default (a binding error leaves ze null).
     let onerr_call_args = std::iter::once("__cap_je".to_string())
@@ -1210,37 +1221,27 @@ pub(crate) fn render_wrapper_fn(
         fun = fun.generic(g);
     }
     for p in &params {
-        fun = fun.param(kt::KtParam::new(
-            &p.kt_name,
-            kt::KtType::from_kotlin_name(&p.kt_type),
-        ));
+        fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
     }
     // The error callback. When an output-expansion builder/fold lambda exists, it
     // must remain the **trailing** lambda (Kotlin trailing-lambda call syntax), so
     // `onError` (which carries a default) is placed *before* it — but *after* any
     // non-lambda `builder_lead` (`acc: A`), which is passed positionally. Without
     // a builder lambda, `onError` is the last param.
-    let onerr = kt::KtParam::new("onError", kt::KtType::from_kotlin_name(&onerr_type))
-        .default(default_lambda);
+    let onerr = kt::KtParam::new("onError", onerr_type).default(default_lambda);
     if let Some((bp_name, bp_ty)) = &builder_param {
         if let Some((lead_name, lead_ty)) = &builder_lead {
-            fun = fun.param(kt::KtParam::new(
-                lead_name,
-                kt::KtType::from_kotlin_name(lead_ty),
-            ));
+            fun = fun.param(kt::KtParam::new(lead_name, lead_ty.clone()));
         }
         fun = fun
             .param(onerr)
-            .param(kt::KtParam::new(
-                bp_name,
-                kt::KtType::from_kotlin_name(bp_ty),
-            ))
+            .param(kt::KtParam::new(bp_name, bp_ty.clone()))
             .annotation("Suppress(\"UNCHECKED_CAST\")");
     } else {
         fun = fun.param(onerr);
     }
-    if !kt_return.is_empty() {
-        fun = fun.returns(kt::KtType::from_kotlin_name(&kt_return));
+    if let Some(rt) = &kt_return {
+        fun = fun.returns(rt.clone());
     }
     // No throw from the binding: the wrapper installs a **capture** the extern
     // invokes on `Err` (recording `(je, ze…)`), then — after the native call —
@@ -1300,7 +1301,7 @@ fn unfold_leaf_kt(
     nullable: bool,
     pk: &str,
     imports: &mut BTreeSet<String>,
-) -> Option<(String, String, String, bool)> {
+) -> Option<(kt::KtType, String, String, bool)> {
     let proj = registry
         .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.clone());
@@ -1310,27 +1311,29 @@ fn unfold_leaf_kt(
         .unwrap_or(false);
     // builder_kt: enum → Int; otherwise the normal classified type
     // (handle class / value class / String / ByteArray / Long …).
-    let mut builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
-        "Int".to_string()
+    let builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+        kt::KtType::int()
     } else {
         let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-        classify_return(ext, &rt, registry, imports)?.0
+        classify_return(ext, &rt, registry, imports)?.0?
     };
     let (mut wire_kt, wrap) = if is_vb {
         let p = proj.as_ref().unwrap();
-        let short = builder_kt.clone();
+        let short = builder_kt.to_string();
         let sentinel = projection_leaf_sentinel(p);
         (
             projection_wire_return(p),
             fold_projection_wrap(&p.strategy, pk, &short, sentinel.as_deref()),
         )
     } else {
-        (builder_kt.clone(), pk.to_string())
+        (builder_kt.to_string(), pk.to_string())
     };
-    if nullable {
-        builder_kt.push('?');
+    let builder_kt = if nullable {
         wire_kt.push('?');
-    }
+        builder_kt.nullable()
+    } else {
+        builder_kt
+    };
     Some((builder_kt, wire_kt, wrap, is_vb))
 }
 
@@ -1463,8 +1466,8 @@ fn whole_value_name(ty: &syn::Type, i: usize) -> String {
 /// when a **binding** error leaves the `ze` null (the value is ignored — the
 /// caller uses `je`). Covers the realistic leaf types; an unknown type falls
 /// back to a non-null-asserting `null!!` (never reached, since `je` is set).
-fn kt_value_default(kt: &str) -> String {
-    match kt {
+fn kt_value_default(kt: &kt::KtType) -> String {
+    match kt.leaf_name().unwrap_or("") {
         "String" => "\"\"".to_string(),
         "Long" => "0L".to_string(),
         "Int" => "0".to_string(),
@@ -1483,7 +1486,7 @@ fn kt_value_default(kt: &str) -> String {
 /// Returns the **non-nullable** Kotlin base name — the use site adds
 /// a `?` suffix when the entry's Rust type is `Option<…>` (via
 /// [`is_option_type`]), so this helper must not double up.
-pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<String> {
+pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
     if let syn::Type::Path(tp) = wire {
         if let Some(last) = tp.path.segments.last() {
             let name = last.ident.to_string();
@@ -1502,7 +1505,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<String> {
                 "JClass" => "Any",
                 _ => return None,
             };
-            return Some(kt.to_string());
+            return Some(kt::KtType::cls(kt));
         }
     }
     None
@@ -1523,9 +1526,12 @@ pub(crate) fn classify_return(
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
-) -> Option<(String, Option<crate::api::lang::jnigen::jni::Projection>)> {
+) -> Option<(
+    Option<kt::KtType>,
+    Option<crate::api::lang::jnigen::jni::Projection>,
+)> {
     let ty = match output {
-        syn::ReturnType::Default => return Some((String::new(), None)),
+        syn::ReturnType::Default => return Some((None, None)),
         syn::ReturnType::Type(_, t) => &**t,
     };
     let outer_meta = registry.output_entry(ty).map(|e| e.metadata.clone());
@@ -1537,7 +1543,7 @@ pub(crate) fn classify_return(
         .unwrap_or_else(|| ty.to_token_stream().to_string());
     let inner: syn::Type = syn::parse_str(&inner_canon).unwrap_or_else(|_| ty.clone());
     if crate::api::lang::jnigen::util::is_unit(&inner) {
-        return Some((String::new(), None));
+        return Some((None, None));
     }
     // Projection return (opaque handle or value class): read the folded
     // `Projection` the type-unfolding mechanism propagated onto this return
@@ -1558,15 +1564,18 @@ pub(crate) fn classify_return(
                 )
             });
         let short = register_fqn(&fqn, imports);
-        return Some((render_handle_type(&h.strategy, &short), Some(h)));
+        return Some((
+            Some(handle_kt_type(&h.strategy, &kt::KtType::cls(short))),
+            Some(h),
+        ));
     }
-    // Non-opaque: read the Kotlin name straight off the resolved
+    // Non-opaque: read the Kotlin type straight off the resolved
     // output entry's metadata — the rank-N handler propagates
     // `ZResult<T>` / `Option<T>` / `Vec<T>` derivations alongside the
     // wire, so no peel-and-fallback chain is needed at the use site.
     if let Some(out_entry) = registry.output_entry(ty) {
         if let Some(kt) = out_entry.metadata.kotlin_name.clone() {
-            return Some((register_fqn(&kt, imports), None));
+            return Some((Some(register_kt_type(&kt, imports)), None));
         }
     }
     None

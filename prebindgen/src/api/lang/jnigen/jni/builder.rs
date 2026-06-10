@@ -724,7 +724,7 @@ impl JniGen {
     /// `Vec<_>`, `impl Fn(...)` lambdas). Errors are routed uniformly to the
     /// per-call `signal_error` sink by the extern emitter, so no
     /// per-converter exception metadata is carried.
-    pub(crate) fn framework_meta(&self, kotlin_name: Option<String>) -> KotlinMeta {
+    pub(crate) fn framework_meta(&self, kotlin_name: Option<kt::KtType>) -> KotlinMeta {
         KotlinMeta {
             kotlin_name,
             value_rust_key: None,
@@ -787,6 +787,7 @@ impl JniGen {
                         .types
                         .get(&key)
                         .and_then(|c| c.kotlin_name.clone())
+                        .map(kt::KtType::cls)
                         .or_else(|| kotlin_for_wire(&ty));
                     (Niches::empty(), kn)
                 } else {
@@ -906,6 +907,7 @@ impl JniGen {
                         .types
                         .get(&key)
                         .and_then(|c| c.kotlin_name.clone())
+                        .map(kt::KtType::cls)
                         .or_else(|| kotlin_for_wire(&ty));
                     (kn, None)
                 };
