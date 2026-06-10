@@ -512,8 +512,8 @@ impl JniGen {
                 continue;
             }
             let (item_fn, _loc) = &registry.functions[ident];
-            if let Some(line) = render_extern_decl(self, item_fn, registry, &mut imports) {
-                externs = externs.line(line);
+            if let Some(code) = render_extern_decl(self, item_fn, registry, &mut imports) {
+                externs = externs.push(code);
             }
         }
 

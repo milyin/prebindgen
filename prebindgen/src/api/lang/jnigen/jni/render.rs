@@ -362,9 +362,7 @@ pub(crate) fn render_extern_decl(
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
-) -> Option<String> {
-    use std::fmt::Write;
-
+) -> Option<kt::Code> {
     let rust_name = f.sig.ident.to_string();
     let kt_name = kt_snake_to_camel(&rust_name);
     let jni_call = ext.mangle_fun(&kt_name);
@@ -465,23 +463,31 @@ pub(crate) fn render_extern_decl(
         }
     };
 
-    let formals = params
-        .iter()
-        .map(|(n, t)| format!("{n}: {t}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    let mut line = String::new();
-    if wire_return.is_empty() {
-        write!(&mut line, "external fun {jni_call}({formals})").ok()?;
+    let formals: Vec<String> = params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
+    let ret_suffix = if wire_return.is_empty() {
+        String::new()
     } else {
-        write!(
-            &mut line,
-            "external fun {jni_call}({formals}): {wire_return}"
-        )
-        .ok()?;
+        format!(": {wire_return}")
+    };
+    let head = format!("external fun {jni_call}");
+    let single = format!("{head}({}){ret_suffix}", formals.join(", "));
+    // Externs render as members of `object JNINative` at one indent level
+    // (4 columns). Past the shared signature-width budget, wrap to one
+    // parameter per line — the same treatment the model renderer gives the
+    // public wrappers — so long native declarations stay readable.
+    const EXTERN_INDENT_COLS: usize = 4;
+    if !formals.is_empty() && EXTERN_INDENT_COLS + single.len() > kt::render::MAX_SIGNATURE_WIDTH {
+        let opener = format!("{head}(");
+        let closer = format!("){ret_suffix}");
+        Some(kt::Code::new().blk_with(opener, closer, move |mut c| {
+            for f in &formals {
+                c = c.line(format!("{f},"));
+            }
+            c
+        }))
+    } else {
+        Some(kt::Code::new().line(single))
     }
-    Some(line)
 }
 
 /// Build a single top-level (free-function) wrapper as a [`kt::KtFun`].

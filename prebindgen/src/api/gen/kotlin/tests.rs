@@ -232,7 +232,11 @@ fn top_level_fun_with_generics_named_lambda_and_default() {
         body_of(&src),
         "\
 @Suppress(\"UNCHECKED_CAST\")
-public fun <R> zThingSub(thing: ZThing, onError: (je: String?, message: String) -> R = { __de_je, __de_z0 -> throw ZException(__de_je ?: __de_z0) }, build: (handle: ZThing, name: String) -> R): R {
+public fun <R> zThingSub(
+    thing: ZThing,
+    onError: (je: String?, message: String) -> R = { __de_je, __de_z0 -> throw ZException(__de_je ?: __de_z0) },
+    build: (handle: ZThing, name: String) -> R,
+): R {
     var __cap_failed = false
     val __ret = run {
         (JNINative.zThingSub(thing.ptr, build, __cap) as R)
@@ -253,6 +257,44 @@ fn unit_return_is_omitted() {
     let src = render::render_one(&f.into(), "p");
     assert!(src.contains("public fun doIt() {"), "{src}");
     assert!(!src.contains(": Unit"), "{src}");
+}
+
+#[test]
+fn long_signature_wraps_params_one_per_line() {
+    // Short signatures stay on a single line.
+    let short = KtFun::new("short")
+        .vis(Vis::Public)
+        .param(KtParam::new("a", KtType::int()))
+        .param(KtParam::new("b", KtType::int()))
+        .returns(KtType::int())
+        .body(Code::new().line("a + b"));
+    let src = render::render_one(&short.into(), "p");
+    assert!(src.contains("public fun short(a: Int, b: Int): Int {"), "{src}");
+
+    // A signature wider than the threshold breaks one parameter per line,
+    // with a trailing comma and the closing paren at the function indent.
+    let long = KtFun::new("zSessionDeclareSubscriber")
+        .vis(Vis::Public)
+        .param(KtParam::new("session", KtType::cls("ZSession")))
+        .param(KtParam::new("keyExprSel", KtType::int()))
+        .param(KtParam::new("keyExpr0", KtType::string().nullable()))
+        .param(KtParam::new("keyExpr1", KtType::cls("ZKeyExpr").nullable()))
+        .param(KtParam::new("onClose", KtType::lambda([], KtType::unit())))
+        .returns(KtType::cls("ZSubscriber"))
+        .body(Code::new().line("TODO()"));
+    let src = render::render_one(&long.into(), "p");
+    assert!(
+        src.contains(
+            "public fun zSessionDeclareSubscriber(\n    \
+             session: ZSession,\n    \
+             keyExprSel: Int,\n    \
+             keyExpr0: String?,\n    \
+             keyExpr1: ZKeyExpr?,\n    \
+             onClose: () -> Unit,\n\
+             ): ZSubscriber {"
+        ),
+        "{src}"
+    );
 }
 
 #[test]
