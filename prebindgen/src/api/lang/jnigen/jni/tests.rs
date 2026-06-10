@@ -449,7 +449,9 @@ fn snapshot_kotlin_side() {
         .cloned()
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
-    assert!(pc.contains("onError:(String?"), "package wrappers: {pkg}");
+    // The error lambda's params are named: the fixed `je` binding message,
+    // then the decomposed error leaves.
+    assert!(pc.contains("onError:(je:String?"), "package wrappers: {pkg}");
     assert!(pc.contains("if(__cap_failed)returnonError("), "package wrappers: {pkg}");
     // The throw lives only in the `onError` *default* (overridable per call), not
     // in the wrapper body itself.
@@ -589,21 +591,57 @@ fn callback_snapshot_kotlin_side() {
     assert!(native.contains("cb:Any"), "{native}");
     assert!(native.contains("onClose:Any"), "{native}");
 
-    // Wrapper tier: typed lambdas — decomposed ZThing ⇒ (ZThing, String),
-    // on_close ⇒ () -> Unit, fallback ZOther ⇒ (ZOther) -> Unit.
+    // Wrapper tier: typed lambdas with NAMED parameters — decomposed ZThing's
+    // identity leaf is `handle`, its accessor leaf strips the receiver-type
+    // prefix (`z_thing_name` on `&ZThing` → `name`); on_close ⇒ () -> Unit;
+    // the plan-less fallback arg is the decapped type short (`zOther`).
     let pkg = kotlin
         .values()
         .find(|v| v.contains("public fun zThingSub"))
         .cloned()
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
-    assert!(pc.contains("cb:(ZThing,String)->Unit"), "{pkg}");
+    assert!(pc.contains("cb:(handle:ZThing,name:String)->Unit"), "{pkg}");
     assert!(pc.contains("onClose:()->Unit"), "{pkg}");
-    assert!(pc.contains("cb:(ZOther)->Unit"), "{pkg}");
+    assert!(pc.contains("cb:(zOther:ZOther)->Unit"), "{pkg}");
 }
 
 #[test]
 #[should_panic(expected = "Function22")]
 fn erased_invoke_descriptor_rejects_over_22() {
     let _ = erased_invoke_descriptor(23);
+}
+
+#[test]
+fn strip_receiver_prefix_cases() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        // Regular snake: ZSample → z_sample_.
+        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+        // Irregular snake: type ZKeyExpr but prefix z_keyexpr_ — the
+        // normalized (underscore-free) comparison still matches.
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        // Double-letter type short: ZZBytes → z_zbytes_.
+        "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
+        // Receiver mismatch: falls back to stripping a bare `z_`.
+        "fn z_error_code(f: &Foo) -> i32 { todo!() }",
+        // No type prefix, no z_: kept whole.
+        "fn get_name(f: &Foo) -> &str { todo!() }",
+    ];
+    let items = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect::<Vec<_>>();
+    let reg = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let id = |s: &str| syn::Ident::new(s, proc_macro2::Span::call_site());
+
+    assert_eq!(strip_receiver_prefix(&reg, &id("z_sample_key_expr")), "key_expr");
+    assert_eq!(strip_receiver_prefix(&reg, &id("z_keyexpr_as_str")), "as_str");
+    assert_eq!(strip_receiver_prefix(&reg, &id("z_zbytes_to_bytes")), "to_bytes");
+    assert_eq!(strip_receiver_prefix(&reg, &id("z_error_code")), "error_code");
+    assert_eq!(strip_receiver_prefix(&reg, &id("get_name")), "get_name");
 }
