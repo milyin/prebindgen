@@ -7,13 +7,9 @@
 //!     `.suppress_kotlin_code()`.
 //!   * One package-level wrapper file for `package()` (top-level
 //!     safe wrappers for `package_methods` fns).
-//!   * `JNINative.kt` — centralized `external fun` holder.
-//!   * One Kotlin fun-interface file per `impl Fn(args) + Send + Sync
-//!     + 'static` type, named via [`JniGen::kotlin_callback_name_mangle`]
-//!     (default = identity over the `"On"`-prefixed auto-derived name;
-//!     in zenoh-jni: `JNIOn<Args>`). Callback types overridden via
-//!     [`JniGen::callback_input`] are skipped — the override points at
-//!     a hand-written interface.
+//!   * `JNINative.kt` — centralized `external fun` holder. (`impl Fn(...)`
+//!     params surface as typed Kotlin lambdas on the wrapper tier and erased
+//!     `Any` here — no fun-interface files are generated.)
 //!
 //! Every `#[prebindgen]` function must be assigned a Kotlin home via
 //! `.method(...)` on either a typed-handle / data-class / enum config
@@ -44,10 +40,9 @@ pub(crate) struct TypedHandle<'a> {
 
 impl JniGen {
     /// Unified Kotlin emission — single public entry point that fans out
-    /// to per-callback fun-interface files, `NativeHandle.kt`, typed-handle
-    /// classes (one per `ptr_class` registration), and
-    /// `JNIWrappers.kt`. Reads all configuration (typed-handle methods,
-    /// callback FQN overrides, Kotlin type names) from internal state set
+    /// to `NativeHandle.kt`, typed-handle classes (one per `ptr_class`
+    /// registration), and `JNIWrappers.kt`. Reads all configuration
+    /// (typed-handle methods, Kotlin type names) from internal state set
     /// during the builder phase. Returns every path written.
     pub fn write_kotlin(
         &self,
@@ -56,7 +51,6 @@ impl JniGen {
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         let mut written = Vec::new();
         written.push(self.write_native_handle(kotlin_root)?);
-        written.extend(self.emit_callback_files(registry, kotlin_root)?);
         written.extend(self.write_enum_classes(registry, kotlin_root)?);
         written.extend(self.write_data_classes(registry, kotlin_root)?);
         written.extend(self.write_value_blobs(kotlin_root)?);
@@ -226,51 +220,6 @@ impl JniGen {
         Ok(written)
     }
 
-    /// Per-callback fun-interface emission (one `<mangle_callback>.kt`
-    /// file per `impl Fn(...)` type encountered in the resolved
-    /// registry). Skips writes for `impl Fn(...)` keys whose Kotlin
-    /// FQN was overridden via [`Self::callback_input`] — the override
-    /// already points at a hand-maintained callback interface, so the
-    /// auto-stub would be dead code. Each emitted file is placed
-    /// under `kotlin_root/<kotlin_callback_package as path>/`.
-    pub(crate) fn emit_callback_files(
-        &self,
-        registry: &Registry<KotlinMeta>,
-        kotlin_root: &Path,
-    ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        let mut seen: HashSet<TypeKey> = HashSet::new();
-        let mut written = Vec::new();
-        for buckets in [&registry.input_types, &registry.output_types] {
-            for bucket in buckets.iter() {
-                for (key, slot) in bucket {
-                    if slot.is_none() {
-                        continue;
-                    }
-                    if !seen.insert(key.clone()) {
-                        continue;
-                    }
-                    let ty = key.to_type();
-                    if let Some(args) = extract_fn_trait_args(&ty) {
-                        // A `callback_input` registration points the
-                        // Kotlin signature at a hand-written interface
-                        // — skip the auto-stub.
-                        if self
-                            .types
-                            .get(key)
-                            .and_then(|c| c.callback_kotlin_fqn.as_ref())
-                            .is_some()
-                        {
-                            continue;
-                        }
-                        let file = build_callback_kotlin_file(self, &args, registry);
-                        written.push(file.write(kotlin_root)?);
-                    }
-                }
-            }
-        }
-        Ok(written)
-    }
-
     /// Build the `TypedHandle` slice from internal `types` config.
     /// Iterates entries where `opaque.is_some()` and emits one
     /// `TypedHandle` per opaque-handle registration. Stable order by
@@ -384,7 +333,7 @@ impl JniGen {
 
         for key in keys {
             let cfg = &self.types[key];
-            if cfg.opaque.is_some() || cfg.enum_cfg.is_some() || cfg.callback_kotlin_fqn.is_some() {
+            if cfg.opaque.is_some() || cfg.enum_cfg.is_some() {
                 continue;
             }
             let Some(kotlin_fqn) = &cfg.kotlin_name else {
@@ -561,69 +510,3 @@ impl JniGen {
 
 }
 
-pub(crate) fn build_callback_kotlin_file(
-    ext: &JniGen,
-    args: &[syn::Type],
-    registry: &Registry<KotlinMeta>,
-) -> KotlinFile {
-    let name = derive_callback_name(args);
-    let class_name = ext.mangle_callback(&name);
-    let package = ext.kotlin_callback_package.clone();
-
-    // Resolve each arg's Kotlin type by reading the output-direction
-    // entry's metadata — callback args flow inverse to the callback
-    // (Rust produces them, Java consumes them). Fall back to the bare
-    // last-segment ident when the metadata is missing (matches today's
-    // behavior; preserves the dead-stub compile path).
-    let mut params: Vec<String> = Vec::new();
-    let mut used_fqns: BTreeSet<String> = BTreeSet::new();
-    for (i, arg) in args.iter().enumerate() {
-        // Data-class arg: flatten into leaf params (mirror of the native
-        // `flatten_struct_encode` that fills the `run` call), so the callback
-        // receives the struct's fields directly — no built `jni.<Struct>`
-        // object crosses the boundary, and the consumer constructs whatever it
-        // wants from the flat params. Prefix `p{i}` matches the native order.
-        if let Some(st) =
-            crate::api::lang::jnigen::jni::callback_arg_data_class(ext, registry, arg)
-        {
-            let prefix = format!("p{i}");
-            if let Some((flat_params, _reconstruct)) =
-                flatten_struct_factory(ext, registry, &st, &prefix, "", &mut used_fqns, 0)
-            {
-                for (name, ty) in &flat_params {
-                    params.push(format!("        {name}: {ty},"));
-                }
-                continue;
-            }
-        }
-        let entry = registry.output_entry(arg);
-        // Opaque-handle args: the converter's value-name is `"Long"`, but the
-        // callback delivers the typed handle class. Prefer its registered FQN
-        // so the param type — and the file's import — resolve to e.g.
-        // `io.zenoh.jni.scouting.ZHello`.
-        let kotlin_ty = entry
-            .and_then(|e| e.metadata.projection.as_ref())
-            .map(|h| crate::api::lang::jnigen::jni::handle_field_fqn(ext, h))
-            .or_else(|| entry.and_then(|e| e.metadata.kotlin_name.clone()))
-            .or_else(|| {
-                if let syn::Type::Path(tp) = arg {
-                    if let Some(last) = tp.path.segments.last() {
-                        return Some(last.ident.to_string());
-                    }
-                }
-                None
-            })
-            .unwrap_or_else(|| "Any".to_string());
-        let short = register_fqn(&kotlin_ty, &mut used_fqns);
-        let optional_suffix = if is_option_type(arg) { "?" } else { "" };
-        params.push(format!("        p{i}: {short}{optional_suffix},"));
-    }
-
-    let contents =
-        templates::callback::render_kotlin_interface(&package, &class_name, &params, &used_fqns);
-    KotlinFile {
-        package,
-        class_name,
-        contents,
-    }
-}

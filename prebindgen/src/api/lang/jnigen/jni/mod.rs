@@ -2,9 +2,8 @@
 //!
 //! [`JniGen`] implements [`crate::api::core::prebindgen::Prebindgen`]
 //! (Rust-side conversion bodies) and provides an inherent
-//! [`JniGen::write_kotlin`] for emitting all Kotlin output (per-callback
-//! fun-interface files, `NativeHandle.kt`, typed-handle classes,
-//! `JNIWrappers.kt`).
+//! [`JniGen::write_kotlin`] for emitting all Kotlin output
+//! (`NativeHandle.kt`, typed-handle classes, `JNIWrappers.kt`).
 //!
 //! The implementation is split across sibling submodules, all sharing this
 //! `jni` module's namespace via the `pub(crate) use …::*` glob re-exports
@@ -20,7 +19,6 @@
 pub mod byte_array_helpers;
 pub mod jni_binding_error;
 pub mod string_helpers;
-pub(crate) mod templates;
 pub(crate) mod wire_access;
 
 pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};
@@ -306,10 +304,6 @@ pub(crate) struct TypeConfig {
     /// / `as jint`) and a generated `.kt` file. Mutually exclusive with
     /// [`Self::opaque`]; builder enforces it.
     pub enum_cfg: Option<EnumConfig>,
-    /// Kotlin FQN override for `impl Fn(...)` keys (the
-    /// closure-mangled callback name, e.g. zenoh-jni stamps `JNIOn...`
-    /// here via [`JniGen::auto_callback_fqn`]).
-    pub callback_kotlin_fqn: Option<String>,
     /// Set by [`JniGen::value_blob`]: this is a `Copy` Rust type passed
     /// **by value as its raw memory blob** in a `JByteArray` (wire), the
     /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no
@@ -459,7 +453,7 @@ where
 
 /// JNI back-end. Configure paths in the Rust crate (zresult, throw macro,
 /// source module the original fns live in) and the JNI/Kotlin classpath
-/// (java class prefix, callback Kotlin package + output dir).
+/// (java class prefix + output dir).
 #[derive(Clone)]
 pub struct JniGen {
     /// Module path the original `#[prebindgen]` fns live under (e.g.
@@ -472,11 +466,6 @@ pub struct JniGen {
     /// `_`-mangled for JNI extern idents, and dot-separated for Kotlin
     /// `package` declarations.
     pub package: String,
-    /// Sub-package leaf appended to [`Self::package`] for the auto-emitted
-    /// callback fun-interface files. Combined as
-    /// `<package>.<callback_subpackage>`; empty = same package as
-    /// [`Self::package`].
-    pub callback_subpackage: String,
     /// Derived: `package.replace('.', '/')`. Read by
     /// [`struct_output_body`] when building `FindClass` strings.
     pub(crate) java_class_prefix: String,
@@ -484,11 +473,6 @@ pub struct JniGen {
     /// mangle_harness("Native")`. Read by [`mangle_jni_name`] when
     /// building the JNI extern symbol path for every emitted wrapper.
     pub(crate) jni_class_path: String,
-    /// Derived: `package + "." + callback_subpackage` (or just `package`
-    /// when the subpackage is empty). Also drives the on-disk subdirectory
-    /// under the `kotlin_root` passed to [`Self::write_kotlin`]
-    /// (`a.b.c` → `a/b/c/`).
-    pub(crate) kotlin_callback_package: String,
 
     /// Mangler for function names (scanned `#[prebindgen]` free fns and
     /// the synthetic `freePtr` destructor). Default = identity; in
@@ -508,14 +492,6 @@ pub struct JniGen {
     /// Mangler for the package-level wrapper object created by
     /// [`Self::package`]. Default = identity.
     pub(crate) kotlin_package_name_mangle: Option<NameMangle>,
-    /// Mangler for `impl Fn(...)` callback Kotlin class names. The
-    /// closure receives the auto-derived callback name
-    /// (`derive_callback_name`, always
-    /// concatenated parameter type shorts + `"Callback"` suffix — e.g.
-    /// `"QueryCallback"`, `"ReplyCallback"`, `"Callback"` for `Fn()`);
-    /// the return value is qualified against
-    /// [`Self::kotlin_callback_package`]. Default = identity.
-    pub(crate) kotlin_callback_name_mangle: Option<NameMangle>,
     /// Mangler for rank-0 user-registered
     /// [`Self::input_wrapper`] / [`Self::output_wrapper`] pattern names
     /// — the Rust short name of the pattern (`Encoding`,
@@ -532,22 +508,19 @@ pub struct JniGen {
     /// Derived `<rust-type-canonical-string> → <kotlin FQN>` view —
     /// populated alongside [`Self::types`] by the structured builders
     /// ([`Self::ptr_class`], [`Self::data_class`],
-    /// [`Self::callback_input`], [`Self::input_wrapper`] /
-    /// [`Self::output_wrapper`]). Internal readers
-    /// (`emit_into_dispatcher`, callback FQN merging) consume this flat
-    /// list directly; the structured `types` map is the source of
-    /// truth.
+    /// [`Self::input_wrapper`] / [`Self::output_wrapper`]). Internal
+    /// readers (`emit_into_dispatcher`) consume this flat list directly;
+    /// the structured `types` map is the source of truth.
     pub(crate) kotlin_type_fqns: Vec<(String, String)>,
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated by the
     /// structured builders (`ptr_class`, `enum_class`,
-    /// `data_class`, `input_wrapper`, `output_wrapper`,
-    /// `callback_input`). Holds opaque-handle config, enum config,
-    /// Kotlin names, and callback FQNs; the converter bodies themselves
-    /// live in [`Self::input_wrappers`] / [`Self::output_wrappers`].
-    /// The rank-0 dispatch order is opaque → enum → wrapper-table →
-    /// primitive → struct.
+    /// `data_class`, `input_wrapper`, `output_wrapper`). Holds
+    /// opaque-handle config, enum config, and Kotlin names; the converter
+    /// bodies themselves live in [`Self::input_wrappers`] /
+    /// [`Self::output_wrappers`]. The rank-0 dispatch order is opaque →
+    /// enum → wrapper-table → primitive → struct.
     pub(crate) types: HashMap<TypeKey, TypeConfig>,
 
     /// Free-standing package-level wrappers, keyed by subpackage path
@@ -576,8 +549,8 @@ pub struct JniGen {
     /// Tracks the last rank-0 wrapper registration so chained per-type
     /// builders ([`Self::suppress_kotlin_code`], [`Self::with_kotlin_type`])
     /// know which entry to extend. Set by `input_wrapper` /
-    /// `output_wrapper` (rank 0 only), `enum_class`, `callback_input`,
-    /// and `data_class`; cleared by other unrelated builders.
+    /// `output_wrapper` (rank 0 only), `enum_class`, and `data_class`;
+    /// cleared by other unrelated builders.
     last_meta_key: Option<TypeKey>,
 
     /// The currently-active subpackage set by [`Self::package`].

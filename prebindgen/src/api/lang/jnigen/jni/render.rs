@@ -795,12 +795,65 @@ pub(crate) fn render_wrapper_fn(
         /// Rust side skips `env.get_field(...)`). The strings are the
         /// per-leaf call-site expressions in plan order.
         FlattenStruct { accesses: Vec<String> },
+        /// `impl Fn(args)` callback param: typed Kotlin lambda over the
+        /// flattened leaves of each arg's callback plan (whole arg when
+        /// plan-less), erased to `Any` at the extern tier — the same shape as
+        /// the unfold `build`/`onError` lambdas. `call_arg` is the call-site
+        /// expression: the param itself, or a value-blob rebuilding adapter.
+        Callback { call_arg: String },
     }
 
     let mut params: Vec<Param> = Vec::new();
     for (eff_ident, eff_ty) in effective_inputs(registry, f) {
         let name = kt_param_name(&eff_ident.to_string());
         let arg_ty = &eff_ty;
+
+        // `impl Fn(args)` param: a typed Kotlin lambda whose parameters are
+        // the flattened leaves of each arg's callback plan (the arg whole when
+        // its type has no canonical output) — mirroring the unfold builder
+        // lambda. The extern receives it erased (`Any`); value-blob leaves get
+        // a rebuilding adapter at the call site, like the unfold path.
+        if let Some(cb_args) = extract_fn_trait_args(arg_ty) {
+            let mut leaf_tys: Vec<(syn::Type, bool)> = Vec::new();
+            for t in &cb_args {
+                if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(t)) {
+                    leaf_tys.extend(plan.leaves.iter().map(|l| (l.out_ty.clone(), l.nullable)));
+                } else {
+                    leaf_tys.push((t.clone(), is_option_type(t)));
+                }
+            }
+            let mut builder_kts: Vec<String> = Vec::with_capacity(leaf_tys.len());
+            let mut adapter_params: Vec<String> = Vec::with_capacity(leaf_tys.len());
+            let mut wraps: Vec<String> = Vec::with_capacity(leaf_tys.len());
+            let mut needs_adapter = false;
+            for (k, (out_ty, nullable)) in leaf_tys.iter().enumerate() {
+                let pk = format!("p{k}");
+                let (builder_kt, wire_kt, wrap, is_vb) =
+                    unfold_leaf_kt(ext, registry, out_ty, *nullable, &pk, imports)?;
+                needs_adapter |= is_vb;
+                adapter_params.push(format!("{pk}: {wire_kt}"));
+                wraps.push(wrap);
+                builder_kts.push(builder_kt);
+            }
+            let kt_type = format!("({}) -> Unit", builder_kts.join(", "));
+            let call_arg = if needs_adapter {
+                format!(
+                    "{{ {} -> {}({}) }}",
+                    adapter_params.join(", "),
+                    name,
+                    wraps.join(", ")
+                )
+            } else {
+                name.clone()
+            };
+            params.push(Param {
+                kt_name: name,
+                kt_type,
+                mode: ParamMode::Callback { call_arg },
+                as_enum_value: false,
+            });
+            continue;
+        }
 
         // Strip leading reference for the type-map lookup; the registry's
         // input entry is keyed by the param as-written.
@@ -987,37 +1040,9 @@ pub(crate) fn render_wrapper_fn(
         let mut needs_adapter = false;
         for (k, (out_ty, nullable)) in arg_tys.iter().enumerate() {
             let pk = format!("p{k}");
-            let proj = registry
-                .output_entry(out_ty)
-                .and_then(|e| e.metadata.projection.clone());
-            let is_vb = proj
-                .as_ref()
-                .map(|p| p.kind == crate::api::lang::jnigen::jni::ProjectionKind::ValueBlob)
-                .unwrap_or(false);
-            // builder_kt: enum → Int; otherwise the normal classified type
-            // (handle class / value class / String / ByteArray / Long …).
-            let mut builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
-                "Int".to_string()
-            } else {
-                let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-                classify_return(ext, &rt, registry, imports)?.0
-            };
-            let (mut wire_kt, wrap) = if is_vb {
-                needs_adapter = true;
-                let p = proj.as_ref().unwrap();
-                let short = builder_kt.clone();
-                let sentinel = projection_leaf_sentinel(p);
-                (
-                    projection_wire_return(p),
-                    fold_projection_wrap(&p.strategy, &pk, &short, sentinel.as_deref()),
-                )
-            } else {
-                (builder_kt.clone(), pk.clone())
-            };
-            if *nullable {
-                builder_kt.push('?');
-                wire_kt.push('?');
-            }
+            let (builder_kt, wire_kt, wrap, is_vb) =
+                unfold_leaf_kt(ext, registry, out_ty, *nullable, &pk, imports)?;
+            needs_adapter |= is_vb;
             builder_kts.push(builder_kt);
             wire_kts.push(wire_kt);
             wraps.push(wrap);
@@ -1107,6 +1132,9 @@ pub(crate) fn render_wrapper_fn(
                         p.kt_name.clone()
                     }
                 }
+                // Callback lambda → the param itself (the extern takes the
+                // erased `Any`), or its value-blob rebuilding adapter.
+                ParamMode::Callback { call_arg } => call_arg.clone(),
                 ParamMode::FlattenStruct { .. } => {
                     unreachable!("FlattenStruct expanded before the single-arg match")
                 }
@@ -1433,6 +1461,53 @@ pub(crate) fn render_wrapper_fn(
     }
     let _ = writeln!(out, "}}");
     Some(out)
+}
+
+/// The Kotlin typing of one delivered lambda leaf: `(builder_kt, wire_kt,
+/// wrap, is_value_blob)` — the type the *user's* lambda sees, the type the
+/// extern delivers, and the expression rebuilding the former from the latter
+/// (`pk` is the adapter's parameter name; passthrough unless the leaf is a
+/// `value_blob`, whose `@JvmInline value class` can't be built Rust-side).
+/// Shared by the unfold builder/fold lambda and the callback lambda params.
+fn unfold_leaf_kt(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    out_ty: &syn::Type,
+    nullable: bool,
+    pk: &str,
+    imports: &mut BTreeSet<String>,
+) -> Option<(String, String, String, bool)> {
+    let proj = registry
+        .output_entry(out_ty)
+        .and_then(|e| e.metadata.projection.clone());
+    let is_vb = proj
+        .as_ref()
+        .map(|p| p.kind == crate::api::lang::jnigen::jni::ProjectionKind::ValueBlob)
+        .unwrap_or(false);
+    // builder_kt: enum → Int; otherwise the normal classified type
+    // (handle class / value class / String / ByteArray / Long …).
+    let mut builder_kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
+        "Int".to_string()
+    } else {
+        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
+        classify_return(ext, &rt, registry, imports)?.0
+    };
+    let (mut wire_kt, wrap) = if is_vb {
+        let p = proj.as_ref().unwrap();
+        let short = builder_kt.clone();
+        let sentinel = projection_leaf_sentinel(p);
+        (
+            projection_wire_return(p),
+            fold_projection_wrap(&p.strategy, pk, &short, sentinel.as_deref()),
+        )
+    } else {
+        (builder_kt.clone(), pk.to_string())
+    };
+    if nullable {
+        builder_kt.push('?');
+        wire_kt.push('?');
+    }
+    Some((builder_kt, wire_kt, wrap, is_vb))
 }
 
 /// A Kotlin default-value literal for a (non-null) error `ze` leaf type, used

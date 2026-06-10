@@ -606,6 +606,67 @@ pub fn apply<M>(
             }
         }
     }
+
+    // Callback-argument decomposition: each `T` of a declared fn's
+    // `impl Fn(T, …)` parameter is delivered per `T`'s default deconstructor —
+    // the same canonical output a *return* of `T` would use — so the foreign
+    // callback receives the flattened leaves in one crossing instead of a
+    // whole value. Plans are type-level (keyed by `T`, fn-independent) with
+    // `by_ref = false` (the trampoline owns the value, so a root identity
+    // record moves it). Delivery is always `Callback` regardless of leaf count
+    // (there is no return-value lane in a callback invocation). A type without
+    // a default deconstructor gets no plan and is delivered whole.
+    for func in declared_fns {
+        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+            continue;
+        };
+        for input in &item_fn.sig.inputs {
+            let syn::FnArg::Typed(pt) = input else { continue };
+            let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
+                continue;
+            };
+            for arg_ty in args {
+                // Only a bare path type can match a deconstructor target
+                // (`Option<T>` / `Vec<T>` / `&T` args are delivered whole).
+                if !matches!(&arg_ty, syn::Type::Path(_)) {
+                    continue;
+                }
+                let key = TypeKey::from_type(&arg_ty);
+                if registry.callback_arg_plans.contains_key(&key) {
+                    continue;
+                }
+                let Some(d) = acc
+                    .deconstructors
+                    .iter()
+                    .find(|d| d.default.is_some() && TypeKey::from_type(&d.target) == key)
+                else {
+                    continue;
+                };
+                let ed = OutputDecl {
+                    func: func.clone(),
+                    sel: DeconSel::TopLevel,
+                    target: DeconTarget::Output,
+                    delivery: Delivery::Callback,
+                };
+                let plan = build_plan(
+                    acc,
+                    registry,
+                    &ed,
+                    false,
+                    &arg_ty,
+                    UnfoldShape::Decompose,
+                    &d.records,
+                )?;
+                if plan.leaves.is_empty() {
+                    continue;
+                }
+                for leaf in &plan.leaves {
+                    registry.require_output(&leaf.out_ty, &loc);
+                }
+                registry.callback_arg_plans.insert(key, plan);
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1586,5 +1647,100 @@ mod tests {
             ["z_fallible"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
         assert!(reg.error_plans.is_empty(), "skipped fn gets no error plan");
+    }
+
+    #[test]
+    fn callback_arg_plan_derived() {
+        // An `impl Fn(ZSample)` parameter of a declared fn gets a type-level
+        // plan from ZSample's default deconstructor — same leaves a return of
+        // ZSample would produce, but owned (`by_ref = false`).
+        let mut reg = reg_with(&[
+            "fn z_declare_sub(cb: impl Fn(ZSample) + Send + Sync + 'static) { todo!() }",
+            "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+            "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+            "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"));
+        acc.add_deconstructor_record(ident("z_sample_kind"));
+        acc.set_default();
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_declare_sub"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+
+        let plan = reg
+            .callback_arg_plans
+            .get(&TypeKey::from_type(&syn::parse_quote!(ZSample)))
+            .expect("callback-arg plan for ZSample");
+        assert!(!plan.by_ref, "the trampoline owns the callback arg");
+        assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
+        assert!(matches!(plan.shape, UnfoldShape::Decompose));
+        assert_eq!(plan.delivery, Delivery::Callback);
+        assert_eq!(plan.leaves.len(), 3);
+        // Nested keyexpr identity (borrowed: non-root) + string + direct enum.
+        assert!(plan.leaves[0].identity);
+        assert_eq!(plan.leaves[0].path[0].to_string(), "z_sample_key_expr");
+        assert_eq!(
+            plan.leaves[0].out_ty.to_token_stream().to_string(),
+            "& ZKeyExpr"
+        );
+        assert_eq!(plan.leaves[1].path.last().unwrap().to_string(), "z_keyexpr_as_str");
+        assert_eq!(plan.leaves[2].out_ty.to_token_stream().to_string(), "SampleKind");
+        // Leaf out_tys registered so the resolver builds their converters.
+        assert!(reg
+            .required_outputs_scan
+            .contains(&TypeKey::from_type(&syn::parse_quote!(&str))));
+        assert!(reg
+            .required_outputs_scan
+            .contains(&TypeKey::from_type(&syn::parse_quote!(SampleKind))));
+        // No return-position plan was created for the declaring fn.
+        assert!(reg.unfold_plans.is_empty());
+    }
+
+    #[test]
+    fn callback_arg_identity_fallback() {
+        // No deconstructor for ZQuery ⇒ no plan: the arg is delivered whole.
+        let mut reg = reg_with(&[
+            "fn z_declare_queryable(cb: impl Fn(ZQuery) + Send + Sync + 'static) { todo!() }",
+        ]);
+        let acc = Deconstructors::default();
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_declare_queryable"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+        assert!(reg.callback_arg_plans.is_empty());
+    }
+
+    #[test]
+    fn callback_zero_arg_no_plan() {
+        let mut reg = reg_with(&[
+            "fn z_with_close(on_close: impl Fn() + Send + Sync + 'static) { todo!() }",
+        ]);
+        let acc = Deconstructors::default();
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_with_close"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+        assert!(reg.callback_arg_plans.is_empty());
+    }
+
+    #[test]
+    fn callback_arg_nonbare_skipped() {
+        // `impl Fn(Vec<ZSample>)`: the arg type key (`Vec<ZSample>`) matches no
+        // deconstructor target ⇒ whole-value fallback, no plan.
+        let mut reg = reg_with(&[
+            "fn z_batched(cb: impl Fn(Vec<ZSample>) + Send + Sync + 'static) { todo!() }",
+            "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_kind"));
+        acc.set_default();
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_batched"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+        assert!(reg.callback_arg_plans.is_empty());
     }
 }

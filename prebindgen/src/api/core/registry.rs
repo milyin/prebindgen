@@ -173,6 +173,15 @@ pub struct Registry<M = ()> {
     /// `.convert_error` / `.deconstruct_error`). Separate from
     /// [`Self::unfold_plans`] — a fn may have both an output and an error plan.
     pub error_plans: HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>,
+
+    /// Canonical decomposition of a **callback argument** type — the `T` of a
+    /// declared fn's `impl Fn(T, …)` parameter — keyed by the bare arg type
+    /// (type-level, fn-independent). Filled by
+    /// [`crate::api::core::unfold::apply`] from the type's default
+    /// deconstructor (`by_ref = false`: the trampoline owns the value); read by
+    /// language adapters when emitting the callback trampoline. A type without
+    /// a default deconstructor has no entry and is delivered whole.
+    pub callback_arg_plans: HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan>,
 }
 
 impl<M> Default for Registry<M> {
@@ -191,6 +200,7 @@ impl<M> Default for Registry<M> {
             expansion_plans: HashMap::new(),
             unfold_plans: HashMap::new(),
             error_plans: HashMap::new(),
+            callback_arg_plans: HashMap::new(),
         }
     }
 }

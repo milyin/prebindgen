@@ -24,16 +24,13 @@ impl JniGen {
         let base = Self {
             source_module: syn::parse_str("crate").unwrap(),
             package: String::new(),
-            callback_subpackage: "callbacks".to_string(),
             java_class_prefix: String::new(),
             jni_class_path: "Java_JNINative".to_string(),
-            kotlin_callback_package: "callbacks".to_string(),
             kotlin_fun_name_mangle: None,
             kotlin_ptr_class_name_mangle: None,
             kotlin_data_class_name_mangle: None,
             kotlin_enum_name_mangle: None,
             kotlin_package_name_mangle: None,
-            kotlin_callback_name_mangle: None,
             kotlin_wrapper_name_mangle: None,
             kotlin_harness_name_mangle: None,
             kotlin_type_fqns: Vec::new(),
@@ -91,7 +88,7 @@ impl JniGen {
 
     /// Set the JVM/Kotlin base package (dot-separated, e.g.
     /// `"io.zenoh.jni"`). All derived forms (`java_class_prefix`,
-    /// `kotlin_callback_package`) are recomputed.
+    /// `jni_class_path`) are recomputed.
     pub fn package_prefix(mut self, p: impl Into<String>) -> Self {
         self.package = p.into().trim_matches('.').trim_matches('/').to_string();
         self.recompute_derived();
@@ -107,14 +104,6 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.kotlin_harness_name_mangle = Some(Arc::new(f));
-        self.recompute_derived();
-        self
-    }
-    /// Set the leaf appended to [`Self::package`] for the auto-emitted
-    /// callback fun-interface files (e.g. `"callbacks"`). Affects
-    /// `kotlin_callback_package`.
-    pub fn callback_subpackage(mut self, s: impl Into<String>) -> Self {
-        self.callback_subpackage = s.into().trim_matches('.').to_string();
         self.recompute_derived();
         self
     }
@@ -169,20 +158,6 @@ impl JniGen {
         self.kotlin_package_name_mangle = Some(Arc::new(f));
         self
     }
-    /// Set the closure that mangles `impl Fn(...)` callback class
-    /// names. Receives the auto-derived callback name
-    /// ([`derive_callback_name`], always
-    /// concatenated parameter type shorts + `"Callback"` suffix — e.g.
-    /// `"QueryCallback"`, `"ReplyCallback"`, `"Callback"` for `Fn()`);
-    /// the returned relative name is qualified against
-    /// [`Self::kotlin_callback_package`]. Default = identity.
-    pub fn kotlin_callback_name_mangle<F>(mut self, f: F) -> Self
-    where
-        F: Fn(&str) -> String + Send + Sync + 'static,
-    {
-        self.kotlin_callback_name_mangle = Some(Arc::new(f));
-        self
-    }
     /// Set the closure that mangles rank-0
     /// [`Self::input_wrapper`] / [`Self::output_wrapper`] pattern
     /// names (e.g. `"Encoding"`). Rank-N patterns are NOT routed
@@ -231,8 +206,8 @@ impl JniGen {
     }
 
     /// Recompute the derived caches (`java_class_prefix`,
-    /// `jni_class_path`, `kotlin_callback_package`) from (`package`,
-    /// `kotlin_harness_name_mangle`, `callback_subpackage`). Called by
+    /// `jni_class_path`) from (`package`,
+    /// `kotlin_harness_name_mangle`). Called by
     /// every setter that touches one of those source fields. The JNI
     /// extern symbol path resolves to the centralized Native object,
     /// whose mangled name comes from the harness mangle (default
@@ -244,13 +219,6 @@ impl JniGen {
             format!("Java_{}", native_class)
         } else {
             format!("Java_{}_{}", self.package.replace(".", "_"), native_class)
-        };
-        self.kotlin_callback_package = if self.package.is_empty() {
-            self.callback_subpackage.clone()
-        } else if self.callback_subpackage.is_empty() {
-            self.package.clone()
-        } else {
-            format!("{}.{}", self.package, self.callback_subpackage)
         };
     }
 
@@ -286,14 +254,6 @@ impl JniGen {
     /// closure result or `name` verbatim when unset.
     pub(crate) fn mangle_enum(&self, name: &str) -> String {
         match &self.kotlin_enum_name_mangle {
-            Some(f) => f(name),
-            None => name.to_string(),
-        }
-    }
-    /// Apply [`Self::kotlin_callback_name_mangle`] to `name`, returning
-    /// the closure result or `name` verbatim when unset.
-    pub(crate) fn mangle_callback(&self, name: &str) -> String {
-        match &self.kotlin_callback_name_mangle {
             Some(f) => f(name),
             None => name.to_string(),
         }
@@ -366,20 +326,6 @@ impl JniGen {
         }
     }
 
-    /// Resolve a relative callback class name against
-    /// `package + "." + callback_subpackage`. Panics if `name` contains a `.`.
-    pub(crate) fn resolve_callback_fqn(&self, name: &str) -> String {
-        assert!(
-            !name.contains('.'),
-            "Kotlin callback name `{}` must be relative (no dots) — FQNs are derived from JniGen::package + callback_subpackage",
-            name
-        );
-        if self.kotlin_callback_package.is_empty() {
-            name.to_string()
-        } else {
-            format!("{}.{}", self.kotlin_callback_package, name)
-        }
-    }
     // ── Structured type-conversion builders ──────────────────────────
 
     /// Declare a typed Kotlin handle class backed by an opaque Rust
@@ -659,103 +605,6 @@ impl JniGen {
         self
     }
 
-    /// Install a manual input converter for an `impl Fn(...)` callback
-    /// parameter (`JObject` wire). `exc` selects the body convention,
-    /// matching the unified [`Self::input_wrapper`] rule:
-    ///
-    /// * `exc = None` ⇒ non-throwing: emitted body is
-    ///   `<dispatcher_path>(env, &v)?` (framework `?`-propagation); only
-    ///   valid if the dispatcher returns the framework error.
-    /// * `exc = Some(<Rust type>)` ⇒ throwing: the dispatcher is
-    ///   expected to return `Result<impl Fn(...), <Rust type>>` (e.g.
-    ///   `ZResult<_>`), and the emitted body is the dispatcher call
-    ///   directly — no `?`/`Ok`, per the body↔exception coupling. The
-    ///   type must match a [`Self::throwable`] declaration
-    ///   by exact canonical-form equality (see [`Self::find_exception`]).
-    ///
-    /// The Kotlin FQN auto-derives via
-    /// [`Self::kotlin_callback_name_mangle`] applied to the per-callback
-    /// name ([`derive_callback_name`]) and
-    /// then qualified against [`Self::kotlin_callback_package`]. Set
-    /// the mangler closure on [`JniGen`] to control naming (default =
-    /// identity).
-    pub fn callback_input(
-        mut self,
-        impl_fn_type: syn::Type,
-        exc: Option<syn::Type>,
-        dispatcher_path: syn::Path,
-    ) -> Self {
-        let key = TypeKey::from_type(&impl_fn_type);
-        let dispatcher_path_str = dispatcher_path.to_token_stream().to_string();
-        let body_path = dispatcher_path_str.clone();
-        // `syn::Type` holds `Rc<TokenStream>` internally and is neither
-        // `Send` nor `Sync`, so we can't capture it directly in a builder
-        // closure that satisfies `WrapperBuilder<Arity0>`'s `Send + Sync`
-        // bounds. Serialise to its canonical token form here and re-parse
-        // inside the closure — same dance the path captures use.
-        let exc_str = exc.as_ref().map(|t| t.to_token_stream().to_string());
-        let builder = move |_reg: &Registry<KotlinMeta>| {
-            let path: syn::Path = syn::parse_str(&body_path).ok()?;
-            // Throwing: dispatcher already returns `Result<_, exc>` — emit
-            // the call verbatim. Non-throwing: framework `?`-propagation
-            // unwraps, and the framework `Ok`-wraps later.
-            let body: syn::Expr = if exc_str.is_some() {
-                syn::parse_quote!(#path(env, &v))
-            } else {
-                syn::parse_quote!(#path(env, &v)?)
-            };
-            let exc_ty = exc_str
-                .as_deref()
-                .and_then(|s| syn::parse_str::<syn::Type>(s).ok());
-            Some((syn::parse_quote!(jni::objects::JObject), exc_ty, body))
-        };
-        // Auto-derive the callback Kotlin FQN via
-        // `kotlin_callback_name_mangle` applied to the per-callback name.
-        // Stamped at registration time so downstream consumers
-        // (`dispatch_fn_input`, `collect_kotlin_callback_fqns`) read a
-        // resolved FQN rather than re-deriving it. The presence of
-        // `callback_kotlin_fqn` also flags this entry as a callback for
-        // emission paths that need to distinguish.
-        let args =
-            crate::api::core::registry::extract_fn_trait_args(&impl_fn_type).unwrap_or_default();
-        let name = derive_callback_name(&args);
-        let fqn = self.resolve_callback_fqn(&self.mangle_callback(&name));
-        let entry = self.types.entry(key.clone()).or_default();
-        entry.callback_kotlin_fqn = Some(fqn.clone());
-        entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.input_wrappers[0].insert(key.clone(), builder.into_wrapper_fn());
-        self.note_wrapper_registration(key, 0);
-        self
-    }
-
-    /// Mark an `impl Fn(...)` callback type as having a hand-written
-    /// Kotlin fun-interface. The framework keeps its default Rust-side
-    /// auto-dispatcher (no [`Self::callback_input`] override here) but
-    /// skips emitting the Kotlin auto-stub — the binding crate provides
-    /// the `<FQN>.kt` file itself. The Kotlin FQN is auto-derived via
-    /// [`Self::mangle_callback`] applied to the callback's name so the
-    /// hand-written file name and the JNI-side mention stay in sync.
-    /// Equivalent to chaining `.suppress_kotlin_code()` after a
-    /// [`Self::ptr_class`] / [`Self::enum_class`] declaration, but
-    /// inline because callbacks don't have a `kotlin_callback` builder
-    /// to chain off.
-    pub fn suppress_kotlin_callback_code(mut self, impl_fn_type: syn::Type) -> Self {
-        let key = TypeKey::from_type(&impl_fn_type);
-        let args =
-            crate::api::core::registry::extract_fn_trait_args(&impl_fn_type).unwrap_or_default();
-        let name = derive_callback_name(&args);
-        let fqn = self.resolve_callback_fqn(&self.mangle_callback(&name));
-        let entry = self.types.entry(key.clone()).or_default();
-        entry.callback_kotlin_fqn = Some(fqn.clone());
-        entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.last_opaque_key = None;
-        self.last_meta_key = None;
-        self.last_entry_ref = None;
-        self
-    }
-
     /// Declare a Rust struct that should appear in Kotlin as a data
     /// class under a derived name. The name passes through
     /// [`Self::kotlin_data_class_name_mangle`] (default = Rust short
@@ -862,26 +711,22 @@ impl JniGen {
 
     /// Shared post-registration bookkeeping for wrapper inserts. Rank-0
     /// patterns identify a concrete type — auto-stamp `kotlin_name` via
-    /// [`Self::mangle_wrapper`] (skipping callback entries, whose
-    /// `kotlin_name` is already stamped via
-    /// [`Self::mangle_callback`] in [`Self::callback_input`], and
-    /// non-path patterns like `()` where there is no sensible short
-    /// name). Rank ≥1 patterns are wildcards — per-outer-type names
-    /// come from inner-metadata propagation via
-    /// [`Self::override_kotlin_name`].
+    /// [`Self::mangle_wrapper`] (skipping non-path patterns like `()`
+    /// where there is no sensible short name). Rank ≥1 patterns are
+    /// wildcards — per-outer-type names come from inner-metadata
+    /// propagation via [`Self::override_kotlin_name`].
     fn note_wrapper_registration(&mut self, key: TypeKey, rank: usize) {
         self.last_opaque_key = None;
         self.last_entry_ref = None;
         if rank == 0 {
             let entry = self.types.entry(key.clone()).or_default();
-            // Skip callbacks (handled by callback_input) and any entry
-            // whose kotlin_name has already been stamped (e.g. by an
-            // earlier data_class / ptr_class call for the
+            // Skip any entry whose kotlin_name has already been stamped
+            // (e.g. by an earlier data_class / ptr_class call for the
             // same type — a wrapper layered on top should not override
             // it). Then derive the short name from the canonical
             // TypeKey; non-path patterns ($()$, references, etc.)
             // yield no Kotlin class name and are left as `None`.
-            if entry.kotlin_name.is_none() && entry.callback_kotlin_fqn.is_none() {
+            if entry.kotlin_name.is_none() {
                 if let Some(short) = rust_short_name_opt(&key) {
                     let fqn = self.resolve_class_fqn(&self.mangle_wrapper(&short));
                     let entry = self.types.get_mut(&key).expect("just-inserted entry");
@@ -897,9 +742,9 @@ impl JniGen {
 
     /// Build a `KotlinMeta` carrying just the value-context Kotlin name.
     /// Used by every built-in converter (primitives, structs, `Option<_>`,
-    /// `Vec<_>`, callbacks). Errors are routed uniformly to the per-call
-    /// `signal_error` sink by the extern emitter, so no per-converter
-    /// exception metadata is carried.
+    /// `Vec<_>`, `impl Fn(...)` lambdas). Errors are routed uniformly to the
+    /// per-call `signal_error` sink by the extern emitter, so no
+    /// per-converter exception metadata is carried.
     pub(crate) fn framework_meta(&self, kotlin_name: Option<String>) -> KotlinMeta {
         KotlinMeta {
             kotlin_name,

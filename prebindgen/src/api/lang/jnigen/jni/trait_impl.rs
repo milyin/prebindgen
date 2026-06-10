@@ -214,18 +214,6 @@ impl JniGen {
         inherited
     }
 
-    /// Auto-derived Kotlin FQN for an `impl Fn(args)` callback. Same
-    /// convention `collect_kotlin_callback_fqns` uses, exposed here so
-    /// the rank-0/rank-1 callback dispatcher can stamp the FQN into
-    /// the converter's [`KotlinMeta`] at creation time. The relative
-    /// class name passes through [`Self::mangle_callback`] before
-    /// being qualified against
-    /// [`Self::kotlin_callback_package`].
-    pub(crate) fn auto_callback_fqn(&self, args: &[syn::Type]) -> String {
-        let name = derive_callback_name(args);
-        self.resolve_callback_fqn(&self.mangle_callback(&name))
-    }
-
     /// Canonical input-converter name for `(rust, wire)` — exposed
     /// for plugin wrapper exts that build `ConverterImpl::function`
     /// manually with a non-standard return type (e.g.
@@ -988,22 +976,16 @@ impl Prebindgen for JniGen {
         let outer_ty = build_fn_type(args);
         let (wire, body) = callback_input(self, args, registry)?;
         let niches = default_niches_for_wire(&wire);
-        // Kotlin sees `impl Fn(...)` as the matching mangled
-        // fun-interface (zenoh-jni: `JNIOn<Args>`). Use the
-        // registration-stamped FQN when set; fall back to the
-        // auto-derived name.
-        let outer_key = TypeKey::from_type(&outer_ty);
-        let kotlin_name = self
-            .types
-            .get(&outer_key)
-            .and_then(|c| c.callback_kotlin_fqn.clone())
-            .or_else(|| Some(self.auto_callback_fqn(args)));
+        // `impl Fn(...)` crosses the extern tier as the erased lambda object
+        // (`Any`) — same as the unfold builder / error-sink params. The typed
+        // wrapper-level lambda signature is computed at render time from the
+        // arg types' callback plans, not carried in metadata.
         Some(ConverterImpl {
             pre_stages: vec![],
             function: self.build_input_fn(&outer_ty, &wire, &body, None),
             destination: wire,
             niches,
-            metadata: self.framework_meta(kotlin_name),
+            metadata: self.framework_meta(Some("Any".to_string())),
         })
     }
 

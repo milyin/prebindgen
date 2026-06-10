@@ -533,221 +533,26 @@ pub(crate) fn emit_unfold_delivery(
 ) -> TokenStream {
     use crate::api::core::unfold::UnfoldShape;
 
-    let source_module = &ext.source_module;
-    let by_ref = plan.by_ref;
     let n = plan.leaves.len();
 
     // Builder-arg object locals, one per leaf in declared order, plus the
     // erased all-`Object` `invoke` descriptor — both value-independent.
     let obj_idents: Vec<syn::Ident> = (0..n).map(|i| format_ident!("__obj{}", i)).collect();
-    let descriptor = {
-        let mut d = String::from("(");
-        for _ in 0..n {
-            d.push_str("Ljava/lang/Object;");
-        }
-        d.push_str(")Ljava/lang/Object;");
-        d
-    };
-    let descr_lit = syn::LitStr::new(&descriptor, Span::call_site());
+    let descr_lit = syn::LitStr::new(&erased_invoke_descriptor(n), Span::call_site());
 
-    // Fold an accessor chain over a base value: `a_n( … a_1(base) … )`. Each
-    // accessor takes `&T` and returns `&F` (so references chain); only the base
-    // needs a `&` when it is owned (`base_is_ref == false`).
-    let compose = |path: &[syn::Ident], base: TokenStream, base_is_ref: bool| -> TokenStream {
-        let mut e = if base_is_ref { base } else { quote!(&#base) };
-        for a in path {
-            e = quote!(#source_module::#a(#e));
-        }
-        e
-    };
-    // True when accessor `acc`'s return type is `Option<…>` (a nullable nesting
-    // step on a leaf's path).
-    let returns_option = |acc: &syn::Ident| -> bool {
-        registry.functions.get(acc).is_some_and(|(f, _)| match &f.sig.output {
-            syn::ReturnType::Type(_, t) => matches!(
-                &**t,
-                syn::Type::Path(tp) if tp.path.segments.last().is_some_and(|s| s.ident == "Option")
-            ),
-            _ => false,
-        })
-    };
-    // Cast an encoded wire local to a `JObject` for the erased `invoke`:
-    // object wires pass through / `.into()`; primitive wires box to `java.lang.*`
-    // (the box-failure arm early-returns the null sentinel). Returns an
-    // expression yielding `JObject`.
-    let cast_to_jobject = |enc: &syn::Ident, wire: &syn::Type| -> TokenStream {
-        if is_jobject_wire(wire) {
-            quote!(#enc)
-        } else if matches!(jni_field_access(wire), Some((_, _, true))) {
-            quote!(#enc.into())
-        } else if let Some((cls, ctor)) = box_class_for_wire(wire) {
-            let cls_lit = syn::LitStr::new(cls, Span::call_site());
-            let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
-            quote! {
-                match env.new_object(#cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc)]) {
-                    ::core::result::Result::Ok(__o) => __o,
-                    ::core::result::Result::Err(__e) => {
-                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                            format!("box primitive {}: {}", #cls_lit, __e));
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
-                        return #on_err;
-                    }
-                }
-            }
-        } else {
-            panic!(
-                "emit_unfold_delivery: leaf has unsupported wire `{}`",
-                wire.to_token_stream()
-            )
+    // Return-site error path: route the message to the error sink, then return
+    // the wrapper's sentinel. Threads through the shared leaf encoder.
+    let fail = |msg: TokenStream| -> TokenStream {
+        quote! {
+            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&#msg), __ze_defaults);
+            return #on_err;
         }
     };
 
     // Encode a value's leaves (`__out`, a `Some`-bound `__inner`, or a Vec
-    // `__elem`) into `__obj0…__objN`. Reference (non-identity) leaves are encoded
-    // first — ending their borrow into the value — and the identity leaf last
-    // (move owned / clone `&T`). Each leaf's value is reached by folding its
-    // accessor `path` over `value`; a nullable leaf (an `Option` nesting step)
-    // wraps the encode in a `match Some/None`.
-    let encode_leaves = |value: &TokenStream| -> TokenStream {
-        let mut stmts = TokenStream::new();
-        let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
-        order.extend((0..n).filter(|&i| plan.leaves[i].identity));
-
-        for idx in order {
-            let leaf = &plan.leaves[idx];
-            let obj_ident = &obj_idents[idx];
-            let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
-                panic!(
-                    "emit_unfold_delivery: leaf `{}` has no registered output converter",
-                    TypeKey::from_type(&leaf.out_ty)
-                )
-            });
-            let conv = out_entry.function.sig.ident.clone();
-
-            if leaf.identity {
-                // Identity leaf: deliver the value itself. Its projection decides
-                // how: a `ptr_class` Handle is cloned (`&T`, reached by the path)
-                // or — at the root of an owned value — moved into a fresh
-                // Box-handle, then Rust-wrapped into its typed Kotlin handle
-                // class. A `value_blob` (`Copy`) is delivered by copy via its
-                // value-blob converter (→ `JByteArray`); the Kotlin adapter wraps
-                // it (Rust can't box a `@JvmInline value class`).
-                let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
-                    panic!(
-                        "emit_unfold_delivery: identity leaf `{}` has no projection — \
-                         `.accessor_record_id()` requires a ptr_class or value_blob type",
-                        TypeKey::from_type(&leaf.out_ty)
-                    )
-                });
-                match proj.kind {
-                    ProjectionKind::Handle => {
-                        let fqn = handle_field_fqn(ext, proj).replace('.', "/");
-                        let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
-                        let handle_ident = format_ident!("__h{}", idx);
-                        if leaf.path.is_empty() && !by_ref {
-                            stmts.extend(quote! {
-                                let #handle_ident: jni::sys::jlong =
-                                    std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
-                            });
-                        } else {
-                            let reached = compose(&leaf.path, value.clone(), by_ref);
-                            stmts.extend(quote! {
-                                let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
-                                    ::core::result::Result::Ok(__w) => __w,
-                                    ::core::result::Result::Err(__e) => {
-                                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
-                                        return #on_err;
-                                    }
-                                };
-                            });
-                        }
-                        stmts.extend(quote! {
-                            let #obj_ident: jni::objects::JObject = match env.new_object(
-                                #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
-                            ) {
-                                ::core::result::Result::Ok(__o) => __o,
-                                ::core::result::Result::Err(__e) => {
-                                    let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                                        format!("wrap typed handle {}: {}", #fqn_lit, __e));
-                                    signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
-                                    return #on_err;
-                                }
-                            };
-                        });
-                    }
-                    ProjectionKind::ValueBlob => {
-                        // The value_blob converter takes the value owned (`Copy`).
-                        // Owned at the root; reached-by-`&` elsewhere ⇒ deref-copy.
-                        let wire = out_entry.destination.clone();
-                        let enc_ident = format_ident!("__enc{}", idx);
-                        let cast = cast_to_jobject(&enc_ident, &wire);
-                        let arg = if leaf.path.is_empty() && !by_ref {
-                            value.clone()
-                        } else {
-                            let r = compose(&leaf.path, value.clone(), by_ref);
-                            quote!(*#r)
-                        };
-                        stmts.extend(quote! {
-                            let #enc_ident = match #conv(&mut env, #arg) {
-                                ::core::result::Result::Ok(__w) => __w,
-                                ::core::result::Result::Err(__e) => {
-                                    signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
-                                    return #on_err;
-                                }
-                            };
-                            let #obj_ident: jni::objects::JObject = #cast;
-                        });
-                    }
-                }
-                continue;
-            }
-
-            // Accessor leaf: walk the path, encode with the leaf's output
-            // converter (the single JVM copy), then cast to JObject. A nullable
-            // leaf (an `Option` step on the path) wraps the encode in a match so
-            // `None` ⇒ a null leaf.
-            let wire = out_entry.destination.clone();
-            let enc_ident = format_ident!("__enc{}", idx);
-            let cast = cast_to_jobject(&enc_ident, &wire);
-            match leaf.path.iter().position(|a| returns_option(a)) {
-                Some(k) => {
-                    let recv = compose(&leaf.path[..k], value.clone(), by_ref);
-                    let opt_acc = &leaf.path[k];
-                    let inner_val = compose(&leaf.path[k + 1..], quote!(__inner), true);
-                    stmts.extend(quote! {
-                        let #obj_ident: jni::objects::JObject =
-                            match #source_module::#opt_acc(#recv) {
-                                ::core::option::Option::Some(__inner) => {
-                                    let #enc_ident = match #conv(&mut env, #inner_val) {
-                                        ::core::result::Result::Ok(__w) => __w,
-                                        ::core::result::Result::Err(__e) => {
-                                            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
-                                            return #on_err;
-                                        }
-                                    };
-                                    #cast
-                                }
-                                ::core::option::Option::None => jni::objects::JObject::null(),
-                            };
-                    });
-                }
-                None => {
-                    let acc_value = compose(&leaf.path, value.clone(), by_ref);
-                    stmts.extend(quote! {
-                        let #enc_ident = match #conv(&mut env, #acc_value) {
-                            ::core::result::Result::Ok(__w) => __w,
-                            ::core::result::Result::Err(__e) => {
-                                signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
-                                return #on_err;
-                            }
-                        };
-                        let #obj_ident: jni::objects::JObject = #cast;
-                    });
-                }
-            }
-        }
-        stmts
-    };
+    // `__elem`) into `__obj0…__objN` (shared with the callback trampoline).
+    let encode_leaves =
+        |value: &TokenStream| -> TokenStream { encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail) };
 
     // Common builder-invoke (erased all-`Object` params + `Object` return). Used
     // by `Decompose`/`Optional`; its success arm yields the result `JObject`,
@@ -820,12 +625,11 @@ pub(crate) fn emit_unfold_delivery(
             // value-class projection wrap happens caller-side (the generated
             // wrapper's fold adapter), so the extern hands over raw wires.
             let fold_invoke = |arg_objs: &[syn::Ident]| -> TokenStream {
-                let mut descr = String::from("(Ljava/lang/Object;"); // acc
-                for _ in arg_objs {
-                    descr.push_str("Ljava/lang/Object;");
-                }
-                descr.push_str(")Ljava/lang/Object;");
-                let descr_lit = syn::LitStr::new(&descr, Span::call_site());
+                // acc + per-element args, all erased `Object`s.
+                let descr_lit = syn::LitStr::new(
+                    &erased_invoke_descriptor(arg_objs.len() + 1),
+                    Span::call_site(),
+                );
                 let jvalues = arg_objs
                     .iter()
                     .map(|id| quote!(jni::objects::JValue::Object(&#id)));
@@ -862,7 +666,7 @@ pub(crate) fn emit_unfold_delivery(
                 });
                 let elem_conv = out_entry.function.sig.ident.clone();
                 let elem_wire = out_entry.destination.clone();
-                let cast = cast_to_jobject(&format_ident!("__enc"), &elem_wire);
+                let cast = cast_wire_to_jobject(&format_ident!("__enc"), &elem_wire, &fail);
                 let invoke = fold_invoke(&[format_ident!("__obj")]);
                 quote! {
                     let __enc = match #elem_conv(&mut env, __elem) {
@@ -896,6 +700,241 @@ pub(crate) fn emit_unfold_delivery(
             }
         }
     }
+}
+
+/// The erased Kotlin-lambda `invoke` JNI descriptor with `n` parameters:
+/// `(Ljava/lang/Object;×n)Ljava/lang/Object;`. Every generated lambda
+/// invocation (builder, fold, callback trampoline) goes through the erased
+/// `FunctionN.invoke` — Kotlin tops out at `Function22`, so more than 22
+/// parameters cannot be expressed as a lambda type.
+pub(crate) fn erased_invoke_descriptor(n: usize) -> String {
+    assert!(
+        n <= 22,
+        "jnigen: a generated lambda needs {n} parameters, but Kotlin function types top out at \
+         Function22 — reduce the decomposed leaf count (or deliver the value whole)"
+    );
+    let mut d = String::from("(");
+    for _ in 0..n {
+        d.push_str("Ljava/lang/Object;");
+    }
+    d.push_str(")Ljava/lang/Object;");
+    d
+}
+
+/// Cast an encoded wire local to a `JObject` for the erased `invoke`: object
+/// wires pass through / `.into()`; primitive wires box to `java.lang.*`.
+/// `fail(msg)` — `msg` an expression yielding `String` — produces the
+/// diverging on-error statements (sink + sentinel at a return site, `Err` in
+/// the trampoline). Returns an expression yielding `JObject`.
+pub(crate) fn cast_wire_to_jobject(
+    enc: &syn::Ident,
+    wire: &syn::Type,
+    fail: &dyn Fn(TokenStream) -> TokenStream,
+) -> TokenStream {
+    if is_jobject_wire(wire) {
+        quote!(#enc)
+    } else if matches!(jni_field_access(wire), Some((_, _, true))) {
+        quote!(#enc.into())
+    } else if let Some((cls, ctor)) = box_class_for_wire(wire) {
+        let cls_lit = syn::LitStr::new(cls, Span::call_site());
+        let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
+        let on_fail = fail(quote!(__e2.to_string()));
+        quote! {
+            match env.new_object(#cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc)]) {
+                ::core::result::Result::Ok(__o) => __o,
+                ::core::result::Result::Err(__e) => {
+                    let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                        format!("box primitive {}: {}", #cls_lit, __e));
+                    #on_fail
+                }
+            }
+        }
+    } else {
+        panic!(
+            "jnigen unfold: leaf has unsupported wire `{}`",
+            wire.to_token_stream()
+        )
+    }
+}
+
+/// Encode a plan's leaves off `value` (`__out`, a `Some`-bound `__inner`, a Vec
+/// `__elem`, or an owned callback arg) into the `obj_idents` `JObject` locals,
+/// in declared-leaf order. Reference (non-identity) leaves are encoded first —
+/// ending their borrow into the value — and the identity leaf last (move owned
+/// / clone `&T`). Each leaf's value is reached by folding its accessor `path`
+/// over `value`; a nullable leaf (an `Option` nesting step) wraps the encode in
+/// a `match Some/None`. Error arms are produced by `fail` (see
+/// [`cast_wire_to_jobject`]). Shared by the return-delivery site
+/// ([`emit_unfold_delivery`]) and the callback trampoline.
+pub(crate) fn encode_plan_leaves(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    plan: &crate::api::core::unfold::UnfoldPlan,
+    obj_idents: &[syn::Ident],
+    value: &TokenStream,
+    fail: &dyn Fn(TokenStream) -> TokenStream,
+) -> TokenStream {
+    let source_module = &ext.source_module;
+    let by_ref = plan.by_ref;
+    let n = plan.leaves.len();
+
+    // Fold an accessor chain over a base value: `a_n( … a_1(base) … )`. Each
+    // accessor takes `&T` and returns `&F` (so references chain); only the base
+    // needs a `&` when it is owned (`base_is_ref == false`).
+    let compose = |path: &[syn::Ident], base: TokenStream, base_is_ref: bool| -> TokenStream {
+        let mut e = if base_is_ref { base } else { quote!(&#base) };
+        for a in path {
+            e = quote!(#source_module::#a(#e));
+        }
+        e
+    };
+    // True when accessor `acc`'s return type is `Option<…>` (a nullable nesting
+    // step on a leaf's path).
+    let returns_option = |acc: &syn::Ident| -> bool {
+        registry.functions.get(acc).is_some_and(|(f, _)| match &f.sig.output {
+            syn::ReturnType::Type(_, t) => matches!(
+                &**t,
+                syn::Type::Path(tp) if tp.path.segments.last().is_some_and(|s| s.ident == "Option")
+            ),
+            _ => false,
+        })
+    };
+
+    let mut stmts = TokenStream::new();
+    let mut order: Vec<usize> = (0..n).filter(|&i| !plan.leaves[i].identity).collect();
+    order.extend((0..n).filter(|&i| plan.leaves[i].identity));
+
+    for idx in order {
+        let leaf = &plan.leaves[idx];
+        let obj_ident = &obj_idents[idx];
+        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+            panic!(
+                "jnigen unfold: leaf `{}` has no registered output converter",
+                TypeKey::from_type(&leaf.out_ty)
+            )
+        });
+        let conv = out_entry.function.sig.ident.clone();
+        let conv_fail = fail(quote!(__e.to_string()));
+
+        if leaf.identity {
+            // Identity leaf: deliver the value itself. Its projection decides
+            // how: a `ptr_class` Handle is cloned (`&T`, reached by the path)
+            // or — at the root of an owned value — moved into a fresh
+            // Box-handle, then Rust-wrapped into its typed Kotlin handle
+            // class. A `value_blob` (`Copy`) is delivered by copy via its
+            // value-blob converter (→ `JByteArray`); the Kotlin adapter wraps
+            // it (Rust can't box a `@JvmInline value class`).
+            let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
+                panic!(
+                    "jnigen unfold: identity leaf `{}` has no projection — \
+                     `.accessor_record_id()` requires a ptr_class or value_blob type",
+                    TypeKey::from_type(&leaf.out_ty)
+                )
+            });
+            match proj.kind {
+                ProjectionKind::Handle => {
+                    let fqn = handle_field_fqn(ext, proj).replace('.', "/");
+                    let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
+                    let handle_ident = format_ident!("__h{}", idx);
+                    if leaf.path.is_empty() && !by_ref {
+                        stmts.extend(quote! {
+                            let #handle_ident: jni::sys::jlong =
+                                std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
+                        });
+                    } else {
+                        let reached = compose(&leaf.path, value.clone(), by_ref);
+                        stmts.extend(quote! {
+                            let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    #conv_fail
+                                }
+                            };
+                        });
+                    }
+                    let wrap_fail = fail(quote!(__e2.to_string()));
+                    stmts.extend(quote! {
+                        let #obj_ident: jni::objects::JObject = match env.new_object(
+                            #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
+                        ) {
+                            ::core::result::Result::Ok(__o) => __o,
+                            ::core::result::Result::Err(__e) => {
+                                let __e2 = <__JniErr as ::core::convert::From<String>>::from(
+                                    format!("wrap typed handle {}: {}", #fqn_lit, __e));
+                                #wrap_fail
+                            }
+                        };
+                    });
+                }
+                ProjectionKind::ValueBlob => {
+                    // The value_blob converter takes the value owned (`Copy`).
+                    // Owned at the root; reached-by-`&` elsewhere ⇒ deref-copy.
+                    let wire = out_entry.destination.clone();
+                    let enc_ident = format_ident!("__enc{}", idx);
+                    let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
+                    let arg = if leaf.path.is_empty() && !by_ref {
+                        value.clone()
+                    } else {
+                        let r = compose(&leaf.path, value.clone(), by_ref);
+                        quote!(*#r)
+                    };
+                    stmts.extend(quote! {
+                        let #enc_ident = match #conv(&mut env, #arg) {
+                            ::core::result::Result::Ok(__w) => __w,
+                            ::core::result::Result::Err(__e) => {
+                                #conv_fail
+                            }
+                        };
+                        let #obj_ident: jni::objects::JObject = #cast;
+                    });
+                }
+            }
+            continue;
+        }
+
+        // Accessor leaf: walk the path, encode with the leaf's output
+        // converter (the single JVM copy), then cast to JObject. A nullable
+        // leaf (an `Option` step on the path) wraps the encode in a match so
+        // `None` ⇒ a null leaf.
+        let wire = out_entry.destination.clone();
+        let enc_ident = format_ident!("__enc{}", idx);
+        let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
+        match leaf.path.iter().position(|a| returns_option(a)) {
+            Some(k) => {
+                let recv = compose(&leaf.path[..k], value.clone(), by_ref);
+                let opt_acc = &leaf.path[k];
+                let inner_val = compose(&leaf.path[k + 1..], quote!(__inner), true);
+                stmts.extend(quote! {
+                    let #obj_ident: jni::objects::JObject =
+                        match #source_module::#opt_acc(#recv) {
+                            ::core::option::Option::Some(__inner) => {
+                                let #enc_ident = match #conv(&mut env, #inner_val) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        #conv_fail
+                                    }
+                                };
+                                #cast
+                            }
+                            ::core::option::Option::None => jni::objects::JObject::null(),
+                        };
+                });
+            }
+            None => {
+                let acc_value = compose(&leaf.path, value.clone(), by_ref);
+                stmts.extend(quote! {
+                    let #enc_ident = match #conv(&mut env, #acc_value) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            #conv_fail
+                        }
+                    };
+                    let #obj_ident: jni::objects::JObject = #cast;
+                });
+            }
+        }
+    }
+    stmts
 }
 
 /// Emit the wire params, decode prelude, and call argument for one
@@ -1358,195 +1397,141 @@ pub(crate) fn option_output(
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Callback wrappers — impl Fn(args) -> JObject (Kotlin fun-interface)
+// Callback wrappers — impl Fn(args) -> JObject (erased Kotlin lambda)
 // ──────────────────────────────────────────────────────────────────────
 
+/// Build the input-converter body for an `impl Fn(args)` parameter: a
+/// trampoline that wraps the Kotlin **lambda** (`(leaves…) -> Unit`, erased to
+/// `Any` at the extern tier) as a `Box<dyn Fn(args) + Send + Sync>`.
+///
+/// Each callback arg is delivered the same way a *return* of its type would
+/// be: a type with a canonical-output plan ([`Registry::callback_arg_plans`])
+/// is decomposed into its leaves via the shared [`encode_plan_leaves`] (the
+/// trampoline owns the value — identity-leaf handles transfer to the lambda,
+/// never closed by Rust); a plan-less opaque-handle type is boxed into a fresh
+/// typed handle that is `close()`-d after the invoke (no-op if `take()`-ed);
+/// anything else crosses whole through its output converter. All objects feed
+/// one erased `invoke(Object…)` — a single JNI crossing per invocation.
+///
+/// Errors cannot reach a caller-side error sink (the declaring call already
+/// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
     ext: &JniGen,
     args: &[syn::Type],
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
-    let name = derive_callback_name(args);
-
-    // Per-arg: encode call + JNI signature chunk.
-    let mut arg_idents: Vec<syn::Ident> = Vec::new();
-    let mut arg_preludes: Vec<TokenStream> = Vec::new();
-    let mut jvalue_exprs: Vec<TokenStream> = Vec::new();
-    // Opaque-handle args wrapped into a typed handle object; closed after
-    // the callback returns so the per-invocation `Box` is freed.
-    let mut handle_obj_idents: Vec<syn::Ident> = Vec::new();
-    let mut sig = String::from("(");
-
-    for (i, arg_ty) in args.iter().enumerate() {
-        let raw_ident = format_ident!("__arg{}", i);
-        let enc_ident = format_ident!("__arg{}_encoded", i);
-        let obj_ident = format_ident!("__arg{}_obj", i);
-
-        // Args are output-direction (encoded outbound). Look up output entry.
-        let arg_entry = registry.output_entry(arg_ty)?;
-        let arg_wire = arg_entry.destination.clone();
-        let conv = arg_entry.function.sig.ident.clone();
-
-        // Opaque-handle arg: the output converter produces a `jlong`
-        // (`Box::into_raw`), but the callback's `run` takes the typed handle
-        // class, not a `Long`. Push the typed FQN slot; the wrapped object is
-        // built in the by-value prelude loop below and `close()`-d after the
-        // callback returns (see the body).
-        if let Some(h) = &arg_entry.metadata.projection {
-            let java_path = handle_field_fqn(ext, h).replace('.', "/");
-            sig.push_str(&format!("L{};", java_path));
-            jvalue_exprs.push(quote!(jni::objects::JValue::Object(&#obj_ident)));
-            handle_obj_idents.push(obj_ident);
-            arg_idents.push(raw_ident);
-            continue;
-        }
-
-        // Data-class arg: flatten into the `run` signature so native makes ONE
-        // crossing with leaf wires (no built `jni.<Struct>` object, no
-        // round-trip). The slots' idents/descriptors are access-independent, so
-        // here (sig + JValue list) we use a throwaway access; the matching
-        // preludes that bind those idents are emitted in the second loop from
-        // the closure param. Prefix `cb{i}` keeps idents unique per arg and
-        // distinct from the `__cb_arg{i}` closure params.
-        if let Some(st) = callback_arg_data_class(ext, registry, arg_ty) {
-            let prefix = format!("cb{}", i);
-            let (_pre, slots) =
-                flatten_struct_encode(ext, registry, &st, &quote!(__unused), &prefix, 0, &quote!(env))?;
-            for sl in &slots {
-                sig.push_str(&sl.descriptor);
-                let id = &sl.ident;
-                if sl.is_object {
-                    jvalue_exprs.push(quote!(jni::objects::JValue::Object(&#id)));
-                } else {
-                    jvalue_exprs.push(quote!(jni::objects::JValue::from(#id)));
-                }
-            }
-            arg_idents.push(raw_ident);
-            continue;
-        }
-
-        match jni_field_access(&arg_wire) {
-            Some((s, _, false)) => {
-                sig.push_str(s);
-                arg_preludes.push(quote! {
-                    let #raw_ident = &__cb_args.#i;
-                    let #enc_ident = #conv(&mut env, #raw_ident)?;
-                });
-                jvalue_exprs.push(quote!(jni::objects::JValue::from(#enc_ident)));
-            }
-            Some((s, _, true)) => {
-                sig.push_str(s);
-                arg_preludes.push(quote! {
-                    let #raw_ident = &__cb_args.#i;
-                    let #enc_ident = #conv(&mut env, #raw_ident)?;
-                    let #obj_ident: jni::objects::JObject = #enc_ident.into();
-                });
-                jvalue_exprs.push(quote!(jni::objects::JValue::Object(&#obj_ident)));
-            }
-            None if is_jobject_wire(&arg_wire) => {
-                // The callback's `run` method takes the Kotlin equivalent
-                // of this Rust arg type, not the callback interface itself.
-                // Look up the registered FQN and slash-encode it for the
-                // JVM method descriptor.
-                let arg_key = TypeKey::from_type(arg_ty).as_str().to_string();
-                let arg_fqn = ext
-                    .kotlin_fqn(&arg_key)
-                    .map(|v| v.replace('.', "/"))
-                    .unwrap_or_else(|| "java/lang/Object".to_string());
-                sig.push_str(&format!("L{};", arg_fqn));
-                arg_preludes.push(quote! {
-                    let #enc_ident = #conv(&mut env, &__cb_args.#i)?;
-                    let #obj_ident: jni::objects::JObject = #enc_ident;
-                });
-                jvalue_exprs.push(quote!(jni::objects::JValue::Object(&#obj_ident)));
-            }
-            None => return None, // unsupported wire form
-        }
-        arg_idents.push(raw_ident);
-    }
-    sig.push_str(")V");
-
-    // Tuple destructure for closure args.
-    let arg_pat_ty: Vec<TokenStream> = args.iter().map(|t| quote!(#t)).collect();
-    let arg_pat_ident: Vec<TokenStream> = (0..args.len())
-        .map(|i| {
-            let ident = format_ident!("__cb_arg{}", i);
-            quote!(#ident)
-        })
-        .collect();
-    let _ = arg_pat_ident;
-
+    // Human-readable tag for attach/log messages.
+    let name = format!(
+        "Fn({})",
+        args.iter()
+            .map(|t| TypeKey::from_type(t).to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
     let name_lit = syn::LitStr::new(&name, Span::call_site());
-    let sig_lit = syn::LitStr::new(&sig, Span::call_site());
 
-    // Body: capture global ref, return a Box<dyn Fn(args)>.
-    // The wrapper takes the raw JObject `v` (the Kotlin callback ref).
-    let arg_indices: Vec<syn::Index> = (0..args.len()).map(syn::Index::from).collect();
-    let _ = arg_indices;
+    // Trampoline error path for the shared leaf encoder: convert the message
+    // to `__JniErr` inside the per-invocation `Result` closure.
+    let fail = |msg: TokenStream| -> TokenStream {
+        quote! {
+            return ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<String>>::from(#msg));
+        }
+    };
 
-    // Build the Fn closure body.
     let arg_names: Vec<syn::Ident> = (0..args.len())
         .map(|i| format_ident!("__cb_arg{}", i))
         .collect();
+    let arg_pat_ty: Vec<TokenStream> = args.iter().map(|t| quote!(#t)).collect();
 
-    // Convert (self.0, .1, ...) tuple field accesses into __cb_arg0, _arg1.
-    // Replace `__cb_args.0` with `__cb_arg0` etc. in arg_preludes by
-    // re-rendering: easier to just rebuild here.
-    let mut fixed_preludes: Vec<TokenStream> = Vec::new();
+    // Per-arg encode preludes binding the erased `invoke`'s object args in
+    // declared order (a decomposed arg contributes one object per leaf).
+    let mut preludes: Vec<TokenStream> = Vec::new();
+    let mut obj_idents_all: Vec<syn::Ident> = Vec::new();
+    // Plan-less opaque-handle args, closed after the invoke returns so the
+    // per-invocation `Box` is freed.
+    let mut handle_obj_idents: Vec<syn::Ident> = Vec::new();
+
     for (i, arg_ty) in args.iter().enumerate() {
-        let raw_ident = format_ident!("__arg{}", i);
-        let enc_ident = format_ident!("__arg{}_encoded", i);
-        let obj_ident = format_ident!("__arg{}_obj", i);
         let cb_arg = &arg_names[i];
+
+        // Decomposed arg: deliver the leaves of its type-level canonical
+        // output, exactly like a return delivery.
+        if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(arg_ty)) {
+            // Deferral safety: every leaf converter (and identity-leaf
+            // projection) must already be resolved — return None so the rank
+            // resolver retries this converter later otherwise.
+            for leaf in &plan.leaves {
+                let e = registry.output_entry(&leaf.out_ty)?;
+                if leaf.identity && e.metadata.projection.is_none() {
+                    return None;
+                }
+            }
+            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
+                .map(|k| format_ident!("__cb{}_obj{}", i, k))
+                .collect();
+            preludes.push(encode_plan_leaves(
+                ext,
+                registry,
+                plan,
+                &obj_idents,
+                &quote!(#cb_arg),
+                &fail,
+            ));
+            obj_idents_all.extend(obj_idents);
+            continue;
+        }
+
         let arg_entry = registry.output_entry(arg_ty)?;
         let arg_wire = arg_entry.destination.clone();
         let conv = arg_entry.function.sig.ident.clone();
-        // Opaque-handle arg: encode to `jlong` then wrap into the typed
-        // handle class via its `(J)V` ctor. By-value non-optional, so no
-        // null guard. The box is freed after the callback via `close()`
-        // in the body below.
+        let enc_ident = format_ident!("__cb{}_enc", i);
+        let obj_ident = format_ident!("__cb{}_obj", i);
+
+        // Plan-less opaque-handle arg: encode to `jlong` (`Box::into_raw`)
+        // then wrap into the typed handle class via its `(J)V` ctor. By-value
+        // non-optional, so no null guard. The box is freed after the invoke
+        // via `close()` in the body below — this is what lets a queryable
+        // consumer reply through the handle inside the callback (a consuming
+        // reply zeroes the slot, making the close a no-op).
         if let Some(h) = &arg_entry.metadata.projection {
-            let java_path = handle_field_fqn(ext, h).replace('.', "/");
-            let java_path_lit = syn::LitStr::new(&java_path, Span::call_site());
-            fixed_preludes.push(quote! {
-                let #enc_ident = #conv(&mut env, #cb_arg)?;
-                let #obj_ident: jni::objects::JObject = env
-                    .new_object(#java_path_lit, "(J)V", &[jni::objects::JValue::from(#enc_ident)])
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?;
-            });
-            let _ = raw_ident;
-            continue;
+            if matches!(h.kind, ProjectionKind::Handle) {
+                let java_path = handle_field_fqn(ext, h).replace('.', "/");
+                let java_path_lit = syn::LitStr::new(&java_path, Span::call_site());
+                preludes.push(quote! {
+                    let #enc_ident = #conv(&mut env, #cb_arg)?;
+                    let #obj_ident: jni::objects::JObject = env
+                        .new_object(#java_path_lit, "(J)V", &[jni::objects::JValue::from(#enc_ident)])
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?;
+                });
+                handle_obj_idents.push(obj_ident.clone());
+                obj_idents_all.push(obj_ident);
+                continue;
+            }
         }
-        // Data-class arg: emit the flatten preludes that encode the struct's
-        // leaf wires from the closure param (`#cb_arg`). Same prefix `cb{i}` as
-        // loop 1, so the bound idents match the `JValue` list built there.
-        if let Some(st) = callback_arg_data_class(ext, registry, arg_ty) {
-            let prefix = format!("cb{}", i);
-            let access = quote!(#cb_arg);
-            let (pre, _slots) =
-                flatten_struct_encode(ext, registry, &st, &access, &prefix, 0, &quote!(&mut env))?;
-            fixed_preludes.push(pre);
-            let _ = raw_ident;
-            continue;
-        }
-        // Output wrappers take rust by value (move). cb_arg is the
-        // closure parameter (by value), so pass it directly.
-        match jni_field_access(&arg_wire) {
-            Some((_, _, false)) => fixed_preludes.push(quote! {
-                let #enc_ident = #conv(&mut env, #cb_arg)?;
-            }),
-            Some((_, _, true)) => fixed_preludes.push(quote! {
-                let #enc_ident = #conv(&mut env, #cb_arg)?;
-                let #obj_ident: jni::objects::JObject = #enc_ident.into();
-            }),
-            None if is_jobject_wire(&arg_wire) => fixed_preludes.push(quote! {
-                let #enc_ident = #conv(&mut env, #cb_arg)?;
-                let #obj_ident: jni::objects::JObject = #enc_ident;
-            }),
-            None => return None,
-        }
-        let _ = raw_ident; // unused with by-value flow
+
+        // Whole-value arg (scalar / String / data-class / value-blob …):
+        // encode with the output converter, then box/cast to the erased
+        // object. Output converters take the value by move; `cb_arg` is the
+        // closure parameter, so pass it directly.
+        let cast = cast_wire_to_jobject(&enc_ident, &arg_wire, &fail);
+        preludes.push(quote! {
+            let #enc_ident = #conv(&mut env, #cb_arg)?;
+            let #obj_ident: jni::objects::JObject = #cast;
+        });
+        obj_idents_all.push(obj_ident);
     }
+
+    let total = obj_idents_all.len();
+    let descr_lit = syn::LitStr::new(&erased_invoke_descriptor(total), Span::call_site());
+    let jvalue_exprs: Vec<TokenStream> = obj_idents_all
+        .iter()
+        .map(|id| quote!(jni::objects::JValue::Object(&#id)))
+        .collect();
+    // Local-frame capacity: roughly an encoded wire + a wrapped object per
+    // delivered leaf, plus call temporaries.
+    let frame_cap = std::cmp::max(16, 2 * total + 6);
+    let frame_cap_lit = syn::LitInt::new(&frame_cap.to_string(), Span::call_site());
 
     let body: syn::Expr = syn::parse_quote!({
         use std::sync::Arc;
@@ -1561,21 +1546,21 @@ pub(crate) fn callback_input(
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Attach thread for {}: {}", #name_lit, e)))?;
                 // The callback fires on a daemon-attached zenoh RX thread that
                 // never returns through a JNI stack frame, so the JNI local
-                // refs each invocation creates (encoded args, wrapped handle
+                // refs each invocation creates (encoded leaves, wrapped handle
                 // objects, call temporaries) would otherwise accumulate for
                 // the thread's lifetime and exhaust the JVM heap
                 // (OutOfMemoryError). Bracket each invocation in an explicit
                 // local frame so every local is released when the frame pops —
                 // popped unconditionally below so an early `?`/error path
                 // still frees it.
-                env.push_local_frame(16)
+                env.push_local_frame(#frame_cap_lit)
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("push local frame for {}: {}", #name_lit, e)))?;
                 let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
-                    #(#fixed_preludes)*
+                    #(#preludes)*
                     let __call_res: ::core::result::Result<(), __JniErr> = env.call_method(
                         &callback_global_ref,
-                        "run",
-                        #sig_lit,
+                        "invoke",
+                        #descr_lit,
                         &[#(#jvalue_exprs),*],
                     )
                     .map(|_| ())
@@ -1585,10 +1570,12 @@ pub(crate) fn callback_input(
                         let _ = env.exception_describe();
                         <__JniErr as ::core::convert::From<String>>::from(e.to_string())
                     });
-                    // Free each opaque-handle arg's per-invocation `Box` once the
-                    // callback returns — a no-op if the consumer `take()`-ed the
-                    // handle (its slot is then already 0). Runs even when the
-                    // callback threw, so a throwing consumer never leaks.
+                    // Free each plan-less opaque-handle arg's per-invocation
+                    // `Box` once the lambda returns — a no-op if the consumer
+                    // `take()`-ed the handle (its slot is then already 0). Runs
+                    // even when the lambda threw, so a throwing consumer never
+                    // leaks. Decomposed identity-leaf handles are NOT closed:
+                    // their ownership transferred to the lambda.
                     #(let _ = env.call_method(&#handle_obj_idents, "close", "()V", &[]);)*
                     __call_res?;
                     Ok(())
@@ -1603,30 +1590,10 @@ pub(crate) fn callback_input(
         })
     });
 
-    // The destination type for an `impl Fn(args)` parameter is JObject (the
-    // Kotlin callback object). We return Box<dyn Fn(args) + Send + Sync>
-    // wrapped in a generic so it satisfies the impl-trait param type.
-    // Actually the SOURCE (rust) type IS `impl Fn(args) + Send + Sync + 'static`,
-    // so the wrapper's return type is that. Box<dyn Fn> coerces.
+    // The wire type for an `impl Fn(args)` parameter is JObject (the erased
+    // Kotlin lambda). The converter returns Box<dyn Fn(args) + Send + Sync>,
+    // which coerces to the source's impl-trait param type.
     Some((syn::parse_quote!(jni::objects::JObject), body))
-}
-
-pub(crate) fn derive_callback_name(args: &[syn::Type]) -> String {
-    let mut s = String::new();
-    for a in args {
-        s.push_str(&type_short_ident(a));
-    }
-    s.push_str("Callback");
-    s
-}
-
-pub(crate) fn type_short_ident(ty: &syn::Type) -> String {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return last.ident.to_string();
-        }
-    }
-    "Unknown".into()
 }
 
 pub(crate) fn is_jobject_wire(wire: &syn::Type) -> bool {
@@ -2454,31 +2421,6 @@ pub(crate) fn flatten_struct_encode(
     Some((preludes, slots))
 }
 
-/// If `arg_ty` is a registered **data_class** (not a handle / value class /
-/// enum / external alias like `ZSample`), return its `ItemStruct` so a callback
-/// arg of that type can be flattened into the `run(...)` signature
-/// (`flatten_struct_encode`) instead of crossing as a built object. Returns
-/// `None` for everything else (those keep their single-slot callback path).
-pub(crate) fn callback_arg_data_class(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    arg_ty: &syn::Type,
-) -> Option<syn::ItemStruct> {
-    let name = bare_path_ident(arg_ty)?;
-    if !registry.structs.contains_key(&name) {
-        return None;
-    }
-    let is_vc = ext
-        .types
-        .get(&TypeKey::from_type(arg_ty))
-        .map(|c| c.value_blob)
-        .unwrap_or(false);
-    if is_vc || ext.is_kotlin_enum(arg_ty) {
-        return None;
-    }
-    registry.structs.get(&name).map(|(st, _)| st.clone())
-}
-
 pub(crate) fn struct_output_body(
     ext: &JniGen,
     s: &syn::ItemStruct,
@@ -2813,17 +2755,11 @@ pub(crate) fn nullable_kind_for_output(
 // JNI plugin's public contract, not a private implementation detail.
 // ──────────────────────────────────────────────────────────────────────
 
-/// INPUT: wire → rust. Format `<wire_id>_to_<rust_id>_<hash>`. Special
-/// case: `impl Fn(...)` keeps the legacy `process_kotlin_<Name>_callback`
-/// name so existing hand-written call sites continue to resolve. With
-/// the current [`derive_callback_name`] algorithm `<Name>` is
-/// concatenated arg shorts + `"Callback"` (e.g. `process_kotlin_SampleCallback_callback`).
+/// INPUT: wire → rust. Format `<wire_id>_to_<rust_id>_<hash>` (including
+/// `impl Fn(...)` lambda converters — the legacy
+/// `process_kotlin_<Name>_callback` naming is gone with the fun-interface
+/// subsystem).
 pub(crate) fn input_name(rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
-    if let Some(args) = extract_fn_trait_args(rust) {
-        let name = derive_callback_name(&args);
-        let s = format!("process_kotlin_{}_callback", name);
-        return syn::Ident::new(&s, Span::call_site());
-    }
     let rust_id = sanitize_for_ident(&rust.to_token_stream().to_string());
     let wire_id = wire_short(wire);
     let h = hash_pair(rust, wire);

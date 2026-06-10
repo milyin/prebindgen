@@ -435,3 +435,151 @@ fn snapshot_kotlin_side() {
     // in the wrapper body itself.
     assert!(pc.contains("=>throwZException") || pc.contains("->throwZException"), "package wrappers: {pkg}");
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// Callback pipeline snapshot: `impl Fn(...)` params unified onto the
+// output-expansion machinery — a decomposed arg (ZThing has a canonical
+// output) delivers its leaves through the erased lambda `invoke`; a
+// plan-less arg (ZOther) falls back to whole-handle delivery with the
+// post-invoke `close()`; `impl Fn()` is a zero-arg `() -> Unit`.
+// ────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_name(this_: &ZThing) -> String {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_sub(
+                    cb: impl Fn(ZThing) + Send + Sync + 'static,
+                    on_close: impl Fn() + Send + Sync + 'static,
+                ) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_other_sub(cb: impl Fn(ZOther) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("thing")
+        .ptr_class(syn::parse_quote!(ZThing))
+        // Canonical output: handle (identity) + its string form — a callback
+        // arg of ZThing decomposes into these 2 leaves.
+        .ptr_class_output_direct()
+        .ptr_class_output(syn::parse_quote!(z_thing_name))
+        .fun_accessor(syn::parse_quote!(z_thing_name))
+        // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
+        .ptr_class(syn::parse_quote!(ZOther))
+        .fun(syn::parse_quote!(z_thing_sub))
+        .fun(syn::parse_quote!(z_other_sub));
+
+    let dir = std::env::temp_dir().join(format!("jnigen_cb_snap_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let mut kotlin = std::collections::BTreeMap::new();
+    for p in &paths {
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        kotlin.insert(name, std::fs::read_to_string(p).unwrap());
+    }
+    (rust, kotlin)
+}
+
+#[test]
+fn callback_snapshot_rust_side() {
+    let (rust, _) = callback_snapshot_pipeline();
+    let rc: String = rust.split_whitespace().collect();
+    // The trampoline invokes the erased Kotlin lambda — never a typed `run`.
+    assert!(rc.contains(r#""invoke""#), "{rust}");
+    assert!(!rc.contains(r#""run""#), "{rust}");
+    // Decomposed ZThing arg: 2 leaves ⇒ 2-object descriptor; on_close ⇒
+    // zero-arg Function0 descriptor.
+    assert!(
+        rc.contains(r#""(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;""#),
+        "{rust}"
+    );
+    assert!(rc.contains(r#""()Ljava/lang/Object;""#), "{rust}");
+    // Fallback ZOther arg: 1-object descriptor + post-invoke `close()` of the
+    // boxed handle. The decomposed path never closes (ownership transfers).
+    assert!(
+        rc.contains(r#""(Ljava/lang/Object;)Ljava/lang/Object;""#),
+        "{rust}"
+    );
+    assert!(rc.contains(r#""close""#), "{rust}");
+    // Daemon-thread attachment + local-frame bracketing kept from the old
+    // trampoline.
+    assert!(rc.contains("attach_current_thread_as_daemon"), "{rust}");
+    assert!(rc.contains("push_local_frame"), "{rust}");
+    assert!(rc.contains("pop_local_frame"), "{rust}");
+    // Identity leaf of the decomposed arg: moved into a fresh box and wrapped
+    // in the typed handle class (declared under the `thing` subpackage).
+    assert!(rc.contains("io/test/jni/thing/ZThing"), "{rust}");
+    // The decomposed leaf encode calls the accessor off the owned root.
+    assert!(rc.contains("myflat::z_thing_name"), "{rust}");
+}
+
+#[test]
+fn callback_snapshot_kotlin_side() {
+    let (_, kotlin) = callback_snapshot_pipeline();
+    let names: Vec<&String> = kotlin.keys().collect();
+
+    // No fun-interface files are generated (the `callbacks/` subsystem is gone).
+    assert!(
+        !names.iter().any(|n| n.contains("Callback")),
+        "files: {names:?}"
+    );
+    for v in kotlin.values() {
+        assert!(!v.contains("fun interface"), "{v}");
+    }
+
+    // Extern tier: callbacks erased to `Any`, like the errorSink.
+    let native: String = kotlin["JNINative.kt"].split_whitespace().collect();
+    assert!(native.contains("cb:Any"), "{}", kotlin["JNINative.kt"]);
+    assert!(native.contains("onClose:Any"), "{}", kotlin["JNINative.kt"]);
+
+    // Wrapper tier: typed lambdas — decomposed ZThing ⇒ (ZThing, String),
+    // on_close ⇒ () -> Unit, fallback ZOther ⇒ (ZOther) -> Unit.
+    let pkg = kotlin
+        .values()
+        .find(|v| v.contains("public fun zThingSub"))
+        .cloned()
+        .unwrap_or_default();
+    let pc: String = pkg.split_whitespace().collect();
+    assert!(pc.contains("cb:(ZThing,String)->Unit"), "{pkg}");
+    assert!(pc.contains("onClose:()->Unit"), "{pkg}");
+    assert!(pc.contains("cb:(ZOther)->Unit"), "{pkg}");
+}
+
+#[test]
+#[should_panic(expected = "Function22")]
+fn erased_invoke_descriptor_rejects_over_22() {
+    let _ = erased_invoke_descriptor(23);
+}

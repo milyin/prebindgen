@@ -13,8 +13,7 @@
 //!      Rust bindings file.
 //!   3. [`jni::JniGen::write_kotlin`] walks the resolved registry to emit the
 //!      secondary Kotlin artifacts (typed-handle classes, data/enum classes,
-//!      exception classes, callback fun-interfaces, the centralized
-//!      `JNINative` holder).
+//!      exception classes, the centralized `JNINative` holder).
 
 pub mod jni;
 pub(crate) mod kotlin;

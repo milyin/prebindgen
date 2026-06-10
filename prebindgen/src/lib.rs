@@ -207,7 +207,7 @@ pub use crate::api::core::gravestone::{Gravestone, Transmute};
 /// [`lang::JniGen`] is the JNI / Kotlin adapter: it turns a flat
 /// `#[prebindgen]` library into a Rust file of JNI `extern "C"` wrappers plus
 /// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
-/// classes, exception classes, callback fun-interfaces).
+/// classes, exception classes).
 pub mod lang {
     pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
     pub use crate::api::lang::jnigen::{
