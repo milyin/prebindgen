@@ -286,50 +286,6 @@ pub(crate) fn render_data_class_aliases_source(package: &str, aliases: &[(String
     s
 }
 
-pub(crate) fn strip_legacy_jni_native_data_classes(
-    output_dir: &Path,
-    package: &str,
-    _rust_names: &[String],
-) -> Result<(), WriteKotlinError> {
-    let jni_native_path = output_dir
-        .join(package.replace('.', "/"))
-        .join("JNINative.kt");
-    if !jni_native_path.exists() {
-        return Ok(());
-    }
-
-    let source = std::fs::read_to_string(&jni_native_path)?;
-    let lines: Vec<&str> = source.lines().collect();
-    let Some(object_start) = lines
-        .iter()
-        .position(|line| line.trim_start().starts_with("internal object JNINative {"))
-    else {
-        return Ok(());
-    };
-
-    let mut filtered: Vec<String> = Vec::new();
-    for line in &lines[..object_start] {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("package ")
-            || trimmed.starts_with("import ")
-            || trimmed.starts_with("//")
-            || trimmed.is_empty()
-        {
-            filtered.push((*line).to_string());
-        }
-    }
-    for line in &lines[object_start..] {
-        filtered.push((*line).to_string());
-    }
-
-    let mut out = filtered.join("\n");
-    out.push('\n');
-    if out != source {
-        std::fs::write(jni_native_path, out)?;
-    }
-    Ok(())
-}
-
 /// Render one typed-handle Kotlin source file. Pure-shell form (with
 /// the closure `|n| format!("{n}ViaJNI")` installed via
 /// [`JniGen::kotlin_fun_name_mangle`]):

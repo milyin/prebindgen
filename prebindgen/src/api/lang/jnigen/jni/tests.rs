@@ -3,6 +3,16 @@ use crate::api::core::niches::{NicheSlot, Niches};
 use crate::api::core::registry::{Registry, TypeEntry, TypeKey};
 use quote::ToTokens;
 
+/// A process-unique temp directory for a snapshot pipeline run. Keyed by pid +
+/// a monotonic counter so the snapshot tests (which share a helper and run on
+/// separate threads) never clobber each other's output dir.
+fn unique_snapshot_dir(prefix: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!("{prefix}_{}_{}", std::process::id(), seq))
+}
+
 /// Build a `TypeEntry` for use in tests. The function body is not
 /// inspected by `option_input` / `option_output`; only the ident,
 /// destination, and niches matter, so we use a stub `ItemFn`.
@@ -342,7 +352,7 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         .fun(syn::parse_quote!(z_thing_new))
         .fun(syn::parse_quote!(z_thing_name));
 
-    let dir = std::env::temp_dir().join(format!("jnigen_snap_{}", std::process::id()));
+    let dir = unique_snapshot_dir("jnigen_snap");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -389,24 +399,34 @@ fn snapshot_rust_side() {
 fn snapshot_kotlin_side() {
     let (_, kotlin) = snapshot_pipeline();
     let names: Vec<&String> = kotlin.keys().collect();
+    // Output is now one merged `.kt` file per package, so look declarations up
+    // by content marker rather than by per-class file name.
+    let find = |needle: &str| -> String {
+        kotlin
+            .values()
+            .find(|v| v.contains(needle))
+            .cloned()
+            .unwrap_or_else(|| panic!("no generated file contains `{needle}`; files: {names:?}"))
+    };
 
-    // Shared base + centralized native holder always emitted.
-    assert!(kotlin.contains_key("NativeHandle.kt"), "files: {names:?}");
-    assert!(kotlin.contains_key("JNINative.kt"), "files: {names:?}");
+    // Shared base + centralized native holder are always emitted (merged into
+    // their package's single file).
+    let nh = find("abstract class NativeHandle");
+    let native = find("object JNINative");
 
     // No framework `ErrorSink` interface — the error channel is a plain function
     // type passed per call. `ZException` remains as the `onError` default throw.
-    let nh: String = kotlin["NativeHandle.kt"].split_whitespace().collect();
-    assert!(!nh.contains("funinterfaceErrorSink"), "{}", kotlin["NativeHandle.kt"]);
-    assert!(nh.contains("classZException"), "{}", kotlin["NativeHandle.kt"]);
+    let nhc: String = nh.split_whitespace().collect();
+    assert!(!nhc.contains("funinterfaceErrorSink"), "{nh}");
+    assert!(nhc.contains("classZException"), "{nh}");
 
-    let native: String = kotlin["JNINative.kt"].split_whitespace().collect();
-    assert!(native.contains("externalfun"), "{}", kotlin["JNINative.kt"]);
+    let nativec: String = native.split_whitespace().collect();
+    assert!(nativec.contains("externalfun"), "{native}");
     // Each extern declares the trailing `errorSink: Any` param.
-    assert!(native.contains("errorSink:Any"), "{}", kotlin["JNINative.kt"]);
+    assert!(nativec.contains("errorSink:Any"), "{native}");
 
     // Enum class with mixed discriminants 0 / 5 / 6 and a `fromInt` factory.
-    let color = kotlin.get("Color.kt").expect("Color.kt");
+    let color = find("enum class Color");
     let cc: String = color.split_whitespace().collect();
     assert!(cc.contains("enumclassColor"), "{color}");
     assert!(cc.contains("RED(0)"), "{color}");
@@ -415,7 +435,7 @@ fn snapshot_kotlin_side() {
     assert!(cc.contains("funfromInt"), "{color}");
 
     // Typed handle subclass of NativeHandle.
-    let thing = kotlin.get("ZThing.kt").expect("ZThing.kt");
+    let thing = find("class ZThing(");
     assert!(
         thing.split_whitespace().collect::<String>().contains(":NativeHandle"),
         "{thing}"
@@ -494,7 +514,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .fun(syn::parse_quote!(z_thing_sub))
         .fun(syn::parse_quote!(z_other_sub));
 
-    let dir = std::env::temp_dir().join(format!("jnigen_cb_snap_{}", std::process::id()));
+    let dir = unique_snapshot_dir("jnigen_cb_snap");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
@@ -561,9 +581,13 @@ fn callback_snapshot_kotlin_side() {
     }
 
     // Extern tier: callbacks erased to `Any`, like the errorSink.
-    let native: String = kotlin["JNINative.kt"].split_whitespace().collect();
-    assert!(native.contains("cb:Any"), "{}", kotlin["JNINative.kt"]);
-    assert!(native.contains("onClose:Any"), "{}", kotlin["JNINative.kt"]);
+    let native: String = kotlin
+        .values()
+        .find(|v| v.contains("object JNINative"))
+        .map(|v| v.split_whitespace().collect())
+        .unwrap_or_else(|| panic!("no generated file contains `object JNINative`; files: {names:?}"));
+    assert!(native.contains("cb:Any"), "{native}");
+    assert!(native.contains("onClose:Any"), "{native}");
 
     // Wrapper tier: typed lambdas — decomposed ZThing ⇒ (ZThing, String),
     // on_close ⇒ () -> Unit, fallback ZOther ⇒ (ZOther) -> Unit.
