@@ -4,8 +4,8 @@
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
 //! [`kt::KtFile`] *model fragments* (declarations, not strings — the
 //! generator module `api::gen::kotlin` owns formatting and imports):
-//!   * the shared `NativeHandle` base + `ZException` + lock helpers (root
-//!     package, e.g. `io.zenoh.jni`).
+//!   * the shared `NativeHandle` base + lock helpers (root package, e.g.
+//!     `io.zenoh.jni`).
 //!   * one typed-handle class per `ptr_class` entry without
 //!     `.suppress_kotlin_code()`.
 //!   * one enum / data / `@JvmInline value` class per declaration.
@@ -217,24 +217,13 @@ impl JniGen {
                         ),
                 );
         }
-        // Error channel: every generated wrapper takes a trailing **error
-        // callback** `onError: (je: String?, ze…) -> R`. On a native error the
-        // Rust side invokes a capture (no JVM throw on the Rust side); the
-        // wrapper calls `onError` after the native call returns. The callback has
-        // a **default** that throws `ZException` (below) — so callers that don't
-        // care still get an exception, while any caller can pass its own handler
-        // (e.g. building a domain object, or throwing its own type).
-        file.decl(
-            KtClass::new(ClassKind::Plain, "ZException")
-                .vis(Vis::Public)
-                .kdoc(
-                    "Default error raised by a generated wrapper's `onError` when the\n\
-                     caller doesn't supply a handler. `message` is the binding error\n\
-                     (`je`) or the library error string (`ze`).",
-                )
-                .ctor_param(KtCtorParam::new("message", KtType::string().nullable()))
-                .supertype(KtType::cls("RuntimeException"), Some("message")),
-        )
+        // Error channel: every generated wrapper takes a **required** trailing
+        // error callback `onError: (je: String?, ze…) -> R`. On a native error
+        // the Rust side invokes a capture (no JVM throw on the Rust side); the
+        // wrapper calls `onError` after the native call returns. The generated
+        // code itself never throws — the consumer decides how a failure
+        // surfaces (e.g. building a domain object, or throwing its own type).
+        file
     }
 
     /// Emit one `@JvmInline value class <Name>(val bytes: ByteArray)` per

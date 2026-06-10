@@ -229,7 +229,7 @@ fn top_level_fun_with_generics_named_lambda_and_default() {
                     KtType::var_r(),
                 ),
             )
-            .default("{ __de_je, __de_z0 -> throw ZException(__de_je ?: __de_z0) }"),
+            .default("{ __de_je, __de_z0 -> error(__de_je ?: __de_z0) }"),
         )
         .param(KtParam::new(
             "build",
@@ -261,7 +261,7 @@ fn top_level_fun_with_generics_named_lambda_and_default() {
 @Suppress(\"UNCHECKED_CAST\")
 public fun <R> zThingSub(
     thing: ZThing,
-    onError: (je: String?, message: String) -> R = { __de_je, __de_z0 -> throw ZException(__de_je ?: __de_z0) },
+    onError: (je: String?, message: String) -> R = { __de_je, __de_z0 -> error(__de_je ?: __de_z0) },
     build: (handle: ZThing, name: String) -> R,
 ): R {
     var __cap_failed = false
@@ -359,7 +359,7 @@ fn long_function_type_param_wraps_its_own_params() {
                     KtType::cls("ZSubscriber"),
                 ),
             )
-            .default("{ __de_je -> throw ZException(__de_je) }"),
+            .default("{ __de_je -> error(__de_je ?: \"\") }"),
         )
         .returns(KtType::cls("ZSubscriber"))
         .body(Code::new().line("TODO()"));
@@ -377,7 +377,7 @@ fn long_function_type_param_wraps_its_own_params() {
                  congestionControl: Int,\n        \
                  attachmentToBytes: ByteArray?,\n    \
              ) -> Unit,\n    \
-             onError: (je: String?) -> ZSubscriber = { __de_je -> throw ZException(__de_je) },\n\
+             onError: (je: String?) -> ZSubscriber = { __de_je -> error(__de_je ?: \"\") },\n\
              ): ZSubscriber {"
         ),
         "{src}"

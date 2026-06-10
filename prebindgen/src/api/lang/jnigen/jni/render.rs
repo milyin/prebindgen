@@ -1076,28 +1076,6 @@ pub(crate) fn render_wrapper_fn(
         ),
         r_ty.clone(),
     );
-    // Default handler: throws `ZException(je ?: ze0)` so a caller that doesn't
-    // supply a handler still gets an exception (overridable per call). The lambda
-    // params are named `__de_je, __de_z0, …` to match the arity.
-    let default_lambda = {
-        let lam_params = std::iter::once("__de_je".to_string())
-            .chain((0..n_ze).map(|i| format!("__de_z{i}")))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let thrown = if n_ze >= 1 {
-            "__de_je ?: __de_z0".to_string()
-        } else {
-            "__de_je".to_string()
-        };
-        // For a non-String first ze, fall back to `je` only (the throw takes a
-        // `String?`); `__de_z0` is `String` only when the leaf is String.
-        let thrown = if n_ze >= 1 && ze_info[0].1 == kt::KtType::string() {
-            thrown
-        } else {
-            "__de_je".to_string()
-        };
-        format!("{{ {lam_params} -> throw ZException({thrown}) }}")
-    };
     // The je/ze argument list to call the user's `onError`, coalescing each
     // captured (nullable) ze with its default (a binding error leaves ze null).
     let onerr_call_args = std::iter::once("__cap_je".to_string())
@@ -1211,11 +1189,6 @@ pub(crate) fn render_wrapper_fn(
         }
     };
 
-    // The `onError` default throws the framework `ZException` (in `NativeHandle.kt`).
-    if !ext.package.is_empty() {
-        imports.insert(format!("{}.ZException", ext.package));
-    }
-
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
     if let Some(g) = &generic {
         fun = fun.generic(g);
@@ -1223,12 +1196,14 @@ pub(crate) fn render_wrapper_fn(
     for p in &params {
         fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
     }
-    // The error callback. When an output-expansion builder/fold lambda exists, it
-    // must remain the **trailing** lambda (Kotlin trailing-lambda call syntax), so
-    // `onError` (which carries a default) is placed *before* it — but *after* any
-    // non-lambda `builder_lead` (`acc: A`), which is passed positionally. Without
-    // a builder lambda, `onError` is the last param.
-    let onerr = kt::KtParam::new("onError", onerr_type).default(default_lambda);
+    // The error callback — **required**: the generated code never throws; the
+    // consumer decides how a failure surfaces (e.g. by throwing its own type).
+    // When an output-expansion builder/fold lambda exists, it must remain the
+    // **trailing** lambda (Kotlin trailing-lambda call syntax), so `onError` is
+    // placed *before* it — but *after* any non-lambda `builder_lead` (`acc: A`),
+    // which is passed positionally. Without a builder lambda, `onError` is the
+    // last param.
+    let onerr = kt::KtParam::new("onError", onerr_type);
     if let Some((bp_name, bp_ty)) = &builder_param {
         if let Some((lead_name, lead_ty)) = &builder_lead {
             fun = fun.param(kt::KtParam::new(lead_name, lead_ty.clone()));

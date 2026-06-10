@@ -176,8 +176,8 @@ pub(crate) fn emit_jni_function_wrapper(
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
         wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
         // Input wrapper takes wires by ref except for raw pointers. The
-        // converter returns `Result<T, __JniErr>`; on `Err` we throw via
-        // this input's own throw fn and bail with the function sentinel.
+        // converter returns `Result<T, __JniErr>`; on `Err` we signal the
+        // error sink and bail with the function sentinel (no JVM throw).
         let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
             quote!(#conv(&mut env, #wire_ident))
         } else {

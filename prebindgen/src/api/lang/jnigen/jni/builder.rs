@@ -643,15 +643,14 @@ impl JniGen {
     /// resolver phase). The body sees `env: &mut JNIEnv` and `v: &<wire>`
     /// in scope.
     ///
-    /// * `exc = None` ⇒ non-throwing: `body` evaluates to a bare `ty`;
-    ///   framework emits `-> Result<ty, __JniErr>` with an `Ok(...)`
+    /// * `exc = None` ⇒ binding-fallible only: `body` evaluates to a bare
+    ///   `ty`; framework emits `-> Result<ty, __JniErr>` with an `Ok(...)`
     ///   wrap, and `?` inside propagates the framework error.
-    /// * `exc = Some(<Rust type>)` ⇒ throwing: `body` evaluates to
-    ///   `Result<ty, <Rust type>>`; framework emits it verbatim. The
-    ///   type must match a [`Self::throwable`] declaration
-    ///   by **exact canonical-form equality** with its `rust_type` (see
-    ///   [`Self::find_exception`] — no short-name fallback). The match
-    ///   is validated at lookup time.
+    /// * `exc = Some(<Rust type>)` ⇒ domain-fallible: `body` evaluates to
+    ///   `Result<ty, <Rust type>>`; framework emits it verbatim. The type
+    ///   is the `E` peeled from the source `Result<T, E>`, matched by
+    ///   **exact canonical-form equality** (no short-name fallback); a
+    ///   failure routes to the wrapper's error sink, never a JVM throw.
     ///
     /// `ty` is auto-classified at resolve: a wire shape ⇒ terminal
     /// converter; a distinct rust type with its own converter ⇒ a

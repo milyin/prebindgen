@@ -415,10 +415,11 @@ fn snapshot_kotlin_side() {
     let native = find("object JNINative");
 
     // No framework `ErrorSink` interface — the error channel is a plain function
-    // type passed per call. `ZException` remains as the `onError` default throw.
+    // type passed per call. No `ZException` either: the generated code never
+    // throws; the consumer's `onError` decides how a failure surfaces.
     let nhc: String = nh.split_whitespace().collect();
     assert!(!nhc.contains("funinterfaceErrorSink"), "{nh}");
-    assert!(nhc.contains("classZException"), "{nh}");
+    assert!(!nhc.contains("ZException"), "{nh}");
 
     let nativec: String = native.split_whitespace().collect();
     assert!(nativec.contains("externalfun"), "{native}");
@@ -462,10 +463,10 @@ fn snapshot_kotlin_side() {
         pc.contains("if(__cap_failed)returnonError("),
         "package wrappers: {pkg}"
     );
-    // The throw lives only in the `onError` *default* (overridable per call), not
-    // in the wrapper body itself.
+    // `onError` is a **required** parameter (no default) and the wrappers
+    // never throw — error surfacing is entirely the caller's business.
     assert!(
-        pc.contains("=>throwZException") || pc.contains("->throwZException"),
+        !pkg.contains("throw") && !pkg.contains("ZException"),
         "package wrappers: {pkg}"
     );
 }

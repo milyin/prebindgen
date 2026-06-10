@@ -334,14 +334,14 @@ pub(crate) struct PackageConfig {
 ///   a wire shape (or the self-converter case) ⇒ terminal converter
 ///   with `destination = ty`; a rust type with its own converter ⇒
 ///   composed as a value-inspecting stage onto that converter's chain.
-/// * `exc` — the bound exception **as a Rust type**, matched by exact
-///   canonical-form equality against a [`JniGen::throwable`]
-///   registration's `rust_type` (use the same full path the
-///   registration was declared with, e.g.
+/// * `exc` — the bound domain error **as a Rust type**: the `E` peeled
+///   from a source `Result<T, E>`, matched by exact canonical-form
+///   equality (use the same full path the source signature uses, e.g.
 ///   `parse_quote!(zenoh_flat::errors::ZError)` — no short-name
-///   matching). `Some(...)` ⇒ throwing: the body evaluates to
-///   `Result<ty, exc>` and is emitted as-is. `None` ⇒ non-throwing:
-///   the body evaluates to a bare `ty` and the framework wraps it
+///   matching). `Some(...)` ⇒ domain-fallible: the body evaluates to
+///   `Result<ty, exc>` and is emitted as-is; a failure routes to the
+///   wrapper's error sink (never a JVM throw). `None` ⇒ binding-fallible
+///   only: the body evaluates to a bare `ty` and the framework wraps it
 ///   `Ok(body)` with `Result<ty, __JniErr>` (= `JniBindingError`).
 /// * `body` — the closure body. The decision between Ok-wrap vs
 ///   verbatim is keyed on `exc` (see [`JniGen::build_input_fn`] /
