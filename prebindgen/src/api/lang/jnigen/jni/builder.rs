@@ -362,7 +362,7 @@ impl JniGen {
     /// idea being that "leak class context to package level" makes the
     /// chain unambiguous after one fn-level declaration. Panics if no
     /// `package` is active.
-    pub fn fun(mut self, ident: syn::Ident) -> Self {
+    pub fn fun(self, ident: syn::Ident) -> Self {
         self.push_fun(MethodEntry::new(ident))
     }
 
@@ -373,7 +373,7 @@ impl JniGen {
     /// constructor [`Self::default`] auto-apply skips it), and it is the only
     /// kind of function a decomposer record ([`Self::deconstructor_record`] /
     /// [`Self::converter`] / [`Self::deconstructor_record_nested`]) may reference.
-    pub fn fun_accessor(mut self, ident: syn::Ident) -> Self {
+    pub fn fun_accessor(self, ident: syn::Ident) -> Self {
         self.push_fun(MethodEntry::new_accessor(ident))
     }
 
