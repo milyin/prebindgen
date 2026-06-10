@@ -44,7 +44,8 @@ pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
 pub(crate) use std::collections::{BTreeSet, HashSet};
 pub(crate) use std::path::{Path, PathBuf};
-pub(crate) use crate::api::lang::jnigen::kotlin::file::{KotlinFile, WriteKotlinError};
+pub(crate) use crate::api::gen::kotlin as kt;
+pub(crate) use crate::api::gen::kotlin::WriteKotlinError;
 
 // ──────────────────────────────────────────────────────────────────────
 // Language metadata (Prebindgen::Metadata for JniGen)
@@ -489,9 +490,6 @@ pub struct JniGen {
     /// Mangler for [`Self::enum_class`]-declared C-like enum class
     /// names. Default = identity.
     pub(crate) kotlin_enum_name_mangle: Option<NameMangle>,
-    /// Mangler for the package-level wrapper object created by
-    /// [`Self::package`]. Default = identity.
-    pub(crate) kotlin_package_name_mangle: Option<NameMangle>,
     /// Mangler for rank-0 user-registered
     /// [`Self::input_wrapper`] / [`Self::output_wrapper`] pattern names
     /// — the Rust short name of the pattern (`Encoding`,

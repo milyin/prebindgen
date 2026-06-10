@@ -2,7 +2,8 @@
 //!
 //! [`JniGen::write_kotlin`] is the single entry point for every Kotlin
 //! file the JNI back-end emits. Each per-kind emitter builds in-memory
-//! `KotlinFile` *fragments*:
+//! [`kt::KtFile`] *model fragments* (declarations, not strings — the
+//! generator module `api::gen::kotlin` owns formatting and imports):
 //!   * the shared `NativeHandle` base + `ZException` + lock helpers (root
 //!     package, e.g. `io.zenoh.jni`).
 //!   * one typed-handle class per `ptr_class` entry without
@@ -13,22 +14,22 @@
 //!     params surface as typed Kotlin lambdas on the wrapper tier and erased
 //!     `Any` here — no fun-interface files are generated.)
 //!
-//! The fragments are then MERGED by [`merge_package_files`] so every
-//! Java/Kotlin package collapses to a SINGLE `.kt` file, written at the
-//! FLATTENED path `<root>/<package as dirs>.kt` (`io.zenoh.jni.config` →
-//! `io/zenoh/jni/config.kt`) — i.e. the file is named after the package's last
-//! segment and lives in the directory of its parent package, holding all of
-//! that package's classes, enums, value-classes and free functions.
+//! The fragments are merged by [`kt::merge_files`] so every Java/Kotlin
+//! package collapses to a SINGLE `.kt` file, written by [`kt::write_files`]
+//! at the FLATTENED path `<root>/<package as dirs>.kt` (`io.zenoh.jni.config`
+//! → `io/zenoh/jni/config.kt`) — i.e. the file is named after the package's
+//! last segment and lives in the directory of its parent package, holding all
+//! of that package's classes, enums, value-classes and free functions.
 //!
 //! Every `#[prebindgen]` function must be assigned a Kotlin home via
 //! `.method(...)` on either a typed-handle / data-class / enum config
 //! or on `package(...)`. Undeclared functions are skipped (see
 //! `Registry::scan_declared` warnings). There is no "orphan" bucket.
-//!
-//! Each merged file is written via [`KotlinFile::write`], which translates
-//! `package` into a sub-path under `kotlin_root`.
 
 use super::*;
+
+use crate::api::gen::kotlin as kt;
+use crate::api::gen::kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis};
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
 ///
@@ -49,25 +50,18 @@ pub(crate) struct TypedHandle<'a> {
 
 impl JniGen {
     /// Unified Kotlin emission — single public entry point. Each per-kind
-    /// emitter builds in-memory `KotlinFile` fragments; they are then merged
-    /// by [`merge_package_files`] into one file per package and written under
-    /// `kotlin_root`. Reads all configuration (typed-handle methods, Kotlin
-    /// type names) from internal state set during the builder phase. Returns
-    /// every path written (one per non-empty package).
+    /// emitter builds in-memory [`kt::KtFile`] model fragments; they are then
+    /// merged by [`kt::merge_files`] into one file per package, rendered, and
+    /// written under `kotlin_root` by [`kt::write_files`]. Reads all
+    /// configuration (typed-handle methods, Kotlin type names) from internal
+    /// state set during the builder phase. Returns every path written (one
+    /// per non-empty package).
     pub fn write_kotlin(
         &self,
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Each emitter produces in-memory `KotlinFile` fragments (one per class
-        // / enum / value-class / function-bucket). They are then MERGED so that
-        // every Java/Kotlin package collapses to a single `.kt` file, written at
-        // the FLATTENED path `<root>/<package as dirs>.kt` — e.g. package
-        // `io.zenoh.jni.bytes` → `io/zenoh/jni/bytes.kt` (not `…/bytes/bytes.kt`).
-        // Kotlin doesn't tie a file's location to its `package`, and a file
-        // `bytes.kt` never clashes with a sibling `bytes/` directory holding the
-        // sub-packages, so the layout is collision-free.
-        let mut fragments: Vec<KotlinFile> = Vec::new();
+        let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
         fragments.extend(self.write_data_classes(registry));
@@ -91,52 +85,75 @@ impl JniGen {
         }
         fragments.push(self.write_jni_native(registry));
 
-        let mut written = Vec::new();
-        for file in merge_package_files(fragments)? {
-            let path = merged_file_path(kotlin_root, &file);
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(&path, &file.contents)?;
-            written.push(path);
-        }
-        Ok(written)
+        kt::write_files(&kt::merge_files(fragments)?, kotlin_root)
     }
 
-    /// Emit `NativeHandle.kt` — the shared base class every typed handle
-    /// extends, plus the `withSortedHandleLocks` helper that the generated
-    /// wrappers use to acquire any number of handle monitors in one
-    /// pointer-sorted, deadlock-safe pass.
-    pub(crate) fn write_native_handle(&self) -> KotlinFile {
-        let mut s = String::new();
-        s.push_str("// Auto-generated by JniGen — do not edit by hand.\n");
-        if !self.package.is_empty() {
-            s.push_str(&format!("package {}\n\n", self.package));
-        }
-        s.push_str(
-            "/** Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
-            \x20*  slot and its monitor. Subclasses add their type-specific `close()` /\n\
-            \x20*  `take()` / `freePtr`. */\n\
-            public abstract class NativeHandle(initialPtr: Long) : AutoCloseable {\n\
-            \x20   @Volatile internal var ptr: Long = initialPtr\n\
-            \x20   public fun peek(): Long = ptr\n\
-            \x20   public fun isClosed(): Boolean = ptr == 0L\n\
-            }\n\n",
+    /// Emit the shared-base fragment — the `NativeHandle` class every typed
+    /// handle extends, plus the `withSortedHandleLocks` helper that the
+    /// generated wrappers use to acquire any number of handle monitors in
+    /// one pointer-sorted, deadlock-safe pass.
+    pub(crate) fn write_native_handle(&self) -> kt::KtFile {
+        let handle_ty = KtType::cls("NativeHandle");
+        // `body: () -> R` — a zero-param function type.
+        let body_param = || KtParam::new("body", KtType::lambda([], KtType::var_r()));
+
+        let mut file = kt::KtFile::new(&self.package).decl(
+            KtClass::new(ClassKind::Abstract, "NativeHandle")
+                .vis(Vis::Public)
+                .kdoc(
+                    "Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
+                     slot and its monitor. Subclasses add their type-specific `close()` /\n\
+                     `take()` / `freePtr`.",
+                )
+                .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
+                .supertype(KtType::cls("AutoCloseable"), None)
+                .member(
+                    KtProperty::var("ptr")
+                        .ty(KtType::long())
+                        .initializer("initialPtr")
+                        .vis(Vis::Internal)
+                        .annotation("Volatile"),
+                )
+                .member(
+                    KtFun::new("peek")
+                        .vis(Vis::Public)
+                        .returns(KtType::long())
+                        .expr_body(Code::new().line("ptr")),
+                )
+                .member(
+                    KtFun::new("isClosed")
+                        .vis(Vis::Public)
+                        .returns(KtType::boolean())
+                        .expr_body(Code::new().line("ptr == 0L")),
+                ),
         );
+
         // The N-ary locking helper is only referenced when wrappers are
         // emitted with locking on; skip it under `handle_locks(false)` so it
         // doesn't surface as an unused-`internal fun` warning.
         if self.emit_handle_locks {
-            s.push_str(
-                "/** Acquire every handle's monitor in one global order (sorted by raw\n\
-                \x20*  pointer) so concurrent calls touching the same handles can't deadlock,\n\
-                \x20*  then run [body]. Closed handles (`ptr == 0`) are still locked; callers\n\
-                \x20*  re-read and null-check each pointer inside [body]. Scales to any arity. */\n\
-                internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> R): R {\n\
-                \x20   val sorted = handles.sortedBy { it.ptr }\n\
-                \x20   fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }\n\
-                \x20   return rec(0)\n\
-                }\n",
+            file = file.decl(
+                KtFun::new("withSortedHandleLocks")
+                    .vis(Vis::Internal)
+                    .kdoc(
+                        "Acquire every handle's monitor in one global order (sorted by raw\n\
+                         pointer) so concurrent calls touching the same handles can't deadlock,\n\
+                         then run [body]. Closed handles (`ptr == 0`) are still locked; callers\n\
+                         re-read and null-check each pointer inside [body]. Scales to any arity.",
+                    )
+                    .generic("R")
+                    .param(KtParam::new(
+                        "handles",
+                        KtType::generic("List", [handle_ty.clone()]),
+                    ))
+                    .param(body_param())
+                    .returns(KtType::var_r())
+                    .body(
+                        Code::new()
+                            .line("val sorted = handles.sortedBy { it.ptr }")
+                            .line("fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }")
+                            .line("return rec(0)"),
+                    ),
             );
             // Allocation-free fixed-arity overloads for the common cases (1–3
             // statically-known, non-null handles). `inline` folds both the
@@ -145,37 +162,58 @@ impl JniGen {
             // `ptr` ascending, IDENTICAL to the `List` overload above, so the
             // global lock order is consistent whichever overload a wrapper
             // uses — deadlock-freedom is preserved even across paths.
-            s.push_str(
-                "/** Allocation-free single-handle lock (one monitor, nothing to order). */\n\
-                internal inline fun <R> withSortedHandleLocks(a: NativeHandle, body: () -> R): R =\n\
-                \x20   synchronized(a) { body() }\n\
-                /** Allocation-free two-handle lock: order by `ptr` then nest monitors. */\n\
-                internal inline fun <R> withSortedHandleLocks(\n\
-                \x20   a: NativeHandle,\n\
-                \x20   b: NativeHandle,\n\
-                \x20   body: () -> R,\n\
-                ): R {\n\
-                \x20   val first: NativeHandle\n\
-                \x20   val second: NativeHandle\n\
-                \x20   if (a.ptr <= b.ptr) { first = a; second = b } else { first = b; second = a }\n\
-                \x20   return synchronized(first) { synchronized(second) { body() } }\n\
-                }\n\
-                /** Allocation-free three-handle lock: 3-compare sorting network, then nest. */\n\
-                internal inline fun <R> withSortedHandleLocks(\n\
-                \x20   a: NativeHandle,\n\
-                \x20   b: NativeHandle,\n\
-                \x20   c: NativeHandle,\n\
-                \x20   body: () -> R,\n\
-                ): R {\n\
-                \x20   var x = a\n\
-                \x20   var y = b\n\
-                \x20   var z = c\n\
-                \x20   if (x.ptr > y.ptr) { val t = x; x = y; y = t }\n\
-                \x20   if (y.ptr > z.ptr) { val t = y; y = z; z = t }\n\
-                \x20   if (x.ptr > y.ptr) { val t = x; x = y; y = t }\n\
-                \x20   return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }\n\
-                }\n",
-            );
+            file = file
+                .decl(
+                    KtFun::new("withSortedHandleLocks")
+                        .vis(Vis::Internal)
+                        .modifier("inline")
+                        .kdoc("Allocation-free single-handle lock (one monitor, nothing to order).")
+                        .generic("R")
+                        .param(KtParam::new("a", handle_ty.clone()))
+                        .param(body_param())
+                        .returns(KtType::var_r())
+                        .expr_body(Code::new().line("synchronized(a) { body() }")),
+                )
+                .decl(
+                    KtFun::new("withSortedHandleLocks")
+                        .vis(Vis::Internal)
+                        .modifier("inline")
+                        .kdoc("Allocation-free two-handle lock: order by `ptr` then nest monitors.")
+                        .generic("R")
+                        .param(KtParam::new("a", handle_ty.clone()))
+                        .param(KtParam::new("b", handle_ty.clone()))
+                        .param(body_param())
+                        .returns(KtType::var_r())
+                        .body(
+                            Code::new()
+                                .line("val first: NativeHandle")
+                                .line("val second: NativeHandle")
+                                .line("if (a.ptr <= b.ptr) { first = a; second = b } else { first = b; second = a }")
+                                .line("return synchronized(first) { synchronized(second) { body() } }"),
+                        ),
+                )
+                .decl(
+                    KtFun::new("withSortedHandleLocks")
+                        .vis(Vis::Internal)
+                        .modifier("inline")
+                        .kdoc("Allocation-free three-handle lock: 3-compare sorting network, then nest.")
+                        .generic("R")
+                        .param(KtParam::new("a", handle_ty.clone()))
+                        .param(KtParam::new("b", handle_ty.clone()))
+                        .param(KtParam::new("c", handle_ty))
+                        .param(body_param())
+                        .returns(KtType::var_r())
+                        .body(
+                            Code::new()
+                                .line("var x = a")
+                                .line("var y = b")
+                                .line("var z = c")
+                                .line("if (x.ptr > y.ptr) { val t = x; x = y; y = t }")
+                                .line("if (y.ptr > z.ptr) { val t = y; y = z; z = t }")
+                                .line("if (x.ptr > y.ptr) { val t = x; x = y; y = t }")
+                                .line("return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }"),
+                        ),
+                );
         }
         // Error channel: every generated wrapper takes a trailing **error
         // callback** `onError: (je: String?, ze…) -> R`. On a native error the
@@ -184,17 +222,17 @@ impl JniGen {
         // a **default** that throws `ZException` (below) — so callers that don't
         // care still get an exception, while any caller can pass its own handler
         // (e.g. building a domain object, or throwing its own type).
-        s.push_str(
-            "\n/** Default error raised by a generated wrapper's `onError` when the\n\
-            \x20*  caller doesn't supply a handler. `message` is the binding error\n\
-            \x20*  (`je`) or the library error string (`ze`). */\n\
-            public class ZException(message: String?) : RuntimeException(message)\n",
-        );
-        KotlinFile {
-            contents: s,
-            package: self.package.clone(),
-            class_name: "NativeHandle".to_string(),
-        }
+        file.decl(
+            KtClass::new(ClassKind::Plain, "ZException")
+                .vis(Vis::Public)
+                .kdoc(
+                    "Default error raised by a generated wrapper's `onError` when the\n\
+                     caller doesn't supply a handler. `message` is the binding error\n\
+                     (`je`) or the library error string (`ze`).",
+                )
+                .ctor_param(KtCtorParam::new("message", KtType::string().nullable()))
+                .supertype(KtType::cls("RuntimeException"), Some("message")),
+        )
     }
 
     /// Emit one `@JvmInline value class <Name>(val bytes: ByteArray)` per
@@ -202,7 +240,7 @@ impl JniGen {
     /// erased to its `ByteArray` field at the JVM/ABI level, so the `JNINative`
     /// extern (and the wire) stays `ByteArray` while wrappers speak the typed
     /// class. The single field name `bytes` matches `value_projection_field`.
-    pub(crate) fn write_value_blobs(&self) -> Result<Vec<KotlinFile>, WriteKotlinError> {
+    pub(crate) fn write_value_blobs(&self) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key (the `types` map is a
         // HashMap, so iterate sorted keys rather than raw map order).
@@ -220,25 +258,20 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), fqn.clone()),
             };
-            let mut s = String::new();
-            s.push_str("// Auto-generated by JniGen — do not edit by hand.\n");
-            if !package.is_empty() {
-                s.push_str(&format!("package {}\n\n", package));
-            }
-            s.push_str(&format!(
-                "/** Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                \x20*  as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary). */\n\
-                @JvmInline\n\
-                public value class {}(public val bytes: ByteArray)\n",
-                key.as_str(),
-                class_name,
+            written.push(kt::KtFile::new(package).decl(
+                KtClass::new(ClassKind::ValueInline, class_name)
+                    .vis(Vis::Public)
+                    .kdoc(format!(
+                        "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
+                         as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
+                        key.as_str()
+                    ))
+                    .ctor_param(
+                        KtCtorParam::new("bytes", KtType::byte_array())
+                            .val()
+                            .vis(Vis::Public),
+                    ),
             ));
-            let file = KotlinFile {
-                contents: s,
-                package,
-                class_name,
-            };
-            written.push(file);
         }
         Ok(written)
     }
@@ -297,7 +330,7 @@ impl JniGen {
     pub(crate) fn write_enum_classes(
         &self,
         registry: &Registry<KotlinMeta>,
-    ) -> Result<Vec<KotlinFile>, WriteKotlinError> {
+    ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key.
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -329,12 +362,9 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            let file = KotlinFile {
-                contents: render_enum_source(&package, &class_name, item_enum),
-                package,
-                class_name,
-            };
-            written.push(file);
+            written.push(
+                kt::KtFile::new(package).decl(build_enum_class(&class_name, item_enum)),
+            );
         }
         Ok(written)
     }
@@ -344,7 +374,7 @@ impl JniGen {
     /// types, so wrappers and data-class declarations stay in sync. A
     /// compatibility-alias fragment is appended when any data class is
     /// renamed relative to its Rust ident.
-    pub(crate) fn write_data_classes(&self, registry: &Registry<KotlinMeta>) -> Vec<KotlinFile> {
+    pub(crate) fn write_data_classes(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
         let mut written = Vec::new();
         let mut aliases: Vec<(String, String)> = Vec::new();
         let mut keys: Vec<&TypeKey> = self.types.keys().collect();
@@ -381,25 +411,24 @@ impl JniGen {
             if item_struct.ident.to_string() != class_name {
                 aliases.push((item_struct.ident.to_string(), class_name.clone()));
             }
-            written.push(KotlinFile {
-                contents: render_data_class_source(
-                    self,
-                    &package,
-                    &class_name,
-                    item_struct,
-                    registry,
-                ),
-                package,
-                class_name,
-            });
+            let (class, imports) =
+                build_data_class(self, &class_name, item_struct, registry);
+            written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }
 
         if !aliases.is_empty() {
-            written.push(KotlinFile {
-                contents: render_data_class_aliases_source(&self.package, &aliases),
-                package: self.package.clone(),
-                class_name: "JNIDataClassAliases".to_string(),
-            });
+            // Compatibility aliases for legacy un-mangled data-class references.
+            aliases.sort_by(|a, b| a.0.cmp(&b.0));
+            aliases.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+            let mut file = kt::KtFile::new(&self.package);
+            for (legacy, current) in aliases {
+                file = file.decl(kt::KtDecl::TypeAlias {
+                    vis: Vis::Public,
+                    name: legacy,
+                    target: KtType::cls(current),
+                });
+            }
+            written.push(file);
         }
 
         written
@@ -418,8 +447,7 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
         subpackage: &str,
         pkg_cfg: &crate::api::lang::jnigen::jni::PackageConfig,
-    ) -> KotlinFile {
-        let class_name = self.jni_package_class_name(subpackage);
+    ) -> kt::KtFile {
         let package = if self.package.is_empty() {
             subpackage.to_string()
         } else if subpackage.is_empty() {
@@ -427,12 +455,35 @@ impl JniGen {
         } else {
             format!("{}.{}", self.package, subpackage)
         };
-        let contents = render_jni_package_source(self, registry, &pkg_cfg.functions, &package);
-        KotlinFile {
-            package,
-            class_name,
-            contents,
+        let mut file = kt::KtFile::new(&package);
+        let mut imports: BTreeSet<String> = BTreeSet::new();
+        for entry in &pkg_cfg.functions {
+            let (item_fn, _loc) = registry
+                .functions
+                .get(&entry.rust_ident)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "write_jni_package: function `{}` registered via .function(...) is \
+                         not in the prebindgen registry — check the spelling against the \
+                         matching `#[prebindgen]` Rust fn name.",
+                        entry.rust_ident,
+                    )
+                });
+            if let Some(f) = render_wrapper_fn(
+                self,
+                item_fn,
+                registry,
+                &mut imports,
+                entry.kotlin_name_override.as_deref(),
+            ) {
+                file = file.decl(f);
+            }
         }
+        // The wrapper bodies call the centralized Native object.
+        if !self.package.is_empty() {
+            imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
+        }
+        file.imports(imports)
     }
 
     /// Emit the centralized Native-object Kotlin file under `output_dir`
@@ -448,15 +499,36 @@ impl JniGen {
     /// `System.load` / `System.loadLibrary` from wrapper entry points
     /// (e.g. via a `companion object { init { ZenohLoad } }` block) so
     /// the lib is in place before any extern call.
-    pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> KotlinFile {
+    pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> kt::KtFile {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
-        let contents = render_jni_native_source(self, registry, &declared, &class_name);
-        KotlinFile {
-            package: self.package.clone(),
-            class_name,
-            contents,
+
+        let mut imports: BTreeSet<String> = BTreeSet::new();
+        let mut externs = Code::new();
+        let mut idents: Vec<&syn::Ident> = registry.functions.keys().collect();
+        idents.sort();
+        for ident in idents {
+            if !declared.contains(ident) {
+                continue;
+            }
+            let (item_fn, _loc) = &registry.functions[ident];
+            if let Some(line) = render_extern_decl(self, item_fn, registry, &mut imports) {
+                externs = externs.line(line);
+            }
         }
+
+        kt::KtFile::new(&self.package)
+            .decl(
+                KtClass::object_(class_name)
+                    .vis(Vis::Internal)
+                    // One compact run of `external fun` lines (no blank lines
+                    // between them), kept as a single raw member.
+                    .member(kt::KtDecl::Raw {
+                        name: "externs".to_string(),
+                        code: externs,
+                    }),
+            )
+            .imports(imports)
     }
 
     /// Emit one Kotlin file per entry in `handles` — each becomes a
@@ -480,167 +552,18 @@ impl JniGen {
     /// [`Self::kotlin_type_fqn`] so the generator can map it back to its
     /// Rust type-key (which identifies the first param to drop in each
     /// promoted method's signature).
-    pub(crate) fn write_typed_handles(&self, handles: &[TypedHandle<'_>]) -> Vec<KotlinFile> {
+    pub(crate) fn write_typed_handles(&self, handles: &[TypedHandle<'_>]) -> Vec<kt::KtFile> {
         let mut written = Vec::new();
         for handle in handles {
             let (package, class_name) = match handle.kotlin_fqn.rsplit_once('.') {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), handle.kotlin_fqn.to_string()),
             };
-            written.push(KotlinFile {
-                contents: render_typed_handle_source(self, &package, &class_name, handle.rust_doc),
-                package,
-                class_name,
-            });
+            written.push(
+                kt::KtFile::new(package)
+                    .decl(build_typed_handle(self, &class_name, handle.rust_doc)),
+            );
         }
         written
     }
-}
-
-/// The banner every generated Kotlin file opens with. Matched verbatim when
-/// splitting a fragment's header so it isn't duplicated into the merged body,
-/// and re-emitted once at the top of each merged file.
-const KOTLIN_BANNER: &str = "// Auto-generated by JniGen — do not edit by hand.";
-
-/// Split one generated Kotlin fragment into its `import` set and its body.
-///
-/// Only the **header** is parsed: the leading banner line, an optional
-/// `package` line, and a run of blank / `import` lines (all at column 0, as
-/// the generator emits them). The first line that is none of those starts the
-/// body, which is taken verbatim from there on — so a `//`/`/** */` comment or
-/// any later line that happens to begin with `import `/`package ` inside the
-/// body is preserved untouched.
-fn split_kotlin_contents(contents: &str) -> (Vec<String>, String) {
-    let lines: Vec<&str> = contents.lines().collect();
-    let mut imports = Vec::new();
-    let mut i = 0;
-    while i < lines.len() {
-        let line = lines[i];
-        if line == KOTLIN_BANNER || line.starts_with("package ") || line.trim().is_empty() {
-            i += 1;
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix("import ") {
-            imports.push(rest.trim().to_string());
-            i += 1;
-            continue;
-        }
-        break;
-    }
-    (imports, lines[i..].join("\n").trim().to_string())
-}
-
-/// Resolve the on-disk path of a merged package file under `kotlin_root`,
-/// using a FLATTENED layout: package `a.b.c` → `<root>/a/b/c.kt` (the file is
-/// named after the package's last segment and sits in the directory of its
-/// PARENT package). This drops the redundant leaf directory of the Java-style
-/// `<root>/a/b/c/c.kt` layout.
-///
-/// The mapping is injective (distinct packages → distinct paths) and never
-/// collides with a directory: package `a.b.c` writes a FILE `c.kt` while any
-/// sub-package `a.b.c.d` needs a DIRECTORY `a/b/c/`, and `c.kt` ≠ `c` on disk.
-/// Kotlin imposes no file-location/`package` correspondence, so this compiles
-/// identically to the nested layout.
-fn merged_file_path(kotlin_root: &Path, file: &KotlinFile) -> PathBuf {
-    if file.package.is_empty() {
-        kotlin_root.join(format!("{}.kt", file.class_name))
-    } else {
-        kotlin_root.join(format!("{}.kt", file.package.replace('.', "/")))
-    }
-}
-
-/// Merge per-declaration [`KotlinFile`] fragments into ONE file per package.
-///
-/// All fragments sharing a `package` are concatenated into one file (see
-/// [`merged_file_path`] for the on-disk path; e.g. `io.zenoh.jni.bytes` →
-/// `io/zenoh/jni/bytes.kt`). The union of their imports is emitted once,
-/// dropping any import that targets the merged file's own package (the symbol
-/// is now declared in the same file, so an explicit import would be a
-/// redeclaration). Packages are emitted in sorted order; within a package
-/// fragments keep their (deterministic) emission order.
-///
-/// Fails with [`WriteKotlinError::Other`] on a duplicate declaration identity
-/// within a package, or on an `import` simple-name collision (two distinct FQNs
-/// sharing a simple name in the same merged file) — both of which would produce
-/// uncompilable Kotlin.
-fn merge_package_files(fragments: Vec<KotlinFile>) -> Result<Vec<KotlinFile>, WriteKotlinError> {
-    let mut groups: BTreeMap<String, Vec<KotlinFile>> = BTreeMap::new();
-    for f in fragments {
-        groups.entry(f.package.clone()).or_default().push(f);
-    }
-
-    let mut out = Vec::new();
-    for (package, group) in groups {
-        // Two fragments must not claim the same Kotlin file identity within a
-        // package — a single merged file can't hold two declarations of it.
-        let mut seen: BTreeSet<&str> = BTreeSet::new();
-        for f in &group {
-            if !seen.insert(f.class_name.as_str()) {
-                return Err(WriteKotlinError::Other(format!(
-                    "duplicate declaration `{}` in package `{}`",
-                    f.class_name, package
-                )));
-            }
-        }
-
-        let mut imports: BTreeSet<String> = BTreeSet::new();
-        let mut bodies: Vec<String> = Vec::new();
-        for f in &group {
-            let (imps, body) = split_kotlin_contents(&f.contents);
-            for imp in imps {
-                let imp_pkg = imp.rsplit_once('.').map(|(p, _)| p).unwrap_or("");
-                // Same-package symbols are now in this very file — no import.
-                if imp_pkg == package {
-                    continue;
-                }
-                imports.insert(imp);
-            }
-            if !body.is_empty() {
-                bodies.push(body);
-            }
-        }
-
-        // A merged file can import each simple name from only one FQN.
-        let mut by_simple: BTreeMap<&str, &str> = BTreeMap::new();
-        for imp in &imports {
-            let simple = imp.rsplit_once('.').map(|(_, s)| s).unwrap_or(imp.as_str());
-            if let Some(prev) = by_simple.insert(simple, imp.as_str()) {
-                return Err(WriteKotlinError::Other(format!(
-                    "import simple-name collision in package `{}`: `{}` and `{}`",
-                    package, prev, imp
-                )));
-            }
-        }
-
-        let class_name = package
-            .rsplit('.')
-            .next()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("Generated")
-            .to_string();
-
-        let mut s = String::new();
-        s.push_str(KOTLIN_BANNER);
-        s.push('\n');
-        if !package.is_empty() {
-            s.push_str(&format!("package {}\n\n", package));
-        }
-        if !imports.is_empty() {
-            for imp in &imports {
-                s.push_str(&format!("import {}\n", imp));
-            }
-            s.push('\n');
-        }
-        s.push_str(&bodies.join("\n\n"));
-        if !s.ends_with('\n') {
-            s.push('\n');
-        }
-
-        out.push(KotlinFile {
-            package,
-            class_name,
-            contents: s,
-        });
-    }
-    Ok(out)
 }

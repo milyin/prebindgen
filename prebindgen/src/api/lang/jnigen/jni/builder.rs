@@ -30,7 +30,6 @@ impl JniGen {
             kotlin_ptr_class_name_mangle: None,
             kotlin_data_class_name_mangle: None,
             kotlin_enum_name_mangle: None,
-            kotlin_package_name_mangle: None,
             kotlin_wrapper_name_mangle: None,
             kotlin_harness_name_mangle: None,
             kotlin_type_fqns: Vec::new(),
@@ -147,15 +146,6 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.kotlin_enum_name_mangle = Some(Arc::new(f));
-        self
-    }
-    /// Set the closure that mangles the package-level wrapper object
-    /// name created by [`Self::package`]. Default = identity.
-    pub fn kotlin_package_name_mangle<F>(mut self, f: F) -> Self
-    where
-        F: Fn(&str) -> String + Send + Sync + 'static,
-    {
-        self.kotlin_package_name_mangle = Some(Arc::new(f));
         self
     }
     /// Set the closure that mangles rank-0
@@ -280,21 +270,6 @@ impl JniGen {
     /// and the JNI extern symbol path on the Rust side.
     pub(crate) fn jni_native_class_name(&self) -> String {
         self.mangle_harness("Native")
-    }
-    /// The mangled wrapper-object class name for a given subpackage
-    /// (one wrapper object per [`Self::package`] context).
-    /// Derives from the subpackage's last dot-segment so
-    /// `package("a.b")` yields a class named after `b`.
-    pub(crate) fn jni_package_class_name(&self, subpackage: &str) -> String {
-        let leaf = subpackage
-            .rsplit('.')
-            .next()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("Package");
-        match &self.kotlin_package_name_mangle {
-            Some(f) => f(leaf),
-            None => self.mangle_harness(leaf),
-        }
     }
 
     /// Resolve a relative class name against [`Self::package`]. Panics

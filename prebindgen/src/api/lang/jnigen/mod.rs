@@ -16,11 +16,14 @@
 //!      exception classes, the centralized `JNINative` holder).
 
 pub mod jni;
-pub(crate) mod kotlin;
 pub(crate) mod util;
 
 pub use jni::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
     null_string, JniBindingError, JniGen,
 };
-pub use kotlin::file::{KotlinFile, WriteKotlinError};
+// Kotlin emission types now live in the standalone generator module
+// (`api::gen::kotlin`); re-exported here so the public `lang::` surface is
+// unchanged (`KotlinFile` aliases the model's `KtFile`).
+pub use crate::api::gen::kotlin::KtFile as KotlinFile;
+pub use crate::api::gen::kotlin::WriteKotlinError;
