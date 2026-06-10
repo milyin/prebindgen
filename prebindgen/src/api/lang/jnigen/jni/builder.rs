@@ -450,7 +450,11 @@ impl JniGen {
 
     /// Per-fn: `param` is built from only the named subset of the canonical
     /// input's build-from variants (plus identity if the canonical input has it).
-    pub fn fun_input(mut self, param: syn::Ident, funcs: impl IntoIterator<Item = syn::Ident>) -> Self {
+    pub fn fun_input(
+        mut self,
+        param: syn::Ident,
+        funcs: impl IntoIterator<Item = syn::Ident>,
+    ) -> Self {
         let func = self.current_fn_ident();
         self.expansions
             .add_construct_subset(func, param, funcs.into_iter().collect());
@@ -783,9 +787,7 @@ impl JniGen {
                         .types
                         .get(&key)
                         .and_then(|c| c.kotlin_name.clone())
-                        .or_else(|| {
-                            kotlin_for_wire(&ty)
-                        });
+                        .or_else(|| kotlin_for_wire(&ty));
                     (Niches::empty(), kn)
                 } else {
                     (default_niches_for_wire(&ty), None)
@@ -904,9 +906,7 @@ impl JniGen {
                         .types
                         .get(&key)
                         .and_then(|c| c.kotlin_name.clone())
-                        .or_else(|| {
-                            kotlin_for_wire(&ty)
-                        });
+                        .or_else(|| kotlin_for_wire(&ty));
                     (kn, None)
                 };
                 let niches = if rank == 0 {
@@ -984,8 +984,7 @@ impl JniGen {
 /// resolves that ambiguity via the self-check + registered-converter
 /// probe, so `()` flows correctly without being force-classified here.
 pub(crate) fn is_wire_type(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Ptr(_))
-        || kotlin_for_wire(ty).is_some()
+    matches!(ty, syn::Type::Ptr(_)) || kotlin_for_wire(ty).is_some()
 }
 
 /// Bare-ident type `__JniErr` — the generated file's alias for the

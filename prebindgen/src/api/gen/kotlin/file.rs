@@ -102,10 +102,7 @@ pub fn merged_file_path(kotlin_root: &Path, file: &KtFile, fallback_name: &str) 
 }
 
 /// Render and write every merged file; returns the written paths.
-pub fn write_files(
-    files: &[KtFile],
-    kotlin_root: &Path,
-) -> Result<Vec<PathBuf>, WriteKotlinError> {
+pub fn write_files(files: &[KtFile], kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
     let mut written = Vec::new();
     for f in files {
         let fallback = f

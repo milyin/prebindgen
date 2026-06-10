@@ -50,10 +50,7 @@ impl KtType {
     }
 
     /// A function type with named parameters.
-    pub fn lambda(
-        params: impl IntoIterator<Item = (String, KtType)>,
-        ret: KtType,
-    ) -> Self {
+    pub fn lambda(params: impl IntoIterator<Item = (String, KtType)>, ret: KtType) -> Self {
         KtType::Function {
             params: params.into_iter().collect(),
             ret: Box::new(ret),
@@ -94,9 +91,7 @@ impl KtType {
     /// This type made nullable (`T?`).
     pub fn nullable(mut self) -> Self {
         match &mut self {
-            KtType::Named { nullable, .. } | KtType::Function { nullable, .. } => {
-                *nullable = true
-            }
+            KtType::Named { nullable, .. } | KtType::Function { nullable, .. } => *nullable = true,
         }
         self
     }
@@ -143,7 +138,11 @@ impl KtType {
         } else {
             KtType::cls(core)
         };
-        if nullable { ty.nullable() } else { ty }
+        if nullable {
+            ty.nullable()
+        } else {
+            ty
+        }
     }
 
     /// Render to Kotlin source, registering imports in `imports`.
@@ -157,8 +156,7 @@ impl KtType {
                 let mut s = imports.short(fqn);
                 if !args.is_empty() {
                     s.push('<');
-                    let rendered: Vec<String> =
-                        args.iter().map(|a| a.render(imports)).collect();
+                    let rendered: Vec<String> = args.iter().map(|a| a.render(imports)).collect();
                     s.push_str(&rendered.join(", "));
                     s.push('>');
                 }

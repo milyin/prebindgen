@@ -71,8 +71,7 @@ fn option_carves_single_niche() {
     );
 
     let inner_ty: syn::Type = syn::parse_quote!(TestType);
-    let (wire, _body, niches) =
-        option_input(&inner_ty, &reg).expect("Option<TestType> resolves");
+    let (wire, _body, niches) = option_input(&inner_ty, &reg).expect("Option<TestType> resolves");
 
     assert_eq!(
         wire.to_token_stream().to_string(),
@@ -146,8 +145,7 @@ fn option_cascades_through_multi_niche() {
     // Layer 3: Option<Option<Option<TestType>>>. No niches left,
     // inner wire is jint (a JNI primitive) → boxed-Long fallback.
     let layer3_ty: syn::Type = syn::parse_quote!(Option<Option<TestType>>);
-    let (w3, _, n3) =
-        option_input(&layer3_ty, &reg).expect("layer 3 resolves via box fallback");
+    let (w3, _, n3) = option_input(&layer3_ty, &reg).expect("layer 3 resolves via box fallback");
     assert_eq!(
         w3.to_token_stream().to_string(),
         "jni :: objects :: JObject",
@@ -185,8 +183,7 @@ fn option_output_cascades_through_multi_niche() {
     );
 
     let inner_ty: syn::Type = syn::parse_quote!(TestType);
-    let (w1, body1, n1) =
-        option_output(&inner_ty, &reg).expect("Option<TestType> output resolves");
+    let (w1, body1, n1) = option_output(&inner_ty, &reg).expect("Option<TestType> output resolves");
     assert_eq!(w1.to_token_stream().to_string(), "jni :: sys :: jint");
     assert_eq!(n1.len(), 1, "one slot left after carving the first");
     // The body must reference the carved value (-1) in the None arm.
@@ -392,7 +389,10 @@ fn snapshot_rust_side() {
     assert!(rc.contains("__error_sink:jni::objects::JObject"), "{rust}");
     assert!(!rc.contains("throw_Error"), "{rust}");
     // JNI extern wrappers.
-    assert!(rc.contains("externfn") || rc.contains("extern\"C\""), "{rust}");
+    assert!(
+        rc.contains("externfn") || rc.contains("extern\"C\""),
+        "{rust}"
+    );
 }
 
 #[test]
@@ -437,7 +437,10 @@ fn snapshot_kotlin_side() {
     // Typed handle subclass of NativeHandle.
     let thing = find("class ZThing(");
     assert!(
-        thing.split_whitespace().collect::<String>().contains(":NativeHandle"),
+        thing
+            .split_whitespace()
+            .collect::<String>()
+            .contains(":NativeHandle"),
         "{thing}"
     );
 
@@ -451,11 +454,20 @@ fn snapshot_kotlin_side() {
     let pc: String = pkg.split_whitespace().collect();
     // The error lambda's params are named: the fixed `je` binding message,
     // then the decomposed error leaves.
-    assert!(pc.contains("onError:(je:String?"), "package wrappers: {pkg}");
-    assert!(pc.contains("if(__cap_failed)returnonError("), "package wrappers: {pkg}");
+    assert!(
+        pc.contains("onError:(je:String?"),
+        "package wrappers: {pkg}"
+    );
+    assert!(
+        pc.contains("if(__cap_failed)returnonError("),
+        "package wrappers: {pkg}"
+    );
     // The throw lives only in the `onError` *default* (overridable per call), not
     // in the wrapper body itself.
-    assert!(pc.contains("=>throwZException") || pc.contains("->throwZException"), "package wrappers: {pkg}");
+    assert!(
+        pc.contains("=>throwZException") || pc.contains("->throwZException"),
+        "package wrappers: {pkg}"
+    );
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -587,7 +599,9 @@ fn callback_snapshot_kotlin_side() {
         .values()
         .find(|v| v.contains("object JNINative"))
         .map(|v| v.split_whitespace().collect())
-        .unwrap_or_else(|| panic!("no generated file contains `object JNINative`; files: {names:?}"));
+        .unwrap_or_else(|| {
+            panic!("no generated file contains `object JNINative`; files: {names:?}")
+        });
     assert!(native.contains("cb:Any"), "{native}");
     assert!(native.contains("onClose:Any"), "{native}");
 
@@ -639,9 +653,21 @@ fn strip_receiver_prefix_cases() {
     let reg = Registry::<KotlinMeta>::from_items(items).expect("index");
     let id = |s: &str| syn::Ident::new(s, proc_macro2::Span::call_site());
 
-    assert_eq!(strip_receiver_prefix(&reg, &id("z_sample_key_expr")), "key_expr");
-    assert_eq!(strip_receiver_prefix(&reg, &id("z_keyexpr_as_str")), "as_str");
-    assert_eq!(strip_receiver_prefix(&reg, &id("z_zbytes_to_bytes")), "to_bytes");
-    assert_eq!(strip_receiver_prefix(&reg, &id("z_error_code")), "error_code");
+    assert_eq!(
+        strip_receiver_prefix(&reg, &id("z_sample_key_expr")),
+        "key_expr"
+    );
+    assert_eq!(
+        strip_receiver_prefix(&reg, &id("z_keyexpr_as_str")),
+        "as_str"
+    );
+    assert_eq!(
+        strip_receiver_prefix(&reg, &id("z_zbytes_to_bytes")),
+        "to_bytes"
+    );
+    assert_eq!(
+        strip_receiver_prefix(&reg, &id("z_error_code")),
+        "error_code"
+    );
     assert_eq!(strip_receiver_prefix(&reg, &id("get_name")), "get_name");
 }

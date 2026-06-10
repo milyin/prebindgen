@@ -5,7 +5,6 @@
 
 use super::*;
 
-
 // ──────────────────────────────────────────────────────────────────────
 // Function-wrapper emission (JNI extern "C")
 // ──────────────────────────────────────────────────────────────────────
@@ -108,8 +107,7 @@ pub(crate) fn emit_jni_function_wrapper(
             .expansion_plans
             .get(&(original_ident.clone(), arg_ident.clone()))
         {
-            let (wp, pre, call_arg) =
-                emit_expanded_param(ext, registry, plan, arg_ident, &on_err);
+            let (wp, pre, call_arg) = emit_expanded_param(ext, registry, plan, arg_ident, &on_err);
             wire_params.extend(wp);
             prelude.extend(pre);
             call_args.push(call_arg);
@@ -345,7 +343,10 @@ pub(crate) fn emit_jni_function_wrapper(
         // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
         // Decompose/Optional: a single `__builder` callback.
         builder_param = Some(
-            if matches!(plan.shape, crate::api::core::unfold::UnfoldShape::Iterable(_)) {
+            if matches!(
+                plan.shape,
+                crate::api::core::unfold::UnfoldShape::Iterable(_)
+            ) {
                 quote!(__acc: jni::objects::JObject<'a>, __fold: jni::objects::JObject<'a>,)
             } else {
                 quote!(__builder: jni::objects::JObject<'a>,)
@@ -392,9 +393,9 @@ pub(crate) fn emit_jni_function_wrapper(
     // the prelude + every helper-generated `signal_error` call.
     let ze_default_idents: Vec<syn::Ident> =
         (0..n_ze).map(|i| format_ident!("__zd{}", i)).collect();
-    let ze_default_lets = ze_default_idents.iter().map(|id| {
-        quote!(let #id: jni::objects::JObject = jni::objects::JObject::null();)
-    });
+    let ze_default_lets = ze_default_idents
+        .iter()
+        .map(|id| quote!(let #id: jni::objects::JObject = jni::objects::JObject::null();));
     let ze_default_refs = ze_default_idents.iter().map(|id| quote!(#id));
     let ze_defaults_setup = quote! {
         #(#ze_default_lets)*
@@ -551,8 +552,9 @@ pub(crate) fn emit_unfold_delivery(
 
     // Encode a value's leaves (`__out`, a `Some`-bound `__inner`, or a Vec
     // `__elem`) into `__obj0…__objN` (shared with the callback trampoline).
-    let encode_leaves =
-        |value: &TokenStream| -> TokenStream { encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail) };
+    let encode_leaves = |value: &TokenStream| -> TokenStream {
+        encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail)
+    };
 
     // Common builder-invoke (erased all-`Object` params + `Object` return). Used
     // by `Decompose`/`Optional`; its success arm yields the result `JObject`,
@@ -1102,7 +1104,6 @@ pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {
     }
     None
 }
-
 
 /// `VisitMut` that prefixes every bare single-segment `Type::Path` whose
 /// ident lives in `source_names` with `source_module`. Walks the full
@@ -2226,8 +2227,9 @@ pub(crate) fn flatten_struct_encode(
                     });
                 }
                 ProjectionKind::ValueBlob => {
-                    preludes
-                        .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
+                    preludes.extend(
+                        quote! { let #id: jni::objects::JObject = { #value_expr }.into(); },
+                    );
                     slots.push(EncSlot {
                         ident: id,
                         wire_ty: quote!(jni::objects::JObject),
@@ -2561,7 +2563,6 @@ pub(crate) fn assert_only_unit_variants(e: &syn::ItemEnum) {
         }
     }
 }
-
 
 /// If `ty` is a `&T` borrow with no explicit lifetime, splice in `'<life>`.
 /// Otherwise return `ty` unchanged.
@@ -2920,4 +2921,3 @@ pub(crate) fn owned_object_prerequisite_items() -> Vec<syn::Item> {
 // semantics: each `Option<_>` layer carves one slot and re-exports the
 // rest; once the rest is exhausted, the next layer falls back to the
 // boxed-Java-primitive scheme.
-

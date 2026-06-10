@@ -186,9 +186,7 @@ pub(crate) fn flatten_struct_factory(
     imports: &mut BTreeSet<String>,
     depth: usize,
 ) -> Option<(Vec<(String, String)>, String)> {
-    use crate::api::lang::jnigen::jni::{
-        bare_path_ident, is_jni_primitive, option_inner_type,
-    };
+    use crate::api::lang::jnigen::jni::{bare_path_ident, is_jni_primitive, option_inner_type};
     assert!(
         depth <= 16,
         "flatten_struct_factory: recursion too deep at struct `{}` (cyclic data_class?)",
@@ -252,8 +250,15 @@ pub(crate) fn flatten_struct_factory(
                 .get(&TypeKey::from_type(&inner_ty))
                 .and_then(|c| c.kotlin_name.clone())?;
             let child_short = register_fqn(&child_fqn, imports);
-            let (child_params, _child_reconstruct) =
-                flatten_struct_factory(ext, registry, &child, &base, &child_short, imports, depth + 1)?;
+            let (child_params, _child_reconstruct) = flatten_struct_factory(
+                ext,
+                registry,
+                &child,
+                &base,
+                &child_short,
+                imports,
+                depth + 1,
+            )?;
             let child_names = child_params
                 .iter()
                 .map(|(n, _)| n.clone())
@@ -422,9 +427,7 @@ pub(crate) fn fold_projection_wrap(
 /// [`NullableKind`] so the declared wire matches the runtime ABI:
 /// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
 /// represents null); `Niche+object` and `Boxed` add `?`.
-pub(crate) fn projection_wire_return(
-    proj: &crate::api::lang::jnigen::jni::Projection,
-) -> String {
+pub(crate) fn projection_wire_return(proj: &crate::api::lang::jnigen::jni::Projection) -> String {
     use crate::api::lang::jnigen::jni::{FoldStrategy, NullableKind, ProjectionKind};
     let (inner_wire_name, inner_is_primitive) = match proj.kind {
         ProjectionKind::Handle => ("Long".to_string(), true),

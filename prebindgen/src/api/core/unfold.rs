@@ -237,18 +237,36 @@ impl Deconstructors {
         let i = self
             .cur_deconstructor
             .expect(".deconstructor_record_nested called without a current .deconstructor");
-        self.deconstructors[i].records.push(DeconRecord::Nested(func));
+        self.deconstructors[i]
+            .records
+            .push(DeconRecord::Nested(func));
     }
 
-    fn push_output(&mut self, func: syn::Ident, sel: DeconSel, target: DeconTarget, delivery: Delivery) {
-        self.outputs.push(OutputDecl { func, sel, target, delivery });
+    fn push_output(
+        &mut self,
+        func: syn::Ident,
+        sel: DeconSel,
+        target: DeconTarget,
+        delivery: Delivery,
+    ) {
+        self.outputs.push(OutputDecl {
+            func,
+            sel,
+            target,
+            delivery,
+        });
         self.cur_deconstructor = None;
     }
 
     /// `.deconstruct_output()` — decompose the fn's return value and deliver the
     /// leaves to a foreign **callback**.
     pub fn add_deconstruct_output(&mut self, func: syn::Ident) {
-        self.push_output(func, DeconSel::TopLevel, DeconTarget::Output, Delivery::Callback);
+        self.push_output(
+            func,
+            DeconSel::TopLevel,
+            DeconTarget::Output,
+            Delivery::Callback,
+        );
     }
 
     /// `.fun_output(funcs)` — per-fn override: decompose the return via exactly
@@ -256,46 +274,86 @@ impl Deconstructors {
     /// output). Recorded as an explicit decl so the auto-`default` skips it.
     pub fn add_output_inline(&mut self, func: syn::Ident, funcs: Vec<syn::Ident>) {
         let records = funcs.into_iter().map(DeconRecord::Acc).collect();
-        self.push_output(func, DeconSel::Inline(records), DeconTarget::Output, Delivery::Callback);
+        self.push_output(
+            func,
+            DeconSel::Inline(records),
+            DeconTarget::Output,
+            Delivery::Callback,
+        );
     }
 
     /// `.deconstruct_output_with(name)` — by named deconstructor.
     pub fn add_deconstruct_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(func, DeconSel::Explicit(name.into()), DeconTarget::Output, Delivery::Callback);
+        self.push_output(
+            func,
+            DeconSel::Explicit(name.into()),
+            DeconTarget::Output,
+            Delivery::Callback,
+        );
     }
 
     /// `.convert_output()` — decompose the fn's return via a single-value
     /// deconstructor and **return** the value directly (no callback).
     pub fn add_convert_output(&mut self, func: syn::Ident) {
-        self.push_output(func, DeconSel::TopLevel, DeconTarget::Output, Delivery::Return);
+        self.push_output(
+            func,
+            DeconSel::TopLevel,
+            DeconTarget::Output,
+            Delivery::Return,
+        );
     }
 
     /// `.convert_output_with(name)` — by named deconstructor.
     pub fn add_convert_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(func, DeconSel::Explicit(name.into()), DeconTarget::Output, Delivery::Return);
+        self.push_output(
+            func,
+            DeconSel::Explicit(name.into()),
+            DeconTarget::Output,
+            Delivery::Return,
+        );
     }
 
     /// `.deconstruct_error()` — decompose the fn's `Result<_, E>` domain error
     /// and deliver its leaves to the foreign error callback (after the fixed
     /// `je: String?` binding param).
     pub fn add_deconstruct_error(&mut self, func: syn::Ident) {
-        self.push_output(func, DeconSel::TopLevel, DeconTarget::Error, Delivery::Callback);
+        self.push_output(
+            func,
+            DeconSel::TopLevel,
+            DeconTarget::Error,
+            Delivery::Callback,
+        );
     }
 
     /// `.deconstruct_error_with(name)` — by named deconstructor.
     pub fn add_deconstruct_error_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(func, DeconSel::Explicit(name.into()), DeconTarget::Error, Delivery::Callback);
+        self.push_output(
+            func,
+            DeconSel::Explicit(name.into()),
+            DeconTarget::Error,
+            Delivery::Callback,
+        );
     }
 
     /// `.convert_error()` — convert the fn's domain error to a single value
     /// (one ze leaf after `je`).
     pub fn add_convert_error(&mut self, func: syn::Ident) {
-        self.push_output(func, DeconSel::TopLevel, DeconTarget::Error, Delivery::Return);
+        self.push_output(
+            func,
+            DeconSel::TopLevel,
+            DeconTarget::Error,
+            Delivery::Return,
+        );
     }
 
     /// `.convert_error_with(name)` — by named deconstructor.
     pub fn add_convert_error_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(func, DeconSel::Explicit(name.into()), DeconTarget::Error, Delivery::Return);
+        self.push_output(
+            func,
+            DeconSel::Explicit(name.into()),
+            DeconTarget::Error,
+            Delivery::Return,
+        );
     }
 
     /// True iff no output expansion was declared (lets `write_rust` skip
@@ -621,7 +679,9 @@ pub fn apply<M>(
             continue;
         };
         for input in &item_fn.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else { continue };
+            let syn::FnArg::Typed(pt) = input else {
+                continue;
+            };
             let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
                 continue;
             };
@@ -733,12 +793,12 @@ fn process_decl<M>(
         // `Result<_, E>` domain error `E` (`Error`).
         let ret_ty: syn::Type = match ed.target {
             DeconTarget::Output => fn_return(&item_fn),
-            DeconTarget::Error => result_err_type(&fn_return(&item_fn)).ok_or_else(|| {
-                UnfoldError::Unsupported {
+            DeconTarget::Error => {
+                result_err_type(&fn_return(&item_fn)).ok_or_else(|| UnfoldError::Unsupported {
                     func: ed.func.clone(),
                     reason: "convert_error/deconstruct_error on a non-Result return",
-                }
-            })?,
+                })?
+            }
         };
 
         // `Vec<T>` return → `Iterable`. Two element-delivery modes:
@@ -862,8 +922,9 @@ fn resolve_deconstructor(
                 func: ed.func.clone(),
                 name: name.clone(),
             }),
-        DeconSel::TopLevel => find_deconstructor_by_type(acc, source_key).map(<[DeconRecord]>::to_vec).map_err(
-            |candidates| match candidates {
+        DeconSel::TopLevel => find_deconstructor_by_type(acc, source_key)
+            .map(<[DeconRecord]>::to_vec)
+            .map_err(|candidates| match candidates {
                 None => UnfoldError::NoDeconstructor {
                     func: ed.func.clone(),
                     target: source_key.to_string(),
@@ -873,8 +934,7 @@ fn resolve_deconstructor(
                     target: source_key.to_string(),
                     candidates,
                 },
-            },
-        ),
+            }),
     }
 }
 
@@ -896,7 +956,11 @@ fn find_deconstructor_by_type<'a>(
         _ => Err(Some(
             matches
                 .iter()
-                .map(|c| c.name.clone().unwrap_or_else(|| "<deconstructor>".to_string()))
+                .map(|c| {
+                    c.name
+                        .clone()
+                        .unwrap_or_else(|| "<deconstructor>".to_string())
+                })
                 .collect(),
         )),
     }
@@ -1072,13 +1136,12 @@ fn flatten<M>(
                         target: child_key.to_string(),
                     });
                 }
-                let child_records =
-                    find_deconstructor_by_type(acc, &child_key).map_err(|_| {
-                        UnfoldError::NoDeconstructor {
-                            func: top_func.clone(),
-                            target: child_key.to_string(),
-                        }
-                    })?;
+                let child_records = find_deconstructor_by_type(acc, &child_key).map_err(|_| {
+                    UnfoldError::NoDeconstructor {
+                        func: top_func.clone(),
+                        target: child_key.to_string(),
+                    }
+                })?;
                 let mut child_path = path_prefix.to_vec();
                 child_path.push(func.clone());
                 flatten(
@@ -1208,12 +1271,23 @@ mod tests {
     /// exercise the gate's *rejection* pass an explicit smaller set instead.
     fn acc_set() -> std::collections::HashSet<syn::Ident> {
         [
-            "a_to_b", "b_to_a", "wrong",
-            "z_error_message", "z_keyexpr_as_str",
-            "z_sample_key_expr", "z_sample_payload", "z_sample_encoding",
-            "z_sample_kind", "z_sample_timestamp", "z_sample_express",
-            "z_sample_priority", "z_sample_congestion_control", "z_sample_attachment",
-            "z_timestamp_ntp64", "z_zbytes_to_bytes", "z_zenoh_id_to_string",
+            "a_to_b",
+            "b_to_a",
+            "wrong",
+            "z_error_message",
+            "z_keyexpr_as_str",
+            "z_sample_key_expr",
+            "z_sample_payload",
+            "z_sample_encoding",
+            "z_sample_kind",
+            "z_sample_timestamp",
+            "z_sample_express",
+            "z_sample_priority",
+            "z_sample_congestion_control",
+            "z_sample_attachment",
+            "z_timestamp_ntp64",
+            "z_zbytes_to_bytes",
+            "z_zenoh_id_to_string",
             "z_encoding_to_string",
         ]
         .iter()
@@ -1292,10 +1366,7 @@ mod tests {
         assert!(!plan.leaves[1].identity);
         assert_eq!(plan.leaves[1].path.len(), 1);
         assert_eq!(plan.leaves[1].path[0].to_string(), "z_keyexpr_as_str");
-        assert_eq!(
-            plan.leaves[1].out_ty.to_token_stream().to_string(),
-            "& str"
-        );
+        assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "& str");
 
         // Leaf out_tys registered as required outputs so the resolver builds
         // their converters.
@@ -1399,7 +1470,10 @@ mod tests {
         acc.add_deconstruct_output(ident("z_reply_sample"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
-        let plan = reg.unfold_plans.get(&ident("z_reply_sample")).expect("plan");
+        let plan = reg
+            .unfold_plans
+            .get(&ident("z_reply_sample"))
+            .expect("plan");
         assert!(plan.by_ref);
         assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
         assert!(matches!(&plan.shape, UnfoldShape::Optional(_)));
@@ -1419,8 +1493,14 @@ mod tests {
         assert_eq!(path(&plan.leaves[1]), "z_sample_key_expr.z_keyexpr_as_str");
         assert_eq!(path(&plan.leaves[2]), "z_sample_payload.z_zbytes_to_bytes");
         assert_eq!(path(&plan.leaves[3]), "z_sample_kind");
-        assert_eq!(plan.leaves[3].out_ty.to_token_stream().to_string(), "SampleKind");
-        assert_eq!(path(&plan.leaves[4]), "z_sample_timestamp.z_timestamp_ntp64");
+        assert_eq!(
+            plan.leaves[3].out_ty.to_token_stream().to_string(),
+            "SampleKind"
+        );
+        assert_eq!(
+            path(&plan.leaves[4]),
+            "z_sample_timestamp.z_timestamp_ntp64"
+        );
         // Only the timestamp leaf (Option nesting accessor) is nullable.
         assert!(!plan.leaves[1].nullable && !plan.leaves[2].nullable);
         assert!(plan.leaves[4].nullable);
@@ -1448,9 +1528,8 @@ mod tests {
     fn iterable_whole_element_plan() {
         // M4: `z_session_peers_zid(&ZSession) -> Vec<ZZenohId>` → Iterable;
         // each element delivered WHOLE (no accessor, no leaves).
-        let mut reg = reg_with(&[
-            "fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }",
-        ]);
+        let mut reg =
+            reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
         let mut acc = Deconstructors::default();
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
@@ -1464,9 +1543,14 @@ mod tests {
             "outer shape is Iterable(Decompose)"
         );
         assert!(!plan.by_ref, "Vec<ZZenohId> owns its elements");
-        assert!(plan.leaves.is_empty(), "whole-element: no decomposed leaves");
+        assert!(
+            plan.leaves.is_empty(),
+            "whole-element: no decomposed leaves"
+        );
         assert_eq!(
-            plan.element.as_ref().map(|t| t.to_token_stream().to_string()),
+            plan.element
+                .as_ref()
+                .map(|t| t.to_token_stream().to_string()),
             Some("ZZenohId".to_string())
         );
         assert!(reg
@@ -1499,12 +1583,18 @@ mod tests {
         assert!(plan.element.is_none(), "decomposed: element not used");
         assert_eq!(plan.leaves.len(), 2);
         assert_eq!(plan.leaves[0].path[0].to_string(), "z_zenoh_id_to_string");
-        assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "String");
+        assert_eq!(
+            plan.leaves[0].out_ty.to_token_stream().to_string(),
+            "String"
+        );
         // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
         // owns its elements (by_ref = false).
         assert!(plan.leaves[1].identity);
         assert!(plan.leaves[1].path.is_empty());
-        assert_eq!(plan.leaves[1].out_ty.to_token_stream().to_string(), "ZZenohId");
+        assert_eq!(
+            plan.leaves[1].out_ty.to_token_stream().to_string(),
+            "ZZenohId"
+        );
     }
 
     #[test]
@@ -1529,7 +1619,9 @@ mod tests {
         assert!(matches!(&plan.shape, UnfoldShape::Optional(_)));
         assert_eq!(plan.leaves.len(), 1);
         assert_eq!(
-            plan.convert_out_ty.as_ref().map(|t| t.to_token_stream().to_string()),
+            plan.convert_out_ty
+                .as_ref()
+                .map(|t| t.to_token_stream().to_string()),
             Some("Option < i64 >".to_string())
         );
         // The shaped convert type is registered as a required output.
@@ -1551,7 +1643,10 @@ mod tests {
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
         acc.add_deconstruct_output(ident("z_sample_key_expr"));
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
-        let plan = reg.unfold_plans.get(&ident("z_sample_key_expr")).expect("plan");
+        let plan = reg
+            .unfold_plans
+            .get(&ident("z_sample_key_expr"))
+            .expect("plan");
         assert_eq!(plan.delivery, Delivery::Callback);
         assert_eq!(plan.leaves.len(), 2);
         assert!(plan.convert_out_ty.is_none());
@@ -1568,7 +1663,10 @@ mod tests {
         acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"));
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
-        let plan = reg.unfold_plans.get(&ident("z_session_peers_zid")).expect("plan");
+        let plan = reg
+            .unfold_plans
+            .get(&ident("z_session_peers_zid"))
+            .expect("plan");
         assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
         assert_eq!(plan.delivery, Delivery::Callback);
     }
@@ -1587,7 +1685,10 @@ mod tests {
         acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"));
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
-            ["z_keyexpr_try_from", "z_infallible"].iter().map(|s| ident(s)).collect();
+            ["z_keyexpr_try_from", "z_infallible"]
+                .iter()
+                .map(|s| ident(s))
+                .collect();
         let accset: std::collections::HashSet<syn::Ident> =
             ["z_error_message"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &declared, &accset).expect("apply");
@@ -1598,7 +1699,10 @@ mod tests {
             .expect("error plan for the fallible fn");
         assert_eq!(plan.delivery, Delivery::Callback);
         assert_eq!(plan.leaves.len(), 1);
-        assert_eq!(plan.leaves[0].out_ty.to_token_stream().to_string(), "String");
+        assert_eq!(
+            plan.leaves[0].out_ty.to_token_stream().to_string(),
+            "String"
+        );
         assert_eq!(plan.source.to_token_stream().to_string(), "ZError");
         // The infallible fn gets no error plan.
         assert!(!reg.error_plans.contains_key(&ident("z_infallible")));
@@ -1626,11 +1730,20 @@ mod tests {
         let accset: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
         let declared: std::collections::HashSet<syn::Ident> =
-            ["z_borrow_keyexpr", "z_make_keyexpr"].iter().map(|s| ident(s)).collect();
+            ["z_borrow_keyexpr", "z_make_keyexpr"]
+                .iter()
+                .map(|s| ident(s))
+                .collect();
         apply(&mut reg, &acc, &declared, &accset).expect("apply");
 
-        assert!(reg.unfold_plans.contains_key(&ident("z_borrow_keyexpr")), "borrow return");
-        assert!(reg.unfold_plans.contains_key(&ident("z_make_keyexpr")), "owned return");
+        assert!(
+            reg.unfold_plans.contains_key(&ident("z_borrow_keyexpr")),
+            "borrow return"
+        );
+        assert!(
+            reg.unfold_plans.contains_key(&ident("z_make_keyexpr")),
+            "owned return"
+        );
     }
 
     #[test]
@@ -1688,8 +1801,14 @@ mod tests {
             plan.leaves[0].out_ty.to_token_stream().to_string(),
             "& ZKeyExpr"
         );
-        assert_eq!(plan.leaves[1].path.last().unwrap().to_string(), "z_keyexpr_as_str");
-        assert_eq!(plan.leaves[2].out_ty.to_token_stream().to_string(), "SampleKind");
+        assert_eq!(
+            plan.leaves[1].path.last().unwrap().to_string(),
+            "z_keyexpr_as_str"
+        );
+        assert_eq!(
+            plan.leaves[2].out_ty.to_token_stream().to_string(),
+            "SampleKind"
+        );
         // Leaf out_tys registered so the resolver builds their converters.
         assert!(reg
             .required_outputs_scan
@@ -1716,9 +1835,8 @@ mod tests {
 
     #[test]
     fn callback_zero_arg_no_plan() {
-        let mut reg = reg_with(&[
-            "fn z_with_close(on_close: impl Fn() + Send + Sync + 'static) { todo!() }",
-        ]);
+        let mut reg =
+            reg_with(&["fn z_with_close(on_close: impl Fn() + Send + Sync + 'static) { todo!() }"]);
         let acc = Deconstructors::default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_with_close"].iter().map(|s| ident(s)).collect();

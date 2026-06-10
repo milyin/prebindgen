@@ -42,10 +42,10 @@ pub(crate) use crate::api::lang::jnigen::jni::wire_access::{box_class_for_wire, 
 pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
 
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
-pub(crate) use std::collections::{BTreeSet, HashSet};
-pub(crate) use std::path::{Path, PathBuf};
 pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::gen::kotlin::WriteKotlinError;
+pub(crate) use std::collections::{BTreeSet, HashSet};
+pub(crate) use std::path::{Path, PathBuf};
 
 // ──────────────────────────────────────────────────────────────────────
 // Language metadata (Prebindgen::Metadata for JniGen)
@@ -587,14 +587,13 @@ pub struct JniGen {
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
 }
 
-
 // ── Sibling submodules (carved from the former monolithic file) ─────────
 mod builder;
 mod emit;
 mod prim;
-mod trait_impl;
 #[cfg(test)]
 mod tests;
+mod trait_impl;
 
 mod fold;
 mod kotlin_emit;

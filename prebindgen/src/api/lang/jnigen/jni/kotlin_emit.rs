@@ -29,7 +29,9 @@
 use super::*;
 
 use crate::api::gen::kotlin as kt;
-use crate::api::gen::kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis};
+use crate::api::gen::kotlin::{
+    ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis,
+};
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
 ///
@@ -362,9 +364,7 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            written.push(
-                kt::KtFile::new(package).decl(build_enum_class(&class_name, item_enum)),
-            );
+            written.push(kt::KtFile::new(package).decl(build_enum_class(&class_name, item_enum)));
         }
         Ok(written)
     }
@@ -411,8 +411,7 @@ impl JniGen {
             if item_struct.ident.to_string() != class_name {
                 aliases.push((item_struct.ident.to_string(), class_name.clone()));
             }
-            let (class, imports) =
-                build_data_class(self, &class_name, item_struct, registry);
+            let (class, imports) = build_data_class(self, &class_name, item_struct, registry);
             written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }
 
@@ -559,10 +558,11 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), handle.kotlin_fqn.to_string()),
             };
-            written.push(
-                kt::KtFile::new(package)
-                    .decl(build_typed_handle(self, &class_name, handle.rust_doc)),
-            );
+            written.push(kt::KtFile::new(package).decl(build_typed_handle(
+                self,
+                &class_name,
+                handle.rust_doc,
+            )));
         }
         written
     }

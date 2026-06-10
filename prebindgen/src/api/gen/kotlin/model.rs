@@ -79,7 +79,10 @@ pub enum KtDecl {
     },
     /// Pre-rendered code at declaration position. `name` is the identity
     /// used for duplicate detection during merge.
-    Raw { name: String, code: Code },
+    Raw {
+        name: String,
+        code: Code,
+    },
 }
 
 impl KtDecl {

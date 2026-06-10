@@ -199,7 +199,12 @@ impl Expansions {
     /// `.fun_input(param, funcs)` — per-fn override: construct `param` from
     /// exactly the listed build-from variant fns (a subset of the canonical
     /// input). Recorded as an explicit decl so the auto-`default` skips it.
-    pub fn add_construct_subset(&mut self, func: syn::Ident, param: syn::Ident, funcs: Vec<syn::Ident>) {
+    pub fn add_construct_subset(
+        &mut self,
+        func: syn::Ident,
+        param: syn::Ident,
+        funcs: Vec<syn::Ident>,
+    ) {
         self.expands.push(ExpandDecl {
             func,
             param,
@@ -577,7 +582,14 @@ fn process_expand<M>(
     let variants = resolve_constructor(exp, registry, &target_key, ed)?;
     let mut visited: HashSet<TypeKey> = HashSet::new();
     let plan = build_plan(
-        exp, registry, ed, optional, by_ref, &target, &variants, &mut visited,
+        exp,
+        registry,
+        ed,
+        optional,
+        by_ref,
+        &target,
+        &variants,
+        &mut visited,
     )?;
 
     for leaf in &plan.leaves {
@@ -625,7 +637,11 @@ fn resolve_constructor<M>(
                     target: target_key.to_string(),
                     candidates: matches
                         .iter()
-                        .map(|c| c.name.clone().unwrap_or_else(|| "<constructor>".to_string()))
+                        .map(|c| {
+                            c.name
+                                .clone()
+                                .unwrap_or_else(|| "<constructor>".to_string())
+                        })
                         .collect(),
                 }),
             }
@@ -635,10 +651,7 @@ fn resolve_constructor<M>(
 
 /// Constructor signature: parameter `(name, type)` pairs, the produced
 /// (`Ok`) target type, and whether it is fallible (`-> Result<_, _>`).
-fn ctor_signature<M>(
-    registry: &Registry<M>,
-    func: &syn::Ident,
-) -> Result<CtorSig, ExpandError> {
+fn ctor_signature<M>(registry: &Registry<M>, func: &syn::Ident) -> Result<CtorSig, ExpandError> {
     let (item_fn, _) = registry
         .functions
         .get(func)
@@ -736,8 +749,17 @@ fn build_plan<M>(
     // on the cycle chain so a constructor parameter of the same type is rejected.
     visited.insert(TypeKey::from_type(target));
     let prefix = param.to_string();
-    let (selector, fold_variants) =
-        build_core(exp, registry, ed, target, variants, by_ref, &prefix, &mut leaves, visited)?;
+    let (selector, fold_variants) = build_core(
+        exp,
+        registry,
+        ed,
+        target,
+        variants,
+        by_ref,
+        &prefix,
+        &mut leaves,
+        visited,
+    )?;
     visited.remove(&TypeKey::from_type(target));
     Ok(FoldPlan {
         target: target.clone(),
@@ -778,7 +800,9 @@ fn build_core<M>(
             } else {
                 ident(&format!("{}_{}", prefix, pname))
             };
-            args.push(build_arg(exp, registry, ed, pty, name, false, leaves, visited)?);
+            args.push(build_arg(
+                exp, registry, ed, pty, name, false, leaves, visited,
+            )?);
         }
         Ok((
             None,
@@ -813,7 +837,9 @@ fn build_core<M>(
                         // `dispatched = true`: a combined arm's leaves are
                         // `Option`-wrapped (selector presence). Recursive nesting
                         // under a combined arm is rejected by `build_arg`.
-                        args.push(build_arg(exp, registry, ed, pty, name, true, leaves, visited)?);
+                        args.push(build_arg(
+                            exp, registry, ed, pty, name, true, leaves, visited,
+                        )?);
                     }
                     fold_variants.push(FoldVariant {
                         ctor: Some(func.clone()),
@@ -1035,7 +1061,12 @@ fn emit_dispatch(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
     match selector {
-        None => variant_result_expr(&variants[0], leaf_locals, qualify, /*dispatched=*/ false),
+        None => variant_result_expr(
+            &variants[0],
+            leaf_locals,
+            qualify,
+            /*dispatched=*/ false,
+        ),
         Some(si) => {
             let sel = &leaf_locals[si];
             let arms: Vec<TokenStream> = variants
@@ -1043,7 +1074,8 @@ fn emit_dispatch(
                 .enumerate()
                 .map(|(vi, v)| {
                     let lit = vi as i32;
-                    let body = variant_result_expr(v, leaf_locals, qualify, /*dispatched=*/ true);
+                    let body =
+                        variant_result_expr(v, leaf_locals, qualify, /*dispatched=*/ true);
                     quote!(#lit => #body,)
                 })
                 .collect();
@@ -1105,7 +1137,9 @@ fn variant_result_expr(
             // `OwnedObject<T>`) down to `T`, then clones — keeping the caller's
             // handle alive without the core knowing the back-end's borrow type.
             let some_val: syn::Expr = if v.clone {
-                syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(&*__v)))
+                syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
+                    &*__v
+                )))
             } else {
                 syn::parse_quote!(::core::result::Result::Ok(__v))
             };
@@ -1132,9 +1166,9 @@ fn variant_result_expr(
                     .map(|i| ident(&format!("__p{}", i)))
                     .collect();
                 let call = ctor_call_result(&path, &bind, v.fallible);
-                let missing = quote!(::core::result::Result::Err(
-                    ::std::string::String::from("constructor variant input missing")
-                ));
+                let missing = quote!(::core::result::Result::Err(::std::string::String::from(
+                    "constructor variant input missing"
+                )));
                 if input_locals.len() == 1 {
                     // `match a { Some(p0) => <call>, None => Err }`
                     let loc = input_locals[0];
@@ -1205,11 +1239,7 @@ fn variant_result_expr(
 
 /// `path(args…)` lifted to `Result<Target, String>` (mapping a fallible
 /// constructor's error via `Display`).
-fn ctor_call_result<I: quote::ToTokens>(
-    path: &syn::Path,
-    args: &[I],
-    fallible: bool,
-) -> syn::Expr {
+fn ctor_call_result<I: quote::ToTokens>(path: &syn::Path, args: &[I], fallible: bool) -> syn::Expr {
     if fallible {
         syn::parse_quote!(#path( #(#args),* ).map_err(|__e| ::std::format!("{}", __e)))
     } else {
@@ -1424,7 +1454,8 @@ mod tests {
             ident("autocanon"),
         );
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("explicit selection resolves");
+        apply(&mut reg, &exp, &Default::default(), &Default::default())
+            .expect("explicit selection resolves");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_keyexpr_intersects"), ident("a")))
@@ -1448,7 +1479,8 @@ mod tests {
         exp.add_constructor_variant(ident("z_zbytes_from_vec"));
         exp.add_construct(ident("z_session_delete"), ident("attachment"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply optional by-value");
+        apply(&mut reg, &exp, &Default::default(), &Default::default())
+            .expect("apply optional by-value");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_delete"), ident("attachment")))
@@ -1468,7 +1500,11 @@ mod tests {
             .to_token_stream()
             .to_string();
         assert!(s.contains("z_zbytes_from_vec"), "fold calls ctor: {}", s);
-        assert!(s.contains("Some") && s.contains("None"), "maps Option: {}", s);
+        assert!(
+            s.contains("Some") && s.contains("None"),
+            "maps Option: {}",
+            s
+        );
     }
 
     #[test]
@@ -1484,7 +1520,8 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_string"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply optional by-ref");
+        apply(&mut reg, &exp, &Default::default(), &Default::default())
+            .expect("apply optional by-ref");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
@@ -1573,7 +1610,10 @@ mod tests {
         // Opt the undeclare's `k` out (must stay a handle).
         exp.add_skip_default_construct(ident("z_session_undeclare"), ident("k"));
         let declared: std::collections::HashSet<syn::Ident> =
-            ["z_keyexpr_intersects", "z_session_undeclare"].iter().map(|s| ident(s)).collect();
+            ["z_keyexpr_intersects", "z_session_undeclare"]
+                .iter()
+                .map(|s| ident(s))
+                .collect();
         apply(&mut reg, &exp, &declared, &Default::default()).expect("apply");
 
         // Both `&ZKeyExpr` params of intersects are constructed.
@@ -1599,7 +1639,10 @@ mod tests {
         let accessor: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
         let declared: std::collections::HashSet<syn::Ident> =
-            ["z_keyexpr_intersects", "z_keyexpr_clone"].iter().map(|s| ident(s)).collect();
+            ["z_keyexpr_intersects", "z_keyexpr_clone"]
+                .iter()
+                .map(|s| ident(s))
+                .collect();
 
         // `.default()` skips the accessor's `ke`, constructs the consumer's a/b.
         let mut exp = Expansions::default();
@@ -1607,8 +1650,12 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.set_default();
         apply(&mut reg, &exp, &declared, &accessor).expect("apply");
-        assert!(reg.expansion_plans.contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
-        assert!(!reg.expansion_plans.contains_key(&(ident("z_keyexpr_clone"), ident("ke"))));
+        assert!(reg
+            .expansion_plans
+            .contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
+        assert!(!reg
+            .expansion_plans
+            .contains_key(&(ident("z_keyexpr_clone"), ident("ke"))));
 
         // Explicit `.construct` on an accessor is a build error.
         let mut reg2 = reg_with(&[
@@ -1661,8 +1708,14 @@ mod tests {
         assert_eq!(plan.variants.len(), 1);
         let args = &plan.variants[0].inputs;
         assert_eq!(args.len(), 2);
-        assert!(matches!(args[0], FoldArg::Build(_)), "key_expr is a nested build");
-        assert!(matches!(args[1], FoldArg::Build(_)), "payload is a nested build");
+        assert!(
+            matches!(args[0], FoldArg::Build(_)),
+            "key_expr is a nested build"
+        );
+        assert!(
+            matches!(args[1], FoldArg::Build(_)),
+            "payload is a nested build"
+        );
         // key_expr's nested build is COMBINED (try_from | identity ⇒ selector).
         if let FoldArg::Build(b) = &args[0] {
             assert!(b.selector.is_some(), "ZKeyExpr canonical input is combined");
@@ -1674,10 +1727,19 @@ mod tests {
         }
         // Wire leaves: key-expr selector + try_from String + identity ZKeyExpr +
         // zbytes Vec<u8> — all flattened into the one signature.
-        let leaf_tys: Vec<String> =
-            plan.leaves.iter().map(|l| l.ty.to_token_stream().to_string()).collect();
-        assert!(leaf_tys.iter().any(|t| t.contains("i32")), "selector leaf: {leaf_tys:?}");
-        assert!(leaf_tys.iter().any(|t| t.contains("String")), "try_from arg: {leaf_tys:?}");
+        let leaf_tys: Vec<String> = plan
+            .leaves
+            .iter()
+            .map(|l| l.ty.to_token_stream().to_string())
+            .collect();
+        assert!(
+            leaf_tys.iter().any(|t| t.contains("i32")),
+            "selector leaf: {leaf_tys:?}"
+        );
+        assert!(
+            leaf_tys.iter().any(|t| t.contains("String")),
+            "try_from arg: {leaf_tys:?}"
+        );
     }
 
     #[test]

@@ -7,7 +7,9 @@ fn body_of(src: &str) -> &str {
     // Strip banner + package + imports + the separating blank line.
     let mut rest = src;
     loop {
-        let Some((line, tail)) = rest.split_once('\n') else { break };
+        let Some((line, tail)) = rest.split_once('\n') else {
+            break;
+        };
         if line.starts_with("//")
             || line.starts_with("package ")
             || line.starts_with("import ")
@@ -30,15 +32,28 @@ fn body_of(src: &str) -> &str {
 fn enum_class_with_from_int_companion() {
     let class = KtClass::new(
         ClassKind::Enum(vec![
-            KtEnumEntry { name: "RED".into(), args: Some("0".into()) },
-            KtEnumEntry { name: "GREEN".into(), args: Some("5".into()) },
-            KtEnumEntry { name: "BLUE".into(), args: Some("6".into()) },
+            KtEnumEntry {
+                name: "RED".into(),
+                args: Some("0".into()),
+            },
+            KtEnumEntry {
+                name: "GREEN".into(),
+                args: Some("5".into()),
+            },
+            KtEnumEntry {
+                name: "BLUE".into(),
+                args: Some("6".into()),
+            },
         ]),
         "Color",
     )
     .vis(Vis::Public)
     .kdoc("JVM-side surface for the native Rust `Color` enum.")
-    .ctor_param(KtCtorParam::new("value", KtType::int()).val().vis(Vis::Public))
+    .ctor_param(
+        KtCtorParam::new("value", KtType::int())
+            .val()
+            .vis(Vis::Public),
+    )
     .companion(
         KtClass::companion_object().vis(Vis::Public).member(
             KtFun::new("fromInt")
@@ -72,7 +87,11 @@ public enum class Color(public val value: Int) {
 fn jvm_inline_value_class() {
     let class = KtClass::new(ClassKind::ValueInline, "ZenohId")
         .vis(Vis::Public)
-        .ctor_param(KtCtorParam::new("bytes", KtType::byte_array()).val().vis(Vis::Public));
+        .ctor_param(
+            KtCtorParam::new("bytes", KtType::byte_array())
+                .val()
+                .vis(Vis::Public),
+        );
     let src = render::render_one(&class.into(), "io.test.jni");
     assert_eq!(
         body_of(&src),
@@ -129,12 +148,14 @@ fn typed_handle_subclass_with_ctor_args_supertype() {
                     c.line("freePtr(ptr)").line("ptr = 0L")
                 })),
         )
-        .companion(KtClass::companion_object().member(
-            KtFun::new("freePtr")
-                .annotation("JvmStatic")
-                .modifier("external")
-                .param(KtParam::new("ptr", KtType::long())),
-        ));
+        .companion(
+            KtClass::companion_object().member(
+                KtFun::new("freePtr")
+                    .annotation("JvmStatic")
+                    .modifier("external")
+                    .param(KtParam::new("ptr", KtType::long())),
+            ),
+        );
     let src = render::render_one(&class.into(), "io.test.jni.thing");
     assert_eq!(
         body_of(&src),
@@ -193,7 +214,10 @@ fn top_level_fun_with_generics_named_lambda_and_default() {
         .vis(Vis::Public)
         .annotation("Suppress(\"UNCHECKED_CAST\")")
         .generic("R")
-        .param(KtParam::new("thing", KtType::cls("io.test.jni.thing.ZThing")))
+        .param(KtParam::new(
+            "thing",
+            KtType::cls("io.test.jni.thing.ZThing"),
+        ))
         .param(
             KtParam::new(
                 "onError",
@@ -211,7 +235,10 @@ fn top_level_fun_with_generics_named_lambda_and_default() {
             "build",
             KtType::lambda(
                 [
-                    ("handle".to_string(), KtType::cls("io.test.jni.thing.ZThing")),
+                    (
+                        "handle".to_string(),
+                        KtType::cls("io.test.jni.thing.ZThing"),
+                    ),
                     ("name".to_string(), KtType::string()),
                 ],
                 KtType::var_r(),
@@ -269,7 +296,10 @@ fn long_signature_wraps_params_one_per_line() {
         .returns(KtType::int())
         .body(Code::new().line("a + b"));
     let src = render::render_one(&short.into(), "p");
-    assert!(src.contains("public fun short(a: Int, b: Int): Int {"), "{src}");
+    assert!(
+        src.contains("public fun short(a: Int, b: Int): Int {"),
+        "{src}"
+    );
 
     // A signature wider than the threshold breaks one parameter per line,
     // with a trailing comma and the closing paren at the function indent.
@@ -377,8 +407,7 @@ fn merged_file_path_is_flattened() {
 
 #[test]
 fn multiline_kdoc() {
-    let c = KtClass::new(ClassKind::Plain, "X")
-        .kdoc("First line.\n\nSecond paragraph.");
+    let c = KtClass::new(ClassKind::Plain, "X").kdoc("First line.\n\nSecond paragraph.");
     let src = render::render_one(&c.into(), "p");
     assert!(
         src.contains("/**\n * First line.\n *\n * Second paragraph.\n */\nclass X"),

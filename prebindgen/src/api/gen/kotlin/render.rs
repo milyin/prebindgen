@@ -212,8 +212,7 @@ fn render_class(c: &KtClass, level: usize, imports: &mut ImportSet, out: &mut St
         ClassKind::Enum(entries) => Some(entries),
         _ => None,
     };
-    let has_body =
-        entries.is_some() || !c.members.is_empty() || c.companion.is_some();
+    let has_body = entries.is_some() || !c.members.is_empty() || c.companion.is_some();
     if !has_body {
         out.push('\n');
         return;

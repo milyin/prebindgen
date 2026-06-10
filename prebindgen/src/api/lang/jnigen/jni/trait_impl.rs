@@ -6,7 +6,6 @@
 
 use super::*;
 
-
 // ──────────────────────────────────────────────────────────────────────
 // Inherent helpers — wrapper builders (used by both Prebindgen impl
 // and consuming-crate wrapper exts like ZenohJniExt).
@@ -275,7 +274,6 @@ impl JniGen {
             metadata: self.opaque_leaf_meta(ty),
         }
     }
-
 }
 
 /// The single `signal_error` free function: the one error channel every
@@ -369,7 +367,10 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
 /// emission and keeps feature-gated handles (e.g. `zenoh-ext`-only types
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
-pub(crate) fn build_handle_destructor_items(ext: &JniGen, registry: &Registry<KotlinMeta>) -> Vec<syn::Item> {
+pub(crate) fn build_handle_destructor_items(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+) -> Vec<syn::Item> {
     let free_ptr = ext.mangle_fun("freePtr");
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
@@ -1323,5 +1324,4 @@ impl Prebindgen for JniGen {
     ) -> Option<ConverterImpl<KotlinMeta>> {
         self.lookup_output(pat, &[t1.clone(), t2.clone(), t3.clone()], registry)
     }
-
 }

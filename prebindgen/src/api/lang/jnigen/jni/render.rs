@@ -20,9 +20,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
         crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
             .into_iter()
             .map(|(ident, value)| kt::KtEnumEntry {
-                name: crate::api::lang::jnigen::util::camel_to_screaming_snake(
-                    &ident.to_string(),
-                ),
+                name: crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()),
                 args: Some(value.to_string()),
             })
             .collect();
@@ -77,10 +75,8 @@ pub(crate) fn build_data_class(
     let mut ctor_params: Vec<kt::KtCtorParam> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
-    let mut destructible_fields: Vec<(
-        String,
-        crate::api::lang::jnigen::jni::FoldStrategy,
-    )> = Vec::new();
+    let mut destructible_fields: Vec<(String, crate::api::lang::jnigen::jni::FoldStrategy)> =
+        Vec::new();
     for field in fields_named {
         let field_ident = field.ident.as_ref().unwrap_or_else(|| {
             panic!(
@@ -273,7 +269,9 @@ pub(crate) fn build_typed_handle(
     };
     kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
-        .kdoc(format!("Typed handle for a native Zenoh `{rust_doc_name}`."))
+        .kdoc(format!(
+            "Typed handle for a native Zenoh `{rust_doc_name}`."
+        ))
         .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()))
         .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
         .member(
@@ -424,7 +422,10 @@ pub(crate) fn render_extern_decl(
     let unfold = registry.unfold_plans.get(&f.sig.ident);
     let callback_unfold = unfold.filter(|p| p.delivery == Delivery::Callback);
     if let Some(plan) = callback_unfold {
-        if matches!(plan.shape, crate::api::core::unfold::UnfoldShape::Iterable(_)) {
+        if matches!(
+            plan.shape,
+            crate::api::core::unfold::UnfoldShape::Iterable(_)
+        ) {
             // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
             // `fold` is the non-null adapter callback.
             params.push(("acc".to_string(), "Any?".to_string()));
@@ -560,13 +561,17 @@ pub(crate) fn render_wrapper_fn(
         /// into the leaf access expressions (no `JObject` crosses, so the
         /// Rust side skips `env.get_field(...)`). The strings are the
         /// per-leaf call-site expressions in plan order.
-        FlattenStruct { accesses: Vec<String> },
+        FlattenStruct {
+            accesses: Vec<String>,
+        },
         /// `impl Fn(args)` callback param: typed Kotlin lambda over the
         /// flattened leaves of each arg's callback plan (whole arg when
         /// plan-less), erased to `Any` at the extern tier — the same shape as
         /// the unfold `build`/`onError` lambdas. `call_arg` is the call-site
         /// expression: the param itself, or a value-blob rebuilding adapter.
-        Callback { call_arg: String },
+        Callback {
+            call_arg: String,
+        },
     }
 
     let mut params: Vec<Param> = Vec::new();
@@ -595,8 +600,7 @@ pub(crate) fn render_wrapper_fn(
                     leaf_tys.push((whole_value_name(t, i), t.clone(), is_option_type(t)));
                 }
             }
-            let mut leaf_names: Vec<String> =
-                leaf_tys.iter().map(|(n, _, _)| n.clone()).collect();
+            let mut leaf_names: Vec<String> = leaf_tys.iter().map(|(n, _, _)| n.clone()).collect();
             dedup_kt_param_names(&mut leaf_names);
             let mut builder_kts: Vec<String> = Vec::with_capacity(leaf_tys.len());
             let mut adapter_params: Vec<String> = Vec::with_capacity(leaf_tys.len());
@@ -669,11 +673,7 @@ pub(crate) fn render_wrapper_fn(
         // **value projection** (`value_blob` — an inline value class). Only
         // handles participate in the lock scaffold and pass a `_ptr`; value
         // projections pass their unwrapped inner field.
-        let proj_kind = entry
-            .metadata
-            .projection
-            .as_ref()
-            .map(|p| p.kind.clone());
+        let proj_kind = entry.metadata.projection.as_ref().map(|p| p.kind.clone());
         let is_handle = matches!(
             proj_kind,
             Some(crate::api::lang::jnigen::jni::ProjectionKind::Handle)
@@ -693,7 +693,11 @@ pub(crate) fn render_wrapper_fn(
         // native wrapper + extern decl consume). The decision is purely
         // type-based so all three sites agree.
         let flat_plan = crate::api::lang::jnigen::jni::build_flat_input_plan(
-            ext, registry, &eff_ident, arg_ty, name.as_str(),
+            ext,
+            registry,
+            &eff_ident,
+            arg_ty,
+            name.as_str(),
         );
         let mode = if let Some(plan) = flat_plan {
             ParamMode::FlattenStruct {
@@ -730,16 +734,14 @@ pub(crate) fn render_wrapper_fn(
                      supported yet (param `{name}`); add array codegen to lift this guard."
                 );
             }
-            let field = crate::api::lang::jnigen::jni::value_projection_field_for_leaf(
-                ext,
-                &proj.leaf_key,
-            )
-            .unwrap_or_else(|| {
-                panic!(
-                    "render_wrapper_fn: cannot determine inline-class field for value \
+            let field =
+                crate::api::lang::jnigen::jni::value_projection_field_for_leaf(ext, &proj.leaf_key)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "render_wrapper_fn: cannot determine inline-class field for value \
                      projection param `{name}`"
-                )
-            });
+                        )
+                    });
             ParamMode::ValueUnwrap { field }
         } else {
             ParamMode::PassThrough
@@ -788,7 +790,9 @@ pub(crate) fn render_wrapper_fn(
     // `acc` + the fold callback/adapter for `Iterable`).
     let mut unfold_call_args: Vec<String> = Vec::new();
 
-    let (kt_return, projection) = if let Some(plan) = unfold.filter(|p| p.delivery == Delivery::Return) {
+    let (kt_return, projection) = if let Some(plan) =
+        unfold.filter(|p| p.delivery == Delivery::Return)
+    {
         // `convert_output` (Return): the wrapper returns the single converted
         // value directly — classify it exactly like a normal function whose
         // return type is `convert_out_ty`. No callback param, no generic, no
@@ -806,7 +810,11 @@ pub(crate) fn render_wrapper_fn(
         // has one (the element); otherwise the decomposed leaves.
         let arg_tys: Vec<(syn::Type, bool)> = match (&plan.shape, &plan.element) {
             (UnfoldShape::Iterable(_), Some(el)) => vec![(el.clone(), false)],
-            _ => plan.leaves.iter().map(|l| (l.out_ty.clone(), l.nullable)).collect(),
+            _ => plan
+                .leaves
+                .iter()
+                .map(|l| (l.out_ty.clone(), l.nullable))
+                .collect(),
         };
         // Lambda parameter names matching `arg_tys`: derived from the plan's
         // accessor paths; a whole-element Iterable delivers one `element`.
@@ -865,9 +873,7 @@ pub(crate) fn render_wrapper_fn(
                 format!("({}) -> R", builder_kts.join(", ")),
             ));
             if needs_adapter {
-                unfold_call_args.push(format!(
-                    "{{ {adapter_params} -> build({wrapped_args}) }}"
-                ));
+                unfold_call_args.push(format!("{{ {adapter_params} -> build({wrapped_args}) }}"));
             } else {
                 unfold_call_args.push("build".to_string());
             }
@@ -1019,7 +1025,11 @@ pub(crate) fn render_wrapper_fn(
     // converted/deconstructed (from `error_plans`). The wrapper passes a capture
     // to the extern, then — after the native call — calls `onError(je, ze…)` and
     // returns its `R` if a failure was recorded (no throw on the Rust upcall).
-    let r_ty = if is_unit { "Unit".to_string() } else { kt_return.clone() };
+    let r_ty = if is_unit {
+        "Unit".to_string()
+    } else {
+        kt_return.clone()
+    };
     let error_plan = registry.error_plans.get(&f.sig.ident);
     // Per ze leaf: (param name, public Kotlin type, default literal for a
     // binding error). Names derive from the error plan's accessor paths
@@ -1080,12 +1090,10 @@ pub(crate) fn render_wrapper_fn(
     // The je/ze argument list to call the user's `onError`, coalescing each
     // captured (nullable) ze with its default (a binding error leaves ze null).
     let onerr_call_args = std::iter::once("__cap_je".to_string())
-        .chain(
-            (0..n_ze).map(|i| {
-                let (_, _, def) = &ze_info[i];
-                format!("(__cap_ze{i} ?: {def})")
-            }),
-        )
+        .chain((0..n_ze).map(|i| {
+            let (_, _, def) = &ze_info[i];
+            format!("(__cap_ze{i} ?: {def})")
+        }))
         .collect::<Vec<_>>()
         .join(", ");
     // Default-ze args for a synchronous (pre-call) closed-handle guard, which
@@ -1104,7 +1112,9 @@ pub(crate) fn render_wrapper_fn(
             format!("{t}.ptr == 0L", t = o.target)
         };
         if is_unit {
-            prelock_guards.push_str(&format!("if ({cond}) {{ onError({onerr_guard_args}); return }}\n"));
+            prelock_guards.push_str(&format!(
+                "if ({cond}) {{ onError({onerr_guard_args}); return }}\n"
+            ));
         } else {
             prelock_guards.push_str(&format!("if ({cond}) return onError({onerr_guard_args})\n"));
         }
@@ -1136,9 +1146,17 @@ pub(crate) fn render_wrapper_fn(
     let mut ptr_binds = String::new();
     for o in &opaques {
         if o.nullable {
-            ptr_binds.push_str(&format!("val {n}_ptr = {t}?.ptr ?: 0L\n", n = o.name, t = o.target));
+            ptr_binds.push_str(&format!(
+                "val {n}_ptr = {t}?.ptr ?: 0L\n",
+                n = o.name,
+                t = o.target
+            ));
         } else {
-            ptr_binds.push_str(&format!("val {n}_ptr = {t}.ptr\n", n = o.name, t = o.target));
+            ptr_binds.push_str(&format!(
+                "val {n}_ptr = {t}.ptr\n",
+                n = o.name,
+                t = o.target
+            ));
         }
     }
 
@@ -1153,8 +1171,7 @@ pub(crate) fn render_wrapper_fn(
         // Pass the handles positionally to the allocation-free fixed-arity
         // `withSortedHandleLocks` overload. Otherwise build a `List` and use
         // the recursive overload.
-        let fixed_arity =
-            !opaques.iter().any(|o| o.nullable) && (1..=3).contains(&opaques.len());
+        let fixed_arity = !opaques.iter().any(|o| o.nullable) && (1..=3).contains(&opaques.len());
         if !ext.package.is_empty() {
             imports.insert(format!("{}.withSortedHandleLocks", ext.package));
             if !fixed_arity {
@@ -1253,10 +1270,14 @@ pub(crate) fn render_wrapper_fn(
         b.push_str(&format!("val __cap = {{ {cap_params} -> {cap_body} }}\n"));
         if is_unit {
             b.push_str(&format!("{core_expr}\n"));
-            b.push_str(&format!("if (__cap_failed) return onError({onerr_call_args})\n"));
+            b.push_str(&format!(
+                "if (__cap_failed) return onError({onerr_call_args})\n"
+            ));
         } else {
             b.push_str(&format!("val __ret = {core_expr}\n"));
-            b.push_str(&format!("if (__cap_failed) return onError({onerr_call_args})\n"));
+            b.push_str(&format!(
+                "if (__cap_failed) return onError({onerr_call_args})\n"
+            ));
             b.push_str("return __ret\n");
         }
         b
@@ -1502,10 +1523,7 @@ pub(crate) fn classify_return(
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
-) -> Option<(
-    String,
-    Option<crate::api::lang::jnigen::jni::Projection>,
-)> {
+) -> Option<(String, Option<crate::api::lang::jnigen::jni::Projection>)> {
     let ty = match output {
         syn::ReturnType::Default => return Some((String::new(), None)),
         syn::ReturnType::Type(_, t) => &**t,
@@ -1598,9 +1616,34 @@ pub(crate) fn kt_snake_to_camel(s: &str) -> String {
 pub(crate) fn kt_param_name(rust_ident: &str) -> String {
     let camel = kt_snake_to_camel(rust_ident);
     const HARD_KEYWORDS: &[&str] = &[
-        "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in",
-        "interface", "is", "null", "object", "package", "return", "super", "this", "throw",
-        "true", "try", "typealias", "typeof", "val", "var", "when", "while",
+        "as",
+        "break",
+        "class",
+        "continue",
+        "do",
+        "else",
+        "false",
+        "for",
+        "fun",
+        "if",
+        "in",
+        "interface",
+        "is",
+        "null",
+        "object",
+        "package",
+        "return",
+        "super",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typealias",
+        "typeof",
+        "val",
+        "var",
+        "when",
+        "while",
     ];
     if HARD_KEYWORDS.contains(&camel.as_str()) {
         format!("{camel}_")
