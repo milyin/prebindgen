@@ -14,9 +14,11 @@
 //!     `Any` here — no fun-interface files are generated.)
 //!
 //! The fragments are then MERGED by [`merge_package_files`] so every
-//! Java/Kotlin package collapses to a SINGLE `.kt` file — named after the
-//! package's last segment (`io.zenoh.jni.config` → `config.kt`) — that holds
-//! all of that package's classes, enums, value-classes and free functions.
+//! Java/Kotlin package collapses to a SINGLE `.kt` file, written at the
+//! FLATTENED path `<root>/<package as dirs>.kt` (`io.zenoh.jni.config` →
+//! `io/zenoh/jni/config.kt`) — i.e. the file is named after the package's last
+//! segment and lives in the directory of its parent package, holding all of
+//! that package's classes, enums, value-classes and free functions.
 //!
 //! Every `#[prebindgen]` function must be assigned a Kotlin home via
 //! `.method(...)` on either a typed-handle / data-class / enum config
@@ -59,9 +61,12 @@ impl JniGen {
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
         // Each emitter produces in-memory `KotlinFile` fragments (one per class
         // / enum / value-class / function-bucket). They are then MERGED so that
-        // every Java/Kotlin package collapses to a single `.kt` file — named
-        // after the package's last segment — holding all of that package's
-        // classes, enums, value-classes and free functions.
+        // every Java/Kotlin package collapses to a single `.kt` file, written at
+        // the FLATTENED path `<root>/<package as dirs>.kt` — e.g. package
+        // `io.zenoh.jni.bytes` → `io/zenoh/jni/bytes.kt` (not `…/bytes/bytes.kt`).
+        // Kotlin doesn't tie a file's location to its `package`, and a file
+        // `bytes.kt` never clashes with a sibling `bytes/` directory holding the
+        // sub-packages, so the layout is collision-free.
         let mut fragments: Vec<KotlinFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
@@ -88,7 +93,12 @@ impl JniGen {
 
         let mut written = Vec::new();
         for file in merge_package_files(fragments)? {
-            written.push(file.write(kotlin_root)?);
+            let path = merged_file_path(kotlin_root, &file);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, &file.contents)?;
+            written.push(path);
         }
         Ok(written)
     }
@@ -520,14 +530,34 @@ fn split_kotlin_contents(contents: &str) -> (Vec<String>, String) {
     (imports, lines[i..].join("\n").trim().to_string())
 }
 
+/// Resolve the on-disk path of a merged package file under `kotlin_root`,
+/// using a FLATTENED layout: package `a.b.c` → `<root>/a/b/c.kt` (the file is
+/// named after the package's last segment and sits in the directory of its
+/// PARENT package). This drops the redundant leaf directory of the Java-style
+/// `<root>/a/b/c/c.kt` layout.
+///
+/// The mapping is injective (distinct packages → distinct paths) and never
+/// collides with a directory: package `a.b.c` writes a FILE `c.kt` while any
+/// sub-package `a.b.c.d` needs a DIRECTORY `a/b/c/`, and `c.kt` ≠ `c` on disk.
+/// Kotlin imposes no file-location/`package` correspondence, so this compiles
+/// identically to the nested layout.
+fn merged_file_path(kotlin_root: &Path, file: &KotlinFile) -> PathBuf {
+    if file.package.is_empty() {
+        kotlin_root.join(format!("{}.kt", file.class_name))
+    } else {
+        kotlin_root.join(format!("{}.kt", file.package.replace('.', "/")))
+    }
+}
+
 /// Merge per-declaration [`KotlinFile`] fragments into ONE file per package.
 ///
-/// All fragments sharing a `package` are concatenated into a single file named
-/// after the package's last segment (`io.zenoh.jni.config` → `config.kt`). The
-/// union of their imports is emitted once, dropping any import that targets the
-/// merged file's own package (the symbol is now declared in the same file, so
-/// an explicit import would be a redeclaration). Packages are emitted in sorted
-/// order; within a package fragments keep their (deterministic) emission order.
+/// All fragments sharing a `package` are concatenated into one file (see
+/// [`merged_file_path`] for the on-disk path; e.g. `io.zenoh.jni.bytes` →
+/// `io/zenoh/jni/bytes.kt`). The union of their imports is emitted once,
+/// dropping any import that targets the merged file's own package (the symbol
+/// is now declared in the same file, so an explicit import would be a
+/// redeclaration). Packages are emitted in sorted order; within a package
+/// fragments keep their (deterministic) emission order.
 ///
 /// Fails with [`WriteKotlinError::Other`] on a duplicate declaration identity
 /// within a package, or on an `import` simple-name collision (two distinct FQNs
