@@ -1260,7 +1260,7 @@ pub(crate) fn render_wrapper_fn(
     };
     // The body is assembled as flat text (`core_expr` nests run/lock blocks);
     // the generator recomputes its indentation from brace structure.
-    Some(fun.body(kt::Code::raw_reindent(body.trim_end())))
+    Some(fun.body(kt::Code::raw_reindent_wrapped(body.trim_end())))
 }
 
 /// The Kotlin typing of one delivered lambda leaf: `(builder_kt, wire_kt,
