@@ -759,15 +759,77 @@ pub(crate) fn cast_wire_to_jobject(
     }
 }
 
+/// Reach a leaf's input by folding its accessor `path` over `base`, then hand
+/// the reached expression to `body` (which renders the encode and yields
+/// `JObject`). Every `Option`-returning nesting step becomes a `match`: its
+/// `None` arm short-circuits the whole leaf to `JObject::null()` (the value is
+/// absent ⇒ the leaf is null) — any number of `Option` steps on the path nest.
+/// With `unwrap_last == false` the final path element composes directly — a
+/// non-identity leaf's converter takes the final accessor's **full** return
+/// type (`Option` included), so only the steps *before* it are nesting. An
+/// identity leaf (`unwrap_last == true`) delivers the reached value itself, so
+/// a final `Option` step unwraps too.
+#[allow(clippy::too_many_arguments)]
+fn reach_leaf(
+    source_module: &syn::Path,
+    path: &[syn::Ident],
+    returns_option: &dyn Fn(&syn::Ident) -> bool,
+    base: TokenStream,
+    base_is_ref: bool,
+    unwrap_last: bool,
+    depth: usize,
+    body: &dyn Fn(TokenStream) -> TokenStream,
+) -> TokenStream {
+    let limit = if unwrap_last {
+        path.len()
+    } else {
+        path.len().saturating_sub(1)
+    };
+    let mut e = if base_is_ref { base } else { quote!(&#base) };
+    match (0..limit).find(|&i| returns_option(&path[i])) {
+        // No (more) `Option` nesting steps: compose the rest plainly.
+        None => {
+            for a in path {
+                e = quote!(#source_module::#a(#e));
+            }
+            body(e)
+        }
+        Some(k) => {
+            for a in &path[..k] {
+                e = quote!(#source_module::#a(#e));
+            }
+            let opt_acc = &path[k];
+            let nested = format_ident!("__n{}", depth);
+            let inner = reach_leaf(
+                source_module,
+                &path[k + 1..],
+                returns_option,
+                quote!(#nested),
+                true,
+                unwrap_last,
+                depth + 1,
+                body,
+            );
+            quote! {
+                match #source_module::#opt_acc(#e) {
+                    ::core::option::Option::Some(#nested) => { #inner }
+                    ::core::option::Option::None => jni::objects::JObject::null(),
+                }
+            }
+        }
+    }
+}
+
 /// Encode a plan's leaves off `value` (`__out`, a `Some`-bound `__inner`, a Vec
 /// `__elem`, or an owned callback arg) into the `obj_idents` `JObject` locals,
 /// in declared-leaf order. Reference (non-identity) leaves are encoded first —
 /// ending their borrow into the value — and the identity leaf last (move owned
 /// / clone `&T`). Each leaf's value is reached by folding its accessor `path`
-/// over `value`; a nullable leaf (an `Option` nesting step) wraps the encode in
-/// a `match Some/None`. Error arms are produced by `fail` (see
-/// [`cast_wire_to_jobject`]). Shared by the return-delivery site
-/// ([`emit_unfold_delivery`]) and the callback trampoline.
+/// over `value`; every `Option`-returning nesting step on the path wraps the
+/// rest in a `match Some/None` (`None` ⇒ a null leaf) — see [`reach_leaf`].
+/// Error arms are produced by `fail` (see [`cast_wire_to_jobject`]). Shared by
+/// the return-delivery site ([`emit_unfold_delivery`]) and the callback
+/// trampoline.
 pub(crate) fn encode_plan_leaves(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -780,16 +842,6 @@ pub(crate) fn encode_plan_leaves(
     let by_ref = plan.by_ref;
     let n = plan.leaves.len();
 
-    // Fold an accessor chain over a base value: `a_n( … a_1(base) … )`. Each
-    // accessor takes `&T` and returns `&F` (so references chain); only the base
-    // needs a `&` when it is owned (`base_is_ref == false`).
-    let compose = |path: &[syn::Ident], base: TokenStream, base_is_ref: bool| -> TokenStream {
-        let mut e = if base_is_ref { base } else { quote!(&#base) };
-        for a in path {
-            e = quote!(#source_module::#a(#e));
-        }
-        e
-    };
     // True when accessor `acc`'s return type is `Option<…>` (a nullable nesting
     // step on a leaf's path).
     let returns_option = |acc: &syn::Ident| -> bool {
@@ -825,7 +877,9 @@ pub(crate) fn encode_plan_leaves(
             // Box-handle, then Rust-wrapped into its typed Kotlin handle
             // class. A `value_blob` (`Copy`) is delivered by copy via its
             // value-blob converter (→ `JByteArray`); the Kotlin adapter wraps
-            // it (Rust can't box a `@JvmInline value class`).
+            // it (Rust can't box a `@JvmInline value class`). The whole path
+            // is `Option`-unwrapped (`unwrap_last`): an optional nesting step
+            // makes the leaf null when the value is absent.
             let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
@@ -838,25 +892,9 @@ pub(crate) fn encode_plan_leaves(
                     let fqn = handle_field_fqn(ext, proj).replace('.', "/");
                     let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
                     let handle_ident = format_ident!("__h{}", idx);
-                    if leaf.path.is_empty() && !by_ref {
-                        stmts.extend(quote! {
-                            let #handle_ident: jni::sys::jlong =
-                                std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
-                        });
-                    } else {
-                        let reached = compose(&leaf.path, value.clone(), by_ref);
-                        stmts.extend(quote! {
-                            let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
-                                ::core::result::Result::Ok(__w) => __w,
-                                ::core::result::Result::Err(__e) => {
-                                    #conv_fail
-                                }
-                            };
-                        });
-                    }
                     let wrap_fail = fail(quote!(__e2.to_string()));
-                    stmts.extend(quote! {
-                        let #obj_ident: jni::objects::JObject = match env.new_object(
+                    let wrap_handle = quote! {
+                        match env.new_object(
                             #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
                         ) {
                             ::core::result::Result::Ok(__o) => __o,
@@ -865,8 +903,39 @@ pub(crate) fn encode_plan_leaves(
                                     format!("wrap typed handle {}: {}", #fqn_lit, __e));
                                 #wrap_fail
                             }
-                        };
-                    });
+                        }
+                    };
+                    if leaf.path.is_empty() && !by_ref {
+                        stmts.extend(quote! {
+                            let #handle_ident: jni::sys::jlong =
+                                std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
+                            let #obj_ident: jni::objects::JObject = #wrap_handle;
+                        });
+                    } else {
+                        let expr = reach_leaf(
+                            source_module,
+                            &leaf.path,
+                            &returns_option,
+                            value.clone(),
+                            by_ref,
+                            true,
+                            0,
+                            &|reached| {
+                                quote! {{
+                                    let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            #conv_fail
+                                        }
+                                    };
+                                    #wrap_handle
+                                }}
+                            },
+                        );
+                        stmts.extend(quote! {
+                            let #obj_ident: jni::objects::JObject = #expr;
+                        });
+                    }
                 }
                 ProjectionKind::ValueBlob => {
                     // The value_blob converter takes the value owned (`Copy`).
@@ -874,67 +943,76 @@ pub(crate) fn encode_plan_leaves(
                     let wire = out_entry.destination.clone();
                     let enc_ident = format_ident!("__enc{}", idx);
                     let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
-                    let arg = if leaf.path.is_empty() && !by_ref {
-                        value.clone()
+                    if leaf.path.is_empty() && !by_ref {
+                        stmts.extend(quote! {
+                            let #enc_ident = match #conv(&mut env, #value) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    #conv_fail
+                                }
+                            };
+                            let #obj_ident: jni::objects::JObject = #cast;
+                        });
                     } else {
-                        let r = compose(&leaf.path, value.clone(), by_ref);
-                        quote!(*#r)
-                    };
-                    stmts.extend(quote! {
-                        let #enc_ident = match #conv(&mut env, #arg) {
-                            ::core::result::Result::Ok(__w) => __w,
-                            ::core::result::Result::Err(__e) => {
-                                #conv_fail
-                            }
-                        };
-                        let #obj_ident: jni::objects::JObject = #cast;
-                    });
+                        let expr = reach_leaf(
+                            source_module,
+                            &leaf.path,
+                            &returns_option,
+                            value.clone(),
+                            by_ref,
+                            true,
+                            0,
+                            &|reached| {
+                                quote! {{
+                                    let #enc_ident = match #conv(&mut env, *#reached) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            #conv_fail
+                                        }
+                                    };
+                                    #cast
+                                }}
+                            },
+                        );
+                        stmts.extend(quote! {
+                            let #obj_ident: jni::objects::JObject = #expr;
+                        });
+                    }
                 }
             }
             continue;
         }
 
-        // Accessor leaf: walk the path, encode with the leaf's output
-        // converter (the single JVM copy), then cast to JObject. A nullable
-        // leaf (an `Option` step on the path) wraps the encode in a match so
-        // `None` ⇒ a null leaf.
+        // Accessor leaf: walk the path — unwrapping every `Option` nesting
+        // step (`None` ⇒ a null leaf) — then encode the final accessor's full
+        // return with the leaf's output converter (the single JVM copy) and
+        // cast to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
         let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
-        match leaf.path.iter().position(|a| returns_option(a)) {
-            Some(k) => {
-                let recv = compose(&leaf.path[..k], value.clone(), by_ref);
-                let opt_acc = &leaf.path[k];
-                let inner_val = compose(&leaf.path[k + 1..], quote!(__inner), true);
-                stmts.extend(quote! {
-                    let #obj_ident: jni::objects::JObject =
-                        match #source_module::#opt_acc(#recv) {
-                            ::core::option::Option::Some(__inner) => {
-                                let #enc_ident = match #conv(&mut env, #inner_val) {
-                                    ::core::result::Result::Ok(__w) => __w,
-                                    ::core::result::Result::Err(__e) => {
-                                        #conv_fail
-                                    }
-                                };
-                                #cast
-                            }
-                            ::core::option::Option::None => jni::objects::JObject::null(),
-                        };
-                });
-            }
-            None => {
-                let acc_value = compose(&leaf.path, value.clone(), by_ref);
-                stmts.extend(quote! {
-                    let #enc_ident = match #conv(&mut env, #acc_value) {
+        let expr = reach_leaf(
+            source_module,
+            &leaf.path,
+            &returns_option,
+            value.clone(),
+            by_ref,
+            false,
+            0,
+            &|reached| {
+                quote! {{
+                    let #enc_ident = match #conv(&mut env, #reached) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
                             #conv_fail
                         }
                     };
-                    let #obj_ident: jni::objects::JObject = #cast;
-                });
-            }
-        }
+                    #cast
+                }}
+            },
+        );
+        stmts.extend(quote! {
+            let #obj_ident: jni::objects::JObject = #expr;
+        });
     }
     stmts
 }

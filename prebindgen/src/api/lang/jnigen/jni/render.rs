@@ -1294,12 +1294,25 @@ fn unfold_leaf_kt(
     };
     let (mut wire_kt, wrap) = if is_vb {
         let p = proj.as_ref().unwrap();
-        let short = builder_kt.to_string();
+        // Wrap class = the projection leaf's typed short name — NOT
+        // `builder_kt` (which is `Short?` for an `Option<…>` leaf and would
+        // leak the `?` into the constructor call).
+        let leaf_fqn = ext.kotlin_fqn(&p.leaf_key).unwrap_or(&p.leaf_key);
+        let short = leaf_fqn.rsplit('.').next().unwrap_or(leaf_fqn).to_string();
         let sentinel = projection_leaf_sentinel(p);
-        (
-            projection_wire_return(p),
-            fold_projection_wrap(&p.strategy, pk, &short, sentinel.as_deref()),
-        )
+        let mut wrap = fold_projection_wrap(&p.strategy, pk, &short, sentinel.as_deref());
+        // A `nullable` leaf (an `Option` nesting step on its path) makes the
+        // wire nullable even when the strategy itself is `Direct` — guard the
+        // wrap so a null wire stays null instead of feeding the constructor.
+        if nullable
+            && matches!(
+                p.strategy,
+                crate::api::lang::jnigen::jni::FoldStrategy::Direct
+            )
+        {
+            wrap = format!("{pk}?.let {{ {short}(it) }}");
+        }
+        (projection_wire_return(p), wrap)
     } else {
         (builder_kt.to_string(), pk.to_string())
     };

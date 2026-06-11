@@ -1276,6 +1276,11 @@ mod tests {
             "wrong",
             "z_error_message",
             "z_keyexpr_as_str",
+            "z_reply_replier_zid",
+            "z_reply_is_ok",
+            "z_reply_sample",
+            "z_reply_err",
+            "z_reply_error_payload",
             "z_sample_key_expr",
             "z_sample_payload",
             "z_sample_encoding",
@@ -1504,6 +1509,97 @@ mod tests {
         // Only the timestamp leaf (Option nesting accessor) is nullable.
         assert!(!plan.leaves[1].nullable && !plan.leaves[2].nullable);
         assert!(plan.leaves[4].nullable);
+    }
+
+    #[test]
+    fn reply_product_double_option_flatten() {
+        // ZReply-shaped product (Result<Sample, ReplyError> decomposed in the
+        // current product model): the root's records include two
+        // `Option<&Child>` nesting accessors (`z_reply_sample`, `z_reply_err`)
+        // whose children themselves contain `Option` nesting steps and a
+        // nested identity — the double-unwrap case — plus an
+        // `Option<ZZenohId>` Acc record with NO canonical child, which keeps
+        // the full `Option<…>` as its leaf `out_ty` (its own `Option` is the
+        // converter's business, not a nesting step ⇒ NOT nullable).
+        let mut reg = reg_with(&[
+            "fn z_recv_reply(q: &ZQuery) -> ZReply { todo!() }",
+            "fn z_reply_replier_zid(r: &ZReply) -> Option<ZZenohId> { todo!() }",
+            "fn z_reply_is_ok(r: &ZReply) -> bool { todo!() }",
+            "fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { todo!() }",
+            "fn z_reply_err(r: &ZReply) -> Option<&ZReplyError> { todo!() }",
+            "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+            "fn z_sample_timestamp(s: &ZSample) -> Option<&ZTimestamp> { todo!() }",
+            "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+            "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
+            "fn z_reply_error_payload(e: &ZReplyError) -> &ZZBytes { todo!() }",
+            "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
+        acc.add_deconstructor(syn::parse_quote!(ZZBytes));
+        acc.add_deconstructor_record(ident("z_zbytes_to_bytes"));
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"));
+        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"));
+        acc.add_deconstructor(syn::parse_quote!(ZReplyError));
+        acc.add_deconstructor_record_nested(ident("z_reply_error_payload"));
+        acc.add_deconstructor(syn::parse_quote!(ZReply));
+        acc.add_deconstructor_record(ident("z_reply_replier_zid"));
+        acc.add_deconstructor_record(ident("z_reply_is_ok"));
+        acc.add_deconstructor_record_nested(ident("z_reply_sample"));
+        acc.add_deconstructor_record_nested(ident("z_reply_err"));
+        acc.add_deconstruct_output(ident("z_recv_reply"));
+
+        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        let plan = reg.unfold_plans.get(&ident("z_recv_reply")).expect("plan");
+        assert!(!plan.by_ref, "owned ZReply return");
+        assert_eq!(plan.source.to_token_stream().to_string(), "ZReply");
+        assert!(matches!(&plan.shape, UnfoldShape::Decompose));
+        assert!(matches!(plan.delivery, Delivery::Callback));
+
+        let path = |l: &UnfoldLeaf| {
+            l.path
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(".")
+        };
+        assert_eq!(plan.leaves.len(), 6);
+        // Acc leaf keeping its full `Option<…>` return — not a nesting step.
+        assert_eq!(path(&plan.leaves[0]), "z_reply_replier_zid");
+        assert_eq!(
+            plan.leaves[0].out_ty.to_token_stream().to_string(),
+            "Option < ZZenohId >"
+        );
+        assert!(!plan.leaves[0].nullable && !plan.leaves[0].identity);
+        assert_eq!(path(&plan.leaves[1]), "z_reply_is_ok");
+        assert!(!plan.leaves[1].nullable);
+        // Ok-arm leaves: spliced through the `Option`-returning
+        // `z_reply_sample` ⇒ all nullable, incl. the nested keyexpr identity
+        // and the doubly-`Option` timestamp path.
+        assert!(plan.leaves[2].identity);
+        assert_eq!(path(&plan.leaves[2]), "z_reply_sample.z_sample_key_expr");
+        assert!(plan.leaves[2].nullable);
+        assert_eq!(
+            path(&plan.leaves[3]),
+            "z_reply_sample.z_sample_key_expr.z_keyexpr_as_str"
+        );
+        assert!(plan.leaves[3].nullable);
+        assert_eq!(
+            path(&plan.leaves[4]),
+            "z_reply_sample.z_sample_timestamp.z_timestamp_ntp64"
+        );
+        assert!(plan.leaves[4].nullable);
+        // Err-arm leaf: spliced through `z_reply_err`.
+        assert_eq!(
+            path(&plan.leaves[5]),
+            "z_reply_err.z_reply_error_payload.z_zbytes_to_bytes"
+        );
+        assert!(plan.leaves[5].nullable);
     }
 
     #[test]

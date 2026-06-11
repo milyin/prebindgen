@@ -705,6 +705,136 @@ fn callback_root_identity_moved_after_nested_borrow() {
     );
 }
 
+/// ZReply-shaped product decomposition: the callback arg's plan contains leaf
+/// paths with MULTIPLE `Option`-returning nesting steps (`z_reply_sample` →
+/// `z_sample_timestamp`), a nested handle identity reached *through* an
+/// `Option` step (`z_reply_sample` → `z_sample_key_expr`), and an Acc leaf
+/// whose own return keeps its full `Option<…>` as the converter input
+/// (`z_reply_zid -> Option<ZId>`, a value_blob with no canonical child).
+/// Every `Option` nesting step must become its own `match` (`None` ⇒ null
+/// leaf) — never a blind accessor compose through an `Option`.
+#[test]
+fn callback_double_option_unwrap_pipeline() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_reply_zid(r: &ZReply) -> Option<ZId> { unimplemented!() }",
+        "pub fn z_reply_is_ok(r: &ZReply) -> bool { unimplemented!() }",
+        "pub fn z_reply_sample(r: &ZReply) -> Option<&ZSample> { unimplemented!() }",
+        "pub fn z_reply_err(r: &ZReply) -> Option<&ZErr> { unimplemented!() }",
+        "pub fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { unimplemented!() }",
+        "pub fn z_sample_timestamp(s: &ZSample) -> Option<&ZTs> { unimplemented!() }",
+        "pub fn z_ts_ntp64(t: &ZTs) -> i64 { unimplemented!() }",
+        "pub fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { unimplemented!() }",
+        "pub fn z_err_payload(e: &ZErr) -> Vec<u8> { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    items.push((
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_get(cb: impl Fn(ZReply) + Send + Sync + 'static) {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    ));
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("query")
+        .value_blob(syn::parse_quote!(ZId))
+        .ptr_class(syn::parse_quote!(ZKeyExpr))
+        .ptr_class_output_direct()
+        .ptr_class_output(syn::parse_quote!(z_keyexpr_as_str))
+        .fun_accessor(syn::parse_quote!(z_keyexpr_as_str))
+        .ptr_class(syn::parse_quote!(ZTs))
+        .ptr_class_output(syn::parse_quote!(z_ts_ntp64))
+        .fun_accessor(syn::parse_quote!(z_ts_ntp64))
+        .ptr_class(syn::parse_quote!(ZSample))
+        .ptr_class_output(syn::parse_quote!(z_sample_key_expr))
+        .ptr_class_output(syn::parse_quote!(z_sample_timestamp))
+        .fun_accessor(syn::parse_quote!(z_sample_key_expr))
+        .fun_accessor(syn::parse_quote!(z_sample_timestamp))
+        .ptr_class(syn::parse_quote!(ZErr))
+        .ptr_class_output(syn::parse_quote!(z_err_payload))
+        .fun_accessor(syn::parse_quote!(z_err_payload))
+        .ptr_class(syn::parse_quote!(ZReply))
+        .ptr_class_output(syn::parse_quote!(z_reply_zid))
+        .ptr_class_output(syn::parse_quote!(z_reply_is_ok))
+        .ptr_class_output(syn::parse_quote!(z_reply_sample))
+        .ptr_class_output(syn::parse_quote!(z_reply_err))
+        .fun_accessor(syn::parse_quote!(z_reply_zid))
+        .fun_accessor(syn::parse_quote!(z_reply_is_ok))
+        .fun_accessor(syn::parse_quote!(z_reply_sample))
+        .fun_accessor(syn::parse_quote!(z_reply_err))
+        .fun(syn::parse_quote!(z_get));
+
+    let dir = unique_snapshot_dir("jnigen_double_opt");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Both Option nesting steps of the timestamp leaf get their own match;
+    // the innermost accessor composes off the second unwrap binding.
+    assert!(rc.contains("matchmyflat::z_reply_sample("), "{rust}");
+    assert!(rc.contains("matchmyflat::z_sample_timestamp("), "{rust}");
+    assert!(rc.contains("myflat::z_ts_ntp64(__n1)"), "{rust}");
+    // Never a blind compose through an `Option`-returning accessor.
+    assert!(
+        !rc.contains("myflat::z_ts_ntp64(myflat::z_sample_timestamp("),
+        "{rust}"
+    );
+    assert!(
+        !rc.contains("myflat::z_sample_key_expr(myflat::z_reply_sample("),
+        "{rust}"
+    );
+    // The nested keyexpr identity is reached through the `Option` unwrap and
+    // has a null arm.
+    assert!(rc.contains("myflat::z_sample_key_expr(__n0)"), "{rust}");
+    assert!(rc.contains("jni::objects::JObject::null()"), "{rust}");
+    // The `Option<ZId>` Acc leaf composes its full return directly into the
+    // converter — no unwrap of the leaf's own `Option`.
+    assert!(rc.contains("myflat::z_reply_zid(&__cb_arg0)"), "{rust}");
+    assert!(!rc.contains("matchmyflat::z_reply_zid("), "{rust}");
+    // 6 leaves ⇒ 6-object erased descriptor.
+    let descr = format!(
+        "\"({})Ljava/lang/Object;\"",
+        "Ljava/lang/Object;".repeat(6)
+    );
+    assert!(rc.contains(&descr), "{rust}");
+
+    // Kotlin wrapper tier: ok-arm and err-arm leaves are nullable (the value
+    // may be absent), the discriminator stays non-null.
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let pkg = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .find(|v| v.contains("public fun zGet"))
+        .unwrap_or_default();
+    let pc: String = pkg.split_whitespace().collect();
+    assert!(pc.contains("isOk:Boolean"), "{pkg}");
+    assert!(pc.contains(":ZKeyExpr?"), "{pkg}");
+    assert!(pc.contains(":Long?"), "{pkg}");
+    assert!(pc.contains(":ByteArray?"), "{pkg}");
+    assert!(pc.contains(":ZId?"), "{pkg}");
+    // The value-blob rebuilding adapter wraps the nullable wire with the bare
+    // value-class name — `x?.let { ZId(it) }`, never `ZId?(it)`.
+    assert!(pc.contains("?.let{ZId(it)}"), "{pkg}");
+    assert!(!pc.contains("ZId?(it)"), "{pkg}");
+}
+
 #[test]
 #[should_panic(expected = "Function22")]
 fn erased_invoke_descriptor_rejects_over_22() {
