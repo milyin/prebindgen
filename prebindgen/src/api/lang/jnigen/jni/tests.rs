@@ -621,6 +621,90 @@ fn callback_snapshot_kotlin_side() {
     assert!(pc.contains("cb:(zOther:ZOther)->Unit"), "{pkg}");
 }
 
+/// Regression: a callback-delivered type that has BOTH a nested handle identity
+/// (a child `ptr_class` reached by an accessor) AND its own root identity
+/// (`.ptr_class_output_direct()`) must emit the root MOVE after every borrow of
+/// the owned value — otherwise the nested child clone (which borrows the root)
+/// follows `Box::into_raw(Box::new(value))` and fails to compile with "use of
+/// moved value". Declaring `.ptr_class_output_direct()` LAST guarantees the
+/// correct order (the emitter emits identity leaves in declaration order, after
+/// all non-identity leaves). This mirrors the zenoh-flat `ZQuery` queryable
+/// callback (handle + decomposed fields, nested `ZKeyExpr` identity).
+#[test]
+fn callback_root_identity_moved_after_nested_borrow() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_parent_child(this_: &ZParent) -> &ZChild {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_child_name(this_: &ZChild) -> String {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_parent_sub(
+                    cb: impl Fn(ZParent) + Send + Sync + 'static,
+                    on_close: impl Fn() + Send + Sync + 'static,
+                ) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("thing")
+        // Child handle: canonical output = identity (clone) + its name string.
+        .ptr_class(syn::parse_quote!(ZChild))
+        .ptr_class_output_direct()
+        .ptr_class_output(syn::parse_quote!(z_child_name))
+        .fun_accessor(syn::parse_quote!(z_child_name))
+        // Parent: a nested child-handle record, then its OWN root identity LAST.
+        .ptr_class(syn::parse_quote!(ZParent))
+        .ptr_class_output(syn::parse_quote!(z_parent_child))
+        .ptr_class_output_direct()
+        .fun_accessor(syn::parse_quote!(z_parent_child))
+        .fun(syn::parse_quote!(z_parent_sub));
+
+    let dir = unique_snapshot_dir("jnigen_root_id_order");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // The root `ZParent` identity is a move (`Box::new(__cb_arg0)`); the nested
+    // `ZChild` identity (and its `z_child_name` leaf) borrow the same owned arg
+    // via `z_parent_child(&__cb_arg0)`. Every borrow must precede the move.
+    let move_pos = rc
+        .find("Box::new(__cb_arg0")
+        .unwrap_or_else(|| panic!("root identity move not found in:\n{rust}"));
+    let last_borrow = rc
+        .rfind("z_parent_child(&__cb_arg0")
+        .unwrap_or_else(|| panic!("nested child borrow not found in:\n{rust}"));
+    assert!(
+        last_borrow < move_pos,
+        "root identity move must follow every borrow of the owned arg\n{rust}"
+    );
+}
+
 #[test]
 #[should_panic(expected = "Function22")]
 fn erased_invoke_descriptor_rejects_over_22() {
