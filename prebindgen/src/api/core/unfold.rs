@@ -26,7 +26,6 @@
 
 use std::collections::HashSet;
 
-use proc_macro2::Span;
 
 use crate::api::core::types_util::{option_inner_type, short_type_name, vec_inner_type};
 use crate::api::core::registry::{Registry, TypeKey};
@@ -1433,7 +1432,7 @@ fn check_takes(
 
 #[cfg(test)]
 fn ident(s: &str) -> syn::Ident {
-    syn::Ident::new(s, Span::call_site())
+    syn::Ident::new(s, proc_macro2::Span::call_site())
 }
 
 #[cfg(test)]

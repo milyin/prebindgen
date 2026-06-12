@@ -494,16 +494,13 @@ pub(crate) enum LeafDefault {
     Str,
     /// Byte array or `Copy` value blob: an empty array.
     Bytes,
-    /// Opaque handle: a fresh CLOSED instance (`ptr = 0` — `isClosed()` is
-    /// the consumer's discriminant). Carries the typed class's dotted FQN.
-    Handle(String),
     /// Collection: an empty list.
     List,
 }
 
 /// Classify a leaf's binding-error default — see [`LeafDefault`].
 pub(crate) fn leaf_default(
-    ext: &JniGen,
+    _ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> LeafDefault {
@@ -518,7 +515,9 @@ pub(crate) fn leaf_default(
     });
     if let Some(proj) = &e.metadata.projection {
         return match proj.kind {
-            ProjectionKind::Handle => LeafDefault::Handle(handle_field_fqn(ext, proj)),
+            // A handle crosses as a raw jlong — `0L` (no handle) is the
+            // default; the receiver's `isClosed()`-style zero check applies.
+            ProjectionKind::Handle => LeafDefault::Prim(JniPrim::Long),
             ProjectionKind::ValueBlob => LeafDefault::Bytes,
         };
     }
@@ -567,14 +566,6 @@ fn default_ze_jvalues(
                     .map(|__a| jni::sys::jvalue { l: __a.into_raw() })
                     .unwrap_or(#null_jv)
             },
-            LeafDefault::Handle(fqn) => {
-                let fqn_lit = syn::LitStr::new(&fqn.replace('.', "/"), Span::call_site());
-                quote! {
-                    env.new_object(#fqn_lit, "(J)V", &[jni::objects::JValue::from(0i64)])
-                        .map(|__o| jni::sys::jvalue { l: __o.into_raw() })
-                        .unwrap_or(#null_jv)
-                }
-            }
             LeafDefault::List => quote! {
                 env.new_object("java/util/ArrayList", "()V", &[])
                     .map(|__o| jni::sys::jvalue { l: __o.into_raw() })
@@ -981,13 +972,17 @@ pub(crate) fn encode_plan_leaves(
         if leaf.identity {
             // Identity leaf: deliver the value itself. Its projection decides
             // how: a `ptr_class` Handle is cloned (`&T`, reached by the path)
-            // or — at the root of an owned value — moved into a fresh
-            // Box-handle, then Rust-wrapped into its typed Kotlin handle
-            // class. A `value_blob` (`Copy`) is delivered by copy via its
-            // value-blob converter (→ `JByteArray`); the Kotlin adapter wraps
-            // it (Rust can't box a `@JvmInline value class`). The whole path
-            // is `Option`-unwrapped (`unwrap_last`): an optional nesting step
-            // makes the leaf null when the value is absent.
+            // or — at the root of an owned value — moved into a fresh Box,
+            // and crosses as the RAW `jlong` (the receiver constructs the
+            // typed class in bytecode — a native `new_object` would cost a
+            // descriptor parse + FindClass + GetMethodID + NewObjectA per
+            // delivery). A nullable handle (an `Option` nesting step on the
+            // path) boxes to `java.lang.Long` / null. A `value_blob` (`Copy`)
+            // is delivered by copy via its value-blob converter
+            // (→ `JByteArray`); the Kotlin adapter wraps it (Rust can't box a
+            // `@JvmInline value class`). The whole path is `Option`-unwrapped
+            // (`unwrap_last`): an optional nesting step makes the leaf null
+            // when the value is absent.
             let proj = out_entry.metadata.projection.as_ref().unwrap_or_else(|| {
                 panic!(
                     "jnigen unfold: identity leaf `{}` has no projection — \
@@ -997,32 +992,19 @@ pub(crate) fn encode_plan_leaves(
             });
             match proj.kind {
                 ProjectionKind::Handle => {
-                    let fqn = handle_field_fqn(ext, proj).replace('.', "/");
-                    let fqn_lit = syn::LitStr::new(&fqn, Span::call_site());
                     let handle_ident = format_ident!("__h{}", idx);
-                    let wrap_fail = fail(quote!(__e2.to_string()));
-                    let wrap_handle = quote! {
-                        match env.new_object(
-                            #fqn_lit, "(J)V", &[jni::objects::JValue::from(#handle_ident)]
-                        ) {
-                            ::core::result::Result::Ok(__o) => __o,
-                            ::core::result::Result::Err(__e) => {
-                                let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                                    format!("wrap typed handle {}: {}", #fqn_lit, __e));
-                                #wrap_fail
-                            }
-                        }
-                    };
                     if leaf.path.is_empty() && !by_ref {
-                        stmts.extend(bind_obj(
-                            obj_ident,
-                            quote! {{
-                                let #handle_ident: jni::sys::jlong =
-                                    std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
-                                #wrap_handle
-                            }},
-                        ));
-                    } else {
+                        // Owned root, non-nullable by construction (nullable
+                        // comes from path nesting): move into a Box, raw jlong.
+                        stmts.extend(quote! {
+                            let #obj_ident: jni::sys::jvalue = jni::sys::jvalue {
+                                j: std::boxed::Box::into_raw(std::boxed::Box::new(#value))
+                                    as jni::sys::jlong,
+                            };
+                        });
+                    } else if !leaf.nullable {
+                        // Reached non-null handle: clone via the converter,
+                        // raw jlong (no Option steps on the path).
                         let expr = reach_leaf(
                             source_module,
                             &leaf.path,
@@ -1039,7 +1021,40 @@ pub(crate) fn encode_plan_leaves(
                                             #conv_fail
                                         }
                                     };
-                                    #wrap_handle
+                                    jni::sys::jvalue { j: #handle_ident }
+                                }}
+                            },
+                        );
+                        stmts.extend(quote! {
+                            let #obj_ident: jni::sys::jvalue = #expr;
+                        });
+                    } else {
+                        // Nullable handle (Option nesting step): boxed
+                        // `java.lang.Long` when present (cached valueOf),
+                        // JVM null when absent — matching the `Long?` param.
+                        let box_fail = fail(quote!(__e.to_string()));
+                        let expr = reach_leaf(
+                            source_module,
+                            &leaf.path,
+                            &returns_option,
+                            value.clone(),
+                            by_ref,
+                            true,
+                            0,
+                            &|reached| {
+                                quote! {{
+                                    let #handle_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            #conv_fail
+                                        }
+                                    };
+                                    match ::prebindgen::lang::box_jlong(&mut env, #handle_ident) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            #box_fail
+                                        }
+                                    }
                                 }}
                             },
                         );
@@ -1172,8 +1187,16 @@ pub(crate) fn leaf_is_prim(
     let Some(entry) = registry.output_entry(&leaf.out_ty) else {
         return false;
     };
-    entry.metadata.projection.is_none()
-        && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
+    // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose
+    // converter's wire is the raw `jlong` the typed `run` declares as `Long`
+    // (`J`): the receiver constructs the typed class in bytecode. A nullable
+    // handle boxes to `java.lang.Long` instead (object chunk). Value blobs
+    // stay objects (`[B`).
+    let proj_ok = match &entry.metadata.projection {
+        None => true,
+        Some(p) => p.kind == ProjectionKind::Handle,
+    };
+    proj_ok && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
 }
 
 /// Emit the wire params, decode prelude, and call argument for one

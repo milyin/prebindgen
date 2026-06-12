@@ -211,7 +211,7 @@ fn plan_leaf_params(
     let mut throwaway = BTreeSet::new();
     let mut out = Vec::with_capacity(leaves.len());
     for (name, leaf) in names.into_iter().zip(leaves.iter()) {
-        let ty = leaf_iface_kt(ext, registry, &leaf.out_ty, leaf.nullable, &mut throwaway)?;
+        let ty = leaf_iface_kt(ext, registry, &leaf.out_ty, leaf.nullable, true, &mut throwaway)?;
         out.push((name, ty));
     }
     Some(out)
@@ -227,6 +227,7 @@ pub(crate) fn leaf_iface_kt(
     registry: &Registry<KotlinMeta>,
     out_ty: &syn::Type,
     nullable: bool,
+    handle_as_long: bool,
     throwaway: &mut BTreeSet<String>,
 ) -> Option<kt::KtType> {
     // The declaration-canonical spec normalizes its identity leaf to the
@@ -252,21 +253,30 @@ pub(crate) fn leaf_iface_kt(
             t
         });
     }
-    // Handle leaf: re-key the class onto its registered FQN, keeping the
-    // folded nullability.
+    // Handle leaf. In a PLAN (decomposed leaves, `handle_as_long`): crosses
+    // as the RAW `jlong` handle (`Long` / boxed `Long?`) — the receiver
+    // constructs the typed class in bytecode (a JVM `new` is free next to the
+    // native `new_object` dance: descriptor parse + FindClass + GetMethodID +
+    // NewObjectA per message); ownership transfers with the value. Delivered
+    // WHOLE (a plan-less callback arg): keeps the typed handle class — the
+    // close-unless-taken contract needs the native side to `close()` the
+    // wrapped object after the invoke.
     if let Some(proj) = registry
         .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.as_ref())
         .filter(|p| p.kind == ProjectionKind::Handle)
     {
-        if let Some(fqn) = ext.kotlin_fqn(&proj.leaf_key) {
-            let t = kt::KtType::cls(fqn.to_string());
-            return Some(if builder_kt.is_nullable() {
-                t.nullable()
-            } else {
-                t
-            });
-        }
+        let t = if handle_as_long {
+            kt::KtType::long()
+        } else {
+            let fqn = ext.kotlin_fqn(&proj.leaf_key)?;
+            kt::KtType::cls(fqn.to_string())
+        };
+        return Some(if builder_kt.is_nullable() {
+            t.nullable()
+        } else {
+            t
+        });
     }
     Some(builder_kt)
 }
@@ -280,25 +290,25 @@ pub(crate) fn callback_iface_spec(
     registry: &Registry<KotlinMeta>,
     cb_args: &[syn::Type],
 ) -> Option<IfaceSpec> {
-    let mut leaf_tys: Vec<(String, syn::Type, bool)> = Vec::new();
+    let mut leaf_tys: Vec<(String, syn::Type, bool, bool)> = Vec::new();
     for (i, t) in cb_args.iter().enumerate() {
         if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(t)) {
             leaf_tys.extend(
                 plan_leaf_names(&plan.leaves)
                     .into_iter()
                     .zip(plan.leaves.iter())
-                    .map(|(n, l)| (n, l.out_ty.clone(), l.nullable)),
+                    .map(|(n, l)| (n, l.out_ty.clone(), l.nullable, true)),
             );
         } else {
-            leaf_tys.push((whole_value_name(t, i), t.clone(), is_option_type(t)));
+            leaf_tys.push((whole_value_name(t, i), t.clone(), is_option_type(t), false));
         }
     }
-    let mut names: Vec<String> = leaf_tys.iter().map(|(n, _, _)| n.clone()).collect();
+    let mut names: Vec<String> = leaf_tys.iter().map(|(n, _, _, _)| n.clone()).collect();
     dedup_names(&mut names);
     let mut throwaway = BTreeSet::new();
     let mut params = Vec::with_capacity(leaf_tys.len());
-    for (k, (_, out_ty, nullable)) in leaf_tys.iter().enumerate() {
-        let ty = leaf_iface_kt(ext, registry, out_ty, *nullable, &mut throwaway)?;
+    for (k, (_, out_ty, nullable, from_plan)) in leaf_tys.iter().enumerate() {
+        let ty = leaf_iface_kt(ext, registry, out_ty, *nullable, *from_plan, &mut throwaway)?;
         params.push((names[k].clone(), ty));
     }
     let name = if cb_args.is_empty() {
@@ -403,7 +413,7 @@ pub(crate) fn whole_folder_iface_spec(
     let mut params: Vec<(String, kt::KtType)> = vec![("acc".to_string(), kt::KtType::var_("A"))];
     params.push((
         "element".to_string(),
-        leaf_iface_kt(ext, registry, element, false, &mut throwaway)?,
+        leaf_iface_kt(ext, registry, element, false, false, &mut throwaway)?,
     ));
     let name = format!("{}Folder", subject_short(element));
     let package = subject_package(ext, element);

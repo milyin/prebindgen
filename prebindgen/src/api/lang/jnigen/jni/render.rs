@@ -958,7 +958,7 @@ pub(crate) fn render_wrapper_fn(
                 .map(|p| &p.leaves[i])
                 .expect("ze params exist only with an error plan");
             let default =
-                ze_default_kotlin(&leaf_default(ext, registry, leaf), kt.is_nullable(), imports);
+                ze_default_kotlin(&leaf_default(ext, registry, leaf), kt.is_nullable());
             (name.clone(), kt.clone(), default)
         })
         .collect();
@@ -1282,22 +1282,13 @@ pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
 /// so the two sides cannot drift. The [`LeafDefault::Null`] arm renders
 /// `null` (valid for plan-nullable params; an unknown non-null object kind
 /// gets a `null!!` assertion — no constructible default exists for it).
-fn ze_default_kotlin(
-    d: &LeafDefault,
-    kt_nullable: bool,
-    imports: &mut BTreeSet<String>,
-) -> String {
+fn ze_default_kotlin(d: &LeafDefault, kt_nullable: bool) -> String {
     match d {
         LeafDefault::Null if kt_nullable => "null".to_string(),
         LeafDefault::Null => "null!!".to_string(),
         LeafDefault::Prim(p) => p.kotlin_zero().to_string(),
         LeafDefault::Str => "\"\"".to_string(),
         LeafDefault::Bytes => "ByteArray(0)".to_string(),
-        LeafDefault::Handle(fqn) => {
-            let short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
-            imports.insert(fqn.clone());
-            format!("{short}(0L)")
-        }
         LeafDefault::List => "emptyList()".to_string(),
     }
 }

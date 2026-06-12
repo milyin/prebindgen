@@ -51,7 +51,7 @@ pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
 pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::gen::kotlin::WriteKotlinError;
-pub(crate) use std::collections::{BTreeSet, HashSet};
+pub(crate) use std::collections::BTreeSet;
 pub(crate) use std::path::{Path, PathBuf};
 
 // ──────────────────────────────────────────────────────────────────────

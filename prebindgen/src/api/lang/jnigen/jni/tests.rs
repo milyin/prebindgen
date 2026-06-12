@@ -559,12 +559,9 @@ fn callback_snapshot_rust_side() {
     // erased `FunctionN.invoke`.
     assert!(rc.contains(r#""run""#), "{rust}");
     assert!(!rc.contains(r#""invoke""#), "{rust}");
-    // Decomposed ZThing arg: 2 typed leaves (handle class + String), void
-    // return; on_close ⇒ zero-arg `()V`.
-    assert!(
-        rc.contains(r#""(Lio/test/jni/thing/ZThing;Ljava/lang/String;)V""#),
-        "{rust}"
-    );
+    // Decomposed ZThing arg: 2 typed leaves (raw jlong handle + String),
+    // void return; on_close ⇒ zero-arg `()V`.
+    assert!(rc.contains(r#""(JLjava/lang/String;)V""#), "{rust}");
     assert!(rc.contains(r#""()V""#), "{rust}");
     // Fallback ZOther arg: 1 typed handle param + post-invoke `close()` of
     // the boxed handle. The decomposed path never closes (ownership
@@ -576,9 +573,10 @@ fn callback_snapshot_rust_side() {
     assert!(rc.contains("attach_current_thread_as_daemon"), "{rust}");
     assert!(rc.contains("push_local_frame"), "{rust}");
     assert!(rc.contains("pop_local_frame"), "{rust}");
-    // Identity leaf of the decomposed arg: moved into a fresh box and wrapped
-    // in the typed handle class (declared under the `thing` subpackage).
-    assert!(rc.contains("io/test/jni/thing/ZThing"), "{rust}");
+    // Identity leaf of the decomposed arg: moved into a fresh box and crosses
+    // as a RAW jlong jvalue — no native `new_object` of the typed class.
+    assert!(rc.contains("jni::sys::jvalue{j:"), "{rust}");
+    assert!(!rc.contains("io/test/jni/thing/ZThing"), "{rust}");
     // The decomposed leaf encode calls the accessor off the owned root.
     assert!(rc.contains("myflat::z_thing_name"), "{rust}");
 }
@@ -612,7 +610,7 @@ fn callback_snapshot_kotlin_side() {
         .split_whitespace()
         .collect();
     assert!(
-        all.contains("funinterfaceZThingCallback{publicfunrun(handle:ZThing,name:String)"),
+        all.contains("funinterfaceZThingCallback{publicfunrun(handle:Long,name:String)"),
         "{all}"
     );
     assert!(
@@ -823,9 +821,7 @@ fn callback_double_option_unwrap_pipeline() {
     // for the non-null bool discriminator, typed handle class (full FQN),
     // nullable String, BOXED Long for the nullable timestamp, nullable `[B`.
     assert!(
-        rc.contains(
-            "\"([BZLio/test/jni/query/ZKeyExpr;Ljava/lang/String;Ljava/lang/Long;[B)V\""
-        ),
+        rc.contains("\"([BZLjava/lang/Long;Ljava/lang/String;Ljava/lang/Long;[B)V\""),
         "{rust}"
     );
     // The non-null bool crosses as a raw typed jvalue — never boxed.
@@ -851,7 +847,7 @@ fn callback_double_option_unwrap_pipeline() {
         .unwrap_or_default();
     let ic: String = iface.split_whitespace().collect();
     assert!(ic.contains("isOk:Boolean"), "{iface}");
-    assert!(ic.contains(":ZKeyExpr?"), "{iface}");
+    assert!(ic.contains("sampleKeyExpr:Long?"), "{iface}");
     assert!(ic.contains(":Long?"), "{iface}");
     assert!(ic.contains(":ByteArray?"), "{iface}");
     assert!(!ic.contains(":ZId"), "{iface}");
@@ -1127,7 +1123,7 @@ fn error_unwrap_universal_records() {
     // Integer for the Option-nested code — exactly the builder typing.
     assert!(
         rc.contains(
-            "\"(Ljava/lang/String;Lio/test/jni/errors/ZErr;Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""
+            "\"(Ljava/lang/String;JLjava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""
         ),
         "{rust}"
     );
@@ -1139,12 +1135,10 @@ fn error_unwrap_universal_records() {
         "{rust}"
     );
     assert!(rc.contains("matchmyflat::z_err_detail(&__de)"), "{rust}");
-    // Binding-error defaults: closed handle instance, empty string, null for
-    // the nullable leaf — built lazily in the __ze_defaults closure.
-    assert!(
-        rc.contains("env.new_object(\"io/test/jni/errors/ZErr\",\"(J)V\",&[jni::objects::JValue::from(0i64)])"),
-        "{rust}"
-    );
+    // Binding-error defaults: zeroed jlong for the handle (no native
+    // construction), empty string, null for the nullable leaf — built lazily
+    // in the __ze_defaults closure.
+    assert!(!rc.contains("env.new_object(\"io/test/jni/errors/ZErr\""), "{rust}");
     assert!(rc.contains("env.new_string(\"\")"), "{rust}");
 
     let kdir = dir.join("kotlin");
@@ -1159,7 +1153,7 @@ fn error_unwrap_universal_records() {
     // Builder-typed handler interface.
     assert!(
         all.contains(
-            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:ZErr,message:String,detailCode:Int?):R"
+            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:Long,message:String,detailCode:Int?):R"
         ),
         "{all}"
     );

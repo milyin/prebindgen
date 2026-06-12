@@ -106,6 +106,47 @@ impl JniGen {
         }
     }
 
+    /// `Cow<[u8]>` output converter (any lifetime form) — see the call site
+    /// in [`Self::on_output_type_rank_0`]. `None` when `ty` isn't a
+    /// `Cow<…, [u8]>` path.
+    fn cow_bytes_output(&self, ty: &syn::Type) -> Option<ConverterImpl<KotlinMeta>> {
+        let syn::Type::Path(tp) = ty else { return None };
+        let seg = tp.path.segments.last()?;
+        if seg.ident != "Cow" {
+            return None;
+        }
+        let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+            return None;
+        };
+        let inner_is_bytes = ab.args.iter().any(|a| {
+            matches!(a, syn::GenericArgument::Type(t) if TypeKey::from_type(t).as_str() == "[u8]")
+        });
+        if !inner_is_bytes {
+            return None;
+        }
+        // The generated fn's param type must be resolvable without imports —
+        // normalize whatever path form the accessor wrote to the full one.
+        let norm_ty: syn::Type = syn::parse_quote!(::std::borrow::Cow<'_, [u8]>);
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
+        let body: syn::Expr = syn::parse_quote!({
+            env.byte_array_from_slice(&v).map_err(|e| {
+                <__JniErr as ::core::convert::From<String>>::from(format!(
+                    "encode_byte_array: {}",
+                    e
+                ))
+            })?
+        });
+        let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::byte_array()));
+        let niches = default_niches_for_wire(&wire);
+        Some(ConverterImpl {
+            pre_stages: vec![],
+            function: self.build_output_fn(&norm_ty, &wire, &body, None),
+            destination: wire,
+            niches,
+            metadata: self.framework_meta(kotlin_name),
+        })
+    }
+
     /// Universal "opaque Box-handle as `jlong`" pair — input side.
     ///
     /// Use for any Rust type whose lifecycle is owned by the Java side:
@@ -1097,6 +1138,14 @@ impl Prebindgen for JniGen {
         // name) so required-propagation doesn't flag it unresolved.
         if TypeKey::from_type(ty).as_str() == "str" {
             return Some(self.str_ref_output());
+        }
+        // `Cow<'_, [u8]>` (any lifetime): a borrow-or-owned byte container —
+        // one copy into the JVM array straight off the `Deref<[u8]>`, no
+        // intermediate owned `Vec` (the zero-copy dual of the `Vec<u8>`
+        // output, for accessors like `zenoh::ZBytes::to_bytes()` that borrow
+        // when the payload is contiguous). Surfaces as Kotlin `ByteArray`.
+        if let Some(conv) = self.cow_bytes_output(ty) {
+            return Some(conv);
         }
         // `()` — identity converter so `fn foo()` and `fn foo() -> ()`
         // funnel through the same uniform output path as everything else.
