@@ -935,22 +935,30 @@ pub(crate) fn render_wrapper_fn(
     let is_unit = kt_return.is_none();
 
     // Error callback `onError: <Err>Handler<R>` / `JniErrorHandler<R>` — a
-    // generated typed fun interface `run(je: String?, ze…): R`. `je` (binding
-    // message) is fixed; the `ze` params are the fn's `Result<_, E>` domain
-    // error converted/deconstructed (from `error_plans`), nullable (a binding
-    // error delivers null ze — the wrapper coalesces with defaults). The
+    // generated typed fun interface `run(je: String?, ze…): R` whose ze params
+    // are typed EXACTLY like a builder's leaves (the error channel is the
+    // output channel with a fixed leading `je`). Contract: `je != null` ⇒
+    // binding/system error, the native side fills the ze with defaults;
+    // `je == null` ⇒ domain error, the ze carry the decomposed error. The
     // wrapper passes a SAM **capture** to the extern, then — after the native
     // call — calls `onError.run(je, ze…)` and returns its `R` if a failure
     // was recorded (no throw on the Rust upcall).
     let r_ty = kt_return.clone().unwrap_or_else(kt::KtType::unit);
     let sink_spec = onerror_iface_spec(ext, registry, &f.sig.ident)?;
-    // Per ze leaf: (param name, nullable iface Kotlin type, default literal
-    // for a binding error) — straight off the handler interface spec (its
-    // first param is the fixed `je`).
+    let error_plan = registry.error_plans.get(&f.sig.ident);
+    // Per ze leaf: (param name, iface Kotlin type, Kotlin default literal) —
+    // names/types off the handler interface spec (its first param is the
+    // fixed `je`), defaults derived from the matching error-plan leaf (same
+    // declaration, same order).
     let ze_info: Vec<(String, kt::KtType, String)> = sink_spec.params[1..]
         .iter()
-        .map(|(name, kt)| {
-            let default = kt_value_default(kt);
+        .enumerate()
+        .map(|(i, (name, kt))| {
+            let leaf = error_plan
+                .map(|p| &p.leaves[i])
+                .expect("ze params exist only with an error plan");
+            let default =
+                ze_default_kotlin(&leaf_default(ext, registry, leaf), kt.is_nullable(), imports);
             (name.clone(), kt.clone(), default)
         })
         .collect();
@@ -960,17 +968,23 @@ pub(crate) fn render_wrapper_fn(
     // raw body text needs the import registered.
     imports.insert(sink_spec.fqn());
     let sink_short = sink_spec.name.clone();
-    // The je/ze argument list to call the user's `onError.run`, coalescing each
-    // captured (nullable) ze with its default (a binding error leaves ze null).
+    // The je/ze argument list to call the user's `onError.run`. The native
+    // side ALWAYS fills the ze (real values or defaults), so the nullable
+    // capture slots are non-null whenever `__cap_failed` — assert with `!!`
+    // for the non-null-declared params, pass through for nullable ones.
     let onerr_call_args = std::iter::once("__cap_je".to_string())
         .chain((0..n_ze).map(|i| {
-            let (_, _, def) = &ze_info[i];
-            format!("(__cap_ze{i} ?: {def})")
+            let (_, kt, _) = &ze_info[i];
+            if kt.is_nullable() {
+                format!("__cap_ze{i}")
+            } else {
+                format!("__cap_ze{i}!!")
+            }
         }))
         .collect::<Vec<_>>()
         .join(", ");
     // Default-ze args for a synchronous (pre-call) closed-handle guard, which
-    // calls `onError.run` directly.
+    // calls `onError.run` directly (a binding-class error ⇒ defaults).
     let onerr_guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
         .chain(ze_info.iter().map(|(_, _, def)| def.clone()))
         .collect::<Vec<_>>()
@@ -1116,9 +1130,12 @@ pub(crate) fn render_wrapper_fn(
         b.push_str("var __cap_failed = false\n");
         b.push_str("var __cap_je: String? = null\n");
         for i in 0..n_ze {
-            // The iface ze type is already nullable — render as-is.
+            // Capture slots are nullable-ized (`null` until the capture
+            // fires); the iface ze type itself may be non-null — the
+            // redispatch re-asserts with `!!` (see `onerr_call_args`).
             let (_, kt, _) = &ze_info[i];
-            b.push_str(&format!("var __cap_ze{i}: {kt} = null\n"));
+            let kt_opt = kt.clone().nullable();
+            b.push_str(&format!("var __cap_ze{i}: {kt_opt} = null\n"));
         }
         // The capture: a SAM literal of the handler interface (arity
         // `1 + n_ze`, params typed by the interface), recording into the
@@ -1257,23 +1274,31 @@ pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
     format!("arg{i}")
 }
 
-/// A Kotlin default-value literal for a (non-null) error `ze` leaf type, used
-/// when a **binding** error leaves the `ze` null (the value is ignored — the
-/// caller uses `je`). Covers the realistic leaf types; an unknown type falls
-/// back to a non-null-asserting `null!!` (never reached, since `je` is set).
-fn kt_value_default(kt: &kt::KtType) -> String {
-    match kt.leaf_name().unwrap_or("") {
-        "String" => "\"\"".to_string(),
-        "Long" => "0L".to_string(),
-        "Int" => "0".to_string(),
-        "Short" => "0".to_string(),
-        "Byte" => "0".to_string(),
-        "Boolean" => "false".to_string(),
-        "Double" => "0.0".to_string(),
-        "Float" => "0.0f".to_string(),
-        "Char" => "'\\u0000'".to_string(),
-        "ByteArray" => "ByteArray(0)".to_string(),
-        _ => "null!!".to_string(),
+/// The Kotlin default literal for an error `ze` leaf, used when the
+/// **wrapper itself** raises a binding-class error before the native call
+/// (the pre-lock closed-handle guard) and must call `onError.run` with
+/// builder-typed ze params. Rendered from the shared [`leaf_default`]
+/// classification — the same one the native `__ze_defaults` jvalues use —
+/// so the two sides cannot drift. The [`LeafDefault::Null`] arm renders
+/// `null` (valid for plan-nullable params; an unknown non-null object kind
+/// gets a `null!!` assertion — no constructible default exists for it).
+fn ze_default_kotlin(
+    d: &LeafDefault,
+    kt_nullable: bool,
+    imports: &mut BTreeSet<String>,
+) -> String {
+    match d {
+        LeafDefault::Null if kt_nullable => "null".to_string(),
+        LeafDefault::Null => "null!!".to_string(),
+        LeafDefault::Prim(p) => p.kotlin_zero().to_string(),
+        LeafDefault::Str => "\"\"".to_string(),
+        LeafDefault::Bytes => "ByteArray(0)".to_string(),
+        LeafDefault::Handle(fqn) => {
+            let short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+            imports.insert(fqn.clone());
+            format!("{short}(0L)")
+        }
+        LeafDefault::List => "emptyList()".to_string(),
     }
 }
 

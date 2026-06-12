@@ -437,10 +437,13 @@ pub(crate) fn folder_iface_for_plan(
 }
 
 /// Interface for a fallible function's **onError** handler: `run(je: String?,
-/// ze-leaves…): R`, `<out R>`. The `ze` leaves are NULLABLE — a binding
-/// error (`je != null`) delivers null `ze`s; consumers coalesce. Keyed by
-/// the error type's deconstructor declaration. Named `<decl-base>Handler`,
-/// placed in the error type's package.
+/// ze-leaves…): R`, `<out R>`. The `ze` leaves are typed EXACTLY like a
+/// builder's for the same decomposition — the error channel IS the output
+/// channel with a fixed leading `je`. Contract: `je != null` ⇒ binding/system
+/// error, the ze carry **default values** (0 / "" / empty / closed handle /
+/// null for plan-nullable leaves); `je == null` ⇒ domain error, the ze carry
+/// the decomposed error. Keyed by the error type's deconstructor declaration.
+/// Named `<decl-base>Handler`, placed in the error type's package.
 pub(crate) fn error_handler_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -449,9 +452,7 @@ pub(crate) fn error_handler_iface_spec(
     let spec = registry.decon_plans.get(decon)?;
     let mut params: Vec<(String, kt::KtType)> =
         vec![("je".to_string(), kt::KtType::string().nullable())];
-    for (name, ty) in plan_leaf_params(ext, registry, &spec.leaves)? {
-        params.push((name, ty.nullable()));
-    }
+    params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
     let name = format!(
         "{}Handler",
         decon_base_name(&subject_short(&spec.source), Some(decon))

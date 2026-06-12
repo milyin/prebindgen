@@ -204,7 +204,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #arg_mut #arg_ident = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                         return #on_err;
                     }
                 };
@@ -217,7 +217,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #stage0_ident = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                         return #on_err;
                     }
                 };
@@ -240,7 +240,7 @@ pub(crate) fn emit_jni_function_wrapper(
                     let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                             return #on_err;
                         }
                     };
@@ -308,11 +308,30 @@ pub(crate) fn emit_jni_function_wrapper(
         }
     } else if let Some(ep) = error_plan {
         // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,
-        // decompose `e` into the `ze` leaves and invoke the error callback with
-        // `je = None` (a domain error, not a binding one), then return the
-        // sentinel. The success `T` flows into the normal output phase.
-        let (ze_stmts, ze_idents) = emit_error_ze(ext, registry, ep);
-        let ze_refs = ze_idents.iter().map(|id| quote!(&#id));
+        // decompose `e` into the `ze` leaves — through the SAME shared leaf
+        // encoder every output/callback delivery uses (typed jvalues, handle
+        // wraps, Option-nested accessor unwrap) — and invoke the error
+        // callback with `je = None` (a domain error, not a binding one), then
+        // return the sentinel. A failure while ENCODING the error itself
+        // degrades to a binding error: `je` = message, ze = defaults. The
+        // success `T` flows into the normal output phase.
+        let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
+            .map(|i| format_ident!("__eze{}", i))
+            .collect();
+        let ze_fail = |msg: TokenStream| -> TokenStream {
+            quote! {
+                let __zd = __ze_defaults(&mut env);
+                signal_error(
+                    &mut env, &__error_sink,
+                    &__SINK_MID, __SINK_FQN, __SINK_DESCR,
+                    ::core::option::Option::Some(&#msg),
+                    &__zd,
+                );
+                return #on_err;
+            }
+        };
+        let (ze_stmts, ze_args) =
+            encode_plan_leaves(ext, registry, ep, &eze_idents, &quote!(__de), &ze_fail);
         quote! {
             match #raw_call {
                 ::core::result::Result::Ok(__v) => __v,
@@ -322,7 +341,7 @@ pub(crate) fn emit_jni_function_wrapper(
                         &mut env, &__error_sink,
                         &__SINK_MID, __SINK_FQN, __SINK_DESCR,
                         ::core::option::Option::None,
-                        &[#(#ze_refs),*],
+                        &[#(#ze_args),*],
                     );
                     return #on_err;
                 }
@@ -367,7 +386,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #next_ident = match #stage_fn(&mut env, #prev_out) {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                         return #on_err;
                     }
                 };
@@ -379,7 +398,7 @@ pub(crate) fn emit_jni_function_wrapper(
             match #conv_out(&mut env, #prev_out) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
-                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                     #on_err
                 }
             }
@@ -387,17 +406,18 @@ pub(crate) fn emit_jni_function_wrapper(
         phase
     };
 
-    // `__ze_defaults` — the `ze` objects passed at **binding** error sites (a
-    // `JniError`, where `je` carries the message). They are `null` (ignored by
-    // the callback, which uses `je`); the slice's length fixes the callback
-    // arity (`1 + n_ze`) so it matches the domain-error invocation. In scope for
-    // the prelude + every helper-generated `signal_error` call.
-    let ze_default_idents: Vec<syn::Ident> =
-        (0..n_ze).map(|i| format_ident!("__zd{}", i)).collect();
-    let ze_default_lets = ze_default_idents
-        .iter()
-        .map(|id| quote!(let #id: jni::objects::JObject = jni::objects::JObject::null();));
-    let ze_default_refs = ze_default_idents.iter().map(|id| quote!(#id));
+    // `__ze_defaults` — the typed default ze values passed at **binding**
+    // error sites (a `JniError`, where `je` carries the message). The handler
+    // interface types its ze exactly like a builder's leaves, so the defaults
+    // must be valid at those types: zeroed jvalue for raw primitives, `""`,
+    // an empty byte array, a closed (`ptr = 0`) handle instance, JVM null for
+    // plan-nullable leaves. Built LAZILY (the closure runs only on the cold
+    // error path); in scope for the prelude + every helper-generated
+    // `signal_error` call.
+    let ze_default_exprs: Vec<TokenStream> = error_plan
+        .map(|ep| default_ze_jvalues(ext, registry, ep))
+        .unwrap_or_default();
+    debug_assert_eq!(ze_default_exprs.len(), n_ze);
     // The error sink is a typed `<Err>Handler` / `JniErrorHandler` fun
     // interface; its `run` method ID is resolved once per process on the
     // interface class (the sink instance differs per call). The trio is in
@@ -411,8 +431,10 @@ pub(crate) fn emit_jni_function_wrapper(
     let sink_fqn_lit = syn::LitStr::new(&sink_spec.slash_fqn(), Span::call_site());
     let sink_descr_lit = syn::LitStr::new(&sink_spec.descr, Span::call_site());
     let ze_defaults_setup = quote! {
-        #(#ze_default_lets)*
-        let __ze_defaults: &[&jni::objects::JObject] = &[#(&#ze_default_refs),*];
+        #[allow(unused_variables)]
+        let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+            ::std::vec![#(#ze_default_exprs),*]
+        };
         #[allow(non_upper_case_globals)]
         static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod =
             ::prebindgen::lang::CachedIfaceMethod::new();
@@ -456,66 +478,110 @@ fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
     })
 }
 
-/// Decompose a domain error value `__de` (bound in scope) into its `ze` JVM
-/// objects via the error plan's leaves. Returns the prelude statements and the
-/// `ze` object idents (`__eze{i}`), in leaf order. Each leaf composes its
-/// accessor chain on `&__de`, encodes via the leaf's output converter, and casts
-/// to a `JObject` (object wires pass through / `.into()`; primitive wires box).
-fn emit_error_ze(
+/// Language-neutral default classification for one plan leaf — what a
+/// **binding** error fills its builder-typed `ze` slot with when the domain
+/// value never materialized. One classifier feeds both renderers — the
+/// native `__ze_defaults` jvalues ([`default_ze_jvalues`]) and the Kotlin
+/// guard literals (`ze_default_kotlin` in render.rs) — so the two sides
+/// cannot drift.
+pub(crate) enum LeafDefault {
+    /// Plan-nullable leaf, or an object kind with no constructible default
+    /// (data classes, …): JVM `null`.
+    Null,
+    /// Raw primitive: zero / `false`.
+    Prim(JniPrim),
+    /// Non-null `String`: `""`.
+    Str,
+    /// Byte array or `Copy` value blob: an empty array.
+    Bytes,
+    /// Opaque handle: a fresh CLOSED instance (`ptr = 0` — `isClosed()` is
+    /// the consumer's discriminant). Carries the typed class's dotted FQN.
+    Handle(String),
+    /// Collection: an empty list.
+    List,
+}
+
+/// Classify a leaf's binding-error default — see [`LeafDefault`].
+pub(crate) fn leaf_default(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    leaf: &crate::api::core::unfold::UnfoldLeaf,
+) -> LeafDefault {
+    if leaf.nullable {
+        return LeafDefault::Null;
+    }
+    let e = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
+        panic!(
+            "leaf_default: leaf `{}` has no registered output converter",
+            TypeKey::from_type(&leaf.out_ty)
+        )
+    });
+    if let Some(proj) = &e.metadata.projection {
+        return match proj.kind {
+            ProjectionKind::Handle => LeafDefault::Handle(handle_field_fqn(ext, proj)),
+            ProjectionKind::ValueBlob => LeafDefault::Bytes,
+        };
+    }
+    if let Some(p) = JniPrim::from_wire(&e.destination) {
+        return LeafDefault::Prim(p);
+    }
+    match jni_field_access(&e.destination) {
+        Some(("Ljava/lang/String;", _, _)) => LeafDefault::Str,
+        Some(("[B", _, _)) => LeafDefault::Bytes,
+        _ => match e
+            .metadata
+            .kotlin_name
+            .as_ref()
+            .and_then(|k| k.simple_name())
+        {
+            Some("List" | "MutableList") => LeafDefault::List,
+            _ => LeafDefault::Null,
+        },
+    }
+}
+
+/// The native default-`jvalue` expression per error-plan leaf, rendered from
+/// [`leaf_default`]. Each expression evaluates inside the lazy
+/// `__ze_defaults` closure (`env` in scope); a zeroed union (`l = null`) is
+/// 0 / `false` at every primitive slot. Construction failures fall back to
+/// null (cold path, OOM-class only).
+fn default_ze_jvalues(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
-) -> (TokenStream, Vec<syn::Ident>) {
-    let source_module = &ext.source_module;
-    let mut stmts = TokenStream::new();
-    let mut idents = Vec::with_capacity(plan.leaves.len());
-    for (i, leaf) in plan.leaves.iter().enumerate() {
-        let out_entry = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
-            panic!(
-                "emit_error_ze: error leaf `{}` has no registered output converter",
-                TypeKey::from_type(&leaf.out_ty)
-            )
-        });
-        let conv = out_entry.function.sig.ident.clone();
-        let wire = out_entry.destination.clone();
-        // Compose the accessor chain on `&__de` (error plans are borrow-decompose;
-        // an empty path = the error value itself, but error decomposition always
-        // has at least one accessor — e.g. `z_error_message`).
-        let mut acc = quote!(&__de);
-        for a in &leaf.path {
-            acc = quote!(#source_module::#a(#acc));
-        }
-        let enc = format_ident!("__eze_enc{}", i);
-        let obj = format_ident!("__eze{}", i);
-        let cast: TokenStream = if is_jobject_wire(&wire) {
-            quote!(#enc)
-        } else if matches!(jni_field_access(&wire), Some((_, _, true))) {
-            quote!(#enc.into())
-        } else if let Some(helper) = box_helper_for_wire(&wire) {
-            quote! {
-                match ::prebindgen::lang::#helper(&mut env, #enc) {
-                    ::core::result::Result::Ok(__o) => __o,
-                    ::core::result::Result::Err(_) => jni::objects::JObject::null(),
+) -> Vec<TokenStream> {
+    let null_jv = quote!(jni::sys::jvalue {
+        l: ::std::ptr::null_mut()
+    });
+    plan.leaves
+        .iter()
+        .map(|leaf| match leaf_default(ext, registry, leaf) {
+            LeafDefault::Null | LeafDefault::Prim(_) => null_jv.clone(),
+            LeafDefault::Str => quote! {
+                env.new_string("")
+                    .map(|__s| jni::sys::jvalue { l: __s.into_raw() })
+                    .unwrap_or(#null_jv)
+            },
+            LeafDefault::Bytes => quote! {
+                env.byte_array_from_slice(&[])
+                    .map(|__a| jni::sys::jvalue { l: __a.into_raw() })
+                    .unwrap_or(#null_jv)
+            },
+            LeafDefault::Handle(fqn) => {
+                let fqn_lit = syn::LitStr::new(&fqn.replace('.', "/"), Span::call_site());
+                quote! {
+                    env.new_object(#fqn_lit, "(J)V", &[jni::objects::JValue::from(0i64)])
+                        .map(|__o| jni::sys::jvalue { l: __o.into_raw() })
+                        .unwrap_or(#null_jv)
                 }
             }
-        } else {
-            panic!(
-                "emit_error_ze: error leaf `{}` has unsupported wire `{}`",
-                TypeKey::from_type(&leaf.out_ty),
-                wire.to_token_stream()
-            )
-        };
-        // Encode failures here can't re-enter the error channel (we're already in
-        // it); fall back to a null `ze` object on failure.
-        stmts.extend(quote! {
-            let #obj: jni::objects::JObject = match #conv(&mut env, #acc) {
-                ::core::result::Result::Ok(#enc) => #cast,
-                ::core::result::Result::Err(_) => jni::objects::JObject::null(),
-            };
-        });
-        idents.push(obj);
-    }
-    (stmts, idents)
+            LeafDefault::List => quote! {
+                env.new_object("java/util/ArrayList", "()V", &[])
+                    .map(|__o| jni::sys::jvalue { l: __o.into_raw() })
+                    .unwrap_or(#null_jv)
+            },
+        })
+        .collect()
 }
 
 /// Emit the output-expansion delivery body (output phase) for a function
@@ -562,7 +628,7 @@ pub(crate) fn emit_unfold_delivery(
     // the wrapper's sentinel. Threads through the shared leaf encoder.
     let fail = |msg: TokenStream| -> TokenStream {
         quote! {
-            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&#msg), __ze_defaults);
+            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&#msg), &__zd);
             return #on_err;
         }
     };
@@ -600,7 +666,7 @@ pub(crate) fn emit_unfold_delivery(
                     // Clears any pending JVM exception so the sink call is safe.
                     let _ = env.exception_describe();
                     let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
+                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), &__zd);
                     #on_err
                 }
             }
@@ -673,7 +739,7 @@ pub(crate) fn emit_unfold_delivery(
                         ::core::result::Result::Err(__e) => {
                             let _ = env.exception_describe();
                             let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
+                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), &__zd);
                             return #on_err;
                         }
                     };
@@ -714,7 +780,7 @@ pub(crate) fn emit_unfold_delivery(
                     let __enc = match #elem_conv(&mut env, __elem) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                             return #on_err;
                         }
                     };
@@ -839,15 +905,17 @@ fn reach_leaf(
 }
 
 /// Encode a plan's leaves off `value` (`__out`, a `Some`-bound `__inner`, a Vec
-/// `__elem`, or an owned callback arg) into the `obj_idents` `JObject` locals,
-/// in declared-leaf order. Reference (non-identity) leaves are encoded first —
-/// ending their borrow into the value — and the identity leaf last (move owned
-/// / clone `&T`). Each leaf's value is reached by folding its accessor `path`
-/// over `value`; every `Option`-returning nesting step on the path wraps the
-/// rest in a `match Some/None` (`None` ⇒ a null leaf) — see [`reach_leaf`].
-/// Error arms are produced by `fail` (see [`cast_wire_to_jobject`]). Shared by
-/// the return-delivery site ([`emit_unfold_delivery`]) and the callback
-/// trampoline.
+/// `__elem`, an owned callback arg, or a domain error `__de`) into the
+/// `obj_idents` locals, in declared-leaf order. Reference (non-identity)
+/// leaves are encoded first — ending their borrow into the value — and the
+/// identity leaf last (move owned / clone `&T`). Each leaf's value is reached
+/// by folding its accessor `path` over `value`; every `Option`-returning
+/// nesting step on the path wraps the rest in a `match Some/None` (`None` ⇒ a
+/// null leaf) — see [`reach_leaf`]. Error arms are produced by `fail` (see
+/// [`cast_wire_to_jobject`]). Shared by the return-delivery site
+/// ([`emit_unfold_delivery`]), the callback trampoline, and the domain-error
+/// arm of fallible externs (whose `fail` falls back to a binding-error
+/// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -903,6 +971,13 @@ pub(crate) fn encode_plan_leaves(
         let conv = out_entry.function.sig.ident.clone();
         let conv_fail = fail(quote!(__e.to_string()));
 
+        // Bind `obj_ident` to a JObject-yielding `expr`.
+        let bind_obj = |obj_ident: &syn::Ident, expr: TokenStream| -> TokenStream {
+            quote! {
+                let #obj_ident: jni::objects::JObject = #expr;
+            }
+        };
+
         if leaf.identity {
             // Identity leaf: deliver the value itself. Its projection decides
             // how: a `ptr_class` Handle is cloned (`&T`, reached by the path)
@@ -939,11 +1014,14 @@ pub(crate) fn encode_plan_leaves(
                         }
                     };
                     if leaf.path.is_empty() && !by_ref {
-                        stmts.extend(quote! {
-                            let #handle_ident: jni::sys::jlong =
-                                std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
-                            let #obj_ident: jni::objects::JObject = #wrap_handle;
-                        });
+                        stmts.extend(bind_obj(
+                            obj_ident,
+                            quote! {{
+                                let #handle_ident: jni::sys::jlong =
+                                    std::boxed::Box::into_raw(std::boxed::Box::new(#value)) as jni::sys::jlong;
+                                #wrap_handle
+                            }},
+                        ));
                     } else {
                         let expr = reach_leaf(
                             source_module,
@@ -965,9 +1043,7 @@ pub(crate) fn encode_plan_leaves(
                                 }}
                             },
                         );
-                        stmts.extend(quote! {
-                            let #obj_ident: jni::objects::JObject = #expr;
-                        });
+                        stmts.extend(bind_obj(obj_ident, expr));
                     }
                 }
                 ProjectionKind::ValueBlob => {
@@ -977,15 +1053,18 @@ pub(crate) fn encode_plan_leaves(
                     let enc_ident = format_ident!("__enc{}", idx);
                     let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
                     if leaf.path.is_empty() && !by_ref {
-                        stmts.extend(quote! {
-                            let #enc_ident = match #conv(&mut env, #value) {
-                                ::core::result::Result::Ok(__w) => __w,
-                                ::core::result::Result::Err(__e) => {
-                                    #conv_fail
-                                }
-                            };
-                            let #obj_ident: jni::objects::JObject = #cast;
-                        });
+                        stmts.extend(bind_obj(
+                            obj_ident,
+                            quote! {{
+                                let #enc_ident = match #conv(&mut env, #value) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        #conv_fail
+                                    }
+                                };
+                                #cast
+                            }},
+                        ));
                     } else {
                         let expr = reach_leaf(
                             source_module,
@@ -1007,9 +1086,7 @@ pub(crate) fn encode_plan_leaves(
                                 }}
                             },
                         );
-                        stmts.extend(quote! {
-                            let #obj_ident: jni::objects::JObject = #expr;
-                        });
+                        stmts.extend(bind_obj(obj_ident, expr));
                     }
                 }
             }
@@ -1075,9 +1152,7 @@ pub(crate) fn encode_plan_leaves(
                 }}
             },
         );
-        stmts.extend(quote! {
-            let #obj_ident: jni::objects::JObject = #expr;
-        });
+        stmts.extend(bind_obj(obj_ident, expr));
     }
     (stmts, arg_exprs)
 }
@@ -1167,7 +1242,7 @@ pub(crate) fn emit_expanded_param(
                 let #local = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                         return #on_err;
                     }
                 };
@@ -1178,7 +1253,7 @@ pub(crate) fn emit_expanded_param(
                 let #stage0 = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                         return #on_err;
                     }
                 };
@@ -1196,7 +1271,7 @@ pub(crate) fn emit_expanded_param(
                     let #out_ident = match #stage_fn(&mut env, #prev) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                             return #on_err;
                         }
                     };
@@ -1217,7 +1292,7 @@ pub(crate) fn emit_expanded_param(
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 let __je = <__JniErr as ::core::convert::From<::std::string::String>>::from(__e);
-                signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__je.to_string()), __ze_defaults);
+                let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__je.to_string()), &__zd);
                 return #on_err;
             }
         };
@@ -2296,7 +2371,7 @@ pub(crate) fn render_flat_input_decode(
             let #tmp = match #conv(&mut env, &#wid) {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                     return #on_err;
                 }
             };

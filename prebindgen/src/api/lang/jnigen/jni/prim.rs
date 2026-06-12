@@ -45,6 +45,18 @@ impl JniPrim {
         })
     }
 
+    /// The Kotlin zero/default literal for the primitive.
+    pub(crate) fn kotlin_zero(self) -> &'static str {
+        match self {
+            Self::Boolean => "false",
+            Self::Byte | Self::Short | Self::Int => "0",
+            Self::Char => "'\\u0000'",
+            Self::Long => "0L",
+            Self::Float => "0.0f",
+            Self::Double => "0.0",
+        }
+    }
+
     /// `<prim>Value()` unboxing accessor method on the boxed class.
     pub(crate) fn unbox_method(self) -> &'static str {
         match self {

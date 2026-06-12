@@ -299,7 +299,7 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
             fqn: &str,
             descr: &str,
             je: ::core::option::Option<&str>,
-            ze: &[&jni::objects::JObject],
+            ze: &[jni::sys::jvalue],
         ) {
             // If a JVM exception is already pending (a Java upcall threw during a
             // converter), let it propagate untouched — do NOT invoke the error
@@ -310,9 +310,10 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
                 return;
             }
             // `je` (binding message, `Some` only for a `JniError`) crosses as the
-            // fixed first `String?`; the `ze` library-error leaves follow — all
-            // nullable object params of the sink's typed `<Err>Handler.run`
-            // (`mid`/`fqn`/`descr` are the per-extern cached interface method).
+            // fixed first `String?`; the `ze` library-error leaves follow as
+            // pre-encoded object-slot jvalues — all nullable object params of
+            // the sink's typed `<Err>Handler.run` (`mid`/`fqn`/`descr` are the
+            // per-extern cached interface method).
             let __je: jni::objects::JObject = match je {
                 ::core::option::Option::Some(__m) => match env.new_string(__m) {
                     Ok(s) => s.into(),
@@ -326,9 +327,7 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
             let mut __args: ::std::vec::Vec<jni::sys::jvalue> =
                 ::std::vec::Vec::with_capacity(1 + ze.len());
             __args.push(jni::sys::jvalue { l: __je.as_raw() });
-            for __z in ze {
-                __args.push(jni::sys::jvalue { l: __z.as_raw() });
-            }
+            __args.extend_from_slice(ze);
             // On failure leave any pending exception in place (don't describe/
             // clear it) so it propagates rather than being swallowed.
             if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, &__args) {

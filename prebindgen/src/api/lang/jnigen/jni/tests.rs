@@ -382,7 +382,7 @@ fn snapshot_rust_side() {
     // now invokes the error callback with `(je, ze…)`.
     assert!(rc.contains("fnsignal_error"), "{rust}");
     assert!(
-        rc.contains("signal_error(&mutenv,&__error_sink,&__SINK_MID,__SINK_FQN,__SINK_DESCR,::core::option::Option::Some(&__e.to_string()),__ze_defaults"),
+        rc.contains("let__zd=__ze_defaults(&mutenv);signal_error(&mutenv,&__error_sink,&__SINK_MID,__SINK_FQN,__SINK_DESCR,::core::option::Option::Some(&__e.to_string()),&__zd"),
         "{rust}"
     );
     // The sink's typed handler `run` is resolved once per process via the
@@ -953,15 +953,14 @@ fn named_error_deconstructor_gets_own_handler() {
     // Each extern's sink statics name its OWN handler interface + descriptor.
     assert!(rc.contains("io/test/jni/errors/ZErrHandler"), "{rust}");
     assert!(rc.contains("io/test/jni/errors/ZErrFullHandler"), "{rust}");
-    // Canonical: (je, message) → 2 object params; full: (je, message, code).
+    // Builder-typed ze: canonical = (je, message: String); full adds the raw
+    // `I` code (non-null Int crosses as a raw primitive, like a builder leaf).
     assert!(
         rc.contains("\"(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;\""),
         "{rust}"
     );
     assert!(
-        rc.contains(
-            "\"(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""
-        ),
+        rc.contains("\"(Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/Object;\""),
         "{rust}"
     );
 
@@ -976,12 +975,12 @@ fn named_error_deconstructor_gets_own_handler() {
         .collect();
     // Both interfaces emitted; the full one carries the extra nullable code.
     assert!(
-        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(je:String?,message:String?):R"),
+        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(je:String?,message:String):R"),
         "{all}"
     );
     assert!(
         all.contains(
-            "funinterfaceZErrFullHandler<outR>{publicfunrun(je:String?,message:String?,code:Int?):R"
+            "funinterfaceZErrFullHandler<outR>{publicfunrun(je:String?,message:String,code:Int):R"
         ),
         "{all}"
     );
@@ -1071,4 +1070,104 @@ fn inline_fun_output_gets_own_builder() {
     // Wrappers take their own builder types.
     assert!(all.contains("build:ZThingBuilder<R>"), "{all}");
     assert!(all.contains("build:ZThingZMakeBBuilder<R>"), "{all}");
+}
+
+/// Error decomposition is the OUTPUT decomposition with a fixed leading `je`:
+/// the same record kinds work — an identity record (the error itself as an
+/// owned handle), plain accessors, and accessors nested through `Option`
+/// (spliced child decomposition, nullable leaves). The ze params are typed
+/// exactly like a builder's; on a binding error the native side fills typed
+/// defaults (closed handle, "", null for nullable).
+#[test]
+fn error_unwrap_universal_records() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
+        "pub fn z_err_detail(e: &ZErr) -> Option<&ZDetail> { unimplemented!() }",
+        "pub fn z_detail_code(d: &ZDetail) -> i32 { unimplemented!() }",
+        "pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("errors")
+        .ptr_class(syn::parse_quote!(ZDetail))
+        .ptr_class_output(syn::parse_quote!(z_detail_code))
+        .fun_accessor(syn::parse_quote!(z_detail_code))
+        .ptr_class(syn::parse_quote!(ZErr))
+        // Canonical error decomposition: the owned error handle itself, its
+        // message, and the Option-nested detail spliced to its code leaf.
+        .ptr_class_output_direct()
+        .ptr_class_output(syn::parse_quote!(z_err_message))
+        .ptr_class_output(syn::parse_quote!(z_err_detail))
+        .fun_accessor(syn::parse_quote!(z_err_message))
+        .fun_accessor(syn::parse_quote!(z_err_detail))
+        .fun(syn::parse_quote!(z_fallible));
+
+    let dir = unique_snapshot_dir("jnigen_err_universal");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Handler descriptor: typed handle class, non-null String, BOXED nullable
+    // Integer for the Option-nested code — exactly the builder typing.
+    assert!(
+        rc.contains(
+            "\"(Ljava/lang/String;Lio/test/jni/errors/ZErr;Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""
+        ),
+        "{rust}"
+    );
+    // Domain-error arm: the SAME shared leaf encoder — owned identity moves
+    // the error into a boxed handle, the nested Option accessor unwraps via
+    // a match.
+    assert!(
+        rc.contains("std::boxed::Box::new(__de)"),
+        "{rust}"
+    );
+    assert!(rc.contains("matchmyflat::z_err_detail(&__de)"), "{rust}");
+    // Binding-error defaults: closed handle instance, empty string, null for
+    // the nullable leaf — built lazily in the __ze_defaults closure.
+    assert!(
+        rc.contains("env.new_object(\"io/test/jni/errors/ZErr\",\"(J)V\",&[jni::objects::JValue::from(0i64)])"),
+        "{rust}"
+    );
+    assert!(rc.contains("env.new_string(\"\")"), "{rust}");
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    // Builder-typed handler interface.
+    assert!(
+        all.contains(
+            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:ZErr,message:String,detailCode:Int?):R"
+        ),
+        "{all}"
+    );
+    // Wrapper: nullable capture slots, `!!` redispatch for the non-null ze,
+    // pass-through for the nullable one — NO `?:` default coalescing.
+    assert!(
+        all.contains("returnonError.run(__cap_je,__cap_ze0!!,__cap_ze1!!,__cap_ze2)"),
+        "{all}"
+    );
+    assert!(!all.contains("?:\"\""), "{all}");
 }
