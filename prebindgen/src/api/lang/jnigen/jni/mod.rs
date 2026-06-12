@@ -18,6 +18,7 @@
 
 pub mod box_helpers;
 pub mod byte_array_helpers;
+pub mod iface_method;
 pub mod jni_binding_error;
 pub mod string_helpers;
 pub(crate) mod wire_access;
@@ -25,6 +26,7 @@ pub(crate) mod wire_access;
 pub use box_helpers::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
 };
+pub use iface_method::CachedIfaceMethod;
 pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};
 pub use jni_binding_error::JniBindingError;
 pub use string_helpers::{decode_string, encode_string, null_string};
@@ -596,6 +598,7 @@ pub struct JniGen {
 // ── Sibling submodules (carved from the former monolithic file) ─────────
 mod builder;
 mod emit;
+mod iface;
 mod prim;
 #[cfg(test)]
 mod tests;
@@ -608,5 +611,6 @@ mod render;
 pub(crate) use builder::*;
 pub(crate) use emit::*;
 pub(crate) use fold::*;
+pub(crate) use iface::*;
 pub(crate) use prim::*;
 pub(crate) use render::*;

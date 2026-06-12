@@ -204,7 +204,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #arg_mut #arg_ident = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                         return #on_err;
                     }
                 };
@@ -217,7 +217,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #stage0_ident = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                         return #on_err;
                     }
                 };
@@ -240,7 +240,7 @@ pub(crate) fn emit_jni_function_wrapper(
                     let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                             return #on_err;
                         }
                     };
@@ -320,6 +320,7 @@ pub(crate) fn emit_jni_function_wrapper(
                     #ze_stmts
                     signal_error(
                         &mut env, &__error_sink,
+                        &__SINK_MID, __SINK_FQN, __SINK_DESCR,
                         ::core::option::Option::None,
                         &[#(#ze_refs),*],
                     );
@@ -366,7 +367,7 @@ pub(crate) fn emit_jni_function_wrapper(
                 let #next_ident = match #stage_fn(&mut env, #prev_out) {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                         return #on_err;
                     }
                 };
@@ -378,7 +379,7 @@ pub(crate) fn emit_jni_function_wrapper(
             match #conv_out(&mut env, #prev_out) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
-                    signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                     #on_err
                 }
             }
@@ -397,9 +398,26 @@ pub(crate) fn emit_jni_function_wrapper(
         .iter()
         .map(|id| quote!(let #id: jni::objects::JObject = jni::objects::JObject::null();));
     let ze_default_refs = ze_default_idents.iter().map(|id| quote!(#id));
+    // The error sink is a typed `<Err>Handler` / `JniErrorHandler` fun
+    // interface; its `run` method ID is resolved once per process on the
+    // interface class (the sink instance differs per call). The trio is in
+    // scope for every `signal_error` call the prelude/output phases emit.
+    let sink_spec = onerror_iface_spec(ext, registry, original_ident).unwrap_or_else(|| {
+        panic!(
+            "jnigen: cannot derive the onError handler interface for `{}`",
+            original_ident
+        )
+    });
+    let sink_fqn_lit = syn::LitStr::new(&sink_spec.slash_fqn(), Span::call_site());
+    let sink_descr_lit = syn::LitStr::new(&sink_spec.descr, Span::call_site());
     let ze_defaults_setup = quote! {
         #(#ze_default_lets)*
         let __ze_defaults: &[&jni::objects::JObject] = &[#(&#ze_default_refs),*];
+        #[allow(non_upper_case_globals)]
+        static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod =
+            ::prebindgen::lang::CachedIfaceMethod::new();
+        const __SINK_FQN: &str = #sink_fqn_lit;
+        const __SINK_DESCR: &str = #sink_descr_lit;
     };
 
     // The trailing `__error_sink` param is the foreign **error callback** (a
@@ -534,48 +552,55 @@ pub(crate) fn emit_unfold_delivery(
 
     let n = plan.leaves.len();
 
-    // Builder-arg object locals, one per leaf in declared order, plus the
-    // erased all-`Object` `invoke` descriptor — both value-independent.
+    // Builder-arg locals, one per leaf in declared order. The builder is a
+    // generated typed `<Source>Builder<out R>` fun interface — its `run`
+    // method ID is resolved once per process on the interface class
+    // ([`CachedIfaceMethod`]); primitives cross as raw typed jvalues.
     let obj_idents: Vec<syn::Ident> = (0..n).map(|i| format_ident!("__obj{}", i)).collect();
-    let descr_lit = syn::LitStr::new(&erased_invoke_descriptor(n), Span::call_site());
 
     // Return-site error path: route the message to the error sink, then return
     // the wrapper's sentinel. Threads through the shared leaf encoder.
     let fail = |msg: TokenStream| -> TokenStream {
         quote! {
-            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&#msg), __ze_defaults);
+            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&#msg), __ze_defaults);
             return #on_err;
         }
     };
 
     // Encode a value's leaves (`__out`, a `Some`-bound `__inner`, or a Vec
-    // `__elem`) into `__obj0…__objN` (shared with the callback trampoline).
-    let encode_leaves = |value: &TokenStream| -> TokenStream {
+    // `__elem`) into `__obj0…__objN` (shared with the callback trampoline),
+    // yielding the per-leaf typed jvalue arg expressions.
+    let encode_leaves = |value: &TokenStream| -> (TokenStream, Vec<TokenStream>) {
         encode_plan_leaves(ext, registry, plan, &obj_idents, value, &fail)
     };
 
-    // Common builder-invoke (erased all-`Object` params + `Object` return). Used
-    // by `Decompose`/`Optional`; its success arm yields the result `JObject`,
-    // error arms route to the sink + return the wrapper's sentinel.
-    let builder_invoke = {
-        let jvalues = obj_idents
-            .iter()
-            .map(|id| quote!(jni::objects::JValue::Object(&#id)));
+    // Cached-interface call statics for the builder / folder `run`.
+    let iface_statics = |spec: &IfaceSpec| -> TokenStream {
+        let fqn_lit = syn::LitStr::new(&spec.slash_fqn(), Span::call_site());
+        let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
         quote! {
-            match env.call_method(&__builder, "invoke", #descr_lit, &[#(#jvalues),*]) {
-                ::core::result::Result::Ok(__r) => match __r.l() {
-                    ::core::result::Result::Ok(__o) => __o,
-                    ::core::result::Result::Err(__e) => {
-                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
-                        #on_err
-                    }
-                },
+            #[allow(non_upper_case_globals)]
+            static __CB_MID: ::prebindgen::lang::CachedIfaceMethod =
+                ::prebindgen::lang::CachedIfaceMethod::new();
+            const __CB_FQN: &str = #fqn_lit;
+            const __CB_DESCR: &str = #descr_lit;
+        }
+    };
+
+    // Common builder-invoke (typed `run`, `Object` return = the erased `R`).
+    // Used by `Decompose`/`Optional`; its success arm yields the result
+    // `JObject`, error arms route to the sink + return the wrapper's sentinel.
+    let builder_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {
+        quote! {
+            match __CB_MID.call_object(
+                &mut env, __CB_FQN, "run", __CB_DESCR, &__builder, &[#(#arg_exprs),*],
+            ) {
+                ::core::result::Result::Ok(__o) => __o,
                 ::core::result::Result::Err(__e) => {
-                    // Clears the pending JVM exception so the sink call is safe.
+                    // Clears any pending JVM exception so the sink call is safe.
                     let _ = env.exception_describe();
                     let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                    signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
+                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
                     #on_err
                 }
             }
@@ -585,14 +610,20 @@ pub(crate) fn emit_unfold_delivery(
     // Decompose a value into leaves then invoke the builder once (`Decompose`/
     // `Optional`).
     let emit_decompose = |value: &TokenStream| -> TokenStream {
-        let leaves = encode_leaves(value);
-        quote! { #leaves #builder_invoke }
+        let (leaves, arg_exprs) = encode_leaves(value);
+        let invoke = builder_invoke(&arg_exprs);
+        quote! { #leaves #invoke }
     };
 
     match &plan.shape {
         UnfoldShape::Decompose => {
+            let statics = iface_statics(
+                &builder_iface_spec(ext, registry, plan)
+                    .expect("builder interface spec derivable for a resolved plan"),
+            );
             let body = emit_decompose(&quote!(__out));
             quote! {
+                #statics
                 let __out = #call_expr;
                 #body
             }
@@ -605,9 +636,14 @@ pub(crate) fn emit_unfold_delivery(
                      nested Optional/Iterable is M3/M4"
                 ),
             }
+            let statics = iface_statics(
+                &builder_iface_spec(ext, registry, plan)
+                    .expect("builder interface spec derivable for a resolved plan"),
+            );
             // `None` ⇒ null result (builder skipped); `Some` ⇒ decompose inner.
             let body = emit_decompose(&quote!(__inner));
             quote! {
+                #statics
                 let __out = #call_expr;
                 match __out {
                     ::core::option::Option::Some(__inner) => { #body }
@@ -617,39 +653,25 @@ pub(crate) fn emit_unfold_delivery(
         }
         UnfoldShape::Iterable(_) => {
             // `Vec<T>` fold: iterate the elements and thread `__acc` through
-            // `__fold(acc, …)`, returning the final accumulator. Per element the
-            // fold args are either the element WHOLE (M4: one object) or its
-            // decomposed leaves (M5: N objects).
-            //
-            // Build the fold-invoke given the per-element object args; the
-            // value-class projection wrap happens caller-side (the generated
-            // wrapper's fold adapter), so the extern hands over raw wires.
-            let fold_invoke = |arg_objs: &[syn::Ident]| -> TokenStream {
-                // acc + per-element args, all erased `Object`s.
-                let descr_lit = syn::LitStr::new(
-                    &erased_invoke_descriptor(arg_objs.len() + 1),
-                    Span::call_site(),
-                );
-                let jvalues = arg_objs
-                    .iter()
-                    .map(|id| quote!(jni::objects::JValue::Object(&#id)));
+            // the typed `<Element>Folder<A>.run(acc, …)`, returning the final
+            // accumulator. Per element the fold args are either the element
+            // WHOLE (M4) or its decomposed leaves (M5); primitives cross as
+            // raw typed jvalues, `acc` is the erased `A` (`Object`).
+            let statics = iface_statics(
+                &folder_iface_spec(ext, registry, plan)
+                    .expect("folder interface spec derivable for a resolved plan"),
+            );
+            let fold_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {
                 quote! {
-                    __acc = match env.call_method(
-                        &__fold, "invoke", #descr_lit,
-                        &[jni::objects::JValue::Object(&__acc), #(#jvalues),*],
+                    __acc = match __CB_MID.call_object(
+                        &mut env, __CB_FQN, "run", __CB_DESCR, &__fold,
+                        &[jni::sys::jvalue { l: __acc.as_raw() }, #(#arg_exprs),*],
                     ) {
-                        ::core::result::Result::Ok(__r) => match __r.l() {
-                            ::core::result::Result::Ok(__o) => __o,
-                            ::core::result::Result::Err(__e) => {
-                                let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                                signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
-                                return #on_err;
-                            }
-                        },
+                        ::core::result::Result::Ok(__o) => __o,
                         ::core::result::Result::Err(__e) => {
                             let _ = env.exception_describe();
                             let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
+                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), __ze_defaults);
                             return #on_err;
                         }
                     };
@@ -657,7 +679,10 @@ pub(crate) fn emit_unfold_delivery(
             };
 
             let loop_body = if let Some(element) = plan.element.as_ref() {
-                // Whole-element (M4): encode the element via its own converter.
+                // Whole-element (M4): encode the element via its own converter —
+                // a raw typed jvalue for a primitive-wire element, a JObject
+                // otherwise (mirrors `leaf_is_prim`; the folder interface
+                // declares the matching typed param).
                 let out_entry = registry.output_entry(element).unwrap_or_else(|| {
                     panic!(
                         "emit_unfold_delivery: Vec element `{}` has no registered output converter",
@@ -666,23 +691,38 @@ pub(crate) fn emit_unfold_delivery(
                 });
                 let elem_conv = out_entry.function.sig.ident.clone();
                 let elem_wire = out_entry.destination.clone();
-                let cast = cast_wire_to_jobject(&format_ident!("__enc"), &elem_wire, &fail);
-                let invoke = fold_invoke(&[format_ident!("__obj")]);
+                let elem_is_prim = out_entry.metadata.projection.is_none()
+                    && matches!(jni_field_access(&elem_wire), Some((_, _, false)));
+                let enc = format_ident!("__enc");
+                let (bind_obj, arg_expr) = if elem_is_prim {
+                    let letter = jni_field_access(&elem_wire).unwrap().1;
+                    (
+                        TokenStream::new(),
+                        quote!(jni::sys::jvalue { #letter: __enc }),
+                    )
+                } else {
+                    let cast = cast_wire_to_jobject(&enc, &elem_wire, &fail);
+                    (
+                        quote! { let __obj: jni::objects::JObject = #cast; },
+                        quote!(jni::sys::jvalue { l: __obj.as_raw() }),
+                    )
+                };
+                let invoke = fold_invoke(&[arg_expr]);
                 quote! {
                     let __enc = match #elem_conv(&mut env, __elem) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                             return #on_err;
                         }
                     };
-                    let __obj: jni::objects::JObject = #cast;
+                    #bind_obj
                     #invoke
                 }
             } else {
                 // Decomposed (M5): encode each element's leaves, fold over them.
-                let leaves = encode_leaves(&quote!(__elem));
-                let invoke = fold_invoke(&obj_idents);
+                let (leaves, arg_exprs) = encode_leaves(&quote!(__elem));
+                let invoke = fold_invoke(&arg_exprs);
                 quote! {
                     #leaves
                     #invoke
@@ -691,6 +731,7 @@ pub(crate) fn emit_unfold_delivery(
             // `into_iter()` yields the element type exactly as written (owned
             // `T`, or `&T` for a borrowed element).
             quote! {
+                #statics
                 let __out = #call_expr;
                 let mut __acc = __acc;
                 for __elem in __out.into_iter() {
@@ -700,25 +741,6 @@ pub(crate) fn emit_unfold_delivery(
             }
         }
     }
-}
-
-/// The erased Kotlin-lambda `invoke` JNI descriptor with `n` parameters:
-/// `(Ljava/lang/Object;×n)Ljava/lang/Object;`. Every generated lambda
-/// invocation (builder, fold, callback trampoline) goes through the erased
-/// `FunctionN.invoke` — Kotlin tops out at `Function22`, so more than 22
-/// parameters cannot be expressed as a lambda type.
-pub(crate) fn erased_invoke_descriptor(n: usize) -> String {
-    assert!(
-        n <= 22,
-        "jnigen: a generated lambda needs {n} parameters, but Kotlin function types top out at \
-         Function22 — reduce the decomposed leaf count (or deliver the value whole)"
-    );
-    let mut d = String::from("(");
-    for _ in 0..n {
-        d.push_str("Ljava/lang/Object;");
-    }
-    d.push_str(")Ljava/lang/Object;");
-    d
 }
 
 /// Cast an encoded wire local to a `JObject` for the erased `invoke`: object
@@ -831,10 +853,25 @@ pub(crate) fn encode_plan_leaves(
     obj_idents: &[syn::Ident],
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
-) -> TokenStream {
+) -> (TokenStream, Vec<TokenStream>) {
     let source_module = &ext.source_module;
     let by_ref = plan.by_ref;
     let n = plan.leaves.len();
+
+    // Typed `jvalue` argument expression per leaf, in leaf order: a non-null
+    // primitive-wire leaf passes its raw primitive (`__objN` IS the jvalue);
+    // every other leaf is a `JObject` local whose raw pointer rides the `l`
+    // slot. Matches the descriptor [`crate::api::lang::jnigen::jni::iface`]
+    // derives for the same leaf (primitive chunk vs object chunk).
+    let mut arg_exprs: Vec<TokenStream> = Vec::with_capacity(n);
+    for (idx, leaf) in plan.leaves.iter().enumerate() {
+        let obj_ident = &obj_idents[idx];
+        if leaf_is_prim(registry, leaf) {
+            arg_exprs.push(quote!(#obj_ident));
+        } else {
+            arg_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
+        }
+    }
 
     // True when accessor `acc`'s return type is `Option<…>` (a nullable nesting
     // step on a leaf's path).
@@ -977,12 +1014,44 @@ pub(crate) fn encode_plan_leaves(
             continue;
         }
 
-        // Accessor leaf: walk the path — unwrapping every `Option` nesting
-        // step (`None` ⇒ a null leaf) — then encode the final accessor's full
-        // return with the leaf's output converter (the single JVM copy) and
-        // cast to JObject.
+        // Accessor leaf. A non-null primitive-wire leaf delivers its raw
+        // primitive as a typed `jvalue` — no boxing, no JNI call at all (the
+        // typed `run` descriptor declares the primitive). Everything else
+        // (object wires, and nullable leaves — whose `None` arm must yield a
+        // JVM null) walks the path — unwrapping every `Option` nesting step
+        // (`None` ⇒ a null leaf) — then encodes the final accessor's full
+        // return with the leaf's output converter and casts to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
+        if leaf_is_prim(registry, leaf) {
+            let letter = jni_field_access(&wire)
+                .expect("leaf_is_prim guarantees a primitive wire")
+                .1;
+            let expr = reach_leaf(
+                source_module,
+                &leaf.path,
+                &returns_option,
+                value.clone(),
+                by_ref,
+                false,
+                0,
+                &|reached| {
+                    quote! {{
+                        let #enc_ident = match #conv(&mut env, #reached) {
+                            ::core::result::Result::Ok(__w) => __w,
+                            ::core::result::Result::Err(__e) => {
+                                #conv_fail
+                            }
+                        };
+                        jni::sys::jvalue { #letter: #enc_ident }
+                    }}
+                },
+            );
+            stmts.extend(quote! {
+                let #obj_ident: jni::sys::jvalue = #expr;
+            });
+            continue;
+        }
         let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
         let expr = reach_leaf(
             source_module,
@@ -1008,7 +1077,26 @@ pub(crate) fn encode_plan_leaves(
             let #obj_ident: jni::objects::JObject = #expr;
         });
     }
-    stmts
+    (stmts, arg_exprs)
+}
+
+/// True when a plan leaf crosses the typed `run` as a **raw primitive**
+/// `jvalue`: non-nullable, no projection (not a handle / value-blob), and a
+/// primitive JNI wire. Must agree with the descriptor chunk
+/// [`crate::api::lang::jnigen::jni::iface`] derives for the same leaf — a
+/// nullable primitive boxes (object chunk), object wires pass as objects.
+pub(crate) fn leaf_is_prim(
+    registry: &Registry<KotlinMeta>,
+    leaf: &crate::api::core::unfold::UnfoldLeaf,
+) -> bool {
+    if leaf.nullable {
+        return false;
+    }
+    let Some(entry) = registry.output_entry(&leaf.out_ty) else {
+        return false;
+    };
+    entry.metadata.projection.is_none()
+        && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
 }
 
 /// Emit the wire params, decode prelude, and call argument for one
@@ -1077,7 +1165,7 @@ pub(crate) fn emit_expanded_param(
                 let #local = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                         return #on_err;
                     }
                 };
@@ -1088,7 +1176,7 @@ pub(crate) fn emit_expanded_param(
                 let #stage0 = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                         return #on_err;
                     }
                 };
@@ -1106,7 +1194,7 @@ pub(crate) fn emit_expanded_param(
                     let #out_ident = match #stage_fn(&mut env, #prev) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                             return #on_err;
                         }
                     };
@@ -1127,7 +1215,7 @@ pub(crate) fn emit_expanded_param(
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 let __je = <__JniErr as ::core::convert::From<::std::string::String>>::from(__e);
-                signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__je.to_string()), __ze_defaults);
+                signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__je.to_string()), __ze_defaults);
                 return #on_err;
             }
         };
@@ -1507,10 +1595,14 @@ pub(crate) fn callback_input(
         .collect();
     let arg_pat_ty: Vec<TokenStream> = args.iter().map(|t| quote!(#t)).collect();
 
-    // Per-arg encode preludes binding the erased `invoke`'s object args in
-    // declared order (a decomposed arg contributes one object per leaf).
+    // Per-arg encode preludes binding the typed `run`'s args in declared
+    // order (a decomposed arg contributes one arg per leaf). Each entry of
+    // `jvalue_exprs` is a typed `jvalue`: raw primitives for primitive-wire
+    // leaves, `{ l: obj.as_raw() }` for object leaves — matching the
+    // descriptor of the generated callback interface's `run`.
     let mut preludes: Vec<TokenStream> = Vec::new();
-    let mut obj_idents_all: Vec<syn::Ident> = Vec::new();
+    let mut jvalue_exprs: Vec<TokenStream> = Vec::new();
+    let mut total: usize = 0;
     // Plan-less opaque-handle args, closed after the invoke returns so the
     // per-invocation `Box` is freed.
     let mut handle_obj_idents: Vec<syn::Ident> = Vec::new();
@@ -1533,15 +1625,11 @@ pub(crate) fn callback_input(
             let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
                 .map(|k| format_ident!("__cb{}_obj{}", i, k))
                 .collect();
-            preludes.push(encode_plan_leaves(
-                ext,
-                registry,
-                plan,
-                &obj_idents,
-                &quote!(#cb_arg),
-                &fail,
-            ));
-            obj_idents_all.extend(obj_idents);
+            let (stmts, arg_exprs) =
+                encode_plan_leaves(ext, registry, plan, &obj_idents, &quote!(#cb_arg), &fail);
+            preludes.push(stmts);
+            total += arg_exprs.len();
+            jvalue_exprs.extend(arg_exprs);
             continue;
         }
 
@@ -1568,29 +1656,42 @@ pub(crate) fn callback_input(
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?;
                 });
                 handle_obj_idents.push(obj_ident.clone());
-                obj_idents_all.push(obj_ident);
+                jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
+                total += 1;
                 continue;
             }
         }
 
         // Whole-value arg (scalar / String / data-class / value-blob …):
-        // encode with the output converter, then box/cast to the erased
-        // object. Output converters take the value by move; `cb_arg` is the
-        // closure parameter, so pass it directly.
+        // encode with its output converter. A non-`Option` primitive-wire arg
+        // passes its raw primitive; everything else casts to JObject. Output
+        // converters take the value by move; `cb_arg` is the closure
+        // parameter, so pass it directly.
+        let arg_is_prim = arg_entry.metadata.projection.is_none()
+            && !is_option_type(arg_ty)
+            && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
+        if arg_is_prim {
+            let letter = jni_field_access(&arg_wire).unwrap().1;
+            preludes.push(quote! {
+                let #enc_ident = #conv(&mut env, #cb_arg)?;
+            });
+            jvalue_exprs.push(quote!(jni::sys::jvalue { #letter: #enc_ident }));
+            total += 1;
+            continue;
+        }
         let cast = cast_wire_to_jobject(&enc_ident, &arg_wire, &fail);
         preludes.push(quote! {
             let #enc_ident = #conv(&mut env, #cb_arg)?;
             let #obj_ident: jni::objects::JObject = #cast;
         });
-        obj_idents_all.push(obj_ident);
+        jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
+        total += 1;
     }
 
-    let total = obj_idents_all.len();
-    let descr_lit = syn::LitStr::new(&erased_invoke_descriptor(total), Span::call_site());
-    let jvalue_exprs: Vec<TokenStream> = obj_idents_all
-        .iter()
-        .map(|id| quote!(jni::objects::JValue::Object(&#id).as_jni()))
-        .collect();
+    // Typed `run` descriptor of the generated callback interface — derived
+    // from the same plans/leaf classification as the jvalues above.
+    let spec = callback_iface_spec(ext, registry, args)?;
+    let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
     // delivered leaf, plus call temporaries.
     let frame_cap = std::cmp::max(16, 2 * total + 6);
@@ -1602,9 +1703,9 @@ pub(crate) fn callback_input(
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to retrieve JVM: {}", e)))?);
         let callback_global_ref = env.new_global_ref(&v)
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to global-ref callback: {}", e)))?;
-        // Resolve the erased `FunctionN.invoke` method ID ONCE, here at
-        // trampoline creation. The safe `JNIEnv::call_method` re-parses the
-        // descriptor string (a `combine`-parser run) and re-resolves the
+        // Resolve the typed callback interface's `run` method ID ONCE, here
+        // at trampoline creation. The safe `JNIEnv::call_method` re-parses
+        // the descriptor string (a `combine`-parser run) and re-resolves the
         // method through the JVM symbol table on EVERY call — measured at
         // ~33% of per-message delivery time on the subscriber hot path. The
         // `JMethodID` is `Copy + Send + Sync` and stays valid for the
@@ -1612,8 +1713,8 @@ pub(crate) fn callback_input(
         // therefore its class.
         let __invoke_class = env.get_object_class(&v)
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to get callback class for {}: {}", #name_lit, e)))?;
-        let __invoke_id = env.get_method_id(&__invoke_class, "invoke", #descr_lit)
-            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to resolve invoke for {}: {}", #name_lit, e)))?;
+        let __invoke_id = env.get_method_id(&__invoke_class, "run", #descr_lit)
+            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to resolve run for {}: {}", #name_lit, e)))?;
         Box::new(move |#(#arg_names: #arg_pat_ty),*| {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
@@ -1636,12 +1737,13 @@ pub(crate) fn callback_input(
                     // callback object's class with this exact descriptor, and
                     // the global ref keeps the class loaded. Exception-check
                     // semantics are identical to the safe `call_method` (both
-                    // route through the same checked JNI invoke).
+                    // route through the same checked JNI invoke). `run`
+                    // returns void; primitives ride the jvalues raw.
                     let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
                         env.call_method_unchecked(
                             &callback_global_ref,
                             __invoke_id,
-                            jni::signature::ReturnType::Object,
+                            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Void),
                             &[#(#jvalue_exprs),*],
                         )
                     }
@@ -2192,7 +2294,7 @@ pub(crate) fn render_flat_input_decode(
             let #tmp = match #conv(&mut env, &#wid) {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    signal_error(&mut env, &__error_sink, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
+                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), __ze_defaults);
                     return #on_err;
                 }
             };

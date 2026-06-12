@@ -71,6 +71,7 @@ impl KtFile {
 pub enum KtDecl {
     Class(KtClass),
     Fun(KtFun),
+    FunInterface(KtFunInterface),
     Property(KtProperty),
     TypeAlias {
         vis: Vis,
@@ -91,6 +92,7 @@ impl KtDecl {
         match self {
             KtDecl::Class(c) => &c.name,
             KtDecl::Fun(f) => &f.name,
+            KtDecl::FunInterface(i) => &i.name,
             KtDecl::Property(p) => &p.name,
             KtDecl::TypeAlias { name, .. } => name,
             KtDecl::Raw { name, .. } => name,
@@ -103,6 +105,11 @@ impl From<KtClass> for KtDecl {
         KtDecl::Class(c)
     }
 }
+impl From<KtFunInterface> for KtDecl {
+    fn from(i: KtFunInterface) -> Self {
+        KtDecl::FunInterface(i)
+    }
+}
 impl From<KtFun> for KtDecl {
     fn from(f: KtFun) -> Self {
         KtDecl::Fun(f)
@@ -111,6 +118,48 @@ impl From<KtFun> for KtDecl {
 impl From<KtProperty> for KtDecl {
     fn from(p: KtProperty) -> Self {
         KtDecl::Property(p)
+    }
+}
+
+/// A `fun interface` (SAM) declaration: exactly one abstract method.
+///
+/// The method is a [`KtFun`] rendered without a body ([`KtBody::None`]); its
+/// JNI-callable JVM name is the method's `name` verbatim — keep the interface
+/// and the method `public` and its params free of `@JvmInline` value classes,
+/// or Kotlin mangles the JVM method name and native `GetMethodID` fails at
+/// runtime.
+#[derive(Clone, Debug)]
+pub struct KtFunInterface {
+    pub vis: Vis,
+    pub name: String,
+    /// Type parameters with variance as written, e.g. `["out R"]`.
+    pub type_params: Vec<String>,
+    pub kdoc: Option<String>,
+    /// The single abstract method.
+    pub method: KtFun,
+}
+
+impl KtFunInterface {
+    pub fn new(name: impl Into<String>, method: KtFun) -> Self {
+        Self {
+            vis: Vis::Default,
+            name: name.into(),
+            type_params: Vec::new(),
+            kdoc: None,
+            method,
+        }
+    }
+    pub fn vis(mut self, v: Vis) -> Self {
+        self.vis = v;
+        self
+    }
+    pub fn type_param(mut self, p: impl Into<String>) -> Self {
+        self.type_params.push(p.into());
+        self
+    }
+    pub fn kdoc(mut self, d: impl Into<String>) -> Self {
+        self.kdoc = Some(d.into());
+        self
     }
 }
 

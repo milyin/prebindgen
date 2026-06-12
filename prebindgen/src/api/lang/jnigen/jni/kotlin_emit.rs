@@ -79,6 +79,7 @@ impl JniGen {
             })
             .collect();
         fragments.extend(self.write_typed_handles(&typed_handles));
+        fragments.extend(self.write_callback_ifaces(registry));
         for (subpackage, pkg_cfg) in &self.packages {
             if pkg_cfg.functions.is_empty() {
                 continue;
@@ -430,6 +431,61 @@ impl JniGen {
     /// the type-conversion rule. Non-opaque parameters pass through with
     /// the Kotlin type from `kotlin_types`. Opaque-handle return values
     /// are wrapped in `NativeHandle(...)` before return.
+    /// Emit every typed callback `fun interface` the declared functions
+    /// reference — impl-`Fn` delivery callbacks, output-expansion builders
+    /// and folders, and per-error-type onError handlers (plus the shared
+    /// `JniErrorHandler` for infallible functions). Each interface lands in
+    /// its subject type's package; specs are deduped by FQN (the derivation
+    /// in [`crate::api::lang::jnigen::jni::iface`] is deterministic, so the
+    /// native emitters independently agree on names and descriptors).
+    pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
+        use crate::api::core::unfold::{Delivery, UnfoldShape};
+        let mut specs: Vec<IfaceSpec> = Vec::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        let mut push = |specs: &mut Vec<IfaceSpec>, spec: Option<IfaceSpec>| {
+            if let Some(s) = spec {
+                if seen.insert(s.fqn()) {
+                    specs.push(s);
+                }
+            }
+        };
+        for pkg_cfg in self.packages.values() {
+            for entry in &pkg_cfg.functions {
+                let Some((item_fn, _loc)) = registry.functions.get(&entry.rust_ident) else {
+                    continue;
+                };
+                for input in &item_fn.sig.inputs {
+                    let syn::FnArg::Typed(pt) = input else { continue };
+                    if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
+                        push(&mut specs, callback_iface_spec(self, registry, &cb_args));
+                    }
+                }
+                if let Some(plan) = registry
+                    .unfold_plans
+                    .get(&item_fn.sig.ident)
+                    .filter(|p| p.delivery == Delivery::Callback)
+                {
+                    if matches!(plan.shape, UnfoldShape::Iterable(_)) {
+                        push(&mut specs, folder_iface_spec(self, registry, plan));
+                    } else {
+                        push(&mut specs, builder_iface_spec(self, registry, plan));
+                    }
+                }
+                push(
+                    &mut specs,
+                    onerror_iface_spec(self, registry, &item_fn.sig.ident),
+                );
+            }
+        }
+        specs
+            .into_iter()
+            .map(|s| {
+                let decl = s.to_decl();
+                kt::KtFile::new(s.package).decl(decl)
+            })
+            .collect()
+    }
+
     pub(crate) fn write_jni_package(
         &self,
         registry: &Registry<KotlinMeta>,

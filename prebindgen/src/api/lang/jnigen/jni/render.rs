@@ -574,60 +574,22 @@ pub(crate) fn render_wrapper_fn(
         let name = kt_param_name(&eff_ident.to_string());
         let arg_ty = &eff_ty;
 
-        // `impl Fn(args)` param: a typed Kotlin lambda whose parameters are
-        // the flattened leaves of each arg's callback plan (the arg whole when
-        // its type has no canonical output) — mirroring the unfold builder
-        // lambda. The extern receives it erased (`Any`); value-blob leaves get
-        // a rebuilding adapter at the call site, like the unfold path.
+        // `impl Fn(args)` param: a generated typed `fun interface`
+        // (`<ArgShorts>Callback`) whose `run` parameters are the flattened
+        // leaves of each arg's callback plan (the arg whole when plan-less).
+        // The extern receives it erased (`Any`) and the native trampoline
+        // calls the typed `run` — value-blob leaves surface as their raw
+        // `ByteArray` wire (the SDK wraps), so no call-site adapter exists.
+        // Lambda-literal call sites SAM-convert unchanged.
         if let Some(cb_args) = extract_fn_trait_args(arg_ty) {
-            // (name, out_ty, nullable) per delivered lambda leaf — names from
-            // the plan's accessor paths (or the bare arg type when plan-less).
-            let mut leaf_tys: Vec<(String, syn::Type, bool)> = Vec::new();
-            for (i, t) in cb_args.iter().enumerate() {
-                if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(t)) {
-                    leaf_tys.extend(
-                        plan_leaf_names(registry, plan)
-                            .into_iter()
-                            .zip(plan.leaves.iter())
-                            .map(|(n, l)| (n, l.out_ty.clone(), l.nullable)),
-                    );
-                } else {
-                    leaf_tys.push((whole_value_name(t, i), t.clone(), is_option_type(t)));
-                }
-            }
-            let mut leaf_names: Vec<String> = leaf_tys.iter().map(|(n, _, _)| n.clone()).collect();
-            dedup_kt_param_names(&mut leaf_names);
-            let mut builder_kts: Vec<kt::KtType> = Vec::with_capacity(leaf_tys.len());
-            let mut adapter_params: Vec<String> = Vec::with_capacity(leaf_tys.len());
-            let mut wraps: Vec<String> = Vec::with_capacity(leaf_tys.len());
-            let mut needs_adapter = false;
-            for (k, (_, out_ty, nullable)) in leaf_tys.iter().enumerate() {
-                let pk = &leaf_names[k];
-                let (builder_kt, wire_kt, wrap, is_vb) =
-                    unfold_leaf_kt(ext, registry, out_ty, *nullable, pk, imports)?;
-                needs_adapter |= is_vb;
-                adapter_params.push(format!("{pk}: {wire_kt}"));
-                wraps.push(wrap);
-                builder_kts.push(builder_kt);
-            }
-            let kt_type = kt::KtType::lambda(
-                leaf_names.iter().cloned().zip(builder_kts.iter().cloned()),
-                kt::KtType::unit(),
-            );
-            let call_arg = if needs_adapter {
-                format!(
-                    "{{ {} -> {}({}) }}",
-                    adapter_params.join(", "),
-                    name,
-                    wraps.join(", ")
-                )
-            } else {
-                name.clone()
-            };
+            let spec = callback_iface_spec(ext, registry, &cb_args)?;
+            let kt_type = spec.kt_ref(vec![]);
             params.push(Param {
-                kt_name: name,
+                kt_name: name.clone(),
                 kt_type,
-                mode: ParamMode::Callback { call_arg },
+                mode: ParamMode::Callback {
+                    call_arg: name.clone(),
+                },
                 as_enum_value: false,
             });
             continue;
@@ -804,89 +766,25 @@ pub(crate) fn render_wrapper_fn(
         classify_return(ext, &rt, registry, imports)?
     } else if let Some(plan) = unfold {
         use crate::api::core::unfold::UnfoldShape;
-        // The (out_ty, nullable) of each callback arg: a whole-element Iterable
-        // has one (the element); otherwise the decomposed leaves.
-        let arg_tys: Vec<(syn::Type, bool)> = match (&plan.shape, &plan.element) {
-            (UnfoldShape::Iterable(_), Some(el)) => vec![(el.clone(), false)],
-            _ => plan
-                .leaves
-                .iter()
-                .map(|l| (l.out_ty.clone(), l.nullable))
-                .collect(),
-        };
-        // Lambda parameter names matching `arg_tys`: derived from the plan's
-        // accessor paths; a whole-element Iterable delivers one `element`.
-        let mut arg_names: Vec<String> = match (&plan.shape, &plan.element) {
-            (UnfoldShape::Iterable(_), Some(_)) => vec!["element".to_string()],
-            _ => plan_leaf_names(registry, plan),
-        };
-        dedup_kt_param_names(&mut arg_names);
-        // Per arg: (builder_kt seen by the user, wire_kt the extern delivers,
-        // wrap expr name→final). value_blob args carry a real wrap; others are
-        // passthrough.
-        let mut builder_kts: Vec<kt::KtType> = Vec::with_capacity(arg_tys.len());
-        let mut wire_kts: Vec<String> = Vec::with_capacity(arg_tys.len());
-        let mut wraps: Vec<String> = Vec::with_capacity(arg_tys.len());
-        let mut needs_adapter = false;
-        for (k, (out_ty, nullable)) in arg_tys.iter().enumerate() {
-            let pk = &arg_names[k];
-            let (builder_kt, wire_kt, wrap, is_vb) =
-                unfold_leaf_kt(ext, registry, out_ty, *nullable, pk, imports)?;
-            needs_adapter |= is_vb;
-            builder_kts.push(builder_kt);
-            wire_kts.push(wire_kt);
-            wraps.push(wrap);
-        }
-        // The builder lambda's named parameters: `(name0: T0, name1: T1, …)`.
-        let builder_lambda_params = || {
-            arg_names
-                .iter()
-                .cloned()
-                .zip(builder_kts.iter().cloned())
-                .collect::<Vec<_>>()
-        };
+        // The builder / fold params are generated typed `fun interface`s
+        // (`<Source>Builder<out R>` / `<Element>Folder<A>`); the native side
+        // calls their typed `run` with raw jvalues (value-blob leaves surface
+        // as `ByteArray` — no call-site adapter). Lambda-literal call sites
+        // SAM-convert unchanged.
         let is_iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
-        // Adapter param list `name0: W0, name1: W1, …` and the wrapped-call
-        // arg list.
-        let adapter_params = wire_kts
-            .iter()
-            .enumerate()
-            .map(|(k, w)| format!("{}: {w}", arg_names[k]))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let wrapped_args = wraps.join(", ");
         if is_iterable {
+            let spec = folder_iface_spec(ext, registry, plan)?;
             generic = Some("A".to_string());
             builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
-            builder_param = Some((
-                "fold".to_string(),
-                kt::KtType::lambda(
-                    std::iter::once(("acc".to_string(), kt::KtType::var_("A")))
-                        .chain(builder_lambda_params()),
-                    kt::KtType::var_("A"),
-                ),
-            ));
+            builder_param = Some(("fold".to_string(), spec.kt_ref(vec![kt::KtType::var_("A")])));
             unfold_call_args.push("acc".to_string());
-            if needs_adapter {
-                let sep = if adapter_params.is_empty() { "" } else { ", " };
-                unfold_call_args.push(format!(
-                    "{{ __a: A{sep}{adapter_params} -> fold(__a, {wrapped_args}) }}"
-                ));
-            } else {
-                unfold_call_args.push("fold".to_string());
-            }
+            unfold_call_args.push("fold".to_string());
             (Some(kt::KtType::var_("A")), None)
         } else {
+            let spec = builder_iface_spec(ext, registry, plan)?;
             generic = Some("R".to_string());
-            builder_param = Some((
-                "build".to_string(),
-                kt::KtType::lambda(builder_lambda_params(), kt::KtType::var_r()),
-            ));
-            if needs_adapter {
-                unfold_call_args.push(format!("{{ {adapter_params} -> build({wrapped_args}) }}"));
-            } else {
-                unfold_call_args.push("build".to_string());
-            }
+            builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
+            unfold_call_args.push("build".to_string());
             let kt = match &plan.shape {
                 UnfoldShape::Optional(_) => kt::KtType::var_r().nullable(),
                 _ => kt::KtType::var_r(),
@@ -1032,51 +930,33 @@ pub(crate) fn render_wrapper_fn(
 
     let is_unit = kt_return.is_none();
 
-    // Error callback `onError: (je: String?, ze…) -> R`. `je` (binding message)
-    // is fixed; the `ze` params are the fn's `Result<_, E>` domain error
-    // converted/deconstructed (from `error_plans`). The wrapper passes a capture
-    // to the extern, then — after the native call — calls `onError(je, ze…)` and
-    // returns its `R` if a failure was recorded (no throw on the Rust upcall).
+    // Error callback `onError: <Err>Handler<R>` / `JniErrorHandler<R>` — a
+    // generated typed fun interface `run(je: String?, ze…): R`. `je` (binding
+    // message) is fixed; the `ze` params are the fn's `Result<_, E>` domain
+    // error converted/deconstructed (from `error_plans`), nullable (a binding
+    // error delivers null ze — the wrapper coalesces with defaults). The
+    // wrapper passes a SAM **capture** to the extern, then — after the native
+    // call — calls `onError.run(je, ze…)` and returns its `R` if a failure
+    // was recorded (no throw on the Rust upcall).
     let r_ty = kt_return.clone().unwrap_or_else(kt::KtType::unit);
-    let error_plan = registry.error_plans.get(&f.sig.ident);
-    // Per ze leaf: (param name, public Kotlin type, default literal for a
-    // binding error). Names derive from the error plan's accessor paths
-    // (`z_error_message` on `&ZError` → `message`).
-    let ze_info: Vec<(String, kt::KtType, String)> = error_plan
-        .map(|p| {
-            let mut names = plan_leaf_names(registry, p);
-            dedup_kt_param_names(&mut names);
-            names
-                .into_iter()
-                .zip(p.leaves.iter())
-                .map(|(name, leaf)| {
-                    let out_ty = &leaf.out_ty;
-                    let kt = if ext.is_kotlin_enum(&enum_probe_type(out_ty)) {
-                        kt::KtType::int()
-                    } else {
-                        let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-                        classify_return(ext, &rt, registry, imports)
-                            .and_then(|(k, _)| k)
-                            .unwrap_or_else(kt::KtType::any)
-                    };
-                    let default = kt_value_default(&kt);
-                    (name, kt, default)
-                })
-                .collect()
+    let sink_spec = onerror_iface_spec(ext, registry, &f.sig.ident)?;
+    // Per ze leaf: (param name, nullable iface Kotlin type, default literal
+    // for a binding error) — straight off the handler interface spec (its
+    // first param is the fixed `je`).
+    let ze_info: Vec<(String, kt::KtType, String)> = sink_spec.params[1..]
+        .iter()
+        .map(|(name, kt)| {
+            let default = kt_value_default(kt);
+            (name.clone(), kt.clone(), default)
         })
-        .unwrap_or_default();
+        .collect();
     let n_ze = ze_info.len();
-    // Public `onError` lambda type: the fixed binding-error message `je`, then
-    // each named ze leaf (non-null), returning `R`.
-    let onerr_type = kt::KtType::lambda(
-        std::iter::once(("je".to_string(), kt::KtType::string().nullable())).chain(
-            ze_info
-                .iter()
-                .map(|(name, kt, _)| (name.clone(), kt.clone())),
-        ),
-        r_ty.clone(),
-    );
-    // The je/ze argument list to call the user's `onError`, coalescing each
+    let onerr_type = sink_spec.kt_ref(vec![r_ty.clone()]);
+    // The capture is a SAM literal of the same interface — its short name in
+    // raw body text needs the import registered.
+    imports.insert(sink_spec.fqn());
+    let sink_short = sink_spec.name.clone();
+    // The je/ze argument list to call the user's `onError.run`, coalescing each
     // captured (nullable) ze with its default (a binding error leaves ze null).
     let onerr_call_args = std::iter::once("__cap_je".to_string())
         .chain((0..n_ze).map(|i| {
@@ -1086,13 +966,13 @@ pub(crate) fn render_wrapper_fn(
         .collect::<Vec<_>>()
         .join(", ");
     // Default-ze args for a synchronous (pre-call) closed-handle guard, which
-    // calls `onError` directly.
+    // calls `onError.run` directly.
     let onerr_guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
         .chain(ze_info.iter().map(|(_, _, def)| def.clone()))
         .collect::<Vec<_>>()
         .join(", ");
     // Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
-    // lock, returning `onError(...)` (function-level return; no throw).
+    // lock, returning `onError.run(...)` (function-level return; no throw).
     let mut prelock_guards = String::new();
     for o in &opaques {
         let cond = if o.nullable {
@@ -1102,10 +982,12 @@ pub(crate) fn render_wrapper_fn(
         };
         if is_unit {
             prelock_guards.push_str(&format!(
-                "if ({cond}) {{ onError({onerr_guard_args}); return }}\n"
+                "if ({cond}) {{ onError.run({onerr_guard_args}); return }}\n"
             ));
         } else {
-            prelock_guards.push_str(&format!("if ({cond}) return onError({onerr_guard_args})\n"));
+            prelock_guards.push_str(&format!(
+                "if ({cond}) return onError.run({onerr_guard_args})\n"
+            ));
         }
     }
 
@@ -1219,40 +1101,44 @@ pub(crate) fn render_wrapper_fn(
         fun = fun.returns(rt.clone());
     }
     // No throw from the binding: the wrapper installs a **capture** the extern
-    // invokes on `Err` (recording `(je, ze…)`), then — after the native call —
-    // calls the user's `onError` and returns its `R`. A pre-lock closed-handle
-    // guard short-circuits straight to `onError` (it can't reach the capture).
+    // invokes on `Err` (a SAM literal of the same handler interface — the
+    // native side calls its typed `run`), then — after the native call —
+    // calls the user's `onError.run` and returns its `R` if a failure was
+    // recorded. A pre-lock closed-handle guard short-circuits straight to
+    // `onError.run` (it can't reach the capture).
     let body: String = {
         let mut b = String::new();
         b.push_str(&prelock_guards);
         b.push_str("var __cap_failed = false\n");
         b.push_str("var __cap_je: String? = null\n");
         for i in 0..n_ze {
+            // The iface ze type is already nullable — render as-is.
             let (_, kt, _) = &ze_info[i];
-            b.push_str(&format!("var __cap_ze{i}: {kt}? = null\n"));
+            b.push_str(&format!("var __cap_ze{i}: {kt} = null\n"));
         }
-        // The capture lambda: arity `1 + n_ze`, matching the extern's invoke.
-        let cap_params = std::iter::once("__je: String?".to_string())
-            .chain((0..n_ze).map(|i| {
-                let (_, kt, _) = &ze_info[i];
-                format!("__ze{i}: {kt}?")
-            }))
+        // The capture: a SAM literal of the handler interface (arity
+        // `1 + n_ze`, params typed by the interface), recording into the
+        // `__cap_*` locals. `R` binds to `Unit`.
+        let cap_params = std::iter::once("__je".to_string())
+            .chain((0..n_ze).map(|i| format!("__ze{i}")))
             .collect::<Vec<_>>()
             .join(", ");
         let mut cap_body = String::from("__cap_failed = true; __cap_je = __je");
         for i in 0..n_ze {
             cap_body.push_str(&format!("; __cap_ze{i} = __ze{i}"));
         }
-        b.push_str(&format!("val __cap = {{ {cap_params} -> {cap_body} }}\n"));
+        b.push_str(&format!(
+            "val __cap = {sink_short}<Unit> {{ {cap_params} -> {cap_body} }}\n"
+        ));
         if is_unit {
             b.push_str(&format!("{core_expr}\n"));
             b.push_str(&format!(
-                "if (__cap_failed) return onError({onerr_call_args})\n"
+                "if (__cap_failed) return onError.run({onerr_call_args})\n"
             ));
         } else {
             b.push_str(&format!("val __ret = {core_expr}\n"));
             b.push_str(&format!(
-                "if (__cap_failed) return onError({onerr_call_args})\n"
+                "if (__cap_failed) return onError.run({onerr_call_args})\n"
             ));
             b.push_str("return __ret\n");
         }
@@ -1269,7 +1155,7 @@ pub(crate) fn render_wrapper_fn(
 /// (`pk` is the adapter's parameter name; passthrough unless the leaf is a
 /// `value_blob`, whose `@JvmInline value class` can't be built Rust-side).
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
-fn unfold_leaf_kt(
+pub(crate) fn unfold_leaf_kt(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     out_ty: &syn::Type,
@@ -1381,7 +1267,7 @@ pub(crate) fn strip_receiver_prefix(registry: &Registry<KotlinMeta>, acc: &syn::
 /// root identity leaf (empty path) is `handle`. Names are keyword-escaped via
 /// [`kt_param_name`]; run [`dedup_kt_param_names`] over the final per-lambda
 /// list.
-fn plan_leaf_names(
+pub(crate) fn plan_leaf_names(
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
 ) -> Vec<String> {
@@ -1406,7 +1292,7 @@ fn plan_leaf_names(
 /// Make one lambda's parameter-name list unique: a duplicate gets a numeric
 /// suffix (`name2`, `name3`, …). Names in a Kotlin function type are purely
 /// documentational but must still be distinct identifiers.
-fn dedup_kt_param_names(names: &mut [String]) {
+pub(crate) fn dedup_kt_param_names(names: &mut [String]) {
     let mut seen: HashSet<String> = HashSet::new();
     for n in names.iter_mut() {
         if !seen.insert(n.clone()) {
@@ -1422,7 +1308,7 @@ fn dedup_kt_param_names(names: &mut [String]) {
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the
 /// decapitalized bare type short (`ZQuery` → `zQuery`), peeling a `&` /
 /// `Option<…>` layer; `arg{i}` for non-path shapes.
-fn whole_value_name(ty: &syn::Type, i: usize) -> String {
+pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
     let mut t = ty.clone();
     if let syn::Type::Reference(r) = &t {
         t = (*r.elem).clone();

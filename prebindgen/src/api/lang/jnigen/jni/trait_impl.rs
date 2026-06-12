@@ -295,6 +295,9 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
         pub(crate) fn signal_error(
             env: &mut jni::JNIEnv,
             sink: &jni::objects::JObject,
+            mid: &::prebindgen::lang::CachedIfaceMethod,
+            fqn: &str,
+            descr: &str,
             je: ::core::option::Option<&str>,
             ze: &[&jni::objects::JObject],
         ) {
@@ -307,9 +310,9 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
                 return;
             }
             // `je` (binding message, `Some` only for a `JniError`) crosses as the
-            // fixed first `String?`; the `ze` library-error leaves follow. The
-            // foreign error callback is a plain function type — invoked via the
-            // erased `invoke` with all-`Object` params and an `Object` return.
+            // fixed first `String?`; the `ze` library-error leaves follow — all
+            // nullable object params of the sink's typed `<Err>Handler.run`
+            // (`mid`/`fqn`/`descr` are the per-extern cached interface method).
             let __je: jni::objects::JObject = match je {
                 ::core::option::Option::Some(__m) => match env.new_string(__m) {
                     Ok(s) => s.into(),
@@ -320,20 +323,15 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
                 },
                 ::core::option::Option::None => jni::objects::JObject::null(),
             };
-            let mut __args: ::std::vec::Vec<jni::objects::JValue> =
+            let mut __args: ::std::vec::Vec<jni::sys::jvalue> =
                 ::std::vec::Vec::with_capacity(1 + ze.len());
-            __args.push(jni::objects::JValue::Object(&__je));
+            __args.push(jni::sys::jvalue { l: __je.as_raw() });
             for __z in ze {
-                __args.push(jni::objects::JValue::Object(__z));
+                __args.push(jni::sys::jvalue { l: __z.as_raw() });
             }
-            let mut __descr = ::std::string::String::from("(");
-            for _ in 0..(1 + ze.len()) {
-                __descr.push_str("Ljava/lang/Object;");
-            }
-            __descr.push_str(")Ljava/lang/Object;");
             // On failure leave any pending exception in place (don't describe/
             // clear it) so it propagates rather than being swallowed.
-            if let Err(e) = env.call_method(sink, "invoke", &__descr, &__args) {
+            if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, &__args) {
                 tracing::error!("signal_error: error-callback invoke failed: {}", e);
             }
         }

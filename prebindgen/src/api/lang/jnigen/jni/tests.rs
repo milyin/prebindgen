@@ -382,9 +382,12 @@ fn snapshot_rust_side() {
     // now invokes the error callback with `(je, ze…)`.
     assert!(rc.contains("fnsignal_error"), "{rust}");
     assert!(
-        rc.contains("signal_error(&mutenv,&__error_sink,::core::option::Option::Some(&__e.to_string()),__ze_defaults"),
+        rc.contains("signal_error(&mutenv,&__error_sink,&__SINK_MID,__SINK_FQN,__SINK_DESCR,::core::option::Option::Some(&__e.to_string()),__ze_defaults"),
         "{rust}"
     );
+    // The sink's typed handler `run` is resolved once per process via the
+    // cached interface-method statics.
+    assert!(rc.contains("CachedIfaceMethod"), "{rust}");
     // The extern takes the trailing error-callback param; no throw fn exists.
     assert!(rc.contains("__error_sink:jni::objects::JObject"), "{rust}");
     assert!(!rc.contains("throw_Error"), "{rust}");
@@ -453,14 +456,14 @@ fn snapshot_kotlin_side() {
         .cloned()
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
-    // The error lambda's params are named: the fixed `je` binding message,
-    // then the decomposed error leaves.
+    // `onError` is the typed handler fun interface, instantiated at the
+    // wrapper's result type; the wrapper calls its `run` on failure.
     assert!(
-        pc.contains("onError:(je:String?"),
+        pc.contains("onError:JniErrorHandler<") || pc.contains("Handler<"),
         "package wrappers: {pkg}"
     );
     assert!(
-        pc.contains("if(__cap_failed)returnonError("),
+        pc.contains("if(__cap_failed)returnonError.run("),
         "package wrappers: {pkg}"
     );
     // `onError` is a **required** parameter (no default) and the wrappers
@@ -552,22 +555,21 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
 fn callback_snapshot_rust_side() {
     let (rust, _) = callback_snapshot_pipeline();
     let rc: String = rust.split_whitespace().collect();
-    // The trampoline invokes the erased Kotlin lambda — never a typed `run`.
-    assert!(rc.contains(r#""invoke""#), "{rust}");
-    assert!(!rc.contains(r#""run""#), "{rust}");
-    // Decomposed ZThing arg: 2 leaves ⇒ 2-object descriptor; on_close ⇒
-    // zero-arg Function0 descriptor.
+    // The trampoline invokes the typed callback interface's `run` — never the
+    // erased `FunctionN.invoke`.
+    assert!(rc.contains(r#""run""#), "{rust}");
+    assert!(!rc.contains(r#""invoke""#), "{rust}");
+    // Decomposed ZThing arg: 2 typed leaves (handle class + String), void
+    // return; on_close ⇒ zero-arg `()V`.
     assert!(
-        rc.contains(r#""(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;""#),
+        rc.contains(r#""(Lio/test/jni/thing/ZThing;Ljava/lang/String;)V""#),
         "{rust}"
     );
-    assert!(rc.contains(r#""()Ljava/lang/Object;""#), "{rust}");
-    // Fallback ZOther arg: 1-object descriptor + post-invoke `close()` of the
-    // boxed handle. The decomposed path never closes (ownership transfers).
-    assert!(
-        rc.contains(r#""(Ljava/lang/Object;)Ljava/lang/Object;""#),
-        "{rust}"
-    );
+    assert!(rc.contains(r#""()V""#), "{rust}");
+    // Fallback ZOther arg: 1 typed handle param + post-invoke `close()` of
+    // the boxed handle. The decomposed path never closes (ownership
+    // transfers).
+    assert!(rc.contains(r#""(Lio/test/jni/thing/ZOther;)V""#), "{rust}");
     assert!(rc.contains(r#""close""#), "{rust}");
     // Daemon-thread attachment + local-frame bracketing kept from the old
     // trampoline.
@@ -586,15 +588,6 @@ fn callback_snapshot_kotlin_side() {
     let (_, kotlin) = callback_snapshot_pipeline();
     let names: Vec<&String> = kotlin.keys().collect();
 
-    // No fun-interface files are generated (the `callbacks/` subsystem is gone).
-    assert!(
-        !names.iter().any(|n| n.contains("Callback")),
-        "files: {names:?}"
-    );
-    for v in kotlin.values() {
-        assert!(!v.contains("fun interface"), "{v}");
-    }
-
     // Extern tier: callbacks erased to `Any`, like the errorSink.
     let native: String = kotlin
         .values()
@@ -606,19 +599,38 @@ fn callback_snapshot_kotlin_side() {
     assert!(native.contains("cb:Any"), "{native}");
     assert!(native.contains("onClose:Any"), "{native}");
 
-    // Wrapper tier: typed lambdas with NAMED parameters — decomposed ZThing's
-    // identity leaf is `handle`, its accessor leaf strips the receiver-type
-    // prefix (`z_thing_name` on `&ZThing` → `name`); on_close ⇒ () -> Unit;
-    // the plan-less fallback arg is the decapped type short (`zOther`).
+    // Typed callback `fun interface`s with NAMED parameters — decomposed
+    // ZThing's identity leaf is `handle`, its accessor leaf strips the
+    // receiver-type prefix (`z_thing_name` on `&ZThing` → `name`); `Fn()` ⇒
+    // the shared zero-arg `VoidCallback` (root package); the plan-less
+    // fallback arg is the decapped type short (`zOther`).
+    let all: String = kotlin
+        .values()
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    assert!(
+        all.contains("funinterfaceZThingCallback{publicfunrun(handle:ZThing,name:String)"),
+        "{all}"
+    );
+    assert!(
+        all.contains("funinterfaceZOtherCallback{publicfunrun(zOther:ZOther)"),
+        "{all}"
+    );
+    assert!(all.contains("funinterfaceVoidCallback{publicfunrun()"), "{all}");
+
+    // Wrapper tier: the params are the typed interfaces, forwarded bare.
     let pkg = kotlin
         .values()
         .find(|v| v.contains("public fun zThingSub"))
         .cloned()
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
-    assert!(pc.contains("cb:(handle:ZThing,name:String)->Unit"), "{pkg}");
-    assert!(pc.contains("onClose:()->Unit"), "{pkg}");
-    assert!(pc.contains("cb:(zOther:ZOther)->Unit"), "{pkg}");
+    assert!(pc.contains("cb:ZThingCallback"), "{pkg}");
+    assert!(pc.contains("onClose:VoidCallback"), "{pkg}");
+    assert!(pc.contains("cb:ZOtherCallback"), "{pkg}");
 }
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
@@ -807,38 +819,55 @@ fn callback_double_option_unwrap_pipeline() {
     // converter — no unwrap of the leaf's own `Option`.
     assert!(rc.contains("myflat::z_reply_zid(&__cb_arg0)"), "{rust}");
     assert!(!rc.contains("matchmyflat::z_reply_zid("), "{rust}");
-    // 6 leaves ⇒ 6-object erased descriptor.
-    let descr = format!(
-        "\"({})Ljava/lang/Object;\"",
-        "Ljava/lang/Object;".repeat(6)
+    // 6 leaves ⇒ typed `run` descriptor: nullable value-blob `[B`, raw `Z`
+    // for the non-null bool discriminator, typed handle class (full FQN),
+    // nullable String, BOXED Long for the nullable timestamp, nullable `[B`.
+    assert!(
+        rc.contains(
+            "\"([BZLio/test/jni/query/ZKeyExpr;Ljava/lang/String;Ljava/lang/Long;[B)V\""
+        ),
+        "{rust}"
     );
-    assert!(rc.contains(&descr), "{rust}");
+    // The non-null bool crosses as a raw typed jvalue — never boxed.
+    assert!(rc.contains("jni::sys::jvalue{z:"), "{rust}");
 
-    // Kotlin wrapper tier: ok-arm and err-arm leaves are nullable (the value
-    // may be absent), the discriminator stays non-null.
+    // Kotlin tier: the generated callback `fun interface` carries the typed
+    // params — ok-arm and err-arm leaves nullable (the value may be absent),
+    // the discriminator non-null; the value-blob leaf surfaces as its raw
+    // (nullable) ByteArray wire, NOT the value class — the SDK wraps.
     let kdir = dir.join("kotlin");
     let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let iface_file = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .find(|v| v.contains("fun interface ZReplyCallback"))
+        .unwrap_or_default();
+    // Scope to the interface block — the merged package file also holds the
+    // ZId value class and other decls.
+    let iface = iface_file
+        .split("fun interface ZReplyCallback")
+        .nth(1)
+        .and_then(|s| s.split_once('}').map(|(b, _)| b.to_string()))
+        .unwrap_or_default();
+    let ic: String = iface.split_whitespace().collect();
+    assert!(ic.contains("isOk:Boolean"), "{iface}");
+    assert!(ic.contains(":ZKeyExpr?"), "{iface}");
+    assert!(ic.contains(":Long?"), "{iface}");
+    assert!(ic.contains(":ByteArray?"), "{iface}");
+    assert!(!ic.contains(":ZId"), "{iface}");
+    // The wrapper takes the typed interface and forwards it bare (no
+    // value-blob rebuilding adapter exists anymore).
     let pkg = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .find(|v| v.contains("public fun zGet"))
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
-    assert!(pc.contains("isOk:Boolean"), "{pkg}");
-    assert!(pc.contains(":ZKeyExpr?"), "{pkg}");
-    assert!(pc.contains(":Long?"), "{pkg}");
-    assert!(pc.contains(":ByteArray?"), "{pkg}");
-    assert!(pc.contains(":ZId?"), "{pkg}");
-    // The value-blob rebuilding adapter wraps the nullable wire with the bare
-    // value-class name — `x?.let { ZId(it) }`, never `ZId?(it)`.
-    assert!(pc.contains("?.let{ZId(it)}"), "{pkg}");
-    assert!(!pc.contains("ZId?(it)"), "{pkg}");
-}
-
-#[test]
-#[should_panic(expected = "Function22")]
-fn erased_invoke_descriptor_rejects_over_22() {
-    let _ = erased_invoke_descriptor(23);
+    assert!(pc.contains("cb:ZReplyCallback"), "{pkg}");
+    // The callback is forwarded bare — no value-blob rebuilding adapter
+    // lambda wraps it at the call site (the interface itself delivers the
+    // raw ByteArray wire).
+    assert!(pc.contains("JNINative.zGet(cb,"), "{pkg}");
 }
 
 #[test]

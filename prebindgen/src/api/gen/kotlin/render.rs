@@ -80,6 +80,7 @@ fn collect_decl_imports(d: &KtDecl, sink: &mut Vec<String>) {
             KtBody::Expr(c) | KtBody::Block(c) => c.collect_imports(sink),
             KtBody::None => {}
         },
+        KtDecl::FunInterface(_) => {}
         KtDecl::Property(p) => {
             if let Some(a) = &p.accessors {
                 a.collect_imports(sink);
@@ -122,6 +123,7 @@ fn render_decl(d: &KtDecl, level: usize, imports: &mut ImportSet, out: &mut Stri
     match d {
         KtDecl::Class(c) => render_class(c, level, imports, out),
         KtDecl::Fun(f) => render_fun(f, level, imports, out),
+        KtDecl::FunInterface(i) => render_fun_interface(i, level, imports, out),
         KtDecl::Property(p) => render_property(p, level, imports, out),
         KtDecl::TypeAlias { vis, name, target } => {
             indent(level, out);
@@ -415,6 +417,23 @@ fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String
             out.push_str("}\n");
         }
     }
+}
+
+fn render_fun_interface(i: &KtFunInterface, level: usize, imports: &mut ImportSet, out: &mut String) {
+    if let Some(doc) = &i.kdoc {
+        render_kdoc(doc, level, out);
+    }
+    indent(level, out);
+    out.push_str(i.vis.prefix());
+    out.push_str("fun interface ");
+    out.push_str(&i.name);
+    if !i.type_params.is_empty() {
+        out.push_str(&format!("<{}>", i.type_params.join(", ")));
+    }
+    out.push_str(" {\n");
+    render_fun(&i.method, level + 1, imports, out);
+    indent(level, out);
+    out.push_str("}\n");
 }
 
 fn render_property(p: &KtProperty, level: usize, imports: &mut ImportSet, out: &mut String) {
