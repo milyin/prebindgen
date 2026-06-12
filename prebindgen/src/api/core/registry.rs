@@ -183,16 +183,15 @@ pub struct Registry<M = ()> {
     /// a default deconstructor has no entry and is delivered whole.
     pub callback_arg_plans: HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan>,
 
-    /// One representative plan per deconstructor **declaration**
-    /// ([`crate::api::core::unfold::DeconId`]) — the single source language
-    /// adapters derive declaration-keyed signature artifacts (e.g. generated
-    /// callback interfaces) from, so every function selecting the same
-    /// declaration sees one signature by construction. The representative's
-    /// fn-specific aspects (`by_ref`, shape, delivery) vary between users but
-    /// do not affect the signature: the leaf list, order, types, and
-    /// nullability are fixed by the declaration's records.
+    /// The declaration-canonical decomposition per deconstructor declaration
+    /// ([`crate::api::core::unfold::DeconId`]) — resolved once with
+    /// normalized inputs, independent of using functions and processing
+    /// order. The single source language adapters derive declaration-keyed
+    /// signature artifacts (e.g. generated callback interfaces) from, so
+    /// every function selecting the same declaration sees one signature by
+    /// construction.
     pub decon_plans:
-        HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::UnfoldPlan>,
+        HashMap<crate::api::core::unfold::DeconId, crate::api::core::unfold::DeconSpec>,
 }
 
 impl<M> Default for Registry<M> {

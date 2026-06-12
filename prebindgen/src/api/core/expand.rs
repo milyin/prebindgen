@@ -29,6 +29,7 @@ use std::collections::HashSet;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
+use crate::api::core::types_util::option_inner_type;
 use crate::api::core::registry::{Registry, TypeKey};
 
 // ──────────────────────────────────────────────────────────────────────
@@ -1264,23 +1265,6 @@ fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Typ
     None
 }
 
-/// If `ty` is `Option<Inner>` (by last path segment), return `Inner`.
-fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else {
-        return None;
-    };
-    let last = tp.path.segments.last()?;
-    if last.ident != "Option" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
-        return None;
-    };
-    ab.args.iter().find_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    })
-}
 
 /// If `ty` is `Result<Ok, Err>` (by last path segment), return `Ok`.
 fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {

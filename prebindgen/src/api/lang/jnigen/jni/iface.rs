@@ -20,7 +20,7 @@
 //! sites independently derive identical specs.
 
 use super::*;
-use crate::api::core::unfold::{DeconId, UnfoldPlan, UnfoldShape};
+use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan, UnfoldShape};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
@@ -178,7 +178,7 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
 /// Short name of a Rust type key (`zenoh_flat::ZSample` → `ZSample`),
 /// peeled of `&` / `Option`.
 fn subject_short(ty: &syn::Type) -> String {
-    let peeled = peel_ref_option(ty);
+    let peeled = crate::api::core::types_util::peel_ref_option_vec(ty);
     if let syn::Type::Path(tp) = &peeled {
         if let Some(seg) = tp.path.segments.last() {
             return seg.ident.to_string();
@@ -187,52 +187,30 @@ fn subject_short(ty: &syn::Type) -> String {
     TypeKey::from_type(&peeled).to_string().replace([' ', ':', '<', '>'], "")
 }
 
-fn peel_ref_option(ty: &syn::Type) -> syn::Type {
-    let mut t = ty.clone();
-    loop {
-        match t {
-            syn::Type::Reference(r) => t = (*r.elem).clone(),
-            syn::Type::Path(ref tp)
-                if tp.path.segments.last().is_some_and(|s| s.ident == "Option"
-                    || s.ident == "Vec") =>
-            {
-                let seg = tp.path.segments.last().unwrap();
-                if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
-                        t = inner.clone();
-                        continue;
-                    }
-                }
-                return t;
-            }
-            other => return other,
-        }
-    }
-}
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
 fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
-    let key = TypeKey::from_type(&peel_ref_option(subject)).to_string();
+    let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject)).to_string();
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
         .unwrap_or_else(|| ext.package.clone())
 }
 
-/// The interface param list for a plan's leaves: names from
+/// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], types from [`unfold_leaf_kt`] — with `value_blob`
 /// leaves degraded to their `ByteArray` wire (the `@JvmInline` class cannot
 /// appear in a JNI-called method signature).
 fn plan_leaf_params(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
-    plan: &UnfoldPlan,
+    leaves: &[crate::api::core::unfold::UnfoldLeaf],
 ) -> Option<Vec<(String, kt::KtType)>> {
-    let mut names = plan_leaf_names(registry, plan);
-    dedup_kt_param_names(&mut names);
+    let mut names = plan_leaf_names(leaves);
+    dedup_names(&mut names);
     let mut throwaway = BTreeSet::new();
-    let mut out = Vec::with_capacity(plan.leaves.len());
-    for (name, leaf) in names.into_iter().zip(plan.leaves.iter()) {
+    let mut out = Vec::with_capacity(leaves.len());
+    for (name, leaf) in names.into_iter().zip(leaves.iter()) {
         let ty = leaf_iface_kt(ext, registry, &leaf.out_ty, leaf.nullable, &mut throwaway)?;
         out.push((name, ty));
     }
@@ -251,6 +229,19 @@ pub(crate) fn leaf_iface_kt(
     nullable: bool,
     throwaway: &mut BTreeSet<String>,
 ) -> Option<kt::KtType> {
+    // The declaration-canonical spec normalizes its identity leaf to the
+    // borrowed `&T` form; a function set that only ever returns the type
+    // OWNED resolved only `T`'s output entry. Both classify to the same
+    // projection/class, so fall back to the peeled form when the borrowed
+    // entry was never required.
+    let mut out_ty = out_ty;
+    let peeled: syn::Type;
+    if registry.output_entry(out_ty).is_none() {
+        if let syn::Type::Reference(r) = out_ty {
+            peeled = (*r.elem).clone();
+            out_ty = &peeled;
+        }
+    }
     let (builder_kt, wire_kt, _wrap, is_vb) =
         unfold_leaf_kt(ext, registry, out_ty, nullable, "x", throwaway)?;
     if is_vb {
@@ -293,7 +284,7 @@ pub(crate) fn callback_iface_spec(
     for (i, t) in cb_args.iter().enumerate() {
         if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(t)) {
             leaf_tys.extend(
-                plan_leaf_names(registry, plan)
+                plan_leaf_names(&plan.leaves)
                     .into_iter()
                     .zip(plan.leaves.iter())
                     .map(|(n, l)| (n, l.out_ty.clone(), l.nullable)),
@@ -303,7 +294,7 @@ pub(crate) fn callback_iface_spec(
         }
     }
     let mut names: Vec<String> = leaf_tys.iter().map(|(n, _, _)| n.clone()).collect();
-    dedup_kt_param_names(&mut names);
+    dedup_names(&mut names);
     let mut throwaway = BTreeSet::new();
     let mut params = Vec::with_capacity(leaf_tys.len());
     for (k, (_, out_ty, nullable)) in leaf_tys.iter().enumerate() {
@@ -349,13 +340,13 @@ pub(crate) fn builder_iface_spec(
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    let plan = registry.decon_plans.get(decon)?;
-    let params = plan_leaf_params(ext, registry, plan)?;
+    let spec = registry.decon_plans.get(decon)?;
+    let params = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Builder",
-        decon_base_name(&subject_short(&plan.source), Some(decon))
+        decon_base_name(&subject_short(&spec.source), Some(decon))
     );
-    let package = subject_package(ext, &plan.source);
+    let package = subject_package(ext, &spec.source);
     let type_params = vec!["out R".to_string()];
     let ret = kt::KtType::var_r();
     let descr = method_descr(&params, &ret, &type_params);
@@ -379,14 +370,14 @@ pub(crate) fn folder_iface_spec(
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    let plan = registry.decon_plans.get(decon)?;
+    let spec = registry.decon_plans.get(decon)?;
     let mut params: Vec<(String, kt::KtType)> = vec![("acc".to_string(), kt::KtType::var_("A"))];
-    params.extend(plan_leaf_params(ext, registry, plan)?);
+    params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
     let name = format!(
         "{}Folder",
-        decon_base_name(&subject_short(&plan.source), Some(decon))
+        decon_base_name(&subject_short(&spec.source), Some(decon))
     );
-    let package = subject_package(ext, &plan.source);
+    let package = subject_package(ext, &spec.source);
     let type_params = vec!["A".to_string()];
     let ret = kt::KtType::var_("A");
     let descr = method_descr(&params, &ret, &type_params);
@@ -455,17 +446,17 @@ pub(crate) fn error_handler_iface_spec(
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    let plan = registry.decon_plans.get(decon)?;
+    let spec = registry.decon_plans.get(decon)?;
     let mut params: Vec<(String, kt::KtType)> =
         vec![("je".to_string(), kt::KtType::string().nullable())];
-    for (name, ty) in plan_leaf_params(ext, registry, plan)? {
+    for (name, ty) in plan_leaf_params(ext, registry, &spec.leaves)? {
         params.push((name, ty.nullable()));
     }
     let name = format!(
         "{}Handler",
-        decon_base_name(&subject_short(&plan.source), Some(decon))
+        decon_base_name(&subject_short(&spec.source), Some(decon))
     );
-    let package = subject_package(ext, &plan.source);
+    let package = subject_package(ext, &spec.source);
     let type_params = vec!["out R".to_string()];
     let ret = kt::KtType::var_r();
     let descr = method_descr(&params, &ret, &type_params);

@@ -1215,98 +1215,15 @@ pub(crate) fn unfold_leaf_kt(
     Some((builder_kt, wire_kt, wrap, is_vb))
 }
 
-/// Stripped form of a deconstructor-record accessor ident relative to its
-/// receiver type: `z_sample_key_expr` on `&ZSample` → `key_expr`;
-/// `z_keyexpr_as_str` on `&ZKeyExpr` → `as_str`. The comparison is
-/// normalized — lowercased with underscores removed — so irregular snake
-/// forms (`z_keyexpr_` vs the type `ZKeyExpr`) still match. Falls back to
-/// stripping a bare `z_` prefix, then to the full ident.
-pub(crate) fn strip_receiver_prefix(registry: &Registry<KotlinMeta>, acc: &syn::Ident) -> String {
-    let fn_str = acc.to_string();
-    let receiver_short = registry.functions.get(acc).and_then(|(f, _)| {
-        let ty = f.sig.inputs.iter().find_map(|i| match i {
-            syn::FnArg::Typed(pt) => Some((*pt.ty).clone()),
-            _ => None,
-        })?;
-        let ty = match ty {
-            syn::Type::Reference(r) => (*r.elem).clone(),
-            other => other,
-        };
-        if let syn::Type::Path(tp) = &ty {
-            tp.path.segments.last().map(|s| s.ident.to_string())
-        } else {
-            None
-        }
-    });
-    if let Some(short) = receiver_short {
-        let norm_ty: String = short.to_lowercase().replace('_', "");
-        let norm_fn: String = fn_str.replace('_', "").to_lowercase();
-        if !norm_ty.is_empty() && norm_fn.starts_with(&norm_ty) {
-            // Cut `norm_ty.len()` alphanumeric chars off the original ident
-            // (underscores don't count), then trim separator underscores.
-            let mut consumed = 0usize;
-            let mut idx = fn_str.len();
-            for (i, c) in fn_str.char_indices() {
-                if consumed == norm_ty.len() {
-                    idx = i;
-                    break;
-                }
-                if c != '_' {
-                    consumed += 1;
-                }
-            }
-            let rest = fn_str[idx..].trim_start_matches('_');
-            if !rest.is_empty() {
-                return rest.to_string();
-            }
-        }
-    }
-    fn_str.strip_prefix("z_").unwrap_or(&fn_str).to_string()
-}
-
-/// Derived Kotlin parameter names for a plan's delivered leaves, in leaf
-/// order: the camelCased join of every path segment stripped of its receiver
-/// type ([`strip_receiver_prefix`]) — fully mechanical, and unique because
-/// accessor paths are (`keyExpr`, `keyExprAsStr`, `payloadToBytes`, …). The
-/// root identity leaf (empty path) is `handle`. Names are keyword-escaped via
-/// [`kt_param_name`]; run [`dedup_kt_param_names`] over the final per-lambda
-/// list.
-pub(crate) fn plan_leaf_names(
-    registry: &Registry<KotlinMeta>,
-    plan: &crate::api::core::unfold::UnfoldPlan,
-) -> Vec<String> {
-    plan.leaves
-        .iter()
-        .map(|leaf| {
-            if leaf.path.is_empty() {
-                "handle".to_string()
-            } else {
-                let joined = leaf
-                    .path
-                    .iter()
-                    .map(|a| strip_receiver_prefix(registry, a))
-                    .collect::<Vec<_>>()
-                    .join("_");
-                kt_param_name(&joined)
-            }
-        })
-        .collect()
-}
-
-/// Make one lambda's parameter-name list unique: a duplicate gets a numeric
-/// suffix (`name2`, `name3`, …). Names in a Kotlin function type are purely
-/// documentational but must still be distinct identifiers.
-pub(crate) fn dedup_kt_param_names(names: &mut [String]) {
-    let mut seen: HashSet<String> = HashSet::new();
-    for n in names.iter_mut() {
-        if !seen.insert(n.clone()) {
-            let mut k = 2;
-            while !seen.insert(format!("{n}{k}")) {
-                k += 1;
-            }
-            *n = format!("{n}{k}");
-        }
-    }
+/// Kotlin parameter names for a plan's delivered leaves, in leaf order: the
+/// core-derived raw display name ([`UnfoldLeaf::name`] — receiver-stripped
+/// accessor path, `handle` for a root identity) put through [`kt_param_name`]
+/// (camelCase + keyword escape). Run [`crate::api::core::unfold::dedup_names`]
+/// over the final per-signature list.
+///
+/// [`UnfoldLeaf::name`]: crate::api::core::unfold::UnfoldLeaf::name
+pub(crate) fn plan_leaf_names(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> Vec<String> {
+    leaves.iter().map(|leaf| kt_param_name(&leaf.name)).collect()
 }
 
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the

@@ -6,14 +6,6 @@
 
 use super::*;
 
-pub(crate) fn is_option_type(ty: &syn::Type) -> bool {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            return last.ident == "Option";
-        }
-    }
-    false
-}
 
 /// Peel a leading `&`/`&mut` and an `Option<…>` layer to expose the inner type
 /// used for enum detection. So `&Priority`, `Priority`, and `Option<Priority>`
@@ -34,27 +26,6 @@ pub(crate) fn enum_probe_type(ty: &syn::Type) -> syn::Type {
     }
 }
 
-/// `true` if `ty` is `Option<&T>` or `Option<&mut T>` (any inner T).
-/// Mirrors `option_inner_ref_mutability` in the `jni` module — kept here too
-/// to avoid a cross-module helper just for one call site.
-pub(crate) fn is_option_ref(ty: &syn::Type) -> bool {
-    let syn::Type::Path(tp) = ty else {
-        return false;
-    };
-    let Some(seg) = tp.path.segments.last() else {
-        return false;
-    };
-    if seg.ident != "Option" {
-        return false;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return false;
-    };
-    let Some(syn::GenericArgument::Type(inner)) = ab.args.first() else {
-        return false;
-    };
-    matches!(inner, syn::Type::Reference(_))
-}
 
 /// Bottom-up fold over the [`FoldStrategy`] layer stack: compute a leaf value,
 /// then apply `on_nullable` / `on_iterable` for each wrapping layer from the

@@ -871,49 +871,25 @@ fn callback_double_option_unwrap_pipeline() {
 }
 
 #[test]
-fn strip_receiver_prefix_cases() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
-    let fns: &[&str] = &[
-        // Regular snake: ZSample → z_sample_.
-        "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
-        // Irregular snake: type ZKeyExpr but prefix z_keyexpr_ — the
-        // normalized (underscore-free) comparison still matches.
-        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
-        // Double-letter type short: ZZBytes → z_zbytes_.
-        "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
-        // Receiver mismatch: falls back to stripping a bare `z_`.
-        "fn z_error_code(f: &Foo) -> i32 { todo!() }",
-        // No type prefix, no z_: kept whole.
-        "fn get_name(f: &Foo) -> &str { todo!() }",
-    ];
-    let items = fns
-        .iter()
-        .map(|src| {
-            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
-            (syn::Item::Fn(f), loc.clone())
-        })
-        .collect::<Vec<_>>();
-    let reg = Registry::<KotlinMeta>::from_items(items).expect("index");
-    let id = |s: &str| syn::Ident::new(s, proc_macro2::Span::call_site());
-
+fn strip_accessor_prefix_cases() {
+    use crate::api::core::unfold::strip_accessor_prefix;
+    // Regular snake: ZSample → z_sample_.
     assert_eq!(
-        strip_receiver_prefix(&reg, &id("z_sample_key_expr")),
+        strip_accessor_prefix("z_sample_key_expr", "ZSample"),
         "key_expr"
     );
+    // Irregular snake: type ZKeyExpr but prefix z_keyexpr_ — the
+    // normalized (underscore-free) comparison still matches.
+    assert_eq!(strip_accessor_prefix("z_keyexpr_as_str", "ZKeyExpr"), "as_str");
+    // Double-letter type short: ZZBytes → z_zbytes_.
     assert_eq!(
-        strip_receiver_prefix(&reg, &id("z_keyexpr_as_str")),
-        "as_str"
-    );
-    assert_eq!(
-        strip_receiver_prefix(&reg, &id("z_zbytes_to_bytes")),
+        strip_accessor_prefix("z_zbytes_to_bytes", "ZZBytes"),
         "to_bytes"
     );
-    assert_eq!(
-        strip_receiver_prefix(&reg, &id("z_error_code")),
-        "error_code"
-    );
-    assert_eq!(strip_receiver_prefix(&reg, &id("get_name")), "get_name");
+    // Receiver mismatch: falls back to stripping a bare `z_`.
+    assert_eq!(strip_accessor_prefix("z_error_code", "Foo"), "error_code");
+    // No type prefix, no z_: kept whole.
+    assert_eq!(strip_accessor_prefix("get_name", "Foo"), "get_name");
 }
 
 // ────────────────────────────────────────────────────────────────────────

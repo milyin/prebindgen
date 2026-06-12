@@ -2842,35 +2842,7 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
     Some(r.mutability.is_some())
 }
 
-pub(crate) fn bare_path_ident(ty: &syn::Type) -> Option<syn::Ident> {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            if matches!(last.arguments, syn::PathArguments::None) {
-                return Some(last.ident.clone());
-            }
-        }
-    }
-    None
-}
 
-/// If `ty` is `Option<Inner>`, return `Inner`. Used by the struct encoder to
-/// derive the JVM ctor slot descriptor of an optional field: the value is
-/// encoded as a nullable JObject, but the Kotlin constructor expects `Inner`'s
-/// concrete erased type, not `Ljava/lang/Object;`.
-pub(crate) fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Option" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    match ab.args.first()? {
-        syn::GenericArgument::Type(inner) => Some(inner.clone()),
-        _ => None,
-    }
-}
 
 /// Inline-class field name for a value projection identified by its folded
 /// [`Projection::leaf_key`] (e.g. `"ZZenohId"`) rather than by a raw param type.

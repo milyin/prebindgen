@@ -28,6 +28,7 @@ use std::collections::HashSet;
 
 use proc_macro2::Span;
 
+use crate::api::core::types_util::{option_inner_type, short_type_name, vec_inner_type};
 use crate::api::core::registry::{Registry, TypeKey};
 
 // ──────────────────────────────────────────────────────────────────────
@@ -425,6 +426,29 @@ pub enum DeconId {
     PerFn(String, String),
 }
 
+/// The declaration-canonical decomposition of one deconstructor: its leaf
+/// list resolved ONCE from the declaration's records with **normalized**
+/// inputs (borrowed identity form, no outer shape), so the content is
+/// independent of which functions use the declaration and in what order.
+/// Stored in `Registry::decon_plans`; the single source language adapters
+/// derive declaration-keyed signature artifacts (e.g. generated callback
+/// interfaces) from. Per-function aspects (`by_ref`, shape, delivery) live on
+/// each function's [`UnfoldPlan`], which points here via [`UnfoldPlan::decon`].
+///
+/// Normalization detail: the identity leaf's `out_ty` is always the borrowed
+/// `&Source` form (an owned-return function's own plan carries owned `Source`
+/// instead) — both resolve to the same projection/class, and adapters reading
+/// the spec must tolerate whichever form their type tables resolved.
+#[derive(Clone)]
+pub struct DeconSpec {
+    /// The decomposed type as first encountered (path qualification may vary
+    /// by call site; compare via [`TypeKey`], not syntactically).
+    pub source: syn::Type,
+    /// Flattened leaves in declared record order — names, types, paths,
+    /// nullability all declaration-fixed.
+    pub leaves: Vec<UnfoldLeaf>,
+}
+
 /// A resolved output expansion for one function.
 #[derive(Clone)]
 pub struct UnfoldPlan {
@@ -462,8 +486,14 @@ pub struct UnfoldPlan {
 /// One flattened output leaf of a decomposed return value.
 #[derive(Clone)]
 pub struct UnfoldLeaf {
-    /// Internal Rust local name for the encoded leaf.
-    pub name: syn::Ident,
+    /// Raw display name derived from the declaration: the accessor path with
+    /// each segment stripped of its receiver-type prefix
+    /// ([`strip_accessor_prefix`]), joined by `_` (`z_sample_key_expr` on
+    /// `&ZSample` then `z_keyexpr_as_str` → `"key_expr_as_str"`); a root
+    /// identity leaf is `"handle"`. Language-neutral snake form — adapters
+    /// apply their own casing/keyword escaping (e.g. jnigen's camelCase) and
+    /// dedup the final per-signature list ([`dedup_names`]).
+    pub name: String,
     /// Accessor-call chain from the root value (`[]` = the identity/root
     /// itself; `[f]` = `f(&root)`; longer = nested records, M3).
     pub path: Vec<syn::Ident>,
@@ -475,8 +505,9 @@ pub struct UnfoldLeaf {
     /// every reference leaf's JVM conversion has ended its borrow).
     pub identity: bool,
     /// `true` when a nesting accessor on [`Self::path`] returns `Option` (M3):
-    /// the reached value may be absent, so the leaf is `null` (Kotlin type gets
-    /// a `?`; emit wraps the encode in a `match Some/None`).
+    /// the reached value may be absent, so the leaf is nullable on the
+    /// destination side (e.g. a Kotlin `?` type); emit wraps the encode in a
+    /// `match Some/None`.
     pub nullable: bool,
 }
 
@@ -759,6 +790,9 @@ pub fn apply<M>(
                     target: DeconTarget::Output,
                     delivery: Delivery::Callback,
                 };
+                let decon = decl_id(&key, d);
+                let records = d.records.clone();
+                register_decon_spec(registry, acc, func, &decon, &records, &arg_ty)?;
                 let plan = build_plan(
                     acc,
                     registry,
@@ -766,20 +800,14 @@ pub fn apply<M>(
                     false,
                     &arg_ty,
                     UnfoldShape::Decompose,
-                    &d.records,
-                    decl_id(&key, d),
+                    &records,
+                    decon,
                 )?;
                 if plan.leaves.is_empty() {
                     continue;
                 }
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty, &loc);
-                }
-                if let Some(d) = &plan.decon {
-                    registry
-                        .decon_plans
-                        .entry(d.clone())
-                        .or_insert_with(|| plan.clone());
                 }
                 registry.callback_arg_plans.insert(key, plan);
             }
@@ -884,6 +912,7 @@ fn process_decl<M>(
                 // Decomposed: reuse the shared flatten (M3 nesting composes).
                 let records = d.records.clone();
                 let decon = decl_id(&ekey, d);
+                register_decon_spec(registry, acc, &ed.func, &decon, &records, &element)?;
                 let plan =
                     build_plan(acc, registry, ed, by_ref, &element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
@@ -924,6 +953,7 @@ fn process_decl<M>(
                 UnfoldShape::Decompose
             };
             let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
+            register_decon_spec(registry, acc, &ed.func, &decon, &records, &source)?;
             let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records, decon)?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty, &loc);
@@ -958,14 +988,6 @@ fn process_decl<M>(
                 ..plan
             }
         };
-        // Register the declaration's representative plan (first user wins —
-        // the signature-determining parts are declaration-fixed).
-        if let Some(d) = &plan.decon {
-            registry
-                .decon_plans
-                .entry(d.clone())
-                .or_insert_with(|| plan.clone());
-        }
         match ed.target {
             DeconTarget::Output => registry.unfold_plans.insert(ed.func.clone(), plan),
             DeconTarget::Error => registry.error_plans.insert(ed.func.clone(), plan),
@@ -981,6 +1003,38 @@ fn decl_id(type_key: &TypeKey, decl: &DeconstructorDecl) -> DeconId {
         Some(n) => DeconId::Named(type_key.to_string(), n.clone()),
         None => DeconId::Canonical(type_key.to_string()),
     }
+}
+
+/// Register the declaration-canonical [`DeconSpec`] for `decon` (no-op when
+/// already present): re-flatten the records with normalized inputs —
+/// borrowed identity, no outer shape — so the stored spec is independent of
+/// the using function's return shape and of processing order.
+fn register_decon_spec<M>(
+    registry: &mut Registry<M>,
+    acc: &Deconstructors,
+    top_func: &syn::Ident,
+    decon: &DeconId,
+    records: &[DeconRecord],
+    source: &syn::Type,
+) -> Result<(), UnfoldError> {
+    if registry.decon_plans.contains_key(decon) {
+        return Ok(());
+    }
+    let mut leaves: Vec<UnfoldLeaf> = Vec::new();
+    let mut visited: HashSet<TypeKey> = HashSet::new();
+    visited.insert(TypeKey::from_type(source));
+    flatten(
+        acc, registry, top_func, records, source, &[], &[], true, false, &mut visited,
+        &mut leaves,
+    )?;
+    registry.decon_plans.insert(
+        decon.clone(),
+        DeconSpec {
+            source: source.clone(),
+            leaves,
+        },
+    );
+    Ok(())
 }
 
 /// Pick the deconstructor (its records + declaration identity) for one
@@ -1077,6 +1131,7 @@ fn build_plan<M>(
         records,
         source,
         &[],
+        &[],
         by_ref,
         false,
         &mut visited,
@@ -1103,8 +1158,9 @@ fn build_plan<M>(
 ///   the root; `[…, nesting_accessor]` when recursing into a nested child).
 /// * `by_ref` — the top-level return/element borrow-ness. The identity leaf is
 ///   **owned** (`source`) only at the root of an owned value (`path_prefix`
-///   empty && `!by_ref`) — a `value_blob` (`Copy`) delivers itself by copy and a
-///   `ptr_class` moves; everywhere else it is **borrowed** (`&source`, cloned).
+///   empty && `!by_ref`) — a `Copy` value delivers itself by copy and an
+///   opaque handle moves; everywhere else it is **borrowed** (`&source`,
+///   cloned).
 /// * `nullable` — `true` once any nesting accessor on the path returned
 ///   `Option` (the reached value may be absent ⇒ the leaf is `null`).
 /// * `visited` — type keys on the current nesting chain (cycle guard; entries
@@ -1117,12 +1173,26 @@ fn flatten<M>(
     records: &[DeconRecord],
     source: &syn::Type,
     path_prefix: &[syn::Ident],
+    name_prefix: &[String],
     by_ref: bool,
     nullable: bool,
     visited: &mut HashSet<TypeKey>,
     leaves: &mut Vec<UnfoldLeaf>,
 ) -> Result<(), UnfoldError> {
     let source_key = TypeKey::from_type(source);
+    // Receiver short name for display-name stripping — the records at this
+    // level belong to `source` (enforced per accessor by `check_takes`).
+    let receiver_short = short_type_name(source);
+    // The stripped display segment of accessor `func` at this level, appended
+    // to the inherited prefix.
+    let seg_name = |func: &syn::Ident| -> Vec<String> {
+        let mut v = name_prefix.to_vec();
+        v.push(strip_accessor_prefix(
+            &func.to_string(),
+            &receiver_short,
+        ));
+        v
+    };
     // Identity uniqueness is per accessor (one move/clone of the value
     // at this level); nested levels each get their own identity budget.
     let mut seen_identity = false;
@@ -1136,16 +1206,21 @@ fn flatten<M>(
                     });
                 }
                 seen_identity = true;
-                // Owned at the root of an owned value (`value_blob` copies /
-                // `ptr_class` moves); borrowed (clone) otherwise. The Kotlin type
-                // + projection come from this `out_ty`'s output converter.
+                // Owned at the root of an owned value (a `Copy` blob copies /
+                // an opaque handle moves); borrowed (clone) otherwise. The
+                // adapter-side type + projection come from this `out_ty`'s
+                // output converter.
                 let out_ty: syn::Type = if path_prefix.is_empty() && !by_ref {
                     source.clone()
                 } else {
                     syn::parse_quote!(&#source)
                 };
                 leaves.push(UnfoldLeaf {
-                    name: ident(&format!("__leaf{}", leaves.len())),
+                    name: if path_prefix.is_empty() {
+                        "handle".to_string()
+                    } else {
+                        name_prefix.join("_")
+                    },
                     path: path_prefix.to_vec(),
                     out_ty,
                     identity: true,
@@ -1187,6 +1262,7 @@ fn flatten<M>(
                         &child_records,
                         &child_ty,
                         &child_path,
+                        &seg_name(func),
                         by_ref,
                         nullable || opt,
                         visited,
@@ -1198,7 +1274,7 @@ fn flatten<M>(
                     let mut path = path_prefix.to_vec();
                     path.push(func.clone());
                     leaves.push(UnfoldLeaf {
-                        name: ident(&format!("__leaf{}", leaves.len())),
+                        name: seg_name(func).join("_"),
                         path,
                         out_ty: ret,
                         identity: false,
@@ -1241,6 +1317,7 @@ fn flatten<M>(
                     &child_records,
                     &child_ty,
                     &child_path,
+                    &seg_name(func),
                     by_ref,
                     nullable || opt,
                     visited,
@@ -1253,6 +1330,53 @@ fn flatten<M>(
     }
 
     Ok(())
+}
+
+/// Strip an accessor ident's receiver-type prefix for display naming:
+/// `z_sample_key_expr` with receiver `ZSample` → `key_expr`. The comparison
+/// is normalized — lowercased with underscores removed — so irregular snake
+/// forms (`z_keyexpr_` vs the type `ZKeyExpr`) still match. Falls back to
+/// stripping a bare `z_` prefix, then to the full ident.
+pub fn strip_accessor_prefix(accessor: &str, receiver_short: &str) -> String {
+    let norm_ty: String = receiver_short.to_lowercase().replace('_', "");
+    let norm_fn: String = accessor.replace('_', "").to_lowercase();
+    if !norm_ty.is_empty() && norm_fn.starts_with(&norm_ty) {
+        // Cut `norm_ty.len()` alphanumeric chars off the original ident
+        // (underscores don't count), then trim separator underscores.
+        let mut consumed = 0usize;
+        let mut idx = accessor.len();
+        for (i, c) in accessor.char_indices() {
+            if consumed == norm_ty.len() {
+                idx = i;
+                break;
+            }
+            if c != '_' {
+                consumed += 1;
+            }
+        }
+        let rest = accessor[idx..].trim_start_matches('_');
+        if !rest.is_empty() {
+            return rest.to_string();
+        }
+    }
+    accessor.strip_prefix("z_").unwrap_or(accessor).to_string()
+}
+
+/// Make a signature's name list unique: a duplicate gets a numeric suffix
+/// (`name2`, `name3`, …). Adapters run this over the final per-signature
+/// list (after their own casing), since one signature may concatenate the
+/// leaves of several plans.
+pub fn dedup_names(names: &mut [String]) {
+    let mut seen: HashSet<String> = HashSet::new();
+    for n in names.iter_mut() {
+        if !seen.insert(n.clone()) {
+            let mut k = 2;
+            while !seen.insert(format!("{n}{k}")) {
+                k += 1;
+            }
+            *n = format!("{n}{k}");
+        }
+    }
 }
 
 /// An accessor `f(&T) -> R`: returns the (peeled) `T` it takes and its return
@@ -1307,33 +1431,7 @@ fn check_takes(
 // Helpers
 // ──────────────────────────────────────────────────────────────────────
 
-/// If `ty` is `Option<Inner>` (by last path segment), return `Inner`.
-fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
-    angle_inner(ty, "Option")
-}
-
-/// If `ty` is `Vec<Inner>` (by last path segment), return `Inner`.
-fn vec_inner_type(ty: &syn::Type) -> Option<syn::Type> {
-    angle_inner(ty, "Vec")
-}
-
-fn angle_inner(ty: &syn::Type, wrapper: &str) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else {
-        return None;
-    };
-    let last = tp.path.segments.last()?;
-    if last.ident != wrapper {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
-        return None;
-    };
-    ab.args.iter().find_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    })
-}
-
+#[cfg(test)]
 fn ident(s: &str) -> syn::Ident {
     syn::Ident::new(s, Span::call_site())
 }

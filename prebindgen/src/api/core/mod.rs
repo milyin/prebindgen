@@ -15,6 +15,7 @@ pub mod niches;
 pub mod prebindgen;
 pub mod registry;
 pub(crate) mod resolve;
+pub mod types_util;
 pub mod unfold;
 pub(crate) mod write;
 

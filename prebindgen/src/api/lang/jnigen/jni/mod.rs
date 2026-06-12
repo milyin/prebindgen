@@ -44,6 +44,7 @@ pub(crate) use quote::{format_ident, quote, ToTokens};
 pub(crate) use crate::api::core::niches::Niches;
 pub(crate) use crate::api::core::prebindgen::{ConverterImpl, Prebindgen, Stage};
 pub(crate) use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
+pub(crate) use crate::api::core::types_util::{bare_path_ident, is_option_ref, is_option_type, option_inner_type};
 pub(crate) use crate::api::lang::jnigen::jni::wire_access::{box_helper_for_wire, jni_field_access};
 pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
 
