@@ -1589,7 +1589,7 @@ pub(crate) fn callback_input(
     let descr_lit = syn::LitStr::new(&erased_invoke_descriptor(total), Span::call_site());
     let jvalue_exprs: Vec<TokenStream> = obj_idents_all
         .iter()
-        .map(|id| quote!(jni::objects::JValue::Object(&#id)))
+        .map(|id| quote!(jni::objects::JValue::Object(&#id).as_jni()))
         .collect();
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
     // delivered leaf, plus call temporaries.
@@ -1602,6 +1602,18 @@ pub(crate) fn callback_input(
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to retrieve JVM: {}", e)))?);
         let callback_global_ref = env.new_global_ref(&v)
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to global-ref callback: {}", e)))?;
+        // Resolve the erased `FunctionN.invoke` method ID ONCE, here at
+        // trampoline creation. The safe `JNIEnv::call_method` re-parses the
+        // descriptor string (a `combine`-parser run) and re-resolves the
+        // method through the JVM symbol table on EVERY call — measured at
+        // ~33% of per-message delivery time on the subscriber hot path. The
+        // `JMethodID` is `Copy + Send + Sync` and stays valid for the
+        // closure's lifetime: the global ref pins the callback instance and
+        // therefore its class.
+        let __invoke_class = env.get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to get callback class for {}: {}", #name_lit, e)))?;
+        let __invoke_id = env.get_method_id(&__invoke_class, "invoke", #descr_lit)
+            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to resolve invoke for {}: {}", #name_lit, e)))?;
         Box::new(move |#(#arg_names: #arg_pat_ty),*| {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
@@ -1620,12 +1632,19 @@ pub(crate) fn callback_input(
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("push local frame for {}: {}", #name_lit, e)))?;
                 let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
                     #(#preludes)*
-                    let __call_res: ::core::result::Result<(), __JniErr> = env.call_method(
-                        &callback_global_ref,
-                        "invoke",
-                        #descr_lit,
-                        &[#(#jvalue_exprs),*],
-                    )
+                    // SAFETY: `__invoke_id` was resolved on this exact
+                    // callback object's class with this exact descriptor, and
+                    // the global ref keeps the class loaded. Exception-check
+                    // semantics are identical to the safe `call_method` (both
+                    // route through the same checked JNI invoke).
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Object,
+                            &[#(#jvalue_exprs),*],
+                        )
+                    }
                     .map(|_| ())
                     .map_err(|e| {
                         // `exception_describe` also clears the pending exception,
