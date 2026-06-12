@@ -33,26 +33,24 @@ pub(crate) fn jni_field_access(jni_type: &syn::Type) -> Option<(&'static str, sy
     Some((sig, format_ident!("{}", accessor), is_obj))
 }
 
-/// Map a JNI **primitive** wire type to its `java.lang.*` boxed wrapper
-/// `(class_internal_name, ctor_descriptor)`. Used when a primitive leaf must be
-/// delivered through an *erased* `Object`-typed call (e.g. a Kotlin function
-/// type's `invoke`): the primitive is boxed via
-/// `env.new_object(class, ctor, &[JValue::from(prim)])`. Returns `None` for
-/// object wires (`JString`/`JByteArray`/`JObject` are already objects).
-pub(crate) fn box_class_for_wire(wire: &syn::Type) -> Option<(&'static str, &'static str)> {
+/// Map a JNI **primitive** wire type to the `prebindgen::lang` cached-boxing
+/// runtime helper that boxes it into its `java.lang.*` wrapper. Used when a
+/// primitive leaf must be delivered through an *erased* `Object`-typed call
+/// (e.g. a Kotlin function type's `invoke`). The helpers resolve the box class
+/// and its static `valueOf` once per process — boxing inline with
+/// `env.new_object("java/lang/Integer", …)` would re-run `FindClass` +
+/// `GetMethodID` on every delivery, which dominates the callback hot path.
+/// Returns `None` for object wires (`JString`/`JByteArray`/`JObject` are
+/// already objects).
+pub(crate) fn box_helper_for_wire(wire: &syn::Type) -> Option<syn::Ident> {
     let syn::Type::Path(tp) = wire else {
         return None;
     };
     let last = tp.path.segments.last()?;
-    Some(match last.ident.to_string().as_str() {
-        "jboolean" => ("java/lang/Boolean", "(Z)V"),
-        "jbyte" => ("java/lang/Byte", "(B)V"),
-        "jchar" => ("java/lang/Character", "(C)V"),
-        "jshort" => ("java/lang/Short", "(S)V"),
-        "jint" => ("java/lang/Integer", "(I)V"),
-        "jlong" => ("java/lang/Long", "(J)V"),
-        "jfloat" => ("java/lang/Float", "(F)V"),
-        "jdouble" => ("java/lang/Double", "(D)V"),
-        _ => return None,
-    })
+    match last.ident.to_string().as_str() {
+        "jboolean" | "jbyte" | "jchar" | "jshort" | "jint" | "jlong" | "jfloat" | "jdouble" => {
+            Some(format_ident!("box_{}", last.ident))
+        }
+        _ => None,
+    }
 }

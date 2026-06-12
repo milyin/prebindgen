@@ -473,11 +473,9 @@ fn emit_error_ze(
             quote!(#enc)
         } else if matches!(jni_field_access(&wire), Some((_, _, true))) {
             quote!(#enc.into())
-        } else if let Some((cls, ctor)) = box_class_for_wire(&wire) {
-            let cls_lit = syn::LitStr::new(cls, Span::call_site());
-            let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
+        } else if let Some(helper) = box_helper_for_wire(&wire) {
             quote! {
-                match env.new_object(#cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc)]) {
+                match ::prebindgen::lang::#helper(&mut env, #enc) {
                     ::core::result::Result::Ok(__o) => __o,
                     ::core::result::Result::Err(_) => jni::objects::JObject::null(),
                 }
@@ -521,7 +519,7 @@ fn emit_error_ze(
 /// directly; [`UnfoldShape::Optional`] matches `Some(__inner)` ⇒ decompose the
 /// inner, `None` ⇒ null result (builder skipped). Leaf wires may be object
 /// (JString/JByteArray/JObject — cast via `.into()`) or primitive (boxed to
-/// `java.lang.*` via [`box_class_for_wire`]).
+/// `java.lang.*` via the cached `box_helper_for_wire` runtime helpers).
 ///
 /// [`UnfoldShape::Decompose`]: crate::api::core::unfold::UnfoldShape::Decompose
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
@@ -737,16 +735,12 @@ pub(crate) fn cast_wire_to_jobject(
         quote!(#enc)
     } else if matches!(jni_field_access(wire), Some((_, _, true))) {
         quote!(#enc.into())
-    } else if let Some((cls, ctor)) = box_class_for_wire(wire) {
-        let cls_lit = syn::LitStr::new(cls, Span::call_site());
-        let ctor_lit = syn::LitStr::new(ctor, Span::call_site());
-        let on_fail = fail(quote!(__e2.to_string()));
+    } else if let Some(helper) = box_helper_for_wire(wire) {
+        let on_fail = fail(quote!(__e));
         quote! {
-            match env.new_object(#cls_lit, #ctor_lit, &[jni::objects::JValue::from(#enc)]) {
+            match ::prebindgen::lang::#helper(&mut env, #enc) {
                 ::core::result::Result::Ok(__o) => __o,
                 ::core::result::Result::Err(__e) => {
-                    let __e2 = <__JniErr as ::core::convert::From<String>>::from(
-                        format!("box primitive {}: {}", #cls_lit, __e));
                     #on_fail
                 }
             }
@@ -1446,24 +1440,14 @@ pub(crate) fn option_output(
         return Some((inner_wire, body, rest));
     }
 
-    // 2. Boxed-primitive fallback.
-    if is_jni_primitive(&inner_wire) {
-        let java_class = jni_box_class(&inner_wire);
-        let box_sig = jni_box_sig(&inner_wire);
-        let variant = jni_box_variant(&inner_wire);
-        let variant_id = format_ident!("{}", variant);
+    // 2. Boxed-primitive fallback (cached box class + `valueOf` method ID).
+    if let Some(helper) = box_helper_for_wire(&inner_wire) {
         let body: syn::Expr = syn::parse_quote!({
             match v {
                 Some(value) => {
                     let __raw: #inner_wire = #inner_conv(env, value)?;
-                    env.call_static_method(
-                        #java_class,
-                        "valueOf",
-                        #box_sig,
-                        &[jni::objects::JValue::#variant_id(__raw)],
-                    )
-                    .and_then(|val| val.l())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Option box: {}", e)))?
+                    ::prebindgen::lang::#helper(env, __raw)
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Option box: {}", e)))?
                 }
                 None => jni::objects::JObject::null(),
             }

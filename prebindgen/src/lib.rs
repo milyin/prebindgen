@@ -211,8 +211,9 @@ pub use crate::api::core::gravestone::{Gravestone, Transmute};
 pub mod lang {
     pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
     pub use crate::api::lang::jnigen::{
-        decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
-        null_string, JniBindingError, JniGen, KotlinFile, WriteKotlinError,
+        box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
+        box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
+        null_byte_array, null_string, JniBindingError, JniGen, KotlinFile, WriteKotlinError,
     };
 }
 
