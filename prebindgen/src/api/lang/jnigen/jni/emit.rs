@@ -617,9 +617,10 @@ pub(crate) fn emit_unfold_delivery(
 
     match &plan.shape {
         UnfoldShape::Decompose => {
+            let decon = plan.decon.as_ref().expect("record-built plan carries its DeconId");
             let statics = iface_statics(
-                &builder_iface_spec(ext, registry, plan)
-                    .expect("builder interface spec derivable for a resolved plan"),
+                &builder_iface_spec(ext, registry, decon)
+                    .expect("builder interface spec derivable for a registered declaration"),
             );
             let body = emit_decompose(&quote!(__out));
             quote! {
@@ -636,9 +637,10 @@ pub(crate) fn emit_unfold_delivery(
                      nested Optional/Iterable is M3/M4"
                 ),
             }
+            let decon = plan.decon.as_ref().expect("record-built plan carries its DeconId");
             let statics = iface_statics(
-                &builder_iface_spec(ext, registry, plan)
-                    .expect("builder interface spec derivable for a resolved plan"),
+                &builder_iface_spec(ext, registry, decon)
+                    .expect("builder interface spec derivable for a registered declaration"),
             );
             // `None` ⇒ null result (builder skipped); `Some` ⇒ decompose inner.
             let body = emit_decompose(&quote!(__inner));
@@ -658,7 +660,7 @@ pub(crate) fn emit_unfold_delivery(
             // WHOLE (M4) or its decomposed leaves (M5); primitives cross as
             // raw typed jvalues, `acc` is the erased `A` (`Object`).
             let statics = iface_statics(
-                &folder_iface_spec(ext, registry, plan)
+                &folder_iface_for_plan(ext, registry, plan)
                     .expect("folder interface spec derivable for a resolved plan"),
             );
             let fold_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {

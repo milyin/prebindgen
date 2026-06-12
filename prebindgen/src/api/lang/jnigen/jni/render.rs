@@ -773,7 +773,7 @@ pub(crate) fn render_wrapper_fn(
         // SAM-convert unchanged.
         let is_iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
         if is_iterable {
-            let spec = folder_iface_spec(ext, registry, plan)?;
+            let spec = folder_iface_for_plan(ext, registry, plan)?;
             generic = Some("A".to_string());
             builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
             builder_param = Some(("fold".to_string(), spec.kt_ref(vec![kt::KtType::var_("A")])));
@@ -781,7 +781,11 @@ pub(crate) fn render_wrapper_fn(
             unfold_call_args.push("fold".to_string());
             (Some(kt::KtType::var_("A")), None)
         } else {
-            let spec = builder_iface_spec(ext, registry, plan)?;
+            let decon = plan
+                .decon
+                .as_ref()
+                .expect("record-built plan carries its DeconId");
+            let spec = builder_iface_spec(ext, registry, decon)?;
             generic = Some("R".to_string());
             builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
             unfold_call_args.push("build".to_string());

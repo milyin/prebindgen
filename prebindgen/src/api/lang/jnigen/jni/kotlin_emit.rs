@@ -433,39 +433,35 @@ impl JniGen {
     /// are wrapped in `NativeHandle(...)` before return.
     /// Emit every typed callback `fun interface` the declared functions
     /// reference — impl-`Fn` delivery callbacks, output-expansion builders
-    /// and folders, and per-error-type onError handlers (plus the shared
-    /// `JniErrorHandler` for infallible functions). Each interface lands in
-    /// its subject type's package; specs are deduped by FQN (the derivation
-    /// in [`crate::api::lang::jnigen::jni::iface`] is deterministic, so the
-    /// native emitters independently agree on names and descriptors).
+    /// and folders, and onError handlers (plus the shared `JniErrorHandler`
+    /// for infallible functions). The function walk only **collects which
+    /// identities are used** (emission stays opt-in: an unused declaration
+    /// emits nothing); each spec is then derived exactly once per identity
+    /// from the declaration's representative plan (`registry.decon_plans`) —
+    /// the same source the native emitters read, so all sites agree by
+    /// construction (no dedup, no signature reconciliation).
     pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
-        use crate::api::core::unfold::{Delivery, UnfoldShape};
-        let mut specs: Vec<IfaceSpec> = Vec::new();
-        // FQN → run descriptor of the spec already collected under that name.
-        // Interface identity is keyed on the deconstructor DECLARATION, so two
-        // specs sharing an FQN must be byte-identical — a mismatch means an
-        // identity-derivation bug and must fail HERE (at generation), not as a
-        // Kotlin compile error or a runtime `GetMethodID` failure.
-        let mut seen: BTreeMap<String, String> = BTreeMap::new();
-        let mut push = |specs: &mut Vec<IfaceSpec>, spec: Option<IfaceSpec>| {
-            if let Some(s) = spec {
-                match seen.get(&s.fqn()) {
-                    None => {
-                        seen.insert(s.fqn(), s.descr.clone());
-                        specs.push(s);
-                    }
-                    Some(prev) if *prev == s.descr => {}
-                    Some(prev) => panic!(
-                        "jnigen: two different callback-interface signatures derived for \
-                         `{}`: `{}` vs `{}` — interface identity must follow the \
-                         deconstructor declaration (bug in DeconId derivation)",
-                        s.fqn(),
-                        prev,
-                        s.descr,
-                    ),
-                }
-            }
-        };
+        use crate::api::core::unfold::{DeconId, Delivery, UnfoldShape};
+
+        /// One distinct interface identity in use. Ordered so emission is
+        /// deterministic.
+        #[derive(PartialEq, Eq, PartialOrd, Ord)]
+        enum Use {
+            /// impl-Fn delivery — identified by the args' canonical type keys
+            /// (each arg uses its type's canonical decomposition or crosses
+            /// whole; the spec carries the arg types).
+            Callback(Vec<String>),
+            Builder(DeconId),
+            Folder(DeconId),
+            /// Whole-element fold — no declaration; keyed by element type.
+            WholeFolder(String),
+            Handler(DeconId),
+            JniErrorHandler,
+        }
+        // Identity → the syn-typed context the spec constructor needs (arg
+        // types for Callback, the element type for WholeFolder).
+        let mut uses: BTreeMap<Use, Vec<syn::Type>> = BTreeMap::new();
+
         for pkg_cfg in self.packages.values() {
             for entry in &pkg_cfg.functions {
                 let Some((item_fn, _loc)) = registry.functions.get(&entry.rust_ident) else {
@@ -474,7 +470,11 @@ impl JniGen {
                 for input in &item_fn.sig.inputs {
                     let syn::FnArg::Typed(pt) = input else { continue };
                     if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
-                        push(&mut specs, callback_iface_spec(self, registry, &cb_args));
+                        let key = cb_args
+                            .iter()
+                            .map(|t| TypeKey::from_type(t).to_string())
+                            .collect();
+                        uses.insert(Use::Callback(key), cb_args);
                     }
                 }
                 if let Some(plan) = registry
@@ -482,20 +482,47 @@ impl JniGen {
                     .get(&item_fn.sig.ident)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
-                    if matches!(plan.shape, UnfoldShape::Iterable(_)) {
-                        push(&mut specs, folder_iface_spec(self, registry, plan));
-                    } else {
-                        push(&mut specs, builder_iface_spec(self, registry, plan));
+                    let iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
+                    match (iterable, &plan.element, &plan.decon) {
+                        (true, Some(el), _) => {
+                            uses.insert(
+                                Use::WholeFolder(TypeKey::from_type(el).to_string()),
+                                vec![el.clone()],
+                            );
+                        }
+                        (true, None, Some(d)) => {
+                            uses.insert(Use::Folder(d.clone()), vec![]);
+                        }
+                        (false, _, Some(d)) => {
+                            uses.insert(Use::Builder(d.clone()), vec![]);
+                        }
+                        _ => {}
                     }
                 }
-                push(
-                    &mut specs,
-                    onerror_iface_spec(self, registry, &item_fn.sig.ident),
-                );
+                match registry.error_plans.get(&item_fn.sig.ident) {
+                    Some(ep) => {
+                        let d = ep
+                            .decon
+                            .clone()
+                            .expect("error plans are always record-built (decon is Some)");
+                        uses.insert(Use::Handler(d), vec![]);
+                    }
+                    None => {
+                        uses.insert(Use::JniErrorHandler, vec![]);
+                    }
+                }
             }
         }
-        specs
-            .into_iter()
+
+        uses.into_iter()
+            .filter_map(|(u, tys)| match u {
+                Use::Callback(_) => callback_iface_spec(self, registry, &tys),
+                Use::Builder(d) => builder_iface_spec(self, registry, &d),
+                Use::Folder(d) => folder_iface_spec(self, registry, &d),
+                Use::WholeFolder(_) => whole_folder_iface_spec(self, registry, &tys[0]),
+                Use::Handler(d) => error_handler_iface_spec(self, registry, &d),
+                Use::JniErrorHandler => Some(jni_error_handler_iface_spec(self)),
+            })
             .map(|s| {
                 let decl = s.to_decl();
                 kt::KtFile::new(s.package).decl(decl)

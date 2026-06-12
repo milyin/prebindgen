@@ -775,6 +775,12 @@ pub fn apply<M>(
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty, &loc);
                 }
+                if let Some(d) = &plan.decon {
+                    registry
+                        .decon_plans
+                        .entry(d.clone())
+                        .or_insert_with(|| plan.clone());
+                }
                 registry.callback_arg_plans.insert(key, plan);
             }
         }
@@ -952,6 +958,14 @@ fn process_decl<M>(
                 ..plan
             }
         };
+        // Register the declaration's representative plan (first user wins —
+        // the signature-determining parts are declaration-fixed).
+        if let Some(d) = &plan.decon {
+            registry
+                .decon_plans
+                .entry(d.clone())
+                .or_insert_with(|| plan.clone());
+        }
         match ed.target {
             DeconTarget::Output => registry.unfold_plans.insert(ed.func.clone(), plan),
             DeconTarget::Error => registry.error_plans.insert(ed.func.clone(), plan),

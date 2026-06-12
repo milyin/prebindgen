@@ -339,17 +339,21 @@ pub(crate) fn callback_iface_spec(
 }
 
 /// Interface for an output-expansion **builder** (`Decompose`/`Optional`
-/// callback delivery): `run(leaves…): R`, `<out R>`. Named
-/// `<SourceShort>Builder`, placed in the source type's package.
+/// callback delivery): `run(leaves…): R`, `<out R>`. Keyed by the
+/// deconstructor declaration — the signature derives from the declaration's
+/// representative plan in `registry.decon_plans`, never from a using
+/// function's own plan. Named `<decl-base>Builder`, placed in the source
+/// type's package.
 pub(crate) fn builder_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
-    plan: &UnfoldPlan,
+    decon: &DeconId,
 ) -> Option<IfaceSpec> {
+    let plan = registry.decon_plans.get(decon)?;
     let params = plan_leaf_params(ext, registry, plan)?;
     let name = format!(
         "{}Builder",
-        decon_base_name(&subject_short(&plan.source), plan.decon.as_ref())
+        decon_base_name(&subject_short(&plan.source), Some(decon))
     );
     let package = subject_package(ext, &plan.source);
     let type_params = vec!["out R".to_string()];
@@ -365,39 +369,24 @@ pub(crate) fn builder_iface_spec(
     })
 }
 
-/// Interface for an output-expansion **fold** (`Iterable` delivery):
-/// `run(acc: A, element-leaves…): A`, `<A>` (invariant — `A` appears in both
-/// parameter and return position). Named `<ElementShort>Folder`, placed in
-/// the element type's package.
+/// Interface for a **decomposed-element fold** (`Iterable` delivery over a
+/// type with a deconstructor): `run(acc: A, element-leaves…): A`, `<A>`
+/// (invariant — `A` appears in both parameter and return position). Keyed by
+/// the element's deconstructor declaration. Named `<decl-base>Folder`,
+/// placed in the element type's package.
 pub(crate) fn folder_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
-    plan: &UnfoldPlan,
+    decon: &DeconId,
 ) -> Option<IfaceSpec> {
-    debug_assert!(matches!(plan.shape, UnfoldShape::Iterable(_)));
-    let mut throwaway = BTreeSet::new();
-    // Whole-element Iterable: one `element` param; decomposed Iterable: the
-    // element's leaves (mirrors `render_wrapper_fn`'s arg_tys derivation).
+    let plan = registry.decon_plans.get(decon)?;
     let mut params: Vec<(String, kt::KtType)> = vec![("acc".to_string(), kt::KtType::var_("A"))];
-    let subject: syn::Type;
-    match &plan.element {
-        Some(el) => {
-            // Whole-element delivery: no declaration involved (`plan.decon`
-            // is None) — one shape per element type by construction.
-            subject = el.clone();
-            let ty = leaf_iface_kt(ext, registry, el, false, &mut throwaway)?;
-            params.push(("element".to_string(), ty));
-        }
-        None => {
-            subject = plan.source.clone();
-            params.extend(plan_leaf_params(ext, registry, plan)?);
-        }
-    }
+    params.extend(plan_leaf_params(ext, registry, plan)?);
     let name = format!(
         "{}Folder",
-        decon_base_name(&subject_short(&subject), plan.decon.as_ref())
+        decon_base_name(&subject_short(&plan.source), Some(decon))
     );
-    let package = subject_package(ext, &subject);
+    let package = subject_package(ext, &plan.source);
     let type_params = vec!["A".to_string()];
     let ret = kt::KtType::var_("A");
     let descr = method_descr(&params, &ret, &type_params);
@@ -411,15 +400,62 @@ pub(crate) fn folder_iface_spec(
     })
 }
 
-/// Interface for a fallible function's **onError** handler: `run(je: String?,
-/// ze-leaves…): R`, `<out R>`. The `ze` leaves are NULLABLE — a binding
-/// error (`je != null`) delivers null `ze`s; consumers coalesce. Named
-/// `<ErrorShort>Handler`, placed in the error type's package.
-pub(crate) fn error_handler_iface_spec(
+/// Interface for a **whole-element fold** (`Iterable` delivery of a type
+/// without a deconstructor — no declaration involved):
+/// `run(acc: A, element): A`. One shape per element type by construction.
+pub(crate) fn whole_folder_iface_spec(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    element: &syn::Type,
+) -> Option<IfaceSpec> {
+    let mut throwaway = BTreeSet::new();
+    let mut params: Vec<(String, kt::KtType)> = vec![("acc".to_string(), kt::KtType::var_("A"))];
+    params.push((
+        "element".to_string(),
+        leaf_iface_kt(ext, registry, element, false, &mut throwaway)?,
+    ));
+    let name = format!("{}Folder", subject_short(element));
+    let package = subject_package(ext, element);
+    let type_params = vec!["A".to_string()];
+    let ret = kt::KtType::var_("A");
+    let descr = method_descr(&params, &ret, &type_params);
+    Some(IfaceSpec {
+        package,
+        name,
+        type_params,
+        params,
+        ret,
+        descr,
+    })
+}
+
+/// The folder spec for an `Iterable` plan: declaration-keyed when the
+/// element decomposes, whole-element otherwise. Thin dispatch — the
+/// derivation itself is keyed.
+pub(crate) fn folder_iface_for_plan(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &UnfoldPlan,
 ) -> Option<IfaceSpec> {
+    debug_assert!(matches!(plan.shape, UnfoldShape::Iterable(_)));
+    match (&plan.element, &plan.decon) {
+        (Some(el), _) => whole_folder_iface_spec(ext, registry, el),
+        (None, Some(d)) => folder_iface_spec(ext, registry, d),
+        (None, None) => None,
+    }
+}
+
+/// Interface for a fallible function's **onError** handler: `run(je: String?,
+/// ze-leaves…): R`, `<out R>`. The `ze` leaves are NULLABLE — a binding
+/// error (`je != null`) delivers null `ze`s; consumers coalesce. Keyed by
+/// the error type's deconstructor declaration. Named `<decl-base>Handler`,
+/// placed in the error type's package.
+pub(crate) fn error_handler_iface_spec(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    decon: &DeconId,
+) -> Option<IfaceSpec> {
+    let plan = registry.decon_plans.get(decon)?;
     let mut params: Vec<(String, kt::KtType)> =
         vec![("je".to_string(), kt::KtType::string().nullable())];
     for (name, ty) in plan_leaf_params(ext, registry, plan)? {
@@ -427,7 +463,7 @@ pub(crate) fn error_handler_iface_spec(
     }
     let name = format!(
         "{}Handler",
-        decon_base_name(&subject_short(&plan.source), plan.decon.as_ref())
+        decon_base_name(&subject_short(&plan.source), Some(decon))
     );
     let package = subject_package(ext, &plan.source);
     let type_params = vec!["out R".to_string()];
@@ -461,15 +497,22 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
     }
 }
 
-/// The onError handler spec for a declared function: its error plan's typed
-/// handler, or the shared [`jni_error_handler_iface_spec`].
+/// The onError handler spec for a declared function: its error plan's
+/// declaration-keyed typed handler, or the shared
+/// [`jni_error_handler_iface_spec`].
 pub(crate) fn onerror_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     fn_ident: &syn::Ident,
 ) -> Option<IfaceSpec> {
     match registry.error_plans.get(fn_ident) {
-        Some(plan) => error_handler_iface_spec(ext, registry, plan),
+        Some(plan) => error_handler_iface_spec(
+            ext,
+            registry,
+            plan.decon
+                .as_ref()
+                .expect("error plans are always record-built (decon is Some)"),
+        ),
         None => Some(jni_error_handler_iface_spec(ext)),
     }
 }
