@@ -129,6 +129,18 @@ impl Deconstructors {
         self.cur_deconstructor = Some(self.deconstructors.len() - 1);
     }
 
+    /// `.deconstructor_name(name)` — name the cursor declaration so per-fn
+    /// `_with(name)` selectors can pick it. A named declaration is an
+    /// *alternative* decomposition of its target type; the type's bare
+    /// (unnamed) declaration stays the canonical one. Panics without a live
+    /// deconstructor cursor.
+    pub fn add_deconstructor_name(&mut self, name: impl Into<String>) {
+        let i = self
+            .cur_deconstructor
+            .expect("deconstructor_name must be chained after `.deconstructor(...)`");
+        self.deconstructors[i].name = Some(name.into());
+    }
+
     /// True when a `.deconstructor` / `.converter` is the live cursor (so a
     /// chained `.default()` routes here rather than to a constructor).
     pub fn has_current(&self) -> bool {
@@ -164,10 +176,20 @@ impl Deconstructors {
     /// so the stored `Delivery` is just a marker.
     pub fn ensure_canonical_deconstructor(&mut self, target: syn::Type) {
         let key = TypeKey::from_type(&target);
+        // Already building a deconstructor of this type — canonical OR a
+        // named alternative begun via `add_deconstructor` +
+        // `add_deconstructor_name` — keep the cursor so records append to it.
+        if let Some(i) = self.cur_deconstructor {
+            if TypeKey::from_type(&self.deconstructors[i].target) == key {
+                return;
+            }
+        }
+        // Only the UNNAMED declaration is the canonical one; named
+        // alternatives of the same type must not receive canonical records.
         if let Some(i) = self
             .deconstructors
             .iter()
-            .position(|d| TypeKey::from_type(&d.target) == key)
+            .position(|d| d.name.is_none() && TypeKey::from_type(&d.target) == key)
         {
             self.cur_deconstructor = Some(i);
         } else {
@@ -385,12 +407,34 @@ pub enum UnfoldShape {
     Iterable(Box<UnfoldShape>),
 }
 
+/// Identity of the deconstructor **declaration** a plan's records came from.
+/// A `run`-signature artifact (e.g. a generated callback interface) is fully
+/// determined by the declaration, so back-ends key such artifacts on this —
+/// functions selecting the same declaration share one artifact; differently
+/// declared decompositions of the same type get distinct ones. The first
+/// field is always the target type's canonical [`TypeKey`] string.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum DeconId {
+    /// The type's unnamed (top-level / `.default()`-applied) deconstructor.
+    Canonical(String),
+    /// A named declaration (`.deconstructor_name(name)`), selected per fn
+    /// via the `_with(name)` selectors.
+    Named(String, String),
+    /// Per-fn inline records (`.fun_output(...)`) — unique to the function
+    /// (second field = the fn ident).
+    PerFn(String, String),
+}
+
 /// A resolved output expansion for one function.
 #[derive(Clone)]
 pub struct UnfoldPlan {
     /// Owned core type the records decompose — the function's return after
     /// peeling `&` / `Option` / `Vec`.
     pub source: syn::Type,
+    /// Which deconstructor declaration produced [`Self::leaves`] — the
+    /// identity back-ends key signature artifacts on. `None` only for the
+    /// whole-element `Iterable` arm (no declaration involved).
+    pub decon: Option<DeconId>,
     /// True when the return was `&T` / `Option<&T>`: the identity leaf clones
     /// the borrow; otherwise it moves the owned value.
     pub by_ref: bool,
@@ -618,6 +662,13 @@ pub fn apply<M>(
             continue;
         }
         let dkey = TypeKey::from_type(&d.target);
+        // Select THIS declaration explicitly: a defaulted *named* declaration
+        // must not be re-resolved through the bare top-level lookup (which
+        // would be ambiguous or pick the type's unnamed declaration).
+        let sel = match &d.name {
+            Some(n) => DeconSel::Explicit(n.clone()),
+            None => DeconSel::TopLevel,
+        };
         for func in declared_fns {
             // Read accessors are never output-decomposed (they ARE the records).
             if accessor_fns.contains(func) {
@@ -638,7 +689,7 @@ pub fn apply<M>(
                         acc,
                         &OutputDecl {
                             func: func.clone(),
-                            sel: DeconSel::TopLevel,
+                            sel: sel.clone(),
                             target: DeconTarget::Error,
                             delivery: Delivery::Callback,
                         },
@@ -656,7 +707,7 @@ pub fn apply<M>(
                     acc,
                     &OutputDecl {
                         func: func.clone(),
-                        sel: DeconSel::TopLevel,
+                        sel: sel.clone(),
                         target: DeconTarget::Output,
                         delivery: Delivery::Callback,
                     },
@@ -716,6 +767,7 @@ pub fn apply<M>(
                     &arg_ty,
                     UnfoldShape::Decompose,
                     &d.records,
+                    decl_id(&key, d),
                 )?;
                 if plan.leaves.is_empty() {
                     continue;
@@ -822,12 +874,12 @@ fn process_decl<M>(
                 other => (false, other.clone()),
             };
             let ekey = TypeKey::from_type(&element);
-            if find_deconstructor_by_type(acc, &ekey).is_ok() {
+            if let Ok(d) = find_deconstructor_by_type(acc, &ekey) {
                 // Decomposed: reuse the shared flatten (M3 nesting composes).
-                let records = find_deconstructor_by_type(acc, &ekey)
-                    .expect("checked is_ok")
-                    .to_vec();
-                let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records)?;
+                let records = d.records.clone();
+                let decon = decl_id(&ekey, d);
+                let plan =
+                    build_plan(acc, registry, ed, by_ref, &element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty, &loc);
                 }
@@ -835,10 +887,13 @@ fn process_decl<M>(
             } else {
                 // Whole element: keep the type exactly as written so the
                 // element's own output converter matches `into_iter()`'s yield.
+                // No declaration is involved (`decon: None`) — the element
+                // crosses whole through its own converter.
                 let by_ref = matches!(&inner, syn::Type::Reference(_));
                 registry.require_output(&inner, &loc);
                 UnfoldPlan {
                     source: inner.clone(),
+                    decon: None,
                     by_ref,
                     shape,
                     leaves: vec![],
@@ -862,8 +917,8 @@ fn process_decl<M>(
             } else {
                 UnfoldShape::Decompose
             };
-            let records = resolve_deconstructor(acc, &source_key, ed)?;
-            let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records)?;
+            let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
+            let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records, decon)?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty, &loc);
             }
@@ -905,25 +960,38 @@ fn process_decl<M>(
     Ok(())
 }
 
-/// Pick the deconstructor (its records) for one output expansion.
+/// The identity of a found declaration: `Named` when it carries a name,
+/// `Canonical` otherwise.
+fn decl_id(type_key: &TypeKey, decl: &DeconstructorDecl) -> DeconId {
+    match &decl.name {
+        Some(n) => DeconId::Named(type_key.to_string(), n.clone()),
+        None => DeconId::Canonical(type_key.to_string()),
+    }
+}
+
+/// Pick the deconstructor (its records + declaration identity) for one
+/// output expansion.
 fn resolve_deconstructor(
     acc: &Deconstructors,
     source_key: &TypeKey,
     ed: &OutputDecl,
-) -> Result<Vec<DeconRecord>, UnfoldError> {
+) -> Result<(Vec<DeconRecord>, DeconId), UnfoldError> {
     match &ed.sel {
-        DeconSel::Inline(records) => Ok(records.clone()),
+        DeconSel::Inline(records) => Ok((
+            records.clone(),
+            DeconId::PerFn(source_key.to_string(), ed.func.to_string()),
+        )),
         DeconSel::Explicit(name) => acc
             .deconstructors
             .iter()
             .find(|c| c.name.as_deref() == Some(name.as_str()))
-            .map(|c| c.records.clone())
+            .map(|c| (c.records.clone(), decl_id(source_key, c)))
             .ok_or_else(|| UnfoldError::UnknownDeconstructor {
                 func: ed.func.clone(),
                 name: name.clone(),
             }),
         DeconSel::TopLevel => find_deconstructor_by_type(acc, source_key)
-            .map(<[DeconRecord]>::to_vec)
+            .map(|d| (d.records.clone(), decl_id(source_key, d)))
             .map_err(|candidates| match candidates {
                 None => UnfoldError::NoDeconstructor {
                     func: ed.func.clone(),
@@ -944,14 +1012,18 @@ fn resolve_deconstructor(
 fn find_deconstructor_by_type<'a>(
     acc: &'a Deconstructors,
     type_key: &TypeKey,
-) -> Result<&'a [DeconRecord], Option<Vec<String>>> {
+) -> Result<&'a DeconstructorDecl, Option<Vec<String>>> {
+    // Only the UNNAMED declaration is the type's canonical decomposition —
+    // named alternatives are reachable solely via the `_with(name)` selectors
+    // and never shadow the canonical one (so `.default()` auto-apply and
+    // nested-child splicing stay unambiguous when alternatives exist).
     let matches: Vec<&DeconstructorDecl> = acc
         .deconstructors
         .iter()
-        .filter(|c| TypeKey::from_type(&c.target) == *type_key)
+        .filter(|c| c.name.is_none() && TypeKey::from_type(&c.target) == *type_key)
         .collect();
     match matches.len() {
-        1 => Ok(&matches[0].records),
+        1 => Ok(matches[0]),
         0 => Err(None),
         _ => Err(Some(
             matches
@@ -979,6 +1051,7 @@ fn build_plan<M>(
     source: &syn::Type,
     shape: UnfoldShape,
     records: &[DeconRecord],
+    decon: DeconId,
 ) -> Result<UnfoldPlan, UnfoldError> {
     let mut leaves: Vec<UnfoldLeaf> = Vec::new();
     let mut visited: HashSet<TypeKey> = HashSet::new();
@@ -998,6 +1071,7 @@ fn build_plan<M>(
 
     Ok(UnfoldPlan {
         source: source.clone(),
+        decon: Some(decon),
         by_ref,
         shape,
         leaves,
@@ -1088,7 +1162,8 @@ fn flatten<M>(
                     }
                     let child_records = find_deconstructor_by_type(acc, &child_key)
                         .expect("checked is_ok")
-                        .to_vec();
+                        .records
+                        .clone();
                     let mut child_path = path_prefix.to_vec();
                     child_path.push(func.clone());
                     flatten(
@@ -1136,19 +1211,20 @@ fn flatten<M>(
                         target: child_key.to_string(),
                     });
                 }
-                let child_records = find_deconstructor_by_type(acc, &child_key).map_err(|_| {
-                    UnfoldError::NoDeconstructor {
+                let child_records = find_deconstructor_by_type(acc, &child_key)
+                    .map_err(|_| UnfoldError::NoDeconstructor {
                         func: top_func.clone(),
                         target: child_key.to_string(),
-                    }
-                })?;
+                    })?
+                    .records
+                    .clone();
                 let mut child_path = path_prefix.to_vec();
                 child_path.push(func.clone());
                 flatten(
                     acc,
                     registry,
                     top_func,
-                    child_records,
+                    &child_records,
                     &child_ty,
                     &child_path,
                     by_ref,

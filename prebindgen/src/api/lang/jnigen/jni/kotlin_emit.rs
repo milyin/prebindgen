@@ -441,11 +441,28 @@ impl JniGen {
     pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
         use crate::api::core::unfold::{Delivery, UnfoldShape};
         let mut specs: Vec<IfaceSpec> = Vec::new();
-        let mut seen: BTreeSet<String> = BTreeSet::new();
+        // FQN → run descriptor of the spec already collected under that name.
+        // Interface identity is keyed on the deconstructor DECLARATION, so two
+        // specs sharing an FQN must be byte-identical — a mismatch means an
+        // identity-derivation bug and must fail HERE (at generation), not as a
+        // Kotlin compile error or a runtime `GetMethodID` failure.
+        let mut seen: BTreeMap<String, String> = BTreeMap::new();
         let mut push = |specs: &mut Vec<IfaceSpec>, spec: Option<IfaceSpec>| {
             if let Some(s) = spec {
-                if seen.insert(s.fqn()) {
-                    specs.push(s);
+                match seen.get(&s.fqn()) {
+                    None => {
+                        seen.insert(s.fqn(), s.descr.clone());
+                        specs.push(s);
+                    }
+                    Some(prev) if *prev == s.descr => {}
+                    Some(prev) => panic!(
+                        "jnigen: two different callback-interface signatures derived for \
+                         `{}`: `{}` vs `{}` — interface identity must follow the \
+                         deconstructor declaration (bug in DeconId derivation)",
+                        s.fqn(),
+                        prev,
+                        s.descr,
+                    ),
                 }
             }
         };

@@ -915,3 +915,184 @@ fn strip_receiver_prefix_cases() {
     );
     assert_eq!(strip_receiver_prefix(&reg, &id("get_name")), "get_name");
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// Declaration-keyed interfaces: a type may have several decompositions —
+// the canonical (unnamed) deconstructor, named alternatives
+// (`.ptr_class_deconstructor(name)` + `.fun_*_named`), and per-fn inline
+// records (`.fun_output`). Interface identity follows the DECLARATION, so
+// differently-decomposed functions get distinct interfaces instead of
+// colliding on one type-keyed name.
+// ────────────────────────────────────────────────────────────────────────
+
+/// Two fns failing with the same error type under different error
+/// decompositions: the canonical (message only) and a named "full"
+/// alternative (message + code). Each fn's extern must carry ITS handler's
+/// FQN + descriptor, and both interfaces must be emitted.
+#[test]
+fn named_error_deconstructor_gets_own_handler() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
+        "pub fn z_err_code(e: &ZErr) -> i32 { unimplemented!() }",
+        "pub fn z_simple() -> Result<i64, ZErr> { unimplemented!() }",
+        "pub fn z_detailed() -> Result<i64, ZErr> { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("errors")
+        .ptr_class(syn::parse_quote!(ZErr))
+        // Canonical error decomposition: message only.
+        .ptr_class_output(syn::parse_quote!(z_err_message))
+        // Named alternative: message + code.
+        .ptr_class_deconstructor("full")
+        .ptr_class_output(syn::parse_quote!(z_err_message))
+        .ptr_class_output(syn::parse_quote!(z_err_code))
+        .fun_accessor(syn::parse_quote!(z_err_message))
+        .fun_accessor(syn::parse_quote!(z_err_code))
+        .fun(syn::parse_quote!(z_simple))
+        .fun(syn::parse_quote!(z_detailed))
+        .fun_error_named("full");
+
+    let dir = unique_snapshot_dir("jnigen_named_err");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Each extern's sink statics name its OWN handler interface + descriptor.
+    assert!(rc.contains("io/test/jni/errors/ZErrHandler"), "{rust}");
+    assert!(rc.contains("io/test/jni/errors/ZErrFullHandler"), "{rust}");
+    // Canonical: (je, message) → 2 object params; full: (je, message, code).
+    assert!(
+        rc.contains("\"(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;\""),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(
+            "\"(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""
+        ),
+        "{rust}"
+    );
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    // Both interfaces emitted; the full one carries the extra nullable code.
+    assert!(
+        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(je:String?,message:String?):R"),
+        "{all}"
+    );
+    assert!(
+        all.contains(
+            "funinterfaceZErrFullHandler<outR>{publicfunrun(je:String?,message:String?,code:Int?):R"
+        ),
+        "{all}"
+    );
+    // Wrappers take their own handler types.
+    assert!(all.contains("funzSimple(onError:ZErrHandler<Long>)"), "{all}");
+    assert!(
+        all.contains("funzDetailed(onError:ZErrFullHandler<Long>)"),
+        "{all}"
+    );
+}
+
+/// Two fns returning the same type under different output decompositions:
+/// the canonical one and a per-fn `.fun_output(...)` inline record list.
+/// Each gets its own builder interface.
+#[test]
+fn inline_fun_output_gets_own_builder() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
+        "pub fn z_thing_size(t: &ZThing) -> i64 { unimplemented!() }",
+        "pub fn z_make_a() -> ZThing { unimplemented!() }",
+        "pub fn z_make_b() -> ZThing { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("thing")
+        .ptr_class(syn::parse_quote!(ZThing))
+        // Canonical output: name + size (2 leaves ⇒ builder callback).
+        .ptr_class_output(syn::parse_quote!(z_thing_name))
+        .ptr_class_output(syn::parse_quote!(z_thing_size))
+        .fun_accessor(syn::parse_quote!(z_thing_name))
+        .fun_accessor(syn::parse_quote!(z_thing_size))
+        .fun(syn::parse_quote!(z_make_a))
+        // Per-fn inline records: identity handle + name (different shape).
+        .fun(syn::parse_quote!(z_make_b))
+        .fun_output([
+            syn::parse_quote!(z_thing_name),
+            syn::parse_quote!(z_thing_size),
+            syn::parse_quote!(z_thing_name),
+        ]);
+
+    let dir = unique_snapshot_dir("jnigen_inline_out");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // Each extern names its own builder interface: the canonical
+    // `ZThingBuilder` for z_make_a, the per-fn `ZThingZMakeBBuilder`.
+    assert!(rc.contains("io/test/jni/thing/ZThingBuilder"), "{rust}");
+    assert!(rc.contains("io/test/jni/thing/ZThingZMakeBBuilder"), "{rust}");
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    // Canonical builder: (name, size); inline builder: (name, size, name2).
+    assert!(
+        all.contains("funinterfaceZThingBuilder<outR>{publicfunrun(name:String,size:Long):R"),
+        "{all}"
+    );
+    assert!(
+        all.contains(
+            "funinterfaceZThingZMakeBBuilder<outR>{publicfunrun(name:String,size:Long,name2:String):R"
+        ),
+        "{all}"
+    );
+    // Wrappers take their own builder types.
+    assert!(all.contains("build:ZThingBuilder<R>"), "{all}");
+    assert!(all.contains("build:ZThingZMakeBBuilder<R>"), "{all}");
+}

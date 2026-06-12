@@ -20,7 +20,7 @@
 //! sites independently derive identical specs.
 
 use super::*;
-use crate::api::core::unfold::{UnfoldPlan, UnfoldShape};
+use crate::api::core::unfold::{DeconId, UnfoldPlan, UnfoldShape};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
@@ -149,6 +149,30 @@ fn method_descr(params: &[(String, kt::KtType)], ret: &kt::KtType, type_params: 
     d.push(')');
     d.push_str(&kt_jvm_descriptor(ret, type_params));
     d
+}
+
+/// The interface base name for a decomposition: the subject type's short
+/// name, extended by the deconstructor declaration's identity. The type's
+/// canonical (unnamed) declaration keeps the bare short; a named alternative
+/// appends its UpperCamel name (`ZError` + `"full"` → `ZErrorFull`); per-fn
+/// inline records (`.fun_output`) append the function's UpperCamel ident.
+/// This is what makes interface identity == declaration identity: functions
+/// sharing a declaration share the interface, differently-declared
+/// decompositions of one type get distinct interfaces.
+fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
+    let upper_camel = |s: &str| -> String {
+        let camel = snake_to_camel(s);
+        let mut c = camel.chars();
+        match c.next() {
+            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+            None => camel,
+        }
+    };
+    match decon {
+        None | Some(DeconId::Canonical(_)) => short.to_string(),
+        Some(DeconId::Named(_, n)) => format!("{short}{}", upper_camel(n)),
+        Some(DeconId::PerFn(_, f)) => format!("{short}{}", upper_camel(f)),
+    }
 }
 
 /// Short name of a Rust type key (`zenoh_flat::ZSample` → `ZSample`),
@@ -323,7 +347,10 @@ pub(crate) fn builder_iface_spec(
     plan: &UnfoldPlan,
 ) -> Option<IfaceSpec> {
     let params = plan_leaf_params(ext, registry, plan)?;
-    let name = format!("{}Builder", subject_short(&plan.source));
+    let name = format!(
+        "{}Builder",
+        decon_base_name(&subject_short(&plan.source), plan.decon.as_ref())
+    );
     let package = subject_package(ext, &plan.source);
     let type_params = vec!["out R".to_string()];
     let ret = kt::KtType::var_r();
@@ -355,6 +382,8 @@ pub(crate) fn folder_iface_spec(
     let subject: syn::Type;
     match &plan.element {
         Some(el) => {
+            // Whole-element delivery: no declaration involved (`plan.decon`
+            // is None) — one shape per element type by construction.
             subject = el.clone();
             let ty = leaf_iface_kt(ext, registry, el, false, &mut throwaway)?;
             params.push(("element".to_string(), ty));
@@ -364,7 +393,10 @@ pub(crate) fn folder_iface_spec(
             params.extend(plan_leaf_params(ext, registry, plan)?);
         }
     }
-    let name = format!("{}Folder", subject_short(&subject));
+    let name = format!(
+        "{}Folder",
+        decon_base_name(&subject_short(&subject), plan.decon.as_ref())
+    );
     let package = subject_package(ext, &subject);
     let type_params = vec!["A".to_string()];
     let ret = kt::KtType::var_("A");
@@ -393,7 +425,10 @@ pub(crate) fn error_handler_iface_spec(
     for (name, ty) in plan_leaf_params(ext, registry, plan)? {
         params.push((name, ty.nullable()));
     }
-    let name = format!("{}Handler", subject_short(&plan.source));
+    let name = format!(
+        "{}Handler",
+        decon_base_name(&subject_short(&plan.source), plan.decon.as_ref())
+    );
     let package = subject_package(ext, &plan.source);
     let type_params = vec!["out R".to_string()];
     let ret = kt::KtType::var_r();

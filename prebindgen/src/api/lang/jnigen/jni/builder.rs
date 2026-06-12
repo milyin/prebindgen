@@ -413,6 +413,21 @@ impl JniGen {
         self
     }
 
+    /// Begin a **named alternative** deconstructor for the current
+    /// `ptr_class`. The records that follow (`.ptr_class_output*`) append to
+    /// this declaration; functions select it via [`Self::fun_output_named`] /
+    /// [`Self::fun_error_named`] — the type's unnamed declaration stays the
+    /// canonical (auto-applied) one. Each named decomposition gets its own
+    /// generated callback interfaces (`<Type><Name>Builder` / `…Handler`).
+    /// Declare the canonical records BEFORE any named alternative — record
+    /// calls append to the most recent declaration of the type.
+    pub fn ptr_class_deconstructor(mut self, name: &str) -> Self {
+        let t = self.current_ptr_class();
+        self.deconstructors.add_deconstructor(t);
+        self.deconstructors.add_deconstructor_name(name);
+        self
+    }
+
     /// **Identity output record**: the current `ptr_class`'s canonical output
     /// includes the handle itself (one of possibly several outputs).
     pub fn ptr_class_output_direct(mut self) -> Self {
@@ -467,6 +482,24 @@ impl JniGen {
         let func = self.current_fn_ident();
         self.deconstructors
             .add_output_inline(func, funcs.into_iter().collect());
+        self
+    }
+
+    /// Per-fn: decompose the return value with the **named** deconstructor
+    /// (declared via [`Self::ptr_class_deconstructor`]) instead of the
+    /// canonical one.
+    pub fn fun_output_named(mut self, name: &str) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_deconstruct_output_with(func, name);
+        self
+    }
+
+    /// Per-fn: decompose the `Result<_, E>` domain error with the **named**
+    /// deconstructor instead of `E`'s canonical one — the `onError` handler
+    /// becomes the named decomposition's `<Type><Name>Handler` interface.
+    pub fn fun_error_named(mut self, name: &str) -> Self {
+        let func = self.current_fn_ident();
+        self.deconstructors.add_deconstruct_error_with(func, name);
         self
     }
 
