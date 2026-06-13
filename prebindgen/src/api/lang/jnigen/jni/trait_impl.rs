@@ -6,6 +6,37 @@
 
 use super::*;
 
+/// Clone a single-type-arg generic (`Option<X>` / `Vec<X>` / any `Path<X, …>`)
+/// replacing its last segment's first type argument with `repl` — yielding the
+/// canonical wildcard pattern (`Option<_>`) the rank-1 handlers `pat_match`,
+/// with the type's own path/qualification preserved exactly as the enumerator
+/// would have produced it.
+fn with_first_arg(ty: &syn::Type, repl: syn::Type) -> syn::Type {
+    let mut out = ty.clone();
+    if let syn::Type::Path(tp) = &mut out {
+        if let Some(seg) = tp.path.segments.last_mut() {
+            if let syn::PathArguments::AngleBracketed(ab) = &mut seg.arguments {
+                for a in ab.args.iter_mut() {
+                    if let syn::GenericArgument::Type(t) = a {
+                        *t = repl;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Clone a reference type replacing its referent with the `_` wildcard,
+/// preserving the lifetime and mutability (`&'a T` → `&'a _`, `&mut T` →
+/// `&mut _`) so the reconstructed pattern matches what the enumerator emitted.
+fn ref_wildcard(r: &syn::TypeReference) -> syn::Type {
+    let mut pr = r.clone();
+    *pr.elem = syn::parse_quote!(_);
+    syn::Type::Reference(pr)
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Inherent helpers — wrapper builders (used by both Prebindgen impl
 // and consuming-crate wrapper exts like ZenohJniExt).
@@ -98,6 +129,7 @@ impl JniGen {
         let kotlin_name = self.override_kotlin_name(&outer_ty, Some(kt::KtType::string()));
         let niches = default_niches_for_wire(&wire);
         ConverterImpl {
+            subs: vec![],
             pre_stages: vec![],
             function: self.build_output_fn(&outer_ty, &wire, &body, None),
             destination: wire,
@@ -139,6 +171,7 @@ impl JniGen {
         let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::byte_array()));
         let niches = default_niches_for_wire(&wire);
         Some(ConverterImpl {
+            subs: vec![],
             pre_stages: vec![],
             function: self.build_output_fn(&norm_ty, &wire, &body, None),
             destination: wire,
@@ -197,6 +230,7 @@ impl JniGen {
             }
         );
         ConverterImpl {
+            subs: vec![],
             function,
             destination: wire,
             pre_stages: vec![],
@@ -303,6 +337,7 @@ impl JniGen {
         let body: syn::Expr =
             syn::parse_quote!(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64);
         ConverterImpl {
+            subs: vec![],
             function: self.build_output_fn(ty, &wire, &body, None),
             destination: wire,
             pre_stages: vec![],
@@ -505,6 +540,7 @@ impl JniGen {
             .clone()
             .map(|h| Projection { owned: false, ..h });
         Some(ConverterImpl {
+            subs: vec![],
             destination: inner.destination.clone(),
             function: inner.function.clone(),
             pre_stages: vec![],
@@ -565,6 +601,7 @@ impl JniGen {
             ..h
         });
         Some(ConverterImpl {
+            subs: vec![],
             pre_stages: vec![],
             function,
             destination: inner_wire,
@@ -620,6 +657,7 @@ impl JniGen {
             Some(kt::KtType::generic("List", [inner_kotlin])),
         );
         Some(ConverterImpl {
+            subs: vec![],
             pre_stages: vec![],
             function: self.build_input_fn(&outer_ty, &wire, &body, None),
             destination: wire,
@@ -674,6 +712,7 @@ impl JniGen {
                     ..h
                 });
                 return Some(ConverterImpl {
+                    subs: vec![],
                     pre_stages: vec![],
                     function,
                     destination: inner_wire,
@@ -710,6 +749,7 @@ impl JniGen {
                     ..h
                 });
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_input_fn(&outer_ty, &wire, &body, None),
                 destination: wire,
@@ -736,6 +776,109 @@ impl Prebindgen for JniGen {
     /// the Kotlin emitter reads it back to drive every wrapper /
     /// typed-handle / `JNIWrappers` signature.
     type Metadata = KotlinMeta;
+
+    // ── Structural type resolution ──────────────────────────────────────
+    // Peel `ty`'s outermost layer and dispatch to the rank handlers with the
+    // reconstructed canonical pattern (reused as builders until the rank
+    // methods are removed). The user-wrapper table is consulted via
+    // `match_user_*` (any depth, specificity-ordered). `subs` = the captured
+    // inner(s), matching the enumerator's recorded wildcard fills.
+
+    fn on_input_type(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        // 1. Terminal categories (incl. the rank-0 user-wrapper table).
+        if let Some(c) = self.on_input_type_rank_0(ty, registry) {
+            return Some(c);
+        }
+        // 2. Higher-arity user-registered input patterns (any depth).
+        if let Some(c) = self.match_user_input(ty, registry) {
+            return Some(c);
+        }
+        // 3. Built-in wrapper shapes. `Option<&T>` tries the DEEP `Option<&_>`
+        //    (borrowed-handle → `Option<OwnedObject<T>>`) before the shallow
+        //    `Option<_>`; the shape that resolves correctly wins.
+        if let Some(inner) = option_inner_type(ty) {
+            if let syn::Type::Reference(r) = &inner {
+                let pat = with_first_arg(ty, ref_wildcard(r));
+                let t1 = (*r.elem).clone();
+                if let Some(mut c) = self.on_input_type_rank_1(&pat, &t1, registry) {
+                    c.subs = vec![t1];
+                    return Some(c);
+                }
+            }
+            let pat = with_first_arg(ty, syn::parse_quote!(_));
+            if let Some(mut c) = self.on_input_type_rank_1(&pat, &inner, registry) {
+                c.subs = vec![inner];
+                return Some(c);
+            }
+            return None;
+        }
+        if let Some(elem) = vec_inner_type(ty) {
+            let pat = with_first_arg(ty, syn::parse_quote!(_));
+            if let Some(mut c) = self.on_input_type_rank_1(&pat, &elem, registry) {
+                c.subs = vec![elem];
+                return Some(c);
+            }
+            return None;
+        }
+        if let syn::Type::Reference(r) = ty {
+            let pat = ref_wildcard(r);
+            let t1 = (*r.elem).clone();
+            if let Some(mut c) = self.on_input_type_rank_1(&pat, &t1, registry) {
+                c.subs = vec![t1];
+                return Some(c);
+            }
+        }
+        None
+    }
+
+    fn on_output_type(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        // 1. Terminal categories (incl. the rank-0 user-wrapper table).
+        if let Some(c) = self.on_output_type_rank_0(ty, registry) {
+            return Some(c);
+        }
+        // 2. User-registered patterns, specificity-ordered — the built-in
+        //    `Result<_, _>` peel and any consumer override (`Result<_,
+        //    ConcreteErr>` wins over the catch-all). Any depth.
+        if let Some(c) = self.match_user_output(ty, registry) {
+            return Some(c);
+        }
+        // 3. Built-in wrapper shapes (`Option<_>`, `Vec<_>`, `&T` borrow). An
+        //    `Option<&Handle>` resolves via the shallow `Option<_>` whose inner
+        //    converter is the `&Handle` borrow entry (no deep output handler).
+        if let Some(inner) = option_inner_type(ty) {
+            let pat = with_first_arg(ty, syn::parse_quote!(_));
+            if let Some(mut c) = self.on_output_type_rank_1(&pat, &inner, registry) {
+                c.subs = vec![inner];
+                return Some(c);
+            }
+            return None;
+        }
+        if let Some(elem) = vec_inner_type(ty) {
+            let pat = with_first_arg(ty, syn::parse_quote!(_));
+            if let Some(mut c) = self.on_output_type_rank_1(&pat, &elem, registry) {
+                c.subs = vec![elem];
+                return Some(c);
+            }
+            return None;
+        }
+        if let syn::Type::Reference(r) = ty {
+            let pat = ref_wildcard(r);
+            let t1 = (*r.elem).clone();
+            if let Some(mut c) = self.on_output_type_rank_1(&pat, &t1, registry) {
+                c.subs = vec![t1];
+                return Some(c);
+            }
+        }
+        None
+    }
 
     /// Hand the registry this back-end's constructor-expansion declarations so
     /// `write_rust` can resolve `.expand`s into fold plans before resolution.
@@ -861,6 +1004,33 @@ impl Prebindgen for JniGen {
         c.to_token_stream()
     }
 
+    fn dispatch_fn_input(
+        &self,
+        args: &[syn::Type],
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let outer_ty = build_fn_type(args);
+        let (wire, body) = callback_input(self, args, registry)?;
+        let niches = default_niches_for_wire(&wire);
+        // `impl Fn(...)` crosses the extern tier as the erased lambda object
+        // (`Any`) — same as the unfold builder / error-sink params. The typed
+        // wrapper-level lambda signature is computed at render time from the
+        // arg types' callback plans, not carried in metadata.
+        Some(ConverterImpl {
+            subs: vec![],
+            pre_stages: vec![],
+            function: self.build_input_fn(&outer_ty, &wire, &body, None),
+            destination: wire,
+            niches,
+            metadata: self.framework_meta(Some(kt::KtType::any())),
+        })
+    }
+}
+
+/// Structural converter builders — the rank-0 terminal chains and the rank-1
+/// wrapper-shape handlers, now inherent helpers called by the structural
+/// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
+impl JniGen {
     // ── Input converters ─────────────────────────────────────────────
 
     fn on_input_type_rank_0(
@@ -903,6 +1073,7 @@ impl Prebindgen for JniGen {
             });
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_input_fn(ty, &wire, &body, None),
                 destination: wire,
@@ -931,6 +1102,7 @@ impl Prebindgen for JniGen {
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
                         return Some(ConverterImpl {
+                            subs: vec![],
                             pre_stages: vec![],
                             function: self.build_input_fn(ty, &wire, &body, None),
                             destination: wire,
@@ -963,6 +1135,7 @@ impl Prebindgen for JniGen {
             let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_input_fn(&rust_ty, &wire, &body, None),
                 destination: wire,
@@ -974,6 +1147,7 @@ impl Prebindgen for JniGen {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_input_fn(ty, &wire, &body, None),
                 destination: wire,
@@ -995,6 +1169,7 @@ impl Prebindgen for JniGen {
                     .and_then(|c| c.kotlin_name.clone())
                     .map(kt::KtType::cls);
                 return Some(ConverterImpl {
+                    subs: vec![],
                     pre_stages: vec![],
                     function: self.build_input_fn(ty, &wire, &body, None),
                     destination: wire,
@@ -1015,7 +1190,7 @@ impl Prebindgen for JniGen {
         t1: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        if let Some(conv) = self.lookup_input(pat, &[t1.clone()], registry) {
+        if let Some(conv) = self.lookup_input(pat, std::slice::from_ref(t1), registry) {
             return Some(conv);
         }
         // Disjoint wildcard patterns (see the `impl JniGen` block above), tried
@@ -1025,50 +1200,6 @@ impl Prebindgen for JniGen {
             .or_else(|| self.input_option_ref(pat, t1, registry))
             .or_else(|| self.input_vec(pat, t1, registry))
             .or_else(|| self.input_option(pat, t1, registry))
-    }
-
-    fn dispatch_fn_input(
-        &self,
-        args: &[syn::Type],
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let outer_ty = build_fn_type(args);
-        let (wire, body) = callback_input(self, args, registry)?;
-        let niches = default_niches_for_wire(&wire);
-        // `impl Fn(...)` crosses the extern tier as the erased lambda object
-        // (`Any`) — same as the unfold builder / error-sink params. The typed
-        // wrapper-level lambda signature is computed at render time from the
-        // arg types' callback plans, not carried in metadata.
-        Some(ConverterImpl {
-            pre_stages: vec![],
-            function: self.build_input_fn(&outer_ty, &wire, &body, None),
-            destination: wire,
-            niches,
-            metadata: self.framework_meta(Some(kt::KtType::any())),
-        })
-    }
-
-    fn on_input_type_rank_2(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let _ = registry;
-        self.lookup_input(pat, &[t1.clone(), t2.clone()], registry)
-    }
-
-    fn on_input_type_rank_3(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        t3: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        let _ = registry;
-        self.lookup_input(pat, &[t1.clone(), t2.clone(), t3.clone()], registry)
     }
 
     // ── Output converters ────────────────────────────────────────────
@@ -1110,6 +1241,7 @@ impl Prebindgen for JniGen {
             });
             let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
@@ -1137,6 +1269,7 @@ impl Prebindgen for JniGen {
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
                         return Some(ConverterImpl {
+                            subs: vec![],
                             pre_stages: vec![],
                             function: self.build_output_fn(ty, &wire, &body, None),
                             destination: wire,
@@ -1174,6 +1307,7 @@ impl Prebindgen for JniGen {
             let wire: syn::Type = syn::parse_quote!(());
             let body: syn::Expr = syn::parse_quote!(v);
             return Some(ConverterImpl {
+                subs: vec![],
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
                 pre_stages: vec![],
@@ -1185,6 +1319,7 @@ impl Prebindgen for JniGen {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
@@ -1202,6 +1337,7 @@ impl Prebindgen for JniGen {
                     .and_then(|c| c.kotlin_name.clone())
                     .map(kt::KtType::cls);
                 return Some(ConverterImpl {
+                    subs: vec![],
                     pre_stages: vec![],
                     function: self.build_output_fn(ty, &wire, &body, None),
                     destination: wire,
@@ -1219,7 +1355,7 @@ impl Prebindgen for JniGen {
         t1: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        if let Some(conv) = self.lookup_output(pat, &[t1.clone()], registry) {
+        if let Some(conv) = self.lookup_output(pat, std::slice::from_ref(t1), registry) {
             return Some(conv);
         }
         // Borrowed opaque-handle output (`&T` / `&'static T` where `T` is a
@@ -1247,6 +1383,7 @@ impl Prebindgen for JniGen {
                     std::boxed::Box::new(v.clone())
                 ) as i64);
                 return Some(ConverterImpl {
+                    subs: vec![],
                     function: self.build_output_fn(&outer_ty, &wire, &body, None),
                     destination: wire,
                     pre_stages: vec![],
@@ -1301,6 +1438,7 @@ impl Prebindgen for JniGen {
                 kotlin_name
             };
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_output_fn(&outer_ty, &wire, &body, None),
                 destination: wire,
@@ -1356,6 +1494,7 @@ impl Prebindgen for JniGen {
                 ..h
             });
             return Some(ConverterImpl {
+                subs: vec![],
                 pre_stages: vec![],
                 function: self.build_output_fn(&outer_ty, &wire, &body, None),
                 destination: wire,
@@ -1368,26 +1507,5 @@ impl Prebindgen for JniGen {
             });
         }
         None
-    }
-
-    fn on_output_type_rank_2(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.lookup_output(pat, &[t1.clone(), t2.clone()], registry)
-    }
-
-    fn on_output_type_rank_3(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        t3: &syn::Type,
-        registry: &Registry<KotlinMeta>,
-    ) -> Option<ConverterImpl<KotlinMeta>> {
-        self.lookup_output(pat, &[t1.clone(), t2.clone(), t3.clone()], registry)
     }
 }

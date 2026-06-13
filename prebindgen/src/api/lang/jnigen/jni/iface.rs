@@ -346,7 +346,11 @@ pub(crate) fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> Stri
             _ => None,
         };
         if let Some((p, boxed)) = prim {
-            return if *nullable { boxed.to_string() } else { p.to_string() };
+            return if *nullable {
+                boxed.to_string()
+            } else {
+                p.to_string()
+            };
         }
         return match simple {
             "Unit" => "V".to_string(),
@@ -407,14 +411,16 @@ fn subject_short(ty: &syn::Type) -> String {
             return seg.ident.to_string();
         }
     }
-    TypeKey::from_type(&peeled).to_string().replace([' ', ':', '<', '>'], "")
+    TypeKey::from_type(&peeled)
+        .to_string()
+        .replace([' ', ':', '<', '>'], "")
 }
-
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
 fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
-    let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject)).to_string();
+    let key =
+        TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject)).to_string();
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
         .unwrap_or_else(|| ext.package.clone())
@@ -483,7 +489,13 @@ pub(crate) fn leaf_iface_param(
     let proj = registry
         .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.as_ref());
-    let nullable_kt = |t: kt::KtType| if builder_kt.is_nullable() { t.nullable() } else { t };
+    let nullable_kt = |t: kt::KtType| {
+        if builder_kt.is_nullable() {
+            t.nullable()
+        } else {
+            t
+        }
+    };
     if is_vb {
         let fqn = proj
             .and_then(|p| ext.kotlin_fqn(&p.leaf_key))

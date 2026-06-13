@@ -124,16 +124,14 @@ pub fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, sy
 }
 
 fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
-    buckets: &[std::collections::HashMap<TypeKey, Option<TypeEntry<M>>>; 4],
+    table: &std::collections::HashMap<TypeKey, Option<TypeEntry<M>>>,
     mut f: F,
 ) {
-    for bucket in buckets {
-        let mut keys: Vec<&TypeKey> = bucket.keys().collect();
-        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-        for key in keys {
-            if let Some(Some(entry)) = bucket.get(key) {
-                f(key, entry);
-            }
+    let mut keys: Vec<&TypeKey> = table.keys().collect();
+    keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    for key in keys {
+        if let Some(Some(entry)) = table.get(key) {
+            f(key, entry);
         }
     }
 }
@@ -207,7 +205,7 @@ mod tests {
             e.to_token_stream()
         }
 
-        fn on_input_type_rank_0(
+        fn on_input_type(
             &self,
             _ty: &syn::Type,
             _registry: &Registry<Self::Metadata>,
@@ -215,69 +213,9 @@ mod tests {
             None
         }
 
-        fn on_input_type_rank_1(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _registry: &Registry<Self::Metadata>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-            None
-        }
-
-        fn on_input_type_rank_2(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _registry: &Registry<Self::Metadata>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-            None
-        }
-
-        fn on_input_type_rank_3(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _t3: &syn::Type,
-            _registry: &Registry<Self::Metadata>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-            None
-        }
-
-        fn on_output_type_rank_0(
+        fn on_output_type(
             &self,
             _ty: &syn::Type,
-            _registry: &Registry<Self::Metadata>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-            None
-        }
-
-        fn on_output_type_rank_1(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _registry: &Registry<Self::Metadata>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-            None
-        }
-
-        fn on_output_type_rank_2(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _registry: &Registry<Self::Metadata>,
-        ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
-            None
-        }
-
-        fn on_output_type_rank_3(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _t3: &syn::Type,
             _registry: &Registry<Self::Metadata>,
         ) -> Option<crate::api::core::prebindgen::ConverterImpl<Self::Metadata>> {
             None
@@ -292,7 +230,7 @@ mod tests {
         let wire: syn::Type = syn::parse_quote!(i64);
         let wire2: syn::Type = syn::parse_quote!(*const u8);
 
-        reg.input_types[0].insert(
+        reg.input_types.insert(
             key_a.clone(),
             Some(TypeEntry {
                 destination: wire.clone(),
@@ -308,7 +246,7 @@ mod tests {
                 metadata: (),
             }),
         );
-        reg.input_types[0].insert(
+        reg.input_types.insert(
             key_b.clone(),
             Some(TypeEntry {
                 destination: wire2.clone(),

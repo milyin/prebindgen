@@ -780,6 +780,51 @@ impl JniGen {
     ///   value-inspecting stage `ty → outer` (built by-value via
     ///   [`Self::build_output_fn`]) prepended to the inner chain. Defer
     ///   (`None`) if the inner converter isn't resolved yet.
+    /// Structurally match `ty` against every registered **input** wrapper
+    /// pattern, most-specific-first (fewest wildcards win, e.g.
+    /// `Result<_, ConcreteErr>` over `Result<_, _>`), and build the first hit.
+    /// Replaces the rank resolver's per-arity enumeration for the user table.
+    pub(crate) fn match_user_input(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        for pat in self.ordered_input_patterns() {
+            if let Some(args) = crate::api::core::types_util::match_pattern(ty, &pat) {
+                if let Some(c) = self.lookup_input(&pat, &args, registry) {
+                    return Some(c);
+                }
+            }
+        }
+        None
+    }
+
+    /// Output-direction peer of [`Self::match_user_input`].
+    pub(crate) fn match_user_output(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        for pat in self.ordered_output_patterns() {
+            if let Some(args) = crate::api::core::types_util::match_pattern(ty, &pat) {
+                if let Some(c) = self.lookup_output(&pat, &args, registry) {
+                    return Some(c);
+                }
+            }
+        }
+        None
+    }
+
+    /// Registered input-wrapper patterns, ordered most-specific (fewest
+    /// wildcards) first; ties keep registration-independent but stable order
+    /// (by canonical key) so resolution is deterministic.
+    fn ordered_input_patterns(&self) -> Vec<syn::Type> {
+        ordered_patterns(&self.input_wrappers)
+    }
+    fn ordered_output_patterns(&self) -> Vec<syn::Type> {
+        ordered_patterns(&self.output_wrappers)
+    }
+
     pub(crate) fn lookup_input(
         &self,
         pat: &syn::Type,
@@ -826,6 +871,7 @@ impl JniGen {
                     (default_niches_for_wire(&ty), None)
                 };
                 Some(ConverterImpl {
+                    subs: vec![],
                     pre_stages: vec![],
                     function: self.build_input_fn(&outer, &ty, &body, exc),
                     destination: ty,
@@ -868,6 +914,7 @@ impl JniGen {
                     default_niches_for_wire(&inner.destination)
                 };
                 Some(ConverterImpl {
+                    subs: vec![],
                     function: inner.function.clone(),
                     destination: inner.destination.clone(),
                     pre_stages,
@@ -949,6 +996,7 @@ impl JniGen {
                     default_niches_for_wire(&ty)
                 };
                 Some(ConverterImpl {
+                    subs: vec![],
                     pre_stages: vec![],
                     function: self.build_output_fn(&outer, &ty, &body, exc),
                     destination: ty,
@@ -986,6 +1034,7 @@ impl JniGen {
                     default_niches_for_wire(&inner.destination)
                 };
                 Some(ConverterImpl {
+                    subs: vec![],
                     function: inner.function.clone(),
                     destination: inner.destination.clone(),
                     pre_stages,
@@ -1094,6 +1143,27 @@ pub(crate) fn substitute_wildcards(pat: &syn::Type, args: &[syn::Type]) -> syn::
     let mut out = pat.clone();
     walk(&mut out, args, &mut idx);
     out
+}
+
+/// Flatten the rank-bucketed wrapper tables into one pattern list ordered
+/// most-specific-first: ascending wildcard count (so `Result<_, ConcreteErr>`
+/// is tried before `Result<_, _>`), then by canonical key for a deterministic
+/// tiebreak independent of `HashMap` iteration order.
+fn ordered_patterns(buckets: &[HashMap<TypeKey, WrapperFn>; 4]) -> Vec<syn::Type> {
+    let mut keys: Vec<(usize, String, syn::Type)> = buckets
+        .iter()
+        .flat_map(|m| m.keys())
+        .map(|k| {
+            let ty = k.to_type();
+            (
+                crate::api::core::types_util::wildcard_count(&ty),
+                k.as_str().to_string(),
+                ty,
+            )
+        })
+        .collect();
+    keys.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    keys.into_iter().map(|(_, _, ty)| ty).collect()
 }
 
 impl Default for JniGen {

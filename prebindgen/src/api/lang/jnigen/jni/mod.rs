@@ -26,8 +26,8 @@ pub(crate) mod wire_access;
 pub use box_helpers::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
 };
-pub use iface_method::CachedIfaceMethod;
 pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_array};
+pub use iface_method::CachedIfaceMethod;
 pub use jni_binding_error::JniBindingError;
 pub use string_helpers::{decode_string, encode_string, null_string};
 
@@ -44,8 +44,12 @@ pub(crate) use quote::{format_ident, quote, ToTokens};
 pub(crate) use crate::api::core::niches::Niches;
 pub(crate) use crate::api::core::prebindgen::{ConverterImpl, Prebindgen, Stage};
 pub(crate) use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
-pub(crate) use crate::api::core::types_util::{bare_path_ident, is_option_ref, is_option_type, option_inner_type};
-pub(crate) use crate::api::lang::jnigen::jni::wire_access::{box_helper_for_wire, jni_field_access};
+pub(crate) use crate::api::core::types_util::{
+    bare_path_ident, is_option_ref, is_option_type, option_inner_type, vec_inner_type,
+};
+pub(crate) use crate::api::lang::jnigen::jni::wire_access::{
+    box_helper_for_wire, jni_field_access,
+};
 pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
 
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).

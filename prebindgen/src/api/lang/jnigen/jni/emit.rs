@@ -695,7 +695,10 @@ pub(crate) fn emit_unfold_delivery(
 
     match &plan.shape {
         UnfoldShape::Base => {
-            let decon = plan.decon.as_ref().expect("record-built plan carries its DeconId");
+            let decon = plan
+                .decon
+                .as_ref()
+                .expect("record-built plan carries its DeconId");
             let statics = iface_statics(
                 &builder_iface_spec(ext, registry, decon)
                     .expect("builder interface spec derivable for a registered declaration"),
@@ -715,7 +718,10 @@ pub(crate) fn emit_unfold_delivery(
                      nested Optional/Iterable is M3/M4"
                 ),
             }
-            let decon = plan.decon.as_ref().expect("record-built plan carries its DeconId");
+            let decon = plan
+                .decon
+                .as_ref()
+                .expect("record-built plan carries its DeconId");
             let statics = iface_statics(
                 &builder_iface_spec(ext, registry, decon)
                     .expect("builder interface spec derivable for a registered declaration"),
@@ -2711,8 +2717,7 @@ fn encode_struct_field(
         None => {
             // Object-shaped wire with no primitive descriptor; the JVM slot
             // must be the field's actual declared type (Option-stripped).
-            let slot_ty =
-                option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+            let slot_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
             let typed_slot = registry
                 .output_entry(&slot_ty)
                 .and_then(|e| jni_field_access(&e.destination))
@@ -2985,8 +2990,6 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
     };
     Some(r.mutability.is_some())
 }
-
-
 
 /// Inline-class field name for a value projection identified by its folded
 /// [`Projection::leaf_key`] (e.g. `"ZZenohId"`) rather than by a raw param type.

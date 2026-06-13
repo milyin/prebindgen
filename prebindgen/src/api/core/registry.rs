@@ -123,9 +123,6 @@ impl Direction {
     }
 }
 
-/// Maximum rank the resolver supports (rank 0..=3).
-pub const MAX_RANK: usize = 3;
-
 /// Single owner of everything parsed from the prebindgen source stream.
 ///
 /// The metadata parameter `M` is the language back-end's per-converter
@@ -142,10 +139,11 @@ pub struct Registry<M = ()> {
     /// Anything else (use, mod, type alias, macro_rules) — passed through.
     pub passthrough: Vec<(syn::Item, SourceLocation)>,
 
-    /// Type tables. `input_types[N]` holds types whose rank is exactly `N`.
-    /// A given key appears in exactly one bucket.
-    pub input_types: [HashMap<TypeKey, Option<TypeEntry<M>>>; 4],
-    pub output_types: [HashMap<TypeKey, Option<TypeEntry<M>>>; 4],
+    /// Type tables, one per direction. Each scanned type maps to its resolved
+    /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
+    /// resolver fills it.
+    pub input_types: HashMap<TypeKey, Option<TypeEntry<M>>>,
+    pub output_types: HashMap<TypeKey, Option<TypeEntry<M>>>,
 
     /// First-seen source location for each type key. Used in error messages
     /// to point the user at where a required-but-unresolved type came from.
@@ -515,23 +513,13 @@ impl<M> Registry<M> {
     /// its wire form.
     pub fn input_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         let key = TypeKey::from_type(ty);
-        for bucket in &self.input_types {
-            if let Some(slot) = bucket.get(&key) {
-                return slot.as_ref();
-            }
-        }
-        None
+        self.input_types.get(&key)?.as_ref()
     }
 
     /// Look up the resolved output entry for `ty`. See [`Self::input_entry`].
     pub fn output_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         let key = TypeKey::from_type(ty);
-        for bucket in &self.output_types {
-            if let Some(slot) = bucket.get(&key) {
-                return slot.as_ref();
-            }
-        }
-        None
+        self.output_types.get(&key)?.as_ref()
     }
 
     /// Register `ty` (and its nested positions) as a required **input** so
@@ -721,12 +709,11 @@ impl<M> Registry<M> {
         loc: &SourceLocation,
     ) {
         let key = TypeKey::from_type(ty);
-        let rank = compute_rank(ty).min(MAX_RANK);
-        let bucket = match dir {
-            Direction::Input => &mut self.input_types[rank],
-            Direction::Output => &mut self.output_types[rank],
+        let table = match dir {
+            Direction::Input => &mut self.input_types,
+            Direction::Output => &mut self.output_types,
         };
-        bucket.entry(key.clone()).or_insert(None);
+        table.entry(key.clone()).or_insert(None);
         if required {
             match dir {
                 Direction::Input => self.required_inputs_scan.insert(key.clone()),
@@ -815,18 +802,6 @@ impl<M> Registry<M> {
 // ──────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────
-
-/// Number of leaves in a type's substitutable-position tree.
-pub fn compute_rank(ty: &syn::Type) -> usize {
-    let positions = immediate_subtype_positions(ty);
-    if positions.is_empty() {
-        return 0;
-    }
-    positions
-        .iter()
-        .map(|p| std::cmp::max(1, compute_rank(p)))
-        .sum()
-}
 
 /// Immediate child type positions of `ty` (one level deep).
 pub fn immediate_subtype_positions(ty: &syn::Type) -> Vec<syn::Type> {
@@ -943,70 +918,16 @@ mod tests {
         fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
             TokenStream::new()
         }
-        fn on_input_type_rank_0(
+        fn on_input_type(
             &self,
             _ty: &syn::Type,
             _registry: &Registry<()>,
         ) -> Option<ConverterImpl<()>> {
             None
         }
-        fn on_input_type_rank_1(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _registry: &Registry<()>,
-        ) -> Option<ConverterImpl<()>> {
-            None
-        }
-        fn on_input_type_rank_2(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _registry: &Registry<()>,
-        ) -> Option<ConverterImpl<()>> {
-            None
-        }
-        fn on_input_type_rank_3(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _t3: &syn::Type,
-            _registry: &Registry<()>,
-        ) -> Option<ConverterImpl<()>> {
-            None
-        }
-        fn on_output_type_rank_0(
+        fn on_output_type(
             &self,
             _ty: &syn::Type,
-            _registry: &Registry<()>,
-        ) -> Option<ConverterImpl<()>> {
-            None
-        }
-        fn on_output_type_rank_1(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _registry: &Registry<()>,
-        ) -> Option<ConverterImpl<()>> {
-            None
-        }
-        fn on_output_type_rank_2(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _registry: &Registry<()>,
-        ) -> Option<ConverterImpl<()>> {
-            None
-        }
-        fn on_output_type_rank_3(
-            &self,
-            _pat: &syn::Type,
-            _t1: &syn::Type,
-            _t2: &syn::Type,
-            _t3: &syn::Type,
             _registry: &Registry<()>,
         ) -> Option<ConverterImpl<()>> {
             None

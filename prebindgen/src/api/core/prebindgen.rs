@@ -98,6 +98,15 @@ pub struct ConverterImpl<M = ()> {
     /// and read by the back-end's language-side emitters. Set this where you
     /// build the converter, not in a side channel.
     pub metadata: M,
+    /// Inner types this converter composed from — the types whose
+    /// `input_entry`/`output_entry` the back-end looked up to build a wrapper
+    /// (`Option<X>` → `[X]`, `Result<T,E>` → `[T, E]`, `&T` → `[&T]`). Empty
+    /// for a terminal converter (scalar, opaque handle, string) and for
+    /// `dispatch_fn_input` (callback args are cross-direction — their
+    /// required-ness flows through `Registry::immediate_edges`, not here). The
+    /// resolver copies these into `TypeEntry::subs`, which `propagate_required`
+    /// walks to mark reachable types required.
+    pub subs: Vec<syn::Type>,
 }
 
 /// The single extension point of the pipeline: implement this trait once per
@@ -248,63 +257,48 @@ pub trait Prebindgen {
         c.to_token_stream()
     }
 
-    // ── Input direction (wire → rust) ──────────────────────────────
+    // ── Structural type resolution (the converter-resolution surface) ──
 
-    /// Whole-type input converter. Returns `Some(ConverterImpl)` if the
-    /// ext handles `ty`.
-    fn on_input_type_rank_0(
+    /// Resolve the **input** (wire → rust) converter for `ty`. The back-end
+    /// inspects `ty`'s outermost structure itself (peeling with
+    /// `core::types_util` helpers) and returns either a *terminal* converter
+    /// (`ConverterImpl::subs` empty) or a *wrapper* that looked up inner
+    /// converters via [`Registry::input_entry`] (listing those inners in
+    /// `subs`). Return `None` to **defer** — when an inner isn't resolved yet
+    /// the resolver retries on a later fixed-point iteration.
+    fn on_input_type(
         &self,
         ty: &syn::Type,
         registry: &Registry<Self::Metadata>,
     ) -> Option<ConverterImpl<Self::Metadata>>;
 
-    /// Single-wildcard input pattern. `pat` contains one `_`; `t1` is the
-    /// type the wildcard slot held in the original.
-    fn on_input_type_rank_1(
+    /// Resolve the **output** (rust → wire) converter for `ty`. The dual of
+    /// [`Self::on_input_type`]; same terminal-vs-wrapper / `subs` / defer
+    /// contract, looking up inners via [`Registry::output_entry`].
+    fn on_output_type(
         &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    fn on_input_type_rank_2(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    fn on_input_type_rank_3(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        t3: &syn::Type,
+        ty: &syn::Type,
         registry: &Registry<Self::Metadata>,
     ) -> Option<ConverterImpl<Self::Metadata>>;
 
     /// Build the wrapper converter for an
     /// `impl Fn(args...) + Send + Sync + 'static` parameter, given the
-    /// already-extracted arg types in declaration order. The resolver
-    /// calls this only after [`Self::on_input_type_rank_0`] /
-    /// [`Self::on_input_type_rank_1`] / [`Self::on_input_type_rank_2`] /
-    /// [`Self::on_input_type_rank_3`] (for the appropriate arity) has
-    /// returned `None`, so wrappers that need custom callback dispatch
-    /// can intercept earlier and skip this path.
+    /// already-extracted arg types in declaration order. The resolver calls
+    /// this only after [`Self::on_input_type`] returns `None`, so wrappers that
+    /// need custom callback dispatch can intercept earlier and skip this path.
     ///
-    /// `args` are the rust-side argument types as they appear in the
-    /// source signature. Note that callback args flow inverse to the
-    /// callback parameter itself: the callback parameter is *input*,
-    /// but its args are produced by the rust side and consumed by the
-    /// foreign side, so they are *output* direction for converter
-    /// resolution. The framework handles this direction-flip at
-    /// registration time (`register_type_inner` in `core::registry`),
-    /// so implementations of this method should look up
-    /// already-registered *output* converters for each arg type.
+    /// `args` are the rust-side argument types as they appear in the source
+    /// signature. Note that callback args flow inverse to the callback
+    /// parameter itself: the callback parameter is *input*, but its args are
+    /// produced by the rust side and consumed by the foreign side, so they are
+    /// *output* direction for converter resolution. The framework handles this
+    /// direction-flip at registration time (`register_type_inner` in
+    /// `core::registry`), so implementations of this method should look up
+    /// already-registered *output* converters for each arg type. The returned
+    /// `ConverterImpl::subs` should be empty — the callback-arg required-ness
+    /// flows through that direction-flipped `immediate_edges`, not `subs`.
     ///
-    /// Default: `None`. Backends that support `impl Fn` callbacks
-    /// (e.g. a future JNI / cbindgen adapter) override this.
+    /// Default: `None`. Backends that support `impl Fn` callbacks override this.
     fn dispatch_fn_input(
         &self,
         args: &[syn::Type],
@@ -313,37 +307,4 @@ pub trait Prebindgen {
         let _ = (args, registry);
         None
     }
-
-    // ── Output direction (rust → wire) ─────────────────────────────
-
-    /// Whole-type output converter.
-    fn on_output_type_rank_0(
-        &self,
-        ty: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    fn on_output_type_rank_1(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    fn on_output_type_rank_2(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
-
-    fn on_output_type_rank_3(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        t2: &syn::Type,
-        t3: &syn::Type,
-        registry: &Registry<Self::Metadata>,
-    ) -> Option<ConverterImpl<Self::Metadata>>;
 }

@@ -3,6 +3,166 @@
 //! replaces the per-module copies that used to live in `core::unfold`,
 //! `core::expand`, and the jnigen back-end.
 
+use quote::ToTokens;
+
+/// Structurally match a concrete type `ty` against a wildcard `pattern` (a
+/// `syn::Type` whose `_` placeholders are [`syn::Type::Infer`]). On success,
+/// returns the subtrees of `ty` captured at each wildcard, in left-to-right
+/// document order; `None` if the shapes don't unify.
+///
+/// This is the inverse of pattern substitution: `match_pattern(ty, pat)` finds
+/// the args `a` such that substituting them into `pat` reproduces `ty`. It
+/// replaces the rank resolver's combinatorial wildcard *enumeration* with a
+/// direct unify — an adapter (or a user-registered wrapper table) keeps full
+/// expressive power (any depth) without the framework enumerating every
+/// placement. Handles the type shapes that appear as wildcard patterns
+/// (`Path<…>`, `&`/`&mut`, `[_]`, `(…)`, `*const`/`*mut`); other leaves compare
+/// by token equality.
+pub fn match_pattern(ty: &syn::Type, pattern: &syn::Type) -> Option<Vec<syn::Type>> {
+    let mut out = Vec::new();
+    if unify(ty, pattern, &mut out) {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+/// Count the wildcard (`_`) placeholders in a pattern — its "openness". Used to
+/// order overlapping registered patterns most-specific-first (fewer wildcards
+/// win, e.g. `Result<_, ConcreteErr>` over `Result<_, _>`).
+pub fn wildcard_count(pattern: &syn::Type) -> usize {
+    if matches!(pattern, syn::Type::Infer(_)) {
+        return 1;
+    }
+    immediate_pattern_children(pattern)
+        .iter()
+        .map(wildcard_count)
+        .sum()
+}
+
+/// Immediate substitutable child positions of a type (the generic type-args of
+/// a path, the referent of a `&`/`*`, the element of a slice/array, the members
+/// of a tuple). Mirrors the resolver's traversal so `match_pattern` /
+/// `wildcard_count` descend the same positions wildcards can occupy.
+fn immediate_pattern_children(ty: &syn::Type) -> Vec<syn::Type> {
+    match ty {
+        syn::Type::Path(tp) => tp
+            .path
+            .segments
+            .last()
+            .and_then(|seg| match &seg.arguments {
+                syn::PathArguments::AngleBracketed(ab) => Some(
+                    ab.args
+                        .iter()
+                        .filter_map(|a| match a {
+                            syn::GenericArgument::Type(t) => Some(t.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .unwrap_or_default(),
+        syn::Type::Reference(r) => vec![(*r.elem).clone()],
+        syn::Type::Ptr(p) => vec![(*p.elem).clone()],
+        syn::Type::Slice(s) => vec![(*s.elem).clone()],
+        syn::Type::Array(a) => vec![(*a.elem).clone()],
+        syn::Type::Tuple(t) => t.elems.iter().cloned().collect(),
+        syn::Type::Group(g) => immediate_pattern_children(&g.elem),
+        syn::Type::Paren(p) => immediate_pattern_children(&p.elem),
+        _ => Vec::new(),
+    }
+}
+
+fn unify(ty: &syn::Type, pat: &syn::Type, out: &mut Vec<syn::Type>) -> bool {
+    if matches!(pat, syn::Type::Infer(_)) {
+        out.push(ty.clone());
+        return true;
+    }
+    match (ty, pat) {
+        (syn::Type::Path(t), syn::Type::Path(p)) => {
+            // Same path up to the last segment's generic type args; unify those.
+            if t.qself.is_some() || p.qself.is_some() {
+                return token_eq(ty, pat);
+            }
+            let (ts, ps) = (&t.path.segments, &p.path.segments);
+            if ts.len() != ps.len() {
+                return false;
+            }
+            for (i, (tseg, pseg)) in ts.iter().zip(ps.iter()).enumerate() {
+                if tseg.ident != pseg.ident {
+                    return false;
+                }
+                let is_last = i + 1 == ts.len();
+                // Non-last segments (and non-angle-bracketed last segments) must
+                // match verbatim; the last segment's type args unify.
+                match (&tseg.arguments, &pseg.arguments) {
+                    (
+                        syn::PathArguments::AngleBracketed(ta),
+                        syn::PathArguments::AngleBracketed(pa),
+                    ) if is_last => {
+                        let tt = type_args(ta);
+                        let pp = type_args(pa);
+                        if tt.len() != pp.len() {
+                            return false;
+                        }
+                        for (a, b) in tt.iter().zip(pp.iter()) {
+                            if !unify(a, b, out) {
+                                return false;
+                            }
+                        }
+                    }
+                    (a, b) => {
+                        if a.to_token_stream().to_string() != b.to_token_stream().to_string() {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        }
+        (syn::Type::Reference(t), syn::Type::Reference(p)) => {
+            t.mutability.is_some() == p.mutability.is_some() && unify(&t.elem, &p.elem, out)
+        }
+        (syn::Type::Ptr(t), syn::Type::Ptr(p)) => {
+            t.mutability.is_some() == p.mutability.is_some()
+                && t.const_token.is_some() == p.const_token.is_some()
+                && unify(&t.elem, &p.elem, out)
+        }
+        (syn::Type::Slice(t), syn::Type::Slice(p)) => unify(&t.elem, &p.elem, out),
+        (syn::Type::Array(t), syn::Type::Array(p)) => {
+            t.len.to_token_stream().to_string() == p.len.to_token_stream().to_string()
+                && unify(&t.elem, &p.elem, out)
+        }
+        (syn::Type::Tuple(t), syn::Type::Tuple(p)) => {
+            t.elems.len() == p.elems.len()
+                && t.elems
+                    .iter()
+                    .zip(p.elems.iter())
+                    .all(|(a, b)| unify(a, b, out))
+        }
+        (syn::Type::Group(t), _) => unify(&t.elem, pat, out),
+        (_, syn::Type::Group(p)) => unify(ty, &p.elem, out),
+        (syn::Type::Paren(t), _) => unify(&t.elem, pat, out),
+        (_, syn::Type::Paren(p)) => unify(ty, &p.elem, out),
+        _ => token_eq(ty, pat),
+    }
+}
+
+fn type_args(ab: &syn::AngleBracketedGenericArguments) -> Vec<syn::Type> {
+    ab.args
+        .iter()
+        .filter_map(|a| match a {
+            syn::GenericArgument::Type(t) => Some(t.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn token_eq(a: &syn::Type, b: &syn::Type) -> bool {
+    a.to_token_stream().to_string() == b.to_token_stream().to_string()
+}
+
 /// If `ty` is `Option<Inner>` (by last path segment), return `Inner`.
 pub fn option_inner_type(ty: &syn::Type) -> Option<syn::Type> {
     generic_inner(ty, "Option")
@@ -124,4 +284,80 @@ pub fn short_type_name(ty: &syn::Type) -> String {
         }
     }
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::ToTokens;
+
+    fn ty(s: &str) -> syn::Type {
+        syn::parse_str(s).unwrap()
+    }
+    fn caps(v: Option<Vec<syn::Type>>) -> Option<Vec<String>> {
+        v.map(|a| a.iter().map(|t| t.to_token_stream().to_string()).collect())
+    }
+
+    #[test]
+    fn match_pattern_outermost_and_deep() {
+        // Outermost single wildcard.
+        assert_eq!(
+            caps(match_pattern(&ty("Option<u64>"), &ty("Option<_>"))),
+            Some(vec!["u64".to_string()])
+        );
+        // Two wildcards (Result).
+        assert_eq!(
+            caps(match_pattern(
+                &ty("Result<ZKeyExpr, ZError>"),
+                &ty("Result<_, _>")
+            )),
+            Some(vec!["ZKeyExpr".to_string(), "ZError".to_string()])
+        );
+        // Deep single wildcard, intermediate level concrete (`Option<&_>`).
+        assert_eq!(
+            caps(match_pattern(&ty("Option<&ZKeyExpr>"), &ty("Option<&_>"))),
+            Some(vec!["ZKeyExpr".to_string()])
+        );
+        // The shallow pattern also matches, capturing the reference whole.
+        assert_eq!(
+            caps(match_pattern(&ty("Option<&ZKeyExpr>"), &ty("Option<_>"))),
+            Some(vec!["& ZKeyExpr".to_string()])
+        );
+        // `&mut _` vs `&_` mutability must agree.
+        assert!(match_pattern(&ty("&mut Foo"), &ty("&_")).is_none());
+        assert_eq!(
+            caps(match_pattern(&ty("&mut Foo"), &ty("&mut _"))),
+            Some(vec!["Foo".to_string()])
+        );
+        // Slice element.
+        assert_eq!(
+            caps(match_pattern(&ty("&[u8]"), &ty("&[_]"))),
+            Some(vec!["u8".to_string()])
+        );
+        // Arbitrary depth (the framework never enumerated this, but a user
+        // pattern can name it).
+        assert_eq!(
+            caps(match_pattern(
+                &ty("Vec<Option<u64>>"),
+                &ty("Vec<Option<_>>")
+            )),
+            Some(vec!["u64".to_string()])
+        );
+        // Head mismatch.
+        assert!(match_pattern(&ty("Vec<u64>"), &ty("Option<_>")).is_none());
+        // Concrete pattern (rank-0): matches only itself, no captures.
+        assert_eq!(
+            caps(match_pattern(&ty("MyType"), &ty("MyType"))),
+            Some(vec![])
+        );
+        assert!(match_pattern(&ty("Other"), &ty("MyType")).is_none());
+    }
+
+    #[test]
+    fn wildcard_count_specificity() {
+        assert_eq!(wildcard_count(&ty("Result<_, _>")), 2);
+        assert_eq!(wildcard_count(&ty("Result<_, ConcreteErr>")), 1);
+        assert_eq!(wildcard_count(&ty("Option<&_>")), 1);
+        assert_eq!(wildcard_count(&ty("ZKeyExpr")), 0);
+    }
 }

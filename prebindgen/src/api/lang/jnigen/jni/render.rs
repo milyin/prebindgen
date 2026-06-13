@@ -1250,7 +1250,10 @@ pub(crate) fn unfold_leaf_kt(
 ///
 /// [`UnfoldLeaf::name`]: crate::api::core::unfold::UnfoldLeaf::name
 pub(crate) fn plan_leaf_names(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> Vec<String> {
-    leaves.iter().map(|leaf| kt_param_name(&leaf.name)).collect()
+    leaves
+        .iter()
+        .map(|leaf| kt_param_name(&leaf.name))
+        .collect()
 }
 
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the

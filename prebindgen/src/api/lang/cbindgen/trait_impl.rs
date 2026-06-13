@@ -1,11 +1,11 @@
 use super::builder::callback_fn_type;
 use super::*;
 
-/// Per-category rank-0 **input** converter builders. Each returns
+/// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
-/// otherwise); [`Cbindgen::on_input_type_rank_0`] chains them in priority
-/// order. The categories are mutually exclusive, so the chain's fall-through
-/// is equivalent to the original sequential `if … return` blocks.
+/// otherwise); [`Prebindgen::on_input_type`] chains them in priority order
+/// before the wrapper shapes. The categories are mutually exclusive, so the
+/// chain's fall-through is equivalent to a sequential `if … return` block.
 impl Cbindgen {
     /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
     /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
@@ -33,6 +33,7 @@ impl Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(*mut #c_struct),
             function,
             pre_stages: vec![],
@@ -70,6 +71,7 @@ impl Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(#c_struct),
             function,
             pre_stages: vec![],
@@ -94,9 +96,9 @@ impl Cbindgen {
         let src = self.src_ty(ty);
         let short = type_short(ty);
         let null_msg = format!("null {short} value passed by value");
-        let writeback = owned.then(|| {
-            quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());)
-        });
+        let writeback = owned.then(
+            || quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());),
+        );
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name(
@@ -115,6 +117,7 @@ impl Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(*mut #opaque),
             function,
             pre_stages: vec![],
@@ -145,6 +148,7 @@ impl Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(#cname),
             function,
             pre_stages: vec![],
@@ -182,6 +186,7 @@ impl Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(*const ::core::ffi::c_char),
             function,
             pre_stages: vec![],
@@ -202,6 +207,7 @@ impl Cbindgen {
             pub(crate) fn #name() {}
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(*const ::core::ffi::c_char),
             function,
             pre_stages: vec![],
@@ -223,6 +229,7 @@ impl Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: ty.clone(),
             function,
             pre_stages: vec![],
@@ -264,9 +271,7 @@ impl Cbindgen {
         // NULs so the terminator marks the true end for C consumers.
         items.push(syn::parse_quote!(
             #[allow(non_snake_case, dead_code)]
-            pub(crate) fn __cbg_alloc_cstr(
-                s: ::std::string::String,
-            ) -> *mut ::core::ffi::c_char {
+            pub(crate) fn __cbg_alloc_cstr(s: ::std::string::String) -> *mut ::core::ffi::c_char {
                 let c = ::std::ffi::CString::new(s).unwrap_or_default();
                 let bytes = c.as_bytes_with_nul();
                 unsafe {
@@ -301,9 +306,7 @@ impl Cbindgen {
         }
         items.push(syn::parse_quote!(
             #[allow(non_snake_case, dead_code)]
-            pub(crate) unsafe fn __cbg_alloc_array<W>(
-                v: ::std::vec::Vec<W>,
-            ) -> (*mut W, usize) {
+            pub(crate) unsafe fn __cbg_alloc_array<W>(v: ::std::vec::Vec<W>) -> (*mut W, usize) {
                 let n = v.len();
                 if n == 0 {
                     return (::core::ptr::null_mut(), 0);
@@ -597,6 +600,29 @@ impl Cbindgen {
 impl Prebindgen for Cbindgen {
     type Metadata = ();
 
+    // ── Structural type resolution ──────────────────────────────────────
+    // The adapter peels `ty` itself: a rank-0 terminal category, else a
+    // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`
+    // / `out_wrappers`.
+
+    fn on_input_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        // Terminal categories (mutually exclusive, priority order), else a
+        // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`).
+        self.in_opaque_handle(ty)
+            .or_else(|| self.in_data_struct(ty, r))
+            .or_else(|| self.in_value_opaque(ty))
+            .or_else(|| self.in_enum(ty, r))
+            .or_else(|| self.in_string(ty))
+            .or_else(|| self.in_str(ty))
+            .or_else(|| self.in_scalar(ty))
+            .or_else(|| self.in_wrappers(ty, r))
+    }
+
+    fn on_output_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        self.out_terminal(ty, r)
+            .or_else(|| self.out_wrappers(ty, r))
+    }
+
     fn declared_functions(&self) -> HashSet<syn::Ident> {
         self.functions.keys().cloned().collect()
     }
@@ -646,265 +672,12 @@ impl Prebindgen for Cbindgen {
 
     fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<()>) -> TokenStream {
         // The `#[repr(C)]` mirror + converters come from prerequisites /
-        // on_output_type_rank_0; the original (non-FFI-safe) struct is dropped.
+        // on_output_type; the original (non-FFI-safe) struct is dropped.
         TokenStream::new()
     }
 
     fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
         TokenStream::new()
-    }
-
-    // ── Input direction (wire → rust) ──────────────────────────────────
-
-    fn on_input_type_rank_0(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-        // Mutually-exclusive type categories, tried in priority order. See the
-        // `impl Cbindgen` block above for each category's converter shape.
-        self.in_opaque_handle(ty)
-            .or_else(|| self.in_data_struct(ty, r))
-            .or_else(|| self.in_value_opaque(ty))
-            .or_else(|| self.in_enum(ty, r))
-            .or_else(|| self.in_string(ty))
-            .or_else(|| self.in_str(ty))
-            .or_else(|| self.in_scalar(ty))
-    }
-
-    fn on_input_type_rank_1(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        // `Option<T>` input: a single nullable C param, NULL = `None` (the input
-        // mirror of the output null-niche rule). A pointer-wire inner (opaque
-        // handle, `char*`) reuses its wire directly; a value/scalar inner is
-        // boxed behind a `*const` pointer. The inner's own converter does the
-        // non-null decode, so its fallibility is preserved.
-        //
-        // Only the `Option<_>` pattern (wildcard directly the argument) is
-        // handled here, so `t1` is the full inner type and its own converter
-        // (e.g. the `&T` borrow) is reused verbatim. Patterns like `Option<&_>`
-        // or `Option<Vec<_>>` are rejected — the resolver also enumerates the
-        // `Option<_>` shape with the concrete inner in `t1`, which is the one
-        // that resolves correctly (otherwise an `Option<&ZConfig>` would bind to
-        // the *owned* `ZConfig` converter, dropping the reference).
-        if is_option(pat) && matches!(first_type_arg(pat), Some(syn::Type::Infer(_))) {
-            let inner = _r.input_entry(t1)?;
-            let inner_wire = inner.destination.clone();
-            let inner_conv = inner.function.sig.ident.clone();
-            // Inner Ok type + fallibility from its converter's return type.
-            let (inner_ok, fallible): (syn::Type, bool) = match &inner.function.sig.output {
-                syn::ReturnType::Type(_, ty) if is_result(ty) => {
-                    let (ok, _e) = result_parts(ty).expect("is_result ⇒ result_parts");
-                    (ok, true)
-                }
-                syn::ReturnType::Type(_, ty) => ((**ty).clone(), false),
-                syn::ReturnType::Default => (syn::parse_quote!(()), false),
-            };
-            let is_ptr = matches!(inner_wire, syn::Type::Ptr(_));
-            let wire: syn::Type = if is_ptr {
-                inner_wire.clone()
-            } else {
-                syn::parse_quote!(*const #inner_wire)
-            };
-            // Read the inner wire value out of `v` for the non-null branch.
-            let read = if is_ptr { quote!(v) } else { quote!(*v) };
-            let name = format_ident!("__cbg_in_option_{}", sanitize(&TypeKey::from_type(t1)));
-            // A borrow inner (`Option<&T>`) carries the `'a` of its decoded
-            // reference into `inner_ok`, so the wrapper must declare it.
-            let lt: TokenStream = if matches!(t1, syn::Type::Reference(_)) {
-                quote!(<'a>)
-            } else {
-                quote!()
-            };
-            let function: syn::ItemFn = if fallible {
-                syn::parse_quote!(
-                    #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name #lt(
-                        v: #wire,
-                    ) -> ::core::result::Result<::core::option::Option<#inner_ok>, ::std::string::String> {
-                        if v.is_null() {
-                            return ::core::result::Result::Ok(::core::option::Option::None);
-                        }
-                        match #inner_conv(#read) {
-                            ::core::result::Result::Ok(__x) => {
-                                ::core::result::Result::Ok(::core::option::Option::Some(__x))
-                            }
-                            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
-                        }
-                    }
-                )
-            } else {
-                syn::parse_quote!(
-                    #[allow(non_snake_case, unused_variables, dead_code)]
-                    pub(crate) unsafe fn #name #lt(
-                        v: #wire,
-                    ) -> ::core::option::Option<#inner_ok> {
-                        if v.is_null() {
-                            ::core::option::Option::None
-                        } else {
-                            ::core::option::Option::Some(#inner_conv(#read))
-                        }
-                    }
-                )
-            };
-            return Some(ConverterImpl {
-                destination: wire,
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // `&str`: borrow a UTF-8 C string directly from the caller.
-        let syn::Type::Reference(r) = pat else {
-            return None;
-        };
-        // `&[E]` slice (scalar `E`): marker only — the two-param (`*const E`,
-        // `usize`) lowering is done structurally in `emit_inputs`. `pat` is the
-        // wildcard `&[_]`; `t1` is the element type.
-        if r.mutability.is_none() {
-            if let syn::Type::Slice(s) = &*r.elem {
-                if matches!(&*s.elem, syn::Type::Infer(_)) && is_scalar(t1) {
-                    let name =
-                        format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(t1)));
-                    let function: syn::ItemFn = syn::parse_quote!(
-                        #[allow(non_snake_case, dead_code, unused)]
-                        pub(crate) fn #name() {}
-                    );
-                    return Some(ConverterImpl {
-                        destination: syn::parse_quote!(*const #t1),
-                        function,
-                        pre_stages: vec![],
-                        niches: Niches::empty(),
-                        metadata: (),
-                    });
-                }
-            }
-        }
-        if r.mutability.is_none() && is_str(t1) {
-            let name = Self::in_name(pat);
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name<'a>(
-                    v: *const ::core::ffi::c_char,
-                ) -> ::core::result::Result<&'a str, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from("null pointer passed for str argument"),
-                        );
-                    }
-                    match ::std::ffi::CStr::from_ptr(v).to_str() {
-                        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
-                        ::core::result::Result::Err(_) => {
-                            ::core::result::Result::Err(
-                                ::std::string::String::from("invalid UTF-8 in str argument"),
-                            )
-                        }
-                    }
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(*const ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // `&mut T` (mutable borrow) of an opaque handle: wire `*mut <C struct>`,
-        // decode to `&mut <src>` borrowed from the C-owned `Box`. Fallible
-        // (null checks).
-        if r.mutability.is_some() {
-            if !self.opaque.contains_key(&TypeKey::from_type(t1)) {
-                return None;
-            }
-            let ref_ty: syn::Type = syn::parse_quote!(&mut #t1);
-            let name = Self::in_name(&ref_ty);
-            let c_struct = self.c_type_ident(t1);
-            let src = self.src_ty(t1);
-            let short = type_short(t1);
-            let null_ptr_msg = format!("null {short} pointer");
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name<'a>(
-                    v: *mut #c_struct,
-                ) -> ::core::result::Result<&'a mut #src, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#null_ptr_msg),
-                        );
-                    }
-                    ::core::result::Result::Ok(&mut *(v as *mut #src))
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(*mut #c_struct),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // `&T` (shared borrow) of an opaque handle or value-opaque type: wire
-        // `*const <C struct>` (the pointer-target for `opaque_ptr`, the opaque
-        // counterpart for `value_opaque`), decode to `&<src>` reinterpreting the
-        // C-owned storage. Fallible (null checks). Other inners fall through.
-        let key1 = TypeKey::from_type(t1);
-        let wire_ty: syn::Type = if self.opaque.contains_key(&key1) {
-            let c_struct = self.c_type_ident(t1);
-            syn::parse_quote!(#c_struct)
-        } else if let Some(op) = self.value_opaque_ty(t1) {
-            op.clone()
-        } else {
-            return None;
-        };
-        let ref_ty: syn::Type = syn::parse_quote!(&#t1);
-        let name = Self::in_name(&ref_ty);
-        let src = self.src_ty(t1);
-        let short = type_short(t1);
-        let null_ptr_msg = format!("null {short} pointer");
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name<'a>(
-                v: *const #wire_ty,
-            ) -> ::core::result::Result<&'a #src, ::std::string::String> {
-                if v.is_null() {
-                    return ::core::result::Result::Err(::std::string::String::from(#null_ptr_msg));
-                }
-                ::core::result::Result::Ok(&*(v as *const #src))
-            }
-        );
-        Some(ConverterImpl {
-            destination: syn::parse_quote!(*const #wire_ty),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    fn on_input_type_rank_2(
-        &self,
-        _pat: &syn::Type,
-        _t1: &syn::Type,
-        _t2: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        None
-    }
-
-    fn on_input_type_rank_3(
-        &self,
-        _pat: &syn::Type,
-        _t1: &syn::Type,
-        _t2: &syn::Type,
-        _t3: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        None
     }
 
     /// `impl Fn(Args...) + Send + Sync + 'static` callback input. The C wire is a
@@ -1007,6 +780,7 @@ impl Prebindgen for Cbindgen {
             }
         );
         Some(ConverterImpl {
+            subs: vec![],
             destination: syn::parse_quote!(#c_struct),
             function,
             pre_stages: vec![],
@@ -1014,14 +788,12 @@ impl Prebindgen for Cbindgen {
             metadata: (),
         })
     }
+}
 
-    // ── Output direction (rust → wire) ─────────────────────────────────
-
-    fn on_output_type_rank_0(
-        &self,
-        ty: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
+/// Output-direction terminal categories — the rank-0 chain, now an inherent
+/// helper called by the structural [`Prebindgen::on_output_type`].
+impl Cbindgen {
+    fn out_terminal(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
         // `emit_fallible_wrapper` special-cases `Result<(), E>` to drop the
@@ -1032,6 +804,7 @@ impl Prebindgen for Cbindgen {
                 pub(crate) fn __cbg_out_unit(v: ()) {}
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],
@@ -1051,6 +824,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: syn::parse_quote!(*mut ::core::ffi::c_char),
                 function,
                 pre_stages: vec![],
@@ -1069,6 +843,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: ty.clone(),
                 function,
                 pre_stages: vec![],
@@ -1091,6 +866,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: syn::parse_quote!(*mut #c_struct),
                 function,
                 pre_stages: vec![],
@@ -1114,6 +890,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: syn::parse_quote!(*mut ::core::ffi::c_char),
                 function,
                 pre_stages: vec![],
@@ -1144,6 +921,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: syn::parse_quote!(#c_struct),
                 function,
                 pre_stages: vec![],
@@ -1166,6 +944,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: opaque,
                 function,
                 pre_stages: vec![],
@@ -1192,6 +971,7 @@ impl Prebindgen for Cbindgen {
                 }
             );
             return Some(ConverterImpl {
+                subs: vec![],
                 destination: syn::parse_quote!(#cname),
                 function,
                 pre_stages: vec![],
@@ -1202,32 +982,78 @@ impl Prebindgen for Cbindgen {
 
         None
     }
+}
 
-    fn on_output_type_rank_1(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        // Composite output layers (`Option<T>`, `Vec<T>`): the structural
-        // lowering happens in `emit_function_wrapper` via `lower_value`. These
-        // markers exist only so the resolver marks the composite type resolved
-        // and propagates required-ness to the inner/element type (resolved here
-        // first, deepest-first). The marker fn is never called.
-        if is_option(pat) || is_vec(pat) {
-            _r.output_entry(t1)?;
-            let kind = if is_option(pat) { "option" } else { "vec" };
-            let name = format_ident!(
-                "__cbg_outmark_{}_{}",
-                kind,
-                sanitize(&TypeKey::from_type(t1))
-            );
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused)]
-                pub(crate) fn #name() {}
-            );
+/// Structural wrapper-shape resolvers (the post-rank-machinery surface). Each
+/// peels `ty`'s outermost layer and composes the inner's converter; `subs`
+/// lists the immediate inner(s) it looked up.
+impl Cbindgen {
+    /// `Option<X>` and reference (`&`/`&mut`/`&[E]`/`&str`) **input** shapes.
+    fn in_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        // `Option<X>` input: a single nullable C param, NULL = `None`. The inner
+        // `X` is reused wholesale (its own converter — e.g. an `&T` borrow — does
+        // the non-null decode), so `Option<&ZConfig>` binds the *reference*
+        // converter, never the owned one.
+        if is_option(ty) {
+            let inner = first_type_arg(ty)?;
+            let entry = r.input_entry(&inner)?;
+            let inner_wire = entry.destination.clone();
+            let inner_conv = entry.function.sig.ident.clone();
+            let (inner_ok, fallible): (syn::Type, bool) = match &entry.function.sig.output {
+                syn::ReturnType::Type(_, t) if is_result(t) => {
+                    let (ok, _e) = result_parts(t).expect("is_result ⇒ result_parts");
+                    (ok, true)
+                }
+                syn::ReturnType::Type(_, t) => ((**t).clone(), false),
+                syn::ReturnType::Default => (syn::parse_quote!(()), false),
+            };
+            let is_ptr = matches!(inner_wire, syn::Type::Ptr(_));
+            let wire: syn::Type = if is_ptr {
+                inner_wire.clone()
+            } else {
+                syn::parse_quote!(*const #inner_wire)
+            };
+            let read = if is_ptr { quote!(v) } else { quote!(*v) };
+            let name = format_ident!("__cbg_in_option_{}", sanitize(&TypeKey::from_type(&inner)));
+            let lt: TokenStream = if matches!(inner, syn::Type::Reference(_)) {
+                quote!(<'a>)
+            } else {
+                quote!()
+            };
+            let function: syn::ItemFn = if fallible {
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name #lt(
+                        v: #wire,
+                    ) -> ::core::result::Result<::core::option::Option<#inner_ok>, ::std::string::String> {
+                        if v.is_null() {
+                            return ::core::result::Result::Ok(::core::option::Option::None);
+                        }
+                        match #inner_conv(#read) {
+                            ::core::result::Result::Ok(__x) => {
+                                ::core::result::Result::Ok(::core::option::Option::Some(__x))
+                            }
+                            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
+                        }
+                    }
+                )
+            } else {
+                syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name #lt(
+                        v: #wire,
+                    ) -> ::core::option::Option<#inner_ok> {
+                        if v.is_null() {
+                            ::core::option::Option::None
+                        } else {
+                            ::core::option::Option::Some(#inner_conv(#read))
+                        }
+                    }
+                )
+            };
             return Some(ConverterImpl {
-                destination: syn::parse_quote!(()),
+                subs: vec![inner],
+                destination: wire,
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),
@@ -1235,41 +1061,123 @@ impl Prebindgen for Cbindgen {
             });
         }
 
-        // `&T` (any shared borrow — `&'static`, `&'a`, or elided) of an opaque
-        // handle → `*const <C struct>`: a const, **non-owning** pointer that
-        // reinterprets the borrow with no allocation. Signals to C callers that
-        // the value must NOT be freed (it is loaned from the receiver / a static).
-        // Composes under `Option<&T>` (NULL niche) for nullable loaned returns.
-        let syn::Type::Reference(r) = pat else {
+        let syn::Type::Reference(rf) = ty else {
             return None;
         };
-        if r.mutability.is_some() {
-            return None;
+        let elem = (*rf.elem).clone();
+        // `&[E]` slice (scalar `E`): marker only — the two-param (`*const E`,
+        // `usize`) lowering is done structurally in `emit_inputs`.
+        if rf.mutability.is_none() {
+            if let syn::Type::Slice(s) = &*rf.elem {
+                if is_scalar(&s.elem) {
+                    let e = (*s.elem).clone();
+                    let name =
+                        format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(&e)));
+                    let function: syn::ItemFn = syn::parse_quote!(
+                        #[allow(non_snake_case, dead_code, unused)]
+                        pub(crate) fn #name() {}
+                    );
+                    return Some(ConverterImpl {
+                        subs: vec![e.clone()],
+                        destination: syn::parse_quote!(*const #e),
+                        function,
+                        pre_stages: vec![],
+                        niches: Niches::empty(),
+                        metadata: (),
+                    });
+                }
+            }
         }
-        let key = TypeKey::from_type(t1);
-        // Wire C type: pointer-target for `opaque_ptr`, opaque counterpart for
-        // `value_opaque`. Other inners fall through.
-        let wire_ty: syn::Type = if self.opaque.contains_key(&key) {
-            let c_struct = self.c_type_ident(t1);
+        // `&str`: borrow a UTF-8 C string directly from the caller.
+        if rf.mutability.is_none() && is_str(&elem) {
+            let name = Self::in_name(ty);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: *const ::core::ffi::c_char,
+                ) -> ::core::result::Result<&'a str, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from("null pointer passed for str argument"),
+                        );
+                    }
+                    match ::std::ffi::CStr::from_ptr(v).to_str() {
+                        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s),
+                        ::core::result::Result::Err(_) => ::core::result::Result::Err(
+                            ::std::string::String::from("invalid UTF-8 in str argument"),
+                        ),
+                    }
+                }
+            );
+            return Some(ConverterImpl {
+                subs: vec![elem],
+                destination: syn::parse_quote!(*const ::core::ffi::c_char),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+        // `&mut T` (mutable borrow) of an opaque handle.
+        if rf.mutability.is_some() {
+            if !self.opaque.contains_key(&TypeKey::from_type(&elem)) {
+                return None;
+            }
+            let ref_ty: syn::Type = syn::parse_quote!(&mut #elem);
+            let name = Self::in_name(&ref_ty);
+            let c_struct = self.c_type_ident(&elem);
+            let src = self.src_ty(&elem);
+            let short = type_short(&elem);
+            let null_ptr_msg = format!("null {short} pointer");
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name<'a>(
+                    v: *mut #c_struct,
+                ) -> ::core::result::Result<&'a mut #src, ::std::string::String> {
+                    if v.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_ptr_msg),
+                        );
+                    }
+                    ::core::result::Result::Ok(&mut *(v as *mut #src))
+                }
+            );
+            return Some(ConverterImpl {
+                subs: vec![elem],
+                destination: syn::parse_quote!(*mut #c_struct),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+        // `&T` (shared borrow) of an opaque handle or value-opaque type.
+        let key1 = TypeKey::from_type(&elem);
+        let wire_ty: syn::Type = if self.opaque.contains_key(&key1) {
+            let c_struct = self.c_type_ident(&elem);
             syn::parse_quote!(#c_struct)
-        } else if let Some(op) = self.value_opaque_ty(t1) {
+        } else if let Some(op) = self.value_opaque_ty(&elem) {
             op.clone()
         } else {
             return None;
         };
-        let src = self.src_ty(t1);
-        // Name off the concrete inner `t1` (not the `&_` wildcard pattern), so
-        // distinct borrowed-return types don't collide on one converter ident.
-        let name = format_ident!("__cbg_out_ref_{}", sanitize(&TypeKey::from_type(t1)));
-        // Elided input lifetime: the raw-pointer output carries no lifetime, so
-        // this accepts a borrow of any lifetime (a `&'static` coerces in).
+        let name = Self::in_name(ty);
+        let src = self.src_ty(&elem);
+        let short = type_short(&elem);
+        let null_ptr_msg = format!("null {short} pointer");
         let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) unsafe fn #name(v: &#src) -> *const #wire_ty {
-                v as *const #src as *const #wire_ty
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name<'a>(
+                v: *const #wire_ty,
+            ) -> ::core::result::Result<&'a #src, ::std::string::String> {
+                if v.is_null() {
+                    return ::core::result::Result::Err(::std::string::String::from(#null_ptr_msg));
+                }
+                ::core::result::Result::Ok(&*(v as *const #src))
             }
         );
         Some(ConverterImpl {
+            subs: vec![elem],
             destination: syn::parse_quote!(*const #wire_ty),
             function,
             pre_stages: vec![],
@@ -1278,46 +1186,84 @@ impl Prebindgen for Cbindgen {
         })
     }
 
-    fn on_output_type_rank_2(
-        &self,
-        pat: &syn::Type,
-        t1: &syn::Type,
-        _t2: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
-        // `Result<T, E>` return: the resolver needs *some* converter so the
-        // entry resolves and its inner T / E become required. The real lowering
-        // (bool + out-param + error-param) happens in `on_function`; this marker
-        // function is never called.
-        if !is_result(pat) {
+    /// `Option<X>`/`Vec<X>`/`&T`/`Result<T,E>` **output** shapes. The composite
+    /// markers (`Option`/`Vec`/`Result`) carry a `()` destination — the real
+    /// lowering is structural in `emit_function_wrapper` — and exist only to
+    /// resolve the entry and make the inner(s) required.
+    fn out_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        // `Option<T>` / `Vec<T>` marker.
+        if is_option(ty) || is_vec(ty) {
+            let inner = first_type_arg(ty)?;
+            r.output_entry(&inner)?;
+            let kind = if is_option(ty) { "option" } else { "vec" };
+            let name = format_ident!(
+                "__cbg_outmark_{}_{}",
+                kind,
+                sanitize(&TypeKey::from_type(&inner))
+            );
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused)]
+                pub(crate) fn #name() {}
+            );
+            return Some(ConverterImpl {
+                subs: vec![inner],
+                destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+        // `&T` shared borrow of an opaque/value-opaque type → non-owning `*const`.
+        if let syn::Type::Reference(rf) = ty {
+            if rf.mutability.is_none() {
+                let elem = (*rf.elem).clone();
+                let key = TypeKey::from_type(&elem);
+                let wire_ty: syn::Type = if self.opaque.contains_key(&key) {
+                    let c_struct = self.c_type_ident(&elem);
+                    syn::parse_quote!(#c_struct)
+                } else if let Some(op) = self.value_opaque_ty(&elem) {
+                    op.clone()
+                } else {
+                    return None;
+                };
+                let src = self.src_ty(&elem);
+                let name = format_ident!("__cbg_out_ref_{}", sanitize(&TypeKey::from_type(&elem)));
+                let function: syn::ItemFn = syn::parse_quote!(
+                    #[allow(non_snake_case, dead_code, unused)]
+                    pub(crate) unsafe fn #name(v: &#src) -> *const #wire_ty {
+                        v as *const #src as *const #wire_ty
+                    }
+                );
+                return Some(ConverterImpl {
+                    subs: vec![elem],
+                    destination: syn::parse_quote!(*const #wire_ty),
+                    function,
+                    pre_stages: vec![],
+                    niches: Niches::empty(),
+                    metadata: (),
+                });
+            }
             return None;
         }
-        let _ = t1;
-        let name = format_ident!("__cbg_result_{}", sanitize(&TypeKey::from_type(pat)));
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, dead_code, unused)]
-            pub(crate) fn #name() {}
-        );
-        // Marker only — `emit_function_wrapper` does the real lowering via
-        // `lower_value`. Destination is unused (the success type may itself be a
-        // composite like `Option<Vec<_>>` with no single C type).
-        Some(ConverterImpl {
-            destination: syn::parse_quote!(()),
-            function,
-            pre_stages: vec![],
-            niches: Niches::empty(),
-            metadata: (),
-        })
-    }
-
-    fn on_output_type_rank_3(
-        &self,
-        _pat: &syn::Type,
-        _t1: &syn::Type,
-        _t2: &syn::Type,
-        _t3: &syn::Type,
-        _r: &Registry<()>,
-    ) -> Option<ConverterImpl<()>> {
+        // `Result<T, E>` marker — real lowering (bool + out-param + error-param)
+        // is in `on_function`.
+        if is_result(ty) {
+            let (ok, err) = result_parts(ty)?;
+            let name = format_ident!("__cbg_result_{}", sanitize(&TypeKey::from_type(ty)));
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused)]
+                pub(crate) fn #name() {}
+            );
+            return Some(ConverterImpl {
+                subs: vec![ok, err],
+                destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
         None
     }
 }

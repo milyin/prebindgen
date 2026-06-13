@@ -468,7 +468,9 @@ impl JniGen {
                     continue;
                 };
                 for input in &item_fn.sig.inputs {
-                    let syn::FnArg::Typed(pt) = input else { continue };
+                    let syn::FnArg::Typed(pt) = input else {
+                        continue;
+                    };
                     if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
                         let key = cb_args
                             .iter()

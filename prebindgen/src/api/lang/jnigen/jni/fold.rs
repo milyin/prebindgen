@@ -6,7 +6,6 @@
 
 use super::*;
 
-
 /// Peel a leading `&`/`&mut` and an `Option<…>` layer to expose the inner type
 /// used for enum detection. So `&Priority`, `Priority`, and `Option<Priority>`
 /// all probe as `Priority` — letting nullable enum params (`Option<enum>`) wire
@@ -25,7 +24,6 @@ pub(crate) fn enum_probe_type(ty: &syn::Type) -> syn::Type {
         None => stripped,
     }
 }
-
 
 // The bottom-up layer fold is the shared `crate::api::core::shape::fold_shape`
 // (its `on_optional` receives the layer's `&NullableKind` + the wrapped

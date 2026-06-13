@@ -40,18 +40,18 @@ fn entry(wire: syn::Type, conv_name: &str, niches: Niches) -> TypeEntry<KotlinMe
 fn install_input(
     reg: &mut Registry<KotlinMeta>,
     ty_str: &str,
-    rank: usize,
+    _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    reg.input_types[rank].insert(TypeKey::parse(ty_str), Some(e));
+    reg.input_types.insert(TypeKey::parse(ty_str), Some(e));
 }
 fn install_output(
     reg: &mut Registry<KotlinMeta>,
     ty_str: &str,
-    rank: usize,
+    _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    reg.output_types[rank].insert(TypeKey::parse(ty_str), Some(e));
+    reg.output_types.insert(TypeKey::parse(ty_str), Some(e));
 }
 
 /// Single niche, single Option layer — wire stays the inner wire,
@@ -617,7 +617,10 @@ fn callback_snapshot_kotlin_side() {
         all.contains("funinterfaceZOtherCallback{publicfunrun(zOther:ZOther)"),
         "{all}"
     );
-    assert!(all.contains("funinterfaceVoidCallback{publicfunrun()"), "{all}");
+    assert!(
+        all.contains("funinterfaceVoidCallback{publicfunrun()"),
+        "{all}"
+    );
     // Raw twin + proxy adapter for the decomposed-arg callback (raw jlong
     // handle at the wire); the all-passthrough interfaces get no twin.
     assert!(
@@ -887,7 +890,10 @@ fn strip_accessor_prefix_cases() {
     );
     // Irregular snake: type ZKeyExpr but prefix z_keyexpr_ — the
     // normalized (underscore-free) comparison still matches.
-    assert_eq!(strip_accessor_prefix("z_keyexpr_as_str", "ZKeyExpr"), "as_str");
+    assert_eq!(
+        strip_accessor_prefix("z_keyexpr_as_str", "ZKeyExpr"),
+        "as_str"
+    );
     // Double-letter type short: ZZBytes → z_zbytes_.
     assert_eq!(
         strip_accessor_prefix("z_zbytes_to_bytes", "ZZBytes"),
@@ -992,7 +998,10 @@ fn named_error_deconstructor_gets_own_handler() {
         "{all}"
     );
     // Wrappers take their own handler types.
-    assert!(all.contains("funzSimple(onError:ZErrHandler<Long>)"), "{all}");
+    assert!(
+        all.contains("funzSimple(onError:ZErrHandler<Long>)"),
+        "{all}"
+    );
     assert!(
         all.contains("funzDetailed(onError:ZErrFullHandler<Long>)"),
         "{all}"
@@ -1052,7 +1061,10 @@ fn inline_fun_output_gets_own_builder() {
     // Each extern names its own builder interface: the canonical
     // `ZThingBuilder` for z_make_a, the per-fn `ZThingZMakeBBuilder`.
     assert!(rc.contains("io/test/jni/thing/ZThingBuilder"), "{rust}");
-    assert!(rc.contains("io/test/jni/thing/ZThingZMakeBBuilder"), "{rust}");
+    assert!(
+        rc.contains("io/test/jni/thing/ZThingZMakeBBuilder"),
+        "{rust}"
+    );
 
     let kdir = dir.join("kotlin");
     let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
@@ -1141,15 +1153,15 @@ fn error_unwrap_universal_records() {
     // Domain-error arm: the SAME shared leaf encoder — owned identity moves
     // the error into a boxed handle, the nested Option accessor unwraps via
     // a match.
-    assert!(
-        rc.contains("std::boxed::Box::new(__de)"),
-        "{rust}"
-    );
+    assert!(rc.contains("std::boxed::Box::new(__de)"), "{rust}");
     assert!(rc.contains("matchmyflat::z_err_detail(&__de)"), "{rust}");
     // Binding-error defaults: zeroed jlong for the handle (no native
     // construction), empty string, null for the nullable leaf — built lazily
     // in the __ze_defaults closure.
-    assert!(!rc.contains("env.new_object(\"io/test/jni/errors/ZErr\""), "{rust}");
+    assert!(
+        !rc.contains("env.new_object(\"io/test/jni/errors/ZErr\""),
+        "{rust}"
+    );
     assert!(rc.contains("env.new_string(\"\")"), "{rust}");
 
     let kdir = dir.join("kotlin");
@@ -1186,7 +1198,10 @@ fn error_unwrap_universal_records() {
         all.contains("internalclassZErrHandlerRawCapture:ZErrHandlerRaw<Unit>"),
         "{all}"
     );
-    assert!(all.contains("val__cap=ZErrHandlerRawCapture.acquire()"), "{all}");
+    assert!(
+        all.contains("val__cap=ZErrHandlerRawCapture.acquire()"),
+        "{all}"
+    );
     assert!(all.contains("ThreadLocal.withInitial"), "{all}");
     // Wrapper: nullable capture slots, `!!` redispatch for the non-null ze,
     // pass-through for the nullable one — NO `?:` default coalescing.
