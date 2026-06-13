@@ -1,6 +1,10 @@
 use super::*;
 
 impl Cbindgen {
+    fn clear_current(&mut self) {
+        self.current = None;
+    }
+
     /// Create an adapter with no declarations (emits an empty library).
     pub fn new() -> Self {
         Self::default()
@@ -11,7 +15,7 @@ impl Cbindgen {
     /// current declaration, so it can't be followed by `.base_name()`/`.error()`/etc.
     pub fn source_module(mut self, p: syn::Path) -> Self {
         self.source_module = Some(p);
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -22,7 +26,7 @@ impl Cbindgen {
     /// produces such string memory; otherwise that's a build error.
     pub fn free_memory_function(mut self, name: impl Into<String>) -> Self {
         self.free_fn = Some(name.into());
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -36,7 +40,7 @@ impl Cbindgen {
     /// `snake_case` of the Rust short name.
     pub fn mangle_rust_type(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_rust_type = Some(Box::new(f));
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -46,7 +50,7 @@ impl Cbindgen {
     /// [`.base_name()`](Self::base_name). Root-level modifier.
     pub fn mangle_type_name(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_type_name = Some(Box::new(f));
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -54,7 +58,7 @@ impl Cbindgen {
     /// `keyexpr` → `z_keyexpr_drop`). Root-level modifier.
     pub fn mangle_destructor(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_destructor = Some(Box::new(f));
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -64,7 +68,7 @@ impl Cbindgen {
     /// modifier.
     pub fn mangle_take(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_take = Some(Box::new(f));
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -74,7 +78,7 @@ impl Cbindgen {
     /// replaces the args' bases with a single explicit base. Root-level modifier.
     pub fn mangle_callback(mut self, f: impl Fn(&[String]) -> String + 'static) -> Self {
         self.mangle_callback = Some(Box::new(f));
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -84,7 +88,7 @@ impl Cbindgen {
     /// per declaration by [`.base_name()`](Self::base_name). Root-level modifier.
     pub fn mangle_function(mut self, f: impl Fn(&str) -> String + 'static) -> Self {
         self.mangle_function = Some(Box::new(f));
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -111,7 +115,7 @@ impl Cbindgen {
             ident
         );
         self.ignored_functions.insert(ident);
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -234,7 +238,7 @@ impl Cbindgen {
             key
         );
         self.ignored_types.insert(key);
-        self.current = None;
+        self.clear_current();
         self
     }
 
@@ -311,7 +315,7 @@ impl Cbindgen {
         let key = TypeKey::from_type(&error_ty);
         self.error.insert(key.clone());
         self.opaque_errors.insert(key, message_fn);
-        self.current = None;
+        self.clear_current();
         self
     }
 

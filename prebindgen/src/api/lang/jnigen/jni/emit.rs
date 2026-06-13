@@ -10,6 +10,12 @@ use crate::api::core::types_util::result_ok_type;
 // Function-wrapper emission (JNI extern "C")
 // ──────────────────────────────────────────────────────────────────────
 
+struct OutputLowering<'a> {
+    entry: Option<&'a crate::api::core::registry::TypeEntry<KotlinMeta>>,
+    wire_return: TokenStream,
+    on_err: TokenStream,
+}
+
 pub(crate) fn emit_jni_function_wrapper(
     ext: &JniGen,
     f: &syn::ItemFn,
@@ -41,7 +47,7 @@ pub(crate) fn emit_jni_function_wrapper(
     //     exactly like a normal function whose return type is `convert_out_ty`.
     use crate::api::core::unfold::Delivery;
     let unfold_plan = registry.unfold_plans.get(original_ident);
-    let is_convert = unfold_plan.map_or(false, |p| p.delivery == Delivery::Return);
+    let is_convert = unfold_plan.is_some_and(|p| p.delivery == Delivery::Return);
     // Error-position expansion: when the fn returns `Result<T, E>` and an error
     // plan is declared, the **`?`** is applied here — the extern peels the
     // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
@@ -49,31 +55,11 @@ pub(crate) fn emit_jni_function_wrapper(
     // `Result<T, E>` rank-2 wrapper). `n_ze` = the error leaf count (the callback
     // arity after the fixed `je`).
     let error_plan = registry.error_plans.get(original_ident);
-    let ok_ty: Option<syn::Type> = error_plan.and_then(|_| result_ok_type(&return_ty));
     let n_ze = error_plan.map_or(0, |p| p.leaves.len());
-    // The output converter to route through: the converted single value for
-    // `Return`, the `Result` Ok type when peeling, the function's own return for
-    // a normal fn, none for `Callback`.
-    let output_target_ty = output_target_type(&return_ty, unfold_plan, ok_ty.as_ref());
-    let output_entry = output_target_ty.as_ref().map(|ty| {
-        registry.output_entry(ty).unwrap_or_else(|| {
-            panic!(
-                "JniGen::on_function: return type `{}` of `{}` has no registered output \
-                 converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
-                 (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
-                  to bind a domain exception)",
-                TypeKey::from_type(ty),
-                original_ident,
-            )
-        })
-    });
-    let wire_return_ty: syn::Type = match output_entry {
-        Some(e) => e.destination.clone(),
-        None => syn::parse_quote!(jni::objects::JObject),
-    };
-    let wire_return_lt = annotate_jobject_with_lifetime(&wire_return_ty, "a");
-    let wire_return = wire_return_lt.to_token_stream();
-    let on_err: TokenStream = sentinel_for_wire(&wire_return_ty);
+    let output = lower_output(registry, original_ident, &return_ty, unfold_plan, error_plan);
+    let output_entry = output.entry;
+    let wire_return = output.wire_return;
+    let on_err = output.on_err;
 
     // Input parameters: look up converter for the param type AS WRITTEN.
     // No strip — a `&T` param looks up `&T`'s entry (which the `& _`
@@ -189,7 +175,7 @@ pub(crate) fn emit_jni_function_wrapper(
         let mut prev_out: TokenStream = quote!(__out);
         // Pre_stages run in forward order BEFORE the wire-facing function:
         // rust → pre_stages[0] → … → pre_stages[N-1] → function → wire.
-        for (i, stage) in output_entry.pre_stages.iter().enumerate() {
+        for (i, stage) in output_entry.output_stage_order() {
             let stage_fn = &stage.function.sig.ident;
             let next_ident = format_ident!("__out_s{}", i);
             phase.extend(quote! {
@@ -203,7 +189,7 @@ pub(crate) fn emit_jni_function_wrapper(
             });
             prev_out = quote!(#next_ident);
         }
-        let conv_out = output_entry.function.sig.ident.clone();
+        let conv_out = output_entry.converter_ident().clone();
         phase.extend(quote! {
             match #conv_out(&mut env, #prev_out) {
                 ::core::result::Result::Ok(__w) => __w,
@@ -276,6 +262,43 @@ fn fn_return_type(f: &syn::ItemFn) -> syn::Type {
     match &f.sig.output {
         syn::ReturnType::Default => syn::parse_quote!(()),
         syn::ReturnType::Type(_, ty) => (**ty).clone(),
+    }
+}
+
+fn lower_output<'a>(
+    registry: &'a Registry<KotlinMeta>,
+    original_ident: &syn::Ident,
+    return_ty: &syn::Type,
+    unfold_plan: Option<&crate::api::core::unfold::UnfoldPlan>,
+    error_plan: Option<&crate::api::core::unfold::UnfoldPlan>,
+) -> OutputLowering<'a> {
+    let ok_ty = error_plan.and_then(|_| result_ok_type(return_ty));
+    // The output converter to route through: the converted single value for
+    // `Return`, the `Result` Ok type when peeling, the function's own return for
+    // a normal fn, none for `Callback`.
+    let target_ty = output_target_type(return_ty, unfold_plan, ok_ty.as_ref());
+    let entry = target_ty.as_ref().map(|ty| {
+        registry.output_entry(ty).unwrap_or_else(|| {
+            panic!(
+                "JniGen::on_function: return type `{}` of `{}` has no registered output \
+                 converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
+                 (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
+                  to bind a domain exception)",
+                TypeKey::from_type(ty),
+                original_ident,
+            )
+        })
+    });
+    let wire_ty = match entry {
+        Some(e) => e.destination.clone(),
+        None => syn::parse_quote!(jni::objects::JObject),
+    };
+    let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
+    let on_err = sentinel_for_wire(&wire_ty);
+    OutputLowering {
+        entry,
+        wire_return,
+        on_err,
     }
 }
 
@@ -376,7 +399,7 @@ fn emit_input_param(
     }
 
     let wire = &entry.destination;
-    let conv = entry.function.sig.ident.clone();
+    let conv = entry.converter_ident().clone();
     let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
         format_ident!("{}_ptr", arg_ident)
     } else {
@@ -459,7 +482,7 @@ fn emit_input_param(
         // pre_stages[0] is closest to rust → iterated last; walk
         // back from the function-adjacent end.
         let n = entry.pre_stages.len();
-        for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
+        for (idx, stage) in entry.input_stage_order() {
             let stage_fn = &stage.function.sig.ident;
             let is_last = idx == 0;
             let out_ident = if is_last {

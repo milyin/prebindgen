@@ -314,9 +314,11 @@ pub(crate) fn build_typed_handle(
 ///   * `enum_class`                  → jint  → `Int` (call passes `.value`)
 ///   * `Any` (impl-Into Dispatch)     → JObject → `Any`
 ///   * everything else                → entry's high-level Kotlin name
+///
 /// Opaque returns become `Long`; every other return uses
 /// [`classify_return`]'s `kt_return` (Unit is empty string).
 /// Returns `None` if any parameter's input converter isn't resolved.
+///
 /// Expand a function's inputs into the effective parameter list seen by the
 /// Kotlin wrapper + extern declaration: a parameter carrying a
 /// constructor-expansion [`FoldPlan`] is replaced by its flattened leaves
@@ -750,7 +752,7 @@ pub(crate) fn render_wrapper_fn(
     // the callback is passed directly (M1–M4 unchanged).
     use crate::api::core::unfold::Delivery;
     let unfold = registry.unfold_plans.get(&f.sig.ident);
-    let is_convert = unfold.map_or(false, |p| p.delivery == Delivery::Return);
+    let is_convert = unfold.is_some_and(|p| p.delivery == Delivery::Return);
     // `builder_param` is the trailing **lambda** param (build / fold) as a
     // `(name, function-type)` pair. For the `Iterable` shape, the non-lambda
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
@@ -823,7 +825,7 @@ pub(crate) fn render_wrapper_fn(
     };
     // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
     // Detect this so `build_call` can wrap the result with `fromInt`.
-    let is_enum_return = !unfold.is_some() && return_is_kotlin_enum(ext, &f.sig.output, registry);
+    let is_enum_return = unfold.is_none() && return_is_kotlin_enum(ext, &f.sig.output, registry);
 
     // Build the JNINative call. Every param maps to exactly one call arg
     // (or several, for a flattened data_class).

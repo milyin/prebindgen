@@ -104,6 +104,36 @@ pub struct TypeEntry<M = ()> {
     pub metadata: M,
 }
 
+impl<M> TypeEntry<M> {
+    /// Identifier of the wire-facing converter function.
+    pub fn converter_ident(&self) -> &syn::Ident {
+        &self.function.sig.ident
+    }
+
+    /// Wire/destination type carried by this converter on success.
+    pub fn wire_type(&self) -> &syn::Type {
+        &self.destination
+    }
+
+    /// Rust-side stages in input execution order, after the wire-facing
+    /// converter has decoded the wire value.
+    pub fn input_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
+        self.pre_stages.iter().enumerate().rev()
+    }
+
+    /// Rust-side stages in output execution order, before the wire-facing
+    /// converter encodes the final wire value.
+    pub fn output_stage_order(&self) -> impl Iterator<Item = (usize, &Stage<M>)> {
+        self.pre_stages.iter().enumerate()
+    }
+
+    /// Immediate converter dependencies recorded by the adapter when this entry
+    /// resolved.
+    pub fn dependency_keys(&self) -> &[TypeKey] {
+        &self.subs
+    }
+}
+
 /// Direction of a converter pair.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Direction {
@@ -1090,5 +1120,58 @@ mod tests {
             Err(ScanError::ConflictingTypeIntent { key: actual }) if actual == key => (),
             other => panic!("expected ConflictingTypeIntent, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn type_entry_helpers_expose_converter_chain_contract() {
+        let entry = TypeEntry {
+            destination: syn::parse_quote!(jni::sys::jlong),
+            function: syn::parse_quote!(
+                fn __wire(v: Owned) -> jni::sys::jlong { 0 }
+            ),
+            pre_stages: vec![
+                Stage {
+                    function: syn::parse_quote!(
+                        fn __stage_rust(v: Rust) -> Result<Mid, Err> { todo!() }
+                    ),
+                    metadata: (),
+                },
+                Stage {
+                    function: syn::parse_quote!(
+                        fn __stage_wire(v: Mid) -> Result<Owned, Err> { todo!() }
+                    ),
+                    metadata: (),
+                },
+            ],
+            subs: vec![TypeKey::parse("Rust"), TypeKey::parse("Mid")],
+            required: true,
+            niches: Niches::empty(),
+            metadata: (),
+        };
+
+        assert_eq!(entry.converter_ident(), "__wire");
+        assert_eq!(TypeKey::from_type(entry.wire_type()), TypeKey::parse("jni::sys::jlong"));
+        assert_eq!(
+            entry
+                .output_stage_order()
+                .map(|(_, s)| s.function.sig.ident.to_string())
+                .collect::<Vec<_>>(),
+            vec!["__stage_rust", "__stage_wire"]
+        );
+        assert_eq!(
+            entry
+                .input_stage_order()
+                .map(|(_, s)| s.function.sig.ident.to_string())
+                .collect::<Vec<_>>(),
+            vec!["__stage_wire", "__stage_rust"]
+        );
+        assert_eq!(
+            entry
+                .dependency_keys()
+                .iter()
+                .map(TypeKey::as_str)
+                .collect::<Vec<_>>(),
+            vec!["Rust", "Mid"]
+        );
     }
 }

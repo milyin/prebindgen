@@ -178,9 +178,7 @@ impl JniGen {
     /// Passing an empty string clears the active subpackage (classes /
     /// functions revert to the base `<package>`).
     pub fn package(mut self, subpackage: impl Into<String>) -> Self {
-        self.last_opaque_key = None;
-        self.last_meta_key = None;
-        self.last_entry_ref = None;
+        self.clear_all_cursors();
         let sub = subpackage
             .into()
             .trim_matches('.')
@@ -210,6 +208,32 @@ impl JniGen {
         } else {
             format!("Java_{}_{}", self.package.replace(".", "_"), native_class)
         };
+    }
+
+    fn clear_type_cursor(&mut self) {
+        self.last_opaque_key = None;
+        self.last_meta_key = None;
+    }
+
+    fn clear_entry_cursor(&mut self) {
+        self.last_entry_ref = None;
+    }
+
+    fn clear_all_cursors(&mut self) {
+        self.clear_type_cursor();
+        self.clear_entry_cursor();
+    }
+
+    fn set_opaque_cursor(&mut self, key: TypeKey) {
+        self.last_opaque_key = Some(key.clone());
+        self.last_meta_key = Some(key);
+        self.clear_entry_cursor();
+    }
+
+    fn set_meta_cursor(&mut self, key: TypeKey) {
+        self.last_opaque_key = None;
+        self.last_meta_key = Some(key);
+        self.clear_entry_cursor();
     }
 
     /// Apply [`Self::kotlin_fun_name_mangle`] to `name`, returning the
@@ -325,9 +349,7 @@ impl JniGen {
         // handler, so wire-level mentions don't collide with the FQN.
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.last_opaque_key = Some(key.clone());
-        self.last_meta_key = Some(key);
-        self.last_entry_ref = None;
+        self.set_opaque_cursor(key);
         self
     }
 
@@ -359,8 +381,7 @@ impl JniGen {
             .clone()
             .expect("JniGen::fun must be chained inside a `package(...)` context");
         // Leak any class context back to package level.
-        self.last_meta_key = None;
-        self.last_opaque_key = None;
+        self.clear_type_cursor();
         let pkg = self.packages.entry(sub.clone()).or_default();
         let idx = pkg.functions.len();
         pkg.functions.push(entry);
@@ -585,12 +606,7 @@ impl JniGen {
         entry.enum_cfg = Some(EnumConfig::default());
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        // Clear opaque tracker so a stray `.method(...)` doesn't latch onto
-        // this entry; `last_meta_key` is what `.suppress_kotlin_code` reads
-        // for chained config.
-        self.last_opaque_key = None;
-        self.last_meta_key = Some(key);
-        self.last_entry_ref = None;
+        self.set_meta_cursor(key);
         self
     }
 
@@ -629,9 +645,7 @@ impl JniGen {
         let entry = self.types.entry(key.clone()).or_default();
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.last_opaque_key = None;
-        self.last_meta_key = Some(key);
-        self.last_entry_ref = None;
+        self.set_meta_cursor(key);
         self
     }
 
@@ -663,9 +677,7 @@ impl JniGen {
         entry.value_blob = true;
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.last_opaque_key = None;
-        self.last_meta_key = Some(key);
-        self.last_entry_ref = None;
+        self.set_meta_cursor(key);
         self
     }
 
@@ -727,8 +739,6 @@ impl JniGen {
     /// wildcards — per-outer-type names come from inner-metadata
     /// propagation via [`Self::override_kotlin_name`].
     fn note_wrapper_registration(&mut self, key: TypeKey, rank: usize) {
-        self.last_opaque_key = None;
-        self.last_entry_ref = None;
         if rank == 0 {
             let entry = self.types.entry(key.clone()).or_default();
             // Skip any entry whose kotlin_name has already been stamped
@@ -745,9 +755,9 @@ impl JniGen {
                     self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
                 }
             }
-            self.last_meta_key = Some(key);
+            self.set_meta_cursor(key);
         } else {
-            self.last_meta_key = None;
+            self.clear_all_cursors();
         }
     }
 

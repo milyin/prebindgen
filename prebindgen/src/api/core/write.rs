@@ -20,13 +20,18 @@ use crate::api::core::registry::{Registry, TypeEntry, TypeKey};
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
     /// as `syn::Item`s. Indicates a codegen bug in the adapter.
-    BadTokens(syn::Error),
+    BadTokens {
+        phase: &'static str,
+        source: syn::Error,
+    },
 }
 
 impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WriteError::BadTokens(e) => write!(f, "generated tokens did not parse: {}", e),
+            WriteError::BadTokens { phase, source } => {
+                write!(f, "generated tokens from {} did not parse: {}", phase, source)
+            }
         }
     }
 }
@@ -60,18 +65,21 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     let declared_fns = ext.declared_functions();
     let declared_types = ext.declared_types();
     items.extend(parse_items_from_tokens(
+        "on_function",
         sorted_items_by_ident(&registry.functions)
             .into_iter()
             .filter(|(ident, _)| declared_fns.contains(*ident))
             .map(|(_, (item, _))| ext.on_function(item, registry)),
     )?);
     items.extend(parse_items_from_tokens(
+        "on_struct",
         sorted_items_by_ident(&registry.structs)
             .into_iter()
             .filter(|(ident, _)| declared_types.contains(&TypeKey::parse(&ident.to_string())))
             .map(|(_, (item, _))| ext.on_struct(item, registry)),
     )?);
     items.extend(parse_items_from_tokens(
+        "on_enum",
         sorted_items_by_ident(&registry.enums)
             .into_iter()
             .filter(|(ident, _)| declared_types.contains(&TypeKey::parse(&ident.to_string())))
@@ -80,6 +88,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // Consts: always emit verbatim — declaration mechanism for consts
     // is future work (see plan).
     items.extend(parse_items_from_tokens(
+        "on_const",
         sorted_items_by_ident(&registry.consts)
             .into_iter()
             .map(|(_, (item, _))| ext.on_const(item, registry)),
@@ -145,6 +154,7 @@ fn sorted_items_by_ident<T>(map: &HashMap<syn::Ident, T>) -> Vec<(&syn::Ident, &
 /// Parse a per-item `TokenStream` (which may be empty) as a sequence of
 /// `syn::Item`s. Empty token streams yield zero items.
 fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
+    phase: &'static str,
     iter: I,
 ) -> Result<Vec<syn::Item>, WriteError> {
     let mut out = Vec::new();
@@ -152,7 +162,8 @@ fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
         if ts.is_empty() {
             continue;
         }
-        let file: syn::File = syn::parse2(ts.clone()).map_err(WriteError::BadTokens)?;
+        let file: syn::File = syn::parse2(ts.clone())
+            .map_err(|source| WriteError::BadTokens { phase, source })?;
         out.extend(file.items);
     }
     Ok(out)
@@ -371,5 +382,16 @@ mod tests {
                 < content.find("pub struct BStruct").unwrap()
         );
         assert!(content.find("fn a_fn").unwrap() < content.find("fn b_fn").unwrap());
+    }
+
+    #[test]
+    fn bad_generated_tokens_report_emission_phase() {
+        let err = parse_items_from_tokens("on_function", [quote::quote!(fn broken)])
+            .expect_err("invalid item tokens should fail");
+        assert!(
+            err.to_string().contains("on_function"),
+            "error should mention the adapter emission phase: {}",
+            err
+        );
     }
 }
