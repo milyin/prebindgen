@@ -265,6 +265,14 @@ pub struct FoldPlan {
     /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
     /// constructor (the sole variant is applied unconditionally).
     pub selector: Option<usize>,
+    /// Index into [`Self::leaves`] of the explicit presence-flag (`bool`) leaf
+    /// for a **multi-argument** `Optional` shape (`Option<T>` built from a
+    /// constructor taking ≥2 args): the flag decides `Some`/`None`, the arg
+    /// leaves are plain (non-`Option`). `None` for a non-optional fold or the
+    /// legacy single-arg `Optional` (where presence rides the sole leaf's own
+    /// `Option`-ness). A separate flag avoids boxing a nullable primitive arg
+    /// (e.g. `Option<i32>` → `Integer?`) on the wire.
+    pub present: Option<usize>,
     /// Dispatch arms — one for a single constructor, selector order for a
     /// combined one.
     pub variants: Vec<FoldVariant>,
@@ -706,9 +714,12 @@ fn build_plan<M>(
     let param = &ed.param;
     let mut leaves: Vec<FoldLeaf> = Vec::new();
 
-    // Optional (`Option<T>`/`Option<&T>`) param: only well-defined for a single,
-    // single-argument constructor — one nullable leaf decides presence. No
-    // recursion under `Optional`.
+    // Optional (`Option<T>`/`Option<&T>`) param: a single (never
+    // selector-dispatched) constructor. No recursion under `Optional`.
+    //  * single-arg ctor → one nullable leaf (`Option<arg>`) decides presence.
+    //  * multi-arg ctor  → an explicit leading `present: bool` flag + one plain
+    //    (non-`Option`) leaf per arg. The flag keeps nullable primitive args
+    //    (e.g. an `Option<i32>` id) from boxing on the wire.
     if optional {
         let [Variant::Ctor(func)] = variants else {
             return Err(ExpandError::UnsupportedOptional {
@@ -719,29 +730,60 @@ fn build_plan<M>(
         };
         let sig = ctor_signature(registry, func)?;
         check_target(func, &sig.target, target)?;
-        if sig.params.len() != 1 {
-            return Err(ExpandError::UnsupportedOptional {
-                func: ed.func.clone(),
-                param: ed.param.clone(),
-                reason: "constructor must take exactly one argument",
+        if sig.params.len() == 1 {
+            let (_pn, pty) = &sig.params[0];
+            leaves.push(FoldLeaf {
+                name: param.clone(),
+                ty: opt(pty),
+            });
+            return Ok(FoldPlan {
+                target: target.clone(),
+                by_ref,
+                shape: FoldShape::Optional(Box::new(FoldShape::Construct)),
+                leaves,
+                selector: None,
+                present: None,
+                variants: vec![FoldVariant {
+                    ctor: Some(func.clone()),
+                    fallible: sig.fallible,
+                    clone: false,
+                    inputs: vec![FoldArg::Leaf(0)],
+                }],
             });
         }
-        let (_pn, pty) = &sig.params[0];
+        // Multi-arg: presence flag (leaf 0) + one flat leaf per ctor arg.
         leaves.push(FoldLeaf {
-            name: param.clone(),
-            ty: opt(pty),
+            name: ident(&format!("{}_present", param)),
+            ty: syn::parse_quote!(bool),
         });
+        let prefix = param.to_string();
+        let mut inputs = Vec::new();
+        for (pname, pty) in &sig.params {
+            let name = ident(&format!("{}_{}", prefix, pname));
+            let arg = build_arg(
+                exp, registry, ed, pty, name, /*dispatched=*/ false, &mut leaves, visited,
+            )?;
+            if matches!(arg, FoldArg::Build(_)) {
+                return Err(ExpandError::UnsupportedOptional {
+                    func: ed.func.clone(),
+                    param: ed.param.clone(),
+                    reason: "nested-buildable constructor arguments cannot be optional",
+                });
+            }
+            inputs.push(arg);
+        }
         return Ok(FoldPlan {
             target: target.clone(),
             by_ref,
             shape: FoldShape::Optional(Box::new(FoldShape::Construct)),
             leaves,
             selector: None,
+            present: Some(0),
             variants: vec![FoldVariant {
                 ctor: Some(func.clone()),
                 fallible: sig.fallible,
                 clone: false,
-                inputs: vec![FoldArg::Leaf(0)],
+                inputs,
             }],
         });
     }
@@ -768,6 +810,7 @@ fn build_plan<M>(
         shape: FoldShape::Construct,
         leaves,
         selector,
+        present: None,
         variants: fold_variants,
     })
 }
@@ -1000,19 +1043,33 @@ fn fold_shape(
     match shape {
         FoldShape::Construct => emit_core_construct(plan, leaf_locals, bound, qualify),
         FoldShape::Optional(inner) => {
-            // The structured value is the enclosing bound var, or — at the top —
-            // the single shaped leaf's decoded local (`leaf_locals[0]`).
-            let value = bound.unwrap_or(&leaf_locals[0]);
-            let inner_ident = ident("__inner");
-            let inner_expr = fold_shape(inner, plan, leaf_locals, Some(&inner_ident), qualify);
-            syn::parse_quote!(match #value {
-                ::core::option::Option::Some(#inner_ident) => {
+            if let Some(pidx) = plan.present {
+                // Multi-arg: an explicit `present: bool` flag decides presence;
+                // the construct reads its plain arg leaves directly (`bound =
+                // None`), the flag leaf is consumed only by this `if`.
+                let present_local = &leaf_locals[pidx];
+                let inner_expr = emit_core_construct(plan, leaf_locals, None, qualify);
+                syn::parse_quote!(if #present_local {
                     (#inner_expr).map(::core::option::Option::Some)
-                }
-                ::core::option::Option::None => {
+                } else {
                     ::core::result::Result::Ok(::core::option::Option::None)
-                }
-            })
+                })
+            } else {
+                // Single-arg: presence rides the sole shaped leaf's `Option`.
+                // The structured value is the enclosing bound var, or — at the
+                // top — that leaf's decoded local (`leaf_locals[0]`).
+                let value = bound.unwrap_or(&leaf_locals[0]);
+                let inner_ident = ident("__inner");
+                let inner_expr = fold_shape(inner, plan, leaf_locals, Some(&inner_ident), qualify);
+                syn::parse_quote!(match #value {
+                    ::core::option::Option::Some(#inner_ident) => {
+                        (#inner_expr).map(::core::option::Option::Some)
+                    }
+                    ::core::option::Option::None => {
+                        ::core::result::Result::Ok(::core::option::Option::None)
+                    }
+                })
+            }
         }
         FoldShape::Iterable(inner) => {
             let value = bound.unwrap_or(&leaf_locals[0]);
@@ -1525,6 +1582,59 @@ mod tests {
     }
 
     #[test]
+    fn optional_byref_multi_arg_ctor() {
+        // `encoding: Option<&ZEncoding>` built from a TWO-arg, infallible
+        // `z_encoding_from_id(i32, Option<String>) -> ZEncoding`: an explicit
+        // `present: bool` flag + two plain (non-`Option`-wrapped) arg leaves.
+        let mut reg = reg_with(&[
+            "fn z_encoding_from_id(id: i32, schema: Option<String>) -> ZEncoding { todo!() }",
+            "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
+        ]);
+        let mut exp = Expansions::default();
+        exp.add_constructor(syn::parse_quote!(ZEncoding));
+        exp.add_constructor_variant(ident("z_encoding_from_id"));
+        exp.add_construct(ident("z_session_put"), ident("encoding"));
+
+        apply(&mut reg, &exp, &Default::default(), &Default::default())
+            .expect("apply optional multi-arg by-ref");
+        let plan = reg
+            .expansion_plans
+            .get(&(ident("z_session_put"), ident("encoding")))
+            .unwrap();
+        assert!(matches!(plan.shape, FoldShape::Optional(_)));
+        assert!(plan.produces_option());
+        assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
+        assert_eq!(plan.present, Some(0), "explicit presence flag at leaf 0");
+        // leaf 0 = present:bool, leaf 1 = id:i32, leaf 2 = schema:Option<String>
+        assert_eq!(plan.leaves.len(), 3);
+        assert_eq!(plan.leaves[0].name.to_string(), "encoding_present");
+        assert_eq!(plan.leaves[0].ty.to_token_stream().to_string(), "bool");
+        assert_eq!(plan.leaves[1].name.to_string(), "encoding_id");
+        assert_eq!(plan.leaves[1].ty.to_token_stream().to_string(), "i32");
+        assert_eq!(plan.leaves[2].name.to_string(), "encoding_schema");
+        assert_eq!(
+            plan.leaves[2].ty.to_token_stream().to_string(),
+            "Option < String >"
+        );
+
+        let locals = vec![ident("pres"), ident("id"), ident("schema")];
+        let s = emit_fold(plan, &locals, &src_qualify)
+            .to_token_stream()
+            .to_string();
+        assert!(s.contains("if pres"), "presence-flag gated: {}", s);
+        assert!(
+            s.contains("z_encoding_from_id"),
+            "fold calls multi-arg ctor: {}",
+            s
+        );
+        assert!(
+            s.contains("Some") && s.contains("None"),
+            "maps Option: {}",
+            s
+        );
+    }
+
+    #[test]
     fn optional_combined_rejected() {
         let mut reg = reg_with(&[
             "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
@@ -1557,6 +1667,7 @@ mod tests {
                 ty: syn::parse_quote!(Vec<String>),
             }],
             selector: None,
+            present: None,
             variants: vec![FoldVariant {
                 ctor: Some(ident("z_keyexpr_try_from")),
                 fallible: true,
