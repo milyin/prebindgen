@@ -29,8 +29,8 @@ use std::collections::HashSet;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
-use crate::api::core::types_util::option_inner_type;
 use crate::api::core::registry::{Registry, TypeKey};
+use crate::api::core::types_util::option_inner_type;
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -753,7 +753,14 @@ fn build_plan<M>(
         for (pname, pty) in &sig.params {
             let name = ident(&format!("{}_{}", prefix, pname));
             let arg = build_arg(
-                exp, registry, ed, pty, name, /*dispatched=*/ false, &mut leaves, visited,
+                exp,
+                registry,
+                ed,
+                pty,
+                name,
+                /*dispatched=*/ false,
+                &mut leaves,
+                visited,
             )?;
             if matches!(arg, FoldArg::Build(_)) {
                 return Err(ExpandError::UnsupportedOptional {
@@ -1313,7 +1320,6 @@ fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Typ
     }
     None
 }
-
 
 /// If `ty` is `Result<Ok, Err>` (by last path segment), return `Ok`.
 fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {

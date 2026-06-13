@@ -26,9 +26,8 @@
 
 use std::collections::HashSet;
 
-
-use crate::api::core::types_util::{option_inner_type, short_type_name, vec_inner_type};
 use crate::api::core::registry::{Registry, TypeKey};
+use crate::api::core::types_util::{option_inner_type, short_type_name, vec_inner_type};
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -911,8 +910,7 @@ fn process_decl<M>(
                 let records = d.records.clone();
                 let decon = decl_id(&ekey, d);
                 register_decon_spec(registry, acc, &ed.func, &decon, &records, &element)?;
-                let plan =
-                    build_plan(acc, registry, ed, by_ref, &element, shape, &records, decon)?;
+                let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty, &loc);
                 }
@@ -1022,7 +1020,16 @@ fn register_decon_spec<M>(
     let mut visited: HashSet<TypeKey> = HashSet::new();
     visited.insert(TypeKey::from_type(source));
     flatten(
-        acc, registry, top_func, records, source, &[], &[], true, false, &mut visited,
+        acc,
+        registry,
+        top_func,
+        records,
+        source,
+        &[],
+        &[],
+        true,
+        false,
+        &mut visited,
         &mut leaves,
     )?;
     registry.decon_plans.insert(
@@ -1185,10 +1192,7 @@ fn flatten<M>(
     // to the inherited prefix.
     let seg_name = |func: &syn::Ident| -> Vec<String> {
         let mut v = name_prefix.to_vec();
-        v.push(strip_accessor_prefix(
-            &func.to_string(),
-            &receiver_short,
-        ));
+        v.push(strip_accessor_prefix(&func.to_string(), &receiver_short));
         v
     };
     // Identity uniqueness is per accessor (one move/clone of the value

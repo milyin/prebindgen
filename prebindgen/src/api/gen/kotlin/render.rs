@@ -419,7 +419,12 @@ fn render_fun(f: &KtFun, level: usize, imports: &mut ImportSet, out: &mut String
     }
 }
 
-fn render_fun_interface(i: &KtFunInterface, level: usize, imports: &mut ImportSet, out: &mut String) {
+fn render_fun_interface(
+    i: &KtFunInterface,
+    level: usize,
+    imports: &mut ImportSet,
+    out: &mut String,
+) {
     if let Some(doc) = &i.kdoc {
         render_kdoc(doc, level, out);
     }
