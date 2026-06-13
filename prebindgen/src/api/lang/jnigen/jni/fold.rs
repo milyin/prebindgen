@@ -27,44 +27,23 @@ pub(crate) fn enum_probe_type(ty: &syn::Type) -> syn::Type {
 }
 
 
-/// Bottom-up fold over the [`FoldStrategy`] layer stack: compute a leaf value,
-/// then apply `on_nullable` / `on_iterable` for each wrapping layer from the
-/// inside out. `on_nullable` additionally receives the layer's [`NullableKind`]
-/// and the strategy it wraps, so callers can special-case e.g. a `Niche` layer
-/// sitting directly over a `Direct` leaf.
-///
-/// Shared skeleton for the **type-name** folds ([`handle_kt_type`],
-/// [`projection_wire_return`]). The **expression** folds
-/// ([`render_handle_close`], [`fold_projection_wrap`]) are deliberately *not*
-/// expressed through this: they fold the other direction (threading a
-/// `receiver` / fresh lambda variable top-down rather than combining a
-/// bottom-up result), so a shared combinator would obscure rather than
-/// simplify them.
-pub(crate) fn fold_strategy<T>(
-    s: &FoldStrategy,
-    on_leaf: &dyn Fn() -> T,
-    on_nullable: &dyn Fn(T, &NullableKind, &FoldStrategy) -> T,
-    on_iterable: &dyn Fn(T) -> T,
-) -> T {
-    match s {
-        FoldStrategy::Direct => on_leaf(),
-        FoldStrategy::Nullable { kind, inner } => {
-            let inner_val = fold_strategy(inner, on_leaf, on_nullable, on_iterable);
-            on_nullable(inner_val, kind, inner)
-        }
-        FoldStrategy::Iterable(inner) => {
-            let inner_val = fold_strategy(inner, on_leaf, on_nullable, on_iterable);
-            on_iterable(inner_val)
-        }
-    }
-}
+// The bottom-up layer fold is the shared `crate::api::core::shape::fold_shape`
+// (its `on_optional` receives the layer's `&NullableKind` + the wrapped
+// `&FoldStrategy`, so callers can special-case e.g. a `Niche` layer sitting
+// directly over the `Base` leaf). Used by the **type-name** folds
+// (`handle_kt_type` / `projection_wire_return`). The **expression** folds
+// (`render_handle_close` / `fold_projection_wrap`) are deliberately *not*
+// expressed through it: they fold the other direction (threading a `receiver` /
+// fresh lambda variable top-down rather than combining a bottom-up result), so
+// a shared combinator would obscure rather than simplify them.
+use crate::api::core::shape::fold_shape;
 
 /// The Kotlin type for a closeable handle reached through the folded
 /// [`FoldStrategy`] layers, given the leaf typed-handle type (e.g.
 /// `ZKeyExpr`): `Direct → ZKeyExpr`, `Nullable(inner) → <inner>?`,
 /// `Iterable(inner) → List<<inner>>`.
 pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::KtType {
-    fold_strategy(
+    fold_shape(
         strategy,
         &|| leaf.clone(),
         // The declared Kotlin projection type is `T?` regardless of how null
@@ -91,16 +70,16 @@ pub(crate) fn factory_projection_wire_wrap(
     short: &str,
     name: &str,
 ) -> (kt::KtType, String) {
-    use crate::api::lang::jnigen::jni::FoldStrategy::*;
+    use crate::api::core::shape::Shape::*;
     use crate::api::lang::jnigen::jni::ProjectionKind::*;
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
         Handle => (kt::KtType::long(), format!("{short}({name})")),
         ValueBlob => (kt::KtType::byte_array(), format!("{short}({name})")),
     };
     match strategy {
-        Direct => direct(kind),
-        Nullable { inner, .. } => {
-            if !matches!(**inner, Direct) {
+        Base => direct(kind),
+        Optional(_, inner) => {
+            if !matches!(**inner, Base) {
                 panic!(
                     "factory_projection_wire_wrap: only `Nullable<Direct>` projection struct \
                      fields are supported (field `{name}`)"
@@ -296,19 +275,19 @@ pub(crate) fn render_handle_close(
     strategy: &crate::api::lang::jnigen::jni::FoldStrategy,
     receiver: &str,
 ) -> String {
-    use crate::api::lang::jnigen::jni::FoldStrategy::*;
+    use crate::api::core::shape::Shape::*;
     fn go(
         strategy: &crate::api::lang::jnigen::jni::FoldStrategy,
         receiver: &str,
         depth: usize,
     ) -> String {
         match strategy {
-            Direct => format!("{receiver}.close()"),
+            Base => format!("{receiver}.close()"),
             // The Kotlin-side receiver is already nullable (`handle_kt_type`
             // emits `T?` for both niche and boxed kinds), so `?.close()` covers
             // both wire representations.
-            Nullable { inner, .. } => match &**inner {
-                Direct => format!("{receiver}?.close()"),
+            Optional(_, inner) => match &**inner {
+                Base => format!("{receiver}?.close()"),
                 _ => {
                     let v = format!("e{depth}");
                     format!("{receiver}?.let {{ {v} -> {} }}", go(inner, &v, depth + 1))
@@ -346,7 +325,8 @@ pub(crate) fn fold_projection_wrap(
     wrap_class: &str,
     niche_sentinel: Option<&str>,
 ) -> String {
-    use crate::api::lang::jnigen::jni::{FoldStrategy::*, NullableKind};
+    use crate::api::core::shape::Shape::*;
+    use crate::api::lang::jnigen::jni::NullableKind;
     fn go(
         s: &crate::api::lang::jnigen::jni::FoldStrategy,
         r: &str,
@@ -355,17 +335,17 @@ pub(crate) fn fold_projection_wrap(
         depth: usize,
     ) -> String {
         match s {
-            Direct => format!("{w}({r})"),
-            Nullable { kind, inner } => match (kind, &**inner) {
+            Base => format!("{w}({r})"),
+            Optional(kind, inner) => match (kind, &**inner) {
                 // Primitive-wired niche → can't carry null on the wire, so
                 // compare against the sentinel and synthesize null on the
                 // Kotlin side.
-                (NullableKind::Niche, Direct) if sentinel.is_some() => {
+                (NullableKind::Niche, Base) if sentinel.is_some() => {
                     let s = sentinel.unwrap();
                     format!("{r}.let {{ if (it == {s}) null else {w}(it) }}")
                 }
                 // Object-wired niche or fully boxed Nullable → `?.let { W(it) }`.
-                (_, Direct) => format!("{r}?.let {{ {w}(it) }}"),
+                (_, Base) => format!("{r}?.let {{ {w}(it) }}"),
                 // Deeper nesting. The niche/boxed distinction is only
                 // observable at the outermost layer covering a `Direct`
                 // leaf; intermediate layers (nullable-of-iterable etc.)
@@ -380,7 +360,7 @@ pub(crate) fn fold_projection_wrap(
                 }
             },
             Iterable(inner) => match &**inner {
-                Direct => format!("{r}.map {{ {w}(it) }}"),
+                Base => format!("{r}.map {{ {w}(it) }}"),
                 _ => {
                     let v = format!("e{depth}");
                     format!(
@@ -408,7 +388,7 @@ pub(crate) fn projection_wire_return(proj: &crate::api::lang::jnigen::jni::Proje
         // Value-blob's inner wire is always `ByteArray` (object-shaped).
         ProjectionKind::ValueBlob => ("ByteArray".to_string(), false),
     };
-    fold_strategy(
+    fold_shape(
         &proj.strategy,
         &|| inner_wire_name.clone(),
         &|inner_str, kind, inner_strategy| {
@@ -416,7 +396,7 @@ pub(crate) fn projection_wire_return(proj: &crate::api::lang::jnigen::jni::Proje
             // the sentinel value is the null representation. Object-wired niches
             // and full-boxed Nullables both add `?` (JVM null on the reference).
             match (kind, inner_strategy) {
-                (NullableKind::Niche, FoldStrategy::Direct) if inner_is_primitive => inner_str,
+                (NullableKind::Niche, FoldStrategy::Base) if inner_is_primitive => inner_str,
                 _ => format!("{inner_str}?"),
             }
         },

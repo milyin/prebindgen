@@ -213,14 +213,14 @@ impl JniGen {
 
     /// Leaf metadata for an opaque handle: value-context name `"Long"`
     /// plus the [`Projection`] that folds outward through wrappers (owned,
-    /// [`FoldStrategy::Direct`]). The single seam where a Rust type is
+    /// [`FoldStrategy::Base`]). The single seam where a Rust type is
     /// first marked a closeable native handle.
     fn opaque_leaf_meta(&self, ty: &syn::Type) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
                 leaf_key: TypeKey::from_type(ty).as_str().to_string(),
                 owned: true,
-                strategy: FoldStrategy::Direct,
+                strategy: FoldStrategy::Base,
                 kind: ProjectionKind::Handle,
             }),
             ..self.framework_meta(Some(kt::KtType::cls("Long")))
@@ -464,6 +464,266 @@ pub(crate) fn build_handle_destructor_items(
     named.into_iter().map(|(_, item)| item).collect()
 }
 
+/// Per-pattern rank-1 **input** converter builders. Each returns
+/// `Some(ConverterImpl)` only for the wildcard pattern it claims;
+/// [`JniGen::on_input_type_rank_1`] chains them in priority order. Because
+/// [`pat_match`] is an exact match, the patterns are disjoint — except the two
+/// `Option<_>` sub-cases (direct-handle-by-value vs general), which share a
+/// pattern and so live together in [`JniGen::input_option`] to keep their
+/// original fall-through.
+impl JniGen {
+    /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
+    /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
+    /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
+    /// wildcard-substitution machinery marks T required transitively from `&T`.
+    fn input_borrow(
+        &self,
+        pat: &syn::Type,
+        t1: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        if !(pat_match(pat, "& _") || pat_match(pat, "& mut _")) {
+            return None;
+        }
+        let inner = registry.input_entry(t1)?;
+        let outer_ty: syn::Type = if pat_match(pat, "& mut _") {
+            syn::parse_quote!(&mut #t1)
+        } else {
+            syn::parse_quote!(&#t1)
+        };
+        // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
+        // type's name, unless the user pinned an explicit override
+        // on the outer form itself (rare but legal).
+        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+        // The outer form shares T's converter function verbatim, so it
+        // inherits T's throws behaviour. A borrowed handle (mut or not) is
+        // still opaque (param classification needs to see it), but the holder
+        // doesn't own it — mark `owned: false` so `close()` emission skips it.
+        let projection = inner
+            .metadata
+            .projection
+            .clone()
+            .map(|h| Projection { owned: false, ..h });
+        Some(ConverterImpl {
+            destination: inner.destination.clone(),
+            function: inner.function.clone(),
+            pre_stages: vec![],
+            niches: inner.niches.clone(),
+            metadata: KotlinMeta {
+                kotlin_name,
+                value_rust_key: None,
+                projection,
+            },
+        })
+    }
+
+    /// `Option<&T>` / `Option<&mut T>` for opaque T: returns
+    /// `Option<OwnedObject<T>>` (the call site `.as_deref()` coerces back).
+    /// `None` for non-opaque inners — the resolver then offers `Option<_>`
+    /// over `&T` and the general handler takes it.
+    fn input_option_ref(
+        &self,
+        pat: &syn::Type,
+        t1: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        if !(pat_match(pat, "Option < & _ >") || pat_match(pat, "Option < & mut _ >")) {
+            return None;
+        }
+        let inner = registry.input_entry(t1)?;
+        if !inner.metadata.is_direct_handle() {
+            // Non-opaque: let the general `Option<_>` handler take it.
+            return None;
+        }
+        let is_mut = pat_match(pat, "Option < & mut _ >");
+        let inner_wire = inner.destination.clone();
+        let inner_conv = inner.function.sig.ident.clone();
+        let outer_ty: syn::Type = if is_mut {
+            syn::parse_quote!(Option<&mut #t1>)
+        } else {
+            syn::parse_quote!(Option<&#t1>)
+        };
+        let name = input_name(&outer_ty, &inner_wire);
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+            pub(crate) unsafe fn #name<'env, 'v>(
+                env: &mut jni::JNIEnv<'env>,
+                v: &#inner_wire,
+            ) -> ::core::result::Result<Option<OwnedObject<#t1>>, __JniErr> {
+                Ok({
+                    if *v == 0 { None } else { Some(#inner_conv(env, v)?) }
+                })
+            }
+        );
+        let kotlin_name = self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+        let projection = inner.metadata.projection.clone().map(|h| Projection {
+            owned: false,
+            // `Option<&Handle>` always rides the inner's `*v == 0` niche
+            // (body is `if *v == 0 { None } else { ... }` above), so
+            // null is the `0i64` sentinel — never JVM boxed.
+            strategy: FoldStrategy::Optional(NullableKind::Niche, Box::new(h.strategy)),
+            ..h
+        });
+        Some(ConverterImpl {
+            pre_stages: vec![],
+            function,
+            destination: inner_wire,
+            niches: Niches::empty(),
+            metadata: KotlinMeta {
+                kotlin_name,
+                value_rust_key: None,
+                projection,
+            },
+        })
+    }
+
+    /// `Vec<T>` (input side): wire is `JObject` carrying a Java
+    /// `List<InnerWire>`; iterate, decode each element via the inner converter,
+    /// collect into a `Vec`. (`Vec<u8>` is special-cased at rank-0.)
+    fn input_vec(
+        &self,
+        pat: &syn::Type,
+        t1: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        if !pat_match(pat, "Vec < _ >") {
+            return None;
+        }
+        let inner = registry.input_entry(t1)?;
+        reject_vec_of_handle(&inner.metadata.projection, t1);
+        let inner_wire = inner.destination.clone();
+        if !is_jobject_shaped_wire(&inner_wire) {
+            return None;
+        }
+        let inner_conv = inner.function.sig.ident.clone();
+        let outer_ty: syn::Type = syn::parse_quote!(Vec<#t1>);
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let body: syn::Expr = syn::parse_quote!({
+            let __list = jni::objects::JList::from_env(env, v)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+            let mut __it = __list.iter(env)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-iter: {}", e)))?;
+            let mut __out: Vec<#t1> = Vec::new();
+            while let Some(__obj) = __it.next(env)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-next: {}", e)))?
+            {
+                let __elem_wire: #inner_wire = __obj.into();
+                let __elem: #t1 = #inner_conv(env, &__elem_wire)?;
+                __out.push(__elem);
+            }
+            __out
+        });
+        let inner_kotlin = inner.metadata.kotlin_name.clone()?;
+        let kotlin_name = self.override_kotlin_name(
+            &outer_ty,
+            // `List` is auto-imported in Kotlin (default imports).
+            Some(kt::KtType::generic("List", [inner_kotlin])),
+        );
+        Some(ConverterImpl {
+            pre_stages: vec![],
+            function: self.build_input_fn(&outer_ty, &wire, &body, None),
+            destination: wire,
+            niches: Niches::empty(),
+            metadata: KotlinMeta {
+                kotlin_name,
+                value_rust_key: None,
+                projection: None,
+            },
+        })
+    }
+
+    /// `Option<T>`: first the direct-opaque-handle by-value consume (wire
+    /// `jlong`, `0` = `None`, `Box` reconstructed and `T` moved out), then —
+    /// when the inner isn't a direct handle — the general nullable fold. The
+    /// two share the `Option<_>` pattern, so they stay in one method to keep
+    /// the original sequential fall-through.
+    fn input_option(
+        &self,
+        pat: &syn::Type,
+        t1: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        if pat_match(pat, "Option < _ >") {
+            let inner = registry.input_entry(t1)?;
+            if inner.metadata.is_direct_handle() {
+                let inner_wire = inner.destination.clone();
+                let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
+                let name = input_name(&outer_ty, &inner_wire);
+                let function: syn::ItemFn = syn::parse_quote!(
+                    #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+                    pub(crate) unsafe fn #name<'env, 'v>(
+                        env: &mut jni::JNIEnv<'env>,
+                        v: &#inner_wire,
+                    ) -> ::core::result::Result<Option<#t1>, __JniErr> {
+                        Ok({
+                            if *v == 0 {
+                                None
+                            } else {
+                                Some(*std::boxed::Box::from_raw(*v as *mut #t1))
+                            }
+                        })
+                    }
+                );
+                let kotlin_name =
+                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
+                let projection = inner.metadata.projection.clone().map(|h| Projection {
+                    owned: true,
+                    // Rides the inner's `*v == 0` niche, so the wire stays
+                    // `jlong` and `None` is the `0` sentinel (never JVM boxed).
+                    strategy: FoldStrategy::Optional(NullableKind::Niche, Box::new(h.strategy)),
+                    ..h
+                });
+                return Some(ConverterImpl {
+                    pre_stages: vec![],
+                    function,
+                    destination: inner_wire,
+                    niches: Niches::empty(),
+                    metadata: KotlinMeta {
+                        kotlin_name,
+                        value_rust_key: None,
+                        projection,
+                    },
+                });
+            }
+            // Non-opaque inner: fall through to the general Option handler.
+        }
+        if pat_match(pat, "Option < _ >") {
+            let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
+            let (wire, body, niches) = option_input(t1, registry)?;
+            // Inherit the inner's name; user pins on `Option<T>` win.
+            // The nullability marker (`?`) is added by the use site.
+            let inherited = registry
+                .input_entry(t1)
+                .and_then(|e| e.metadata.kotlin_name.clone());
+            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
+            // Fold a Nullable layer over the inner projection (if any). The
+            // kind mirrors which path `option_input` took: when it consumed
+            // an inner niche, the wire stays identical to the inner's
+            // destination and `None` is the niche slot sentinel; the boxed
+            // fallback widens the wire to `JObject`.
+            let nullable_kind = nullable_kind_for(&wire, t1, registry);
+            let projection = registry
+                .input_entry(t1)
+                .and_then(|e| e.metadata.projection.clone())
+                .map(|h| Projection {
+                    strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
+                    ..h
+                });
+            return Some(ConverterImpl {
+                pre_stages: vec![],
+                function: self.build_input_fn(&outer_ty, &wire, &body, None),
+                destination: wire,
+                niches,
+                metadata: KotlinMeta {
+                    projection,
+                    ..self.framework_meta(kotlin_name)
+                },
+            });
+        }
+        None
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
@@ -651,7 +911,7 @@ impl Prebindgen for JniGen {
                     projection: Some(Projection {
                         leaf_key: key.as_str().to_string(),
                         owned: false,
-                        strategy: FoldStrategy::Direct,
+                        strategy: FoldStrategy::Base,
                         kind: ProjectionKind::ValueBlob,
                     }),
                     ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
@@ -758,255 +1018,13 @@ impl Prebindgen for JniGen {
         if let Some(conv) = self.lookup_input(pat, &[t1.clone()], registry) {
             return Some(conv);
         }
-        // `& _` borrow: a free-fn converter can't return `&T` (no borrow
-        // source), so we *share* T's resolved converter — `&T`'s entry
-        // points at the same `ItemFn`. The fn returns owned `T`; the
-        // call site in `emit_jni_function_wrapper` adds `&decoded` when
-        // the original param was `&T`. write.rs's dedup-by-name keeps
-        // the function emitted exactly once.
-        //
-        // This handler exists to make the wildcard-substitution machinery
-        // fire: it returns subs=[t1] (via the resolver), so propagation
-        // marks T as required transitively from `&T`.
-        if pat_match(pat, "& _") || pat_match(pat, "& mut _") {
-            let inner = registry.input_entry(t1)?;
-            let outer_ty: syn::Type = if pat_match(pat, "& mut _") {
-                syn::parse_quote!(&mut #t1)
-            } else {
-                syn::parse_quote!(&#t1)
-            };
-            // `&T` / `&mut T` are Kotlin-side no-ops — inherit the inner
-            // type's name, unless the user pinned an explicit override
-            // on the outer form itself (rare but legal).
-            let kotlin_name =
-                self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-            // The outer form shares T's converter function verbatim, so it
-            // inherits T's throws behaviour (whatever exception T's
-            // converter is bound to). Copy the inner's throws metadata.
-            // A borrowed handle (mut or not) is still opaque (param
-            // classification needs to see it), but the holder doesn't own
-            // it — mark `owned: false` so `close()` emission skips it.
-            let projection = inner
-                .metadata
-                .projection
-                .clone()
-                .map(|h| Projection { owned: false, ..h });
-            return Some(ConverterImpl {
-                destination: inner.destination.clone(),
-                function: inner.function.clone(),
-                pre_stages: vec![],
-                niches: inner.niches.clone(),
-                metadata: KotlinMeta {
-                    kotlin_name,
-                    value_rust_key: None,
-                    projection,
-                },
-            });
-        }
-        // `Option<&T>` / `Option<&mut T>` for opaque T: the general
-        // `Option<_>` handler below treats the inner type opaquely and
-        // would generate `Option<&T>` with no lifetime + a buggy
-        // `*const &T` cast. Route opaque borrows through their own path
-        // that returns `Option<OwnedObject<T>>`; the call site
-        // `.as_deref()` / `.as_deref_mut()` coerces back to `Option<&T>`
-        // / `Option<&mut T>` per OwnedObject's Deref / DerefMut impls.
-        //
-        // Falls through for non-opaque inners — the general handler
-        // produces sensible code (returns `Option<T>` and the call site
-        // adds `.as_ref()` if needed; out of scope here).
-        if pat_match(pat, "Option < & _ >") || pat_match(pat, "Option < & mut _ >") {
-            let inner = registry.input_entry(t1)?;
-            if inner.metadata.is_direct_handle() {
-                let is_mut = pat_match(pat, "Option < & mut _ >");
-                let inner_wire = inner.destination.clone();
-                let inner_conv = inner.function.sig.ident.clone();
-                let outer_ty: syn::Type = if is_mut {
-                    syn::parse_quote!(Option<&mut #t1>)
-                } else {
-                    syn::parse_quote!(Option<&#t1>)
-                };
-                let name = input_name(&outer_ty, &inner_wire);
-                let function: syn::ItemFn = syn::parse_quote!(
-                    #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-                    pub(crate) unsafe fn #name<'env, 'v>(
-                        env: &mut jni::JNIEnv<'env>,
-                        v: &#inner_wire,
-                    ) -> ::core::result::Result<Option<OwnedObject<#t1>>, __JniErr> {
-                        Ok({
-                            if *v == 0 { None } else { Some(#inner_conv(env, v)?) }
-                        })
-                    }
-                );
-                let kotlin_name =
-                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-                let projection = inner.metadata.projection.clone().map(|h| Projection {
-                    owned: false,
-                    // `Option<&Handle>` always rides the inner's `*v == 0` niche
-                    // (body is `if *v == 0 { None } else { ... }` above), so
-                    // null is the `0i64` sentinel — never JVM boxed.
-                    strategy: FoldStrategy::Nullable {
-                        kind: NullableKind::Niche,
-                        inner: Box::new(h.strategy),
-                    },
-                    ..h
-                });
-                return Some(ConverterImpl {
-                    pre_stages: vec![],
-                    function,
-                    destination: inner_wire,
-                    niches: Niches::empty(),
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_key: None,
-                        projection,
-                    },
-                });
-            }
-            // Non-opaque: let the general `Option<_>` handler below take it.
-        }
-        // `Vec<T>` (input side): wire is `JObject` carrying a Java
-        // `List<InnerWire>`; we iterate, decode each element via the
-        // inner converter, collect into a `Vec`. `Vec<u8>` is already
-        // handled at rank-0 (special-cased in `primitive_input` to a
-        // `JByteArray` wire) so rank-1 never gets it. Non-opaque inners
-        // whose wire is a non-jobject primitive (e.g. `Vec<i32>`) aren't
-        // covered by this handler — extend if needed.
-        if pat_match(pat, "Vec < _ >") {
-            let inner = registry.input_entry(t1)?;
-            reject_vec_of_handle(&inner.metadata.projection, t1);
-            let inner_wire = inner.destination.clone();
-            if !is_jobject_shaped_wire(&inner_wire) {
-                return None;
-            }
-            let inner_conv = inner.function.sig.ident.clone();
-            let outer_ty: syn::Type = syn::parse_quote!(Vec<#t1>);
-            let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
-            let body: syn::Expr = syn::parse_quote!({
-                let __list = jni::objects::JList::from_env(env, v)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-from-env: {}", e)))?;
-                let mut __it = __list.iter(env)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-iter: {}", e)))?;
-                let mut __out: Vec<#t1> = Vec::new();
-                while let Some(__obj) = __it.next(env)
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Vec<_>: list-next: {}", e)))?
-                {
-                    let __elem_wire: #inner_wire = __obj.into();
-                    let __elem: #t1 = #inner_conv(env, &__elem_wire)?;
-                    __out.push(__elem);
-                }
-                __out
-            });
-            let inner_kotlin = inner.metadata.kotlin_name.clone()?;
-            let kotlin_name = self.override_kotlin_name(
-                &outer_ty,
-                // `List` is auto-imported in Kotlin (default imports).
-                Some(kt::KtType::generic("List", [inner_kotlin])),
-            );
-            return Some(ConverterImpl {
-                pre_stages: vec![],
-                function: self.build_input_fn(&outer_ty, &wire, &body, None),
-                destination: wire,
-                niches: Niches::empty(),
-                metadata: KotlinMeta {
-                    kotlin_name,
-                    value_rust_key: None,
-                    projection: None,
-                },
-            });
-        }
-        // `Option<T>` for a direct opaque handle, BY VALUE (consume): wire is
-        // `jlong` with `0` = `None`; when present the `Box` is reconstructed
-        // and `T` moved out (owned), mirroring the by-value `T` consume path.
-        // Produces `Option<T>` (not `Option<OwnedObject<T>>`) so the source
-        // fn's `Option<T>` parameter type matches. The Kotlin side nulls the
-        // handle's `ptr` slot after the call (see `ConsumeNullable`).
-        if pat_match(pat, "Option < _ >") {
-            let inner = registry.input_entry(t1)?;
-            if inner.metadata.is_direct_handle() {
-                let inner_wire = inner.destination.clone();
-                let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
-                let name = input_name(&outer_ty, &inner_wire);
-                let function: syn::ItemFn = syn::parse_quote!(
-                    #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-                    pub(crate) unsafe fn #name<'env, 'v>(
-                        env: &mut jni::JNIEnv<'env>,
-                        v: &#inner_wire,
-                    ) -> ::core::result::Result<Option<#t1>, __JniErr> {
-                        Ok({
-                            if *v == 0 {
-                                None
-                            } else {
-                                Some(*std::boxed::Box::from_raw(*v as *mut #t1))
-                            }
-                        })
-                    }
-                );
-                let kotlin_name =
-                    self.override_kotlin_name(&outer_ty, inner.metadata.kotlin_name.clone());
-                let projection = inner.metadata.projection.clone().map(|h| Projection {
-                    owned: true,
-                    // Rides the inner's `*v == 0` niche, so the wire stays
-                    // `jlong` and `None` is the `0` sentinel (never JVM boxed).
-                    strategy: FoldStrategy::Nullable {
-                        kind: NullableKind::Niche,
-                        inner: Box::new(h.strategy),
-                    },
-                    ..h
-                });
-                return Some(ConverterImpl {
-                    pre_stages: vec![],
-                    function,
-                    destination: inner_wire,
-                    niches: Niches::empty(),
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_key: None,
-                        projection,
-                    },
-                });
-            }
-            // Non-opaque inner: fall through to the general Option handler.
-        }
-        if pat_match(pat, "Option < _ >") {
-            let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
-            let (wire, body, niches) = option_input(t1, registry)?;
-            // Inherit the inner's name; user pins on `Option<T>` win.
-            // The nullability marker (`?`) is added by the use site.
-            let inherited = registry
-                .input_entry(t1)
-                .and_then(|e| e.metadata.kotlin_name.clone());
-            let kotlin_name = self.override_kotlin_name(&outer_ty, inherited);
-            // Fold a Nullable layer over the inner projection (if any). The
-            // kind mirrors which path `option_input` took: when it consumed
-            // an inner niche, the wire stays identical to the inner's
-            // destination (e.g. `jlong` for handles, `JByteArray` for
-            // ByteArray-shaped value classes) and `None` is the niche slot
-            // sentinel; the boxed fallback widens the wire to `JObject`. The
-            // renderer reads `kind` so the Kotlin declared wire and wrap
-            // shape match the runtime ABI.
-            let nullable_kind = nullable_kind_for(&wire, t1, registry);
-            let projection = registry
-                .input_entry(t1)
-                .and_then(|e| e.metadata.projection.clone())
-                .map(|h| Projection {
-                    strategy: FoldStrategy::Nullable {
-                        kind: nullable_kind,
-                        inner: Box::new(h.strategy),
-                    },
-                    ..h
-                });
-            return Some(ConverterImpl {
-                pre_stages: vec![],
-                function: self.build_input_fn(&outer_ty, &wire, &body, None),
-                destination: wire,
-                niches,
-                metadata: KotlinMeta {
-                    projection,
-                    ..self.framework_meta(kotlin_name)
-                },
-            });
-        }
-        None
+        // Disjoint wildcard patterns (see the `impl JniGen` block above), tried
+        // in priority order. The borrow/option-ref/vec patterns are exact and
+        // mutually exclusive; the two `Option<_>` sub-cases share a method.
+        self.input_borrow(pat, t1, registry)
+            .or_else(|| self.input_option_ref(pat, t1, registry))
+            .or_else(|| self.input_vec(pat, t1, registry))
+            .or_else(|| self.input_option(pat, t1, registry))
     }
 
     fn dispatch_fn_input(
@@ -1100,7 +1118,7 @@ impl Prebindgen for JniGen {
                     projection: Some(Projection {
                         leaf_key: key.as_str().to_string(),
                         owned: false,
-                        strategy: FoldStrategy::Direct,
+                        strategy: FoldStrategy::Base,
                         kind: ProjectionKind::ValueBlob,
                     }),
                     ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
@@ -1269,10 +1287,7 @@ impl Prebindgen for JniGen {
                 .output_entry(t1)
                 .and_then(|e| e.metadata.projection.clone())
                 .map(|h| Projection {
-                    strategy: FoldStrategy::Nullable {
-                        kind: nullable_kind,
-                        inner: Box::new(h.strategy),
-                    },
+                    strategy: FoldStrategy::Optional(nullable_kind, Box::new(h.strategy)),
                     ..h
                 });
             // A **non-projection** `Option<T>` return (`Option<String>`,

@@ -67,6 +67,13 @@ use quote::{format_ident, quote, ToTokens};
 use crate::api::core::niches::Niches;
 use crate::api::core::prebindgen::{ConverterImpl, Prebindgen};
 use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
+// Shared `syn::Type` shape predicates live in `core::types_util`; re-exported
+// here under this back-end's historical names so the submodules (`use super::*`)
+// keep their call sites. `pub(crate) use` so the glob re-export reaches them.
+pub(crate) use crate::api::core::types_util::{
+    first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
+    is_vec_type as is_vec, path_tail_ident as type_path_tail,
+};
 
 /// Identity of a declared callback signature: its argument-type list (the
 /// dedup key, since two `impl Fn` params with the same args share one closure
@@ -283,15 +290,6 @@ fn assert_unit_variants(e: &syn::ItemEnum) {
     }
 }
 
-/// Last path-segment ident of a path type.
-fn type_path_tail(ty: &syn::Type) -> Option<syn::Ident> {
-    if let syn::Type::Path(tp) = ty {
-        tp.path.segments.last().map(|s| s.ident.clone())
-    } else {
-        None
-    }
-}
-
 /// PascalCase → snake_case (`ZKeyExpr` → `z_key_expr`).
 /// Convert a `PascalCase` / `camelCase` identifier to `snake_case` (a
 /// convention-free helper, re-exported as `prebindgen::lang::snake_case` for
@@ -344,22 +342,6 @@ fn is_scalar(ty: &syn::Type) -> bool {
         .unwrap_or(false)
 }
 
-fn is_unit(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
-}
-
-fn is_result(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "Result").unwrap_or(false)
-}
-
-fn is_option(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "Option").unwrap_or(false)
-}
-
-fn is_vec(ty: &syn::Type) -> bool {
-    type_path_tail(ty).map(|i| i == "Vec").unwrap_or(false)
-}
-
 /// Whether `Vec<_>` appears anywhere in `ty` (including nested under
 /// `Result`/`Option`/references).
 fn type_contains_vec(ty: &syn::Type) -> bool {
@@ -367,20 +349,6 @@ fn type_contains_vec(ty: &syn::Type) -> bool {
         || crate::api::core::registry::immediate_subtype_positions(ty)
             .iter()
             .any(type_contains_vec)
-}
-
-/// First angle-bracketed type argument of a path type (e.g. `T` of `Option<T>`
-/// or `Vec<T>`). `None` if there is none.
-fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    ab.args.iter().find_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    })
 }
 
 /// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.

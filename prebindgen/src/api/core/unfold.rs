@@ -389,23 +389,22 @@ impl Deconstructors {
 // Resolved plan (stored on the registry, read at emission time)
 // ──────────────────────────────────────────────────────────────────────
 
-/// Outer shape wrapping the [core decomposition](`UnfoldShape::Decompose`).
-/// The output-side analog of [`crate::api::core::expand::FoldShape`].
-#[derive(Clone)]
-pub enum UnfoldShape {
-    /// Innermost: run the accessor's records on the value, producing
-    /// all [leaves](`UnfoldPlan::leaves`) and invoking the builder once.
-    Decompose,
-    /// `Option<T>` / `Option<&T>` return: `None` ⇒ a null result (builder
-    /// skipped); `Some` ⇒ decompose the inner.
-    Optional(Box<UnfoldShape>),
-    /// `Vec<T>` return: deliver each element (whole, via its own output
-    /// converter + projection — see [`UnfoldPlan::element`]) to a caller-supplied
-    /// **fold** `(acc, element) -> acc`, threading the accumulator. The inner
-    /// shape is `Decompose` (a degenerate single whole-element step; per-element
-    /// accessor decomposition is future work).
-    Iterable(Box<UnfoldShape>),
-}
+/// Outer shape wrapping the [core decomposition](`UnfoldShape::Base`).
+/// The output-side analog of [`crate::api::core::expand::FoldShape`], on the
+/// unified [`Shape`](crate::api::core::shape::Shape) layer stack:
+///   * `Base` — run the accessor's records on the value, producing all
+///     [leaves](`UnfoldPlan::leaves`) and invoking the builder once;
+///   * `Optional((), inner)` — `Option<T>`/`Option<&T>` return: `None` ⇒ a null
+///     result (builder skipped), `Some` ⇒ decompose the inner;
+///   * `Iterable(inner)` — `Vec<T>` return: deliver each element whole (via its
+///     own output converter + projection — see [`UnfoldPlan::element`]) to a
+///     caller-supplied fold `(acc, element) -> acc`; inner is `Base` (a
+///     degenerate single whole-element step; per-element accessor decomposition
+///     is future work).
+///
+/// The `()` payload is unused here — only the JNI back-end's
+/// `Shape<NullableKind>` carries per-layer data.
+pub use crate::api::core::shape::Shape as UnfoldShape;
 
 /// Identity of the deconstructor **declaration** a plan's records came from.
 /// A `run`-signature artifact (e.g. a generated callback interface) is fully
@@ -798,7 +797,7 @@ pub fn apply<M>(
                     &ed,
                     false,
                     &arg_ty,
-                    UnfoldShape::Decompose,
+                    UnfoldShape::Base,
                     &records,
                     decon,
                 )?;
@@ -900,7 +899,7 @@ fn process_decl<M>(
                     reason: "Vec<Option<…>> returns",
                 });
             }
-            let shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Decompose));
+            let shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
             // Element type peeled of a leading `&` (accessors take `&Element`).
             let (by_ref, element) = match &inner {
                 syn::Type::Reference(r) => (true, (*r.elem).clone()),
@@ -947,9 +946,9 @@ fn process_decl<M>(
             };
             let source_key = TypeKey::from_type(&source);
             let shape = if optional {
-                UnfoldShape::Optional(Box::new(UnfoldShape::Decompose))
+                UnfoldShape::Optional((), Box::new(UnfoldShape::Base))
             } else {
-                UnfoldShape::Decompose
+                UnfoldShape::Base
             };
             let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
             register_decon_spec(registry, acc, &ed.func, &decon, &records, &source)?;
@@ -970,7 +969,7 @@ fn process_decl<M>(
             && plan.leaves.len() == 1;
         let plan = if single_return {
             let leaf_ty = plan.leaves[0].out_ty.clone();
-            let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional(_)) {
+            let cv_ty: syn::Type = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
                 syn::parse_quote!(Option<#leaf_ty>)
             } else {
                 leaf_ty
@@ -1510,7 +1509,7 @@ mod tests {
         assert!(plan.by_ref, "inner was &ZTimestamp");
         assert_eq!(plan.source.to_token_stream().to_string(), "ZTimestamp");
         assert!(
-            matches!(&plan.shape, UnfoldShape::Optional(inner) if matches!(**inner, UnfoldShape::Decompose)),
+            matches!(&plan.shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)),
             "outer shape is Optional(Decompose)"
         );
         assert_eq!(plan.leaves.len(), 1);
@@ -1544,7 +1543,7 @@ mod tests {
             .expect("plan");
         assert!(plan.by_ref, "return was &ZKeyExpr");
         assert_eq!(plan.source.to_token_stream().to_string(), "ZKeyExpr");
-        assert!(matches!(plan.shape, UnfoldShape::Decompose));
+        assert!(matches!(plan.shape, UnfoldShape::Base));
         assert_eq!(plan.leaves.len(), 2);
 
         // Identity leaf: out_ty `&ZKeyExpr`, empty path, emitted last.
@@ -1668,7 +1667,7 @@ mod tests {
             .expect("plan");
         assert!(plan.by_ref);
         assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
-        assert!(matches!(&plan.shape, UnfoldShape::Optional(_)));
+        assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
 
         let path = |l: &UnfoldLeaf| {
             l.path
@@ -1745,7 +1744,7 @@ mod tests {
         let plan = reg.unfold_plans.get(&ident("z_recv_reply")).expect("plan");
         assert!(!plan.by_ref, "owned ZReply return");
         assert_eq!(plan.source.to_token_stream().to_string(), "ZReply");
-        assert!(matches!(&plan.shape, UnfoldShape::Decompose));
+        assert!(matches!(&plan.shape, UnfoldShape::Base));
         assert!(matches!(plan.delivery, Delivery::Callback));
 
         let path = |l: &UnfoldLeaf| {
@@ -1822,7 +1821,7 @@ mod tests {
             .get(&ident("z_session_peers_zid"))
             .expect("plan");
         assert!(
-            matches!(&plan.shape, UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Decompose)),
+            matches!(&plan.shape, UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Base)),
             "outer shape is Iterable(Decompose)"
         );
         assert!(!plan.by_ref, "Vec<ZZenohId> owns its elements");
@@ -1899,7 +1898,7 @@ mod tests {
             .get(&ident("z_sample_timestamp"))
             .expect("plan");
         assert_eq!(plan.delivery, Delivery::Return);
-        assert!(matches!(&plan.shape, UnfoldShape::Optional(_)));
+        assert!(matches!(&plan.shape, UnfoldShape::Optional((), _)));
         assert_eq!(plan.leaves.len(), 1);
         assert_eq!(
             plan.convert_out_ty
@@ -2074,7 +2073,7 @@ mod tests {
             .expect("callback-arg plan for ZSample");
         assert!(!plan.by_ref, "the trampoline owns the callback arg");
         assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
-        assert!(matches!(plan.shape, UnfoldShape::Decompose));
+        assert!(matches!(plan.shape, UnfoldShape::Base));
         assert_eq!(plan.delivery, Delivery::Callback);
         assert_eq!(plan.leaves.len(), 3);
         // Nested keyexpr identity (borrowed: non-root) + string + direct enum.

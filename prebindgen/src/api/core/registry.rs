@@ -21,6 +21,7 @@ use quote::ToTokens;
 
 use crate::api::core::niches::Niches;
 use crate::api::core::prebindgen::Stage;
+use crate::api::core::types_util::bare_path_ident;
 
 /// Canonical type-shape key — the `to_token_stream().to_string()` form of a
 /// `syn::Type`. Whitespace-normalised (`"Vec<u8>"` and `"Vec < u8 >"` produce
@@ -424,7 +425,7 @@ impl<M> Registry<M> {
         for key in &declared_types {
             let ty = key.to_type();
             let mut matched = false;
-            if let Some(ident) = type_path_tail_ident(&ty) {
+            if let Some(ident) = bare_path_ident(&ty) {
                 if let Some((s, loc)) = self.structs.get(&ident).cloned() {
                     self.scan_struct(&s, &loc)?;
                     self.ensure_entry(Direction::Input, &ty, true, &loc);
@@ -450,7 +451,7 @@ impl<M> Registry<M> {
 
         for key in &ignored_types {
             let ty = key.to_type();
-            let matched = type_path_tail_ident(&ty).is_some_and(|ident| {
+            let matched = bare_path_ident(&ty).is_some_and(|ident| {
                 self.structs.contains_key(&ident) || self.enums.contains_key(&ident)
             });
             if !matched {
@@ -759,7 +760,7 @@ impl<M> Registry<M> {
         for sub in positions {
             out.push((child_dir, sub));
         }
-        if let Some(name) = type_path_tail_ident(ty) {
+        if let Some(name) = bare_path_ident(ty) {
             if let Some((s, _)) = self.structs.get(&name) {
                 if let syn::Fields::Named(named) = &s.fields {
                     for field in &named.named {
@@ -896,19 +897,6 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
     } else {
         None
     }
-}
-
-/// Return the bare last-path-segment ident of `ty` if `ty` is a path type
-/// like `Sample` (not generic). None for `Option<Sample>`, `&T`, `(A, B)`.
-pub(crate) fn type_path_tail_ident(ty: &syn::Type) -> Option<syn::Ident> {
-    if let syn::Type::Path(tp) = ty {
-        if let Some(last) = tp.path.segments.last() {
-            if matches!(last.arguments, syn::PathArguments::None) {
-                return Some(last.ident.clone());
-            }
-        }
-    }
-    None
 }
 
 #[cfg(test)]

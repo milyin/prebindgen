@@ -28,10 +28,54 @@ fn generic_inner(ty: &syn::Type, wrapper: &str) -> Option<syn::Type> {
     }
 }
 
+/// Last path-segment ident of a path type, **generics permitting**
+/// (`Option<T>` → `Option`, `Vec<u8>` → `Vec`). Contrast with
+/// [`bare_path_ident`], which is `None` for any generic/non-path shape.
+pub fn path_tail_ident(ty: &syn::Type) -> Option<syn::Ident> {
+    match ty {
+        syn::Type::Path(tp) => tp.path.segments.last().map(|s| s.ident.clone()),
+        _ => None,
+    }
+}
+
+/// True when `ty`'s last path segment is `name` (`path_tail_is(ty, "Vec")`).
+fn path_tail_is(ty: &syn::Type, name: &str) -> bool {
+    path_tail_ident(ty).is_some_and(|i| i == name)
+}
+
 /// True when `ty` is `Option<…>` (by last path segment).
 pub fn is_option_type(ty: &syn::Type) -> bool {
-    matches!(ty, syn::Type::Path(tp)
-        if tp.path.segments.last().is_some_and(|s| s.ident == "Option"))
+    path_tail_is(ty, "Option")
+}
+
+/// True when `ty` is `Vec<…>` (by last path segment).
+pub fn is_vec_type(ty: &syn::Type) -> bool {
+    path_tail_is(ty, "Vec")
+}
+
+/// True when `ty` is `Result<…>` (by last path segment).
+pub fn is_result_type(ty: &syn::Type) -> bool {
+    path_tail_is(ty, "Result")
+}
+
+/// True when `ty` is the unit type `()`.
+pub fn is_unit(ty: &syn::Type) -> bool {
+    matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
+}
+
+/// First angle-bracketed **type** argument of a path type (`T` of `Option<T>`
+/// / `Vec<T>` / `Result<T, _>`), skipping lifetime/const args. `None` when
+/// there is no type argument.
+pub fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let seg = tp.path.segments.last()?;
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    ab.args.iter().find_map(|a| match a {
+        syn::GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    })
 }
 
 /// True when `ty` is `Option<&T>` / `Option<&mut T>`.

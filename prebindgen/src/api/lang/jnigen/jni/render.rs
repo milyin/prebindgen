@@ -807,7 +807,7 @@ pub(crate) fn render_wrapper_fn(
                 unfold_call_args.push("build".to_string());
             }
             let kt = match &plan.shape {
-                UnfoldShape::Optional(_) => kt::KtType::var_r().nullable(),
+                UnfoldShape::Optional((), _) => kt::KtType::var_r().nullable(),
                 _ => kt::KtType::var_r(),
             };
             (Some(kt), None)
@@ -1224,7 +1224,7 @@ pub(crate) fn unfold_leaf_kt(
         if nullable
             && matches!(
                 p.strategy,
-                crate::api::lang::jnigen::jni::FoldStrategy::Direct
+                crate::api::lang::jnigen::jni::FoldStrategy::Base
             )
         {
             wrap = format!("{pk}?.let {{ {short}(it) }}");

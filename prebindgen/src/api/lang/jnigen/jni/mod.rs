@@ -58,14 +58,8 @@ pub(crate) use std::path::{Path, PathBuf};
 // Language metadata (Prebindgen::Metadata for JniGen)
 // ──────────────────────────────────────────────────────────────────────
 
-/// Folded nullability / collection layers wrapping a closeable native
-/// projection, outermost first. Mirrors how the type folds: the opaque-handle
-/// leaf is [`FoldStrategy::Direct`]; an `Option<_>` wrapper adds
-/// [`FoldStrategy::Nullable`]; a collection wrapper would add
-/// [`FoldStrategy::Iterable`]. Drives both the typed Kotlin rendering of
-/// a handle-bearing field/return and the generated `close()` expression,
-/// uniformly across whatever wrappers compose.
-/// How a `Nullable` fold layer represents `None` over the JNI wire.
+/// How a `Shape::Optional` fold layer represents `None` over the JNI wire —
+/// the per-layer payload `N` of the JNI back-end's [`FoldStrategy`].
 ///
 /// The choice is made at the point the `Option<_>` rank-1 handler folds the
 /// layer onto a projection's `FoldStrategy`, and only depends on whether
@@ -91,21 +85,16 @@ pub enum NullableKind {
     Boxed,
 }
 
-#[derive(Clone, Debug)]
-pub enum FoldStrategy {
-    /// The receiver *is* the handle.
-    Direct,
-    /// `T?` — receiver may be null. `kind` records how null is represented
-    /// over the wire (see [`NullableKind`]).
-    Nullable {
-        kind: NullableKind,
-        inner: Box<FoldStrategy>,
-    },
-    /// `List<T>` — receiver is a collection. EXTENSION POINT: no
-    /// `Vec<Handle>` shape exists today, so the emitters guard this arm
-    /// loudly rather than silently mis-generating.
-    Iterable(Box<FoldStrategy>),
-}
+/// The JNI back-end's nullability / collection layer stack over a handle or
+/// value-class leaf, on the unified [`Shape`](crate::api::core::shape::Shape)
+/// with [`NullableKind`] as the per-`Optional`-layer payload:
+///   * `Base` — the receiver *is* the handle;
+///   * `Optional(kind, inner)` — `T?`; `kind` records how null is represented
+///     over the wire (see [`NullableKind`]);
+///   * `Iterable(inner)` — `List<T>`. EXTENSION POINT: no `Vec<Handle>` shape
+///     exists today, so the emitters guard this arm loudly rather than silently
+///     mis-generating.
+pub type FoldStrategy = crate::api::core::shape::Shape<NullableKind>;
 
 /// Which flavor of Kotlin newtype a [`Projection`] surfaces. Both share the
 /// same "wire ≠ declared Kotlin type, wrap as `W(wire)`, fold through
@@ -202,7 +191,7 @@ impl KotlinMeta {
     /// function, both carrying a `Direct` `Handle` projection).
     pub(crate) fn is_direct_handle(&self) -> bool {
         self.projection.as_ref().is_some_and(|p| {
-            p.kind == ProjectionKind::Handle && matches!(p.strategy, FoldStrategy::Direct)
+            p.kind == ProjectionKind::Handle && matches!(p.strategy, FoldStrategy::Base)
         })
     }
 }

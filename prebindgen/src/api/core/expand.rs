@@ -225,26 +225,18 @@ impl Expansions {
 // Resolved plan (stored on the registry, read at emission time)
 // ──────────────────────────────────────────────────────────────────────
 
-/// Outer shape wrapping the [core construct](`FoldShape::Construct`). The
-/// value-side analog of how the rank-1 `Option<_>` / `Vec<_>` handlers compose
-/// converters at the wire — mirrors jnigen's `FoldStrategy` (`jni/fold.rs`).
-/// The innermost `Construct` builds the target from the decoded leaves; each
-/// wrapping layer lifts that construction over `Option` / `Vec`.
-#[derive(Clone)]
-pub enum FoldShape {
-    /// Innermost: build the target directly from the leaves — a single
-    /// constructor (any arity) or a combined-selector dispatch.
-    Construct,
-    /// `Option<T>` / `Option<&T>` param: the single leaf is `Option<ctor_arg>`;
-    /// `Some` ⇒ run the inner shape on the unwrapped value and re-wrap `Some`,
-    /// `None` ⇒ `None`. Inner is always [`Self::Construct`] today (single,
-    /// single-arg constructor; combined-under-`Optional` is rejected in `apply`).
-    Optional(Box<FoldShape>),
-    /// `Vec<T>` param: map the inner shape over each element and collect.
-    /// Emit-ready and unit-tested, but not yet produced by `apply` (no `Vec<_>`
-    /// param expansion is declared) — kept so the fold composes for future Vec.
-    Iterable(Box<FoldShape>),
-}
+/// Outer shape wrapping the core construct. The value-side analog of how the
+/// rank-1 `Option<_>` / `Vec<_>` handlers compose converters at the wire.
+///
+/// The unified [`Shape`](crate::api::core::shape::Shape) layer stack: `Base`
+/// builds the target directly from the decoded leaves (a single constructor of
+/// any arity or a combined-selector dispatch); `Optional((), inner)` lifts that
+/// over `Option<T>`/`Option<&T>` (`Some` ⇒ run `inner` on the unwrapped value
+/// and re-wrap, `None` ⇒ `None`; inner is always `Base` today);
+/// `Iterable(inner)` maps `inner` over each element of a `Vec<T>` (emit-ready
+/// but not yet produced by `apply`). The `()` payload is unused here — only the
+/// JNI back-end's `Shape<NullableKind>` carries per-layer data.
+pub use crate::api::core::shape::Shape as FoldShape;
 
 /// A resolved expansion for one `(function, parameter)`.
 #[derive(Clone)]
@@ -282,7 +274,7 @@ impl FoldPlan {
     /// True when the fold produces an `Option<_>` (outermost shape layer is
     /// `Optional`) — drives the by-ref call-site form (`folded.as_ref()`).
     pub fn produces_option(&self) -> bool {
-        matches!(self.shape, FoldShape::Optional(_))
+        matches!(self.shape, FoldShape::Optional((), _))
     }
 }
 
@@ -739,7 +731,7 @@ fn build_plan<M>(
             return Ok(FoldPlan {
                 target: target.clone(),
                 by_ref,
-                shape: FoldShape::Optional(Box::new(FoldShape::Construct)),
+                shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
                 leaves,
                 selector: None,
                 present: None,
@@ -775,7 +767,7 @@ fn build_plan<M>(
         return Ok(FoldPlan {
             target: target.clone(),
             by_ref,
-            shape: FoldShape::Optional(Box::new(FoldShape::Construct)),
+            shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
             leaves,
             selector: None,
             present: Some(0),
@@ -807,7 +799,7 @@ fn build_plan<M>(
     Ok(FoldPlan {
         target: target.clone(),
         by_ref,
-        shape: FoldShape::Construct,
+        shape: FoldShape::Base,
         leaves,
         selector,
         present: None,
@@ -1041,8 +1033,8 @@ fn fold_shape(
     qualify: &dyn Fn(&syn::Ident) -> syn::Path,
 ) -> syn::Expr {
     match shape {
-        FoldShape::Construct => emit_core_construct(plan, leaf_locals, bound, qualify),
-        FoldShape::Optional(inner) => {
+        FoldShape::Base => emit_core_construct(plan, leaf_locals, bound, qualify),
+        FoldShape::Optional((), inner) => {
             if let Some(pidx) = plan.present {
                 // Multi-arg: an explicit `present: bool` flag decides presence;
                 // the construct reads its plain arg leaves directly (`bound =
@@ -1526,7 +1518,7 @@ mod tests {
             .expansion_plans
             .get(&(ident("z_session_delete"), ident("attachment")))
             .unwrap();
-        assert!(matches!(plan.shape, FoldShape::Optional(_)));
+        assert!(matches!(plan.shape, FoldShape::Optional((), _)));
         assert!(plan.produces_option());
         assert!(!plan.by_ref);
         assert_eq!(plan.leaves.len(), 1);
@@ -1567,7 +1559,7 @@ mod tests {
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
             .unwrap();
-        assert!(matches!(plan.shape, FoldShape::Optional(_)));
+        assert!(matches!(plan.shape, FoldShape::Optional((), _)));
         assert!(plan.produces_option());
         assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
         assert_eq!(
@@ -1601,7 +1593,7 @@ mod tests {
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
             .unwrap();
-        assert!(matches!(plan.shape, FoldShape::Optional(_)));
+        assert!(matches!(plan.shape, FoldShape::Optional((), _)));
         assert!(plan.produces_option());
         assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
         assert_eq!(plan.present, Some(0), "explicit presence flag at leaf 0");
@@ -1661,7 +1653,7 @@ mod tests {
         let plan = FoldPlan {
             target: syn::parse_quote!(ZKeyExpr),
             by_ref: false,
-            shape: FoldShape::Iterable(Box::new(FoldShape::Construct)),
+            shape: FoldShape::Iterable(Box::new(FoldShape::Base)),
             leaves: vec![FoldLeaf {
                 name: ident("kes"),
                 ty: syn::parse_quote!(Vec<String>),

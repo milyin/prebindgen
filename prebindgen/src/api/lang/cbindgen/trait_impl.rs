@@ -1,114 +1,330 @@
 use super::builder::callback_fn_type;
 use super::*;
 
-impl Prebindgen for Cbindgen {
-    type Metadata = ();
-
-    fn declared_functions(&self) -> HashSet<syn::Ident> {
-        self.functions.keys().cloned().collect()
+/// Per-category rank-0 **input** converter builders. Each returns
+/// `Some(ConverterImpl)` only for the type category it claims (and `None`
+/// otherwise); [`Cbindgen::on_input_type_rank_0`] chains them in priority
+/// order. The categories are mutually exclusive, so the chain's fall-through
+/// is equivalent to the original sequential `if … return` blocks.
+impl Cbindgen {
+    /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
+    /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
+    fn in_opaque_handle(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        let key = TypeKey::from_type(ty);
+        if !self.opaque.contains_key(&key) {
+            return None;
+        }
+        let name = Self::in_name(ty);
+        let c_struct = self.c_type_ident(ty);
+        let src = self.src_ty(ty);
+        let short = type_short(ty);
+        let null_msg = format!("null {short} handle passed by value");
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(
+                v: *mut #c_struct,
+            ) -> ::core::result::Result<#src, ::std::string::String> {
+                if v.is_null() {
+                    return ::core::result::Result::Err(
+                        ::std::string::String::from(#null_msg),
+                    );
+                }
+                ::core::result::Result::Ok(*::std::boxed::Box::from_raw(v as *mut #src))
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(*mut #c_struct),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
-    fn ignored_functions(&self) -> HashSet<syn::Ident> {
-        self.ignored_functions.clone()
+    /// Data struct: decode each field from its C wire — infallible.
+    fn in_data_struct(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        let key = TypeKey::from_type(ty);
+        if !self.data.contains_key(&key) {
+            return None;
+        }
+        let fields = self.struct_fields(r, ty)?;
+        let name = Self::in_name(ty);
+        let c_struct = self.c_type_ident(ty);
+        let src = self.src_ty(ty);
+        let mut inits: Vec<TokenStream> = Vec::new();
+        for (fname, fty) in &fields {
+            if is_string(fty) {
+                inits.push(quote!(#fname: if v.#fname.is_null() {
+                    ::std::string::String::new()
+                } else {
+                    ::std::ffi::CStr::from_ptr(v.#fname).to_string_lossy().into_owned()
+                }));
+            } else {
+                inits.push(quote!(#fname: v.#fname));
+            }
+        }
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(v: #c_struct) -> #src {
+                #src { #(#inits),* }
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(#c_struct),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
-    fn declared_types(&self) -> HashSet<TypeKey> {
-        self.opaque
-            .keys()
-            .chain(self.data.keys())
-            .chain(self.value_opaque.keys())
-            .chain(self.enums.keys())
-            .cloned()
-            .collect()
+    /// Inline-opaque, by-`*mut` consume: read the live Rust value out by
+    /// transmute (move). For an `opaque_owned_struct` type, write a gravestone back so a
+    /// later `_drop` is a no-op (safe drop-after-move); an `opaque_data_struct` type
+    /// owns no external resource, so the moved-from bitwise duplicate is
+    /// harmlessly droppable and no write-back is needed. Only the C pointer is
+    /// null-checked — NULL ⇒ Err, and the `Option<_>` wrapper maps a NULL pointer
+    /// wire → None. (We do NOT reject gravestone values: for types whose
+    /// gravestone coincides with a legitimate value — e.g. an *empty* `ZBytes` —
+    /// that would wrongly reject valid inputs; the move + write-back is safe.)
+    fn in_value_opaque(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        let opaque = self.value_opaque_ty(ty)?.clone();
+        let owned = self.opaque_kind(ty) == Some(OpaqueKind::Owned);
+        let name = Self::in_name(ty);
+        let src = self.src_ty(ty);
+        let short = type_short(ty);
+        let null_msg = format!("null {short} value passed by value");
+        let writeback = owned.then(|| {
+            quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());)
+        });
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(
+                v: *mut #opaque,
+            ) -> ::core::result::Result<#src, ::std::string::String> {
+                if v.is_null() {
+                    return ::core::result::Result::Err(
+                        ::std::string::String::from(#null_msg),
+                    );
+                }
+                let __live = <#opaque as ::prebindgen::Transmute>::into_rust(
+                    ::core::ptr::read(v),
+                );
+                #writeback
+                ::core::result::Result::Ok(__live)
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(*mut #opaque),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
-    fn ignored_types(&self) -> HashSet<TypeKey> {
-        self.ignored_types.clone()
+    /// Enum input: `match` the C enum back to the source enum — infallible.
+    fn in_enum(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        let key = TypeKey::from_type(ty);
+        if !self.enums.contains_key(&key) {
+            return None;
+        }
+        let e = enum_item(r, ty)?;
+        assert_unit_variants(e);
+        let name = Self::in_name(ty);
+        let cname = self.c_type_ident(ty);
+        let src = self.src_ty(ty);
+        let arms = e.variants.iter().map(|v| {
+            let id = &v.ident;
+            quote!(#cname::#id => #src::#id,)
+        });
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) fn #name(v: #cname) -> #src {
+                match v { #(#arms)* }
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(#cname),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
     }
 
-    fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+    /// `String` input: `*const c_char` → owned `String` — fallible.
+    fn in_string(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        if !is_string(ty) {
+            return None;
+        }
+        let name = Self::in_name(ty);
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(
+                v: *const ::core::ffi::c_char,
+            ) -> ::core::result::Result<::std::string::String, ::std::string::String> {
+                if v.is_null() {
+                    return ::core::result::Result::Err(
+                        ::std::string::String::from("null pointer passed for String argument"),
+                    );
+                }
+                match ::std::ffi::CStr::from_ptr(v).to_str() {
+                    ::core::result::Result::Ok(s) => {
+                        ::core::result::Result::Ok(s.to_owned())
+                    }
+                    ::core::result::Result::Err(_) => {
+                        ::core::result::Result::Err(
+                            ::std::string::String::from("invalid UTF-8 in String argument"),
+                        )
+                    }
+                }
+            }
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(*const ::core::ffi::c_char),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// Bare `str` never crosses the C ABI directly, but resolving `&str`
+    /// inputs requires its inner node to have a filled rank-0 cell.
+    fn in_str(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        if !is_str(ty) {
+            return None;
+        }
+        let name = Self::in_name(ty);
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, dead_code, unused_variables)]
+            pub(crate) fn #name() {}
+        );
+        Some(ConverterImpl {
+            destination: syn::parse_quote!(*const ::core::ffi::c_char),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// FFI-safe scalar (`bool`, integers, floats): identity pass-through.
+    fn in_scalar(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+        if !is_scalar(ty) {
+            return None;
+        }
+        let name = Self::in_name(ty);
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) fn #name(v: #ty) -> #ty {
+                v
+            }
+        );
+        Some(ConverterImpl {
+            destination: ty.clone(),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+}
+
+/// Per-section [`Cbindgen::prerequisites`] emitters. Each returns the runtime-
+/// support items for one concern; the trait method concatenates them in order,
+/// so the emitted preamble is identical to the former single function.
+impl Cbindgen {
+    /// C allocator extern + raw C-string allocator + the universal memory freer.
+    /// Emitted when the layer hands `char*`/array memory to C. Panics if such
+    /// memory is produced but no `.free_memory_function` is declared.
+    fn prereq_alloc_free(&self, registry: &Registry<()>, produces_array: bool) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
-
-        // C-string data memory (string returns + `String` fields of data structs)
-        // is malloc'd raw and freed by the single universal `free_memory_function`.
-        // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
-        // same function (per element through the `z_free_array` macro), so the
-        // allocator/freer prelude is needed for them too.
-        let produces_array = self.produces_array(registry);
-        if self.needs_free(registry) || produces_array {
-            let free_ident = match &self.free_fn {
-                Some(name) => format_ident!("{}", name),
-                None => panic!(
-                    "Cbindgen: the generated layer hands `char*` string memory to C \
-                     (a `String` return or a `String` data-struct field) but no \
-                     memory-freeing function is declared — add \
-                     `.free_memory_function(\"z_free\")`"
-                ),
-            };
-            // C allocator (linked from the C runtime; no crate dependency).
-            items.push(syn::parse_quote!(
-                extern "C" {
-                    fn malloc(size: usize) -> *mut ::core::ffi::c_void;
-                    fn free(ptr: *mut ::core::ffi::c_void);
-                }
-            ));
-            // Raw, destructor-free C-string block. `CString::new` drops interior
-            // NULs so the terminator marks the true end for C consumers.
-            items.push(syn::parse_quote!(
-                #[allow(non_snake_case, dead_code)]
-                pub(crate) fn __cbg_alloc_cstr(
-                    s: ::std::string::String,
-                ) -> *mut ::core::ffi::c_char {
-                    let c = ::std::ffi::CString::new(s).unwrap_or_default();
-                    let bytes = c.as_bytes_with_nul();
-                    unsafe {
-                        let p = malloc(bytes.len()) as *mut u8;
-                        if p.is_null() {
-                            return ::core::ptr::null_mut();
-                        }
-                        ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
-                        p as *mut ::core::ffi::c_char
-                    }
-                }
-            ));
-            // Universal raw memory freer: type-agnostic C `free`, no length, no
-            // destructor (NULL-safe via C `free`).
-            items.push(syn::parse_quote!(
-                #[no_mangle]
-                #[allow(non_snake_case, unused_variables)]
-                pub unsafe extern "C" fn #free_ident(p: *mut ::core::ffi::c_void) {
-                    free(p);
-                }
-            ));
+        if !(self.needs_free(registry) || produces_array) {
+            return items;
         }
-
-        // Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W` and
-        // return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed C-side
-        // via the `z_free_array` macro (per-element drop + the universal freer).
-        if produces_array {
-            items.push(syn::parse_quote!(
-                #[allow(non_snake_case, dead_code)]
-                pub(crate) unsafe fn __cbg_alloc_array<W>(
-                    v: ::std::vec::Vec<W>,
-                ) -> (*mut W, usize) {
-                    let n = v.len();
-                    if n == 0 {
-                        return (::core::ptr::null_mut(), 0);
-                    }
-                    let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+        let free_ident = match &self.free_fn {
+            Some(name) => format_ident!("{}", name),
+            None => panic!(
+                "Cbindgen: the generated layer hands `char*` string memory to C \
+                 (a `String` return or a `String` data-struct field) but no \
+                 memory-freeing function is declared — add \
+                 `.free_memory_function(\"z_free\")`"
+            ),
+        };
+        // C allocator (linked from the C runtime; no crate dependency).
+        items.push(syn::parse_quote!(
+            extern "C" {
+                fn malloc(size: usize) -> *mut ::core::ffi::c_void;
+                fn free(ptr: *mut ::core::ffi::c_void);
+            }
+        ));
+        // Raw, destructor-free C-string block. `CString::new` drops interior
+        // NULs so the terminator marks the true end for C consumers.
+        items.push(syn::parse_quote!(
+            #[allow(non_snake_case, dead_code)]
+            pub(crate) fn __cbg_alloc_cstr(
+                s: ::std::string::String,
+            ) -> *mut ::core::ffi::c_char {
+                let c = ::std::ffi::CString::new(s).unwrap_or_default();
+                let bytes = c.as_bytes_with_nul();
+                unsafe {
+                    let p = malloc(bytes.len()) as *mut u8;
                     if p.is_null() {
-                        return (::core::ptr::null_mut(), 0);
+                        return ::core::ptr::null_mut();
                     }
-                    for (i, e) in v.into_iter().enumerate() {
-                        ::core::ptr::write(p.add(i), e);
-                    }
-                    (p, n)
+                    ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
+                    p as *mut ::core::ffi::c_char
                 }
-            ));
-        }
+            }
+        ));
+        // Universal raw memory freer: type-agnostic C `free`, no length, no
+        // destructor (NULL-safe via C `free`).
+        items.push(syn::parse_quote!(
+            #[no_mangle]
+            #[allow(non_snake_case, unused_variables)]
+            pub unsafe extern "C" fn #free_ident(p: *mut ::core::ffi::c_void) {
+                free(p);
+            }
+        ));
+        items
+    }
 
-        // Opaque handles: bare-pointer C type (`z_*_t*` = `Box::into_raw`) + typed
-        // `_drop`. The C type is an opaque/incomplete struct.
+    /// Array builder: copy a `Vec<W>` into a C-`malloc`'d block of `W` and
+    /// return `(ptr, len)` (empty ⇒ `(NULL, 0)`). The block is freed C-side
+    /// via the `z_free_array` macro (per-element drop + the universal freer).
+    fn prereq_array_builder(&self, produces_array: bool) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
+        if !produces_array {
+            return items;
+        }
+        items.push(syn::parse_quote!(
+            #[allow(non_snake_case, dead_code)]
+            pub(crate) unsafe fn __cbg_alloc_array<W>(
+                v: ::std::vec::Vec<W>,
+            ) -> (*mut W, usize) {
+                let n = v.len();
+                if n == 0 {
+                    return (::core::ptr::null_mut(), 0);
+                }
+                let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+                if p.is_null() {
+                    return (::core::ptr::null_mut(), 0);
+                }
+                for (i, e) in v.into_iter().enumerate() {
+                    ::core::ptr::write(p.add(i), e);
+                }
+                (p, n)
+            }
+        ));
+        items
+    }
+
+    /// Opaque handles: bare-pointer C type (`z_*_t*` = `Box::into_raw`) + typed
+    /// `_drop`. The C type is an opaque/incomplete struct.
+    fn prereq_opaque_handles(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.opaque) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
@@ -136,10 +352,14 @@ impl Prebindgen for Cbindgen {
                 }
             ));
         }
+        items
+    }
 
-        // Data structs: `#[repr(C)]` mirror only. Heap (`String`) fields are
-        // `char*` raw blocks the C user releases individually via the
-        // `free_memory_function` — no per-struct destructor.
+    /// Data structs: `#[repr(C)]` mirror only. Heap (`String`) fields are
+    /// `char*` raw blocks the C user releases individually via the
+    /// `free_memory_function` — no per-struct destructor.
+    fn prereq_data_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.data) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
@@ -169,113 +389,120 @@ impl Prebindgen for Cbindgen {
                 }
             ));
         }
+        items
+    }
 
-        // Value-opaque types: the opaque `#[repr(C, align(_))]` counterpart is
-        // defined elsewhere (e.g. a size/align probe generator). Here we emit only
-        // the fail-closed size+align equality asserts and the typed `_drop` (drops
-        // the live Rust value in place; NULL/gravestone ⇒ no-op).
-        {
-            let takeable_keys = self.takeable_type_keys();
-            let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
-            vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
-            for (key, cfg) in vo {
-                let ty = key.to_type();
-                if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
-                    continue;
-                }
-                let src = self.src_ty(&ty);
-                let opaque = &cfg.opaque;
-                // Fail-closed size/align equality guard (proves the transmute sound).
-                items.push(syn::parse_quote!(
-                    const _: () = {
-                        assert!(
-                            ::core::mem::size_of::<#src>() == ::core::mem::size_of::<#opaque>(),
-                            "value_opaque: Rust type and opaque counterpart differ in size"
-                        );
-                        assert!(
-                            ::core::mem::align_of::<#src>() == ::core::mem::align_of::<#opaque>(),
-                            "value_opaque: Rust type and opaque counterpart differ in alignment"
-                        );
-                    };
-                ));
-                // Autogenerated transmute glue: the single place that owns the
-                // unsafe rust<->opaque reinterpretation. `Gravestone` (user logic)
-                // and the converters below are all expressed via these methods.
-                items.push(syn::parse_quote!(
-                    impl ::prebindgen::Transmute for #opaque {
-                        type Rust = #src;
-                        #[inline]
-                        fn from_rust(value: Self::Rust) -> Self {
-                            let __v = ::core::mem::ManuallyDrop::new(value);
-                            unsafe {
-                                ::core::ptr::read(&*__v as *const Self::Rust as *const Self)
-                            }
-                        }
-                        #[inline]
-                        fn into_rust(self) -> Self::Rust {
-                            let __v = ::core::mem::ManuallyDrop::new(self);
-                            unsafe {
-                                ::core::ptr::read(&*__v as *const Self as *const Self::Rust)
-                            }
-                        }
-                        #[inline]
-                        fn as_rust(&self) -> &Self::Rust {
-                            unsafe { &*(self as *const Self as *const Self::Rust) }
-                        }
-                        #[inline]
-                        fn as_rust_mut(&mut self) -> &mut Self::Rust {
-                            unsafe { &mut *(self as *mut Self as *mut Self::Rust) }
+    /// Value-opaque types: the opaque `#[repr(C, align(_))]` counterpart is
+    /// defined elsewhere (e.g. a size/align probe generator). Here we emit only
+    /// the fail-closed size+align equality asserts and the typed `_drop` (drops
+    /// the live Rust value in place; NULL/gravestone ⇒ no-op), plus a `_take`
+    /// for types delivered as takeable callback params.
+    fn prereq_value_opaque(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
+        let takeable_keys = self.takeable_type_keys();
+        let mut vo: Vec<(&TypeKey, &ValueOpaqueCfg)> = self.value_opaque.iter().collect();
+        vo.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+        for (key, cfg) in vo {
+            let ty = key.to_type();
+            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+                continue;
+            }
+            let src = self.src_ty(&ty);
+            let opaque = &cfg.opaque;
+            // Fail-closed size/align equality guard (proves the transmute sound).
+            items.push(syn::parse_quote!(
+                const _: () = {
+                    assert!(
+                        ::core::mem::size_of::<#src>() == ::core::mem::size_of::<#opaque>(),
+                        "value_opaque: Rust type and opaque counterpart differ in size"
+                    );
+                    assert!(
+                        ::core::mem::align_of::<#src>() == ::core::mem::align_of::<#opaque>(),
+                        "value_opaque: Rust type and opaque counterpart differ in alignment"
+                    );
+                };
+            ));
+            // Autogenerated transmute glue: the single place that owns the
+            // unsafe rust<->opaque reinterpretation. `Gravestone` (user logic)
+            // and the converters below are all expressed via these methods.
+            items.push(syn::parse_quote!(
+                impl ::prebindgen::Transmute for #opaque {
+                    type Rust = #src;
+                    #[inline]
+                    fn from_rust(value: Self::Rust) -> Self {
+                        let __v = ::core::mem::ManuallyDrop::new(value);
+                        unsafe {
+                            ::core::ptr::read(&*__v as *const Self::Rust as *const Self)
                         }
                     }
-                ));
-                let drop_ident = self.destructor_symbol(&ty);
-                // Unconditional drop: safe because a moved-from slot holds a
-                // gravestone (a valid, safely-droppable empty value), so dropping
-                // it is a harmless no-op; a live slot drops normally.
+                    #[inline]
+                    fn into_rust(self) -> Self::Rust {
+                        let __v = ::core::mem::ManuallyDrop::new(self);
+                        unsafe {
+                            ::core::ptr::read(&*__v as *const Self as *const Self::Rust)
+                        }
+                    }
+                    #[inline]
+                    fn as_rust(&self) -> &Self::Rust {
+                        unsafe { &*(self as *const Self as *const Self::Rust) }
+                    }
+                    #[inline]
+                    fn as_rust_mut(&mut self) -> &mut Self::Rust {
+                        unsafe { &mut *(self as *mut Self as *mut Self::Rust) }
+                    }
+                }
+            ));
+            let drop_ident = self.destructor_symbol(&ty);
+            // Unconditional drop: safe because a moved-from slot holds a
+            // gravestone (a valid, safely-droppable empty value), so dropping
+            // it is a harmless no-op; a live slot drops normally.
+            items.push(syn::parse_quote!(
+                #[no_mangle]
+                #[allow(non_snake_case, unused_variables)]
+                pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
+                    if !this_.is_null() {
+                        ::core::ptr::drop_in_place(
+                            <#opaque as ::prebindgen::Transmute>::as_rust_mut(&mut *this_),
+                        );
+                    }
+                }
+            ));
+            // For a type delivered as a takeable callback param, also emit a
+            // public `<base>_take(dst, src)`: move `src`'s value into `dst`. For
+            // an `opaque_owned_struct` type, leave `src` a gravestone (so the
+            // trampoline's post-call drop is a no-op); an `opaque_data_struct` type owns
+            // nothing, so the leftover bitwise copy in `src` drops harmlessly and
+            // no write-back is needed. This is the C user's "take" operation.
+            if takeable_keys.contains(key) {
+                let take_ident = self.take_symbol(&ty);
+                let writeback = (cfg.kind == OpaqueKind::Owned).then(|| {
+                    quote!(::core::ptr::write(
+                        src,
+                        <#opaque as ::prebindgen::Gravestone>::gravestone(),
+                    );)
+                });
                 items.push(syn::parse_quote!(
                     #[no_mangle]
                     #[allow(non_snake_case, unused_variables)]
-                    pub unsafe extern "C" fn #drop_ident(this_: *mut #opaque) {
-                        if !this_.is_null() {
-                            ::core::ptr::drop_in_place(
-                                <#opaque as ::prebindgen::Transmute>::as_rust_mut(&mut *this_),
-                            );
+                    pub unsafe extern "C" fn #take_ident(
+                        dst: *mut #opaque,
+                        src: *mut #opaque,
+                    ) {
+                        if dst.is_null() || src.is_null() {
+                            return;
                         }
+                        ::core::ptr::write(dst, ::core::ptr::read(src));
+                        #writeback
                     }
                 ));
-                // For a type delivered as a takeable callback param, also emit a
-                // public `<base>_take(dst, src)`: move `src`'s value into `dst`. For
-                // an `opaque_owned_struct` type, leave `src` a gravestone (so the
-                // trampoline's post-call drop is a no-op); an `opaque_data_struct` type owns
-                // nothing, so the leftover bitwise copy in `src` drops harmlessly and
-                // no write-back is needed. This is the C user's "take" operation.
-                if takeable_keys.contains(key) {
-                    let take_ident = self.take_symbol(&ty);
-                    let writeback = (cfg.kind == OpaqueKind::Owned).then(|| {
-                        quote!(::core::ptr::write(
-                            src,
-                            <#opaque as ::prebindgen::Gravestone>::gravestone(),
-                        );)
-                    });
-                    items.push(syn::parse_quote!(
-                        #[no_mangle]
-                        #[allow(non_snake_case, unused_variables)]
-                        pub unsafe extern "C" fn #take_ident(
-                            dst: *mut #opaque,
-                            src: *mut #opaque,
-                        ) {
-                            if dst.is_null() || src.is_null() {
-                                return;
-                            }
-                            ::core::ptr::write(dst, ::core::ptr::read(src));
-                            #writeback
-                        }
-                    ));
-                }
             }
         }
+        items
+    }
 
-        // Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
+    /// Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
+    fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
             let ty = key.to_type();
             if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
@@ -302,12 +529,16 @@ impl Prebindgen for Cbindgen {
                 }
             ));
         }
+        items
+    }
 
-        // Callback closure structs: one `#[repr(C)]` `{ context, call, drop }`
-        // per declared signature actually used (its `impl Fn(...)` input
-        // resolved). `call` takes each arg's output wire (the owned handle the
-        // C callback must drop) plus the `void *context`; `drop` releases the
-        // context. Deterministic order by emitted name.
+    /// Callback closure structs: one `#[repr(C)]` `{ context, call, drop }`
+    /// per declared signature actually used (its `impl Fn(...)` input
+    /// resolved). `call` takes each arg's output wire (the owned handle the
+    /// C callback must drop) plus the `void *context`; `drop` releases the
+    /// context. Deterministic order by emitted name.
+    fn prereq_callback_structs(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
         let mut cb_keys: Vec<&CallbackKey> = self.callbacks.keys().collect();
         cb_keys.sort_by_key(|k| {
             let args: Vec<syn::Type> = k.iter().map(|t| t.to_type()).collect();
@@ -359,7 +590,51 @@ impl Prebindgen for Cbindgen {
                 }
             ));
         }
+        items
+    }
+}
 
+impl Prebindgen for Cbindgen {
+    type Metadata = ();
+
+    fn declared_functions(&self) -> HashSet<syn::Ident> {
+        self.functions.keys().cloned().collect()
+    }
+
+    fn ignored_functions(&self) -> HashSet<syn::Ident> {
+        self.ignored_functions.clone()
+    }
+
+    fn declared_types(&self) -> HashSet<TypeKey> {
+        self.opaque
+            .keys()
+            .chain(self.data.keys())
+            .chain(self.value_opaque.keys())
+            .chain(self.enums.keys())
+            .cloned()
+            .collect()
+    }
+
+    fn ignored_types(&self) -> HashSet<TypeKey> {
+        self.ignored_types.clone()
+    }
+
+    fn prerequisites(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        // C-string data memory (string returns + `String` fields of data structs)
+        // is malloc'd raw and freed by the single universal `free_memory_function`.
+        // Array returns (`Vec<T>`) also hand out a malloc'd block freed via the
+        // same function (per element through the `z_free_array` macro), so the
+        // allocator/freer prelude is needed for them too. Each section's emitter
+        // lives in the `impl Cbindgen` block above; order is significant.
+        let produces_array = self.produces_array(registry);
+        let mut items: Vec<syn::Item> = Vec::new();
+        items.extend(self.prereq_alloc_free(registry, produces_array));
+        items.extend(self.prereq_array_builder(produces_array));
+        items.extend(self.prereq_opaque_handles(registry));
+        items.extend(self.prereq_data_structs(registry));
+        items.extend(self.prereq_value_opaque(registry));
+        items.extend(self.prereq_enums(registry));
+        items.extend(self.prereq_callback_structs(registry));
         items
     }
 
@@ -381,213 +656,16 @@ impl Prebindgen for Cbindgen {
 
     // ── Input direction (wire → rust) ──────────────────────────────────
 
-    fn on_input_type_rank_0(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
-        let key = TypeKey::from_type(ty);
-
-        // Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
-        // handle → message). The wire is the bare handle pointer `*mut #c_struct`.
-        if self.opaque.contains_key(&key) {
-            let name = Self::in_name(ty);
-            let c_struct = self.c_type_ident(ty);
-            let src = self.src_ty(ty);
-            let short = type_short(ty);
-            let null_msg = format!("null {short} handle passed by value");
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: *mut #c_struct,
-                ) -> ::core::result::Result<#src, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#null_msg),
-                        );
-                    }
-                    ::core::result::Result::Ok(*::std::boxed::Box::from_raw(v as *mut #src))
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(*mut #c_struct),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // Data struct: decode each field from its C wire — infallible.
-        if self.data.contains_key(&key) {
-            let fields = self.struct_fields(_r, ty)?;
-            let name = Self::in_name(ty);
-            let c_struct = self.c_type_ident(ty);
-            let src = self.src_ty(ty);
-            let mut inits: Vec<TokenStream> = Vec::new();
-            for (fname, fty) in &fields {
-                if is_string(fty) {
-                    inits.push(quote!(#fname: if v.#fname.is_null() {
-                        ::std::string::String::new()
-                    } else {
-                        ::std::ffi::CStr::from_ptr(v.#fname).to_string_lossy().into_owned()
-                    }));
-                } else {
-                    inits.push(quote!(#fname: v.#fname));
-                }
-            }
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(v: #c_struct) -> #src {
-                    #src { #(#inits),* }
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(#c_struct),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // Inline-opaque, by-`*mut` consume: read the live Rust value out by
-        // transmute (move). For an `opaque_owned_struct` type, write a gravestone back so a
-        // later `_drop` is a no-op (safe drop-after-move); an `opaque_data_struct` type
-        // owns no external resource, so the moved-from bitwise duplicate is
-        // harmlessly droppable and no write-back is needed. Only the C pointer is
-        // null-checked — NULL ⇒ Err, and the `Option<_>` wrapper maps a NULL pointer
-        // wire → None. (We do NOT reject gravestone values: for types whose
-        // gravestone coincides with a legitimate value — e.g. an *empty* `ZBytes` —
-        // that would wrongly reject valid inputs; the move + write-back is safe.)
-        if let Some(opaque) = self.value_opaque_ty(ty) {
-            let opaque = opaque.clone();
-            let owned = self.opaque_kind(ty) == Some(OpaqueKind::Owned);
-            let name = Self::in_name(ty);
-            let src = self.src_ty(ty);
-            let short = type_short(ty);
-            let null_msg = format!("null {short} value passed by value");
-            let writeback = owned.then(|| {
-                quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());)
-            });
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: *mut #opaque,
-                ) -> ::core::result::Result<#src, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from(#null_msg),
-                        );
-                    }
-                    let __live = <#opaque as ::prebindgen::Transmute>::into_rust(
-                        ::core::ptr::read(v),
-                    );
-                    #writeback
-                    ::core::result::Result::Ok(__live)
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(*mut #opaque),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // Enum input: `match` the C enum back to the source enum — infallible.
-        if self.enums.contains_key(&key) {
-            let e = enum_item(_r, ty)?;
-            assert_unit_variants(e);
-            let name = Self::in_name(ty);
-            let cname = self.c_type_ident(ty);
-            let src = self.src_ty(ty);
-            let arms = e.variants.iter().map(|v| {
-                let id = &v.ident;
-                quote!(#cname::#id => #src::#id,)
-            });
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #cname) -> #src {
-                    match v { #(#arms)* }
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(#cname),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // `String` input: `*const c_char` → owned `String` — fallible.
-        if is_string(ty) {
-            let name = Self::in_name(ty);
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) unsafe fn #name(
-                    v: *const ::core::ffi::c_char,
-                ) -> ::core::result::Result<::std::string::String, ::std::string::String> {
-                    if v.is_null() {
-                        return ::core::result::Result::Err(
-                            ::std::string::String::from("null pointer passed for String argument"),
-                        );
-                    }
-                    match ::std::ffi::CStr::from_ptr(v).to_str() {
-                        ::core::result::Result::Ok(s) => {
-                            ::core::result::Result::Ok(s.to_owned())
-                        }
-                        ::core::result::Result::Err(_) => {
-                            ::core::result::Result::Err(
-                                ::std::string::String::from("invalid UTF-8 in String argument"),
-                            )
-                        }
-                    }
-                }
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(*const ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // Bare `str` never crosses the C ABI directly, but resolving `&str`
-        // inputs requires its inner node to have a filled rank-0 cell.
-        if is_str(ty) {
-            let name = Self::in_name(ty);
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, dead_code, unused_variables)]
-                pub(crate) fn #name() {}
-            );
-            return Some(ConverterImpl {
-                destination: syn::parse_quote!(*const ::core::ffi::c_char),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        // FFI-safe scalar (`bool`, integers, floats): identity pass-through.
-        if is_scalar(ty) {
-            let name = Self::in_name(ty);
-            let function: syn::ItemFn = syn::parse_quote!(
-                #[allow(non_snake_case, unused_variables, dead_code)]
-                pub(crate) fn #name(v: #ty) -> #ty {
-                    v
-                }
-            );
-            return Some(ConverterImpl {
-                destination: ty.clone(),
-                function,
-                pre_stages: vec![],
-                niches: Niches::empty(),
-                metadata: (),
-            });
-        }
-
-        None
+    fn on_input_type_rank_0(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+        // Mutually-exclusive type categories, tried in priority order. See the
+        // `impl Cbindgen` block above for each category's converter shape.
+        self.in_opaque_handle(ty)
+            .or_else(|| self.in_data_struct(ty, r))
+            .or_else(|| self.in_value_opaque(ty))
+            .or_else(|| self.in_enum(ty, r))
+            .or_else(|| self.in_string(ty))
+            .or_else(|| self.in_str(ty))
+            .or_else(|| self.in_scalar(ty))
     }
 
     fn on_input_type_rank_1(

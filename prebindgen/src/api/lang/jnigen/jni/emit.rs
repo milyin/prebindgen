@@ -91,185 +91,14 @@ pub(crate) fn emit_jni_function_wrapper(
     // `&decoded` only for `&T`-shaped originals; that's a Rust call-
     // convention concern, not a converter concern.
     for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else {
+        let Some((wp, pre, call_arg)) =
+            emit_input_param(ext, registry, original_ident, input, &on_err)
+        else {
             continue;
         };
-        let syn::Pat::Ident(pat_id) = &*pt.pat else {
-            continue;
-        };
-        let arg_ident = &pat_id.ident;
-        let arg_ty = &*pt.ty;
-
-        // Constructor-expansion: this parameter's wire form is the fold plan's
-        // flattened leaves. Decode each leaf with its own converter, run the
-        // (pure-Rust) fold to build the value, then pass it to the call.
-        if let Some(plan) = registry
-            .expansion_plans
-            .get(&(original_ident.clone(), arg_ident.clone()))
-        {
-            let (wp, pre, call_arg) = emit_expanded_param(ext, registry, plan, arg_ident, &on_err);
-            wire_params.extend(wp);
-            prelude.extend(pre);
-            call_args.push(call_arg);
-            continue;
-        }
-
-        let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
-            panic!(
-                "JniGen::on_function: input type `{}` for `{}` is unresolved",
-                TypeKey::from_type(arg_ty),
-                original_ident,
-            )
-        });
-
-        // Flattenable data_class param: cross its fields as separate wire
-        // params and reconstruct the struct inline — no per-call
-        // `env.get_field(...)` reflection. Falls back (None) to the
-        // single-`JObject` path for any shape outside the conservative leaf
-        // set (handles, nested structs, enums, …). The `JNINative` extern and
-        // the Kotlin call-site destructure read the same plan so the three
-        // sites can't drift.
-        if let Some(plan) = build_flat_input_plan(ext, registry, arg_ident, arg_ty, "") {
-            for leaf in &plan.leaves {
-                let pid = &leaf.native_ident;
-                let pty = &leaf.native_wire_ty;
-                wire_params.push(quote!(#pid: #pty));
-            }
-            let (decode, call_arg) = render_flat_input_decode(&plan, arg_ident, &on_err);
-            prelude.push(decode);
-            call_args.push(call_arg);
-            continue;
-        }
-
-        let wire = &entry.destination;
-        let conv = entry.function.sig.ident.clone();
-        let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
-            format_ident!("{}_ptr", arg_ident)
-        } else {
-            arg_ident.clone()
-        };
-
-        // By-value `T` opaque-handle parameter: emit the consume
-        // converter inline, bypassing `OwnedObject`. The Java side
-        // takes the pointer out of its `NativeHandle.consume` under
-        // the write lock and passes it here; `Box::from_raw`
-        // reconstructs the unique owner and `*box` moves `T` out,
-        // dropping the heap allocation. The unique-ownership
-        // invariant is upheld by `NativeHandle.consume` (write-lock
-        // + atomic pointer take), which drains all in-flight borrows
-        // and ensures no live borrow can outlive this point. No
-        // `T: Clone` bound, so non-Clone handles (e.g. `Publisher<'a>`)
-        // work too. This decode is infallible — no `match` needed.
-        let is_consume =
-            !matches!(arg_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
-        if is_consume {
-            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-            prelude.push(quote!(
-                let #arg_ident: #arg_ty = unsafe {
-                    *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
-                };
-            ));
-            call_args.push(quote!(#arg_ident));
-            continue;
-        }
-
-        let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
-        wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
-        // Input wrapper takes wires by ref except for raw pointers. The
-        // converter returns `Result<T, __JniErr>`; on `Err` we signal the
-        // error sink and bail with the function sentinel (no JVM throw).
-        let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
-            quote!(#conv(&mut env, #wire_ident))
-        } else {
-            quote!(#conv(&mut env, &#wire_ident))
-        };
-        // Binding for the final `arg_ident` needs `mut` when the source
-        // fn takes `&mut T` — the call site below emits `&mut arg_ident`,
-        // which requires a mutable binding. Also for `Option<&mut T>`
-        // where the call site needs `.as_deref_mut()`. Intermediate stage
-        // bindings (`__{ident}_sN`) don't need it.
-        let arg_mut: TokenStream = if matches!(arg_ty, syn::Type::Reference(r) if r.mutability.is_some())
-            || matches!(option_inner_ref_mutability(arg_ty), Some(true))
-        {
-            quote!(mut)
-        } else {
-            quote!()
-        };
-        // Stage 0: wire-facing function. Pre_stages then run in REVERSE
-        // (rust-side last). Even with no pre_stages this collapses to a
-        // single `let #arg_ident = match decode_call { ... }`, byte-
-        // identical to the pre-chain emission.
-        if entry.pre_stages.is_empty() {
-            prelude.push(quote!(
-                let #arg_mut #arg_ident = match #decode_call {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
-                        return #on_err;
-                    }
-                };
-            ));
-        } else {
-            // Multi-stage: introduce a temporary for the function's
-            // result, then thread each pre_stage in reverse onto it.
-            let stage0_ident = format_ident!("__{}_s0", arg_ident);
-            prelude.push(quote!(
-                let #stage0_ident = match #decode_call {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
-                        return #on_err;
-                    }
-                };
-            ));
-            let mut prev = stage0_ident;
-            // pre_stages[0] is closest to rust → iterated last; walk
-            // back from the function-adjacent end.
-            let n = entry.pre_stages.len();
-            for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
-                let stage_fn = &stage.function.sig.ident;
-                let is_last = idx == 0;
-                let out_ident = if is_last {
-                    arg_ident.clone()
-                } else {
-                    format_ident!("__{}_s{}", arg_ident, n - idx)
-                };
-                // Final binding gets `mut` if the source fn takes `&mut`.
-                let bind_mut: TokenStream = if is_last { arg_mut.clone() } else { quote!() };
-                prelude.push(quote!(
-                    let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
-                        ::core::result::Result::Ok(__v) => __v,
-                        ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
-                            return #on_err;
-                        }
-                    };
-                ));
-                prev = out_ident;
-            }
-        }
-        match arg_ty {
-            syn::Type::Reference(r) if r.mutability.is_some() => {
-                call_args.push(quote!(&mut #arg_ident));
-            }
-            syn::Type::Reference(_) => {
-                call_args.push(quote!(&#arg_ident));
-            }
-            // `Option<&T>` / `Option<&mut T>` for opaque inner: the input
-            // converter produced `Option<OwnedObject<T>>` (see rank-1
-            // handler above). `.as_deref()` / `.as_deref_mut()` coerces
-            // back to `Option<&T>` / `Option<&mut T>` via OwnedObject's
-            // Deref / DerefMut impls.
-            _ if matches!(option_inner_ref_mutability(arg_ty), Some(false)) => {
-                call_args.push(quote!(#arg_ident.as_deref()));
-            }
-            _ if matches!(option_inner_ref_mutability(arg_ty), Some(true)) => {
-                call_args.push(quote!(#arg_ident.as_deref_mut()));
-            }
-            _ => {
-                call_args.push(quote!(#arg_ident));
-            }
-        }
+        wire_params.extend(wp);
+        prelude.extend(pre);
+        call_args.push(call_arg);
     }
 
     let raw_call = quote!(#source_module::#original_ident(#(#call_args),*));
@@ -291,7 +120,7 @@ pub(crate) fn emit_jni_function_wrapper(
             e
         };
         match &plan.shape {
-            UnfoldShape::Optional(_) => {
+            UnfoldShape::Optional((), _) => {
                 let inner = compose(quote!(__inner), by_ref);
                 quote!({
                     let __cvsrc = #raw_call;
@@ -462,6 +291,198 @@ pub(crate) fn emit_jni_function_wrapper(
     }
 }
 
+/// Decode one source-fn input parameter: look up its converter for the type AS
+/// WRITTEN (no strip — a `&T` param looks up `&T`'s entry, which the `& _`
+/// rank-1 handler resolved by sharing `T`'s function), then emit its wire
+/// params, prelude decode statements, and the call argument. Returns `None` for
+/// a non-`Typed`/non-`Ident` arg (`self`, patterns), which the caller skips.
+///
+/// Reads only `ext`/`registry`/`original_ident`/`on_err` — independent of any
+/// other input — so the per-input handling stays a self-contained unit.
+#[allow(clippy::type_complexity)]
+fn emit_input_param(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    original_ident: &syn::Ident,
+    input: &syn::FnArg,
+    on_err: &TokenStream,
+) -> Option<(Vec<TokenStream>, Vec<TokenStream>, TokenStream)> {
+    let syn::FnArg::Typed(pt) = input else {
+        return None;
+    };
+    let syn::Pat::Ident(pat_id) = &*pt.pat else {
+        return None;
+    };
+    let arg_ident = &pat_id.ident;
+    let arg_ty = &*pt.ty;
+
+    let mut wire_params: Vec<TokenStream> = Vec::new();
+    let mut prelude: Vec<TokenStream> = Vec::new();
+
+    // Constructor-expansion: this parameter's wire form is the fold plan's
+    // flattened leaves. Decode each leaf with its own converter, run the
+    // (pure-Rust) fold to build the value, then pass it to the call.
+    if let Some(plan) = registry
+        .expansion_plans
+        .get(&(original_ident.clone(), arg_ident.clone()))
+    {
+        let (wp, pre, call_arg) = emit_expanded_param(ext, registry, plan, arg_ident, on_err);
+        wire_params.extend(wp);
+        prelude.extend(pre);
+        return Some((wire_params, prelude, call_arg));
+    }
+
+    let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
+        panic!(
+            "JniGen::on_function: input type `{}` for `{}` is unresolved",
+            TypeKey::from_type(arg_ty),
+            original_ident,
+        )
+    });
+
+    // Flattenable data_class param: cross its fields as separate wire
+    // params and reconstruct the struct inline — no per-call
+    // `env.get_field(...)` reflection. Falls back (None) to the
+    // single-`JObject` path for any shape outside the conservative leaf
+    // set (handles, nested structs, enums, …). The `JNINative` extern and
+    // the Kotlin call-site destructure read the same plan so the three
+    // sites can't drift.
+    if let Some(plan) = build_flat_input_plan(ext, registry, arg_ident, arg_ty, "") {
+        for leaf in &plan.leaves {
+            let pid = &leaf.native_ident;
+            let pty = &leaf.native_wire_ty;
+            wire_params.push(quote!(#pid: #pty));
+        }
+        let (decode, call_arg) = render_flat_input_decode(&plan, arg_ident, on_err);
+        prelude.push(decode);
+        return Some((wire_params, prelude, call_arg));
+    }
+
+    let wire = &entry.destination;
+    let conv = entry.function.sig.ident.clone();
+    let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
+        format_ident!("{}_ptr", arg_ident)
+    } else {
+        arg_ident.clone()
+    };
+
+    // By-value `T` opaque-handle parameter: emit the consume
+    // converter inline, bypassing `OwnedObject`. The Java side
+    // takes the pointer out of its `NativeHandle.consume` under
+    // the write lock and passes it here; `Box::from_raw`
+    // reconstructs the unique owner and `*box` moves `T` out,
+    // dropping the heap allocation. The unique-ownership
+    // invariant is upheld by `NativeHandle.consume` (write-lock
+    // + atomic pointer take), which drains all in-flight borrows
+    // and ensures no live borrow can outlive this point. No
+    // `T: Clone` bound, so non-Clone handles (e.g. `Publisher<'a>`)
+    // work too. This decode is infallible — no `match` needed.
+    let is_consume =
+        !matches!(arg_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
+    if is_consume {
+        wire_params.push(quote!(#wire_ident: jni::sys::jlong));
+        prelude.push(quote!(
+            let #arg_ident: #arg_ty = unsafe {
+                *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
+            };
+        ));
+        return Some((wire_params, prelude, quote!(#arg_ident)));
+    }
+
+    let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
+    wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
+    // Input wrapper takes wires by ref except for raw pointers. The
+    // converter returns `Result<T, __JniErr>`; on `Err` we signal the
+    // error sink and bail with the function sentinel (no JVM throw).
+    let decode_call = if matches!(wire, syn::Type::Ptr(_)) {
+        quote!(#conv(&mut env, #wire_ident))
+    } else {
+        quote!(#conv(&mut env, &#wire_ident))
+    };
+    // Binding for the final `arg_ident` needs `mut` when the source
+    // fn takes `&mut T` — the call site below emits `&mut arg_ident`,
+    // which requires a mutable binding. Also for `Option<&mut T>`
+    // where the call site needs `.as_deref_mut()`. Intermediate stage
+    // bindings (`__{ident}_sN`) don't need it.
+    let arg_mut: TokenStream = if matches!(arg_ty, syn::Type::Reference(r) if r.mutability.is_some())
+        || matches!(option_inner_ref_mutability(arg_ty), Some(true))
+    {
+        quote!(mut)
+    } else {
+        quote!()
+    };
+    // Stage 0: wire-facing function. Pre_stages then run in REVERSE
+    // (rust-side last). Even with no pre_stages this collapses to a
+    // single `let #arg_ident = match decode_call { ... }`, byte-
+    // identical to the pre-chain emission.
+    if entry.pre_stages.is_empty() {
+        prelude.push(quote!(
+            let #arg_mut #arg_ident = match #decode_call {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                    return #on_err;
+                }
+            };
+        ));
+    } else {
+        // Multi-stage: introduce a temporary for the function's
+        // result, then thread each pre_stage in reverse onto it.
+        let stage0_ident = format_ident!("__{}_s0", arg_ident);
+        prelude.push(quote!(
+            let #stage0_ident = match #decode_call {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                    return #on_err;
+                }
+            };
+        ));
+        let mut prev = stage0_ident;
+        // pre_stages[0] is closest to rust → iterated last; walk
+        // back from the function-adjacent end.
+        let n = entry.pre_stages.len();
+        for (idx, stage) in entry.pre_stages.iter().enumerate().rev() {
+            let stage_fn = &stage.function.sig.ident;
+            let is_last = idx == 0;
+            let out_ident = if is_last {
+                arg_ident.clone()
+            } else {
+                format_ident!("__{}_s{}", arg_ident, n - idx)
+            };
+            // Final binding gets `mut` if the source fn takes `&mut`.
+            let bind_mut: TokenStream = if is_last { arg_mut.clone() } else { quote!() };
+            prelude.push(quote!(
+                let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        return #on_err;
+                    }
+                };
+            ));
+            prev = out_ident;
+        }
+    }
+    let call_arg = match arg_ty {
+        syn::Type::Reference(r) if r.mutability.is_some() => quote!(&mut #arg_ident),
+        syn::Type::Reference(_) => quote!(&#arg_ident),
+        // `Option<&T>` / `Option<&mut T>` for opaque inner: the input
+        // converter produced `Option<OwnedObject<T>>` (see rank-1
+        // handler above). `.as_deref()` / `.as_deref_mut()` coerces
+        // back to `Option<&T>` / `Option<&mut T>` via OwnedObject's
+        // Deref / DerefMut impls.
+        _ if matches!(option_inner_ref_mutability(arg_ty), Some(false)) => {
+            quote!(#arg_ident.as_deref())
+        }
+        _ if matches!(option_inner_ref_mutability(arg_ty), Some(true)) => {
+            quote!(#arg_ident.as_deref_mut())
+        }
+        _ => quote!(#arg_ident),
+    };
+    Some((wire_params, prelude, call_arg))
+}
+
 /// `Result<Ok, _>` → `Ok` (by last path segment's first generic arg).
 fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
     let syn::Type::Path(tp) = ty else { return None };
@@ -590,13 +611,13 @@ fn default_ze_jvalues(
 /// borrowed-opaque output converter. The builder args are assembled in declared
 /// leaf order regardless of encode order.
 ///
-/// Shape handling: [`UnfoldShape::Decompose`] decomposes the returned value
+/// Shape handling: [`UnfoldShape::Base`] decomposes the returned value
 /// directly; [`UnfoldShape::Optional`] matches `Some(__inner)` ⇒ decompose the
 /// inner, `None` ⇒ null result (builder skipped). Leaf wires may be object
 /// (JString/JByteArray/JObject — cast via `.into()`) or primitive (boxed to
 /// `java.lang.*` via the cached `box_helper_for_wire` runtime helpers).
 ///
-/// [`UnfoldShape::Decompose`]: crate::api::core::unfold::UnfoldShape::Decompose
+/// [`UnfoldShape::Base`]: crate::api::core::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
     ext: &JniGen,
@@ -673,7 +694,7 @@ pub(crate) fn emit_unfold_delivery(
     };
 
     match &plan.shape {
-        UnfoldShape::Decompose => {
+        UnfoldShape::Base => {
             let decon = plan.decon.as_ref().expect("record-built plan carries its DeconId");
             let statics = iface_statics(
                 &builder_iface_spec(ext, registry, decon)
@@ -686,9 +707,9 @@ pub(crate) fn emit_unfold_delivery(
                 #body
             }
         }
-        UnfoldShape::Optional(inner) => {
+        UnfoldShape::Optional((), inner) => {
             match **inner {
-                UnfoldShape::Decompose => {}
+                UnfoldShape::Base => {}
                 _ => panic!(
                     "emit_unfold_delivery: only Optional(Decompose) is implemented (M2); \
                      nested Optional/Iterable is M3/M4"
@@ -1958,8 +1979,8 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 pub(crate) fn handle_field_fqn(ext: &JniGen, h: &Projection) -> String {
     fn assert_scalar(s: &FoldStrategy) {
         match s {
-            FoldStrategy::Direct => {}
-            FoldStrategy::Nullable { inner, .. } => assert_scalar(inner),
+            FoldStrategy::Base => {}
+            FoldStrategy::Optional(_, inner) => assert_scalar(inner),
             FoldStrategy::Iterable(_) => panic!(
                 "struct handle field: collection (Vec<Handle>) layers are not yet \
                  supported by the struct encode/decode bridge — add array codegen \
@@ -2487,220 +2508,245 @@ pub(crate) fn flatten_struct_encode(
     let mut slots: Vec<EncSlot> = Vec::new();
 
     for field in &named.named {
-        let fname = field.ident.as_ref().unwrap().clone();
-        let effective_ty = field.ty.clone();
-        let field_entry = registry.output_entry(&effective_ty)?;
-        let field_wire = field_entry.destination.clone();
-        let field_conv = field_entry.function.sig.ident.clone();
-        let value_expr = quote! { #field_conv(#env_expr, #access.#fname.clone())? };
-        let base = format!("{}_{}", prefix, fname);
-        let id = format_ident!("__{}", base);
+        let (pre, sl) =
+            encode_struct_field(ext, registry, s, access, prefix, depth, env_expr, field)?;
+        preludes.extend(pre);
+        slots.extend(sl);
+    }
+    Some((preludes, slots))
+}
 
-        // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
-        if let Some(proj) = &field_entry.metadata.projection {
-            match proj.kind {
-                ProjectionKind::Handle => {
-                    preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
-                    slots.push(EncSlot {
-                        ident: id,
-                        wire_ty: quote!(jni::sys::jlong),
-                        descriptor: "J".to_string(),
-                        is_object: false,
-                        default: quote!(0i64),
-                    });
-                }
-                ProjectionKind::ValueBlob => {
-                    preludes.extend(
-                        quote! { let #id: jni::objects::JObject = { #value_expr }.into(); },
-                    );
-                    slots.push(EncSlot {
-                        ident: id,
-                        wire_ty: quote!(jni::objects::JObject),
-                        descriptor: "[B".to_string(),
-                        is_object: true,
-                        default: quote!(jni::objects::JObject::null()),
-                    });
-                }
+/// Encode one field of a flattened data-class into its wire slots: the four
+/// disjoint field kinds (projection leaf, enum leaf, nested data-class —
+/// recursing back into [`flatten_struct_encode`] — and primitive/object leaf),
+/// in priority order. Returns the field's prelude statements and [`EncSlot`]s,
+/// or `None` to abort the whole flatten (an unresolved field converter).
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn encode_struct_field(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    s: &syn::ItemStruct,
+    access: &TokenStream,
+    prefix: &str,
+    depth: usize,
+    env_expr: &TokenStream,
+    field: &syn::Field,
+) -> Option<(TokenStream, Vec<EncSlot>)> {
+    let mut preludes = TokenStream::new();
+    let mut slots: Vec<EncSlot> = Vec::new();
+
+    let fname = field.ident.as_ref().unwrap().clone();
+    let effective_ty = field.ty.clone();
+    let field_entry = registry.output_entry(&effective_ty)?;
+    let field_wire = field_entry.destination.clone();
+    let field_conv = field_entry.function.sig.ident.clone();
+    let value_expr = quote! { #field_conv(#env_expr, #access.#fname.clone())? };
+    let base = format!("{}_{}", prefix, fname);
+    let id = format_ident!("__{}", base);
+
+    // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
+    if let Some(proj) = &field_entry.metadata.projection {
+        match proj.kind {
+            ProjectionKind::Handle => {
+                preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
+                slots.push(EncSlot {
+                    ident: id,
+                    wire_ty: quote!(jni::sys::jlong),
+                    descriptor: "J".to_string(),
+                    is_object: false,
+                    default: quote!(0i64),
+                });
             }
-            continue;
+            ProjectionKind::ValueBlob => {
+                preludes
+                    .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
+                slots.push(EncSlot {
+                    ident: id,
+                    wire_ty: quote!(jni::objects::JObject),
+                    descriptor: "[B".to_string(),
+                    is_object: true,
+                    default: quote!(jni::objects::JObject::null()),
+                });
+            }
         }
-        // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
-        if ext.is_kotlin_enum(&effective_ty) {
-            if let Some(name) = bare_path_ident(&effective_ty) {
-                if ext.kotlin_fqn(&name.to_string()).is_some() {
-                    preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
-                    slots.push(EncSlot {
-                        ident: id,
-                        wire_ty: quote!(jni::sys::jint),
-                        descriptor: "I".to_string(),
-                        is_object: false,
-                        default: quote!(0i32),
-                    });
-                    continue;
-                }
+        return Some((preludes, slots));
+    }
+    // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
+    if ext.is_kotlin_enum(&effective_ty) {
+        if let Some(name) = bare_path_ident(&effective_ty) {
+            if ext.kotlin_fqn(&name.to_string()).is_some() {
+                preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
+                slots.push(EncSlot {
+                    ident: id,
+                    wire_ty: quote!(jni::sys::jint),
+                    descriptor: "I".to_string(),
+                    is_object: false,
+                    default: quote!(0i32),
+                });
+                return Some((preludes, slots));
             }
         }
-        // Nested data-class field (not a projection / not an enum, and its
-        // option-stripped bare type is a registered non-value-class struct):
-        // recurse and inline its leaves instead of building the child via its
-        // own `fromParts` call.
-        let inner_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-        let nested_child = bare_path_ident(&inner_ty).and_then(|name| {
-            let is_struct = registry.structs.contains_key(&name);
-            let is_vc = ext
-                .types
-                .get(&TypeKey::from_type(&inner_ty))
-                .map(|c| c.value_blob)
-                .unwrap_or(false);
-            if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
-                registry.structs.get(&name).map(|(st, _)| st.clone())
-            } else {
-                None
-            }
-        });
-        if let Some(child) = nested_child {
-            if pat_match_top(&effective_ty, "Vec") {
-                panic!(
-                    "flatten_struct_encode: `Vec<{}>` data-class field (`{}.{}`) is not \
-                     supported by the fromParts flatten (variable arity)",
-                    inner_ty.to_token_stream(),
-                    s.ident,
-                    fname
-                );
-            }
-            if option_inner_type(&effective_ty).is_none() {
-                let child_access = quote! { #access.#fname };
-                let (child_pre, child_slots) = flatten_struct_encode(
-                    ext,
-                    registry,
-                    &child,
-                    &child_access,
-                    &base,
-                    depth + 1,
-                    env_expr,
-                )?;
-                preludes.extend(child_pre);
-                slots.extend(child_slots);
-            } else {
-                // `Option<nested>`: a `present` flag + the child's leaves,
-                // encoded in the `Some` arm and defaulted in the `None` arm.
-                let cbind = format_ident!("__c{}", depth);
-                let child_access = quote! { #cbind };
-                let (child_pre, child_slots) = flatten_struct_encode(
-                    ext,
-                    registry,
-                    &child,
-                    &child_access,
-                    &base,
-                    depth + 1,
-                    env_expr,
-                )?;
-                let flag_id = format_ident!("__{}_present", base);
-                let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
-                    .map(|i| format_ident!("__{}_o{}", base, i))
-                    .collect();
-                let outer_tys: Vec<TokenStream> =
-                    child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
-                let inner_ids: Vec<proc_macro2::Ident> =
-                    child_slots.iter().map(|sl| sl.ident.clone()).collect();
-                let defaults: Vec<TokenStream> =
-                    child_slots.iter().map(|sl| sl.default.clone()).collect();
-                preludes.extend(quote! {
-                    let #flag_id: jni::sys::jboolean;
-                    #( let #outer_ids: #outer_tys; )*
-                    match &#access.#fname {
-                        Some(#cbind) => {
-                            #child_pre
-                            #flag_id = 1u8;
-                            #( #outer_ids = #inner_ids; )*
-                        }
-                        None => {
-                            #flag_id = 0u8;
-                            #( #outer_ids = #defaults; )*
-                        }
+    }
+    // Nested data-class field (not a projection / not an enum, and its
+    // option-stripped bare type is a registered non-value-class struct):
+    // recurse and inline its leaves instead of building the child via its
+    // own `fromParts` call.
+    let inner_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+    let nested_child = bare_path_ident(&inner_ty).and_then(|name| {
+        let is_struct = registry.structs.contains_key(&name);
+        let is_vc = ext
+            .types
+            .get(&TypeKey::from_type(&inner_ty))
+            .map(|c| c.value_blob)
+            .unwrap_or(false);
+        if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
+            registry.structs.get(&name).map(|(st, _)| st.clone())
+        } else {
+            None
+        }
+    });
+    if let Some(child) = nested_child {
+        if pat_match_top(&effective_ty, "Vec") {
+            panic!(
+                "flatten_struct_encode: `Vec<{}>` data-class field (`{}.{}`) is not \
+                 supported by the fromParts flatten (variable arity)",
+                inner_ty.to_token_stream(),
+                s.ident,
+                fname
+            );
+        }
+        if option_inner_type(&effective_ty).is_none() {
+            let child_access = quote! { #access.#fname };
+            let (child_pre, child_slots) = flatten_struct_encode(
+                ext,
+                registry,
+                &child,
+                &child_access,
+                &base,
+                depth + 1,
+                env_expr,
+            )?;
+            preludes.extend(child_pre);
+            slots.extend(child_slots);
+        } else {
+            // `Option<nested>`: a `present` flag + the child's leaves,
+            // encoded in the `Some` arm and defaulted in the `None` arm.
+            let cbind = format_ident!("__c{}", depth);
+            let child_access = quote! { #cbind };
+            let (child_pre, child_slots) = flatten_struct_encode(
+                ext,
+                registry,
+                &child,
+                &child_access,
+                &base,
+                depth + 1,
+                env_expr,
+            )?;
+            let flag_id = format_ident!("__{}_present", base);
+            let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
+                .map(|i| format_ident!("__{}_o{}", base, i))
+                .collect();
+            let outer_tys: Vec<TokenStream> =
+                child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
+            let inner_ids: Vec<proc_macro2::Ident> =
+                child_slots.iter().map(|sl| sl.ident.clone()).collect();
+            let defaults: Vec<TokenStream> =
+                child_slots.iter().map(|sl| sl.default.clone()).collect();
+            preludes.extend(quote! {
+                let #flag_id: jni::sys::jboolean;
+                #( let #outer_ids: #outer_tys; )*
+                match &#access.#fname {
+                    Some(#cbind) => {
+                        #child_pre
+                        #flag_id = 1u8;
+                        #( #outer_ids = #inner_ids; )*
                     }
-                });
-                slots.push(EncSlot {
-                    ident: flag_id,
-                    wire_ty: quote!(jni::sys::jboolean),
-                    descriptor: "Z".to_string(),
-                    is_object: false,
-                    default: quote!(0u8),
-                });
-                for (i, sl) in child_slots.iter().enumerate() {
-                    slots.push(EncSlot {
-                        ident: outer_ids[i].clone(),
-                        wire_ty: sl.wire_ty.clone(),
-                        descriptor: sl.descriptor.clone(),
-                        is_object: sl.is_object,
-                        default: sl.default.clone(),
-                    });
+                    None => {
+                        #flag_id = 0u8;
+                        #( #outer_ids = #defaults; )*
+                    }
                 }
+            });
+            slots.push(EncSlot {
+                ident: flag_id,
+                wire_ty: quote!(jni::sys::jboolean),
+                descriptor: "Z".to_string(),
+                is_object: false,
+                default: quote!(0u8),
+            });
+            for (i, sl) in child_slots.iter().enumerate() {
+                slots.push(EncSlot {
+                    ident: outer_ids[i].clone(),
+                    wire_ty: sl.wire_ty.clone(),
+                    descriptor: sl.descriptor.clone(),
+                    is_object: sl.is_object,
+                    default: sl.default.clone(),
+                });
             }
-            continue;
         }
-        // Leaf primitive / object (string, byte array, Vec, ...).
-        match jni_field_access(&field_wire) {
-            Some((sig, _, false)) => {
-                preludes.extend(quote! { let #id: #field_wire = #value_expr; });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(#field_wire),
-                    descriptor: sig.to_string(),
-                    is_object: false,
-                    default: primitive_default_for_descriptor(sig),
-                });
-            }
-            Some((sig, _, true)) => {
-                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr.into(); });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::objects::JObject),
-                    descriptor: sig.to_string(),
-                    is_object: true,
-                    default: quote!(jni::objects::JObject::null()),
-                });
-            }
-            None => {
-                // Object-shaped wire with no primitive descriptor; the JVM slot
-                // must be the field's actual declared type (Option-stripped).
-                let slot_ty =
-                    option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-                let typed_slot = registry
-                    .output_entry(&slot_ty)
-                    .and_then(|e| jni_field_access(&e.destination))
-                    .map(|(sig, _, _)| sig.to_string())
-                    .or_else(|| {
-                        bare_path_ident(&slot_ty).and_then(|name| {
-                            ext.kotlin_fqn(&name.to_string())
-                                .map(|v| format!("L{};", v.replace('.', "/")))
+        return Some((preludes, slots));
+    }
+    // Leaf primitive / object (string, byte array, Vec, ...).
+    match jni_field_access(&field_wire) {
+        Some((sig, _, false)) => {
+            preludes.extend(quote! { let #id: #field_wire = #value_expr; });
+            slots.push(EncSlot {
+                ident: id,
+                wire_ty: quote!(#field_wire),
+                descriptor: sig.to_string(),
+                is_object: false,
+                default: primitive_default_for_descriptor(sig),
+            });
+        }
+        Some((sig, _, true)) => {
+            preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr.into(); });
+            slots.push(EncSlot {
+                ident: id,
+                wire_ty: quote!(jni::objects::JObject),
+                descriptor: sig.to_string(),
+                is_object: true,
+                default: quote!(jni::objects::JObject::null()),
+            });
+        }
+        None => {
+            // Object-shaped wire with no primitive descriptor; the JVM slot
+            // must be the field's actual declared type (Option-stripped).
+            let slot_ty =
+                option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+            let typed_slot = registry
+                .output_entry(&slot_ty)
+                .and_then(|e| jni_field_access(&e.destination))
+                .map(|(sig, _, _)| sig.to_string())
+                .or_else(|| {
+                    bare_path_ident(&slot_ty).and_then(|name| {
+                        ext.kotlin_fqn(&name.to_string())
+                            .map(|v| format!("L{};", v.replace('.', "/")))
+                    })
+                })
+                .or_else(|| {
+                    if pat_match_top(&slot_ty, "Vec") {
+                        Some("Ljava/util/List;".to_string())
+                    } else if let syn::Type::Path(tp) = &field_wire {
+                        tp.path.segments.last().and_then(|seg| {
+                            match seg.ident.to_string().as_str() {
+                                "JString" => Some("Ljava/lang/String;".to_string()),
+                                "JByteArray" => Some("[B".to_string()),
+                                _ => None,
+                            }
                         })
-                    })
-                    .or_else(|| {
-                        if pat_match_top(&slot_ty, "Vec") {
-                            Some("Ljava/util/List;".to_string())
-                        } else if let syn::Type::Path(tp) = &field_wire {
-                            tp.path.segments.last().and_then(|seg| {
-                                match seg.ident.to_string().as_str() {
-                                    "JString" => Some("Ljava/lang/String;".to_string()),
-                                    "JByteArray" => Some("[B".to_string()),
-                                    _ => None,
-                                }
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::objects::JObject),
-                    descriptor: typed_slot,
-                    is_object: true,
-                    default: quote!(jni::objects::JObject::null()),
-                });
-            }
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
+            preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
+            slots.push(EncSlot {
+                ident: id,
+                wire_ty: quote!(jni::objects::JObject),
+                descriptor: typed_slot,
+                is_object: true,
+                default: quote!(jni::objects::JObject::null()),
+            });
         }
     }
     Some((preludes, slots))
