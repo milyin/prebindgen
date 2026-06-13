@@ -139,7 +139,7 @@ impl JniGen {
     }
 
     /// `Cow<[u8]>` output converter (any lifetime form) — see the call site
-    /// in [`Self::on_output_type_rank_0`]. `None` when `ty` isn't a
+    /// in [`Self::output_terminal`]. `None` when `ty` isn't a
     /// `Cow<…, [u8]>` path.
     fn cow_bytes_output(&self, ty: &syn::Type) -> Option<ConverterImpl<KotlinMeta>> {
         let syn::Type::Path(tp) = ty else { return None };
@@ -499,13 +499,13 @@ pub(crate) fn build_handle_destructor_items(
     named.into_iter().map(|(_, item)| item).collect()
 }
 
-/// Per-pattern rank-1 **input** converter builders. Each returns
-/// `Some(ConverterImpl)` only for the wildcard pattern it claims;
-/// [`JniGen::on_input_type_rank_1`] chains them in priority order. Because
-/// [`pat_match`] is an exact match, the patterns are disjoint — except the two
-/// `Option<_>` sub-cases (direct-handle-by-value vs general), which share a
-/// pattern and so live together in [`JniGen::input_option`] to keep their
-/// original fall-through.
+/// Per-shape **input** wrapper converter builders (`&`/`Option<&>`/`Vec`/
+/// `Option`). Each returns `Some(ConverterImpl)` only for the wildcard pattern
+/// it claims; [`JniGen::input_wrapper_shape`] chains them in priority order.
+/// Because [`pat_match`] is an exact match, the patterns are disjoint — except
+/// the two `Option<_>` sub-cases (direct-handle-by-value vs general), which
+/// share a pattern and so live together in [`JniGen::input_option`] to keep
+/// their original fall-through.
 impl JniGen {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
@@ -778,19 +778,18 @@ impl Prebindgen for JniGen {
     type Metadata = KotlinMeta;
 
     // ── Structural type resolution ──────────────────────────────────────
-    // Peel `ty`'s outermost layer and dispatch to the rank handlers with the
-    // reconstructed canonical pattern (reused as builders until the rank
-    // methods are removed). The user-wrapper table is consulted via
-    // `match_user_*` (any depth, specificity-ordered). `subs` = the captured
-    // inner(s), matching the enumerator's recorded wildcard fills.
+    // Try the terminal categories, then the user-wrapper table (`match_user_*`,
+    // any depth, specificity-ordered), then the built-in wrapper shapes — peel
+    // `ty`'s outermost layer and dispatch to `{input,output}_wrapper_shape` with
+    // the reconstructed canonical pattern. `subs` = the captured inner(s).
 
     fn on_input_type(
         &self,
         ty: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // 1. Terminal categories (incl. the rank-0 user-wrapper table).
-        if let Some(c) = self.on_input_type_rank_0(ty, registry) {
+        // 1. Terminal categories (incl. the terminal user-wrapper lookup).
+        if let Some(c) = self.input_terminal(ty, registry) {
             return Some(c);
         }
         // 2. Higher-arity user-registered input patterns (any depth).
@@ -804,13 +803,13 @@ impl Prebindgen for JniGen {
             if let syn::Type::Reference(r) = &inner {
                 let pat = with_first_arg(ty, ref_wildcard(r));
                 let t1 = (*r.elem).clone();
-                if let Some(mut c) = self.on_input_type_rank_1(&pat, &t1, registry) {
+                if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
                     c.subs = vec![t1];
                     return Some(c);
                 }
             }
             let pat = with_first_arg(ty, syn::parse_quote!(_));
-            if let Some(mut c) = self.on_input_type_rank_1(&pat, &inner, registry) {
+            if let Some(mut c) = self.input_wrapper_shape(&pat, &inner, registry) {
                 c.subs = vec![inner];
                 return Some(c);
             }
@@ -818,7 +817,7 @@ impl Prebindgen for JniGen {
         }
         if let Some(elem) = vec_inner_type(ty) {
             let pat = with_first_arg(ty, syn::parse_quote!(_));
-            if let Some(mut c) = self.on_input_type_rank_1(&pat, &elem, registry) {
+            if let Some(mut c) = self.input_wrapper_shape(&pat, &elem, registry) {
                 c.subs = vec![elem];
                 return Some(c);
             }
@@ -827,7 +826,7 @@ impl Prebindgen for JniGen {
         if let syn::Type::Reference(r) = ty {
             let pat = ref_wildcard(r);
             let t1 = (*r.elem).clone();
-            if let Some(mut c) = self.on_input_type_rank_1(&pat, &t1, registry) {
+            if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
                 c.subs = vec![t1];
                 return Some(c);
             }
@@ -840,8 +839,8 @@ impl Prebindgen for JniGen {
         ty: &syn::Type,
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
-        // 1. Terminal categories (incl. the rank-0 user-wrapper table).
-        if let Some(c) = self.on_output_type_rank_0(ty, registry) {
+        // 1. Terminal categories (incl. the terminal user-wrapper lookup).
+        if let Some(c) = self.output_terminal(ty, registry) {
             return Some(c);
         }
         // 2. User-registered patterns, specificity-ordered — the built-in
@@ -855,7 +854,7 @@ impl Prebindgen for JniGen {
         //    converter is the `&Handle` borrow entry (no deep output handler).
         if let Some(inner) = option_inner_type(ty) {
             let pat = with_first_arg(ty, syn::parse_quote!(_));
-            if let Some(mut c) = self.on_output_type_rank_1(&pat, &inner, registry) {
+            if let Some(mut c) = self.output_wrapper_shape(&pat, &inner, registry) {
                 c.subs = vec![inner];
                 return Some(c);
             }
@@ -863,7 +862,7 @@ impl Prebindgen for JniGen {
         }
         if let Some(elem) = vec_inner_type(ty) {
             let pat = with_first_arg(ty, syn::parse_quote!(_));
-            if let Some(mut c) = self.on_output_type_rank_1(&pat, &elem, registry) {
+            if let Some(mut c) = self.output_wrapper_shape(&pat, &elem, registry) {
                 c.subs = vec![elem];
                 return Some(c);
             }
@@ -872,7 +871,7 @@ impl Prebindgen for JniGen {
         if let syn::Type::Reference(r) = ty {
             let pat = ref_wildcard(r);
             let t1 = (*r.elem).clone();
-            if let Some(mut c) = self.on_output_type_rank_1(&pat, &t1, registry) {
+            if let Some(mut c) = self.output_wrapper_shape(&pat, &t1, registry) {
                 c.subs = vec![t1];
                 return Some(c);
             }
@@ -991,7 +990,7 @@ impl Prebindgen for JniGen {
 
     fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<KotlinMeta>) -> TokenStream {
         // Struct converter bodies are emitted by the resolver via
-        // on_input_type_rank_0 / on_output_type_rank_0 below; no separate
+        // input_terminal / output_terminal below; no separate
         // per-struct item is needed.
         TokenStream::new()
     }
@@ -1033,7 +1032,10 @@ impl Prebindgen for JniGen {
 impl JniGen {
     // ── Input converters ─────────────────────────────────────────────
 
-    fn on_input_type_rank_0(
+    /// Whole-type **input** terminal categories (opaque handle, value-blob,
+    /// enum, the rank-0 user table, `str`, primitive, struct) — depends on
+    /// nothing, `subs` empty.
+    fn input_terminal(
         &self,
         ty: &syn::Type,
         registry: &Registry<KotlinMeta>,
@@ -1179,12 +1181,15 @@ impl JniGen {
             }
             // Bare-ident enum: leave to the consuming crate to override
             // (today's CongestionControl etc. fall here — caller's wrapper
-            // ext returns Some in its own on_input_type_rank_0).
+            // ext returns Some in its own input_terminal).
         }
         None
     }
 
-    fn on_input_type_rank_1(
+    /// **Input** wrapper shape (`pat` = the reconstructed canonical pattern,
+    /// `t1` = its captured inner): the rank-1 user table, then the built-in
+    /// `&`/`Option<&>`/`Vec`/`Option` handlers.
+    fn input_wrapper_shape(
         &self,
         pat: &syn::Type,
         t1: &syn::Type,
@@ -1204,7 +1209,10 @@ impl JniGen {
 
     // ── Output converters ────────────────────────────────────────────
 
-    fn on_output_type_rank_0(
+    /// Whole-type **output** terminal categories (the dual of
+    /// [`Self::input_terminal`]: opaque handle, value-blob, enum, user table,
+    /// `str`, `Cow<[u8]>`, unit, primitive, struct) — `subs` empty.
+    fn output_terminal(
         &self,
         ty: &syn::Type,
         registry: &Registry<KotlinMeta>,
@@ -1349,7 +1357,10 @@ impl JniGen {
         None
     }
 
-    fn on_output_type_rank_1(
+    /// **Output** wrapper shape (the dual of [`Self::input_wrapper_shape`]):
+    /// the rank-1 user table, then the built-in `&Handle`/`&str`/`Option`/`Vec`
+    /// handlers. An `Option<&Handle>` resolves via the shallow `Option<_>`.
+    fn output_wrapper_shape(
         &self,
         pat: &syn::Type,
         t1: &syn::Type,

@@ -81,7 +81,7 @@ fn unify(ty: &syn::Type, pat: &syn::Type, out: &mut Vec<syn::Type>) -> bool {
     }
     match (ty, pat) {
         (syn::Type::Path(t), syn::Type::Path(p)) => {
-            // Same path up to the last segment's generic type args; unify those.
+            // Same path up to the last segment's generic args; unify those.
             if t.qself.is_some() || p.qself.is_some() {
                 return token_eq(ty, pat);
             }
@@ -95,20 +95,38 @@ fn unify(ty: &syn::Type, pat: &syn::Type, out: &mut Vec<syn::Type>) -> bool {
                 }
                 let is_last = i + 1 == ts.len();
                 // Non-last segments (and non-angle-bracketed last segments) must
-                // match verbatim; the last segment's type args unify.
+                // match verbatim; the last segment's generic args unify.
                 match (&tseg.arguments, &pseg.arguments) {
                     (
                         syn::PathArguments::AngleBracketed(ta),
                         syn::PathArguments::AngleBracketed(pa),
                     ) if is_last => {
-                        let tt = type_args(ta);
-                        let pp = type_args(pa);
-                        if tt.len() != pp.len() {
+                        // Compare ALL generic args positionally — lifetimes,
+                        // const generics, and bindings are part of the fixed
+                        // pattern structure and must match token-for-token; only
+                        // a `_` in a type position captures. (Mirrors the old
+                        // enumerator's exact `TypeKey` match, so e.g.
+                        // `Foo<'static, _>` does NOT match `Foo<'a, T>`.)
+                        if ta.args.len() != pa.args.len() {
                             return false;
                         }
-                        for (a, b) in tt.iter().zip(pp.iter()) {
-                            if !unify(a, b, out) {
-                                return false;
+                        for (a, b) in ta.args.iter().zip(pa.args.iter()) {
+                            match (a, b) {
+                                (
+                                    syn::GenericArgument::Type(at),
+                                    syn::GenericArgument::Type(bt),
+                                ) => {
+                                    if !unify(at, bt, out) {
+                                        return false;
+                                    }
+                                }
+                                (a, b) => {
+                                    if a.to_token_stream().to_string()
+                                        != b.to_token_stream().to_string()
+                                    {
+                                        return false;
+                                    }
+                                }
                             }
                         }
                     }
@@ -122,7 +140,11 @@ fn unify(ty: &syn::Type, pat: &syn::Type, out: &mut Vec<syn::Type>) -> bool {
             true
         }
         (syn::Type::Reference(t), syn::Type::Reference(p)) => {
-            t.mutability.is_some() == p.mutability.is_some() && unify(&t.elem, &p.elem, out)
+            // Mutability and lifetime are fixed structure — `&'static _` must not
+            // match `&'a T`, and `&_` (no lifetime) must not match `&'a T`.
+            t.mutability.is_some() == p.mutability.is_some()
+                && lifetime_eq(&t.lifetime, &p.lifetime)
+                && unify(&t.elem, &p.elem, out)
         }
         (syn::Type::Ptr(t), syn::Type::Ptr(p)) => {
             t.mutability.is_some() == p.mutability.is_some()
@@ -149,14 +171,14 @@ fn unify(ty: &syn::Type, pat: &syn::Type, out: &mut Vec<syn::Type>) -> bool {
     }
 }
 
-fn type_args(ab: &syn::AngleBracketedGenericArguments) -> Vec<syn::Type> {
-    ab.args
-        .iter()
-        .filter_map(|a| match a {
-            syn::GenericArgument::Type(t) => Some(t.clone()),
-            _ => None,
-        })
-        .collect()
+/// Two optional reference lifetimes are equal iff both are absent or name the
+/// same lifetime.
+fn lifetime_eq(a: &Option<syn::Lifetime>, b: &Option<syn::Lifetime>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(x), Some(y)) => x.ident == y.ident,
+        _ => false,
+    }
 }
 
 fn token_eq(a: &syn::Type, b: &syn::Type) -> bool {
@@ -351,6 +373,46 @@ mod tests {
             Some(vec![])
         );
         assert!(match_pattern(&ty("Other"), &ty("MyType")).is_none());
+    }
+
+    /// Lifetimes and const-generic args are fixed pattern structure — they must
+    /// match token-for-token, not be silently dropped (restores the old
+    /// enumerator's exact `TypeKey` semantics).
+    #[test]
+    fn match_pattern_respects_lifetimes_and_const_generics() {
+        // Reference lifetimes must match exactly.
+        assert_eq!(
+            caps(match_pattern(&ty("&'static Foo"), &ty("&'static _"))),
+            Some(vec!["Foo".to_string()])
+        );
+        assert!(match_pattern(&ty("&'a Foo"), &ty("&'static _")).is_none());
+        // A no-lifetime pattern must not match a borrow that names a lifetime.
+        assert!(match_pattern(&ty("&'a Foo"), &ty("&_")).is_none());
+        assert_eq!(
+            caps(match_pattern(&ty("&Foo"), &ty("&_"))),
+            Some(vec!["Foo".to_string()])
+        );
+        // A lifetime generic arg in a path is fixed structure.
+        assert_eq!(
+            caps(match_pattern(
+                &ty("Cow<'static, _>"),
+                &ty("Cow<'static, _>")
+            )),
+            Some(vec!["_".to_string()])
+        );
+        assert!(match_pattern(&ty("Cow<'a, str>"), &ty("Cow<'static, _>")).is_none());
+        // Const-generic arg is fixed structure: arity must match exactly.
+        assert_eq!(
+            caps(match_pattern(&ty("Arr<u8, 4>"), &ty("Arr<_, 4>"))),
+            Some(vec!["u8".to_string()])
+        );
+        assert!(match_pattern(&ty("Arr<u8, 8>"), &ty("Arr<_, 4>")).is_none());
+        // Array length is fixed structure.
+        assert!(match_pattern(&ty("[u8; 8]"), &ty("[_; 4]")).is_none());
+        assert_eq!(
+            caps(match_pattern(&ty("[u8; 4]"), &ty("[_; 4]"))),
+            Some(vec!["u8".to_string()])
+        );
     }
 
     #[test]
