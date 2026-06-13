@@ -463,7 +463,7 @@ fn snapshot_kotlin_side() {
         "package wrappers: {pkg}"
     );
     assert!(
-        pc.contains("if(__cap_failed)returnonError.run("),
+        pc.contains("if(__cap.failed)returnonError.run("),
         "package wrappers: {pkg}"
     );
     // `onError` is a **required** parameter (no default) and the wrappers
@@ -1177,9 +1177,17 @@ fn error_unwrap_universal_records() {
         "{all}"
     );
     assert!(
-        all.contains("returnonError.run(__cap_je,ZErr(__cap_ze0!!),__cap_ze1!!,__cap_ze2)"),
+        all.contains("returnonError.run(__cap.je,ZErr(__cap.ze0!!),__cap.ze1!!,__cap.ze2)"),
         "{all}"
     );
+    // Zero-alloc thread-local capture holder generated for the error handler
+    // (no per-call SAM lambda / Ref-boxed vars); the wrapper uses acquire().
+    assert!(
+        all.contains("internalclassZErrHandlerRawCapture:ZErrHandlerRaw<Unit>"),
+        "{all}"
+    );
+    assert!(all.contains("val__cap=ZErrHandlerRawCapture.acquire()"), "{all}");
+    assert!(all.contains("ThreadLocal.withInitial"), "{all}");
     // Wrapper: nullable capture slots, `!!` redispatch for the non-null ze,
     // pass-through for the nullable one — NO `?:` default coalescing.
     assert!(!all.contains("?:\"\""), "{all}");

@@ -160,6 +160,80 @@ impl IfaceSpec {
         self.raw_fqn().replace('.', "/")
     }
 
+    /// Short name of the generated capture holder (`<RawName>Capture`).
+    pub fn capture_name(&self) -> String {
+        format!("{}Capture", self.raw_name())
+    }
+
+    pub fn capture_fqn(&self) -> String {
+        if self.package.is_empty() {
+            self.capture_name()
+        } else {
+            format!("{}.{}", self.package, self.capture_name())
+        }
+    }
+
+    /// A **zero-allocation thread-local capture holder** for an error-handler
+    /// interface — replaces the per-call SAM lambda (and the `Ref` boxes
+    /// Kotlin allocates for its captured mutable `var`s: ~4 heap objects on
+    /// every fallible/infallible outbound call). A final class implementing
+    /// the (raw twin) handler, with `@JvmField` slots the native `signal_error`
+    /// writes via `run`; one instance per calling thread, reset by `acquire()`.
+    ///
+    /// Safe to reuse per thread: the error sink is invoked **synchronously**
+    /// inside the extern on the calling thread (never the async daemon-callback
+    /// thread, which has its own thread-local), and the wrapper reads the slots
+    /// into the `onError` arguments *before* any re-entrant call. Assumes the
+    /// error-handler shape: `params[0]` is `je: String?`, the rest are `ze`.
+    pub fn to_capture_decl(&self) -> kt::KtDecl {
+        let cap = self.capture_name();
+        let raw = self.raw_name();
+        let n_ze = self.params.len() - 1;
+
+        let mut fields = String::from("@JvmField var failed: Boolean = false\n");
+        fields.push_str("@JvmField var je: String? = null\n");
+        for (i, p) in self.params[1..].iter().enumerate() {
+            // The slot is nullable (null until the capture fires).
+            let ty = p.raw.clone().nullable();
+            fields.push_str(&format!("@JvmField var ze{i}: {ty} = null\n"));
+        }
+
+        let run_params = self
+            .params
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.raw))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut run_body = String::from("failed = true; this.je = je");
+        for (i, p) in self.params[1..].iter().enumerate() {
+            run_body.push_str(&format!("; this.ze{i} = {}", p.name));
+        }
+
+        let mut reset = String::from("c.failed = false; c.je = null");
+        for i in 0..n_ze {
+            reset.push_str(&format!("; c.ze{i} = null"));
+        }
+
+        let code = format!(
+            "internal class {cap} : {raw}<Unit> {{\n\
+             {fields}\
+             override fun run({run_params}) {{ {run_body} }}\n\
+             companion object {{\n\
+             private val TL: ThreadLocal<{cap}> = ThreadLocal.withInitial {{ {cap}() }}\n\
+             @JvmStatic fun acquire(): {cap} {{\n\
+             val c = TL.get()\n\
+             {reset}\n\
+             return c\n\
+             }}\n\
+             }}\n\
+             }}"
+        );
+        kt::KtDecl::Raw {
+            name: cap,
+            code: kt::Code::raw_reindent(&code),
+        }
+    }
+
     /// The typed (user-facing) Kotlin declaration.
     pub fn to_decl(&self) -> kt::KtFunInterface {
         let mut m = kt::KtFun::new(IFACE_METHOD).vis(kt::Vis::Public);

@@ -515,15 +515,22 @@ impl JniGen {
         }
 
         uses.into_iter()
-            .filter_map(|(u, tys)| match u {
-                Use::Callback(_) => callback_iface_spec(self, registry, &tys),
-                Use::Builder(d) => builder_iface_spec(self, registry, &d),
-                Use::Folder(d) => folder_iface_spec(self, registry, &d),
-                Use::WholeFolder(_) => whole_folder_iface_spec(self, registry, &tys[0]),
-                Use::Handler(d) => error_handler_iface_spec(self, registry, &d),
-                Use::JniErrorHandler => Some(jni_error_handler_iface_spec(self)),
+            .filter_map(|(u, tys)| {
+                // `is_error` ⇒ also emit the zero-alloc capture holder used by
+                // the generated wrappers' error channel.
+                let (spec, is_error) = match u {
+                    Use::Callback(_) => (callback_iface_spec(self, registry, &tys), false),
+                    Use::Builder(d) => (builder_iface_spec(self, registry, &d), false),
+                    Use::Folder(d) => (folder_iface_spec(self, registry, &d), false),
+                    Use::WholeFolder(_) => {
+                        (whole_folder_iface_spec(self, registry, &tys[0]), false)
+                    }
+                    Use::Handler(d) => (error_handler_iface_spec(self, registry, &d), true),
+                    Use::JniErrorHandler => (Some(jni_error_handler_iface_spec(self)), true),
+                };
+                spec.map(|s| (s, is_error))
             })
-            .map(|s| {
+            .map(|(s, is_error)| {
                 // Typed (user-facing) interface; when any leaf's raw view
                 // differs, also the JNI-called raw twin and the `asRaw()`
                 // proxy adapter that wraps raw leaves into typed objects.
@@ -535,6 +542,9 @@ impl JniGen {
                             file = file.import(fqn.to_string());
                         }
                     }
+                }
+                if is_error {
+                    file = file.decl(s.to_capture_decl());
                 }
                 file
             })

@@ -986,21 +986,22 @@ pub(crate) fn render_wrapper_fn(
         .collect();
     let n_ze = ze_info.len();
     let onerr_type = sink_spec.kt_ref(vec![r_ty.clone()]);
-    // The capture is a SAM literal of the RAW twin — its short name in raw
-    // body text needs the import registered.
-    imports.insert(sink_spec.raw_fqn());
-    let sink_raw_short = sink_spec.raw_name();
+    // The capture is a generated zero-alloc thread-local holder of the RAW
+    // twin (no SAM lambda, no `Ref`-boxed captured vars) — its short name in
+    // raw body text needs the import registered.
+    imports.insert(sink_spec.capture_fqn());
+    let sink_capture_short = sink_spec.capture_name();
     // The je/ze argument list to call the user's typed `onError.run`. The
     // native side ALWAYS fills the raw ze (real values or defaults), so the
     // nullable capture slots are non-null whenever `__cap_failed` — assert
     // with `!!` for non-null params, then wrap raw → typed.
-    let onerr_call_args = std::iter::once("__cap_je".to_string())
+    let onerr_call_args = std::iter::once("__cap.je".to_string())
         .chain((0..n_ze).map(|i| {
             let (raw, _, wrap) = &ze_info[i];
             if raw.is_nullable() {
-                wrap.wrap_expr(&format!("__cap_ze{i}"), true)
+                wrap.wrap_expr(&format!("__cap.ze{i}"), true)
             } else {
-                wrap.wrap_expr(&format!("__cap_ze{i}!!"), false)
+                wrap.wrap_expr(&format!("__cap.ze{i}!!"), false)
             }
         }))
         .collect::<Vec<_>>()
@@ -1156,39 +1157,19 @@ pub(crate) fn render_wrapper_fn(
     let body: String = {
         let mut b = String::new();
         b.push_str(&prelock_guards);
-        b.push_str("var __cap_failed = false\n");
-        b.push_str("var __cap_je: String? = null\n");
-        for i in 0..n_ze {
-            // Capture slots are nullable-ized (`null` until the capture
-            // fires); the iface ze type itself may be non-null — the
-            // redispatch re-asserts with `!!` (see `onerr_call_args`).
-            let (raw, _, _) = &ze_info[i];
-            let kt_opt = raw.clone().nullable();
-            b.push_str(&format!("var __cap_ze{i}: {kt_opt} = null\n"));
-        }
-        // The capture: a SAM literal of the handler interface (arity
-        // `1 + n_ze`, params typed by the interface), recording into the
-        // `__cap_*` locals. `R` binds to `Unit`.
-        let cap_params = std::iter::once("__je".to_string())
-            .chain((0..n_ze).map(|i| format!("__ze{i}")))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let mut cap_body = String::from("__cap_failed = true; __cap_je = __je");
-        for i in 0..n_ze {
-            cap_body.push_str(&format!("; __cap_ze{i} = __ze{i}"));
-        }
-        b.push_str(&format!(
-            "val __cap = {sink_raw_short}<Unit> {{ {cap_params} -> {cap_body} }}\n"
-        ));
+        // The capture is a per-thread reusable holder (zero allocation): the
+        // extern writes its `@JvmField` slots via `run`, the wrapper reads
+        // them after the (synchronous) call. `acquire()` resets the slots.
+        b.push_str(&format!("val __cap = {sink_capture_short}.acquire()\n"));
         if is_unit {
             b.push_str(&format!("{core_expr}\n"));
             b.push_str(&format!(
-                "if (__cap_failed) return onError.run({onerr_call_args})\n"
+                "if (__cap.failed) return onError.run({onerr_call_args})\n"
             ));
         } else {
             b.push_str(&format!("val __ret = {core_expr}\n"));
             b.push_str(&format!(
-                "if (__cap_failed) return onError.run({onerr_call_args})\n"
+                "if (__cap.failed) return onError.run({onerr_call_args})\n"
             ));
             b.push_str("return __ret\n");
         }
