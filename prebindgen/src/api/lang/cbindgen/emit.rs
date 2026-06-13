@@ -9,6 +9,14 @@ impl Cbindgen {
         if registry.output_entry(&string_ty).is_some() {
             return true;
         }
+        // Opaque error types are marshalled to a malloc'd `char*` message.
+        if self
+            .opaque_errors
+            .keys()
+            .any(|key| registry.output_entry(&key.to_type()).is_some())
+        {
+            return true;
+        }
         self.data.keys().any(|key| {
             let ty = key.to_type();
             registry.output_entry(&ty).is_some()

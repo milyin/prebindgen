@@ -1099,6 +1099,29 @@ impl Prebindgen for Cbindgen {
             });
         }
 
+        // Opaque error output (e.g. `ZError`): not a by-value struct — marshal it
+        // to a malloc'd `char*` message via the recorded accessor `fn(&E) ->
+        // String`. The error out-param of a `Result<_, E>` wrapper is thus
+        // `char **e`. Freed by the universal `free_memory_function`.
+        if let Some(msg_fn) = self.opaque_errors.get(&key) {
+            let name = Self::out_name(ty);
+            let src = self.src_ty(ty);
+            let msg_path = self.src_fn(msg_fn);
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) fn #name(v: #src) -> *mut ::core::ffi::c_char {
+                    __cbg_alloc_cstr(#msg_path(&v))
+                }
+            );
+            return Some(ConverterImpl {
+                destination: syn::parse_quote!(*mut ::core::ffi::c_char),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+
         // Data struct output: encode each field into its C wire (`String` →
         // malloc'd `char*` raw block, freed by the `free_memory_function`).
         if self.data.contains_key(&key) {

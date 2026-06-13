@@ -210,6 +210,12 @@ pub struct Cbindgen {
     /// Data structs additionally marked as error types (allowlist for the
     /// "Result error type must be declared" rule).
     error: HashSet<TypeKey>,
+    /// Opaque error types (e.g. `ZError = Box<dyn Error>`) that are NOT by-value
+    /// data structs: they appear as the `E` of a `Result<_, E>` but are
+    /// marshalled to C as a `char*` message obtained by calling the recorded
+    /// accessor `fn(&E) -> String`. Keyed by the error type; the value is the
+    /// message-accessor function ident. Also inserted into [`Self::error`].
+    opaque_errors: HashMap<TypeKey, syn::Ident>,
     /// Name of the universal raw-memory freer (C `free`) for `char*` data the
     /// generated code hands out. Set by [`Self::free_memory_function`]. Required
     /// (build error otherwise) whenever string memory is produced.

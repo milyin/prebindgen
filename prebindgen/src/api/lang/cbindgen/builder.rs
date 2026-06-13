@@ -299,6 +299,22 @@ impl Cbindgen {
         self
     }
 
+    /// Declare an **opaque error type** — one that appears as the `E` of a
+    /// `Result<_, E>` but is *not* a by-value [`Self::data_struct`] (e.g.
+    /// `ZError = Box<dyn Error + Send + Sync>`). Such an error is marshalled to C
+    /// as a `char*` message obtained by calling `message_fn(&err) -> String`
+    /// (e.g. `z_error_message`); the generated wrapper's error out-param becomes
+    /// `char **e`. The type must implement `From<String>` (so a fallible input's
+    /// internal message can be lifted into it). Root-level modifier (resets the
+    /// current declaration).
+    pub fn opaque_error(mut self, error_ty: syn::Type, message_fn: syn::Ident) -> Self {
+        let key = TypeKey::from_type(&error_ty);
+        self.error.insert(key.clone());
+        self.opaque_errors.insert(key, message_fn);
+        self.current = None;
+        self
+    }
+
     /// Declare a C-like (fieldless) enum type to convert. (Mirrors `JniExt`'s
     /// `enum_class`.)
     pub fn enum_type(mut self, ty: syn::Type) -> Self {

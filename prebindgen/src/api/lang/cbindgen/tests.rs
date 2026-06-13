@@ -97,6 +97,52 @@ fn keyexpr_try_from_lowering() {
     assert!(compact.contains("return::core::ptr::null_mut()"), "{src}");
 }
 
+/// An **opaque error** (`ZError`, *not* a by-value data struct) used as the `E`
+/// of a `Result<_, E>` is marshalled to C as a `char*` message obtained from the
+/// recorded accessor (`z_error_message`); the wrapper's error out-param is thus
+/// `char **e`, and no error struct is generated.
+#[test]
+fn opaque_error_lowering() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, ZError> {
+            unimplemented!()
+        }
+    );
+
+    let mut registry =
+        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .opaque_ptr(syn::parse_quote!(ZKeyExpr))
+        .base_name("z_keyexpr")
+        .opaque_error(
+            syn::parse_quote!(ZError),
+            syn::parse_quote!(z_error_message),
+        )
+        .function(syn::parse_quote!(z_keyexpr_try_from));
+
+    let src = write(&cbindgen, &mut registry, "opaque_error");
+    let compact: String = src.split_whitespace().collect();
+
+    // Pointer-return wrapper; the error out-param is a bare `char **e`.
+    assert!(compact.contains("extern\"C\"fnz_keyexpr_try_from"), "{src}");
+    assert!(compact.contains("->*mutz_keyexpr"), "{src}");
+    assert!(compact.contains("e:*mut*mut::core::ffi::c_char"), "{src}");
+    // The error converter marshals the opaque error via the recorded accessor.
+    assert!(compact.contains("zenoh_flat::z_error_message(&v)"), "{src}");
+    assert!(compact.contains("__cbg_alloc_cstr"), "{src}");
+    // No by-value error struct is generated for an opaque error.
+    assert!(!compact.contains("structz_error"), "{src}");
+    // Fallible-input messages still lift into the error via `From<String>`.
+    assert!(
+        compact.contains("as::core::convert::From<::std::string::String"),
+        "{src}"
+    );
+}
+
 /// A `Result<(), E>` function lowers to `bool f(<inputs>, E *e)` — no
 /// out-param, just `true` on `Ok`.
 #[test]
