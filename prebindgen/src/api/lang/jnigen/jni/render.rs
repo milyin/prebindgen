@@ -584,12 +584,19 @@ pub(crate) fn render_wrapper_fn(
         if let Some(cb_args) = extract_fn_trait_args(arg_ty) {
             let spec = callback_iface_spec(ext, registry, &cb_args)?;
             let kt_type = spec.kt_ref(vec![]);
+            // The extern receives the RAW twin: the generated `asRaw()`
+            // proxy (built once per registration) wraps raw leaves into the
+            // typed objects the user's interface declares.
+            let call_arg = if spec.needs_raw() {
+                imports.insert(format!("{}.asRaw", spec.package));
+                format!("{name}.asRaw()")
+            } else {
+                name.clone()
+            };
             params.push(Param {
                 kt_name: name.clone(),
                 kt_type,
-                mode: ParamMode::Callback {
-                    call_arg: name.clone(),
-                },
+                mode: ParamMode::Callback { call_arg },
                 as_enum_value: false,
             });
             continue;
@@ -778,7 +785,12 @@ pub(crate) fn render_wrapper_fn(
             builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
             builder_param = Some(("fold".to_string(), spec.kt_ref(vec![kt::KtType::var_("A")])));
             unfold_call_args.push("acc".to_string());
-            unfold_call_args.push("fold".to_string());
+            if spec.needs_raw() {
+                imports.insert(format!("{}.asRaw", spec.package));
+                unfold_call_args.push("fold.asRaw()".to_string());
+            } else {
+                unfold_call_args.push("fold".to_string());
+            }
             (Some(kt::KtType::var_("A")), None)
         } else {
             let decon = plan
@@ -788,7 +800,12 @@ pub(crate) fn render_wrapper_fn(
             let spec = builder_iface_spec(ext, registry, decon)?;
             generic = Some("R".to_string());
             builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
-            unfold_call_args.push("build".to_string());
+            if spec.needs_raw() {
+                imports.insert(format!("{}.asRaw", spec.package));
+                unfold_call_args.push("build.asRaw()".to_string());
+            } else {
+                unfold_call_args.push("build".to_string());
+            }
             let kt = match &plan.shape {
                 UnfoldShape::Optional(_) => kt::KtType::var_r().nullable(),
                 _ => kt::KtType::var_r(),
@@ -946,47 +963,59 @@ pub(crate) fn render_wrapper_fn(
     let r_ty = kt_return.clone().unwrap_or_else(kt::KtType::unit);
     let sink_spec = onerror_iface_spec(ext, registry, &f.sig.ident)?;
     let error_plan = registry.error_plans.get(&f.sig.ident);
-    // Per ze leaf: (param name, iface Kotlin type, Kotlin default literal) —
-    // names/types off the handler interface spec (its first param is the
-    // fixed `je`), defaults derived from the matching error-plan leaf (same
-    // declaration, same order).
-    let ze_info: Vec<(String, kt::KtType, String)> = sink_spec.params[1..]
+    // Per ze leaf: (raw capture Kotlin type, raw default literal, raw→typed
+    // wrap) — off the handler interface spec (its first param is the fixed
+    // `je`), defaults from the matching error-plan leaf (same declaration,
+    // same order). The CAPTURE is the raw twin (what the native side calls);
+    // the user's handler is the TYPED interface — the redispatch wraps.
+    let ze_info: Vec<(kt::KtType, String, crate::api::lang::jnigen::jni::WrapKind)> = sink_spec
+        .params[1..]
         .iter()
         .enumerate()
-        .map(|(i, (name, kt))| {
+        .map(|(i, p)| {
             let leaf = error_plan
-                .map(|p| &p.leaves[i])
+                .map(|pl| &pl.leaves[i])
                 .expect("ze params exist only with an error plan");
             let default =
-                ze_default_kotlin(&leaf_default(ext, registry, leaf), kt.is_nullable());
-            (name.clone(), kt.clone(), default)
+                ze_default_kotlin(&leaf_default(ext, registry, leaf), p.raw.is_nullable());
+            if let Some(fqn) = p.wrap.class_fqn() {
+                imports.insert(fqn.to_string());
+            }
+            (p.raw.clone(), default, p.wrap.clone())
         })
         .collect();
     let n_ze = ze_info.len();
     let onerr_type = sink_spec.kt_ref(vec![r_ty.clone()]);
-    // The capture is a SAM literal of the same interface — its short name in
-    // raw body text needs the import registered.
-    imports.insert(sink_spec.fqn());
-    let sink_short = sink_spec.name.clone();
-    // The je/ze argument list to call the user's `onError.run`. The native
-    // side ALWAYS fills the ze (real values or defaults), so the nullable
-    // capture slots are non-null whenever `__cap_failed` — assert with `!!`
-    // for the non-null-declared params, pass through for nullable ones.
+    // The capture is a SAM literal of the RAW twin — its short name in raw
+    // body text needs the import registered.
+    imports.insert(sink_spec.raw_fqn());
+    let sink_raw_short = sink_spec.raw_name();
+    // The je/ze argument list to call the user's typed `onError.run`. The
+    // native side ALWAYS fills the raw ze (real values or defaults), so the
+    // nullable capture slots are non-null whenever `__cap_failed` — assert
+    // with `!!` for non-null params, then wrap raw → typed.
     let onerr_call_args = std::iter::once("__cap_je".to_string())
         .chain((0..n_ze).map(|i| {
-            let (_, kt, _) = &ze_info[i];
-            if kt.is_nullable() {
-                format!("__cap_ze{i}")
+            let (raw, _, wrap) = &ze_info[i];
+            if raw.is_nullable() {
+                wrap.wrap_expr(&format!("__cap_ze{i}"), true)
             } else {
-                format!("__cap_ze{i}!!")
+                wrap.wrap_expr(&format!("__cap_ze{i}!!"), false)
             }
         }))
         .collect::<Vec<_>>()
         .join(", ");
     // Default-ze args for a synchronous (pre-call) closed-handle guard, which
-    // calls `onError.run` directly (a binding-class error ⇒ defaults).
+    // calls the typed `onError.run` directly (a binding-class error ⇒ wrapped
+    // raw defaults: `ZErr(0L)`, `ZId(ByteArray(0))`, …).
     let onerr_guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
-        .chain(ze_info.iter().map(|(_, _, def)| def.clone()))
+        .chain(ze_info.iter().map(|(raw, def, wrap)| {
+            if raw.is_nullable() {
+                "null".to_string()
+            } else {
+                wrap.wrap_expr(def, false)
+            }
+        }))
         .collect::<Vec<_>>()
         .join(", ");
     // Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
@@ -1133,8 +1162,8 @@ pub(crate) fn render_wrapper_fn(
             // Capture slots are nullable-ized (`null` until the capture
             // fires); the iface ze type itself may be non-null — the
             // redispatch re-asserts with `!!` (see `onerr_call_args`).
-            let (_, kt, _) = &ze_info[i];
-            let kt_opt = kt.clone().nullable();
+            let (raw, _, _) = &ze_info[i];
+            let kt_opt = raw.clone().nullable();
             b.push_str(&format!("var __cap_ze{i}: {kt_opt} = null\n"));
         }
         // The capture: a SAM literal of the handler interface (arity
@@ -1149,7 +1178,7 @@ pub(crate) fn render_wrapper_fn(
             cap_body.push_str(&format!("; __cap_ze{i} = __ze{i}"));
         }
         b.push_str(&format!(
-            "val __cap = {sink_short}<Unit> {{ {cap_params} -> {cap_body} }}\n"
+            "val __cap = {sink_raw_short}<Unit> {{ {cap_params} -> {cap_body} }}\n"
         ));
         if is_unit {
             b.push_str(&format!("{core_expr}\n"));

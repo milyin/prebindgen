@@ -74,10 +74,16 @@ pub fn merge_files(fragments: Vec<KtFile>) -> Result<Vec<KtFile>, WriteKotlinErr
     // Extra imports carry pre-shortened raw text references, so a simple-name
     // collision between two distinct FQNs cannot be repaired by qualifying a
     // use site — reject it (parity with the previous string-merge behavior).
+    // Exception: lowercase simple names are top-level FUNCTION imports, which
+    // Kotlin allows to overload across packages (resolution by signature/
+    // receiver) — e.g. several `asRaw` extension adapters in one file.
     for (package, file) in &groups {
         let mut by_simple: BTreeMap<&str, &str> = BTreeMap::new();
         for imp in &file.extra_imports {
             let simple = imp.rsplit_once('.').map(|(_, s)| s).unwrap_or(imp.as_str());
+            if simple.chars().next().is_some_and(|c| c.is_lowercase()) {
+                continue;
+            }
             if let Some(prev) = by_simple.insert(simple, imp.as_str()) {
                 if prev != imp.as_str() {
                     return Err(WriteKotlinError::Other(format!(

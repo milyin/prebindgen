@@ -610,7 +610,7 @@ fn callback_snapshot_kotlin_side() {
         .split_whitespace()
         .collect();
     assert!(
-        all.contains("funinterfaceZThingCallback{publicfunrun(handle:Long,name:String)"),
+        all.contains("funinterfaceZThingCallback{publicfunrun(handle:ZThing,name:String)"),
         "{all}"
     );
     assert!(
@@ -618,6 +618,18 @@ fn callback_snapshot_kotlin_side() {
         "{all}"
     );
     assert!(all.contains("funinterfaceVoidCallback{publicfunrun()"), "{all}");
+    // Raw twin + proxy adapter for the decomposed-arg callback (raw jlong
+    // handle at the wire); the all-passthrough interfaces get no twin.
+    assert!(
+        all.contains("funinterfaceZThingCallbackRaw{publicfunrun(handle:Long,name:String)"),
+        "{all}"
+    );
+    assert!(
+        all.contains("funZThingCallback.asRaw():ZThingCallbackRaw=ZThingCallbackRaw{handle,name->run(ZThing(handle),name)}"),
+        "{all}"
+    );
+    assert!(!all.contains("ZOtherCallbackRaw"), "{all}");
+    assert!(!all.contains("VoidCallbackRaw"), "{all}");
 
     // Wrapper tier: the params are the typed interfaces, forwarded bare.
     let pkg = kotlin
@@ -627,6 +639,7 @@ fn callback_snapshot_kotlin_side() {
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
     assert!(pc.contains("cb:ZThingCallback"), "{pkg}");
+    assert!(pc.contains("cb.asRaw()"), "{pkg}");
     assert!(pc.contains("onClose:VoidCallback"), "{pkg}");
     assert!(pc.contains("cb:ZOtherCallback"), "{pkg}");
 }
@@ -847,10 +860,9 @@ fn callback_double_option_unwrap_pipeline() {
         .unwrap_or_default();
     let ic: String = iface.split_whitespace().collect();
     assert!(ic.contains("isOk:Boolean"), "{iface}");
-    assert!(ic.contains("sampleKeyExpr:Long?"), "{iface}");
+    assert!(ic.contains("sampleKeyExpr:ZKeyExpr?"), "{iface}");
     assert!(ic.contains(":Long?"), "{iface}");
-    assert!(ic.contains(":ByteArray?"), "{iface}");
-    assert!(!ic.contains(":ZId"), "{iface}");
+    assert!(ic.contains(":ZId?"), "{iface}");
     // The wrapper takes the typed interface and forwards it bare (no
     // value-blob rebuilding adapter exists anymore).
     let pkg = paths
@@ -860,10 +872,9 @@ fn callback_double_option_unwrap_pipeline() {
         .unwrap_or_default();
     let pc: String = pkg.split_whitespace().collect();
     assert!(pc.contains("cb:ZReplyCallback"), "{pkg}");
-    // The callback is forwarded bare — no value-blob rebuilding adapter
-    // lambda wraps it at the call site (the interface itself delivers the
-    // raw ByteArray wire).
-    assert!(pc.contains("JNINative.zGet(cb,"), "{pkg}");
+    // The call site forwards the generated raw-proxy adapter — the typed
+    // interface is the user surface, the extern receives the raw twin.
+    assert!(pc.contains("JNINative.zGet(cb.asRaw(),"), "{pkg}");
 }
 
 #[test]
@@ -1153,15 +1164,23 @@ fn error_unwrap_universal_records() {
     // Builder-typed handler interface.
     assert!(
         all.contains(
-            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:Long,message:String,detailCode:Int?):R"
+            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:ZErr,message:String,detailCode:Int?):R"
         ),
+        "{all}"
+    );
+    // Raw twin carries the jlong handle; the wrapper captures raw and wraps
+    // on redispatch.
+    assert!(
+        all.contains(
+            "funinterfaceZErrHandlerRaw<outR>{publicfunrun(je:String?,handle:Long,message:String,detailCode:Int?):R"
+        ),
+        "{all}"
+    );
+    assert!(
+        all.contains("returnonError.run(__cap_je,ZErr(__cap_ze0!!),__cap_ze1!!,__cap_ze2)"),
         "{all}"
     );
     // Wrapper: nullable capture slots, `!!` redispatch for the non-null ze,
     // pass-through for the nullable one — NO `?:` default coalescing.
-    assert!(
-        all.contains("returnonError.run(__cap_je,__cap_ze0!!,__cap_ze1!!,__cap_ze2)"),
-        "{all}"
-    );
     assert!(!all.contains("?:\"\""), "{all}");
 }

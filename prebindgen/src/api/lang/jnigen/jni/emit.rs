@@ -428,7 +428,7 @@ pub(crate) fn emit_jni_function_wrapper(
             original_ident
         )
     });
-    let sink_fqn_lit = syn::LitStr::new(&sink_spec.slash_fqn(), Span::call_site());
+    let sink_fqn_lit = syn::LitStr::new(&sink_spec.raw_slash_fqn(), Span::call_site());
     let sink_descr_lit = syn::LitStr::new(&sink_spec.descr, Span::call_site());
     let ze_defaults_setup = quote! {
         #[allow(unused_variables)]
@@ -633,7 +633,7 @@ pub(crate) fn emit_unfold_delivery(
 
     // Cached-interface call statics for the builder / folder `run`.
     let iface_statics = |spec: &IfaceSpec| -> TokenStream {
-        let fqn_lit = syn::LitStr::new(&spec.slash_fqn(), Span::call_site());
+        let fqn_lit = syn::LitStr::new(&spec.raw_slash_fqn(), Span::call_site());
         let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
         quote! {
             #[allow(non_upper_case_globals)]

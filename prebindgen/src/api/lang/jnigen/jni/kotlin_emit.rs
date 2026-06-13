@@ -524,8 +524,19 @@ impl JniGen {
                 Use::JniErrorHandler => Some(jni_error_handler_iface_spec(self)),
             })
             .map(|s| {
-                let decl = s.to_decl();
-                kt::KtFile::new(s.package).decl(decl)
+                // Typed (user-facing) interface; when any leaf's raw view
+                // differs, also the JNI-called raw twin and the `asRaw()`
+                // proxy adapter that wraps raw leaves into typed objects.
+                let mut file = kt::KtFile::new(s.package.clone()).decl(s.to_decl());
+                if s.needs_raw() {
+                    file = file.decl(s.to_raw_decl()).decl(s.to_as_raw_fun());
+                    for p in &s.params {
+                        if let Some(fqn) = p.wrap.class_fqn() {
+                            file = file.import(fqn.to_string());
+                        }
+                    }
+                }
+                file
             })
             .collect()
     }

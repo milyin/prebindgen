@@ -233,6 +233,11 @@ pub struct ImportSet {
     package: String,
     /// simple name → FQN that owns it in this file.
     by_simple: BTreeMap<String, String>,
+    /// Top-level FUNCTION imports (lowercase simple names): Kotlin allows
+    /// several with the same simple name (overload resolution), so they
+    /// bypass the simple-name ownership map — every registered FQN gets its
+    /// import line.
+    fn_imports: std::collections::BTreeSet<String>,
 }
 
 impl ImportSet {
@@ -240,6 +245,7 @@ impl ImportSet {
         Self {
             package: package.into(),
             by_simple: BTreeMap::new(),
+            fn_imports: Default::default(),
         }
     }
 
@@ -259,6 +265,13 @@ impl ImportSet {
         let Some((_pkg, simple)) = name.rsplit_once('.') else {
             return name.to_string();
         };
+        // Lowercase simple name = a top-level function import (extension
+        // adapters, helpers): same-named overloads from different packages
+        // may coexist — register them all, always render short.
+        if simple.chars().next().is_some_and(|c| c.is_lowercase()) {
+            self.fn_imports.insert(name.to_string());
+            return simple.to_string();
+        }
         match self.by_simple.get(simple) {
             Some(owner) if owner == name => simple.to_string(),
             Some(_) => name.to_string(), // collision: render fully qualified
@@ -280,12 +293,15 @@ impl ImportSet {
     pub fn import_lines(&self) -> Vec<String> {
         self.by_simple
             .values()
+            .chain(self.fn_imports.iter())
             .filter(|fqn| {
                 fqn.rsplit_once('.')
                     .map(|(pkg, _)| pkg != self.package)
                     .unwrap_or(false)
             })
             .map(|fqn| format!("import {fqn}"))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
             .collect()
     }
 }

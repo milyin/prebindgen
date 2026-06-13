@@ -25,8 +25,70 @@ use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan, UnfoldShape};
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
 
-/// One generated `fun interface`: identity, Kotlin surface, and the JVM
-/// descriptor of its `run` method.
+/// How a raw leaf value is wrapped into its typed form by the generated
+/// `asRaw` proxy adapter (and by the onError redispatch / guard defaults).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum WrapKind {
+    /// Typed == raw (primitives, String, arrays, …): passthrough.
+    None,
+    /// Opaque handle: raw `Long` → typed handle class (dotted FQN).
+    Handle(String),
+    /// `Copy` value blob: raw `ByteArray` → `@JvmInline` value class (FQN).
+    Blob(String),
+}
+
+impl WrapKind {
+    /// The Kotlin FQN the wrap constructs, if any (for import registration).
+    pub fn class_fqn(&self) -> Option<&str> {
+        match self {
+            WrapKind::None => None,
+            WrapKind::Handle(f) | WrapKind::Blob(f) => Some(f),
+        }
+    }
+
+    /// The wrapping expression over `arg` (`raw_nullable` adds a null-safe
+    /// `?.let`): `ZKeyExpr(x)` / `x?.let { ZKeyExpr(it) }` / passthrough.
+    pub fn wrap_expr(&self, arg: &str, raw_nullable: bool) -> String {
+        match self.class_fqn() {
+            None => arg.to_string(),
+            Some(fqn) => {
+                let short = fqn.rsplit('.').next().unwrap_or(fqn);
+                if raw_nullable {
+                    format!("{arg}?.let {{ {short}(it) }}")
+                } else {
+                    format!("{short}({arg})")
+                }
+            }
+        }
+    }
+}
+
+/// One `run` parameter of a generated callback interface, in both views.
+#[derive(Clone, Debug)]
+pub(crate) struct IfaceParam {
+    pub name: String,
+    /// User-facing type (typed handle class, value class, …).
+    pub typed: kt::KtType,
+    /// JNI-called raw-twin type (`Long`, `ByteArray`, …) — what the
+    /// descriptor and the native jvalues match.
+    pub raw: kt::KtType,
+    /// How the proxy wraps raw → typed.
+    pub wrap: WrapKind,
+}
+
+impl IfaceParam {
+    fn same(name: String, ty: kt::KtType) -> Self {
+        Self {
+            name,
+            typed: ty.clone(),
+            raw: ty,
+            wrap: WrapKind::None,
+        }
+    }
+}
+
+/// One generated `fun interface`: identity, Kotlin surface (typed + raw
+/// views), and the JVM descriptor of the raw `run` the native side calls.
 #[derive(Clone, Debug)]
 pub(crate) struct IfaceSpec {
     /// Kotlin package the interface is declared in.
@@ -35,12 +97,12 @@ pub(crate) struct IfaceSpec {
     pub name: String,
     /// Type parameters with variance as written (`["out R"]`, `["A"]`).
     pub type_params: Vec<String>,
-    /// `run` parameters: `(name, Kotlin type)`. Generic positions use the
-    /// bare type-variable name (`A`).
-    pub params: Vec<(String, kt::KtType)>,
+    /// `run` parameters in both views. Generic positions use the bare
+    /// type-variable name (`A`).
+    pub params: Vec<IfaceParam>,
     /// `run` return type (`Unit`, or a bare type variable `R`/`A`).
     pub ret: kt::KtType,
-    /// Full JVM descriptor of `run`, e.g. `"(Ljava/lang/String;[BI)V"`.
+    /// Full JVM descriptor of the RAW `run`, e.g. `"(JLjava/lang/String;)V"`.
     /// Generic positions erase to `Ljava/lang/Object;`.
     pub descr: String,
 }
@@ -69,11 +131,40 @@ impl IfaceSpec {
         }
     }
 
-    /// The Kotlin declaration.
+    /// True when any param's raw view differs from its typed view — only
+    /// then are a raw twin + `asRaw` proxy generated; otherwise the typed
+    /// interface IS the JNI-called shape.
+    pub fn needs_raw(&self) -> bool {
+        self.params.iter().any(|p| p.wrap != WrapKind::None)
+    }
+
+    /// Short name of the raw twin (`<Name>Raw`); = `name` when no twin.
+    pub fn raw_name(&self) -> String {
+        if self.needs_raw() {
+            format!("{}Raw", self.name)
+        } else {
+            self.name.clone()
+        }
+    }
+
+    pub fn raw_fqn(&self) -> String {
+        if self.package.is_empty() {
+            self.raw_name()
+        } else {
+            format!("{}.{}", self.package, self.raw_name())
+        }
+    }
+
+    /// Slash form of the JNI-called interface for `FindClass`.
+    pub fn raw_slash_fqn(&self) -> String {
+        self.raw_fqn().replace('.', "/")
+    }
+
+    /// The typed (user-facing) Kotlin declaration.
     pub fn to_decl(&self) -> kt::KtFunInterface {
         let mut m = kt::KtFun::new(IFACE_METHOD).vis(kt::Vis::Public);
-        for (n, t) in &self.params {
-            m = m.param(kt::KtParam::new(n, t.clone()));
+        for p in &self.params {
+            m = m.param(kt::KtParam::new(&p.name, p.typed.clone()));
         }
         m = m.returns(self.ret.clone());
         let mut i = kt::KtFunInterface::new(&self.name, m).vis(kt::Vis::Public);
@@ -81,6 +172,64 @@ impl IfaceSpec {
             i = i.type_param(tp);
         }
         i
+    }
+
+    /// The raw-twin declaration (call only when [`Self::needs_raw`]).
+    pub fn to_raw_decl(&self) -> kt::KtFunInterface {
+        let mut m = kt::KtFun::new(IFACE_METHOD).vis(kt::Vis::Public);
+        for p in &self.params {
+            m = m.param(kt::KtParam::new(&p.name, p.raw.clone()));
+        }
+        m = m.returns(self.ret.clone());
+        let mut i = kt::KtFunInterface::new(self.raw_name(), m).vis(kt::Vis::Public);
+        for tp in &self.type_params {
+            i = i.type_param(tp);
+        }
+        i
+    }
+
+    /// The generated proxy: `fun <G> <Name><G>.asRaw(): <Name>Raw<G> =
+    /// <Name>Raw { raw leaves… -> run(<wraps…>) }` — constructed once per
+    /// registration; per message it performs exactly the typed-object
+    /// constructions the consumer needs anyway, in JVM bytecode.
+    pub fn to_as_raw_fun(&self) -> kt::KtFun {
+        let bare_generics: Vec<String> = self
+            .type_params
+            .iter()
+            .map(|tp| tp.strip_prefix("out ").unwrap_or(tp).trim().to_string())
+            .collect();
+        let gen_args = if bare_generics.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", bare_generics.join(", "))
+        };
+        let recv = format!("{}{gen_args}.asRaw", self.name);
+        let arg_list = self
+            .params
+            .iter()
+            .map(|p| p.name.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let wrapped = self
+            .params
+            .iter()
+            .map(|p| p.wrap.wrap_expr(&p.name, p.raw.is_nullable()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let body = if self.params.is_empty() {
+            format!("{}{gen_args} {{ run() }}", self.raw_name())
+        } else {
+            format!(
+                "{}{gen_args} {{ {arg_list} -> run({wrapped}) }}",
+                self.raw_name()
+            )
+        };
+        let mut f = kt::KtFun::new(recv).vis(kt::Vis::Public);
+        for g in &bare_generics {
+            f = f.generic(g);
+        }
+        f = f.returns(kt::KtType::cls(format!("{}{gen_args}", self.raw_name())));
+        f.expr_body(kt::Code::new().line(body))
     }
 }
 
@@ -141,10 +290,10 @@ pub(crate) fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> Stri
     format!("L{};", fqn.replace('.', "/"))
 }
 
-fn method_descr(params: &[(String, kt::KtType)], ret: &kt::KtType, type_params: &[String]) -> String {
+fn method_descr(params: &[IfaceParam], ret: &kt::KtType, type_params: &[String]) -> String {
     let mut d = String::from("(");
-    for (_, t) in params {
-        d.push_str(&kt_jvm_descriptor(t, type_params));
+    for p in params {
+        d.push_str(&kt_jvm_descriptor(&p.raw, type_params));
     }
     d.push(')');
     d.push_str(&kt_jvm_descriptor(ret, type_params));
@@ -198,38 +347,49 @@ fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
 }
 
 /// The interface param list for a decomposition's leaves: names from
-/// [`plan_leaf_names`], types from [`unfold_leaf_kt`] — with `value_blob`
-/// leaves degraded to their `ByteArray` wire (the `@JvmInline` class cannot
-/// appear in a JNI-called method signature).
+/// [`plan_leaf_names`], typed + raw views per leaf.
 fn plan_leaf_params(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
-) -> Option<Vec<(String, kt::KtType)>> {
+) -> Option<Vec<IfaceParam>> {
     let mut names = plan_leaf_names(leaves);
     dedup_names(&mut names);
-    let mut throwaway = BTreeSet::new();
     let mut out = Vec::with_capacity(leaves.len());
     for (name, leaf) in names.into_iter().zip(leaves.iter()) {
-        let ty = leaf_iface_kt(ext, registry, &leaf.out_ty, leaf.nullable, true, &mut throwaway)?;
-        out.push((name, ty));
+        out.push(leaf_iface_param(
+            ext,
+            registry,
+            name,
+            &leaf.out_ty,
+            leaf.nullable,
+            true,
+        )?);
     }
     Some(out)
 }
 
-/// The interface-tier Kotlin type of one delivered leaf: the user-visible
-/// classified type, except `value_blob` leaves which surface as their raw
-/// `ByteArray` wire, and handle leaves which carry the typed-handle **FQN**
-/// (the classified type may be the bare short name; the JVM descriptor
-/// derived from this type must name the class fully).
-pub(crate) fn leaf_iface_kt(
+/// Both interface views of one delivered leaf.
+///
+/// * **typed** (user-facing, Kotlin-called): handles as their typed handle
+///   classes, value blobs as their `@JvmInline` value classes — legal here
+///   because the JNI border never touches this method.
+/// * **raw** (JNI-called twin): a PLAN leaf (`raw_handle`) crosses handles
+///   as the raw `jlong` (`Long`/boxed `Long?` — the proxy constructs the
+///   class in bytecode; a native `new_object` would cost descriptor parse +
+///   FindClass + GetMethodID + NewObjectA per message) and blobs as
+///   `ByteArray` (the `@JvmInline` class would mangle `run`). A whole
+///   (plan-less callback) arg keeps the typed handle class in BOTH views —
+///   the close-unless-taken contract needs the native side to `close()` the
+///   wrapped object after the invoke.
+pub(crate) fn leaf_iface_param(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
+    name: String,
     out_ty: &syn::Type,
     nullable: bool,
-    handle_as_long: bool,
-    throwaway: &mut BTreeSet<String>,
-) -> Option<kt::KtType> {
+    raw_handle: bool,
+) -> Option<IfaceParam> {
     // The declaration-canonical spec normalizes its identity leaf to the
     // borrowed `&T` form; a function set that only ever returns the type
     // OWNED resolved only `T`'s output entry. Both classify to the same
@@ -243,42 +403,38 @@ pub(crate) fn leaf_iface_kt(
             out_ty = &peeled;
         }
     }
-    let (builder_kt, wire_kt, _wrap, is_vb) =
-        unfold_leaf_kt(ext, registry, out_ty, nullable, "x", throwaway)?;
-    if is_vb {
-        let t = kt::KtType::byte_array();
-        return Some(if wire_kt.ends_with('?') {
-            t.nullable()
-        } else {
-            t
-        });
-    }
-    // Handle leaf. In a PLAN (decomposed leaves, `handle_as_long`): crosses
-    // as the RAW `jlong` handle (`Long` / boxed `Long?`) — the receiver
-    // constructs the typed class in bytecode (a JVM `new` is free next to the
-    // native `new_object` dance: descriptor parse + FindClass + GetMethodID +
-    // NewObjectA per message); ownership transfers with the value. Delivered
-    // WHOLE (a plan-less callback arg): keeps the typed handle class — the
-    // close-unless-taken contract needs the native side to `close()` the
-    // wrapped object after the invoke.
-    if let Some(proj) = registry
+    let mut throwaway = BTreeSet::new();
+    let (builder_kt, _wire_kt, _wrap, is_vb) =
+        unfold_leaf_kt(ext, registry, out_ty, nullable, "x", &mut throwaway)?;
+    let proj = registry
         .output_entry(out_ty)
-        .and_then(|e| e.metadata.projection.as_ref())
-        .filter(|p| p.kind == ProjectionKind::Handle)
-    {
-        let t = if handle_as_long {
-            kt::KtType::long()
-        } else {
-            let fqn = ext.kotlin_fqn(&proj.leaf_key)?;
-            kt::KtType::cls(fqn.to_string())
-        };
-        return Some(if builder_kt.is_nullable() {
-            t.nullable()
-        } else {
-            t
+        .and_then(|e| e.metadata.projection.as_ref());
+    let nullable_kt = |t: kt::KtType| if builder_kt.is_nullable() { t.nullable() } else { t };
+    if is_vb {
+        let fqn = proj
+            .and_then(|p| ext.kotlin_fqn(&p.leaf_key))
+            .map(|f| f.to_string())?;
+        return Some(IfaceParam {
+            name,
+            typed: nullable_kt(kt::KtType::cls(fqn.clone())),
+            raw: nullable_kt(kt::KtType::byte_array()),
+            wrap: WrapKind::Blob(fqn),
         });
     }
-    Some(builder_kt)
+    if let Some(p) = proj.filter(|p| p.kind == ProjectionKind::Handle) {
+        let fqn = ext.kotlin_fqn(&p.leaf_key)?.to_string();
+        if raw_handle {
+            return Some(IfaceParam {
+                name,
+                typed: nullable_kt(kt::KtType::cls(fqn.clone())),
+                raw: nullable_kt(kt::KtType::long()),
+                wrap: WrapKind::Handle(fqn),
+            });
+        }
+        // Whole arg: typed class in both views (no proxy wrap).
+        return Some(IfaceParam::same(name, nullable_kt(kt::KtType::cls(fqn))));
+    }
+    Some(IfaceParam::same(name, builder_kt))
 }
 
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
@@ -305,11 +461,16 @@ pub(crate) fn callback_iface_spec(
     }
     let mut names: Vec<String> = leaf_tys.iter().map(|(n, _, _, _)| n.clone()).collect();
     dedup_names(&mut names);
-    let mut throwaway = BTreeSet::new();
     let mut params = Vec::with_capacity(leaf_tys.len());
     for (k, (_, out_ty, nullable, from_plan)) in leaf_tys.iter().enumerate() {
-        let ty = leaf_iface_kt(ext, registry, out_ty, *nullable, *from_plan, &mut throwaway)?;
-        params.push((names[k].clone(), ty));
+        params.push(leaf_iface_param(
+            ext,
+            registry,
+            names[k].clone(),
+            out_ty,
+            *nullable,
+            *from_plan,
+        )?);
     }
     let name = if cb_args.is_empty() {
         "VoidCallback".to_string()
@@ -381,7 +542,8 @@ pub(crate) fn folder_iface_spec(
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans.get(decon)?;
-    let mut params: Vec<(String, kt::KtType)> = vec![("acc".to_string(), kt::KtType::var_("A"))];
+    let mut params: Vec<IfaceParam> =
+        vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];
     params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
     let name = format!(
         "{}Folder",
@@ -409,12 +571,16 @@ pub(crate) fn whole_folder_iface_spec(
     registry: &Registry<KotlinMeta>,
     element: &syn::Type,
 ) -> Option<IfaceSpec> {
-    let mut throwaway = BTreeSet::new();
-    let mut params: Vec<(String, kt::KtType)> = vec![("acc".to_string(), kt::KtType::var_("A"))];
-    params.push((
+    let mut params: Vec<IfaceParam> =
+        vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];
+    params.push(leaf_iface_param(
+        ext,
+        registry,
         "element".to_string(),
-        leaf_iface_kt(ext, registry, element, false, false, &mut throwaway)?,
-    ));
+        element,
+        false,
+        false,
+    )?);
     let name = format!("{}Folder", subject_short(element));
     let package = subject_package(ext, element);
     let type_params = vec!["A".to_string()];
@@ -460,8 +626,10 @@ pub(crate) fn error_handler_iface_spec(
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans.get(decon)?;
-    let mut params: Vec<(String, kt::KtType)> =
-        vec![("je".to_string(), kt::KtType::string().nullable())];
+    let mut params: Vec<IfaceParam> = vec![IfaceParam::same(
+        "je".to_string(),
+        kt::KtType::string().nullable(),
+    )];
     params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
     let name = format!(
         "{}Handler",
@@ -485,7 +653,10 @@ pub(crate) fn error_handler_iface_spec(
 /// — every function without an error plan takes one; placed in the root
 /// package.
 pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
-    let params = vec![("je".to_string(), kt::KtType::string().nullable())];
+    let params = vec![IfaceParam::same(
+        "je".to_string(),
+        kt::KtType::string().nullable(),
+    )];
     let type_params = vec!["out R".to_string()];
     let ret = kt::KtType::var_r();
     let descr = method_descr(&params, &ret, &type_params);
