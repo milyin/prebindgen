@@ -19,7 +19,7 @@
 //! Resolution is language-agnostic: [`apply`] turns declarations into
 //! [`UnfoldPlan`]s (stored on the registry, keyed by function ident) and
 //! registers every leaf's `out_ty` as a required **output** so the resolver
-//! produces its converter (and projection). The jnigen back-end reads the
+//! produces its converter (and projection). The jnigen adapter reads the
 //! plan at the return-emission site.
 //!
 //! [`Iterable`]: UnfoldShape::Iterable
@@ -27,7 +27,17 @@
 use std::collections::HashSet;
 
 use crate::api::core::registry::{Registry, TypeKey};
-use crate::api::core::types_util::{option_inner_type, short_type_name, vec_inner_type};
+use crate::api::core::types_util::{
+    ident, option_inner_type, result_err_type, short_type_name, vec_inner_type,
+};
+
+mod error;
+mod plan;
+
+pub use self::{
+    error::UnfoldError,
+    plan::{DeconId, DeconSpec, UnfoldLeaf, UnfoldPlan, UnfoldShape},
+};
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -385,258 +395,6 @@ impl Deconstructors {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Resolved plan (stored on the registry, read at emission time)
-// ──────────────────────────────────────────────────────────────────────
-
-/// Outer shape wrapping the [core decomposition](`UnfoldShape::Base`).
-/// The output-side analog of [`crate::api::core::expand::FoldShape`], on the
-/// unified [`Shape`](crate::api::core::shape::Shape) layer stack:
-///   * `Base` — run the accessor's records on the value, producing all
-///     [leaves](`UnfoldPlan::leaves`) and invoking the builder once;
-///   * `Optional((), inner)` — `Option<T>`/`Option<&T>` return: `None` ⇒ a null
-///     result (builder skipped), `Some` ⇒ decompose the inner;
-///   * `Iterable(inner)` — `Vec<T>` return: deliver each element whole (via its
-///     own output converter + projection — see [`UnfoldPlan::element`]) to a
-///     caller-supplied fold `(acc, element) -> acc`; inner is `Base` (a
-///     degenerate single whole-element step; per-element accessor decomposition
-///     is future work).
-///
-/// The `()` payload is unused here — only the JNI back-end's
-/// `Shape<NullableKind>` carries per-layer data.
-pub use crate::api::core::shape::Shape as UnfoldShape;
-
-/// Identity of the deconstructor **declaration** a plan's records came from.
-/// A `run`-signature artifact (e.g. a generated callback interface) is fully
-/// determined by the declaration, so back-ends key such artifacts on this —
-/// functions selecting the same declaration share one artifact; differently
-/// declared decompositions of the same type get distinct ones. The first
-/// field is always the target type's canonical [`TypeKey`] string.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum DeconId {
-    /// The type's unnamed (top-level / `.default()`-applied) deconstructor.
-    Canonical(String),
-    /// A named declaration (`.deconstructor_name(name)`), selected per fn
-    /// via the `_with(name)` selectors.
-    Named(String, String),
-    /// Per-fn inline records (`.fun_output(...)`) — unique to the function
-    /// (second field = the fn ident).
-    PerFn(String, String),
-}
-
-/// The declaration-canonical decomposition of one deconstructor: its leaf
-/// list resolved ONCE from the declaration's records with **normalized**
-/// inputs (borrowed identity form, no outer shape), so the content is
-/// independent of which functions use the declaration and in what order.
-/// Stored in `Registry::decon_plans`; the single source language adapters
-/// derive declaration-keyed signature artifacts (e.g. generated callback
-/// interfaces) from. Per-function aspects (`by_ref`, shape, delivery) live on
-/// each function's [`UnfoldPlan`], which points here via [`UnfoldPlan::decon`].
-///
-/// Normalization detail: the identity leaf's `out_ty` is always the borrowed
-/// `&Source` form (an owned-return function's own plan carries owned `Source`
-/// instead) — both resolve to the same projection/class, and adapters reading
-/// the spec must tolerate whichever form their type tables resolved.
-#[derive(Clone)]
-pub struct DeconSpec {
-    /// The decomposed type as first encountered (path qualification may vary
-    /// by call site; compare via [`TypeKey`], not syntactically).
-    pub source: syn::Type,
-    /// Flattened leaves in declared record order — names, types, paths,
-    /// nullability all declaration-fixed.
-    pub leaves: Vec<UnfoldLeaf>,
-}
-
-/// A resolved output expansion for one function.
-#[derive(Clone)]
-pub struct UnfoldPlan {
-    /// Owned core type the records decompose — the function's return after
-    /// peeling `&` / `Option` / `Vec`.
-    pub source: syn::Type,
-    /// Which deconstructor declaration produced [`Self::leaves`] — the
-    /// identity back-ends key signature artifacts on. `None` only for the
-    /// whole-element `Iterable` arm (no declaration involved).
-    pub decon: Option<DeconId>,
-    /// True when the return was `&T` / `Option<&T>`: the identity leaf clones
-    /// the borrow; otherwise it moves the owned value.
-    pub by_ref: bool,
-    /// Outer shape over the core decomposition (`Decompose` for a plain
-    /// `T`/`&T` return).
-    pub shape: UnfoldShape,
-    /// Flattened output leaves, in builder-argument order. Populated for
-    /// `Decompose`/`Optional` (accessor decomposition); **empty** for
-    /// `Iterable`, which delivers each element whole (see [`Self::element`]).
-    pub leaves: Vec<UnfoldLeaf>,
-    /// For an `Iterable` plan: the owned/ref element type, delivered to the fold
-    /// via its own output converter + projection (not decomposed). `None` for
-    /// `Decompose`/`Optional`.
-    pub element: Option<syn::Type>,
-    /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
-    /// delivery.
-    pub delivery: Delivery,
-    /// For [`Delivery::Return`]: the single leaf's `out_ty` lifted through the
-    /// shape (`Decompose` ⇒ `out_ty`, `Optional` ⇒ `Option<out_ty>`). The
-    /// wrapper returns this value through its ordinary output converter (no
-    /// callback). `None` for [`Delivery::Callback`].
-    pub convert_out_ty: Option<syn::Type>,
-}
-
-/// One flattened output leaf of a decomposed return value.
-#[derive(Clone)]
-pub struct UnfoldLeaf {
-    /// Raw display name derived from the declaration: the accessor path with
-    /// each segment stripped of its receiver-type prefix
-    /// ([`strip_accessor_prefix`]), joined by `_` (`z_sample_key_expr` on
-    /// `&ZSample` then `z_keyexpr_as_str` → `"key_expr_as_str"`); a root
-    /// identity leaf is `"handle"`. Language-neutral snake form — adapters
-    /// apply their own casing/keyword escaping (e.g. jnigen's camelCase) and
-    /// dedup the final per-signature list ([`dedup_names`]).
-    pub name: String,
-    /// Accessor-call chain from the root value (`[]` = the identity/root
-    /// itself; `[f]` = `f(&root)`; longer = nested records, M3).
-    pub path: Vec<syn::Ident>,
-    /// Type whose resolved **output** converter encodes this leaf — a
-    /// reference type for accessors (`&str`, `&F`), `&Source` for the identity
-    /// leaf (so the borrowed-opaque clone converter / projection is reused).
-    pub out_ty: syn::Type,
-    /// `true` for the move/clone-the-value handle leaf, emitted **last** (after
-    /// every reference leaf's JVM conversion has ended its borrow).
-    pub identity: bool,
-    /// `true` when a nesting accessor on [`Self::path`] returns `Option` (M3):
-    /// the reached value may be absent, so the leaf is nullable on the
-    /// destination side (e.g. a Kotlin `?` type); emit wraps the encode in a
-    /// `match Some/None`.
-    pub nullable: bool,
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Errors
-// ──────────────────────────────────────────────────────────────────────
-
-/// Errors surfaced while resolving [`Deconstructors`] in [`apply`].
-#[derive(Debug)]
-pub enum UnfoldError {
-    UnknownFunction(syn::Ident),
-    UnknownAccessor(syn::Ident),
-    NoDeconstructor {
-        func: syn::Ident,
-        target: String,
-    },
-    AmbiguousDeconstructor {
-        func: syn::Ident,
-        target: String,
-        candidates: Vec<String>,
-    },
-    UnknownDeconstructor {
-        func: syn::Ident,
-        name: String,
-    },
-    AccessorTargetMismatch {
-        accessor: String,
-        takes: String,
-        expected: String,
-    },
-    MultipleIdentity {
-        target: String,
-    },
-    /// A nested deconstructor recurses back into a type already on the nesting
-    /// chain (`A → … → A`).
-    Cycle {
-        target: String,
-    },
-    /// `.convert_output()` on a deconstructor that does not flatten to exactly
-    /// one leaf, or whose shape is `Iterable` (use `.deconstruct_output()`).
-    ConvertNotSingle {
-        func: syn::Ident,
-        reason: &'static str,
-    },
-    /// A decomposer record references a function that was not declared via
-    /// `.fun_accessor`.
-    RecordNotAccessor {
-        func: syn::Ident,
-    },
-    /// A shape / record kind not yet implemented.
-    Unsupported {
-        func: syn::Ident,
-        reason: &'static str,
-    },
-}
-
-impl std::fmt::Display for UnfoldError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UnfoldError::UnknownFunction(name) => write!(
-                f,
-                "output expansion: function `{}` is not a #[prebindgen] item",
-                name
-            ),
-            UnfoldError::UnknownAccessor(name) => write!(
-                f,
-                "output expansion: accessor `{}` is not a #[prebindgen] item",
-                name
-            ),
-            UnfoldError::NoDeconstructor { func, target } => write!(
-                f,
-                "output expansion: no deconstructor registered for `{}` (return of `{}`)",
-                target, func
-            ),
-            UnfoldError::AmbiguousDeconstructor {
-                func,
-                target,
-                candidates,
-            } => write!(
-                f,
-                "output expansion: multiple deconstructors for `{}` (return of `{}`): {} — disambiguate with `.deconstruct_output_with` / `.convert_output_with`",
-                target,
-                func,
-                candidates.join(", ")
-            ),
-            UnfoldError::UnknownDeconstructor { func, name } => write!(
-                f,
-                "output expansion: no deconstructor named `{}` (for `{}`)",
-                name, func
-            ),
-            UnfoldError::AccessorTargetMismatch {
-                accessor,
-                takes,
-                expected,
-            } => write!(
-                f,
-                "output expansion: accessor `{}` takes `{}` but the deconstructor decomposes `{}`",
-                accessor, takes, expected
-            ),
-            UnfoldError::MultipleIdentity { target } => write!(
-                f,
-                "output expansion: deconstructor for `{}` has more than one identity record",
-                target
-            ),
-            UnfoldError::Cycle { target } => write!(
-                f,
-                "output expansion: nested deconstructors form a cycle through `{}`",
-                target
-            ),
-            UnfoldError::ConvertNotSingle { func, reason } => write!(
-                f,
-                "convert_output: `{}` is not a single-value deconstructor: {}",
-                func, reason
-            ),
-            UnfoldError::RecordNotAccessor { func } => write!(
-                f,
-                "deconstructor record `{}` is not a `.fun_accessor` — decomposer records may only \
-                 reference functions declared via `.fun_accessor(...)`",
-                func
-            ),
-            UnfoldError::Unsupported { func, reason } => write!(
-                f,
-                "output expansion: `{}` not yet supported: {}",
-                func, reason
-            ),
-        }
-    }
-}
-
-impl std::error::Error for UnfoldError {}
-
-// ──────────────────────────────────────────────────────────────────────
 // apply
 // ──────────────────────────────────────────────────────────────────────
 
@@ -645,7 +403,7 @@ impl std::error::Error for UnfoldError {}
 /// required output, and store the plans on the registry (`unfold_plans` for
 /// `Output`, `error_plans` for `Error`).
 ///
-/// `declared_fns` is the back-end's claimed `#[prebindgen]` fn set — the domain
+/// `declared_fns` is the adapter's claimed `#[prebindgen]` fn set — the domain
 /// over which `.default()` deconstructors are auto-applied. `accessor_fns` is
 /// the `.fun_accessor` subset — the only functions a decomposer record may
 /// reference.
@@ -819,25 +577,6 @@ fn fn_return(item_fn: &syn::ItemFn) -> syn::Type {
         syn::ReturnType::Default => syn::parse_quote!(()),
         syn::ReturnType::Type(_, t) => (**t).clone(),
     }
-}
-
-/// `Result<_, E>` → `E` (by last path segment's 2nd generic arg).
-fn result_err_type(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let last = tp.path.segments.last()?;
-    if last.ident != "Result" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
-        return None;
-    };
-    ab.args
-        .iter()
-        .filter_map(|a| match a {
-            syn::GenericArgument::Type(t) => Some(t.clone()),
-            _ => None,
-        })
-        .nth(1)
 }
 
 /// True when `ret` is `T` / `&T` / `Option<T|&T>` / `Vec<T|&T>` with
@@ -1427,15 +1166,6 @@ fn check_takes(
             expected: TypeKey::from_type(expected).to_string(),
         })
     }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-fn ident(s: &str) -> syn::Ident {
-    syn::Ident::new(s, proc_macro2::Span::call_site())
 }
 
 #[cfg(test)]

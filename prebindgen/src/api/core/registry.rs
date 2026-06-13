@@ -6,12 +6,11 @@
 //!   items live in one flat namespace.
 //! * `passthrough` — items that aren't function/struct/enum/const (use, mod,
 //!   type alias, macro_rules) emitted verbatim.
-//! * `input_types` / `output_types` — type tables split by rank
-//!   (`[HashMap<TypeKey, Option<TypeEntry>>; 4]`). Each type encountered in
-//!   a `#[prebindgen]` fn signature or struct/enum body lands here.
-//!
-//! See the plan at `~/.claude/plans/are-there-any-reasons-hazy-brook.md` for
-//! the full rationale.
+//! * `input_types` / `output_types` — direction-specific type tables. Each
+//!   scanned type maps to either a resolved [`TypeEntry`] or an unresolved cell
+//!   that the fixed-point resolver can retry.
+//! * Expansion/deconstruction sidecars — adapter declarations are resolved into
+//!   plans before type resolution, then consumed at wrapper-emission sites.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -20,7 +19,7 @@ use crate::SourceLocation;
 use quote::ToTokens;
 
 use crate::api::core::niches::Niches;
-use crate::api::core::prebindgen::Stage;
+use crate::api::core::prebindgen::{Prebindgen, Stage};
 use crate::api::core::types_util::bare_path_ident;
 
 /// Canonical type-shape key — the `to_token_stream().to_string()` form of a
@@ -70,12 +69,12 @@ impl fmt::Display for TypeKey {
 #[derive(Clone)]
 pub struct TypeEntry<M = ()> {
     /// Wire/destination type — the form the value takes on the wire as
-    /// chosen by the back-end (e.g. an `i64` handle for a JNI back-end, or
-    /// a `*const T` raw pointer for a C back-end). Other converters that
+    /// chosen by the adapter (e.g. an `i64` handle for a JNI adapter, or
+    /// a `*const T` raw pointer for a C adapter). Other converters that
     /// ask "what's the wire form of this rust type?" read this.
     pub destination: syn::Type,
     /// Complete generated function for the **wire-facing** stage of the
-    /// converter (signature, body, attributes, lifetimes). The back-end
+    /// converter (signature, body, attributes, lifetimes). The adapter
     /// owns the shape. Callers compute this stage's name via
     /// `function.sig.ident`.
     pub function: syn::ItemFn,
@@ -85,8 +84,8 @@ pub struct TypeEntry<M = ()> {
     /// that field's docs for the chain-order semantics.
     pub pre_stages: Vec<Stage<M>>,
     /// Inner types whose function delegates to their converters. Empty for
-    /// rank-0 resolutions; equal to the rank-N `subs` array for rank-N≥1
-    /// resolutions. Used by the post-resolution propagation pass.
+    /// terminal converters; populated by wrapper converters. Used by the
+    /// post-resolution propagation pass.
     pub subs: Vec<TypeKey>,
     /// Initially true for types that appear directly in a `#[prebindgen]` fn
     /// signature; false for sub-positions. Promoted true by the propagation
@@ -96,11 +95,11 @@ pub struct TypeEntry<M = ()> {
     /// Wrappers (`Option<_>`, sum-typed enums) carve from this set for
     /// their own discriminants. See [`Niches`] for the cascade model.
     pub niches: Niches,
-    /// Back-end-specific extras carried in by the
+    /// Adapter-specific extras carried in by the
     /// [`crate::api::core::prebindgen::ConverterImpl`] that filled this
     /// slot. Emitter code reads this directly — the registry is the
     /// single source of truth for cross-language facts (C header names,
-    /// JVM class names, etc.). Defaults to `()` for back-ends that don't
+    /// JVM class names, etc.). Defaults to `()` for adapters that don't
     /// need any.
     pub metadata: M,
 }
@@ -125,12 +124,12 @@ impl Direction {
 
 /// Single owner of everything parsed from the prebindgen source stream.
 ///
-/// The metadata parameter `M` is the language back-end's per-converter
+/// The metadata parameter `M` is the language adapter's per-converter
 /// extra type, supplied via
 /// [`crate::api::core::prebindgen::Prebindgen::Metadata`]. Each
 /// [`TypeEntry`] carries one `M` copied in by the resolver from the
 /// [`crate::api::core::prebindgen::ConverterImpl`] that produced it.
-/// Back-ends that don't carry extras leave `M = ()`.
+/// Adapters that don't carry extras leave `M = ()`.
 pub struct Registry<M = ()> {
     pub functions: HashMap<syn::Ident, (syn::ItemFn, SourceLocation)>,
     pub structs: HashMap<syn::Ident, (syn::ItemStruct, SourceLocation)>,
@@ -158,12 +157,12 @@ pub struct Registry<M = ()> {
     /// Resolved constructor-expansion plans, keyed by `(function, parameter)`.
     /// Filled by [`crate::api::core::expand::apply`] before resolution; read
     /// by language adapters at the parameter-emission site. Empty unless the
-    /// back-end declared expansions.
+    /// adapter declared expansions.
     pub expansion_plans: HashMap<(syn::Ident, syn::Ident), crate::api::core::expand::FoldPlan>,
 
     /// Resolved output-expansion plans, keyed by function ident. Filled by
     /// [`crate::api::core::unfold::apply`] before resolution; read by language
-    /// adapters at the return-emission site. Empty unless the back-end declared
+    /// adapters at the return-emission site. Empty unless the adapter declared
     /// deconstructors.
     pub unfold_plans: HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>,
 
@@ -330,6 +329,49 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
     }
 }
 
+/// Adapter declaration intent normalized once per pipeline run.
+struct DeclaredItems {
+    functions: HashSet<syn::Ident>,
+    ignored_functions: HashSet<syn::Ident>,
+    accessors: HashSet<syn::Ident>,
+    types: HashSet<TypeKey>,
+    ignored_types: HashSet<TypeKey>,
+}
+
+impl DeclaredItems {
+    fn from_adapter<E, M>(adapter: &E) -> Result<Self, ScanError>
+    where
+        E: Prebindgen<Metadata = M>,
+    {
+        let declared = Self {
+            functions: adapter.declared_functions(),
+            ignored_functions: adapter.ignored_functions(),
+            accessors: adapter.accessor_functions(),
+            types: adapter.declared_types(),
+            ignored_types: adapter.ignored_types(),
+        };
+
+        if let Some(name) = declared
+            .functions
+            .intersection(&declared.ignored_functions)
+            .cloned()
+            .min_by_key(|ident| ident.to_string())
+        {
+            return Err(ScanError::ConflictingFunctionIntent { name });
+        }
+        if let Some(key) = declared
+            .types
+            .intersection(&declared.ignored_types)
+            .cloned()
+            .min_by_key(|key| key.as_str().to_owned())
+        {
+            return Err(ScanError::ConflictingTypeIntent { key });
+        }
+
+        Ok(declared)
+    }
+}
+
 impl<M> Registry<M> {
     /// Construct a `Registry` by indexing a stream of source items.
     ///
@@ -341,7 +383,7 @@ impl<M> Registry<M> {
     /// This step only populates the item maps (`functions`, `structs`,
     /// `enums`, `consts`, `passthrough`). Signature/body scanning that
     /// drives type-resolution requirements happens later, in
-    /// [`Self::scan_declared`], and is gated on what the language ext
+    /// [`Self::scan_declared`], and is gated on what the language adapter
     /// has explicitly declared. Items that are never declared remain in
     /// the registry but never drive type resolution and never emit.
     pub fn from_items<I>(items: I) -> Result<Self, ScanError>
@@ -355,18 +397,18 @@ impl<M> Registry<M> {
         Ok(registry)
     }
 
-    /// Scan the signature/body of every item declared by `ext`.
+    /// Scan the signature/body of every item declared by the adapter.
     ///
-    /// * For each ident in `ext.declared_functions()` ∩ indexed functions,
+    /// * For each ident in `adapter.declared_functions()` ∩ indexed functions,
     ///   call `scan_fn_signature` so parameter and return types
     ///   are registered as required.
-    /// * For each `TypeKey` in `ext.declared_types()`, mark the key as
+    /// * For each `TypeKey` in `adapter.declared_types()`, mark the key as
     ///   required in both directions; if the key resolves to an indexed
     ///   struct/enum, also scan its body so field types are registered
     ///   (still `required: false` — propagation later promotes them
     ///   through `subs`).
-    /// * Idents / types returned by `ext.ignored_functions()` /
-    ///   `ext.ignored_types()` are treated as intentional skips: they are
+    /// * Idents / types returned by `adapter.ignored_functions()` /
+    ///   `adapter.ignored_types()` are treated as intentional skips: they are
     ///   neither scanned nor emitted, but they do suppress the "skipping
     ///   undeclared" warnings.
     ///
@@ -376,30 +418,15 @@ impl<M> Registry<M> {
     /// line so the user sees the remaining unexpected skips per build.
     pub fn scan_declared<E>(&mut self, ext: &E) -> Result<(), ScanError>
     where
-        E: crate::api::core::prebindgen::Prebindgen<Metadata = M>,
+        E: Prebindgen<Metadata = M>,
     {
-        let declared_fns = ext.declared_functions();
-        let ignored_fns = ext.ignored_functions();
-        let declared_types = ext.declared_types();
-        let ignored_types = ext.ignored_types();
+        let declared = DeclaredItems::from_adapter(ext)?;
+        self.scan_declared_items(&declared)
+    }
 
-        if let Some(name) = declared_fns
-            .intersection(&ignored_fns)
-            .map(|ident| ident.clone())
-            .min_by_key(|ident| ident.to_string())
-        {
-            return Err(ScanError::ConflictingFunctionIntent { name });
-        }
-        if let Some(key) = declared_types
-            .intersection(&ignored_types)
-            .map(|key| key.clone())
-            .min_by_key(|key| key.as_str().to_owned())
-        {
-            return Err(ScanError::ConflictingTypeIntent { key });
-        }
-
+    fn scan_declared_items(&mut self, declared: &DeclaredItems) -> Result<(), ScanError> {
         // Scan declared functions.
-        for ident in &declared_fns {
+        for ident in &declared.functions {
             if let Some((item_fn, loc)) = self.functions.get(ident).cloned() {
                 self.scan_fn_signature(&item_fn, &loc)?;
             } else {
@@ -410,7 +437,7 @@ impl<M> Registry<M> {
             }
         }
 
-        for ident in &ignored_fns {
+        for ident in &declared.ignored_functions {
             if !self.functions.contains_key(ident) {
                 println!(
                     "cargo:warning=prebindgen: ignored function `{}` not found among #[prebindgen] items",
@@ -420,7 +447,7 @@ impl<M> Registry<M> {
         }
 
         // Scan declared types.
-        for key in &declared_types {
+        for key in &declared.types {
             let ty = key.to_type();
             let mut matched = false;
             if let Some(ident) = bare_path_ident(&ty) {
@@ -447,7 +474,7 @@ impl<M> Registry<M> {
             }
         }
 
-        for key in &ignored_types {
+        for key in &declared.ignored_types {
             let ty = key.to_type();
             let matched = bare_path_ident(&ty).is_some_and(|ident| {
                 self.structs.contains_key(&ident) || self.enums.contains_key(&ident)
@@ -460,11 +487,13 @@ impl<M> Registry<M> {
             }
         }
 
-        // Warn about indexed items that the ext never claimed.
+        // Warn about indexed items that the adapter never claimed.
         let mut skipped_fns: Vec<String> = self
             .functions
             .keys()
-            .filter(|k| !declared_fns.contains(*k) && !ignored_fns.contains(*k))
+            .filter(|k| {
+                !declared.functions.contains(*k) && !declared.ignored_functions.contains(*k)
+            })
             .map(|k| k.to_string())
             .collect();
         skipped_fns.sort();
@@ -478,13 +507,13 @@ impl<M> Registry<M> {
         let mut skipped_types: Vec<String> = Vec::new();
         for ident in self.structs.keys() {
             let key = TypeKey::parse(&ident.to_string());
-            if !declared_types.contains(&key) && !ignored_types.contains(&key) {
+            if !declared.types.contains(&key) && !declared.ignored_types.contains(&key) {
                 skipped_types.push(ident.to_string());
             }
         }
         for ident in self.enums.keys() {
             let key = TypeKey::parse(&ident.to_string());
-            if !declared_types.contains(&key) && !ignored_types.contains(&key) {
+            if !declared.types.contains(&key) && !declared.ignored_types.contains(&key) {
                 skipped_types.push(ident.to_string());
             }
         }
@@ -507,19 +536,38 @@ impl<M> Registry<M> {
         self.required_outputs_scan.contains(key)
     }
 
+    /// Direction-indexed read access to the type-resolution tables.
+    pub(crate) fn type_table(&self, dir: Direction) -> &HashMap<TypeKey, Option<TypeEntry<M>>> {
+        match dir {
+            Direction::Input => &self.input_types,
+            Direction::Output => &self.output_types,
+        }
+    }
+
+    /// Direction-indexed mutable access to the type-resolution tables.
+    pub(crate) fn type_table_mut(
+        &mut self,
+        dir: Direction,
+    ) -> &mut HashMap<TypeKey, Option<TypeEntry<M>>> {
+        match dir {
+            Direction::Input => &mut self.input_types,
+            Direction::Output => &mut self.output_types,
+        }
+    }
+
     /// Look up the resolved input entry for `ty`, returning `None` if it
     /// was never registered or is still unresolved. The returned entry's
     /// `function.sig.ident` is the converter's call name; `destination` is
     /// its wire form.
     pub fn input_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         let key = TypeKey::from_type(ty);
-        self.input_types.get(&key)?.as_ref()
+        self.type_table(Direction::Input).get(&key)?.as_ref()
     }
 
     /// Look up the resolved output entry for `ty`. See [`Self::input_entry`].
     pub fn output_entry(&self, ty: &syn::Type) -> Option<&TypeEntry<M>> {
         let key = TypeKey::from_type(ty);
-        self.output_types.get(&key)?.as_ref()
+        self.type_table(Direction::Output).get(&key)?.as_ref()
     }
 
     /// Register `ty` (and its nested positions) as a required **input** so
@@ -602,10 +650,10 @@ impl<M> Registry<M> {
     ) -> Result<(), ScanError> {
         // Mechanical: register every fn-signature type as the user wrote it.
         // No semantic transformations (no &T→T strip, no ZResult<T>→T strip,
-        // no skip for () / ZResult<()>). The plugin handles those via rank
-        // handlers; propagation through `subs` then marks transitive deps
-        // (e.g. &Foo's `& _` rank-1 handler returns subs=[Foo], so Foo
-        // becomes required).
+        // no skip for () / ZResult<()>). The adapter handles structural
+        // wrappers; propagation through `subs` then marks transitive deps
+        // (e.g. &Foo's `&_` converter returns subs=[Foo], so Foo becomes
+        // required).
         for input in &f.sig.inputs {
             match input {
                 syn::FnArg::Receiver(_) => {
@@ -709,10 +757,7 @@ impl<M> Registry<M> {
         loc: &SourceLocation,
     ) {
         let key = TypeKey::from_type(ty);
-        let table = match dir {
-            Direction::Input => &mut self.input_types,
-            Direction::Output => &mut self.output_types,
-        };
+        let table = self.type_table_mut(dir);
         table.entry(key.clone()).or_insert(None);
         if required {
             match dir {
@@ -766,7 +811,7 @@ impl<M> Registry<M> {
         out
     }
 
-    /// One-shot: resolve every required type using `ext`, then write the
+    /// One-shot: resolve every required type using an adapter, then write the
     /// generated Rust bindings file. The single public entry point for
     /// language-specific binding generation — language-agnostic because
     /// `ext` is any [`crate::api::core::prebindgen::Prebindgen`] impl
@@ -777,25 +822,36 @@ impl<M> Registry<M> {
         out_path: impl AsRef<std::path::Path>,
     ) -> Result<std::path::PathBuf, WriteRustError>
     where
-        E: crate::api::core::prebindgen::Prebindgen<Metadata = M>,
+        E: Prebindgen<Metadata = M>,
         M: Clone + Default,
     {
-        self.scan_declared(ext)?;
-        // The set of `#[prebindgen]` fns the back-end claims — drives the
-        // `.default()` auto-apply (a defaulted constructor/deconstructor is
-        // synthesized for every matching declared fn). `accessor_fns` is the
-        // `.fun_accessor` subset: excluded from constructor composition and the
-        // only fns a decomposer record may reference.
-        let declared_fns = ext.declared_functions();
-        let accessor_fns = ext.accessor_functions();
-        if let Some(exp) = ext.expansions() {
-            crate::api::core::expand::apply(self, exp, &declared_fns, &accessor_fns)?;
-        }
-        if let Some(dec) = ext.deconstructors() {
-            crate::api::core::unfold::apply(self, dec, &declared_fns, &accessor_fns)?;
-        }
+        let declared = DeclaredItems::from_adapter(ext)?;
+        self.scan_declared_items(&declared)?;
+        self.apply_adapter_plans(ext, &declared)?;
         crate::api::core::resolve::resolve(self, ext)?;
         Ok(crate::api::core::write::write_rust(self, ext, out_path)?)
+    }
+
+    fn apply_adapter_plans<E>(
+        &mut self,
+        ext: &E,
+        declared: &DeclaredItems,
+    ) -> Result<(), WriteRustError>
+    where
+        E: Prebindgen<Metadata = M>,
+    {
+        // The set of declared fns drives `.default()` auto-apply: a defaulted
+        // constructor/deconstructor is synthesized for every matching declared
+        // fn. `accessors` is the `.fun_accessor` subset: excluded from
+        // constructor composition and the only fns a decomposer record may
+        // reference.
+        if let Some(exp) = ext.expansions() {
+            crate::api::core::expand::apply(self, exp, &declared.functions, &declared.accessors)?;
+        }
+        if let Some(dec) = ext.deconstructors() {
+            crate::api::core::unfold::apply(self, dec, &declared.functions, &declared.accessors)?;
+        }
+        Ok(())
     }
 }
 

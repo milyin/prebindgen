@@ -486,6 +486,64 @@ pub(crate) fn render_extern_decl(
     }
 }
 
+struct Param {
+    kt_name: String,
+    kt_type: kt::KtType,
+    mode: ParamMode,
+    /// `true` when the param's Rust type is a `enum_class`-declared enum: the
+    /// high-level Kotlin signature uses the typed enum (`Priority`), but the
+    /// underlying JNI `external fun` declares the param as `Int` (jint wire).
+    /// The wrapper bridges the two by passing `<name>.value` at the call site.
+    as_enum_value: bool,
+}
+
+enum ParamMode {
+    Borrow,  // &T opaque-handle → withPtr
+    Consume, // T  opaque-handle → consume
+    /// `Option<&T>` / `Option<&mut T>` opaque-handle → `withPtrOrZero`.
+    /// Nullable typed-handle param; the wrapper runs the body under the read
+    /// lock when the handle is non-null and with `0L` when null. The Rust
+    /// converter materializes `Option<OwnedObject<T>>` and the call site uses
+    /// `.as_deref()` / `.as_deref_mut()`.
+    BorrowNullable,
+    /// By-value `Option<T>` opaque-handle → nullable consume. Same as
+    /// [`Self::Consume`] but the typed param is nullable (`T?`): `0L` when
+    /// absent, and the handle's `ptr` slot is nulled after the call only when
+    /// present. The Rust converter consumes the `Box` to `Option<T>`.
+    ConsumeNullable,
+    PassThrough,
+    /// Value-projection param (`value_blob`): a Kotlin `@JvmInline value class`
+    /// that is **not** a lockable handle. The Kotlin param type is the
+    /// value-class FQN; the call site passes the unwrapped inline-class field
+    /// (`<name>.<field>`) so the `JNINative` extern receives the erased inner
+    /// wire (e.g. `ByteArray`). No lock.
+    ValueUnwrap { field: String },
+    /// Flattenable `data_class` param: the high-level Kotlin signature keeps the
+    /// typed object, but the `JNINative` call destructures it into the leaf
+    /// access expressions (no `JObject` crosses, so the Rust side skips
+    /// `env.get_field(...)`). The strings are the per-leaf call-site
+    /// expressions in plan order.
+    FlattenStruct { accesses: Vec<String> },
+    /// `impl Fn(args)` callback param: typed Kotlin lambda over the flattened
+    /// leaves of each arg's callback plan (whole arg when plan-less), erased to
+    /// `Any` at the extern tier — the same shape as the unfold `build`/`onError`
+    /// lambdas. `call_arg` is the call-site expression: the param itself, or a
+    /// value-blob rebuilding adapter.
+    Callback { call_arg: String },
+}
+
+struct Opaque {
+    /// Kotlin param name (e.g. `"b"`).
+    name: String,
+    /// Object to synchronize on and read the pointer from (`<name>`).
+    target: String,
+    /// Statement that nulls the pointer slot after consume (`"<target>.ptr =
+    /// 0L"`), or `None` for borrow modes.
+    consume_null: Option<String>,
+    /// `true` for `Option<&T>` — nullable param, branches before lock.
+    nullable: bool,
+}
+
 /// Build a single top-level (free-function) wrapper as a [`kt::KtFun`].
 /// Returns `None` if the function has a parameter whose Kotlin type isn't
 /// registered (in that case we skip the function rather than panicking — the
@@ -517,58 +575,6 @@ pub(crate) fn render_wrapper_fn(
     let jni_call = ext.mangle_fun(&default_kt_name);
 
     // Classify each parameter.
-    struct Param {
-        kt_name: String,
-        kt_type: kt::KtType,
-        mode: ParamMode,
-        /// `true` when the param's Rust type is a `enum_class`-declared
-        /// enum: the high-level Kotlin signature uses the typed enum
-        /// (`Priority`), but the underlying JNI `external fun` declares
-        /// the param as `Int` (jint wire). The wrapper bridges the two
-        /// by passing `<name>.value` at the call site.
-        as_enum_value: bool,
-    }
-    enum ParamMode {
-        Borrow,  // &T opaque-handle → withPtr
-        Consume, // T  opaque-handle → consume
-        /// `Option<&T>` / `Option<&mut T>` opaque-handle → `withPtrOrZero`.
-        /// Nullable typed-handle param; the wrapper runs the body under
-        /// the read lock when the handle is non-null and with `0L` when
-        /// null. The Rust converter materializes `Option<OwnedObject<T>>`
-        /// and the call site uses `.as_deref()` / `.as_deref_mut()`.
-        BorrowNullable,
-        /// By-value `Option<T>` opaque-handle → nullable consume. Same as
-        /// [`Self::Consume`] but the typed param is nullable (`T?`): `0L` when
-        /// absent, and the handle's `ptr` slot is nulled after the call only
-        /// when present. The Rust converter consumes the `Box` to `Option<T>`.
-        ConsumeNullable,
-        PassThrough,
-        /// Value-projection param (`value_blob`): a Kotlin
-        /// `@JvmInline value class` that is **not** a lockable handle. The
-        /// Kotlin param type is the value-class FQN; the call site passes the
-        /// unwrapped inline-class field (`<name>.<field>`) so the `JNINative`
-        /// extern receives the erased inner wire (e.g. `ByteArray`). No lock.
-        ValueUnwrap {
-            field: String,
-        },
-        /// Flattenable `data_class` param: the high-level Kotlin signature
-        /// keeps the typed object, but the `JNINative` call destructures it
-        /// into the leaf access expressions (no `JObject` crosses, so the
-        /// Rust side skips `env.get_field(...)`). The strings are the
-        /// per-leaf call-site expressions in plan order.
-        FlattenStruct {
-            accesses: Vec<String>,
-        },
-        /// `impl Fn(args)` callback param: typed Kotlin lambda over the
-        /// flattened leaves of each arg's callback plan (whole arg when
-        /// plan-less), erased to `Any` at the extern tier — the same shape as
-        /// the unfold `build`/`onError` lambdas. `call_arg` is the call-site
-        /// expression: the param itself, or a value-blob rebuilding adapter.
-        Callback {
-            call_arg: String,
-        },
-    }
-
     let mut params: Vec<Param> = Vec::new();
     for (eff_ident, eff_ty) in effective_inputs(registry, f) {
         let name = kt_param_name(&eff_ident.to_string());
@@ -910,17 +916,6 @@ pub(crate) fn render_wrapper_fn(
 
     // Collect the opaque-handle params so we can scaffold pointer-ordered
     // synchronized blocks around them.
-    struct Opaque {
-        /// Kotlin param name (e.g. `"b"`).
-        name: String,
-        /// Object to synchronize on and read the pointer from (`<name>`).
-        target: String,
-        /// Statement that nulls the pointer slot after consume
-        /// (`"<target>.ptr = 0L"`), or `None` for borrow modes.
-        consume_null: Option<String>,
-        /// `true` for `Option<&T>` — nullable param, branches before lock.
-        nullable: bool,
-    }
     let opaques: Vec<Opaque> = params
         .iter()
         .filter_map(|p| {

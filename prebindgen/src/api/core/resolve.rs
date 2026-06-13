@@ -1,9 +1,9 @@
 //! Structural resolver and the post-resolution `required` propagation pass.
 //!
 //! The resolver fills `Registry::input_types` / `output_types` cells by asking
-//! the language ext for each unresolved type's converter via
-//! [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`]. The ext peels
-//! the type's outermost structure itself and either returns a *terminal*
+//! the language adapter for each unresolved type's converter via
+//! [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`]. The adapter
+//! peels the type's outermost structure itself and either returns a *terminal*
 //! converter or a *wrapper* that looked up inner converters in the registry
 //! (declaring those inners in [`ConverterImpl::subs`]); it returns `None` to
 //! **defer** when an inner isn't resolved yet.
@@ -90,10 +90,9 @@ pub fn resolve<E: Prebindgen>(
 ) -> Result<(), ResolveError> {
     loop {
         // PASS A (read-only): sweep every unresolved entry once per direction,
-        // ask the ext for a converter. No per-rank phasing — the ext peels the
-        // type itself; inner-before-outer ordering falls out of the fixed-point
-        // loop (a wrapper that needs an unresolved inner returns `None` and is
-        // retried next iteration).
+        // ask the adapter for a converter. Inner-before-outer ordering falls out
+        // of the fixed-point loop: a wrapper that needs an unresolved inner
+        // returns `None` and is retried next iteration.
         let deltas_in = collect_deltas(registry, Direction::Input, ext);
         let deltas_out = collect_deltas(registry, Direction::Output, ext);
         if deltas_in.is_empty() && deltas_out.is_empty() {
@@ -107,7 +106,7 @@ pub fn resolve<E: Prebindgen>(
     final_invariant_check(registry)
 }
 
-/// PASS A — walk every unresolved entry in `dir`, ask the ext, collect
+/// PASS A — walk every unresolved entry in `dir`, ask the adapter, collect
 /// successful results without mutating the registry.
 fn collect_deltas<E: Prebindgen>(
     registry: &Registry<E::Metadata>,
@@ -115,10 +114,7 @@ fn collect_deltas<E: Prebindgen>(
     ext: &E,
 ) -> Vec<(TypeKey, TypeEntry<E::Metadata>)> {
     let mut deltas: Vec<(TypeKey, TypeEntry<E::Metadata>)> = Vec::new();
-    let table = match dir {
-        Direction::Input => &registry.input_types,
-        Direction::Output => &registry.output_types,
-    };
+    let table = registry.type_table(dir);
     for (key, slot) in table {
         if slot.is_some() {
             continue;
@@ -143,10 +139,7 @@ fn apply_deltas<M>(
     dir: Direction,
     deltas: Vec<(TypeKey, TypeEntry<M>)>,
 ) {
-    let table = match dir {
-        Direction::Input => &mut registry.input_types,
-        Direction::Output => &mut registry.output_types,
-    };
+    let table = registry.type_table_mut(dir);
     for (key, entry) in deltas {
         if let Some(slot) = table.get_mut(&key) {
             if slot.is_none() {
@@ -156,7 +149,7 @@ fn apply_deltas<M>(
     }
 }
 
-/// Resolve one entry: ask the ext for a converter (it inspects `key_ty`
+/// Resolve one entry: ask the adapter for a converter (it inspects `key_ty`
 /// structurally), then — for an `impl Fn(args...)` input that nothing else
 /// claimed — fall back to `dispatch_fn_input`. The resulting `TypeEntry::subs`
 /// are the inner types the converter declared it composed from.
@@ -223,10 +216,7 @@ fn propagate_required<M>(registry: &mut Registry<M>) {
 }
 
 fn mark_and_get_subs<M>(registry: &mut Registry<M>, dir: Direction, key: &TypeKey) -> Vec<TypeKey> {
-    let table = match dir {
-        Direction::Input => &mut registry.input_types,
-        Direction::Output => &mut registry.output_types,
-    };
+    let table = registry.type_table_mut(dir);
     match table.get_mut(key) {
         Some(Some(entry)) => {
             entry.required = true;
@@ -237,10 +227,7 @@ fn mark_and_get_subs<M>(registry: &mut Registry<M>, dir: Direction, key: &TypeKe
 }
 
 fn is_required_resolved<M>(registry: &Registry<M>, dir: Direction, key: &TypeKey) -> bool {
-    let table = match dir {
-        Direction::Input => &registry.input_types,
-        Direction::Output => &registry.output_types,
-    };
+    let table = registry.type_table(dir);
     table
         .get(key)
         .and_then(|slot| slot.as_ref())
@@ -256,10 +243,7 @@ fn set_required<M>(registry: &mut Registry<M>, dir: Direction, key: &TypeKey) {
             registry.required_outputs_scan.insert(key.clone());
         }
     }
-    let table = match dir {
-        Direction::Input => &mut registry.input_types,
-        Direction::Output => &mut registry.output_types,
-    };
+    let table = registry.type_table_mut(dir);
     if let Some(Some(entry)) = table.get_mut(key) {
         entry.required = true;
     }
@@ -270,11 +254,7 @@ fn lookup_slot<'a, M>(
     dir: Direction,
     key: &TypeKey,
 ) -> Option<&'a Option<TypeEntry<M>>> {
-    let table = match dir {
-        Direction::Input => &registry.input_types,
-        Direction::Output => &registry.output_types,
-    };
-    table.get(key)
+    registry.type_table(dir).get(key)
 }
 
 /// BFS from unresolved required-roots through the type graph, surfacing

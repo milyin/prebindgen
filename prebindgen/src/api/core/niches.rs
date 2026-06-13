@@ -35,7 +35,7 @@
 //!
 //! For the carve to be sound, the inner converter's outputs must
 //! genuinely avoid the carved bit pattern, and its input must reject it
-//! (typically by erroring). The back-end author guarantees this — `Niches`
+//! (typically by erroring). The adapter author guarantees this — `Niches`
 //! is a *declaration* that the resolver and wrappers trust.
 //!
 //! ## Calling convention for `matches`
@@ -50,7 +50,7 @@
 //! * Raw-pointer wires (`*const T`): `v: <wire>` — write `v.is_null()`
 //!   directly, no `*` deref.
 //!
-//! The back-end producing the niche knows which wire kind it is using and
+//! The adapter producing the niche knows which wire kind it is using and
 //! must write `matches` accordingly.
 //!
 //! `value` is a wire-typed *constant* expression with no `v` and no other

@@ -72,7 +72,7 @@ use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
 // keep their call sites. `pub(crate) use` so the glob re-export reaches them.
 pub(crate) use crate::api::core::types_util::{
     first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
-    is_vec_type as is_vec, path_tail_ident as type_path_tail,
+    is_vec_type as is_vec, path_tail_ident as type_path_tail, result_parts,
 };
 
 /// Identity of a declared callback signature: its argument-type list (the
@@ -249,6 +249,7 @@ type MangleN = Box<dyn Fn(&[String]) -> String>;
 
 mod builder;
 mod emit;
+mod selector;
 #[cfg(test)]
 mod tests;
 mod trait_impl;
@@ -414,25 +415,6 @@ fn returns_result(output: &syn::ReturnType) -> bool {
         syn::ReturnType::Type(_, ty) => is_result(ty),
         syn::ReturnType::Default => false,
     }
-}
-
-/// If `ty` is `Result<T, E>`, return `(T, E)`.
-fn result_parts(ty: &syn::Type) -> Option<(syn::Type, syn::Type)> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let seg = tp.path.segments.last()?;
-    if seg.ident != "Result" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
-        return None;
-    };
-    let mut tys = ab.args.iter().filter_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    });
-    let t = tys.next()?;
-    let e = tys.next()?;
-    Some((t, e))
 }
 
 /// C-ABI wire type for a struct field. `String` → `*mut c_char`; FFI-safe

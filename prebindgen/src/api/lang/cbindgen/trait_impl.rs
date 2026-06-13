@@ -9,7 +9,7 @@ use super::*;
 impl Cbindgen {
     /// Opaque handle, by-value consume: `*Box::from_raw(v)` — fallible (null
     /// handle → message). The wire is the bare handle pointer `*mut #c_struct`.
-    fn in_opaque_handle(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_opaque_handle(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.opaque.contains_key(&key) {
             return None;
@@ -43,7 +43,11 @@ impl Cbindgen {
     }
 
     /// Data struct: decode each field from its C wire — infallible.
-    fn in_data_struct(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_data_struct(
+        &self,
+        ty: &syn::Type,
+        r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.data.contains_key(&key) {
             return None;
@@ -89,7 +93,7 @@ impl Cbindgen {
     /// wire → None. (We do NOT reject gravestone values: for types whose
     /// gravestone coincides with a legitimate value — e.g. an *empty* `ZBytes` —
     /// that would wrongly reject valid inputs; the move + write-back is safe.)
-    fn in_value_opaque(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_value_opaque(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
         let opaque = self.value_opaque_ty(ty)?.clone();
         let owned = self.opaque_kind(ty) == Some(OpaqueKind::Owned);
         let name = Self::in_name(ty);
@@ -127,7 +131,7 @@ impl Cbindgen {
     }
 
     /// Enum input: `match` the C enum back to the source enum — infallible.
-    fn in_enum(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_enum(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.enums.contains_key(&key) {
             return None;
@@ -158,7 +162,7 @@ impl Cbindgen {
     }
 
     /// `String` input: `*const c_char` → owned `String` — fallible.
-    fn in_string(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_string(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
         if !is_string(ty) {
             return None;
         }
@@ -197,7 +201,7 @@ impl Cbindgen {
 
     /// Bare `str` never crosses the C ABI directly, but resolving `&str`
     /// inputs requires its inner node to have a filled rank-0 cell.
-    fn in_str(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_str(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
         if !is_str(ty) {
             return None;
         }
@@ -217,7 +221,7 @@ impl Cbindgen {
     }
 
     /// FFI-safe scalar (`bool`, integers, floats): identity pass-through.
-    fn in_scalar(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_scalar(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
         if !is_scalar(ty) {
             return None;
         }
@@ -606,21 +610,11 @@ impl Prebindgen for Cbindgen {
     // / `out_wrappers`.
 
     fn on_input_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-        // Terminal categories (mutually exclusive, priority order), else a
-        // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`).
-        self.in_opaque_handle(ty)
-            .or_else(|| self.in_data_struct(ty, r))
-            .or_else(|| self.in_value_opaque(ty))
-            .or_else(|| self.in_enum(ty, r))
-            .or_else(|| self.in_string(ty))
-            .or_else(|| self.in_str(ty))
-            .or_else(|| self.in_scalar(ty))
-            .or_else(|| self.in_wrappers(ty, r))
+        self.select_input_type(ty, r)
     }
 
     fn on_output_type(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
-        self.out_terminal(ty, r)
-            .or_else(|| self.out_wrappers(ty, r))
+        self.select_output_type(ty, r)
     }
 
     fn declared_functions(&self) -> HashSet<syn::Ident> {
@@ -793,7 +787,11 @@ impl Prebindgen for Cbindgen {
 /// Output-direction terminal categories — the rank-0 chain, now an inherent
 /// helper called by the structural [`Prebindgen::on_output_type`].
 impl Cbindgen {
-    fn out_terminal(&self, ty: &syn::Type, _r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_terminal(
+        &self,
+        ty: &syn::Type,
+        _r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
         // Unit return: trivial converter so `()` (and `Result<(), _>`) resolves.
         // Never actually called — void-returning wrappers ignore it, and
         // `emit_fallible_wrapper` special-cases `Result<(), E>` to drop the
@@ -989,7 +987,7 @@ impl Cbindgen {
 /// lists the immediate inner(s) it looked up.
 impl Cbindgen {
     /// `Option<X>` and reference (`&`/`&mut`/`&[E]`/`&str`) **input** shapes.
-    fn in_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
         // `Option<X>` input: a single nullable C param, NULL = `None`. The inner
         // `X` is reused wholesale (its own converter — e.g. an `&T` borrow — does
         // the non-null decode), so `Option<&ZConfig>` binds the *reference*
@@ -1190,7 +1188,7 @@ impl Cbindgen {
     /// markers (`Option`/`Vec`/`Result`) carry a `()` destination — the real
     /// lowering is structural in `emit_function_wrapper` — and exist only to
     /// resolve the entry and make the inner(s) required.
-    fn out_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
         // `Option<T>` / `Vec<T>` marker.
         if is_option(ty) || is_vec(ty) {
             let inner = first_type_arg(ty)?;

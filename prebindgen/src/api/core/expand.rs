@@ -18,7 +18,7 @@
 //!   The identity variant passes an already-built `T` straight through.
 //!
 //! Everything here is **language-agnostic**: the fold is pure Rust and the
-//! per-leaf wire encode/decode is delegated to the back-end's existing
+//! per-leaf wire encode/decode is delegated to the adapter's existing
 //! converters. [`apply`] resolves declarations into [`FoldPlan`]s (stored on
 //! the registry, keyed by `(fn, param)`) and registers each leaf type as a
 //! required input so the resolver produces its converter. [`emit_fold`]
@@ -30,7 +30,15 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use crate::api::core::registry::{Registry, TypeKey};
-use crate::api::core::types_util::option_inner_type;
+use crate::api::core::types_util::{ident, option_inner_type, result_ok_type};
+
+mod error;
+mod plan;
+
+pub use self::{
+    error::ExpandError,
+    plan::{FoldArg, FoldBuild, FoldLeaf, FoldPlan, FoldShape, FoldVariant},
+};
 
 // ──────────────────────────────────────────────────────────────────────
 // Declarations (populated by the language builder)
@@ -222,255 +230,12 @@ impl Expansions {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Resolved plan (stored on the registry, read at emission time)
-// ──────────────────────────────────────────────────────────────────────
-
-/// Outer shape wrapping the core construct. The value-side analog of how the
-/// rank-1 `Option<_>` / `Vec<_>` handlers compose converters at the wire.
-///
-/// The unified [`Shape`](crate::api::core::shape::Shape) layer stack: `Base`
-/// builds the target directly from the decoded leaves (a single constructor of
-/// any arity or a combined-selector dispatch); `Optional((), inner)` lifts that
-/// over `Option<T>`/`Option<&T>` (`Some` ⇒ run `inner` on the unwrapped value
-/// and re-wrap, `None` ⇒ `None`; inner is always `Base` today);
-/// `Iterable(inner)` maps `inner` over each element of a `Vec<T>` (emit-ready
-/// but not yet produced by `apply`). The `()` payload is unused here — only the
-/// JNI back-end's `Shape<NullableKind>` carries per-layer data.
-pub use crate::api::core::shape::Shape as FoldShape;
-
-/// A resolved expansion for one `(function, parameter)`.
-#[derive(Clone)]
-pub struct FoldPlan {
-    /// Owned type the core construct produces — what the underlying call needs
-    /// (before any [`Self::shape`] wrapping).
-    pub target: syn::Type,
-    /// True when the original parameter was `&T` / `Option<&T>`: the call
-    /// receives `&folded` (or `folded.as_ref()` when also optional). A
-    /// call-site concern (the resolver's `&_` handler shares the inner
-    /// converter the same way), not part of the fold.
-    pub by_ref: bool,
-    /// Outer shape over the core construct (`Construct` for a plain `T`/`&T`
-    /// param; `Optional(Construct)` for `Option<T>`/`Option<&T>`).
-    pub shape: FoldShape,
-    /// Flattened wire leaves, in foreign-signature order.
-    pub leaves: Vec<FoldLeaf>,
-    /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
-    /// constructor (the sole variant is applied unconditionally).
-    pub selector: Option<usize>,
-    /// Index into [`Self::leaves`] of the explicit presence-flag (`bool`) leaf
-    /// for a **multi-argument** `Optional` shape (`Option<T>` built from a
-    /// constructor taking ≥2 args): the flag decides `Some`/`None`, the arg
-    /// leaves are plain (non-`Option`). `None` for a non-optional fold or the
-    /// legacy single-arg `Optional` (where presence rides the sole leaf's own
-    /// `Option`-ness). A separate flag avoids boxing a nullable primitive arg
-    /// (e.g. `Option<i32>` → `Integer?`) on the wire.
-    pub present: Option<usize>,
-    /// Dispatch arms — one for a single constructor, selector order for a
-    /// combined one.
-    pub variants: Vec<FoldVariant>,
-}
-
-impl FoldPlan {
-    /// True when the fold produces an `Option<_>` (outermost shape layer is
-    /// `Optional`) — drives the by-ref call-site form (`folded.as_ref()`).
-    pub fn produces_option(&self) -> bool {
-        matches!(self.shape, FoldShape::Optional((), _))
-    }
-}
-
-/// One flattened wire leaf of an expanded parameter.
-#[derive(Clone)]
-pub struct FoldLeaf {
-    /// Foreign-side parameter name.
-    pub name: syn::Ident,
-    /// Rust type whose resolved **input** converter decodes this leaf. For a
-    /// single constructor these are the raw constructor parameter types; for a
-    /// combined one the selector (`i32`) and `Option`-wrapped variant inputs.
-    pub ty: syn::Type,
-}
-
-/// One dispatch arm of a [`FoldPlan`].
-#[derive(Clone)]
-pub struct FoldVariant {
-    /// `None` => identity (pass the decoded target value through). `Some` =>
-    /// call this constructor function.
-    pub ctor: Option<syn::Ident>,
-    /// Whether the constructor returns `Result` (its `Err` is routed through
-    /// the back-end's error channel). Always `false` for identity.
-    pub fallible: bool,
-    /// `true` for a borrowed identity arm (`&T` parameter): the input leaf is
-    /// `Option<&T>` and the fold clones it (`T: Clone`) so the caller's handle
-    /// is preserved rather than consumed. `false` otherwise.
-    pub clone: bool,
-    /// This variant's constructor inputs, in parameter order. Each is either a
-    /// flat wire leaf or a recursively-built sub-value (a parameter that is
-    /// itself a type with a canonical constructor — recursive input).
-    pub inputs: Vec<FoldArg>,
-}
-
-/// One constructor-parameter input of a [`FoldVariant`].
-#[derive(Clone)]
-pub enum FoldArg {
-    /// Decode the flat wire leaf at this index into [`FoldPlan::leaves`].
-    Leaf(usize),
-    /// Build this parameter by recursively folding its own canonical
-    /// constructor (the parameter's type is itself a ptr_class with a canonical
-    /// input). Its leaves live in the shared flat [`FoldPlan::leaves`].
-    Build(Box<FoldBuild>),
-}
-
-/// A recursively-nested construction for one [`FoldArg::Build`] parameter — the
-/// same dispatch shape as a top-level [`FoldPlan`]'s core, minus the outer
-/// `Option`/`Vec` wrapping (a nested param is built by value).
-#[derive(Clone)]
-pub struct FoldBuild {
-    /// Owned type this nested build produces (the constructor parameter type).
-    pub target: syn::Type,
-    /// `true` when the consuming parameter is `&T` (the built value is borrowed
-    /// at the call site).
-    pub by_ref: bool,
-    /// Selector leaf index for a combined nested build; `None` for a single one.
-    pub selector: Option<usize>,
-    /// Dispatch arms (recursive).
-    pub variants: Vec<FoldVariant>,
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Errors
-// ──────────────────────────────────────────────────────────────────────
-
-/// Errors surfaced while resolving [`Expansions`] in [`apply`].
-#[derive(Debug)]
-pub enum ExpandError {
-    UnknownFunction(syn::Ident),
-    UnknownParam(syn::Ident, syn::Ident),
-    UnknownConstructor(syn::Ident),
-    NoConstructor {
-        func: syn::Ident,
-        param: syn::Ident,
-        target: String,
-    },
-    AmbiguousConstructor {
-        func: syn::Ident,
-        param: syn::Ident,
-        target: String,
-        candidates: Vec<String>,
-    },
-    TargetMismatch {
-        ctor: String,
-        produces: String,
-        expected: String,
-    },
-    UnsupportedOptional {
-        func: syn::Ident,
-        param: syn::Ident,
-        reason: &'static str,
-    },
-    /// `.construct(param)` (explicit) targeted a `.fun_accessor` — read
-    /// accessors are never parameter-composed.
-    ConstructOnAccessor {
-        func: syn::Ident,
-    },
-    /// Recursive input reached a type already on the build chain (`A → … → A`).
-    InputCycle {
-        ty: String,
-    },
-    /// A recursive-input shape that is declared-but-not-yet-supported (recursion
-    /// under a selector-dispatched variant, or on an `Option<…>` parameter).
-    UnsupportedRecursive {
-        func: syn::Ident,
-        reason: &'static str,
-    },
-}
-
-impl std::fmt::Display for ExpandError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExpandError::UnknownFunction(name) => write!(
-                f,
-                "expand: function `{}` is not a #[prebindgen] item",
-                name
-            ),
-            ExpandError::ConstructOnAccessor { func } => write!(
-                f,
-                "expand: `.construct` on accessor fn `{}` — a `.fun_accessor` is never \
-                 parameter-composed (remove the `.construct`, or declare it as `.fun`)",
-                func
-            ),
-            ExpandError::InputCycle { ty } => write!(
-                f,
-                "expand: recursive input forms a cycle through `{}` — a constructor \
-                 parameter's type transitively constructs itself",
-                ty
-            ),
-            ExpandError::UnsupportedRecursive { func, reason } => write!(
-                f,
-                "expand: `{}`: recursive input not supported here: {}",
-                func, reason
-            ),
-            ExpandError::UnknownParam(func, param) => write!(
-                f,
-                "expand: function `{}` has no parameter named `{}`",
-                func, param
-            ),
-            ExpandError::UnknownConstructor(name) => write!(
-                f,
-                "expand: constructor `{}` is not a #[prebindgen] item",
-                name
-            ),
-            ExpandError::NoConstructor {
-                func,
-                param,
-                target,
-            } => write!(
-                f,
-                "expand: no constructor registered for `{}` (parameter `{}` of `{}`)",
-                target, param, func
-            ),
-            ExpandError::AmbiguousConstructor {
-                func,
-                param,
-                target,
-                candidates,
-            } => write!(
-                f,
-                "expand: multiple independent constructors for `{}` (parameter `{}` of `{}`): {} — disambiguate with `.expand_with`",
-                target,
-                param,
-                func,
-                candidates.join(", ")
-            ),
-            ExpandError::TargetMismatch {
-                ctor,
-                produces,
-                expected,
-            } => write!(
-                f,
-                "expand: constructor `{}` produces `{}` but the parameter expects `{}`",
-                ctor, produces, expected
-            ),
-            ExpandError::UnsupportedOptional {
-                func,
-                param,
-                reason,
-            } => write!(
-                f,
-                "expand: optional parameter `{}` of `{}` is not supported: {}",
-                param, func, reason
-            ),
-        }
-    }
-}
-
-impl std::error::Error for ExpandError {}
-
-// ──────────────────────────────────────────────────────────────────────
 // apply
 // ──────────────────────────────────────────────────────────────────────
 
 /// Resolve every `.construct` declaration (explicit + `.default()`
 /// auto-applied) into a [`FoldPlan`], register each plan's leaf types as required
-/// inputs, and store the plans on the registry. `declared_fns` is the back-end's
+/// inputs, and store the plans on the registry. `declared_fns` is the adapter's
 /// claimed `#[prebindgen]` fn set — the domain over which `.default()`
 /// constructors auto-apply.
 ///
@@ -1016,10 +781,10 @@ fn check_target(
 /// constructor ident to its call path (e.g. prefixing the source module).
 ///
 /// The returned expression has type `Result<<shaped> plan.target, String>`
-/// (`Result<Target>`, `Result<Option<Target>>`, …). The back-end routes its
+/// (`Result<Target>`, `Result<Option<Target>>`, …). The adapter routes its
 /// `Err(String)` through its own error channel. Folds the [`FoldShape`] layers
 /// top-down over the shared [core construct](`emit_core_construct`) — the value
-/// analog of how the rank-1 `Option<_>`/`Vec<_>` handlers compose at the wire.
+/// analog of how `Option<_>`/`Vec<_>` wrappers compose at the wire.
 pub fn emit_fold(
     plan: &FoldPlan,
     leaf_locals: &[syn::Ident],
@@ -1190,9 +955,9 @@ fn variant_result_expr(
             // that we clone, for `&T` consumers — preserving the caller's handle).
             let loc = leaf(&v.inputs[0]);
             // `&*__v` derefs through whatever the borrow leaf decoded to (a
-            // plain `&T`, or a back-end smart-pointer like jnigen's
+            // plain `&T`, or an adapter smart-pointer like jnigen's
             // `OwnedObject<T>`) down to `T`, then clones — keeping the caller's
-            // handle alive without the core knowing the back-end's borrow type.
+            // handle alive without the core knowing the adapter's borrow type.
             let some_val: syn::Expr = if v.clone {
                 syn::parse_quote!(::core::result::Result::Ok(::core::clone::Clone::clone(
                     &*__v
@@ -1321,30 +1086,8 @@ fn find_param_type(item_fn: &syn::ItemFn, param: &syn::Ident) -> Option<syn::Typ
     None
 }
 
-/// If `ty` is `Result<Ok, Err>` (by last path segment), return `Ok`.
-fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else {
-        return None;
-    };
-    let last = tp.path.segments.last()?;
-    if last.ident != "Result" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
-        return None;
-    };
-    ab.args.iter().find_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    })
-}
-
 fn opt(ty: &syn::Type) -> syn::Type {
     syn::parse_quote!(Option<#ty>)
-}
-
-fn ident(s: &str) -> syn::Ident {
-    syn::Ident::new(s, Span::call_site())
 }
 
 #[cfg(test)]

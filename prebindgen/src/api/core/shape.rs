@@ -12,7 +12,7 @@
 //!     `Shape`.
 //!
 //! `N` is the per-`Optional`-layer payload: `()` for the language-agnostic
-//! engines, a back-end type (e.g. jnigen's `NullableKind`) where the layer
+//! engines, an adapter type (e.g. jnigen's `NullableKind`) where the layer
 //! needs to remember how null is represented over the wire.
 
 /// A base leaf wrapped in zero or more `Optional` / `Iterable` layers, from the

@@ -1,8 +1,9 @@
 //! Shared `syn::Type` shape utilities — the Option/Vec/reference peelers and
 //! short-name helpers every pipeline stage needs. One definition here
 //! replaces the per-module copies that used to live in `core::unfold`,
-//! `core::expand`, and the jnigen back-end.
+//! `core::expand`, and the jnigen adapter.
 
+use proc_macro2::Span;
 use quote::ToTokens;
 
 /// Structurally match a concrete type `ty` against a wildcard `pattern` (a
@@ -245,6 +246,35 @@ pub fn is_unit(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
 
+/// If `ty` is `Result<T, E>` (by last path segment), return `(T, E)`.
+pub fn result_parts(ty: &syn::Type) -> Option<(syn::Type, syn::Type)> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let seg = tp.path.segments.last()?;
+    if seg.ident != "Result" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(ab) = &seg.arguments else {
+        return None;
+    };
+    let mut args = ab.args.iter().filter_map(|a| match a {
+        syn::GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    });
+    let ok = args.next()?;
+    let err = args.next()?;
+    Some((ok, err))
+}
+
+/// If `ty` is `Result<T, E>`, return `T`.
+pub fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
+    result_parts(ty).map(|(ok, _)| ok)
+}
+
+/// If `ty` is `Result<T, E>`, return `E`.
+pub fn result_err_type(ty: &syn::Type) -> Option<syn::Type> {
+    result_parts(ty).map(|(_, err)| err)
+}
+
 /// First angle-bracketed **type** argument of a path type (`T` of `Option<T>`
 /// / `Vec<T>` / `Result<T, _>`), skipping lifetime/const args. `None` when
 /// there is no type argument.
@@ -308,6 +338,11 @@ pub fn short_type_name(ty: &syn::Type) -> String {
     String::new()
 }
 
+/// Build an identifier at call-site span.
+pub(crate) fn ident(s: &str) -> syn::Ident {
+    syn::Ident::new(s, Span::call_site())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,7 +402,7 @@ mod tests {
         );
         // Head mismatch.
         assert!(match_pattern(&ty("Vec<u64>"), &ty("Option<_>")).is_none());
-        // Concrete pattern (rank-0): matches only itself, no captures.
+        // Concrete non-wildcard pattern: matches only itself, no captures.
         assert_eq!(
             caps(match_pattern(&ty("MyType"), &ty("MyType"))),
             Some(vec![])

@@ -116,11 +116,6 @@ impl IfaceSpec {
         }
     }
 
-    /// Slash form for `FindClass`.
-    pub fn slash_fqn(&self) -> String {
-        self.fqn().replace('.', "/")
-    }
-
     /// A [`kt::KtType`] reference to this interface, instantiated with
     /// `args` (empty for a non-generic interface).
     pub fn kt_ref(&self, args: Vec<kt::KtType>) -> kt::KtType {

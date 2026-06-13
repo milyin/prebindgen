@@ -4,6 +4,7 @@
 //! namespace via `use super::*`.
 
 use super::*;
+use crate::api::core::types_util::result_ok_type;
 
 // ──────────────────────────────────────────────────────────────────────
 // Function-wrapper emission (JNI extern "C")
@@ -28,10 +29,7 @@ pub(crate) fn emit_jni_function_wrapper(
 
     // Output is resolved first so the per-input `match`-arms can splice
     // the function's sentinel into their early-`return` path.
-    let return_ty: syn::Type = match &f.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, ty) => (**ty).clone(),
-    };
+    let return_ty = fn_return_type(f);
     // Output (data) expansion: when output expansion was declared for this
     // function, the return value is decomposed by the deconstructor. Two
     // deliveries:
@@ -56,15 +54,7 @@ pub(crate) fn emit_jni_function_wrapper(
     // The output converter to route through: the converted single value for
     // `Return`, the `Result` Ok type when peeling, the function's own return for
     // a normal fn, none for `Callback`.
-    let output_target_ty: Option<syn::Type> = match unfold_plan {
-        Some(p) if p.delivery == Delivery::Return => Some(
-            p.convert_out_ty
-                .clone()
-                .expect("Return delivery carries convert_out_ty"),
-        ),
-        Some(_) => None,
-        None => Some(ok_ty.clone().unwrap_or_else(|| return_ty.clone())),
-    };
+    let output_target_ty = output_target_type(&return_ty, unfold_plan, ok_ty.as_ref());
     let output_entry = output_target_ty.as_ref().map(|ty| {
         registry.output_entry(ty).unwrap_or_else(|| {
             panic!(
@@ -191,16 +181,7 @@ pub(crate) fn emit_jni_function_wrapper(
     let output_phase: TokenStream = if let (Some(plan), false) = (unfold_plan, is_convert) {
         // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
         // Decompose/Optional: a single `__builder` callback.
-        builder_param = Some(
-            if matches!(
-                plan.shape,
-                crate::api::core::unfold::UnfoldShape::Iterable(_)
-            ) {
-                quote!(__acc: jni::objects::JObject<'a>, __fold: jni::objects::JObject<'a>,)
-            } else {
-                quote!(__builder: jni::objects::JObject<'a>,)
-            },
-        );
+        builder_param = Some(unfold_builder_param(plan));
         emit_unfold_delivery(ext, registry, plan, &call_expr, &on_err)
     } else {
         let output_entry = output_entry.expect("normal path has an output entry");
@@ -288,6 +269,42 @@ pub(crate) fn emit_jni_function_wrapper(
             #(#prelude)*
             #output_phase
         }
+    }
+}
+
+fn fn_return_type(f: &syn::ItemFn) -> syn::Type {
+    match &f.sig.output {
+        syn::ReturnType::Default => syn::parse_quote!(()),
+        syn::ReturnType::Type(_, ty) => (**ty).clone(),
+    }
+}
+
+fn output_target_type(
+    return_ty: &syn::Type,
+    unfold_plan: Option<&crate::api::core::unfold::UnfoldPlan>,
+    ok_ty: Option<&syn::Type>,
+) -> Option<syn::Type> {
+    use crate::api::core::unfold::Delivery;
+
+    match unfold_plan {
+        Some(p) if p.delivery == Delivery::Return => Some(
+            p.convert_out_ty
+                .clone()
+                .expect("Return delivery carries convert_out_ty"),
+        ),
+        Some(_) => None,
+        None => Some(ok_ty.cloned().unwrap_or_else(|| return_ty.clone())),
+    }
+}
+
+fn unfold_builder_param(plan: &crate::api::core::unfold::UnfoldPlan) -> TokenStream {
+    if matches!(
+        plan.shape,
+        crate::api::core::unfold::UnfoldShape::Iterable(_)
+    ) {
+        quote!(__acc: jni::objects::JObject<'a>, __fold: jni::objects::JObject<'a>,)
+    } else {
+        quote!(__builder: jni::objects::JObject<'a>,)
     }
 }
 
@@ -481,22 +498,6 @@ fn emit_input_param(
         _ => quote!(#arg_ident),
     };
     Some((wire_params, prelude, call_arg))
-}
-
-/// `Result<Ok, _>` → `Ok` (by last path segment's first generic arg).
-fn result_ok_type(ty: &syn::Type) -> Option<syn::Type> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let last = tp.path.segments.last()?;
-    if last.ident != "Result" {
-        return None;
-    }
-    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else {
-        return None;
-    };
-    ab.args.iter().find_map(|a| match a {
-        syn::GenericArgument::Type(t) => Some(t.clone()),
-        _ => None,
-    })
 }
 
 /// Language-neutral default classification for one plan leaf — what a

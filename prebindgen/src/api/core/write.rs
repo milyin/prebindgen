@@ -19,7 +19,7 @@ use crate::api::core::registry::{Registry, TypeEntry, TypeKey};
 #[derive(Debug)]
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
-    /// as `syn::Item`s. Indicates a codegen bug in the ext.
+    /// as `syn::Item`s. Indicates a codegen bug in the adapter.
     BadTokens(syn::Error),
 }
 
@@ -44,7 +44,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 ) -> Result<PathBuf, WriteError> {
     let mut items: Vec<syn::Item> = Vec::new();
 
-    // 0. Plugin prerequisites — runtime-support items (helper structs,
+    // 0. Adapter prerequisites — runtime-support items (helper structs,
     //    type aliases) the converter bodies depend on. Emitted first so
     //    everything below can reference them.
     items.extend(ext.prerequisites(registry));
@@ -54,7 +54,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         items.push(syn::Item::Fn(item_fn));
     }
 
-    // 2. Per-item Rust output from the ext — only for items the ext
+    // 2. Per-item Rust output from the adapter — only for items the adapter
     //    explicitly declared. Undeclared items were already announced
     //    via `cargo:warning=` in `Registry::scan_declared`.
     let declared_fns = ext.declared_functions();
@@ -90,7 +90,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         items.push(item.clone());
     }
 
-    // 4. Cross-cutting post-process pass. Plugins use this to qualify
+    // 4. Cross-cutting post-process pass. Adapters use this to qualify
     //    bare type references etc. — see Prebindgen::post_process_item.
     for item in &mut items {
         ext.post_process_item(item);
@@ -103,7 +103,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
 /// Walk both type tables, dedupe each entry's stored `function` AND each
 /// of its [`crate::api::core::prebindgen::Stage`] functions by name, sort
 /// for determinism. Names are read directly off `function.sig.ident` —
-/// the plugin owns the naming.
+/// the adapter owns the naming.
 pub fn collect_converter_items<M>(registry: &Registry<M>) -> Vec<(syn::Ident, syn::ItemFn)> {
     let mut by_name: BTreeMap<String, (syn::Ident, syn::ItemFn)> = BTreeMap::new();
     let mut collect = |entry: &TypeEntry<M>| {
