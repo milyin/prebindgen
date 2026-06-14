@@ -68,8 +68,7 @@ pub(crate) fn factory_projection_wire_wrap(
     short: &str,
     name: &str,
 ) -> (kt::KtType, String) {
-    use crate::api::core::shape::Shape::*;
-    use crate::api::lang::jnigen::jni::ProjectionKind::*;
+    use crate::api::{core::shape::Shape::*, lang::jnigen::jni::ProjectionKind::*};
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
         Handle => (kt::KtType::long(), format!("{short}({name})")),
         ValueBlob => (kt::KtType::byte_array(), format!("{short}({name})")),
@@ -129,7 +128,7 @@ pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
 ///   optional) and a leaf reconstructs with its wrap.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_factory(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     prefix: &str,
@@ -323,8 +322,7 @@ pub(crate) fn fold_projection_wrap(
     wrap_class: &str,
     niche_sentinel: Option<&str>,
 ) -> String {
-    use crate::api::core::shape::Shape::*;
-    use crate::api::lang::jnigen::jni::NullableKind;
+    use crate::api::{core::shape::Shape::*, lang::jnigen::jni::NullableKind};
     fn go(
         s: &crate::api::lang::jnigen::jni::FoldStrategy,
         r: &str,

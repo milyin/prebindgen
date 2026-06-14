@@ -27,10 +27,9 @@
 //! `Registry::scan_declared` warnings). There is no "orphan" bucket.
 
 use super::*;
-
-use crate::api::gen::kotlin as kt;
-use crate::api::gen::kotlin::{
-    ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis,
+use crate::api::gen::{
+    kotlin as kt,
+    kotlin::{ClassKind, Code, KtClass, KtCtorParam, KtFun, KtParam, KtProperty, KtType, Vis},
 };
 
 /// Declaration of one auto-generated typed `NativeHandle` subclass.
@@ -50,7 +49,7 @@ pub(crate) struct TypedHandle<'a> {
     pub kotlin_fqn: &'a str,
 }
 
-impl JniGen {
+impl<S: JniGenState> JniGen<S> {
     /// Unified Kotlin emission — single public entry point. Each per-kind
     /// emitter builds in-memory [`kt::KtFile`] model fragments; they are then
     /// merged by [`kt::merge_files`] into one file per package, rendered, and
@@ -310,7 +309,7 @@ pub(crate) struct OwnedTypedHandle {
     pub kotlin_fqn: String,
 }
 
-impl JniGen {
+impl<S: JniGenState> JniGen<S> {
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type
     /// (skipping any flagged with `.suppress_kotlin_code()`). Variants
     /// render in declaration order using SCREAMING_SNAKE_CASE names; the

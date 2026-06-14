@@ -26,9 +26,9 @@
 
 use std::collections::HashSet;
 
-use crate::api::core::registry::{Registry, TypeKey};
-use crate::api::core::types_util::{
-    ident, option_inner_type, result_err_type, short_type_name, vec_inner_type,
+use crate::api::core::{
+    registry::{Registry, TypeKey},
+    types_util::{option_inner_type, result_err_type, short_type_name, vec_inner_type},
 };
 
 mod error;
@@ -1170,9 +1170,10 @@ fn check_takes(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::api::core::registry::Registry;
     use quote::ToTokens;
+
+    use super::*;
+    use crate::api::core::{registry::Registry, types_util::ident};
 
     fn reg_with(fns: &[&str]) -> Registry<()> {
         let items = fns

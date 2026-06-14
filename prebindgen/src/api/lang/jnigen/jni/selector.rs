@@ -33,7 +33,7 @@ fn ref_wildcard(r: &syn::TypeReference) -> syn::Type {
     syn::Type::Reference(pr)
 }
 
-impl JniGen {
+impl<S: JniGenState> JniGen<S> {
     /// Select the input converter for `ty`: terminals, user wrappers, then
     /// built-in structural wrappers.
     pub(crate) fn select_input_type(

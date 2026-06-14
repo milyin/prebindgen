@@ -11,7 +11,7 @@ use super::*;
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
-impl JniGen {
+impl<S> JniGen<S> {
     /// Build the standard JNI input-converter `fn`. Body assumes in-scope
     /// `env: &mut JNIEnv` and `v: &<wire>` (or `v: <wire>` for raw-pointer
     /// wires); produces a value of `rust`. Returned function has its name
@@ -410,7 +410,7 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let free_ptr = ext.mangle_fun("freePtr");
@@ -475,7 +475,7 @@ pub(crate) fn build_handle_destructor_items(
 /// the two `Option<_>` sub-cases (direct-handle-by-value vs general), which
 /// share a pattern and so live together in [`JniGen::input_option`] to keep
 /// their original fall-through.
-impl JniGen {
+impl<S: JniGenState> JniGen<S> {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
     /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
@@ -737,7 +737,7 @@ impl JniGen {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
-impl Prebindgen for JniGen {
+impl<S: JniGenState> Prebindgen for JniGen<S> {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
@@ -918,7 +918,7 @@ impl Prebindgen for JniGen {
 /// Structural converter builders — the rank-0 terminal chains and the rank-1
 /// wrapper-shape handlers, now inherent helpers called by the structural
 /// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
-impl JniGen {
+impl<S: JniGenState> JniGen<S> {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Whole-type **input** terminal categories (opaque handle, value-blob,

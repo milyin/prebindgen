@@ -56,7 +56,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
 /// Rust struct. Returns the class plus the FQN imports its (pre-shortened)
 /// field/factory type strings reference.
 pub(crate) fn build_data_class(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     class_name: &str,
     item_struct: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
@@ -242,7 +242,7 @@ pub(crate) fn build_data_class(
 /// to the matching `Java_<pkg>_<class>_<mangle_fun("freePtr")>`
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     class_name: &str,
     rust_doc_name: &str,
 ) -> kt::KtClass {
@@ -352,7 +352,7 @@ pub(crate) fn effective_inputs(
 }
 
 pub(crate) fn render_extern_decl(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -519,19 +519,25 @@ enum ParamMode {
     /// value-class FQN; the call site passes the unwrapped inline-class field
     /// (`<name>.<field>`) so the `JNINative` extern receives the erased inner
     /// wire (e.g. `ByteArray`). No lock.
-    ValueUnwrap { field: String },
+    ValueUnwrap {
+        field: String,
+    },
     /// Flattenable `data_class` param: the high-level Kotlin signature keeps the
     /// typed object, but the `JNINative` call destructures it into the leaf
     /// access expressions (no `JObject` crosses, so the Rust side skips
     /// `env.get_field(...)`). The strings are the per-leaf call-site
     /// expressions in plan order.
-    FlattenStruct { accesses: Vec<String> },
+    FlattenStruct {
+        accesses: Vec<String>,
+    },
     /// `impl Fn(args)` callback param: typed Kotlin lambda over the flattened
     /// leaves of each arg's callback plan (whole arg when plan-less), erased to
     /// `Any` at the extern tier — the same shape as the unfold `build`/`onError`
     /// lambdas. `call_arg` is the call-site expression: the param itself, or a
     /// value-blob rebuilding adapter.
-    Callback { call_arg: String },
+    Callback {
+        call_arg: String,
+    },
 }
 
 struct Opaque {
@@ -557,7 +563,7 @@ struct Opaque {
 /// per-call `withSortedHandleLocks` scaffold. There is no receiver promotion /
 /// instance-method representation: the base library is flat.
 pub(crate) fn render_wrapper_fn(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1184,7 +1190,7 @@ pub(crate) fn render_wrapper_fn(
 /// `value_blob`, whose `@JvmInline value class` can't be built Rust-side).
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     out_ty: &syn::Type,
     nullable: bool,
@@ -1343,7 +1349,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   the inner wire's Kotlin name for `ValueClass`). `None` for plain
 ///   non-projection returns.
 pub(crate) fn classify_return(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1406,7 +1412,7 @@ pub(crate) fn classify_return(
 /// via [`JniGen::enum_class`]. Enum returns cross the JNI wire as `jint` (Kotlin
 /// `Int`); the public wrapper must call `EnumType.fromInt(Int)` to convert back.
 pub(crate) fn return_is_kotlin_enum(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
 ) -> bool {

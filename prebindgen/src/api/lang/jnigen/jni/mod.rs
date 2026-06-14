@@ -24,6 +24,17 @@ mod metadata;
 pub mod string_helpers;
 pub(crate) mod wire_access;
 
+// Shared imports for this module and all its sibling submodules
+// (`builder`, `trait_impl`, `emit`, `prim`, `kotlin_emit`, `render`, `fold`,
+// `tests`). They are re-exported `pub(crate)` so each sibling only needs
+// `use super::*;`.
+pub(crate) use std::collections::{BTreeMap, HashMap};
+pub(crate) use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
 pub use box_helpers::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
 };
@@ -31,34 +42,27 @@ pub use byte_array_helpers::{decode_byte_array, encode_byte_array, null_byte_arr
 pub use iface_method::CachedIfaceMethod;
 pub use jni_binding_error::JniBindingError;
 pub(crate) use metadata::{FoldStrategy, KotlinMeta, NullableKind, Projection, ProjectionKind};
-pub use string_helpers::{decode_string, encode_string, null_string};
-
-// Shared imports for this module and all its sibling submodules
-// (`builder`, `trait_impl`, `emit`, `prim`, `kotlin_emit`, `render`, `fold`,
-// `tests`). They are re-exported `pub(crate)` so each sibling only needs
-// `use super::*;`.
-pub(crate) use std::collections::{BTreeMap, HashMap};
-pub(crate) use std::sync::Arc;
-
 pub(crate) use proc_macro2::{Span, TokenStream};
 pub(crate) use quote::{format_ident, quote, ToTokens};
-
-pub(crate) use crate::api::core::niches::Niches;
-pub(crate) use crate::api::core::prebindgen::{ConverterImpl, Prebindgen, Stage};
-pub(crate) use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
-pub(crate) use crate::api::core::types_util::{
-    bare_path_ident, is_option_ref, is_option_type, option_inner_type, vec_inner_type,
-};
-pub(crate) use crate::api::lang::jnigen::jni::wire_access::{
-    box_helper_for_wire, jni_field_access,
-};
-pub(crate) use crate::api::lang::jnigen::util::snake_to_camel;
+pub use string_helpers::{decode_string, encode_string, null_string};
 
 // Kotlin-emission shared imports (used by `kotlin_emit` / `render` / `fold`).
 pub(crate) use crate::api::gen::kotlin as kt;
-pub(crate) use crate::api::gen::kotlin::WriteKotlinError;
-pub(crate) use std::collections::BTreeSet;
-pub(crate) use std::path::{Path, PathBuf};
+pub(crate) use crate::api::{
+    core::{
+        niches::Niches,
+        prebindgen::{ConverterImpl, Prebindgen, Stage},
+        registry::{extract_fn_trait_args, Registry, TypeKey},
+        types_util::{
+            bare_path_ident, is_option_ref, is_option_type, option_inner_type, vec_inner_type,
+        },
+    },
+    gen::kotlin::WriteKotlinError,
+    lang::jnigen::{
+        jni::wire_access::{box_helper_for_wire, jni_field_access},
+        util::snake_to_camel,
+    },
+};
 
 // ──────────────────────────────────────────────────────────────────────
 // Structured type-conversion configuration
@@ -139,14 +143,6 @@ impl MethodEntry {
             is_accessor: true,
         }
     }
-}
-
-/// Back-pointer to the last entry added via `.fun` / `.fun_accessor`, used by
-/// `.name(...)` to find what to mutate. Cleared by every other builder call.
-#[derive(Clone, Debug)]
-pub(crate) enum NamedEntryRef {
-    /// Index into `packages[subpackage].functions`.
-    Function(String, usize),
 }
 
 /// All configuration the structured builder accumulates for one
@@ -230,8 +226,26 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 /// or `None` (defer to a later resolver phase). See [`WrapperFn`] for
 /// the triple's semantics.
 pub trait WrapperBuilder<Arity>: Send + Sync + 'static {
+    type NextState: WrapperReturnState;
+
     fn into_wrapper_fn(self) -> WrapperFn;
     fn rank() -> usize;
+}
+
+pub trait WrapperReturnState: Clone {
+    fn from_wrapper(key: TypeKey) -> Self;
+}
+
+impl WrapperReturnState for TypeMeta {
+    fn from_wrapper(key: TypeKey) -> Self {
+        Self { key }
+    }
+}
+
+impl WrapperReturnState for WrapperNonMeta {
+    fn from_wrapper(_key: TypeKey) -> Self {
+        Self
+    }
 }
 
 /// Arity-discriminating marker types. `Arity0` is for non-wildcard
@@ -248,6 +262,8 @@ where
         + Sync
         + 'static,
 {
+    type NextState = TypeMeta;
+
     fn into_wrapper_fn(self) -> WrapperFn {
         Arc::new(move |_args: &[syn::Type], reg: &Registry<KotlinMeta>| self(reg))
     }
@@ -263,6 +279,8 @@ where
         + Sync
         + 'static,
 {
+    type NextState = WrapperNonMeta;
+
     fn into_wrapper_fn(self) -> WrapperFn {
         Arc::new(move |args: &[syn::Type], reg: &Registry<KotlinMeta>| self(&args[0], reg))
     }
@@ -282,6 +300,8 @@ where
         + Sync
         + 'static,
 {
+    type NextState = WrapperNonMeta;
+
     fn into_wrapper_fn(self) -> WrapperFn {
         Arc::new(move |args: &[syn::Type], reg: &Registry<KotlinMeta>| {
             self(&args[0], &args[1], reg)
@@ -304,6 +324,8 @@ where
         + Sync
         + 'static,
 {
+    type NextState = WrapperNonMeta;
+
     fn into_wrapper_fn(self) -> WrapperFn {
         Arc::new(move |args: &[syn::Type], reg: &Registry<KotlinMeta>| {
             self(&args[0], &args[1], &args[2], reg)
@@ -314,11 +336,150 @@ where
     }
 }
 
+/// Root builder state: no package context is active yet.
+#[derive(Clone, Debug, Default)]
+pub struct Root;
+
+/// Package builder state: free functions and type declarations can be added.
+#[derive(Clone, Debug)]
+pub struct Package;
+
+/// Pointer-class builder state.
+#[derive(Clone, Debug)]
+pub struct PtrClass {
+    pub(crate) key: TypeKey,
+}
+
+/// Enum-class builder state.
+#[derive(Clone, Debug)]
+pub struct EnumClass {
+    pub(crate) key: TypeKey,
+}
+
+/// Type-metadata builder state for data classes, value blobs, and rank-0
+/// wrappers.
+#[derive(Clone, Debug)]
+pub struct TypeMeta {
+    pub(crate) key: TypeKey,
+}
+
+/// Function builder state.
+#[derive(Clone, Debug)]
+pub struct Function {
+    pub(crate) package: String,
+    pub(crate) index: usize,
+}
+
+/// Wrapper builder state for wildcard wrapper registrations that do not leave a
+/// concrete type metadata cursor live.
+#[derive(Clone, Debug, Default)]
+pub struct WrapperNonMeta;
+
+/// Builder states that have an active package context.
+pub trait PackageState: Clone {}
+
+impl PackageState for Package {}
+impl PackageState for PtrClass {}
+impl PackageState for EnumClass {}
+impl PackageState for TypeMeta {}
+impl PackageState for Function {}
+
+/// Builder states where type declarations are valid.
+pub trait TypeDeclState: Clone {}
+
+impl TypeDeclState for Root {}
+impl<T: PackageState> TypeDeclState for T {}
+
+/// Builder states that can be used as the final configured adapter.
+pub trait JniGenState: Clone {}
+
+impl JniGenState for Root {}
+impl<T: PackageState> JniGenState for T {}
+impl JniGenState for WrapperNonMeta {}
+
+pub trait TypeKeyState: Clone {
+    fn type_key(&self) -> &TypeKey;
+}
+
+impl TypeKeyState for PtrClass {
+    fn type_key(&self) -> &TypeKey {
+        &self.key
+    }
+}
+
+impl TypeKeyState for EnumClass {
+    fn type_key(&self) -> &TypeKey {
+        &self.key
+    }
+}
+
+impl TypeKeyState for TypeMeta {
+    fn type_key(&self) -> &TypeKey {
+        &self.key
+    }
+}
+
 /// JNI back-end. Configure paths in the Rust crate (zresult, throw macro,
 /// source module the original fns live in) and the JNI/Kotlin classpath
 /// (java class prefix + output dir).
+///
+/// The builder is type-state based: methods that only make sense after a
+/// specific declaration are only available in that declaration's state. Invalid
+/// chains fail to compile instead of panicking at build-script runtime.
+///
+/// ```compile_fail
+/// use prebindgen::lang::JniGen;
+/// use syn::parse_quote as pq;
+///
+/// // A function needs an active package context.
+/// let _ = JniGen::new().fun(pq!(z_open));
+/// ```
+///
+/// ```compile_fail
+/// use prebindgen::lang::JniGen;
+/// use syn::parse_quote as pq;
+///
+/// // `.name(...)` only applies immediately after `.fun(...)` / `.fun_accessor(...)`.
+/// let _ = JniGen::new().ptr_class(pq!(ZSession)).name("Session");
+/// ```
+///
+/// ```compile_fail
+/// use prebindgen::lang::JniGen;
+/// use syn::parse_quote as pq;
+///
+/// // Pointer-class output declarations require a live `.ptr_class(...)` state.
+/// let _ = JniGen::new().package("session").fun(pq!(z_open)).ptr_class_output_direct();
+/// ```
+///
+/// ```compile_fail
+/// use prebindgen::lang::JniGen;
+/// use syn::parse_quote as pq;
+///
+/// // Suppression is valid for generated pointer/enum classes, not data classes.
+/// let _ = JniGen::new().data_class(pq!(Config)).suppress_kotlin_code();
+/// ```
 #[derive(Clone)]
-pub struct JniGen {
+pub struct JniGen<S = Root> {
+    pub(crate) inner: JniGenInner,
+    pub(crate) state: S,
+}
+
+impl<S> std::ops::Deref for JniGen<S> {
+    type Target = JniGenInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<S> std::ops::DerefMut for JniGen<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+#[derive(Clone)]
+pub struct JniGenInner {
     /// Module path the original `#[prebindgen]` fns live under (e.g.
     /// the host crate of `#[prebindgen]` items). The wrapper body calls
     /// `<source_module>::<fn>(args)`.
@@ -401,18 +562,6 @@ pub struct JniGen {
     /// Per-rank output converters. Same shape as [`Self::input_wrappers`].
     pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
 
-    /// Tracks the last [`Self::ptr_class`] key registered so
-    /// [`Self::method`] / [`Self::suppress_kotlin_code`] know which
-    /// entry to extend. Cleared after each unrelated builder call.
-    last_opaque_key: Option<TypeKey>,
-
-    /// Tracks the last rank-0 wrapper registration so chained per-type
-    /// builders ([`Self::suppress_kotlin_code`], [`Self::with_kotlin_type`])
-    /// know which entry to extend. Set by `input_wrapper` /
-    /// `output_wrapper` (rank 0 only), `enum_class`, and `data_class`;
-    /// cleared by other unrelated builders.
-    last_meta_key: Option<TypeKey>,
-
     /// The currently-active subpackage set by [`Self::package`].
     /// Drives where [`Self::function`] entries land and is folded into
     /// the FQN of any class declared while it's `Some(_)`. Package
@@ -420,12 +569,6 @@ pub struct JniGen {
     /// `package` call overwrites the previous; nest via dotted
     /// paths (`package("a.b")`) instead.
     pub(crate) active_subpackage: Option<String>,
-
-    /// Back-pointer to the entry the next [`Self::name`] call should
-    /// mutate (the most recent `.method` / `.companion_method` /
-    /// `.function`). Cleared by every other builder call so `.name(...)`
-    /// only applies right after a fn-entry registration.
-    last_entry_ref: Option<NamedEntryRef>,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`

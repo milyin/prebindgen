@@ -17,7 +17,7 @@ struct OutputLowering<'a> {
 }
 
 pub(crate) fn emit_jni_function_wrapper(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
 ) -> TokenStream {
@@ -56,7 +56,13 @@ pub(crate) fn emit_jni_function_wrapper(
     // arity after the fixed `je`).
     let error_plan = registry.error_plans.get(original_ident);
     let n_ze = error_plan.map_or(0, |p| p.leaves.len());
-    let output = lower_output(registry, original_ident, &return_ty, unfold_plan, error_plan);
+    let output = lower_output(
+        registry,
+        original_ident,
+        &return_ty,
+        unfold_plan,
+        error_plan,
+    );
     let output_entry = output.entry;
     let wire_return = output.wire_return;
     let on_err = output.on_err;
@@ -341,7 +347,7 @@ fn unfold_builder_param(plan: &crate::api::core::unfold::UnfoldPlan) -> TokenStr
 /// other input — so the per-input handling stays a self-contained unit.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     original_ident: &syn::Ident,
     input: &syn::FnArg,
@@ -545,7 +551,7 @@ pub(crate) enum LeafDefault {
 
 /// Classify a leaf's binding-error default — see [`LeafDefault`].
 pub(crate) fn leaf_default(
-    _ext: &JniGen,
+    _ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> LeafDefault {
@@ -590,7 +596,7 @@ pub(crate) fn leaf_default(
 /// 0 / `false` at every primitive slot. Construction failures fall back to
 /// null (cold path, OOM-class only).
 fn default_ze_jvalues(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
 ) -> Vec<TokenStream> {
@@ -644,7 +650,7 @@ fn default_ze_jvalues(
 /// [`UnfoldShape::Base`]: crate::api::core::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     call_expr: &TokenStream,
@@ -959,7 +965,7 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` falls back to a binding-error
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],
@@ -1258,7 +1264,7 @@ pub(crate) fn leaf_is_prim(
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::expand::FoldPlan,
     orig_param: &syn::Ident,
@@ -1440,7 +1446,7 @@ impl<'a> syn::visit_mut::VisitMut for QualifyEmittedTypes<'a> {
     }
 }
 
-pub(crate) fn mangle_jni_name(ext: &JniGen, ident: &syn::Ident) -> syn::Ident {
+pub(crate) fn mangle_jni_name(ext: &JniGen<impl JniGenState>, ident: &syn::Ident) -> syn::Ident {
     let camel = snake_to_camel(&ident.to_string());
     let mangled = ext.mangle_fun(&camel);
     let mut name = ext.jni_class_path.clone();
@@ -1718,7 +1724,7 @@ pub(crate) fn option_output(
 /// Errors cannot reach a caller-side error sink (the declaring call already
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     args: &[syn::Type],
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
@@ -2006,7 +2012,7 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// in `Nullable`) are encodable as a single `L<FQN>;` ctor arg; a
 /// collection layer (`Iterable`, i.e. `Vec<Handle>`) would need array
 /// codegen and is a loud build-time error until implemented.
-pub(crate) fn handle_field_fqn(ext: &JniGen, h: &Projection) -> String {
+pub(crate) fn handle_field_fqn(ext: &JniGen<impl JniGenState>, h: &Projection) -> String {
     fn assert_scalar(s: &FoldStrategy) {
         match s {
             FoldStrategy::Base => {}
@@ -2031,7 +2037,7 @@ pub(crate) fn handle_field_fqn(ext: &JniGen, h: &Projection) -> String {
 }
 
 pub(crate) fn struct_input_body(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     s: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
@@ -2276,7 +2282,7 @@ pub(crate) fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
 /// the single source of truth shared by the native wrapper signature, the
 /// `JNINative` extern declaration, and the Kotlin call-site destructure.
 pub(crate) fn build_flat_input_plan(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg_ty: &syn::Type,
@@ -2518,7 +2524,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// `__cN` under an Option); `prefix` namespaces the generated idents.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn flatten_struct_encode(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     access: &TokenStream,
@@ -2553,7 +2559,7 @@ pub(crate) fn flatten_struct_encode(
 /// or `None` to abort the whole flatten (an unresolved field converter).
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn encode_struct_field(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     access: &TokenStream,
@@ -2782,7 +2788,7 @@ fn encode_struct_field(
 }
 
 pub(crate) fn struct_output_body(
-    ext: &JniGen,
+    ext: &JniGen<impl JniGenState>,
     s: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
@@ -2841,7 +2847,7 @@ pub(crate) fn struct_output_body(
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
 
-pub(crate) fn struct_module_path(ext: &JniGen, s: &syn::ItemStruct) -> syn::Path {
+pub(crate) fn struct_module_path(ext: &JniGen<impl JniGenState>, s: &syn::ItemStruct) -> syn::Path {
     // Place the struct under <source_module>::<file_stem>::<Name>. Today's
     // pipeline derives the module from the source file stem; here we ride
     // on the same convention by inspecting the SourceLocation. Without a
@@ -2868,7 +2874,10 @@ pub(crate) fn struct_module_path(ext: &JniGen, s: &syn::ItemStruct) -> syn::Path
 /// `v: <ident>` signature — so binding crates can pick whichever
 /// upstream type a bare `<ident>` resolves to in their include-site
 /// `use` statements. Pairs with output body below.
-pub(crate) fn enum_input_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
+pub(crate) fn enum_input_body(
+    _ext: &JniGen<impl JniGenState>,
+    e: &syn::ItemEnum,
+) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let ident = &e.ident;
     let ident_name = ident.to_string();
@@ -2900,7 +2909,10 @@ pub(crate) fn enum_input_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, s
 /// upstream of the cast. The body works without naming the enum type
 /// at all — `v` is already typed via the wrapper signature, so the
 /// `as` cast picks up the right type by inference.
-pub(crate) fn enum_output_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
+pub(crate) fn enum_output_body(
+    _ext: &JniGen<impl JniGenState>,
+    e: &syn::ItemEnum,
+) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
     (syn::parse_quote!(jni::sys::jint), body)
@@ -3020,7 +3032,10 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
 /// Used for `Option<value-blob>` params where the written type isn't the bare
 /// value class but the projection still resolves the leaf — so the wrapper
 /// knows which inline field to unwrap (`<name>.bytes`).
-pub(crate) fn value_projection_field_for_leaf(ext: &JniGen, leaf_key: &str) -> Option<String> {
+pub(crate) fn value_projection_field_for_leaf(
+    ext: &JniGen<impl JniGenState>,
+    leaf_key: &str,
+) -> Option<String> {
     let key = TypeKey::parse(leaf_key);
     let cfg = ext.types.get(&key)?;
     if cfg.value_blob {
@@ -3147,8 +3162,10 @@ pub(crate) fn wire_short(wire: &syn::Type) -> String {
 }
 
 pub(crate) fn hash_pair(rust: &syn::Type, wire: &syn::Type) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
     let mut h = DefaultHasher::new();
     rust.to_token_stream().to_string().hash(&mut h);
     "::".hash(&mut h);
