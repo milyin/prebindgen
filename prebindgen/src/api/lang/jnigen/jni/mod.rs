@@ -458,6 +458,21 @@ impl TypeKeyState for TypeMeta {
 /// // Suppression is valid for generated pointer/enum classes, not data classes.
 /// let _ = JniGen::new().data_class(pq!(Config)).suppress_kotlin_code();
 /// ```
+///
+/// State types are public so large build scripts can be factored into helpers
+/// without losing type safety:
+///
+/// ```
+/// use prebindgen::lang::{JniGen, Package};
+/// use syn::parse_quote as pq;
+///
+/// fn add_keyexpr(jni: JniGen<Package>) -> JniGen<Package> {
+///     jni.ptr_class(pq!(ZKeyExpr))
+///         .ptr_class_output_direct()
+///         .fun_accessor(pq!(z_keyexpr_as_str))
+///         .package("next")
+/// }
+/// ```
 #[derive(Clone)]
 pub struct JniGen<S = Root> {
     pub(crate) inner: JniGenInner,

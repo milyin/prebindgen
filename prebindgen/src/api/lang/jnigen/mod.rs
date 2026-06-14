@@ -21,7 +21,8 @@ pub(crate) mod util;
 pub use jni::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
-    null_string, CachedIfaceMethod, JniBindingError, JniGen,
+    null_string, CachedIfaceMethod, EnumClass, Function, JniBindingError, JniGen, JniGenState,
+    Package, PackageState, PtrClass, Root, TypeDeclState, TypeKeyState, TypeMeta, WrapperNonMeta,
 };
 // Kotlin emission types now live in the standalone generator module
 // (`api::gen::kotlin`); re-exported here so the public `lang::` surface is

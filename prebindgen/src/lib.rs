@@ -213,8 +213,9 @@ pub mod lang {
     pub use crate::api::lang::jnigen::{
         box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
         box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
-        null_byte_array, null_string, CachedIfaceMethod, JniBindingError, JniGen, KotlinFile,
-        WriteKotlinError,
+        null_byte_array, null_string, CachedIfaceMethod, EnumClass, Function, JniBindingError,
+        JniGen, JniGenState, KotlinFile, Package, PackageState, PtrClass, Root, TypeDeclState,
+        TypeKeyState, TypeMeta, WrapperNonMeta, WriteKotlinError,
     };
 }
 
