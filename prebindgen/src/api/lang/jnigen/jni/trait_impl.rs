@@ -780,8 +780,8 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
         Some(&self.deconstructors)
     }
 
-    /// Union of every `.fun(...)` / `.fun_accessor(...)` list across all
-    /// [`Self::package`] contexts. Each entry is a
+    /// Union of every `.package_fun(...)` list across all
+    /// [`Self::package`] subpackage contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
     /// binding; functions not in this set are skipped by the registry's
     /// signature scan and by the per-item emitter.
@@ -795,7 +795,8 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
         out
     }
 
-    /// Subset of [`Self::declared_functions`] declared via `.fun_accessor(...)`
+    /// Subset of [`Self::declared_functions`] declared via
+    /// `.package_fun(...).accessor()`
     /// — read accessors excluded from the parameter composer and required for
     /// decomposer records.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
@@ -812,7 +813,7 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
 
     /// Every type registered via `.ptr_class`,
     /// `.data_class`, or `.enum_class` — anything in
-    /// [`Self::types`]. These are the only structs/enums the
+    /// the adapter's type map. These are the only structs/enums the
     /// per-item emitter walks; bodies of undeclared types are
     /// skipped.
     fn declared_types(&self) -> std::collections::HashSet<TypeKey> {

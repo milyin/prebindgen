@@ -52,8 +52,8 @@ pub(crate) struct TypedHandle<'a> {
 impl<S: JniGenState> JniGen<S> {
     /// Unified Kotlin emission — single public entry point. Each per-kind
     /// emitter builds in-memory [`kt::KtFile`] model fragments; they are then
-    /// merged by [`kt::merge_files`] into one file per package, rendered, and
-    /// written under `kotlin_root` by [`kt::write_files`]. Reads all
+    /// merged into one file per package, rendered, and written under
+    /// `kotlin_root`. Reads all
     /// configuration (typed-handle methods, Kotlin type names) from internal
     /// state set during the builder phase. Returns every path written (one
     /// per non-empty package).
@@ -131,7 +131,7 @@ impl<S: JniGenState> JniGen<S> {
         );
 
         // The N-ary locking helper is only referenced when wrappers are
-        // emitted with locking on; skip it under `handle_locks(false)` so it
+        // emitted with locking on; skip it under `disable_handle_locks()` so it
         // doesn't surface as an unused-`internal fun` warning.
         if self.emit_handle_locks {
             file = file.decl(

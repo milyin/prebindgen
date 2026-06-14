@@ -105,7 +105,7 @@ pub(crate) struct EnumConfig {
     pub suppress_kotlin_code: bool,
 }
 
-/// One registered `.fun(...)` entry. The Rust identifier is captured
+/// One registered `.package_fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
 /// optional override sets the Kotlin-side name when the default
 /// `snake_to_camel(rust_ident)` derivation isn't what the user wants.
@@ -119,7 +119,7 @@ pub struct MethodEntry {
     /// the entry's registration. `None` = derive from `rust_ident` via
     /// `snake_to_camel`.
     pub kotlin_name_override: Option<String>,
-    /// `true` when declared via `.fun_accessor(...)` (a read accessor): the
+    /// `true` when marked with `.accessor()` (a read accessor): the
     /// parameter composer (constructor `.default()` / explicit `.construct`) is
     /// never applied to it, and it is the only kind of function a decomposer
     /// record (`.deconstructor_record`/`.converter`/`_nested`) may reference.
@@ -135,14 +135,6 @@ impl MethodEntry {
         }
     }
 
-    /// A `.fun_accessor(...)` entry — see [`Self::is_accessor`].
-    pub fn new_accessor(rust_ident: syn::Ident) -> Self {
-        Self {
-            rust_ident,
-            kotlin_name_override: None,
-            is_accessor: true,
-        }
-    }
 }
 
 /// All configuration the structured builder accumulates for one
@@ -163,7 +155,7 @@ pub(crate) struct TypeConfig {
     /// / `as jint`) and a generated `.kt` file. Mutually exclusive with
     /// [`Self::opaque`]; builder enforces it.
     pub enum_cfg: Option<EnumConfig>,
-    /// Set by [`JniGen::value_blob`]: this is a `Copy` Rust type passed
+    /// Set by [`JniGen::value_class`]: this is a `Copy` Rust type passed
     /// **by value as its raw memory blob** in a `JByteArray` (wire), the
     /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no
     /// projection — it surfaces as `ByteArray`. Mutually exclusive with
@@ -173,11 +165,11 @@ pub(crate) struct TypeConfig {
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
 /// object. One entry per `.package(subpackage)` context that
-/// received `.function(...)` calls.
+/// received `.package_fun(...)` calls.
 #[derive(Clone, Default)]
 pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
-    /// subpackage via [`JniGen::function`].
+    /// subpackage via [`JniGen::package_fun`].
     pub functions: Vec<MethodEntry>,
 }
 
@@ -238,13 +230,18 @@ pub trait WrapperReturnState: Clone {
 
 impl WrapperReturnState for TypeMeta {
     fn from_wrapper(key: TypeKey) -> Self {
-        Self { key }
+        Self {
+            key,
+            package: std::marker::PhantomData,
+        }
     }
 }
 
 impl WrapperReturnState for WrapperNonMeta {
     fn from_wrapper(_key: TypeKey) -> Self {
-        Self
+        Self {
+            package: std::marker::PhantomData,
+        }
     }
 }
 
@@ -344,23 +341,30 @@ pub struct Root;
 #[derive(Clone, Debug)]
 pub struct Package;
 
+/// Marker for builders with an active package/subpackage context.
+#[derive(Clone, Debug, Default)]
+pub struct InPackage;
+
 /// Pointer-class builder state.
 #[derive(Clone, Debug)]
-pub struct PtrClass {
+pub struct PtrClass<P = InPackage> {
     pub(crate) key: TypeKey,
+    pub(crate) package: std::marker::PhantomData<P>,
 }
 
 /// Enum-class builder state.
 #[derive(Clone, Debug)]
-pub struct EnumClass {
+pub struct EnumClass<P = InPackage> {
     pub(crate) key: TypeKey,
+    pub(crate) package: std::marker::PhantomData<P>,
 }
 
 /// Type-metadata builder state for data classes, value blobs, and rank-0
 /// wrappers.
 #[derive(Clone, Debug)]
-pub struct TypeMeta {
+pub struct TypeMeta<P = InPackage> {
     pub(crate) key: TypeKey,
+    pub(crate) package: std::marker::PhantomData<P>,
 }
 
 /// Function builder state.
@@ -373,9 +377,12 @@ pub struct Function {
 /// Wrapper builder state for wildcard wrapper registrations that do not leave a
 /// concrete type metadata cursor live.
 #[derive(Clone, Debug, Default)]
-pub struct WrapperNonMeta;
+pub struct WrapperNonMeta<P = InPackage> {
+    pub(crate) package: std::marker::PhantomData<P>,
+}
 
-/// Builder states that have an active package context.
+/// Builder states that can safely declare package functions with
+/// [`JniGen::package_fun`].
 pub trait PackageState: Clone {}
 
 impl PackageState for Package {}
@@ -383,6 +390,7 @@ impl PackageState for PtrClass {}
 impl PackageState for EnumClass {}
 impl PackageState for TypeMeta {}
 impl PackageState for Function {}
+impl PackageState for WrapperNonMeta {}
 
 /// Builder states where type declarations are valid.
 pub trait TypeDeclState: Clone {}
@@ -395,25 +403,24 @@ pub trait JniGenState: Clone {}
 
 impl JniGenState for Root {}
 impl<T: PackageState> JniGenState for T {}
-impl JniGenState for WrapperNonMeta {}
 
 pub trait TypeKeyState: Clone {
     fn type_key(&self) -> &TypeKey;
 }
 
-impl TypeKeyState for PtrClass {
+impl<P: Clone> TypeKeyState for PtrClass<P> {
     fn type_key(&self) -> &TypeKey {
         &self.key
     }
 }
 
-impl TypeKeyState for EnumClass {
+impl<P: Clone> TypeKeyState for EnumClass<P> {
     fn type_key(&self) -> &TypeKey {
         &self.key
     }
 }
 
-impl TypeKeyState for TypeMeta {
+impl<P: Clone> TypeKeyState for TypeMeta<P> {
     fn type_key(&self) -> &TypeKey {
         &self.key
     }
@@ -432,14 +439,14 @@ impl TypeKeyState for TypeMeta {
 /// use syn::parse_quote as pq;
 ///
 /// // A function needs an active package context.
-/// let _ = JniGen::new().fun(pq!(z_open));
+/// let _ = JniGen::new().package_fun(pq!(z_open));
 /// ```
 ///
 /// ```compile_fail
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // `.name(...)` only applies immediately after `.fun(...)` / `.fun_accessor(...)`.
+/// // `.name(...)` only applies immediately after `.package_fun(...)`.
 /// let _ = JniGen::new().ptr_class(pq!(ZSession)).name("Session");
 /// ```
 ///
@@ -448,7 +455,7 @@ impl TypeKeyState for TypeMeta {
 /// use syn::parse_quote as pq;
 ///
 /// // Pointer-class output declarations require a live `.ptr_class(...)` state.
-/// let _ = JniGen::new().package("session").fun(pq!(z_open)).ptr_class_output_direct();
+/// let _ = JniGen::new().package("session").package_fun(pq!(z_open)).ptr_class_output_direct();
 /// ```
 ///
 /// ```compile_fail
@@ -457,6 +464,18 @@ impl TypeKeyState for TypeMeta {
 ///
 /// // Suppression is valid for generated pointer/enum classes, not data classes.
 /// let _ = JniGen::new().data_class(pq!(Config)).suppress_kotlin_code();
+/// ```
+///
+/// Type declarations are allowed before a subpackage is selected, but declaring
+/// functions still requires calling [`JniGen::package`].
+/// Until the root/type states are split further, a root-level type declaration
+/// followed directly by `.package_fun(...)` is rejected at runtime:
+///
+/// ```should_panic
+/// use prebindgen::lang::JniGen;
+/// use syn::parse_quote as pq;
+///
+/// let _ = JniGen::new().ptr_class(pq!(ZSession)).package_fun(pq!(z_open));
 /// ```
 ///
 /// State types are public so large build scripts can be factored into helpers
@@ -469,7 +488,7 @@ impl TypeKeyState for TypeMeta {
 /// fn add_keyexpr(jni: JniGen<Package>) -> JniGen<Package> {
 ///     jni.ptr_class(pq!(ZKeyExpr))
 ///         .ptr_class_output_direct()
-///         .fun_accessor(pq!(z_keyexpr_as_str))
+///         .package_fun(pq!(z_keyexpr_as_str)).accessor()
 ///         .package("next")
 /// }
 /// ```
@@ -561,7 +580,7 @@ pub struct JniGenInner {
 
     /// Free-standing package-level wrappers, keyed by subpackage path
     /// (relative to [`Self::package`], dot-separated; never empty for an
-    /// entry to be emitted). Populated by [`Self::function`] under the
+    /// entry to be emitted). Populated by [`Self::package_fun`] under the
     /// currently-active [`Self::active_subpackage`].
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 
@@ -577,8 +596,8 @@ pub struct JniGenInner {
     /// Per-rank output converters. Same shape as [`Self::input_wrappers`].
     pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
 
-    /// The currently-active subpackage set by [`Self::package`].
-    /// Drives where [`Self::function`] entries land and is folded into
+    /// The currently-active generated subpackage set by [`Self::package`].
+    /// Drives where [`Self::package_fun`] entries land and is folded into
     /// the FQN of any class declared while it's `Some(_)`. Package
     /// inheritance via chaining is **not** supported — each
     /// `package` call overwrites the previous; nest via dotted

@@ -85,35 +85,34 @@ impl JniGen<Root> {
 }
 
 impl<S> JniGen<S> {
+    /// Set the Rust module path that contains the original `#[prebindgen]`
+    /// items. Generated Rust wrappers call functions as
+    /// `<source_module>::<function>(...)`; defaults to `crate`.
     pub fn source_module(mut self, p: syn::Path) -> Self {
         self.source_module = p;
         self
     }
 
-    /// When `false`, generated wrappers skip the per-call
-    /// `withSortedHandleLocks` scaffold (and the dispatch
-    /// `as? NativeHandle` lock-adds), emitting only the raw `ptr` read +
-    /// closed-handle null-check + native call. Removes per-call lock
-    /// allocations / monitor entry at the cost of thread-safety (no
-    /// deadlock-safe N-ary locking, no atomic consume). Default `true`.
-    pub fn handle_locks(mut self, on: bool) -> Self {
-        self.emit_handle_locks = on;
-        self
-    }
-
-    /// Set the JVM/Kotlin base package (dot-separated, e.g.
-    /// `"io.zenoh.jni"`). All derived forms (`java_class_prefix`,
-    /// `jni_class_path`) are recomputed.
+    /// Set the JVM/Kotlin **base** package (dot-separated, e.g.
+    /// `"io.zenoh.jni"`). All derived forms are recomputed.
+    ///
+    /// Use [`Self::package`] for generated subpackages below this base.
     pub fn package_prefix(mut self, p: impl Into<String>) -> Self {
         self.package = p.into().trim_matches('.').trim_matches('/').to_string();
         self.recompute_derived();
         self
     }
+
+    /// Disable the per-call handle-lock scaffold.
+    pub fn disable_handle_locks(mut self) -> Self {
+        self.emit_handle_locks = false;
+        self
+    }
+
     /// Set the closure that mangles the framework "harness" class name
     /// `"Native"` (the centralized extern holder). Default = prepend
     /// `"JNI"` (yielding `JNINative`). Affects the generated Kotlin
-    /// class name and, via [`Self::jni_class_path`], the JNI extern
-    /// symbol path on the Rust side.
+    /// class name and the derived JNI extern symbol path on the Rust side.
     pub fn kotlin_harness_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -179,14 +178,17 @@ impl<S> JniGen<S> {
         self
     }
 
-    /// Activate a subpackage context. Subsequent [`Self::function`]
-    /// calls land in this subpackage, and any class declared
+    /// Activate a generated subpackage context below the base package set by
+    /// [`Self::package_prefix`]. Despite the short name, this does **not** set
+    /// the base package; use [`Self::package_prefix`] for that. Subsequent
+    /// [`Self::package_fun`] calls land in this subpackage, and
+    /// any class declared
     /// ([`Self::ptr_class`] / [`Self::data_class`] /
     /// [`Self::enum_class`] / [`Self::value_class`]) while the
     /// subpackage is active gets an FQN of
     /// `<package>.<subpackage>.<ClassName>`.
     ///
-    /// Package inheritance is **not** supported — chaining
+    /// Subpackage inheritance is **not** supported — chaining
     /// `.package("a").package("b")` does not produce
     /// `"a.b"`; each call overwrites the previous active subpackage.
     /// To nest, pass a dotted path: `.package("a.b")`.
@@ -324,8 +326,8 @@ impl<S: TypeDeclState> JniGen<S> {
     /// dispatch class, and the Kotlin typed-handle class FQN. By
     /// default a `.kt` shell is auto-emitted — chain
     /// [`Self::suppress_kotlin_code`] to keep the file hand-maintained,
-    /// or chain one or more [`Self::method`] calls to promote
-    /// `#[prebindgen]` functions onto the class as instance methods.
+    /// or chain `.ptr_class_input*` / `.ptr_class_output*` calls to define its
+    /// canonical conversion shape.
     pub fn ptr_class(mut self, rust_type: syn::Type) -> JniGen<PtrClass> {
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
@@ -340,33 +342,24 @@ impl<S: TypeDeclState> JniGen<S> {
         // handler, so wire-level mentions don't collide with the FQN.
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.into_state(PtrClass { key })
+        self.into_state(PtrClass {
+            key,
+            package: std::marker::PhantomData,
+        })
     }
 }
 
 impl<S: PackageState> JniGen<S> {
-    /// Declare a `#[prebindgen]` function as a free-standing wrapper
-    /// under the currently-active [`Self::package`] context. If a
-    /// class context is also live, calling `fun` clears it — the
-    /// idea being that "leak class context to package level" makes the
-    /// chain unambiguous after one fn-level declaration. Panics if no
-    /// `package` is active.
-    pub fn fun(self, ident: syn::Ident) -> JniGen<Function> {
+    /// Declare a `#[prebindgen]` function as a free-standing package wrapper
+    /// under the currently-active [`Self::package`] subpackage context. If a
+    /// class context is also live, calling `package_fun` clears it — the idea
+    /// being that "leak class context to package level" makes the chain
+    /// unambiguous after one fn-level declaration.
+    pub fn package_fun(self, ident: syn::Ident) -> JniGen<Function> {
         self.push_fun(MethodEntry::new(ident))
     }
 
-    /// Declare a `#[prebindgen]` **read accessor** (`f(&T) -> …`) — like
-    /// [`Self::fun`] (exported wrapper) but flagged
-    /// [`MethodEntry::is_accessor`]: the parameter composer is never applied to
-    /// it (explicit [`Self::construct`] on its params is a build error, and
-    /// constructor [`Self::default`] auto-apply skips it), and it is the only
-    /// kind of function a decomposer record ([`Self::deconstructor_record`] /
-    /// [`Self::converter`] / [`Self::deconstructor_record_nested`]) may reference.
-    pub fn fun_accessor(self, ident: syn::Ident) -> JniGen<Function> {
-        self.push_fun(MethodEntry::new_accessor(ident))
-    }
-
-    /// Shared body of [`Self::fun`] / [`Self::fun_accessor`].
+    /// Shared body of [`Self::package_fun`].
     fn push_fun(mut self, entry: MethodEntry) -> JniGen<Function> {
         let sub = self
             .active_subpackage
@@ -383,10 +376,30 @@ impl<S: PackageState> JniGen<S> {
 }
 
 impl JniGen<Function> {
-    /// Override the Kotlin-side name for the most recent [`Self::fun`] /
-    /// [`Self::fun_accessor`] entry. Default (without `.name(...)`) is
+    /// Mark this package function as a `#[prebindgen]` **read accessor**
+    /// (`f(&T) -> ...`). Accessors are still exported wrappers, but the
+    /// parameter composer is never applied to them (explicit [`Self::input`] on
+    /// their params is a build error, and constructor `.default()` auto-apply
+    /// skips them). They are the only functions that pointer-class
+    /// output/deconstructor records may reference.
+    pub fn accessor(mut self) -> Self {
+        let package = self.state.package.clone();
+        let index = self.state.index;
+        let pkg = self
+            .packages
+            .get_mut(&package)
+            .expect("package entry vanished");
+        pkg.functions[index].is_accessor = true;
+        self
+    }
+
+    /// Override the Kotlin-side function name for this [`Self::package_fun`]
+    /// entry. Default (without `.name(...)`) is
     /// `snake_to_camel(rust_ident)` (e.g. `z_hello_whatami` → `zHelloWhatami`).
-    /// Panics if not chained immediately after a fn-level builder.
+    ///
+    /// This is unrelated to the deconstructor ids used by
+    /// [`Self::ptr_class_deconstructor`], [`Self::output_named`], and
+    /// [`Self::error_named`].
     pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
         let name = kotlin_name.into();
         let package = self.state.package.clone();
@@ -403,8 +416,8 @@ impl JniGen<Function> {
 impl JniGen<PtrClass> {
     // ── Canonical type representation (input / output on the ptr_class) ──
 
-    /// Rust type of the most recent [`Self::ptr_class`], for the
-    /// `.ptr_class_input*` / `.ptr_class_output*` chain. Panics otherwise.
+    /// Rust type of this [`Self::ptr_class`] state, for the
+    /// `.ptr_class_input*` / `.ptr_class_output*` chain.
     fn current_ptr_class(&self) -> syn::Type {
         self.state.key.to_type()
     }
@@ -430,13 +443,13 @@ impl JniGen<PtrClass> {
 
     /// Begin a **named alternative** deconstructor for the current
     /// `ptr_class`. The records that follow (`.ptr_class_output*`) append to
-    /// this declaration; functions select it via [`Self::fun_output_named`] /
-    /// [`Self::fun_error_named`] — the type's unnamed declaration stays the
+    /// this declaration; functions select it via [`Self::output_named`] /
+    /// [`Self::error_named`] — the type's unnamed declaration stays the
     /// canonical (auto-applied) one. Each named decomposition gets its own
     /// generated callback interfaces (`<Type><Name>Builder` / `…Handler`).
     /// Declare the canonical records BEFORE any named alternative — record
     /// calls append to the most recent declaration of the type.
-    pub fn ptr_class_deconstructor(mut self, name: &str) -> Self {
+    pub fn ptr_class_deconstructor(mut self, name: impl Into<String>) -> Self {
         let t = self.current_ptr_class();
         self.deconstructors.add_deconstructor(t);
         self.deconstructors.add_deconstructor_name(name);
@@ -467,14 +480,14 @@ impl JniGen<Function> {
     // ── Per-function overrides of the canonical representation ──────────
 
     /// Per-fn: `param` skips the canonical input and takes the raw handle.
-    pub fn fun_input_direct(mut self, param: syn::Ident) -> Self {
+    pub fn input_direct(mut self, param: syn::Ident) -> Self {
         let func = self.current_fn_ident();
         self.expansions.add_skip_default_construct(func, param);
         self
     }
 
     /// Per-fn: the return value skips the canonical output and stays a raw handle.
-    pub fn fun_output_direct(mut self) -> Self {
+    pub fn output_direct(mut self) -> Self {
         let func = self.current_fn_ident();
         self.deconstructors.add_skip_default_output(func);
         self
@@ -482,7 +495,7 @@ impl JniGen<Function> {
 
     /// Per-fn: `param` is built from only the named subset of the canonical
     /// input's build-from variants (plus identity if the canonical input has it).
-    pub fn fun_input(
+    pub fn input(
         mut self,
         param: syn::Ident,
         funcs: impl IntoIterator<Item = syn::Ident>,
@@ -495,7 +508,7 @@ impl JniGen<Function> {
 
     /// Per-fn: replace the canonical output with an explicit record list (the
     /// `func`s, each unwrapped per its return type's canonical output).
-    pub fn fun_output(mut self, funcs: impl IntoIterator<Item = syn::Ident>) -> Self {
+    pub fn output(mut self, funcs: impl IntoIterator<Item = syn::Ident>) -> Self {
         let func = self.current_fn_ident();
         self.deconstructors
             .add_output_inline(func, funcs.into_iter().collect());
@@ -505,7 +518,7 @@ impl JniGen<Function> {
     /// Per-fn: decompose the return value with the **named** deconstructor
     /// (declared via [`Self::ptr_class_deconstructor`]) instead of the
     /// canonical one.
-    pub fn fun_output_named(mut self, name: &str) -> Self {
+    pub fn output_named(mut self, name: impl Into<String>) -> Self {
         let func = self.current_fn_ident();
         self.deconstructors.add_deconstruct_output_with(func, name);
         self
@@ -514,14 +527,14 @@ impl JniGen<Function> {
     /// Per-fn: decompose the `Result<_, E>` domain error with the **named**
     /// deconstructor instead of `E`'s canonical one — the `onError` handler
     /// becomes the named decomposition's `<Type><Name>Handler` interface.
-    pub fn fun_error_named(mut self, name: &str) -> Self {
+    pub fn error_named(mut self, name: impl Into<String>) -> Self {
         let func = self.current_fn_ident();
         self.deconstructors.add_deconstruct_error_with(func, name);
         self
     }
 
     /// Rust ident of the function the current per-fn override chain targets,
-    /// resolved from the live [`Self::fun`] cursor.
+    /// resolved from the live [`Self::package_fun`] state.
     fn current_fn_ident(&self) -> syn::Ident {
         self.packages
             .get(&self.state.package)
@@ -533,11 +546,9 @@ impl JniGen<Function> {
 }
 
 impl JniGen<PtrClass> {
-    /// Opt out of Kotlin class emission for the most recent
-    /// [`Self::ptr_class`] / [`Self::enum_class`] — the `.kt` file is
-    /// assumed to be hand-written. Without this, a typed-handle shell
-    /// class (or an `enum class`) is auto-emitted. Panics if no
-    /// `ptr_class` / `enum_class` is in scope.
+    /// Opt out of Kotlin typed-handle class emission for this
+    /// [`Self::ptr_class`] declaration — the `.kt` file is assumed to be
+    /// hand-written.
     pub fn suppress_kotlin_code(mut self) -> Self {
         let key = self.state.key.clone();
         let entry = self.types.get_mut(&key).expect("type entry vanished");
@@ -608,7 +619,10 @@ impl<S: TypeDeclState> JniGen<S> {
         entry.enum_cfg = Some(EnumConfig::default());
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.into_state(EnumClass { key })
+        self.into_state(EnumClass {
+            key,
+            package: std::marker::PhantomData,
+        })
     }
 
     /// Declare a Rust struct that should appear in Kotlin as a data
@@ -623,10 +637,13 @@ impl<S: TypeDeclState> JniGen<S> {
         let entry = self.types.entry(key.clone()).or_default();
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.into_state(TypeMeta { key })
+        self.into_state(TypeMeta {
+            key,
+            package: std::marker::PhantomData,
+        })
     }
 
-    /// Declare a **`Copy` value-blob** type: a Rust type passed across the
+    /// Declare a **`Copy` value class** type: a Rust type passed across the
     /// JNI boundary **by value as its raw memory bytes** in a `ByteArray`,
     /// rather than as a closeable `jlong` heap handle. The value-level peer
     /// of [`Self::ptr_class`] — `ByteArray` is to a blob what `Long` is to a
@@ -640,7 +657,7 @@ impl<S: TypeDeclState> JniGen<S> {
     /// raw-bytes read on output), so the blob is valid only same-architecture
     /// in-process, exactly like an opaque handle pointer. Mutually exclusive
     /// with `ptr_class` / `enum_class`.
-    pub fn value_blob(mut self, rust_type: syn::Type) -> JniGen<TypeMeta> {
+    pub fn value_class(mut self, rust_type: syn::Type) -> JniGen<TypeMeta> {
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
         // Typed Kotlin FQN for the emitted `@JvmInline value class` — the same
@@ -654,8 +671,12 @@ impl<S: TypeDeclState> JniGen<S> {
         entry.value_blob = true;
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.into_state(TypeMeta { key })
+        self.into_state(TypeMeta {
+            key,
+            package: std::marker::PhantomData,
+        })
     }
+
 }
 
 impl<S: TypeKeyState> JniGen<S> {
@@ -664,9 +685,9 @@ impl<S: TypeKeyState> JniGen<S> {
     /// Use this when the Kotlin type is not a class FQN (generics,
     /// primitives, container types). For class names, the per-kind
     /// `kotlin_*_name_mangle` closures (configured on [`JniGen`]) own
-    /// derivation — `with_kotlin_type` is the escape hatch for verbatim
+    /// derivation — `kotlin_type` is the escape hatch for verbatim
     /// expressions that don't map onto any one element kind.
-    pub fn with_kotlin_type(mut self, kotlin_expr: impl Into<String>) -> Self {
+    pub fn kotlin_type(mut self, kotlin_expr: impl Into<String>) -> Self {
         let key = self.state.type_key().clone();
         let expr = kotlin_expr.into();
         let entry = self.types.get_mut(&key).expect("meta entry vanished");
@@ -674,12 +695,14 @@ impl<S: TypeKeyState> JniGen<S> {
         self.kotlin_type_fqns.push((key.as_str().to_string(), expr));
         self
     }
+
 }
 
 impl<S> JniGen<S> {
     /// Register a rank-N **input converter**. `pattern` contains 0–3
     /// `_` placeholders; the closure's arity selects the rank table.
-    /// The closure returns `Some((ty, exc, body))` (see [`WrapperFn`]
+    /// The closure returns `Some((ty, exc, body))` (see the internal wrapper
+    /// function type
     /// for the triple's full semantics) or `None` (defer to a later
     /// resolver phase). The body sees `env: &mut JNIEnv` and `v: &<wire>`
     /// in scope.
@@ -696,7 +719,7 @@ impl<S> JniGen<S> {
     /// `ty` is auto-classified at resolve: a wire shape ⇒ terminal
     /// converter; a distinct rust type with its own converter ⇒ a
     /// value-inspecting stage composed onto that converter's chain
-    /// (see [`Self::lookup_input`]).
+    /// (resolved by the adapter's wrapper lookup).
     pub fn input_wrapper<A, B>(self, pattern: syn::Type, builder: B) -> JniGen<B::NextState>
     where
         B: WrapperBuilder<A>,

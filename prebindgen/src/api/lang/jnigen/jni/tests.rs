@@ -346,8 +346,8 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         .ptr_class(syn::parse_quote!(ZThing))
         .enum_class(syn::parse_quote!(Color))
         .package("thing")
-        .fun(syn::parse_quote!(z_thing_new))
-        .fun(syn::parse_quote!(z_thing_name));
+        .package_fun(syn::parse_quote!(z_thing_new))
+        .package_fun(syn::parse_quote!(z_thing_name));
 
     let dir = unique_snapshot_dir("jnigen_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -526,11 +526,11 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         // arg of ZThing decomposes into these 2 leaves.
         .ptr_class_output_direct()
         .ptr_class_output(syn::parse_quote!(z_thing_name))
-        .fun_accessor(syn::parse_quote!(z_thing_name))
+        .package_fun(syn::parse_quote!(z_thing_name)).accessor()
         // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
         .ptr_class(syn::parse_quote!(ZOther))
-        .fun(syn::parse_quote!(z_thing_sub))
-        .fun(syn::parse_quote!(z_other_sub));
+        .package_fun(syn::parse_quote!(z_thing_sub))
+        .package_fun(syn::parse_quote!(z_other_sub));
 
     let dir = unique_snapshot_dir("jnigen_cb_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -699,13 +699,13 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .ptr_class(syn::parse_quote!(ZChild))
         .ptr_class_output_direct()
         .ptr_class_output(syn::parse_quote!(z_child_name))
-        .fun_accessor(syn::parse_quote!(z_child_name))
+        .package_fun(syn::parse_quote!(z_child_name)).accessor()
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .ptr_class(syn::parse_quote!(ZParent))
         .ptr_class_output(syn::parse_quote!(z_parent_child))
         .ptr_class_output_direct()
-        .fun_accessor(syn::parse_quote!(z_parent_child))
-        .fun(syn::parse_quote!(z_parent_sub));
+        .package_fun(syn::parse_quote!(z_parent_child)).accessor()
+        .package_fun(syn::parse_quote!(z_parent_sub));
 
     let dir = unique_snapshot_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
@@ -736,7 +736,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
 /// `z_sample_timestamp`), a nested handle identity reached *through* an
 /// `Option` step (`z_reply_sample` → `z_sample_key_expr`), and an Acc leaf
 /// whose own return keeps its full `Option<…>` as the converter input
-/// (`z_reply_zid -> Option<ZId>`, a value_blob with no canonical child).
+/// (`z_reply_zid -> Option<ZId>`, a value class with no canonical child).
 /// Every `Option` nesting step must become its own `match` (`None` ⇒ null
 /// leaf) — never a blind accessor compose through an `Option`.
 #[test]
@@ -775,32 +775,32 @@ fn callback_double_option_unwrap_pipeline() {
         .source_module(syn::parse_quote!(myflat))
         .package_prefix("io.test.jni")
         .package("query")
-        .value_blob(syn::parse_quote!(ZId))
+        .value_class(syn::parse_quote!(ZId))
         .ptr_class(syn::parse_quote!(ZKeyExpr))
         .ptr_class_output_direct()
         .ptr_class_output(syn::parse_quote!(z_keyexpr_as_str))
-        .fun_accessor(syn::parse_quote!(z_keyexpr_as_str))
+        .package_fun(syn::parse_quote!(z_keyexpr_as_str)).accessor()
         .ptr_class(syn::parse_quote!(ZTs))
         .ptr_class_output(syn::parse_quote!(z_ts_ntp64))
-        .fun_accessor(syn::parse_quote!(z_ts_ntp64))
+        .package_fun(syn::parse_quote!(z_ts_ntp64)).accessor()
         .ptr_class(syn::parse_quote!(ZSample))
         .ptr_class_output(syn::parse_quote!(z_sample_key_expr))
         .ptr_class_output(syn::parse_quote!(z_sample_timestamp))
-        .fun_accessor(syn::parse_quote!(z_sample_key_expr))
-        .fun_accessor(syn::parse_quote!(z_sample_timestamp))
+        .package_fun(syn::parse_quote!(z_sample_key_expr)).accessor()
+        .package_fun(syn::parse_quote!(z_sample_timestamp)).accessor()
         .ptr_class(syn::parse_quote!(ZErr))
         .ptr_class_output(syn::parse_quote!(z_err_payload))
-        .fun_accessor(syn::parse_quote!(z_err_payload))
+        .package_fun(syn::parse_quote!(z_err_payload)).accessor()
         .ptr_class(syn::parse_quote!(ZReply))
         .ptr_class_output(syn::parse_quote!(z_reply_zid))
         .ptr_class_output(syn::parse_quote!(z_reply_is_ok))
         .ptr_class_output(syn::parse_quote!(z_reply_sample))
         .ptr_class_output(syn::parse_quote!(z_reply_err))
-        .fun_accessor(syn::parse_quote!(z_reply_zid))
-        .fun_accessor(syn::parse_quote!(z_reply_is_ok))
-        .fun_accessor(syn::parse_quote!(z_reply_sample))
-        .fun_accessor(syn::parse_quote!(z_reply_err))
-        .fun(syn::parse_quote!(z_get));
+        .package_fun(syn::parse_quote!(z_reply_zid)).accessor()
+        .package_fun(syn::parse_quote!(z_reply_is_ok)).accessor()
+        .package_fun(syn::parse_quote!(z_reply_sample)).accessor()
+        .package_fun(syn::parse_quote!(z_reply_err)).accessor()
+        .package_fun(syn::parse_quote!(z_get));
 
     let dir = unique_snapshot_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
@@ -908,8 +908,8 @@ fn strip_accessor_prefix_cases() {
 // ────────────────────────────────────────────────────────────────────────
 // Declaration-keyed interfaces: a type may have several decompositions —
 // the canonical (unnamed) deconstructor, named alternatives
-// (`.ptr_class_deconstructor(name)` + `.fun_*_named`), and per-fn inline
-// records (`.fun_output`). Interface identity follows the DECLARATION, so
+// (`.ptr_class_deconstructor(name)` + `.*_named`), and per-fn inline records
+// (`.output`). Interface identity follows the DECLARATION, so
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────
@@ -948,11 +948,11 @@ fn named_error_deconstructor_gets_own_handler() {
         .ptr_class_deconstructor("full")
         .ptr_class_output(syn::parse_quote!(z_err_message))
         .ptr_class_output(syn::parse_quote!(z_err_code))
-        .fun_accessor(syn::parse_quote!(z_err_message))
-        .fun_accessor(syn::parse_quote!(z_err_code))
-        .fun(syn::parse_quote!(z_simple))
-        .fun(syn::parse_quote!(z_detailed))
-        .fun_error_named("full");
+        .package_fun(syn::parse_quote!(z_err_message)).accessor()
+        .package_fun(syn::parse_quote!(z_err_code)).accessor()
+        .package_fun(syn::parse_quote!(z_simple))
+        .package_fun(syn::parse_quote!(z_detailed))
+        .error_named("full");
 
     let dir = unique_snapshot_dir("jnigen_named_err");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1009,10 +1009,10 @@ fn named_error_deconstructor_gets_own_handler() {
 }
 
 /// Two fns returning the same type under different output decompositions:
-/// the canonical one and a per-fn `.fun_output(...)` inline record list.
+/// the canonical one and a per-fn `.output(...)` inline record list.
 /// Each gets its own builder interface.
 #[test]
-fn inline_fun_output_gets_own_builder() {
+fn inline_output_gets_own_builder() {
     use crate::SourceLocation;
     let loc = SourceLocation::default();
     let fns: &[&str] = &[
@@ -1038,12 +1038,12 @@ fn inline_fun_output_gets_own_builder() {
         // Canonical output: name + size (2 leaves ⇒ builder callback).
         .ptr_class_output(syn::parse_quote!(z_thing_name))
         .ptr_class_output(syn::parse_quote!(z_thing_size))
-        .fun_accessor(syn::parse_quote!(z_thing_name))
-        .fun_accessor(syn::parse_quote!(z_thing_size))
-        .fun(syn::parse_quote!(z_make_a))
+        .package_fun(syn::parse_quote!(z_thing_name)).accessor()
+        .package_fun(syn::parse_quote!(z_thing_size)).accessor()
+        .package_fun(syn::parse_quote!(z_make_a))
         // Per-fn inline records: identity handle + name (different shape).
-        .fun(syn::parse_quote!(z_make_b))
-        .fun_output([
+        .package_fun(syn::parse_quote!(z_make_b))
+        .output([
             syn::parse_quote!(z_thing_name),
             syn::parse_quote!(z_thing_size),
             syn::parse_quote!(z_thing_name),
@@ -1122,16 +1122,16 @@ fn error_unwrap_universal_records() {
         .package("errors")
         .ptr_class(syn::parse_quote!(ZDetail))
         .ptr_class_output(syn::parse_quote!(z_detail_code))
-        .fun_accessor(syn::parse_quote!(z_detail_code))
+        .package_fun(syn::parse_quote!(z_detail_code)).accessor()
         .ptr_class(syn::parse_quote!(ZErr))
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
         .ptr_class_output_direct()
         .ptr_class_output(syn::parse_quote!(z_err_message))
         .ptr_class_output(syn::parse_quote!(z_err_detail))
-        .fun_accessor(syn::parse_quote!(z_err_message))
-        .fun_accessor(syn::parse_quote!(z_err_detail))
-        .fun(syn::parse_quote!(z_fallible));
+        .package_fun(syn::parse_quote!(z_err_message)).accessor()
+        .package_fun(syn::parse_quote!(z_err_detail)).accessor()
+        .package_fun(syn::parse_quote!(z_fallible));
 
     let dir = unique_snapshot_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);

@@ -1395,13 +1395,13 @@ pub(crate) fn emit_expanded_param(
 /// the Rust type-key. Panics for non-path types (e.g. closures, references) —
 /// the per-kind `kotlin_*_name_mangle` closures see only path-shaped
 /// shorts. For verbatim Kotlin expressions on non-path types, chain
-/// [`JniGen::with_kotlin_type`] after the structured builder.
+/// [`JniGen::kotlin_type`] after the structured builder.
 pub(crate) fn rust_short_name(key: &TypeKey) -> String {
     rust_short_name_opt(key).unwrap_or_else(|| {
         panic!(
             "rust_short_name: cannot derive Kotlin name from type-key `{}` — \
              only path-shaped types are supported here; use \
-             `with_kotlin_type(\"<verbatim>\")` to set the name explicitly",
+             `kotlin_type(\"<verbatim>\")` to set the name explicitly",
             key.as_str()
         )
     })
@@ -1974,7 +1974,7 @@ pub(crate) fn reject_vec_of_handle(inner_projection: &Option<Projection>, elem: 
             panic!(
                 "JniGen: `Vec<{}>` is unsupported — its elements would be closeable native \
                  handles (jlong) the JVM must free individually. If `{}` is `Copy`, declare \
-                 it as a value-blob via `.value_blob(...)` so the Vec surfaces as \
+                 it as a value class via `.value_class(...)` so the Vec surfaces as \
                  `List<ByteArray>`; otherwise expose a per-element accessor instead of \
                  returning a `Vec` of handles.",
                 elem.to_token_stream(),

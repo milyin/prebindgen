@@ -377,7 +377,7 @@ fn method_descr(params: &[IfaceParam], ret: &kt::KtType, type_params: &[String])
 /// name, extended by the deconstructor declaration's identity. The type's
 /// canonical (unnamed) declaration keeps the bare short; a named alternative
 /// appends its UpperCamel name (`ZError` + `"full"` → `ZErrorFull`); per-fn
-/// inline records (`.fun_output`) append the function's UpperCamel ident.
+/// inline records (`.output`) append the function's UpperCamel ident.
 /// This is what makes interface identity == declaration identity: functions
 /// sharing a declaration share the interface, differently-declared
 /// decompositions of one type get distinct interfaces.
