@@ -48,6 +48,18 @@ pub enum UnfoldError {
         func: syn::Ident,
         reason: &'static str,
     },
+    /// Two leaves of one deconstructor resolved to the same (literal) name.
+    /// Author leaf names are explicit and emitted verbatim, so a collision is a
+    /// declaration bug — never auto-resolved.
+    DuplicateLeafName {
+        target: String,
+        name: String,
+    },
+    /// An author-supplied leaf name contains the reserved `"__"` chain
+    /// separator (used internally to join nested deconstructor segments).
+    ReservedSeparator {
+        name: String,
+    },
 }
 
 impl std::fmt::Display for UnfoldError {
@@ -118,6 +130,18 @@ impl std::fmt::Display for UnfoldError {
                 f,
                 "output expansion: `{}` not yet supported: {}",
                 func, reason
+            ),
+            UnfoldError::DuplicateLeafName { target, name } => write!(
+                f,
+                "deconstructor for `{}` has two output records named `{}` — leaf names must be \
+                 unique (they are emitted literally)",
+                target, name
+            ),
+            UnfoldError::ReservedSeparator { name } => write!(
+                f,
+                "output record name `{}` contains the reserved `__` separator (used to join \
+                 nested deconstructor segments)",
+                name
             ),
         }
     }

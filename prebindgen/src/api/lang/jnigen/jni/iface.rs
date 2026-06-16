@@ -428,8 +428,9 @@ fn plan_leaf_params(
     registry: &Registry<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
 ) -> Option<Vec<IfaceParam>> {
-    let mut names = plan_leaf_names(leaves);
-    dedup_names(&mut names);
+    // Decomposition leaf names are author-supplied, literal, and unique by
+    // construction (enforced in `core::unfold`) — no dedup/casing here.
+    let names = plan_leaf_names(leaves);
     let mut out = Vec::with_capacity(leaves.len());
     for (name, leaf) in names.into_iter().zip(leaves.iter()) {
         out.push(leaf_iface_param(

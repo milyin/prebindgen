@@ -468,10 +468,14 @@ impl JniGen<PtrClass> {
     /// **Accessor output record**: the current `ptr_class`'s canonical output
     /// includes `func`'s result, unwrapped per the return type's own canonical
     /// output (one leaf for a scalar/string/enum; spliced for a nested ptr_class).
-    pub fn ptr_class_output(mut self, func: syn::Ident) -> Self {
+    /// `name` is the literal callback-parameter name for this leaf (emitted
+    /// verbatim — no casing/escaping); it must be unique within the
+    /// deconstructor and must not contain the reserved `"__"` separator. For a
+    /// spliced nested ptr_class it prefixes the child leaf names (`name__<child>`).
+    pub fn ptr_class_output(mut self, func: syn::Ident, name: impl Into<String>) -> Self {
         let t = self.current_ptr_class();
         self.deconstructors.ensure_canonical_deconstructor(t);
-        self.deconstructors.add_deconstructor_record(func);
+        self.deconstructors.add_deconstructor_record(func, name);
         self
     }
 }
@@ -506,12 +510,21 @@ impl JniGen<Function> {
         self
     }
 
-    /// Per-fn: replace the canonical output with an explicit record list (the
-    /// `func`s, each unwrapped per its return type's canonical output).
-    pub fn output(mut self, funcs: impl IntoIterator<Item = syn::Ident>) -> Self {
+    /// Per-fn: replace the canonical output with an explicit record list — each
+    /// `(accessor, name)` unwrapped per its return type's canonical output, with
+    /// `name` the literal leaf/callback-parameter name.
+    pub fn output(
+        mut self,
+        records: impl IntoIterator<Item = (syn::Ident, impl Into<String>)>,
+    ) -> Self {
         let func = self.current_fn_ident();
-        self.deconstructors
-            .add_output_inline(func, funcs.into_iter().collect());
+        self.deconstructors.add_output_inline(
+            func,
+            records
+                .into_iter()
+                .map(|(f, n)| (f, n.into()))
+                .collect(),
+        );
         self
     }
 

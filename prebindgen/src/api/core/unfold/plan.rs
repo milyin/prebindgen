@@ -99,13 +99,11 @@ pub struct UnfoldPlan {
 /// One flattened output leaf of a decomposed return value.
 #[derive(Clone)]
 pub struct UnfoldLeaf {
-    /// Raw display name derived from the declaration: the accessor path with
-    /// each segment stripped of its receiver-type prefix
-    /// ([`strip_accessor_prefix`](super::strip_accessor_prefix)), joined by `_`
-    /// (`z_sample_key_expr` on `&ZSample` then `z_keyexpr_as_str` →
-    /// `"key_expr_as_str"`); a root identity leaf is `"handle"`.
-    /// Language-neutral snake form — adapters apply their own casing/keyword
-    /// escaping (e.g. jnigen's camelCase) and dedup the final per-signature list.
+    /// The author-supplied leaf name, used **literally** (no casing / stripping /
+    /// keyword escaping). Nested records prefix the child's name with their own
+    /// name, joined by the reserved `"__"` separator (`"sample"` splicing
+    /// `"keyExpr"` → `"sample__keyExpr"`); a root identity leaf is `"handle"`.
+    /// Names are unique within a deconstructor (a duplicate is a hard error).
     pub name: String,
     /// Accessor-call chain from the root value (`[]` = the identity/root
     /// itself; `[f]` = `f(&root)`; longer = nested records, M3).

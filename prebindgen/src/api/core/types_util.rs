@@ -323,21 +323,6 @@ pub fn peel_ref_option_vec(ty: &syn::Type) -> syn::Type {
     }
 }
 
-/// Short (last-segment) name of a type, peeled of a leading `&` —
-/// `&zenoh_flat::ZSample` → `"ZSample"`. Empty for non-path shapes.
-pub fn short_type_name(ty: &syn::Type) -> String {
-    let bare = match ty {
-        syn::Type::Reference(r) => &*r.elem,
-        other => other,
-    };
-    if let syn::Type::Path(tp) = bare {
-        if let Some(seg) = tp.path.segments.last() {
-            return seg.ident.to_string();
-        }
-    }
-    String::new()
-}
-
 /// Build an identifier at call-site span.
 pub(crate) fn ident(s: &str) -> syn::Ident {
     syn::Ident::new(s, Span::call_site())

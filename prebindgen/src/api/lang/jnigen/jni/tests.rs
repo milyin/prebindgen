@@ -525,7 +525,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_thing_name))
+        .ptr_class_output(syn::parse_quote!(z_thing_name), "name")
         .package_fun(syn::parse_quote!(z_thing_name)).accessor()
         // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
         .ptr_class(syn::parse_quote!(ZOther))
@@ -598,8 +598,8 @@ fn callback_snapshot_kotlin_side() {
     assert!(native.contains("onClose:Any"), "{native}");
 
     // Typed callback `fun interface`s with NAMED parameters — decomposed
-    // ZThing's identity leaf is `handle`, its accessor leaf strips the
-    // receiver-type prefix (`z_thing_name` on `&ZThing` → `name`); `Fn()` ⇒
+    // ZThing's identity leaf is `handle`, its accessor leaf carries the literal
+    // author-supplied name (`z_thing_name` declared as `"name"`); `Fn()` ⇒
     // the shared zero-arg `VoidCallback` (root package); the plan-less
     // fallback arg is the decapped type short (`zOther`).
     let all: String = kotlin
@@ -698,11 +698,11 @@ fn callback_root_identity_moved_after_nested_borrow() {
         // Child handle: canonical output = identity (clone) + its name string.
         .ptr_class(syn::parse_quote!(ZChild))
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_child_name))
+        .ptr_class_output(syn::parse_quote!(z_child_name), "name")
         .package_fun(syn::parse_quote!(z_child_name)).accessor()
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .ptr_class(syn::parse_quote!(ZParent))
-        .ptr_class_output(syn::parse_quote!(z_parent_child))
+        .ptr_class_output(syn::parse_quote!(z_parent_child), "child")
         .ptr_class_output_direct()
         .package_fun(syn::parse_quote!(z_parent_child)).accessor()
         .package_fun(syn::parse_quote!(z_parent_sub));
@@ -778,24 +778,24 @@ fn callback_double_option_unwrap_pipeline() {
         .value_class(syn::parse_quote!(ZId))
         .ptr_class(syn::parse_quote!(ZKeyExpr))
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_keyexpr_as_str))
+        .ptr_class_output(syn::parse_quote!(z_keyexpr_as_str), "asStr")
         .package_fun(syn::parse_quote!(z_keyexpr_as_str)).accessor()
         .ptr_class(syn::parse_quote!(ZTs))
-        .ptr_class_output(syn::parse_quote!(z_ts_ntp64))
+        .ptr_class_output(syn::parse_quote!(z_ts_ntp64), "ntp64")
         .package_fun(syn::parse_quote!(z_ts_ntp64)).accessor()
         .ptr_class(syn::parse_quote!(ZSample))
-        .ptr_class_output(syn::parse_quote!(z_sample_key_expr))
-        .ptr_class_output(syn::parse_quote!(z_sample_timestamp))
+        .ptr_class_output(syn::parse_quote!(z_sample_key_expr), "keyExpr")
+        .ptr_class_output(syn::parse_quote!(z_sample_timestamp), "timestamp")
         .package_fun(syn::parse_quote!(z_sample_key_expr)).accessor()
         .package_fun(syn::parse_quote!(z_sample_timestamp)).accessor()
         .ptr_class(syn::parse_quote!(ZErr))
-        .ptr_class_output(syn::parse_quote!(z_err_payload))
+        .ptr_class_output(syn::parse_quote!(z_err_payload), "payload")
         .package_fun(syn::parse_quote!(z_err_payload)).accessor()
         .ptr_class(syn::parse_quote!(ZReply))
-        .ptr_class_output(syn::parse_quote!(z_reply_zid))
-        .ptr_class_output(syn::parse_quote!(z_reply_is_ok))
-        .ptr_class_output(syn::parse_quote!(z_reply_sample))
-        .ptr_class_output(syn::parse_quote!(z_reply_err))
+        .ptr_class_output(syn::parse_quote!(z_reply_zid), "zid")
+        .ptr_class_output(syn::parse_quote!(z_reply_is_ok), "isOk")
+        .ptr_class_output(syn::parse_quote!(z_reply_sample), "sample")
+        .ptr_class_output(syn::parse_quote!(z_reply_err), "err")
         .package_fun(syn::parse_quote!(z_reply_zid)).accessor()
         .package_fun(syn::parse_quote!(z_reply_is_ok)).accessor()
         .package_fun(syn::parse_quote!(z_reply_sample)).accessor()
@@ -863,7 +863,7 @@ fn callback_double_option_unwrap_pipeline() {
         .unwrap_or_default();
     let ic: String = iface.split_whitespace().collect();
     assert!(ic.contains("isOk:Boolean"), "{iface}");
-    assert!(ic.contains("sampleKeyExpr:ZKeyExpr?"), "{iface}");
+    assert!(ic.contains("sample__keyExpr:ZKeyExpr?"), "{iface}");
     assert!(ic.contains(":Long?"), "{iface}");
     assert!(ic.contains(":ZId?"), "{iface}");
     // The wrapper takes the typed interface and forwards it bare (no
@@ -878,31 +878,6 @@ fn callback_double_option_unwrap_pipeline() {
     // The call site forwards the generated raw-proxy adapter — the typed
     // interface is the user surface, the extern receives the raw twin.
     assert!(pc.contains("JNINative.zGet(cb.asRaw(),"), "{pkg}");
-}
-
-#[test]
-fn strip_accessor_prefix_cases() {
-    use crate::api::core::unfold::strip_accessor_prefix;
-    // Regular snake: ZSample → z_sample_.
-    assert_eq!(
-        strip_accessor_prefix("z_sample_key_expr", "ZSample"),
-        "key_expr"
-    );
-    // Irregular snake: type ZKeyExpr but prefix z_keyexpr_ — the
-    // normalized (underscore-free) comparison still matches.
-    assert_eq!(
-        strip_accessor_prefix("z_keyexpr_as_str", "ZKeyExpr"),
-        "as_str"
-    );
-    // Double-letter type short: ZZBytes → z_zbytes_.
-    assert_eq!(
-        strip_accessor_prefix("z_zbytes_to_bytes", "ZZBytes"),
-        "to_bytes"
-    );
-    // Receiver mismatch: falls back to stripping a bare `z_`.
-    assert_eq!(strip_accessor_prefix("z_error_code", "Foo"), "error_code");
-    // No type prefix, no z_: kept whole.
-    assert_eq!(strip_accessor_prefix("get_name", "Foo"), "get_name");
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -943,11 +918,11 @@ fn named_error_deconstructor_gets_own_handler() {
         .package("errors")
         .ptr_class(syn::parse_quote!(ZErr))
         // Canonical error decomposition: message only.
-        .ptr_class_output(syn::parse_quote!(z_err_message))
+        .ptr_class_output(syn::parse_quote!(z_err_message), "message")
         // Named alternative: message + code.
         .ptr_class_deconstructor("full")
-        .ptr_class_output(syn::parse_quote!(z_err_message))
-        .ptr_class_output(syn::parse_quote!(z_err_code))
+        .ptr_class_output(syn::parse_quote!(z_err_message), "message")
+        .ptr_class_output(syn::parse_quote!(z_err_code), "code")
         .package_fun(syn::parse_quote!(z_err_message)).accessor()
         .package_fun(syn::parse_quote!(z_err_code)).accessor()
         .package_fun(syn::parse_quote!(z_simple))
@@ -1036,17 +1011,19 @@ fn inline_output_gets_own_builder() {
         .package("thing")
         .ptr_class(syn::parse_quote!(ZThing))
         // Canonical output: name + size (2 leaves ⇒ builder callback).
-        .ptr_class_output(syn::parse_quote!(z_thing_name))
-        .ptr_class_output(syn::parse_quote!(z_thing_size))
+        .ptr_class_output(syn::parse_quote!(z_thing_name), "name")
+        .ptr_class_output(syn::parse_quote!(z_thing_size), "size")
         .package_fun(syn::parse_quote!(z_thing_name)).accessor()
         .package_fun(syn::parse_quote!(z_thing_size)).accessor()
         .package_fun(syn::parse_quote!(z_make_a))
-        // Per-fn inline records: identity handle + name (different shape).
+        // Per-fn inline records: identity handle + name (different shape). The
+        // third record reuses the `z_thing_name` accessor but must carry a
+        // distinct (literal) leaf name — duplicate names are a hard error.
         .package_fun(syn::parse_quote!(z_make_b))
         .output([
-            syn::parse_quote!(z_thing_name),
-            syn::parse_quote!(z_thing_size),
-            syn::parse_quote!(z_thing_name),
+            (syn::parse_quote!(z_thing_name), "name"),
+            (syn::parse_quote!(z_thing_size), "size"),
+            (syn::parse_quote!(z_thing_name), "name2"),
         ]);
 
     let dir = unique_snapshot_dir("jnigen_inline_out");
@@ -1121,14 +1098,14 @@ fn error_unwrap_universal_records() {
         .package_prefix("io.test.jni")
         .package("errors")
         .ptr_class(syn::parse_quote!(ZDetail))
-        .ptr_class_output(syn::parse_quote!(z_detail_code))
+        .ptr_class_output(syn::parse_quote!(z_detail_code), "code")
         .package_fun(syn::parse_quote!(z_detail_code)).accessor()
         .ptr_class(syn::parse_quote!(ZErr))
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_err_message))
-        .ptr_class_output(syn::parse_quote!(z_err_detail))
+        .ptr_class_output(syn::parse_quote!(z_err_message), "message")
+        .ptr_class_output(syn::parse_quote!(z_err_detail), "detail")
         .package_fun(syn::parse_quote!(z_err_message)).accessor()
         .package_fun(syn::parse_quote!(z_err_detail)).accessor()
         .package_fun(syn::parse_quote!(z_fallible));
@@ -1176,7 +1153,7 @@ fn error_unwrap_universal_records() {
     // Builder-typed handler interface.
     assert!(
         all.contains(
-            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:ZErr,message:String,detailCode:Int?):R"
+            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:ZErr,message:String,detail__code:Int?):R"
         ),
         "{all}"
     );
@@ -1184,7 +1161,7 @@ fn error_unwrap_universal_records() {
     // on redispatch.
     assert!(
         all.contains(
-            "funinterfaceZErrHandlerRaw<outR>{publicfunrun(je:String?,handle:Long,message:String,detailCode:Int?):R"
+            "funinterfaceZErrHandlerRaw<outR>{publicfunrun(je:String?,handle:Long,message:String,detail__code:Int?):R"
         ),
         "{all}"
     );

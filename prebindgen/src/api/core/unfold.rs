@@ -28,7 +28,7 @@ use std::collections::HashSet;
 
 use crate::api::core::{
     registry::{Registry, TypeKey},
-    types_util::{option_inner_type, result_err_type, short_type_name, vec_inner_type},
+    types_util::{option_inner_type, result_err_type, vec_inner_type},
 };
 
 mod error;
@@ -47,8 +47,10 @@ pub use self::{
 /// record contributes a leaf.
 #[derive(Clone)]
 enum DeconRecord {
-    /// Read this field by calling the accessor function `f(&T) -> &F`.
-    Acc(syn::Ident),
+    /// Read this field by calling the accessor function `f(&T) -> &F`. `name`
+    /// is the author-supplied leaf name, used **literally** (no casing /
+    /// stripping); it may not contain the reserved `"__"` chain separator.
+    Acc { func: syn::Ident, name: String },
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
     /// moved for an owned `T`, copied for a `Copy` value_blob). At most one per
     /// deconstructor.
@@ -56,8 +58,9 @@ enum DeconRecord {
     /// Splice in another type's deconstructor via the accessor function
     /// `f(&T) -> &Child` (or `-> Option<&Child>`): the child type's records are
     /// flattened with the access path prefixed by `f` (and marked nullable when
-    /// `f` returns `Option`).
-    Nested(syn::Ident),
+    /// `f` returns `Option`). `name` is the author-supplied segment prefix for
+    /// the spliced child leaves, joined with `"__"`; it may not contain `"__"`.
+    Nested { func: syn::Ident, name: String },
 }
 
 #[derive(Clone)]
@@ -224,14 +227,14 @@ impl Deconstructors {
         self.skip_error.insert(func);
     }
 
-    /// `.converter(target, func)` — a single-value deconstructor: one accessor
-    /// record `func` (`f(&target) -> F`). Sugar for `.deconstructor(target)` +
-    /// `.deconstructor_record(func)`; usable via `.convert_output`/`.convert_error`
-    /// and as a nested record source. Leaves the cursor on it so `.default()` can
-    /// chain.
-    pub fn add_converter(&mut self, target: syn::Type, func: syn::Ident) {
+    /// `.converter(target, func, name)` — a single-value deconstructor: one
+    /// accessor record `func` (`f(&target) -> F`) named `name`. Sugar for
+    /// `.deconstructor(target)` + `.deconstructor_record(func, name)`; usable via
+    /// `.convert_output`/`.convert_error` and as a nested record source. Leaves
+    /// the cursor on it so `.default()` can chain.
+    pub fn add_converter(&mut self, target: syn::Type, func: syn::Ident, name: impl Into<String>) {
         self.add_deconstructor(target);
-        self.add_deconstructor_record(func);
+        self.add_deconstructor_record(func, name);
     }
 
     /// `.deconstructor_name(name)` — name the current deconstructor so it can be
@@ -243,12 +246,16 @@ impl Deconstructors {
         self.deconstructors[i].name = Some(name.into());
     }
 
-    /// `.deconstructor_record(func)` — add an accessor-function record.
-    pub fn add_deconstructor_record(&mut self, func: syn::Ident) {
+    /// `.deconstructor_record(func, name)` — add an accessor-function record
+    /// with the author-supplied (literal) leaf `name`.
+    pub fn add_deconstructor_record(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
             .cur_deconstructor
             .expect(".deconstructor_record called without a current .deconstructor");
-        self.deconstructors[i].records.push(DeconRecord::Acc(func));
+        self.deconstructors[i].records.push(DeconRecord::Acc {
+            func,
+            name: name.into(),
+        });
     }
 
     /// `.deconstructor_record_id()` — add the identity record (the value
@@ -260,17 +267,18 @@ impl Deconstructors {
         self.deconstructors[i].records.push(DeconRecord::Identity);
     }
 
-    /// `.deconstructor_record_nested(func)` — splice another type's
+    /// `.deconstructor_record_nested(func, name)` — splice another type's
     /// deconstructor via the accessor `func` (`f(&T) -> &Child` or
     /// `-> Option<&Child>`); `Child`'s records are flattened with the access
-    /// path prefixed by `func`.
-    pub fn add_deconstructor_record_nested(&mut self, func: syn::Ident) {
+    /// path prefixed by `func` and the leaf names prefixed by `name__`.
+    pub fn add_deconstructor_record_nested(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
             .cur_deconstructor
             .expect(".deconstructor_record_nested called without a current .deconstructor");
-        self.deconstructors[i]
-            .records
-            .push(DeconRecord::Nested(func));
+        self.deconstructors[i].records.push(DeconRecord::Nested {
+            func,
+            name: name.into(),
+        });
     }
 
     fn push_output(
@@ -300,11 +308,15 @@ impl Deconstructors {
         );
     }
 
-    /// `.fun_output(funcs)` — per-fn override: decompose the return via exactly
-    /// these accessor-fn records (each unwrapped per its return type's canonical
-    /// output). Recorded as an explicit decl so the auto-`default` skips it.
-    pub fn add_output_inline(&mut self, func: syn::Ident, funcs: Vec<syn::Ident>) {
-        let records = funcs.into_iter().map(DeconRecord::Acc).collect();
+    /// `.fun_output(records)` — per-fn override: decompose the return via exactly
+    /// these `(accessor-fn, leaf-name)` records (each unwrapped per its return
+    /// type's canonical output). Recorded as an explicit decl so the
+    /// auto-`default` skips it.
+    pub fn add_output_inline(&mut self, func: syn::Ident, funcs: Vec<(syn::Ident, String)>) {
+        let records = funcs
+            .into_iter()
+            .map(|(func, name)| DeconRecord::Acc { func, name })
+            .collect();
         self.push_output(
             func,
             DeconSel::Inline(records),
@@ -420,10 +432,17 @@ pub fn apply<M>(
     // be a `.fun_accessor` (the single source of truth for "accessor").
     for d in &acc.deconstructors {
         for rec in &d.records {
-            let func = match rec {
-                DeconRecord::Acc(f) | DeconRecord::Nested(f) => f,
+            let (func, name) = match rec {
+                DeconRecord::Acc { func, name } | DeconRecord::Nested { func, name } => {
+                    (func, name)
+                }
                 DeconRecord::Identity => continue,
             };
+            // `"__"` is the reserved nesting/chain separator — author leaf names
+            // must not contain it.
+            if name.contains("__") {
+                return Err(UnfoldError::ReservedSeparator { name: name.clone() });
+            }
             if !accessor_fns.contains(func) {
                 return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
             }
@@ -771,6 +790,7 @@ fn register_decon_spec<M>(
         &mut visited,
         &mut leaves,
     )?;
+    require_unique_leaf_names(source, &leaves)?;
     registry.decon_plans.insert(
         decon.clone(),
         DeconSpec {
@@ -881,6 +901,7 @@ fn build_plan<M>(
         &mut visited,
         &mut leaves,
     )?;
+    require_unique_leaf_names(source, &leaves)?;
 
     Ok(UnfoldPlan {
         source: source.clone(),
@@ -924,14 +945,11 @@ fn flatten<M>(
     leaves: &mut Vec<UnfoldLeaf>,
 ) -> Result<(), UnfoldError> {
     let source_key = TypeKey::from_type(source);
-    // Receiver short name for display-name stripping — the records at this
-    // level belong to `source` (enforced per accessor by `check_takes`).
-    let receiver_short = short_type_name(source);
-    // The stripped display segment of accessor `func` at this level, appended
-    // to the inherited prefix.
-    let seg_name = |func: &syn::Ident| -> Vec<String> {
+    // The author-supplied (literal) leaf-name segment at this level, appended
+    // to the inherited chain prefix. Segments are joined with `"__"`.
+    let seg_name = |name: &str| -> Vec<String> {
         let mut v = name_prefix.to_vec();
-        v.push(strip_accessor_prefix(&func.to_string(), &receiver_short));
+        v.push(name.to_string());
         v
     };
     // Identity uniqueness is per accessor (one move/clone of the value
@@ -960,7 +978,7 @@ fn flatten<M>(
                     name: if path_prefix.is_empty() {
                         "handle".to_string()
                     } else {
-                        name_prefix.join("_")
+                        name_prefix.join("__")
                     },
                     path: path_prefix.to_vec(),
                     out_ty,
@@ -968,7 +986,7 @@ fn flatten<M>(
                     nullable,
                 });
             }
-            DeconRecord::Acc(func) => {
+            DeconRecord::Acc { func, name } => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
                 // Canonical unwrap: if the return type has its own deconstructor,
@@ -1003,7 +1021,7 @@ fn flatten<M>(
                         &child_records,
                         &child_ty,
                         &child_path,
-                        &seg_name(func),
+                        &seg_name(name),
                         by_ref,
                         nullable || opt,
                         visited,
@@ -1015,7 +1033,7 @@ fn flatten<M>(
                     let mut path = path_prefix.to_vec();
                     path.push(func.clone());
                     leaves.push(UnfoldLeaf {
-                        name: seg_name(func).join("_"),
+                        name: seg_name(name).join("__"),
                         path,
                         out_ty: ret,
                         identity: false,
@@ -1023,7 +1041,7 @@ fn flatten<M>(
                     });
                 }
             }
-            DeconRecord::Nested(func) => {
+            DeconRecord::Nested { func, name } => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
                 // Peel an `Option` (nested value may be absent) then a leading
@@ -1058,7 +1076,7 @@ fn flatten<M>(
                     &child_records,
                     &child_ty,
                     &child_path,
-                    &seg_name(func),
+                    &seg_name(name),
                     by_ref,
                     nullable || opt,
                     visited,
@@ -1073,34 +1091,23 @@ fn flatten<M>(
     Ok(())
 }
 
-/// Strip an accessor ident's receiver-type prefix for display naming:
-/// `z_sample_key_expr` with receiver `ZSample` → `key_expr`. The comparison
-/// is normalized — lowercased with underscores removed — so irregular snake
-/// forms (`z_keyexpr_` vs the type `ZKeyExpr`) still match. Falls back to
-/// stripping a bare `z_` prefix, then to the full ident.
-pub fn strip_accessor_prefix(accessor: &str, receiver_short: &str) -> String {
-    let norm_ty: String = receiver_short.to_lowercase().replace('_', "");
-    let norm_fn: String = accessor.replace('_', "").to_lowercase();
-    if !norm_ty.is_empty() && norm_fn.starts_with(&norm_ty) {
-        // Cut `norm_ty.len()` alphanumeric chars off the original ident
-        // (underscores don't count), then trim separator underscores.
-        let mut consumed = 0usize;
-        let mut idx = accessor.len();
-        for (i, c) in accessor.char_indices() {
-            if consumed == norm_ty.len() {
-                idx = i;
-                break;
-            }
-            if c != '_' {
-                consumed += 1;
-            }
-        }
-        let rest = accessor[idx..].trim_start_matches('_');
-        if !rest.is_empty() {
-            return rest.to_string();
+/// Error if two leaves of one flattened deconstructor share a name. Author leaf
+/// names are explicit and emitted literally, so a collision is a declaration
+/// bug — never auto-resolved.
+fn require_unique_leaf_names(
+    source: &syn::Type,
+    leaves: &[UnfoldLeaf],
+) -> Result<(), UnfoldError> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    for l in leaves {
+        if !seen.insert(l.name.as_str()) {
+            return Err(UnfoldError::DuplicateLeafName {
+                target: TypeKey::from_type(source).to_string(),
+                name: l.name.clone(),
+            });
         }
     }
-    accessor.strip_prefix("z_").unwrap_or(accessor).to_string()
+    Ok(())
 }
 
 /// Make a signature's name list unique: a duplicate gets a numeric suffix
@@ -1232,7 +1239,7 @@ mod tests {
         ]);
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
-        acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
         acc.add_deconstruct_output(ident("z_sample_timestamp"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
@@ -1267,7 +1274,7 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.add_deconstruct_output(ident("z_sample_key_expr"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
@@ -1323,7 +1330,7 @@ mod tests {
         ]);
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
-        acc.add_deconstructor_record(ident("wrong"));
+        acc.add_deconstructor_record(ident("wrong"), "wrong");
         acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::AccessorTargetMismatch { .. }));
@@ -1351,7 +1358,7 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.add_deconstruct_output(ident("z_foo"));
         // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
         let err = apply(&mut reg, &acc, &Default::default(), &Default::default()).unwrap_err();
@@ -1360,6 +1367,39 @@ mod tests {
         let accset: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &Default::default(), &accset).expect("gate passes");
+    }
+
+    #[test]
+    fn duplicate_leaf_name_errors() {
+        // Two records of one deconstructor given the same literal name ⇒ hard
+        // error (names are emitted verbatim; never auto-disambiguated).
+        let mut reg = reg_with(&[
+            "fn z_foo() -> ZSample { todo!() }",
+            "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
+            "fn z_sample_payload(s: &ZSample) -> Vec<u8> { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_key_expr"), "field");
+        acc.add_deconstructor_record(ident("z_sample_payload"), "field");
+        acc.add_deconstruct_output(ident("z_foo"));
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        assert!(matches!(err, UnfoldError::DuplicateLeafName { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn reserved_separator_in_name_errors() {
+        // A record name containing the reserved `"__"` chain separator ⇒ error.
+        let mut reg = reg_with(&[
+            "fn z_foo() -> ZSample { todo!() }",
+            "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_key_expr"), "key__expr");
+        acc.add_deconstruct_output(ident("z_foo"));
+        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        assert!(matches!(err, UnfoldError::ReservedSeparator { .. }), "{err:?}");
     }
 
     #[test]
@@ -1382,17 +1422,17 @@ mod tests {
         // Child accessors (reused via nesting).
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.add_deconstructor(syn::parse_quote!(ZZBytes));
-        acc.add_deconstructor_record(ident("z_zbytes_to_bytes"));
+        acc.add_deconstructor_record(ident("z_zbytes_to_bytes"), "z_zbytes_to_bytes");
         acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
-        acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
         // Parent accessor with nested + direct records.
         acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"));
-        acc.add_deconstructor_record_nested(ident("z_sample_payload"));
-        acc.add_deconstructor_record(ident("z_sample_kind"));
-        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.add_deconstructor_record_nested(ident("z_sample_payload"), "z_sample_payload");
+        acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
+        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"), "z_sample_timestamp");
         acc.add_deconstruct_output(ident("z_reply_sample"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
@@ -1458,21 +1498,21 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
-        acc.add_deconstructor_record(ident("z_timestamp_ntp64"));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
         acc.add_deconstructor(syn::parse_quote!(ZZBytes));
-        acc.add_deconstructor_record(ident("z_zbytes_to_bytes"));
+        acc.add_deconstructor_record(ident("z_zbytes_to_bytes"), "z_zbytes_to_bytes");
         acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"));
-        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"), "z_sample_timestamp");
         acc.add_deconstructor(syn::parse_quote!(ZReplyError));
-        acc.add_deconstructor_record_nested(ident("z_reply_error_payload"));
+        acc.add_deconstructor_record_nested(ident("z_reply_error_payload"), "z_reply_error_payload");
         acc.add_deconstructor(syn::parse_quote!(ZReply));
-        acc.add_deconstructor_record(ident("z_reply_replier_zid"));
-        acc.add_deconstructor_record(ident("z_reply_is_ok"));
-        acc.add_deconstructor_record_nested(ident("z_reply_sample"));
-        acc.add_deconstructor_record_nested(ident("z_reply_err"));
+        acc.add_deconstructor_record(ident("z_reply_replier_zid"), "z_reply_replier_zid");
+        acc.add_deconstructor_record(ident("z_reply_is_ok"), "z_reply_is_ok");
+        acc.add_deconstructor_record_nested(ident("z_reply_sample"), "z_reply_sample");
+        acc.add_deconstructor_record_nested(ident("z_reply_err"), "z_reply_err");
         acc.add_deconstruct_output(ident("z_recv_reply"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
@@ -1533,9 +1573,9 @@ mod tests {
         ]);
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZA));
-        acc.add_deconstructor_record_nested(ident("a_to_b"));
+        acc.add_deconstructor_record_nested(ident("a_to_b"), "a_to_b");
         acc.add_deconstructor(syn::parse_quote!(ZB));
-        acc.add_deconstructor_record_nested(ident("b_to_a"));
+        acc.add_deconstructor_record_nested(ident("b_to_a"), "b_to_a");
         acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
         assert!(matches!(err, UnfoldError::Cycle { .. }));
@@ -1587,7 +1627,7 @@ mod tests {
         ]);
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZZenohId));
-        acc.add_deconstructor_record(ident("z_zenoh_id_to_string"));
+        acc.add_deconstructor_record(ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
         acc.add_deconstructor_record_id();
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
@@ -1624,7 +1664,7 @@ mod tests {
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZTimestamp), ident("z_timestamp_ntp64"));
+        acc.add_converter(syn::parse_quote!(ZTimestamp), ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
         acc.add_convert_output(ident("z_sample_timestamp"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
@@ -1657,7 +1697,7 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.add_deconstruct_output(ident("z_sample_key_expr"));
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg
@@ -1677,7 +1717,7 @@ mod tests {
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"));
+        acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg
@@ -1699,7 +1739,7 @@ mod tests {
             "fn z_infallible(s: &ZSample) -> bool { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"));
+        acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"), "z_error_message");
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_try_from", "z_infallible"]
@@ -1741,7 +1781,7 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.set_default();
         // Only the record fn is an accessor; the two return fns are plain.
         let accset: std::collections::HashSet<syn::Ident> =
@@ -1770,7 +1810,7 @@ mod tests {
             "fn z_error_message(e: &ZError) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"));
+        acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"), "z_error_message");
         acc.set_default();
         acc.add_skip_default_error(ident("z_fallible"));
         let declared: std::collections::HashSet<syn::Ident> =
@@ -1793,10 +1833,10 @@ mod tests {
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor_record(ident("z_keyexpr_as_str"));
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
         acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"));
-        acc.add_deconstructor_record(ident("z_sample_kind"));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_declare_sub"].iter().map(|s| ident(s)).collect();
@@ -1871,7 +1911,7 @@ mod tests {
         ]);
         let mut acc = Deconstructors::default();
         acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record(ident("z_sample_kind"));
+        acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_batched"].iter().map(|s| ident(s)).collect();

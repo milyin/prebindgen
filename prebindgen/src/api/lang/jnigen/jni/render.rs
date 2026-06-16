@@ -1245,18 +1245,15 @@ pub(crate) fn unfold_leaf_kt(
     Some((builder_kt, wire_kt, wrap, is_vb))
 }
 
-/// Kotlin parameter names for a plan's delivered leaves, in leaf order: the
-/// core-derived raw display name ([`UnfoldLeaf::name`] — receiver-stripped
-/// accessor path, `handle` for a root identity) put through [`kt_param_name`]
-/// (camelCase + keyword escape). Run [`crate::api::core::unfold::dedup_names`]
-/// over the final per-signature list.
+/// Kotlin parameter names for a plan's delivered leaves, in leaf order. The
+/// names are the author-supplied [`UnfoldLeaf::name`]s (`handle` for a root
+/// identity), emitted **verbatim** — no casing/keyword escaping (the author
+/// writes valid Kotlin identifiers) and no dedup (uniqueness is enforced in
+/// `core::unfold`).
 ///
 /// [`UnfoldLeaf::name`]: crate::api::core::unfold::UnfoldLeaf::name
 pub(crate) fn plan_leaf_names(leaves: &[crate::api::core::unfold::UnfoldLeaf]) -> Vec<String> {
-    leaves
-        .iter()
-        .map(|leaf| kt_param_name(&leaf.name))
-        .collect()
+    leaves.iter().map(|leaf| leaf.name.clone()).collect()
 }
 
 /// Lambda parameter name for a whole-value (plan-less) callback arg: the
