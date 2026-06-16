@@ -124,6 +124,10 @@ pub struct Deconstructors {
     /// Cursor for the deconstructor builder (`.deconstructor_record*` /
     /// `.default`).
     cur_deconstructor: Option<usize>,
+    /// Cursor for an in-progress per-fn inline output flatten
+    /// (`.flatten_output_with()` → `.field`/`.field_self`): index into
+    /// [`Self::outputs`].
+    cur_output: Option<usize>,
     /// `.skip_default_*` opt-outs: fns excluded from a `.default()` auto-apply.
     skip_output: std::collections::HashSet<syn::Ident>,
     skip_error: std::collections::HashSet<syn::Ident>,
@@ -144,7 +148,7 @@ impl Deconstructors {
     /// `.deconstructor_name(name)` — name the cursor declaration so per-fn
     /// `_with(name)` selectors can pick it. A named declaration is an
     /// *alternative* decomposition of its target type; the type's bare
-    /// (unnamed) declaration stays the canonical one. Panics without a live
+    /// (unnamed) declaration stays the default one. Panics without a live
     /// deconstructor cursor.
     pub fn add_deconstructor_name(&mut self, name: impl Into<String>) {
         let i = self
@@ -182,13 +186,13 @@ impl Deconstructors {
         self.deconstructors[i].default = Some((DeconTarget::Output, Delivery::Callback));
     }
 
-    /// Find-or-create the canonical (always-`default`) deconstructor for `target`
-    /// and set the cursor to it. Idempotent across a `.ptr_class_output*` chain.
+    /// Find-or-create the default (always-`default`) deconstructor for `target`
+    /// and set the cursor to it. Idempotent across a `.flatten_output()` chain.
     /// Delivery is derived from leaf count at emit time (1 ⇒ return, N ⇒ callback),
     /// so the stored `Delivery` is just a marker.
-    pub fn ensure_canonical_deconstructor(&mut self, target: syn::Type) {
+    pub fn ensure_default_deconstructor(&mut self, target: syn::Type) {
         let key = TypeKey::from_type(&target);
-        // Already building a deconstructor of this type — canonical OR a
+        // Already building a deconstructor of this type — default OR a
         // named alternative begun via `add_deconstructor` +
         // `add_deconstructor_name` — keep the cursor so records append to it.
         if let Some(i) = self.cur_deconstructor {
@@ -196,8 +200,8 @@ impl Deconstructors {
                 return;
             }
         }
-        // Only the UNNAMED declaration is the canonical one; named
-        // alternatives of the same type must not receive canonical records.
+        // Only the UNNAMED declaration is the default one; named
+        // alternatives of the same type must not receive default records.
         if let Some(i) = self
             .deconstructors
             .iter()
@@ -295,6 +299,7 @@ impl Deconstructors {
             delivery,
         });
         self.cur_deconstructor = None;
+        self.cur_output = None;
     }
 
     /// `.deconstruct_output()` — decompose the fn's return value and deliver the
@@ -310,7 +315,7 @@ impl Deconstructors {
 
     /// `.fun_output(records)` — per-fn override: decompose the return via exactly
     /// these `(accessor-fn, leaf-name)` records (each unwrapped per its return
-    /// type's canonical output). Recorded as an explicit decl so the
+    /// type's default output). Recorded as an explicit decl so the
     /// auto-`default` skips it.
     pub fn add_output_inline(&mut self, func: syn::Ident, funcs: Vec<(syn::Ident, String)>) {
         let records = funcs
@@ -323,6 +328,47 @@ impl Deconstructors {
             DeconTarget::Output,
             Delivery::Callback,
         );
+    }
+
+    /// Begin a per-fn inline output flatten (`.flatten_output_with()`):
+    /// decompose `func`'s return via an incrementally-built record list
+    /// (accessor fields via [`Self::push_inline_field`] and/or the identity/self
+    /// field via [`Self::push_inline_field_self`]). Recorded as an explicit decl
+    /// so the auto-`default` skips it, and leaves the output cursor on it.
+    pub fn begin_inline_output(&mut self, func: syn::Ident) {
+        self.outputs.push(OutputDecl {
+            func,
+            sel: DeconSel::Inline(Vec::new()),
+            target: DeconTarget::Output,
+            delivery: Delivery::Callback,
+        });
+        self.cur_deconstructor = None;
+        self.cur_output = Some(self.outputs.len() - 1);
+    }
+
+    /// `.field(fn, name)` inside `.flatten_output_with()` — append an
+    /// accessor-function field (named `name`) to the current per-fn inline output.
+    pub fn push_inline_field(&mut self, func: syn::Ident, name: impl Into<String>) {
+        let i = self
+            .cur_output
+            .expect(".field called without a current .flatten_output_with");
+        if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
+            records.push(DeconRecord::Acc {
+                func,
+                name: name.into(),
+            });
+        }
+    }
+
+    /// `.field_self()` inside `.flatten_output_with()` — append the identity
+    /// (the handle itself) field to the current per-fn inline output.
+    pub fn push_inline_field_self(&mut self) {
+        let i = self
+            .cur_output
+            .expect(".field_self called without a current .flatten_output_with");
+        if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
+            records.push(DeconRecord::Identity);
+        }
     }
 
     /// `.deconstruct_output_with(name)` — by named deconstructor.
@@ -457,7 +503,7 @@ pub fn apply<M>(
         done.insert((ed.func.clone(), ed.target));
     }
 
-    // Canonical auto-apply: a type's deconstructor (`.ptr_class_output*`) is
+    // Default auto-apply: a type's deconstructor (`.flatten_output()`) is
     // applied to every declared fn that returns it (Output) or has it as a
     // `Result<_, E>` error (Error), unless the fn is `fun_accessor` or has a
     // per-fn override. `Delivery` is recomputed from leaf count inside
@@ -523,7 +569,7 @@ pub fn apply<M>(
 
     // Callback-argument decomposition: each `T` of a declared fn's
     // `impl Fn(T, …)` parameter is delivered per `T`'s default deconstructor —
-    // the same canonical output a *return* of `T` would use — so the foreign
+    // the same default output a *return* of `T` would use — so the foreign
     // callback receives the flattened leaves in one crossing instead of a
     // whole value. Plans are type-level (keyed by `T`, fn-independent) with
     // `by_ref = false` (the trampoline owns the value, so a root identity
@@ -599,7 +645,7 @@ fn fn_return(item_fn: &syn::ItemFn) -> syn::Type {
 }
 
 /// True when `ret` is `T` / `&T` / `Option<T|&T>` / `Vec<T|&T>` with
-/// `T == key` — the canonical-output match. `Result<_, _>` is NOT peeled, so a
+/// `T == key` — the default-output match. `Result<_, _>` is NOT peeled, so a
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
 fn returns_type(ret: &syn::Type, key: &TypeKey) -> bool {
@@ -751,15 +797,15 @@ fn process_decl<M>(
 }
 
 /// The identity of a found declaration: `Named` when it carries a name,
-/// `Canonical` otherwise.
+/// `Default` otherwise.
 fn decl_id(type_key: &TypeKey, decl: &DeconstructorDecl) -> DeconId {
     match &decl.name {
         Some(n) => DeconId::Named(type_key.to_string(), n.clone()),
-        None => DeconId::Canonical(type_key.to_string()),
+        None => DeconId::Default(type_key.to_string()),
     }
 }
 
-/// Register the declaration-canonical [`DeconSpec`] for `decon` (no-op when
+/// Register the declaration-default [`DeconSpec`] for `decon` (no-op when
 /// already present): re-flatten the records with normalized inputs —
 /// borrowed identity, no outer shape — so the stored spec is independent of
 /// the using function's return shape and of processing order.
@@ -845,9 +891,9 @@ fn find_deconstructor_by_type<'a>(
     acc: &'a Deconstructors,
     type_key: &TypeKey,
 ) -> Result<&'a DeconstructorDecl, Option<Vec<String>>> {
-    // Only the UNNAMED declaration is the type's canonical decomposition —
+    // Only the UNNAMED declaration is the type's default decomposition —
     // named alternatives are reachable solely via the `_with(name)` selectors
-    // and never shadow the canonical one (so `.default()` auto-apply and
+    // and never shadow the default one (so `.default()` auto-apply and
     // nested-child splicing stay unambiguous when alternatives exist).
     let matches: Vec<&DeconstructorDecl> = acc
         .deconstructors
@@ -989,7 +1035,7 @@ fn flatten<M>(
             DeconRecord::Acc { func, name } => {
                 let (takes, ret) = accessor_signature(registry, func)?;
                 check_takes(func, &takes, source)?;
-                // Canonical unwrap: if the return type has its own deconstructor,
+                // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
                 let (opt, core) = match option_inner_type(&ret) {
@@ -1001,8 +1047,8 @@ fn flatten<M>(
                     other => other.clone(),
                 };
                 let child_key = TypeKey::from_type(&child_ty);
-                let has_canonical = find_deconstructor_by_type(acc, &child_key).is_ok();
-                if has_canonical {
+                let has_default = find_deconstructor_by_type(acc, &child_key).is_ok();
+                if has_default {
                     if !visited.insert(child_key.clone()) {
                         return Err(UnfoldError::Cycle {
                             target: child_key.to_string(),
@@ -1479,7 +1525,7 @@ mod tests {
         // `Option<&Child>` nesting accessors (`z_reply_sample`, `z_reply_err`)
         // whose children themselves contain `Option` nesting steps and a
         // nested identity — the double-unwrap case — plus an
-        // `Option<ZZenohId>` Acc record with NO canonical child, which keeps
+        // `Option<ZZenohId>` Acc record with NO default child, which keeps
         // the full `Option<…>` as its leaf `out_ty` (its own `Option` is the
         // converter's business, not a nesting step ⇒ NOT nullable).
         let mut reg = reg_with(&[
@@ -1769,8 +1815,8 @@ mod tests {
     }
 
     #[test]
-    fn canonical_output_applies_to_owned_and_borrow_returns() {
-        // Canonical-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
+    fn default_output_applies_to_owned_and_borrow_returns() {
+        // Default-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
         // `&ZKeyExpr` (borrow) and an owned `ZKeyExpr` return. (`Result<…>` returns
         // are excluded — they keep a handle — and `fun_accessor`s are skipped.)
         let mut reg = reg_with(&[

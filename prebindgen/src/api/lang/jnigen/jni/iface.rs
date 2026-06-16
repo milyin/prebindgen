@@ -492,7 +492,7 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
         }
     };
     match decon {
-        None | Some(DeconId::Canonical(_)) => short.to_string(),
+        None | Some(DeconId::Default(_)) => short.to_string(),
         Some(DeconId::Named(_, n)) => format!("{short}{}", upper_camel(n)),
         Some(DeconId::PerFn(_, f)) => format!("{short}{}", upper_camel(f)),
     }

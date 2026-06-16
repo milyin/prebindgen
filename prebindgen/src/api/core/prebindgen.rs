@@ -196,6 +196,17 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// `#[prebindgen]` functions declared as **methods** of a class, mapping the
+    /// fn ident to its class's canonical [`TypeKey`]. A method's first parameter
+    /// of that class type is the receiver and is excluded from input-flattening
+    /// (it is bound to `this`); the remaining parameters flatten normally.
+    /// Adapters without the concept return empty.
+    ///
+    /// Default: empty.
+    fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
+        std::collections::HashMap::new()
+    }
+
     /// Idents of `#[prebindgen]` functions the adapter explicitly knows about but
     /// intentionally does not emit. These suppress the registry's
     /// "skipping undeclared" warning while still leaving the items out of the

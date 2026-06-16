@@ -29,7 +29,7 @@ use super::Delivery;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DeconId {
     /// The type's unnamed (top-level / `.default()`-applied) deconstructor.
-    Canonical(String),
+    Default(String),
     /// A named declaration (`.deconstructor_name(name)`), selected per fn
     /// via the `_with(name)` selectors.
     Named(String, String),
@@ -38,7 +38,7 @@ pub enum DeconId {
     PerFn(String, String),
 }
 
-/// The declaration-canonical decomposition of one deconstructor: its leaf
+/// The declaration-default decomposition of one deconstructor: its leaf
 /// list resolved ONCE from the declaration's records with **normalized**
 /// inputs (borrowed identity form, no outer shape), so the content is
 /// independent of which functions use the declaration and in what order.

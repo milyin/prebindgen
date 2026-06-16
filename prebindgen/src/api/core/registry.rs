@@ -202,7 +202,7 @@ pub struct Registry<M = ()> {
     /// [`Self::unfold_plans`] — a fn may have both an output and an error plan.
     pub error_plans: HashMap<syn::Ident, crate::api::core::unfold::UnfoldPlan>,
 
-    /// Canonical decomposition of a **callback argument** type — the `T` of a
+    /// Default decomposition of a **callback argument** type — the `T` of a
     /// declared fn's `impl Fn(T, …)` parameter — keyed by the bare arg type
     /// (type-level, fn-independent). Filled by
     /// [`crate::api::core::unfold::apply`] from the type's default
@@ -211,7 +211,7 @@ pub struct Registry<M = ()> {
     /// a default deconstructor has no entry and is delivered whole.
     pub callback_arg_plans: HashMap<TypeKey, crate::api::core::unfold::UnfoldPlan>,
 
-    /// The declaration-canonical decomposition per deconstructor declaration
+    /// The declaration-default decomposition per deconstructor declaration
     /// ([`crate::api::core::unfold::DeconId`]) — resolved once with
     /// normalized inputs, independent of using functions and processing
     /// order. The single source language adapters derive declaration-keyed
@@ -364,6 +364,7 @@ struct DeclaredItems {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
     accessors: HashSet<syn::Ident>,
+    method_receivers: HashMap<syn::Ident, TypeKey>,
     types: HashSet<TypeKey>,
     ignored_types: HashSet<TypeKey>,
 }
@@ -377,6 +378,7 @@ impl DeclaredItems {
             functions: adapter.declared_functions(),
             ignored_functions: adapter.ignored_functions(),
             accessors: adapter.accessor_functions(),
+            method_receivers: adapter.method_receivers(),
             types: adapter.declared_types(),
             ignored_types: adapter.ignored_types(),
         };
@@ -876,7 +878,13 @@ impl<M> Registry<M> {
         // constructor composition and the only fns a decomposer record may
         // reference.
         if let Some(exp) = ext.expansions() {
-            crate::api::core::expand::apply(self, exp, &declared.functions, &declared.accessors)?;
+            crate::api::core::expand::apply(
+                self,
+                exp,
+                &declared.functions,
+                &declared.accessors,
+                &declared.method_receivers,
+            )?;
         }
         if let Some(dec) = ext.deconstructors() {
             crate::api::core::unfold::apply(self, dec, &declared.functions, &declared.accessors)?;

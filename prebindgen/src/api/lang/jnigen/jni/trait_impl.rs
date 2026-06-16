@@ -780,7 +780,7 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
         Some(&self.deconstructors)
     }
 
-    /// Union of every `.package_fun(...)` list across all
+    /// Union of every `.fun(...)` list across all
     /// [`Self::package`] subpackage contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the
     /// binding; functions not in this set are skipped by the registry's
@@ -792,27 +792,42 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
                 out.insert(m.rust_ident.clone());
             }
         }
-        // Class accessors are declared via `.class_accessor` (not
-        // `.package_fun`) but are still real `#[prebindgen]` wrappers: they need
-        // a Rust extern + JNINative `external fun` + JSONL inclusion. Only their
-        // Kotlin surface differs (an instance method instead of a free fn).
+        // Class members (accessor/method/constructor) are declared via
+        // `.accessor`/`.method`/`.constructor` (not `.fun`) but are still real
+        // `#[prebindgen]` wrappers: they need a Rust extern + JNINative
+        // `external fun` + JSONL inclusion. Only their Kotlin surface differs
+        // (an instance method or companion factory instead of a free fn).
         out.extend(
-            self.class_accessors
+            self.class_members
                 .values()
                 .flatten()
-                .map(|a| a.rust_ident.clone()),
+                .map(|m| m.rust_ident.clone()),
         );
         out
     }
 
-    /// Read accessors declared via [`JniGen::class_accessor`] — emitted as
-    /// class instance methods, excluded from the parameter composer, and the
-    /// only functions a decomposition record may reference.
+    /// Accessor members (`.accessor`) — emitted as class instance methods,
+    /// excluded from input-flattening, and the only functions a flatten field
+    /// may reference.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.class_accessors
+        self.class_members
             .values()
             .flatten()
-            .map(|a| a.rust_ident.clone())
+            .filter(|m| m.kind == MemberKind::Accessor)
+            .map(|m| m.rust_ident.clone())
+            .collect()
+    }
+
+    /// Method members (`.method`) — their fn ident mapped to the owning class's
+    /// `TypeKey`, so input-flattening can skip the receiver parameter.
+    fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
+        self.class_members
+            .iter()
+            .flat_map(|(key, ms)| {
+                ms.iter()
+                    .filter(|m| m.kind == MemberKind::Method)
+                    .map(move |m| (m.rust_ident.clone(), key.clone()))
+            })
             .collect()
     }
 

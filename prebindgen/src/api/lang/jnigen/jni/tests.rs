@@ -346,8 +346,8 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         .ptr_class(syn::parse_quote!(ZThing))
         .enum_class(syn::parse_quote!(Color))
         .package("thing")
-        .package_fun(syn::parse_quote!(z_thing_new))
-        .package_fun(syn::parse_quote!(z_thing_name));
+        .fun(syn::parse_quote!(z_thing_new))
+        .fun(syn::parse_quote!(z_thing_name));
 
     let dir = unique_snapshot_dir("jnigen_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -524,13 +524,13 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .ptr_class(syn::parse_quote!(ZThing))
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
-        .class_accessor(syn::parse_quote!(z_thing_name), "name")
-        .ptr_class_output_direct()
-        .ptr_class_output("name")
+        .accessor(syn::parse_quote!(z_thing_name), "name")
+        .flatten_output().field_self()
+        .flatten_output().field("name")
         // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
         .ptr_class(syn::parse_quote!(ZOther))
-        .package_fun(syn::parse_quote!(z_thing_sub))
-        .package_fun(syn::parse_quote!(z_other_sub));
+        .fun(syn::parse_quote!(z_thing_sub))
+        .fun(syn::parse_quote!(z_other_sub));
 
     let dir = unique_snapshot_dir("jnigen_cb_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -649,10 +649,10 @@ fn callback_snapshot_kotlin_side() {
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
-/// (`.ptr_class_output_direct()`) must emit the root MOVE after every borrow of
+/// (`.flatten_output().field_self()`) must emit the root MOVE after every borrow of
 /// the owned value — otherwise the nested child clone (which borrows the root)
 /// follows `Box::into_raw(Box::new(value))` and fails to compile with "use of
-/// moved value". Declaring `.ptr_class_output_direct()` LAST guarantees the
+/// moved value". Declaring `.flatten_output().field_self()` LAST guarantees the
 /// correct order (the emitter emits identity leaves in declaration order, after
 /// all non-identity leaves). This mirrors the zenoh-flat `ZQuery` queryable
 /// callback (handle + decomposed fields, nested `ZKeyExpr` identity).
@@ -697,15 +697,15 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .package("thing")
         // Child handle: canonical output = identity (clone) + its name string.
         .ptr_class(syn::parse_quote!(ZChild))
-        .class_accessor(syn::parse_quote!(z_child_name), "name")
-        .ptr_class_output_direct()
-        .ptr_class_output("name")
+        .accessor(syn::parse_quote!(z_child_name), "name")
+        .flatten_output().field_self()
+        .flatten_output().field("name")
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .ptr_class(syn::parse_quote!(ZParent))
-        .class_accessor(syn::parse_quote!(z_parent_child), "child")
-        .ptr_class_output("child")
-        .ptr_class_output_direct()
-        .package_fun(syn::parse_quote!(z_parent_sub));
+        .accessor(syn::parse_quote!(z_parent_child), "child")
+        .flatten_output().field("child")
+        .flatten_output().field_self()
+        .fun(syn::parse_quote!(z_parent_sub));
 
     let dir = unique_snapshot_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
@@ -777,30 +777,30 @@ fn callback_double_option_unwrap_pipeline() {
         .package("query")
         .value_class(syn::parse_quote!(ZId))
         .ptr_class(syn::parse_quote!(ZKeyExpr))
-        .class_accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
-        .ptr_class_output_direct()
-        .ptr_class_output("asStr")
+        .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
+        .flatten_output().field_self()
+        .flatten_output().field("asStr")
         .ptr_class(syn::parse_quote!(ZTs))
-        .class_accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
-        .ptr_class_output("ntp64")
+        .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
+        .flatten_output().field("ntp64")
         .ptr_class(syn::parse_quote!(ZSample))
-        .class_accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
-        .class_accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
-        .ptr_class_output("keyExpr")
-        .ptr_class_output("timestamp")
+        .accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
+        .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
+        .flatten_output().field("keyExpr")
+        .flatten_output().field("timestamp")
         .ptr_class(syn::parse_quote!(ZErr))
-        .class_accessor(syn::parse_quote!(z_err_payload), "payload")
-        .ptr_class_output("payload")
+        .accessor(syn::parse_quote!(z_err_payload), "payload")
+        .flatten_output().field("payload")
         .ptr_class(syn::parse_quote!(ZReply))
-        .class_accessor(syn::parse_quote!(z_reply_zid), "zid")
-        .class_accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
-        .class_accessor(syn::parse_quote!(z_reply_sample), "sample")
-        .class_accessor(syn::parse_quote!(z_reply_err), "err")
-        .ptr_class_output("zid")
-        .ptr_class_output("isOk")
-        .ptr_class_output("sample")
-        .ptr_class_output("err")
-        .package_fun(syn::parse_quote!(z_get));
+        .accessor(syn::parse_quote!(z_reply_zid), "zid")
+        .accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
+        .accessor(syn::parse_quote!(z_reply_sample), "sample")
+        .accessor(syn::parse_quote!(z_reply_err), "err")
+        .flatten_output().field("zid")
+        .flatten_output().field("isOk")
+        .flatten_output().field("sample")
+        .flatten_output().field("err")
+        .fun(syn::parse_quote!(z_get));
 
     let dir = unique_snapshot_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
@@ -882,109 +882,14 @@ fn callback_double_option_unwrap_pipeline() {
 
 // ────────────────────────────────────────────────────────────────────────
 // Declaration-keyed interfaces: a type may have several decompositions —
-// the canonical (unnamed) deconstructor, named alternatives
-// (`.ptr_class_deconstructor(name)` + `.*_named`), and per-fn inline records
-// (`.output`). Interface identity follows the DECLARATION, so
+// the default (unnamed) deconstructor and per-fn inline records
+// (`.flatten_output_with`). Interface identity follows the DECLARATION, so
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────
 
-/// Two fns failing with the same error type under different error
-/// decompositions: the canonical (message only) and a named "full"
-/// alternative (message + code). Each fn's extern must carry ITS handler's
-/// FQN + descriptor, and both interfaces must be emitted.
-#[test]
-fn named_error_deconstructor_gets_own_handler() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
-    let fns: &[&str] = &[
-        "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
-        "pub fn z_err_code(e: &ZErr) -> i32 { unimplemented!() }",
-        "pub fn z_simple() -> Result<i64, ZErr> { unimplemented!() }",
-        "pub fn z_detailed() -> Result<i64, ZErr> { unimplemented!() }",
-    ];
-    let items: Vec<(syn::Item, SourceLocation)> = fns
-        .iter()
-        .map(|src| {
-            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
-            (syn::Item::Fn(f), loc.clone())
-        })
-        .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("errors")
-        .ptr_class(syn::parse_quote!(ZErr))
-        .class_accessor(syn::parse_quote!(z_err_message), "message")
-        .class_accessor(syn::parse_quote!(z_err_code), "code")
-        // Canonical error decomposition: message only.
-        .ptr_class_output("message")
-        // Named alternative: message + code.
-        .ptr_class_deconstructor("full")
-        .ptr_class_output("message")
-        .ptr_class_output("code")
-        .package_fun(syn::parse_quote!(z_simple))
-        .package_fun(syn::parse_quote!(z_detailed))
-        .error_named("full");
-
-    let dir = unique_snapshot_dir("jnigen_named_err");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
-    let rust = std::fs::read_to_string(&rust_path).unwrap();
-    let rc: String = rust.split_whitespace().collect();
-
-    // Each extern's sink statics name its OWN handler interface + descriptor.
-    assert!(rc.contains("io/test/jni/errors/ZErrHandler"), "{rust}");
-    assert!(rc.contains("io/test/jni/errors/ZErrFullHandler"), "{rust}");
-    // Builder-typed ze: canonical = (je, message: String); full adds the raw
-    // `I` code (non-null Int crosses as a raw primitive, like a builder leaf).
-    assert!(
-        rc.contains("\"(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;\""),
-        "{rust}"
-    );
-    assert!(
-        rc.contains("\"(Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/Object;\""),
-        "{rust}"
-    );
-
-    let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
-    let all: String = paths
-        .iter()
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .collect::<Vec<_>>()
-        .join("\n")
-        .split_whitespace()
-        .collect();
-    // Both interfaces emitted; the full one carries the extra nullable code.
-    assert!(
-        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(je:String?,message:String):R"),
-        "{all}"
-    );
-    assert!(
-        all.contains(
-            "funinterfaceZErrFullHandler<outR>{publicfunrun(je:String?,message:String,code:Int):R"
-        ),
-        "{all}"
-    );
-    // Wrappers take their own handler types.
-    assert!(
-        all.contains("funzSimple(onError:ZErrHandler<Long>)"),
-        "{all}"
-    );
-    assert!(
-        all.contains("funzDetailed(onError:ZErrFullHandler<Long>)"),
-        "{all}"
-    );
-}
-
 /// Two fns returning the same type under different output decompositions:
-/// the canonical one and a per-fn `.output(...)` inline record list.
+/// the default one and a per-fn `.flatten_output_with(...)` inline field list.
 /// Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
@@ -1010,21 +915,19 @@ fn inline_output_gets_own_builder() {
         .package_prefix("io.test.jni")
         .package("thing")
         .ptr_class(syn::parse_quote!(ZThing))
-        .class_accessor(syn::parse_quote!(z_thing_name), "name")
-        .class_accessor(syn::parse_quote!(z_thing_size), "size")
-        // Canonical output: name + size (2 leaves ⇒ builder callback).
-        .ptr_class_output("name")
-        .ptr_class_output("size")
-        .package_fun(syn::parse_quote!(z_make_a))
-        // Per-fn inline records: identity handle + name (different shape). The
-        // third record reuses the `z_thing_name` accessor but must carry a
+        .accessor(syn::parse_quote!(z_thing_name), "name")
+        .accessor(syn::parse_quote!(z_thing_size), "size")
+        // Default output: name + size (2 leaves ⇒ builder callback).
+        .flatten_output().field("name").field("size")
+        .fun(syn::parse_quote!(z_make_a))
+        // Per-fn inline fields: name + size + name again (different shape). The
+        // third field reuses the `z_thing_name` accessor but must carry a
         // distinct (literal) leaf name — duplicate names are a hard error.
-        .package_fun(syn::parse_quote!(z_make_b))
-        .output([
-            (syn::parse_quote!(z_thing_name), "name"),
-            (syn::parse_quote!(z_thing_size), "size"),
-            (syn::parse_quote!(z_thing_name), "name2"),
-        ]);
+        .fun(syn::parse_quote!(z_make_b))
+        .flatten_output_with()
+        .field(syn::parse_quote!(z_thing_name), "name")
+        .field(syn::parse_quote!(z_thing_size), "size")
+        .field(syn::parse_quote!(z_thing_name), "name2");
 
     let dir = unique_snapshot_dir("jnigen_inline_out");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1098,17 +1001,17 @@ fn error_unwrap_universal_records() {
         .package_prefix("io.test.jni")
         .package("errors")
         .ptr_class(syn::parse_quote!(ZDetail))
-        .class_accessor(syn::parse_quote!(z_detail_code), "code")
-        .ptr_class_output("code")
+        .accessor(syn::parse_quote!(z_detail_code), "code")
+        .flatten_output().field("code")
         .ptr_class(syn::parse_quote!(ZErr))
-        .class_accessor(syn::parse_quote!(z_err_message), "message")
-        .class_accessor(syn::parse_quote!(z_err_detail), "detail")
+        .accessor(syn::parse_quote!(z_err_message), "message")
+        .accessor(syn::parse_quote!(z_err_detail), "detail")
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
-        .ptr_class_output_direct()
-        .ptr_class_output("message")
-        .ptr_class_output("detail")
-        .package_fun(syn::parse_quote!(z_fallible));
+        .flatten_output().field_self()
+        .flatten_output().field("message")
+        .flatten_output().field("detail")
+        .fun(syn::parse_quote!(z_fallible));
 
     let dir = unique_snapshot_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1185,17 +1088,87 @@ fn error_unwrap_universal_records() {
     assert!(!all.contains("?:\"\""), "{all}");
 }
 
-/// `.ptr_class_output(name)` must reference a `.class_accessor` declared on the
-/// same class; an unknown method name is a loud build-script panic.
+/// `.flatten_output().field(name)` must reference an `.accessor` declared on the
+/// same class; an unknown name is a loud build-script panic.
 #[test]
-#[should_panic(expected = "no `.class_accessor")]
-fn ptr_class_output_unknown_accessor_panics() {
+#[should_panic(expected = "no `.accessor")]
+fn flatten_output_field_unknown_accessor_panics() {
     let _ = JniGen::new()
         .source_module(syn::parse_quote!(myflat))
         .package_prefix("io.test.jni")
         .package("thing")
         .ptr_class(syn::parse_quote!(ZThing))
-        .class_accessor(syn::parse_quote!(z_thing_name), "name")
-        // References a name that was never declared via `.class_accessor`.
-        .ptr_class_output("size");
+        .accessor(syn::parse_quote!(z_thing_name), "name")
+        // References a name that was never declared via `.accessor`.
+        .flatten_output().field("size");
+}
+
+/// `.method(f, name)` binds the `&Class` receiver to `this` (dropped from the
+/// signature, its handle locked) while keeping the non-receiver params; the
+/// method delegates to the same `JNINative` extern. `.constructor(f, name)`
+/// emits a companion-object factory returning the class. Per-fn
+/// `.flatten_output_with().field_self()` emits the handle leaf.
+#[test]
+fn method_constructor_and_inline_field_self() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
+        "pub fn z_thing_rename(t: &ZThing, name: String) -> bool { unimplemented!() }",
+        "pub fn z_thing_make(name: String) -> ZThing { unimplemented!() }",
+        "pub fn z_get() -> ZThing { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("thing")
+        .ptr_class(syn::parse_quote!(ZThing))
+        .accessor(syn::parse_quote!(z_thing_name), "name")
+        // A method: `&ZThing` receiver + a `name: String` param.
+        .method(syn::parse_quote!(z_thing_rename), "rename")
+        // A constructor: factory returning ZThing.
+        .constructor(syn::parse_quote!(z_thing_make), "make")
+        // A free fn whose per-fn inline output decomposes to (handle, name).
+        .fun(syn::parse_quote!(z_get))
+        .flatten_output_with()
+        .field_self()
+        .field(syn::parse_quote!(z_thing_name), "name");
+
+    let dir = unique_snapshot_dir("jnigen_method_ctor");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let flat: String = all.split_whitespace().collect();
+
+    // The method binds `this` and keeps the non-receiver `name` param (no `t`).
+    assert!(flat.contains("publicfunrename(name:String"), "{all}");
+    // The receiver is locked under `this`.
+    assert!(all.contains("withSortedHandleLocks(this)"), "{all}");
+    // The constructor is a companion-object factory returning ZThing.
+    assert!(flat.contains("publiccompanionobject"), "{all}");
+    assert!(flat.contains("publicfunmake(name:String"), "{all}");
+    // Per-fn inline output: `z_get` decomposes to (handle, name) — a 2-leaf
+    // builder (`handle: ZThing, name: String`) from the inline field list.
+    assert!(
+        flat.contains("publicfunrun(handle:ZThing,name:String)"),
+        "{all}"
+    );
 }

@@ -105,7 +105,7 @@ pub(crate) struct EnumConfig {
     pub suppress_kotlin_code: bool,
 }
 
-/// One registered `.package_fun(...)` entry. The Rust identifier is captured
+/// One registered `.fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
 /// optional override sets the Kotlin-side name when the default
 /// `snake_to_camel(rust_ident)` derivation isn't what the user wants.
@@ -159,29 +159,46 @@ pub(crate) struct TypeConfig {
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
 /// object. One entry per `.package(subpackage)` context that
-/// received `.package_fun(...)` calls.
+/// received `.fun(...)` calls.
 #[derive(Clone, Default)]
 pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
-    /// subpackage via [`JniGen::package_fun`].
+    /// subpackage via [`JniGen::fun`].
     pub functions: Vec<MethodEntry>,
 }
 
-/// One `#[prebindgen]` read accessor (`f(&T) -> R`) attached to a declared
-/// class (`ptr_class` / `value_class`) via [`JniGen::class_accessor`]. The
-/// accessor is emitted as an **instance method** of that class's Kotlin
-/// type (dropping the receiver param) instead of a flat free function, and it
-/// is the membership source for [`crate::api::core::unfold`]/`expand`
-/// (replacing the old `.accessor()` modifier): its parameters are never
-/// input-composed, its return is never output-decomposed, and a decomposition
-/// record (`.ptr_class_output`) may reference it by `method_name`.
+/// What kind of class member a [`ClassMember`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MemberKind {
+    /// `f(&T) -> R` (single param): the only kind usable as an output flatten
+    /// field. Promoted to an instance method; never input/output-flattened.
+    Accessor,
+    /// `f(&T, …) -> R` (receiver + extra params): promoted to an instance method
+    /// (receiver→`this`); receiver excluded from input-flatten, other params
+    /// flatten like a function; not usable as a flatten field.
+    Method,
+    /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
+    /// member returning the class; never output-flattened; referenceable by a
+    /// `.flatten_input().variant(name)`.
+    Constructor,
+}
+
+/// One `#[prebindgen]` function attached to a declared class (`ptr_class` /
+/// `enum_class` / `value_class` / `data_class`) via [`JniGen::accessor`] /
+/// [`JniGen::method`] / [`JniGen::constructor`]. Accessors/methods become
+/// **instance methods** (receiver dropped→`this`); constructors become
+/// **companion factory** members. Each is also a real `#[prebindgen]` wrapper
+/// (Rust extern + `JNINative` extern + JSONL).
 #[derive(Clone, Debug)]
-pub(crate) struct ClassAccessor {
+pub(crate) struct ClassMember {
     /// Rust function ident (`registry.functions[ident]`).
     pub rust_ident: syn::Ident,
-    /// Kotlin method name on the owning class — also the leaf/parameter name
-    /// when referenced by `.ptr_class_output(method_name)`.
-    pub method_name: String,
+    /// Kotlin member name on the owning class — for an accessor it is also the
+    /// leaf/parameter name when referenced by a flatten `.field(name)`; for a
+    /// constructor it is the name referenced by a flatten `.variant(name)`.
+    pub kotlin_name: String,
+    /// Member kind (accessor / method / constructor).
+    pub kind: MemberKind,
 }
 
 /// Boxed closure that builds a converter when applied to the wildcard
@@ -393,7 +410,7 @@ pub struct WrapperNonMeta<P = InPackage> {
 }
 
 /// Builder states that can safely declare package functions with
-/// [`JniGen::package_fun`].
+/// [`JniGen::fun`].
 pub trait PackageState: Clone {}
 
 impl PackageState for Package {}
@@ -450,14 +467,14 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// use syn::parse_quote as pq;
 ///
 /// // A function needs an active package context.
-/// let _ = JniGen::new().package_fun(pq!(z_open));
+/// let _ = JniGen::new().fun(pq!(z_open));
 /// ```
 ///
 /// ```compile_fail
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // `.name(...)` only applies immediately after `.package_fun(...)`.
+/// // `.name(...)` only applies immediately after `.fun(...)`.
 /// let _ = JniGen::new().ptr_class(pq!(ZSession)).name("Session");
 /// ```
 ///
@@ -465,8 +482,8 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // Pointer-class output declarations require a live `.ptr_class(...)` state.
-/// let _ = JniGen::new().package("session").package_fun(pq!(z_open)).ptr_class_output_direct();
+/// // Pointer-class output flatten requires a live `.ptr_class(...)` state.
+/// let _ = JniGen::new().package("session").fun(pq!(z_open)).flatten_output();
 /// ```
 ///
 /// ```compile_fail
@@ -480,13 +497,13 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// Type declarations are allowed before a subpackage is selected, but declaring
 /// functions still requires calling [`JniGen::package`].
 /// Until the root/type states are split further, a root-level type declaration
-/// followed directly by `.package_fun(...)` is rejected at runtime:
+/// followed directly by `.fun(...)` is rejected at runtime:
 ///
 /// ```should_panic
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// let _ = JniGen::new().ptr_class(pq!(ZSession)).package_fun(pq!(z_open));
+/// let _ = JniGen::new().ptr_class(pq!(ZSession)).fun(pq!(z_open));
 /// ```
 ///
 /// State types are public so large build scripts can be factored into helpers
@@ -498,8 +515,8 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 ///
 /// fn add_keyexpr(jni: JniGen<Package>) -> JniGen<Package> {
 ///     jni.ptr_class(pq!(ZKeyExpr))
-///         .class_accessor(pq!(z_keyexpr_as_str), "getStr")
-///         .ptr_class_output_direct()
+///         .accessor(pq!(z_keyexpr_as_str), "getStr")
+///         .flatten_output().field_self()
 ///         .package("next")
 /// }
 /// ```
@@ -591,7 +608,7 @@ pub struct JniGenInner {
 
     /// Free-standing package-level wrappers, keyed by subpackage path
     /// (relative to [`Self::package`], dot-separated; never empty for an
-    /// entry to be emitted). Populated by [`Self::package_fun`] under the
+    /// entry to be emitted). Populated by [`Self::fun`] under the
     /// currently-active [`Self::active_subpackage`].
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 
@@ -608,7 +625,7 @@ pub struct JniGenInner {
     pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
 
     /// The currently-active generated subpackage set by [`Self::package`].
-    /// Drives where [`Self::package_fun`] entries land and is folded into
+    /// Drives where [`Self::fun`] entries land and is folded into
     /// the FQN of any class declared while it's `Some(_)`. Package
     /// inheritance via chaining is **not** supported — each
     /// `package` call overwrites the previous; nest via dotted
@@ -636,13 +653,14 @@ pub struct JniGenInner {
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
 
-    /// Read accessors attached to a declared class via
-    /// [`JniGen::class_accessor`], keyed by the class's canonical Rust type.
-    /// Each is emitted as an instance method of that class and supplies the
-    /// accessor-membership set for the input/output composers (see
-    /// [`ClassAccessor`]). Insertion order within a class is preserved (the Vec);
-    /// class emission iterates `types` by sorted key, so map order is irrelevant.
-    pub(crate) class_accessors: HashMap<TypeKey, Vec<ClassAccessor>>,
+    /// Class members (accessors / methods / constructors) attached to a declared
+    /// class via [`JniGen::accessor`] / [`JniGen::method`] / [`JniGen::constructor`],
+    /// keyed by the class's canonical Rust type. Supplies the instance-method /
+    /// companion-factory emission and the accessor/method/constructor membership
+    /// sets for the flatten machinery (see [`ClassMember`]). Insertion order
+    /// within a class is preserved (the Vec); class emission iterates `types` by
+    /// sorted key, so map order is irrelevant.
+    pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

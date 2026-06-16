@@ -48,7 +48,7 @@ pub(crate) struct TypedHandle<'a> {
     /// `"io.zenoh.jni.JNIPublisher"`).
     pub kotlin_fqn: &'a str,
     /// Canonical Rust type key of the handle — used to look up the class's
-    /// [`crate::api::lang::jnigen::jni::ClassAccessor`]s (promoted methods).
+    /// [`crate::api::lang::jnigen::jni::ClassMember`]s (promoted methods).
     pub key: &'a TypeKey,
 }
 
@@ -268,26 +268,52 @@ impl<S: JniGenState> JniGen<S> {
                         .val()
                         .vis(Vis::Public),
                 );
-            // Promoted read-accessor methods (receiver bound to `this`, passing
-            // `this.bytes` to the extern).
             let mut imports: BTreeSet<String> = BTreeSet::new();
-            let accessors = self.class_accessors.get(key).map(Vec::as_slice).unwrap_or(&[]);
-            if !accessors.is_empty() && !self.package.is_empty() {
+            let members = self.class_members.get(key).map(Vec::as_slice).unwrap_or(&[]);
+            if !members.is_empty() && !self.package.is_empty() {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
-            for acc in accessors {
-                if let Some((item_fn, _)) = registry.functions.get(&acc.rust_ident) {
-                    if let Some(m) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+            // Promoted instance methods (`.accessor`/`.method`): receiver bound to
+            // `this`, passing `this.bytes` to the extern.
+            for m in members
+                .iter()
+                .filter(|m| matches!(m.kind, MemberKind::Accessor | MemberKind::Method))
+            {
+                if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                    if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
                         item_fn,
                         registry,
                         &mut imports,
-                        Some(acc.method_name.as_str()),
+                        Some(m.kotlin_name.as_str()),
                         Some(key),
                     ) {
-                        class = class.member(m);
+                        class = class.member(f);
                     }
                 }
+            }
+            // Companion-object factory members (`.constructor`).
+            let ctors: Vec<_> = members
+                .iter()
+                .filter(|m| m.kind == MemberKind::Constructor)
+                .collect();
+            if !ctors.is_empty() {
+                let mut companion = KtClass::companion_object().vis(Vis::Public);
+                for m in ctors {
+                    if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                        if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+                            self,
+                            item_fn,
+                            registry,
+                            &mut imports,
+                            Some(m.kotlin_name.as_str()),
+                            None,
+                        ) {
+                            companion = companion.member(f);
+                        }
+                    }
+                }
+                class = class.companion(companion);
             }
             written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }

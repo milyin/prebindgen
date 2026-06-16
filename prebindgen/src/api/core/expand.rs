@@ -68,12 +68,13 @@ struct ConstructorDecl {
 /// How a construct declaration chooses the variants for a parameter.
 #[derive(Clone)]
 enum ExpandSel {
-    /// Use the target type's canonical constructor (error if none/ambiguous).
+    /// Use the target type's default constructor (error if none/ambiguous).
     TopLevel,
     /// Use the constructor named (via `.constructor_name`) by this ident.
     Explicit(syn::Ident),
-    /// Per-fn override (`.fun_input`): use exactly these build-from variant fns.
-    Subset(Vec<syn::Ident>),
+    /// Per-fn override (`.flatten_input_with`): use exactly these build-from
+    /// variants (constructor fns and/or the identity/self arm).
+    Subset(Vec<Variant>),
 }
 
 #[derive(Clone)]
@@ -92,6 +93,9 @@ pub struct Expansions {
     expands: Vec<ExpandDecl>,
     /// Cursor for the constructor builder (`.constructor_variant*` / `.default`).
     cur_constructor: Option<usize>,
+    /// Cursor for an in-progress per-fn input subset (`.flatten_input_with(...)`
+    /// → `.variant`/`.variant_self`): index into [`Self::expands`].
+    cur_expand: Option<usize>,
     /// `.skip_default_construct(param)` opt-outs: `(fn, param)` excluded from a
     /// constructor `.default()` auto-apply.
     skip_construct: std::collections::HashSet<(syn::Ident, syn::Ident)>,
@@ -122,10 +126,10 @@ impl Expansions {
         self.constructors[i].default = true;
     }
 
-    /// Find-or-create the canonical (always-`default`) constructor for `target`
-    /// and set the cursor to it. Idempotent across a `.ptr_class_input*` chain —
+    /// Find-or-create the default (always-`default`) constructor for `target`
+    /// and set the cursor to it. Idempotent across a `.flatten_input()` chain —
     /// the first call creates it, subsequent ones reuse it so variants accumulate.
-    pub fn ensure_canonical_constructor(&mut self, target: syn::Type) {
+    pub fn ensure_default_constructor(&mut self, target: syn::Type) {
         let key = TypeKey::from_type(&target);
         if let Some(i) = self
             .constructors
@@ -205,21 +209,41 @@ impl Expansions {
         self.cur_constructor = None;
     }
 
-    /// `.fun_input(param, funcs)` — per-fn override: construct `param` from
-    /// exactly the listed build-from variant fns (a subset of the canonical
-    /// input). Recorded as an explicit decl so the auto-`default` skips it.
-    pub fn add_construct_subset(
-        &mut self,
-        func: syn::Ident,
-        param: syn::Ident,
-        funcs: Vec<syn::Ident>,
-    ) {
+    /// Begin a per-fn input flatten (`.flatten_input_with(param)`): construct
+    /// `param` from an explicit, incrementally-built variant list (constructor
+    /// arms via [`Self::push_subset_variant`] and/or the identity/self arm via
+    /// [`Self::push_subset_self`]). Recorded as an explicit decl so the
+    /// auto-`default` skips it, and leaves the expand cursor on it.
+    pub fn begin_subset(&mut self, func: syn::Ident, param: syn::Ident) {
         self.expands.push(ExpandDecl {
             func,
             param,
-            sel: ExpandSel::Subset(funcs),
+            sel: ExpandSel::Subset(Vec::new()),
         });
         self.cur_constructor = None;
+        self.cur_expand = Some(self.expands.len() - 1);
+    }
+
+    /// `.variant(fn)` inside a `.flatten_input_with(...)` — append a build-from
+    /// constructor arm to the current per-fn input subset.
+    pub fn push_subset_variant(&mut self, func: syn::Ident) {
+        let i = self
+            .cur_expand
+            .expect(".variant called without a current .flatten_input_with");
+        if let ExpandSel::Subset(v) = &mut self.expands[i].sel {
+            v.push(Variant::Ctor(func));
+        }
+    }
+
+    /// `.variant_self()` inside a `.flatten_input_with(...)` — append the
+    /// identity (pass-the-handle-through) arm to the current per-fn subset.
+    pub fn push_subset_self(&mut self) {
+        let i = self
+            .cur_expand
+            .expect(".variant_self called without a current .flatten_input_with");
+        if let ExpandSel::Subset(v) = &mut self.expands[i].sel {
+            v.push(Variant::Identity);
+        }
     }
 
     /// True iff nothing has been declared (lets `write_rust` skip [`apply`]). A
@@ -246,6 +270,7 @@ pub fn apply<M>(
     exp: &Expansions,
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
+    method_receivers: &std::collections::HashMap<syn::Ident, TypeKey>,
 ) -> Result<(), ExpandError> {
     let mut done: HashSet<(String, String)> = HashSet::new();
     for ed in &exp.expands {
@@ -275,13 +300,22 @@ pub fn apply<M>(
             let Some((item_fn, _)) = registry.functions.get(func).cloned() else {
                 continue;
             };
+            // A method's receiver (first param of its class type) binds to `this`
+            // and is never input-flattened; skip exactly that one param.
+            let receiver_key = method_receivers.get(func);
+            let mut receiver_skipped = false;
             for (pname, pty) in fn_params(&item_fn) {
                 let core = option_inner_type(&pty).unwrap_or(pty);
                 let bare = match &core {
                     syn::Type::Reference(r) => (*r.elem).clone(),
                     other => other.clone(),
                 };
-                if TypeKey::from_type(&bare) != ckey {
+                let bare_key = TypeKey::from_type(&bare);
+                if !receiver_skipped && receiver_key == Some(&bare_key) {
+                    receiver_skipped = true;
+                    continue;
+                }
+                if bare_key != ckey {
                     continue;
                 }
                 if exp.skip_construct.contains(&(func.clone(), pname.clone())) {
@@ -377,7 +411,7 @@ fn resolve_constructor<M>(
     ed: &ExpandDecl,
 ) -> Result<Vec<Variant>, ExpandError> {
     match &ed.sel {
-        ExpandSel::Subset(funcs) => Ok(funcs.iter().cloned().map(Variant::Ctor).collect()),
+        ExpandSel::Subset(variants) => Ok(variants.clone()),
         ExpandSel::Explicit(ident) => exp
             .constructors
             .iter()
@@ -581,7 +615,7 @@ fn build_plan<M>(
 
 /// Build a construct core (selector + dispatch arms) for `target` from its
 /// `variants`, appending wire leaves to `leaves`. Recursive: a constructor
-/// parameter whose type has its OWN canonical constructor is built as a nested
+/// parameter whose type has its OWN default constructor is built as a nested
 /// [`FoldArg::Build`] (recursive input). Used by both the top-level [`build_plan`]
 /// and each nested build. `prefix` disambiguates leaf names across the tree.
 #[allow(clippy::too_many_arguments)]
@@ -681,7 +715,7 @@ fn build_core<M>(
 }
 
 /// Build one constructor-parameter input. If the parameter's (peeled) type has
-/// its own canonical constructor, recurse into a nested [`FoldArg::Build`]
+/// its own default constructor, recurse into a nested [`FoldArg::Build`]
 /// (recursive input); otherwise it is a flat wire [`FoldArg::Leaf`].
 #[allow(clippy::too_many_arguments)]
 fn build_arg<M>(
@@ -704,7 +738,7 @@ fn build_arg<M>(
         other => (false, other.clone()),
     };
     let key = TypeKey::from_type(&bare);
-    // A canonical constructor for the parameter's type ⇒ recursive nested build.
+    // A default constructor for the parameter's type ⇒ recursive nested build.
     let canon = exp
         .constructors
         .iter()
@@ -1123,7 +1157,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply");
+        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1154,7 +1188,7 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default()).expect("apply");
+        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1207,7 +1241,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        match apply(&mut reg, &exp, &Default::default(), &Default::default()) {
+        match apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()) {
             Err(ExpandError::AmbiguousConstructor { candidates, .. }) => {
                 assert_eq!(candidates.len(), 2);
             }
@@ -1236,7 +1270,7 @@ mod tests {
             ident("autocanon"),
         );
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default())
+        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
             .expect("explicit selection resolves");
         let plan = reg
             .expansion_plans
@@ -1261,7 +1295,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_zbytes_from_vec"));
         exp.add_construct(ident("z_session_delete"), ident("attachment"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default())
+        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
             .expect("apply optional by-value");
         let plan = reg
             .expansion_plans
@@ -1302,7 +1336,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_string"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default())
+        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
             .expect("apply optional by-ref");
         let plan = reg
             .expansion_plans
@@ -1336,7 +1370,7 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_id"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default())
+        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
             .expect("apply optional multi-arg by-ref");
         let plan = reg
             .expansion_plans
@@ -1387,7 +1421,7 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_session_get"), ident("ke"));
 
-        match apply(&mut reg, &exp, &Default::default(), &Default::default()) {
+        match apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()) {
             Err(ExpandError::UnsupportedOptional { .. }) => {}
             other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
         }
@@ -1450,7 +1484,7 @@ mod tests {
                 .iter()
                 .map(|s| ident(s))
                 .collect();
-        apply(&mut reg, &exp, &declared, &Default::default()).expect("apply");
+        apply(&mut reg, &exp, &declared, &Default::default(), &Default::default()).expect("apply");
 
         // Both `&ZKeyExpr` params of intersects are constructed.
         assert!(reg
@@ -1485,7 +1519,7 @@ mod tests {
         exp.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.set_default();
-        apply(&mut reg, &exp, &declared, &accessor).expect("apply");
+        apply(&mut reg, &exp, &declared, &accessor, &Default::default()).expect("apply");
         assert!(reg
             .expansion_plans
             .contains_key(&(ident("z_keyexpr_intersects"), ident("a"))));
@@ -1502,16 +1536,16 @@ mod tests {
         exp2.add_constructor(syn::parse_quote!(ZKeyExpr));
         exp2.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp2.add_construct(ident("z_keyexpr_clone"), ident("ke"));
-        let err = apply(&mut reg2, &exp2, &declared, &accessor).unwrap_err();
+        let err = apply(&mut reg2, &exp2, &declared, &accessor, &Default::default()).unwrap_err();
         assert!(matches!(err, ExpandError::ConstructOnAccessor { .. }));
     }
 
     #[test]
     fn recursive_input_nests_param_constructors() {
         // z_sample_new(key_expr: ZKeyExpr, payload: ZZBytes) -> ZSample, consumed
-        // by z_reply_sample(sample: ZSample). ZSample's canonical input expands
+        // by z_reply_sample(sample: ZSample). ZSample's default input expands
         // the `sample` param into z_sample_new's params, each of which (ZKeyExpr,
-        // ZZBytes) recursively expands per ITS canonical input.
+        // ZZBytes) recursively expands per ITS default input.
         let mut reg = reg_with(&[
             "fn z_sample_new(key_expr: ZKeyExpr, payload: ZZBytes) -> ZSample { todo!() }",
             "fn z_keyexpr_try_from(s: String) -> ZKeyExpr { todo!() }",
@@ -1519,7 +1553,7 @@ mod tests {
             "fn z_reply_sample(sample: ZSample) -> bool { todo!() }",
         ]);
         let mut exp = Expansions::default();
-        // Canonical inputs for ZSample (single), ZKeyExpr (combined: try_from|id),
+        // Default inputs for ZSample (single), ZKeyExpr (combined: try_from|id),
         // ZZBytes (single).
         exp.add_constructor(syn::parse_quote!(ZSample));
         exp.add_constructor_variant(ident("z_sample_new"));
@@ -1533,7 +1567,7 @@ mod tests {
         exp.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_reply_sample"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &exp, &declared, &Default::default()).expect("apply");
+        apply(&mut reg, &exp, &declared, &Default::default(), &Default::default()).expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1554,12 +1588,12 @@ mod tests {
         );
         // key_expr's nested build is COMBINED (try_from | identity ⇒ selector).
         if let FoldArg::Build(b) = &args[0] {
-            assert!(b.selector.is_some(), "ZKeyExpr canonical input is combined");
+            assert!(b.selector.is_some(), "ZKeyExpr default input is combined");
             assert_eq!(b.variants.len(), 2);
         }
         // payload's nested build is SINGLE (no selector).
         if let FoldArg::Build(b) = &args[1] {
-            assert!(b.selector.is_none(), "ZZBytes canonical input is single");
+            assert!(b.selector.is_none(), "ZZBytes default input is single");
         }
         // Wire leaves: key-expr selector + try_from String + identity ZKeyExpr +
         // zbytes Vec<u8> — all flattened into the one signature.
@@ -1595,7 +1629,7 @@ mod tests {
         exp.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["consume_a"].iter().map(|s| ident(s)).collect();
-        let err = apply(&mut reg, &exp, &declared, &Default::default()).unwrap_err();
+        let err = apply(&mut reg, &exp, &declared, &Default::default(), &Default::default()).unwrap_err();
         assert!(matches!(err, ExpandError::InputCycle { .. }), "got {err:?}");
     }
 }

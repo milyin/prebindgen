@@ -264,6 +264,30 @@ pub(crate) fn build_typed_handle(
     } else {
         format!("{}.NativeHandle", ext.package)
     };
+    let members = ext.class_members.get(key).map(Vec::as_slice).unwrap_or(&[]);
+    if !members.is_empty() && !ext.package.is_empty() {
+        imports.insert(format!("{}.{}", ext.package, ext.jni_native_class_name()));
+    }
+
+    // Companion object: the `@JvmStatic external fun freePtr(ptr: Long)` called
+    // by `close()`, plus one **factory** member per `.constructor(f, name)`
+    // (a free wrapper — no receiver — returning the class).
+    let mut companion = kt::KtClass::companion_object().vis(kt::Vis::Public).member(
+        kt::KtFun::new(free_extern.clone())
+            .annotation("JvmStatic")
+            .modifier("external")
+            .param(kt::KtParam::new("ptr", kt::KtType::long())),
+    );
+    for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
+        if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+            if let Some(f) =
+                render_wrapper_fn(ext, item_fn, registry, imports, Some(m.kotlin_name.as_str()), None)
+            {
+                companion = companion.member(f);
+            }
+        }
+    }
+
     let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
         .kdoc(format!(
@@ -299,35 +323,25 @@ pub(crate) fn build_typed_handle(
                         .line(format!("return {class_name}(p)")),
                 ),
         )
-        // Companion object carries the `@JvmStatic external fun freePtr(ptr:
-        // Long)` called by `close()` above.
-        .companion(
-            kt::KtClass::companion_object().vis(kt::Vis::Public).member(
-                kt::KtFun::new(free_extern)
-                    .annotation("JvmStatic")
-                    .modifier("external")
-                    .param(kt::KtParam::new("ptr", kt::KtType::long())),
-            ),
-        );
+        .companion(companion);
 
-    // Promoted read-accessor methods: each `.class_accessor(f, name)` becomes
-    // an instance method (receiver bound to `this`), delegating to the same
-    // centralized `JNINative` extern as a free wrapper would.
-    let accessors = ext.class_accessors.get(key).map(Vec::as_slice).unwrap_or(&[]);
-    if !accessors.is_empty() && !ext.package.is_empty() {
-        imports.insert(format!("{}.{}", ext.package, ext.jni_native_class_name()));
-    }
-    for acc in accessors {
-        if let Some((item_fn, _)) = registry.functions.get(&acc.rust_ident) {
-            if let Some(m) = render_wrapper_fn(
+    // Promoted instance methods: each `.accessor(f, name)` / `.method(f, name)`
+    // becomes an instance method (receiver bound to `this`), delegating to the
+    // same centralized `JNINative` extern as a free wrapper would.
+    for m in members
+        .iter()
+        .filter(|m| matches!(m.kind, MemberKind::Accessor | MemberKind::Method))
+    {
+        if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+            if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
                 registry,
                 imports,
-                Some(acc.method_name.as_str()),
+                Some(m.kotlin_name.as_str()),
                 Some(key),
             ) {
-                class = class.member(m);
+                class = class.member(f);
             }
         }
     }

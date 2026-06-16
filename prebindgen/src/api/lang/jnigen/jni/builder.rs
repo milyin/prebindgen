@@ -61,7 +61,7 @@ impl JniGen<Root> {
                 emit_handle_locks: true,
                 expansions: crate::api::core::expand::Expansions::default(),
                 deconstructors: crate::api::core::unfold::Deconstructors::default(),
-                class_accessors: HashMap::new(),
+                class_members: HashMap::new(),
             },
             state: Root,
         };
@@ -182,7 +182,7 @@ impl<S> JniGen<S> {
     /// Activate a generated subpackage context below the base package set by
     /// [`Self::package_prefix`]. Despite the short name, this does **not** set
     /// the base package; use [`Self::package_prefix`] for that. Subsequent
-    /// [`Self::package_fun`] calls land in this subpackage, and
+    /// [`JniGen::fun`] calls land in this subpackage, and
     /// any class declared
     /// ([`Self::ptr_class`] / [`Self::data_class`] /
     /// [`Self::enum_class`] / [`Self::value_class`]) while the
@@ -327,8 +327,8 @@ impl<S: TypeDeclState> JniGen<S> {
     /// dispatch class, and the Kotlin typed-handle class FQN. By
     /// default a `.kt` shell is auto-emitted — chain
     /// [`Self::suppress_kotlin_code`] to keep the file hand-maintained,
-    /// or chain `.ptr_class_input*` / `.ptr_class_output*` calls to define its
-    /// canonical conversion shape.
+    /// or chain `.flatten_input()` / `.flatten_output()` to define its
+    /// default flatten shape.
     pub fn ptr_class(mut self, rust_type: syn::Type) -> JniGen<PtrClass> {
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
@@ -353,14 +353,14 @@ impl<S: TypeDeclState> JniGen<S> {
 impl<S: PackageState> JniGen<S> {
     /// Declare a `#[prebindgen]` function as a free-standing package wrapper
     /// under the currently-active [`Self::package`] subpackage context. If a
-    /// class context is also live, calling `package_fun` clears it — the idea
+    /// class context is also live, calling `fun` clears it — the idea
     /// being that "leak class context to package level" makes the chain
     /// unambiguous after one fn-level declaration.
-    pub fn package_fun(self, ident: syn::Ident) -> JniGen<Function> {
+    pub fn fun(self, ident: syn::Ident) -> JniGen<Function> {
         self.push_fun(MethodEntry::new(ident))
     }
 
-    /// Shared body of [`Self::package_fun`].
+    /// Shared body of [`Self::fun`].
     fn push_fun(mut self, entry: MethodEntry) -> JniGen<Function> {
         let sub = self
             .active_subpackage
@@ -377,13 +377,9 @@ impl<S: PackageState> JniGen<S> {
 }
 
 impl JniGen<Function> {
-    /// Override the Kotlin-side function name for this [`Self::package_fun`]
+    /// Override the Kotlin-side function name for this [`JniGen::fun`]
     /// entry. Default (without `.name(...)`) is
     /// `snake_to_camel(rust_ident)` (e.g. `z_hello_whatami` → `zHelloWhatami`).
-    ///
-    /// This is unrelated to the deconstructor ids used by
-    /// [`Self::ptr_class_deconstructor`], [`Self::output_named`], and
-    /// [`Self::error_named`].
     pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
         let name = kotlin_name.into();
         let package = self.state.package.clone();
@@ -398,159 +394,162 @@ impl JniGen<Function> {
 }
 
 impl JniGen<PtrClass> {
-    // ── Canonical type representation (input / output on the ptr_class) ──
+    // ── Default flatten shape (input / output) on the ptr_class ──
 
     /// Rust type of this [`Self::ptr_class`] state, for the
-    /// `.ptr_class_input*` / `.ptr_class_output*` chain.
+    /// `.flatten_input*` / `.flatten_output*` chain.
     fn current_ptr_class(&self) -> syn::Type {
         self.state.key.to_type()
     }
 
-    /// **Identity input variant**: the canonical input of the current
-    /// `ptr_class` accepts the handle directly (alongside any `.ptr_class_input`
-    /// build-from variants, selector-dispatched).
-    pub fn ptr_class_input_direct(mut self) -> Self {
-        let t = self.current_ptr_class();
-        self.expansions.ensure_canonical_constructor(t);
-        self.expansions.add_constructor_variant_id();
-        self
-    }
-
-    /// **Build-from input variant**: the canonical input may build the current
-    /// `ptr_class` by calling `func` with `func`'s (recursively expanded) params.
-    pub fn ptr_class_input(mut self, func: syn::Ident) -> Self {
-        let t = self.current_ptr_class();
-        self.expansions.ensure_canonical_constructor(t);
-        self.expansions.add_constructor_variant(func);
-        self
-    }
-
-    /// Begin a **named alternative** deconstructor for the current
-    /// `ptr_class`. The records that follow (`.ptr_class_output*`) append to
-    /// this declaration; functions select it via [`Self::output_named`] /
-    /// [`Self::error_named`] — the type's unnamed declaration stays the
-    /// canonical (auto-applied) one. Each named decomposition gets its own
-    /// generated callback interfaces (`<Type><Name>Builder` / `…Handler`).
-    /// Declare the canonical records BEFORE any named alternative — record
-    /// calls append to the most recent declaration of the type.
-    pub fn ptr_class_deconstructor(mut self, name: impl Into<String>) -> Self {
-        let t = self.current_ptr_class();
-        self.deconstructors.add_deconstructor(t);
-        self.deconstructors.add_deconstructor_name(name);
-        self
-    }
-
-    /// **Identity output record**: the current `ptr_class`'s canonical output
-    /// includes the handle itself (one of possibly several outputs).
-    pub fn ptr_class_output_direct(mut self) -> Self {
-        let t = self.current_ptr_class();
-        self.deconstructors.ensure_canonical_deconstructor(t);
-        self.deconstructors.add_deconstructor_record_id();
-        self
-    }
-
-    /// **Accessor output record**: the current `ptr_class`'s canonical output
-    /// includes the result of the accessor previously declared via
-    /// [`JniGen::class_accessor`] under the method name `name`, unwrapped per the
-    /// return type's own canonical output (one leaf for a scalar/string/enum;
-    /// spliced for a nested ptr_class). `name` is also the literal
-    /// callback-parameter name for this leaf (emitted verbatim); it must be
-    /// unique within the deconstructor and must not contain the reserved `"__"`
-    /// separator. For a spliced nested ptr_class it prefixes the child leaf
-    /// names (`name__<child>`). The accessor must be declared on this class
-    /// before it is referenced here.
-    pub fn ptr_class_output(mut self, name: impl Into<String>) -> Self {
-        let name = name.into();
+    /// Resolve a member `name` of the given [`MemberKind`] on the current class
+    /// to its Rust ident, or panic with a clear build-script message.
+    fn resolve_member(&self, name: &str, kind: MemberKind, verb: &str) -> syn::Ident {
         let key = self.state.key.clone();
-        let func = self
-            .class_accessors
+        self.class_members
             .get(&key)
-            .and_then(|accs| accs.iter().find(|a| a.method_name == name))
+            .and_then(|ms| ms.iter().find(|m| m.kind == kind && m.kotlin_name == name))
             .unwrap_or_else(|| {
+                let what = match kind {
+                    MemberKind::Accessor => ".accessor",
+                    MemberKind::Constructor => ".constructor",
+                    MemberKind::Method => ".method",
+                };
                 panic!(
-                    "ptr_class_output(\"{name}\"): no `.class_accessor(.., \"{name}\")` declared on \
-                     `{}` — declare the accessor on this class before referencing it as an output \
-                     record.",
+                    "{verb}(\"{name}\"): no `{what}(.., \"{name}\")` declared on `{}` — declare \
+                     the member on this class before referencing it here.",
                     key.as_str()
                 )
             })
             .rust_ident
-            .clone();
+            .clone()
+    }
+
+    /// Begin the class's **default input flatten**: how a parameter of this
+    /// class type is assembled at the boundary. Chain `.variant(name)` (build
+    /// via a declared `.constructor`) and/or `.variant_self()` (accept the
+    /// handle directly); multiple variants are selector-dispatched.
+    pub fn flatten_input(mut self) -> Self {
         let t = self.current_ptr_class();
-        self.deconstructors.ensure_canonical_deconstructor(t);
+        self.expansions.ensure_default_constructor(t);
+        self
+    }
+
+    /// `.variant(name)` inside `.flatten_input()` — add a build-from variant via
+    /// the constructor declared as `name` (see [`Self::constructor`]).
+    pub fn variant(mut self, name: impl Into<String>) -> Self {
+        let func = self.resolve_member(&name.into(), MemberKind::Constructor, "variant");
+        self.expansions.add_constructor_variant(func);
+        self
+    }
+
+    /// `.variant_self()` inside `.flatten_input()` — accept an already-built
+    /// handle directly (the identity variant).
+    pub fn variant_self(mut self) -> Self {
+        self.expansions.add_constructor_variant_id();
+        self
+    }
+
+    /// Begin the class's **default output flatten**: how a returned/callback
+    /// value of this class is decomposed into fields. Chain `.field(name)`
+    /// (a declared `.accessor`'s value) and/or `.field_self()` (the handle
+    /// itself).
+    pub fn flatten_output(mut self) -> Self {
+        let t = self.current_ptr_class();
+        self.deconstructors.ensure_default_deconstructor(t);
+        self
+    }
+
+    /// `.field(name)` inside `.flatten_output()` — include the value of the
+    /// accessor declared as `name` (see [`Self::accessor`]), flattened per its
+    /// return type's own default output. `name` is also the literal
+    /// callback-parameter name (emitted verbatim; unique within the flatten,
+    /// no reserved `"__"` separator). A nested class field prefixes the child
+    /// field names (`name__<child>`).
+    pub fn field(mut self, name: impl Into<String>) -> Self {
+        let name = name.into();
+        let func = self.resolve_member(&name, MemberKind::Accessor, "field");
+        let t = self.current_ptr_class();
+        self.deconstructors.ensure_default_deconstructor(t);
         self.deconstructors.add_deconstructor_record(func, name);
+        self
+    }
+
+    /// `.field_self()` inside `.flatten_output()` — include the handle itself
+    /// as a field.
+    pub fn field_self(mut self) -> Self {
+        let t = self.current_ptr_class();
+        self.deconstructors.ensure_default_deconstructor(t);
+        self.deconstructors.add_deconstructor_record_id();
         self
     }
 }
 
 impl JniGen<Function> {
-    // ── Per-function overrides of the canonical representation ──────────
+    // ── Per-function flatten overrides ──────────────────────────────────
 
-    /// Per-fn: `param` skips the canonical input and takes the raw handle.
-    pub fn input_direct(mut self, param: syn::Ident) -> Self {
+    /// Per-fn: `param` skips input-flattening and takes the raw handle.
+    pub fn flatten_input_suppress(mut self, param: syn::Ident) -> Self {
         let func = self.current_fn_ident();
         self.expansions.add_skip_default_construct(func, param);
         self
     }
 
-    /// Per-fn: the return value skips the canonical output and stays a raw handle.
-    pub fn output_direct(mut self) -> Self {
+    /// Per-fn: the return value skips output-flattening and stays a raw handle.
+    pub fn flatten_output_suppress(mut self) -> Self {
         let func = self.current_fn_ident();
         self.deconstructors.add_skip_default_output(func);
         self
     }
 
-    /// Per-fn: `param` is built from only the named subset of the canonical
-    /// input's build-from variants (plus identity if the canonical input has it).
-    pub fn input(
-        mut self,
-        param: syn::Ident,
-        funcs: impl IntoIterator<Item = syn::Ident>,
-    ) -> Self {
+    /// Per-fn: replace the default input flatten of `param` with an explicit,
+    /// incrementally-built variant list — chain `.variant(fn)` (build-from
+    /// constructor fns) and/or `.variant_self()` (accept the handle directly).
+    pub fn flatten_input_with(mut self, param: syn::Ident) -> Self {
         let func = self.current_fn_ident();
-        self.expansions
-            .add_construct_subset(func, param, funcs.into_iter().collect());
+        self.expansions.begin_subset(func, param);
         self
     }
 
-    /// Per-fn: replace the canonical output with an explicit record list — each
-    /// `(accessor, name)` unwrapped per its return type's canonical output, with
-    /// `name` the literal leaf/callback-parameter name.
-    pub fn output(
-        mut self,
-        records: impl IntoIterator<Item = (syn::Ident, impl Into<String>)>,
-    ) -> Self {
-        let func = self.current_fn_ident();
-        self.deconstructors.add_output_inline(
-            func,
-            records
-                .into_iter()
-                .map(|(f, n)| (f, n.into()))
-                .collect(),
-        );
+    /// `.variant(fn)` inside `.flatten_input_with(param)` — add a build-from
+    /// constructor arm (the rust constructor fn directly).
+    pub fn variant(mut self, func: syn::Ident) -> Self {
+        self.expansions.push_subset_variant(func);
         self
     }
 
-    /// Per-fn: decompose the return value with the **named** deconstructor
-    /// (declared via [`Self::ptr_class_deconstructor`]) instead of the
-    /// canonical one.
-    pub fn output_named(mut self, name: impl Into<String>) -> Self {
-        let func = self.current_fn_ident();
-        self.deconstructors.add_deconstruct_output_with(func, name);
+    /// `.variant_self()` inside `.flatten_input_with(param)` — accept an
+    /// already-built handle directly (the identity arm).
+    pub fn variant_self(mut self) -> Self {
+        self.expansions.push_subset_self();
         self
     }
 
-    /// Per-fn: decompose the `Result<_, E>` domain error with the **named**
-    /// deconstructor instead of `E`'s canonical one — the `onError` handler
-    /// becomes the named decomposition's `<Type><Name>Handler` interface.
-    pub fn error_named(mut self, name: impl Into<String>) -> Self {
+    /// Per-fn: replace the default output flatten with an explicit,
+    /// incrementally-built field list — chain `.field(fn, name)` (accessor fns
+    /// with their leaf name) and/or `.field_self()` (the handle itself).
+    pub fn flatten_output_with(mut self) -> Self {
         let func = self.current_fn_ident();
-        self.deconstructors.add_deconstruct_error_with(func, name);
+        self.deconstructors.begin_inline_output(func);
+        self
+    }
+
+    /// `.field(fn, name)` inside `.flatten_output_with()` — include the value of
+    /// the accessor fn `fn` (the rust accessor fn directly) as field `name`.
+    pub fn field(mut self, func: syn::Ident, name: impl Into<String>) -> Self {
+        self.deconstructors.push_inline_field(func, name);
+        self
+    }
+
+    /// `.field_self()` inside `.flatten_output_with()` — include the handle
+    /// itself as a field.
+    pub fn field_self(mut self) -> Self {
+        self.deconstructors.push_inline_field_self();
         self
     }
 
     /// Rust ident of the function the current per-fn override chain targets,
-    /// resolved from the live [`Self::package_fun`] state.
+    /// resolved from the live [`Self::fun`] state.
     fn current_fn_ident(&self) -> syn::Ident {
         self.packages
             .get(&self.state.package)
@@ -712,26 +711,53 @@ impl<S: TypeKeyState> JniGen<S> {
         self
     }
 
-    /// Declare a `#[prebindgen]` **read accessor** (`f(&Self) -> R`) as an
-    /// **instance method** of the current class (`ptr_class` / `value_class`),
-    /// named `method_name`. The receiver parameter (the first `&Self` /
-    /// `Self`) is dropped from the Kotlin signature and bound to `this`; the
-    /// remaining parameters/return are emitted exactly as a free wrapper would.
-    ///
-    /// Replaces the former `.package_fun(f).accessor()`: the accessor is the
-    /// membership token for the input/output composers — its params are never
-    /// input-composed and its return is never output-decomposed — and a
-    /// decomposition record selects it via [`JniGen::ptr_class_output`] by its
-    /// `method_name` (which doubles as the leaf/parameter name). Declare an
-    /// accessor BEFORE any `.ptr_class_output(name)` that references it.
-    pub fn class_accessor(mut self, rust_fun: syn::Ident, method_name: impl Into<String>) -> Self {
+    /// Declare a `#[prebindgen]` **read accessor** (`f(&Self) -> R`, a single
+    /// parameter) as an **instance method** `name` of the current class. The
+    /// receiver is dropped from the Kotlin signature and bound to `this`. An
+    /// accessor's params are never input-flattened and its return is never
+    /// output-flattened; it is the only member kind usable as a flatten
+    /// `.field(name)`. Declare it BEFORE any `.flatten_output().field(name)`
+    /// that references it.
+    pub fn accessor(self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
+        self.push_member(rust_fun, name, MemberKind::Accessor)
+    }
+
+    /// Declare a `#[prebindgen]` **method** (`f(&Self, …) -> R`) as an
+    /// **instance method** `name` of the current class. The first parameter
+    /// (the `&Self` receiver) is dropped and bound to `this`; the remaining
+    /// parameters flatten like a normal function. A method is NOT usable as a
+    /// flatten field.
+    pub fn method(self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
+        self.push_member(rust_fun, name, MemberKind::Method)
+    }
+
+    /// Declare a `#[prebindgen]` **constructor** (`f(…) -> Self` /
+    /// `Result<Self, E>`) as a **companion-object factory** member `name` of the
+    /// current class, returning the class. Its return never output-flattens (it
+    /// is a factory). Reference it from `.flatten_input().variant(name)` to make
+    /// it a build-from variant for parameters of this class type.
+    pub fn constructor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
+        // A constructor returns the class itself — never decompose its return.
+        self.deconstructors
+            .add_skip_default_output(rust_fun.clone());
+        self.push_member(rust_fun, name, MemberKind::Constructor)
+    }
+
+    /// Shared body of [`Self::accessor`] / [`Self::method`] / [`Self::constructor`].
+    fn push_member(
+        mut self,
+        rust_fun: syn::Ident,
+        name: impl Into<String>,
+        kind: MemberKind,
+    ) -> Self {
         let key = self.state.type_key().clone();
-        self.class_accessors
+        self.class_members
             .entry(key)
             .or_default()
-            .push(crate::api::lang::jnigen::jni::ClassAccessor {
+            .push(crate::api::lang::jnigen::jni::ClassMember {
                 rust_ident: rust_fun,
-                method_name: method_name.into(),
+                kotlin_name: name.into(),
+                kind,
             });
         self
     }

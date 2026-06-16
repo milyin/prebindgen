@@ -79,7 +79,7 @@ pub struct FoldVariant {
     pub clone: bool,
     /// This variant's constructor inputs, in parameter order. Each is either a
     /// flat wire leaf or a recursively-built sub-value (a parameter that is
-    /// itself a type with a canonical constructor — recursive input).
+    /// itself a type with a default constructor — recursive input).
     pub inputs: Vec<FoldArg>,
 }
 
@@ -88,8 +88,8 @@ pub struct FoldVariant {
 pub enum FoldArg {
     /// Decode the flat wire leaf at this index into [`FoldPlan::leaves`].
     Leaf(usize),
-    /// Build this parameter by recursively folding its own canonical
-    /// constructor (the parameter's type is itself a ptr_class with a canonical
+    /// Build this parameter by recursively folding its own default
+    /// constructor (the parameter's type is itself a ptr_class with a default
     /// input). Its leaves live in the shared flat [`FoldPlan::leaves`].
     Build(Box<FoldBuild>),
 }
