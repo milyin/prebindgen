@@ -640,6 +640,15 @@ pub struct JniGenInner {
     /// Toggled via [`Self::handle_locks`].
     pub(crate) emit_handle_locks: bool,
 
+    /// Optional Kotlin statement(s) to place inside an `init { … }` block of
+    /// the generated centralized externs object (`JNINative`). Set via
+    /// [`Self::jni_native_init`]. Every generated native call routes through
+    /// that object, so its `<clinit>` is the single point at which a consumer
+    /// can trigger native-library loading (e.g.
+    /// `"io.zenoh.jni.NativeLibrary.ensureLoaded()"`). `None` (default) emits no
+    /// init block — loading stays the consumer's responsibility.
+    pub(crate) jni_native_init: Option<String>,
+
     /// Constructor-expansion declarations (`.constructor`,
     /// `.constructor`, `.expand`, …). Resolved into
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during

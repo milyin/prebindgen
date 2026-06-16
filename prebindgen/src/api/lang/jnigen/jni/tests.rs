@@ -474,6 +474,56 @@ fn snapshot_kotlin_side() {
     );
 }
 
+/// `.jni_native_init(code)` injects an `init { code }` block into the generated
+/// centralized externs object (`JNINative`) — the single static-init point a
+/// consumer uses to trigger native-library loading. Unset (the `snapshot_*`
+/// tests) emits no init block.
+#[test]
+fn jni_native_init_emits_init_block() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_ping() {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
+        .package("thing")
+        .fun(syn::parse_quote!(z_ping));
+
+    let dir = unique_snapshot_dir("jnigen_native_init");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let paths = jni.write_kotlin(&registry, &dir.join("kotlin")).expect("write_kotlin");
+    let native = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .find(|v| v.contains("object JNINative"))
+        .expect("a generated file contains `object JNINative`");
+
+    // The init block is present, references the consumer's loader, and precedes
+    // the `external fun` declarations.
+    let flat: String = native.split_whitespace().collect();
+    assert!(
+        flat.contains("init{io.test.jni.NativeLibrary.ensureLoaded()}"),
+        "JNINative should carry the init block:\n{native}"
+    );
+    let init_pos = native.find("init {").expect("init block present");
+    let extern_pos = native.find("external fun").expect("externs present");
+    assert!(init_pos < extern_pos, "init must precede externs:\n{native}");
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // Callback pipeline snapshot: `impl Fn(...)` params unified onto the
 // output-expansion machinery — a decomposed arg (ZThing has a canonical

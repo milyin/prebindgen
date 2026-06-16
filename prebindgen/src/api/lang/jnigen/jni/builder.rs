@@ -62,6 +62,7 @@ impl JniGen<Root> {
                 expansions: crate::api::core::expand::Expansions::default(),
                 deconstructors: crate::api::core::unfold::Deconstructors::default(),
                 class_members: HashMap::new(),
+                jni_native_init: None,
             },
             state: Root,
         };
@@ -107,6 +108,19 @@ impl<S> JniGen<S> {
     /// Disable the per-call handle-lock scaffold.
     pub fn disable_handle_locks(mut self) -> Self {
         self.emit_handle_locks = false;
+        self
+    }
+
+    /// Emit `code` inside an `init { … }` block of the generated centralized
+    /// externs object (`JNINative`). Because every generated native call routes
+    /// through that object, its static initializer is the single point at which
+    /// the consumer can trigger native-library loading transparently — e.g.
+    /// `.jni_native_init("io.zenoh.jni.NativeLibrary.ensureLoaded()")` so any
+    /// call into the generated bindings loads the library first. The referenced
+    /// loader is the consumer's own (hand-written) code; this keeps the
+    /// generator free of any concrete loading logic. Unset = no init block.
+    pub fn jni_native_init(mut self, code: impl Into<String>) -> Self {
+        self.jni_native_init = Some(code.into());
         self
     }
 

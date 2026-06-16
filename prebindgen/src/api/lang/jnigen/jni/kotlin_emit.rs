@@ -658,13 +658,13 @@ impl<S: JniGenState> JniGen<S> {
     /// `kotlin_fun_name_mangle`, parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under
-    /// `Java_<package>_<jni_native_class>_<name>`. Loading the native
-    /// library is the wrapper layer's responsibility — the auto-generated
-    /// holder stays free of any reference to higher-layer types so that
-    /// `io.zenoh.jni.*` doesn't depend on `io.zenoh.*`. Trigger
-    /// `System.load` / `System.loadLibrary` from wrapper entry points
-    /// (e.g. via a `companion object { init { ZenohLoad } }` block) so
-    /// the lib is in place before any extern call.
+    /// `Java_<package>_<jni_native_class>_<name>`. Every generated native
+    /// call routes through this object, so its static initializer is the
+    /// single point at which native-library loading can be triggered: when
+    /// [`JniGen::jni_native_init`] is set, its Kotlin statement(s) are emitted
+    /// inside an `init { … }` block here (e.g. a reference to the consumer's
+    /// own loader object). Unset, the holder stays free of any loading logic
+    /// and the wrapper layer is responsible for loading.
     pub(crate) fn write_jni_native(&self, registry: &Registry<KotlinMeta>) -> kt::KtFile {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
@@ -683,18 +683,22 @@ impl<S: JniGenState> JniGen<S> {
             }
         }
 
-        kt::KtFile::new(&self.package)
-            .decl(
-                KtClass::object_(class_name)
-                    .vis(Vis::Internal)
-                    // One compact run of `external fun` lines (no blank lines
-                    // between them), kept as a single raw member.
-                    .member(kt::KtDecl::Raw {
-                        name: "externs".to_string(),
-                        code: externs,
-                    }),
-            )
-            .imports(imports)
+        let mut obj = KtClass::object_(class_name).vis(Vis::Internal);
+        // Optional native-load trigger: emitted FIRST so the object's static
+        // initializer runs the consumer's loader before any extern resolves.
+        if let Some(code) = &self.jni_native_init {
+            obj = obj.member(kt::KtDecl::Raw {
+                name: "native_init".to_string(),
+                code: Code::new().line("init {").line(format!("    {code}")).line("}"),
+            });
+        }
+        // One compact run of `external fun` lines (no blank lines between
+        // them), kept as a single raw member.
+        obj = obj.member(kt::KtDecl::Raw {
+            name: "externs".to_string(),
+            code: externs,
+        });
+        kt::KtFile::new(&self.package).decl(obj).imports(imports)
     }
 
     /// Emit one Kotlin file per entry in `handles` — each becomes a
