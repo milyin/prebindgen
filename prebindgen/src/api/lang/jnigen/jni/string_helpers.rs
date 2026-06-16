@@ -1,7 +1,9 @@
 //! JNI String conversion helpers for use in type converters and runtime code.
 
-use jni::objects::{JObject, JString};
-use jni::JNIEnv;
+use jni::{
+    objects::{JObject, JString},
+    JNIEnv,
+};
 
 /// Converts a JString into a Rust String.
 ///

@@ -3,8 +3,7 @@
 //! style as the JniGen config builder. Rendering lives in
 //! [`super::render`]; this module is pure data.
 
-use super::code::Code;
-use super::types::KtType;
+use super::{code::Code, types::KtType};
 
 /// Visibility modifier. `Public` renders explicitly (matching the existing
 /// generated style); `Default` renders nothing.

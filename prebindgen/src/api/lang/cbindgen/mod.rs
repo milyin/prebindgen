@@ -64,15 +64,17 @@ use std::collections::{HashMap, HashSet};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 
-use crate::api::core::niches::Niches;
-use crate::api::core::prebindgen::{ConverterImpl, Prebindgen};
-use crate::api::core::registry::{extract_fn_trait_args, Registry, TypeKey};
 // Shared `syn::Type` shape predicates live in `core::types_util`; re-exported
 // here under this back-end's historical names so the submodules (`use super::*`)
 // keep their call sites. `pub(crate) use` so the glob re-export reaches them.
 pub(crate) use crate::api::core::types_util::{
     first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
     is_vec_type as is_vec, path_tail_ident as type_path_tail, result_parts,
+};
+use crate::api::core::{
+    niches::Niches,
+    prebindgen::{ConverterImpl, Prebindgen},
+    registry::{extract_fn_trait_args, Registry, TypeKey},
 };
 
 /// Identity of a declared callback signature: its argument-type list (the
@@ -349,13 +351,33 @@ fn is_scalar(ty: &syn::Type) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether `Vec<_>` appears anywhere in `ty` (including nested under
-/// `Result`/`Option`/references).
+/// Whether an array-producing output appears anywhere in `ty` (including nested
+/// under `Result`/`Option`/references).
 fn type_contains_vec(ty: &syn::Type) -> bool {
     is_vec(ty)
+        || cow_slice_elem(ty).is_some()
         || crate::api::core::registry::immediate_subtype_positions(ty)
             .iter()
             .any(type_contains_vec)
+}
+
+/// If `ty` is `Cow<'_, [E]>` with scalar `E`, return `E`.
+fn cow_slice_elem(ty: &syn::Type) -> Option<syn::Type> {
+    let syn::Type::Path(tp) = ty else {
+        return None;
+    };
+    let seg = tp.path.segments.last()?;
+    if seg.ident != "Cow" {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
+        return None;
+    };
+    let elem = args.args.iter().find_map(|arg| match arg {
+        syn::GenericArgument::Type(syn::Type::Slice(slice)) => Some((*slice.elem).clone()),
+        _ => None,
+    })?;
+    is_scalar(&elem).then_some(elem)
 }
 
 /// If `ty` is `&[E]` (a shared slice borrow) with scalar `E`, return `E`.

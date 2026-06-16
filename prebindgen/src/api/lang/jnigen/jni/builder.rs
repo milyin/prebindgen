@@ -705,7 +705,6 @@ impl<S: TypeDeclState> JniGen<S> {
             package: std::marker::PhantomData,
         })
     }
-
 }
 
 impl<S: TypeKeyState> JniGen<S> {
@@ -765,14 +764,13 @@ impl<S: TypeKeyState> JniGen<S> {
         kind: MemberKind,
     ) -> Self {
         let key = self.state.type_key().clone();
-        self.class_members
-            .entry(key)
-            .or_default()
-            .push(crate::api::lang::jnigen::jni::ClassMember {
+        self.class_members.entry(key).or_default().push(
+            crate::api::lang::jnigen::jni::ClassMember {
                 rust_ident: rust_fun,
                 kotlin_name: name.into(),
                 kind,
-            });
+            },
+        );
         self
     }
 }

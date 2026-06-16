@@ -1140,10 +1140,7 @@ fn flatten<M>(
 /// Error if two leaves of one flattened deconstructor share a name. Author leaf
 /// names are explicit and emitted literally, so a collision is a declaration
 /// bug — never auto-resolved.
-fn require_unique_leaf_names(
-    source: &syn::Type,
-    leaves: &[UnfoldLeaf],
-) -> Result<(), UnfoldError> {
+fn require_unique_leaf_names(source: &syn::Type, leaves: &[UnfoldLeaf]) -> Result<(), UnfoldError> {
     let mut seen: HashSet<&str> = HashSet::new();
     for l in leaves {
         if !seen.insert(l.name.as_str()) {
@@ -1430,7 +1427,10 @@ mod tests {
         acc.add_deconstructor_record(ident("z_sample_payload"), "field");
         acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
-        assert!(matches!(err, UnfoldError::DuplicateLeafName { .. }), "{err:?}");
+        assert!(
+            matches!(err, UnfoldError::DuplicateLeafName { .. }),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -1445,7 +1445,10 @@ mod tests {
         acc.add_deconstructor_record(ident("z_sample_key_expr"), "key__expr");
         acc.add_deconstruct_output(ident("z_foo"));
         let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
-        assert!(matches!(err, UnfoldError::ReservedSeparator { .. }), "{err:?}");
+        assert!(
+            matches!(err, UnfoldError::ReservedSeparator { .. }),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -1553,7 +1556,10 @@ mod tests {
         acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
         acc.add_deconstructor_record_nested(ident("z_sample_timestamp"), "z_sample_timestamp");
         acc.add_deconstructor(syn::parse_quote!(ZReplyError));
-        acc.add_deconstructor_record_nested(ident("z_reply_error_payload"), "z_reply_error_payload");
+        acc.add_deconstructor_record_nested(
+            ident("z_reply_error_payload"),
+            "z_reply_error_payload",
+        );
         acc.add_deconstructor(syn::parse_quote!(ZReply));
         acc.add_deconstructor_record(ident("z_reply_replier_zid"), "z_reply_replier_zid");
         acc.add_deconstructor_record(ident("z_reply_is_ok"), "z_reply_is_ok");
@@ -1710,7 +1716,11 @@ mod tests {
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZTimestamp), ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
+        acc.add_converter(
+            syn::parse_quote!(ZTimestamp),
+            ident("z_timestamp_ntp64"),
+            "z_timestamp_ntp64",
+        );
         acc.add_convert_output(ident("z_sample_timestamp"));
 
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
@@ -1763,7 +1773,11 @@ mod tests {
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZZenohId), ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
+        acc.add_converter(
+            syn::parse_quote!(ZZenohId),
+            ident("z_zenoh_id_to_string"),
+            "z_zenoh_id_to_string",
+        );
         acc.add_deconstruct_output(ident("z_session_peers_zid"));
         apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
         let plan = reg
@@ -1785,7 +1799,11 @@ mod tests {
             "fn z_infallible(s: &ZSample) -> bool { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"), "z_error_message");
+        acc.add_converter(
+            syn::parse_quote!(ZError),
+            ident("z_error_message"),
+            "z_error_message",
+        );
         acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_try_from", "z_infallible"]
@@ -1856,7 +1874,11 @@ mod tests {
             "fn z_error_message(e: &ZError) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(syn::parse_quote!(ZError), ident("z_error_message"), "z_error_message");
+        acc.add_converter(
+            syn::parse_quote!(ZError),
+            ident("z_error_message"),
+            "z_error_message",
+        );
         acc.set_default();
         acc.add_skip_default_error(ident("z_fallible"));
         let declared: std::collections::HashSet<syn::Ident> =

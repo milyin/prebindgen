@@ -1,5 +1,6 @@
 //! Resolved output-deconstruction plans.
 
+use super::Delivery;
 /// Outer shape wrapping the [core decomposition](`UnfoldShape::Base`).
 /// The output-side analog of [`crate::api::core::expand::FoldShape`], on the
 /// unified [`Shape`](crate::api::core::shape::Shape) layer stack:
@@ -16,8 +17,6 @@
 /// The `()` payload is unused here — only the JNI adapter's
 /// `Shape<NullableKind>` carries per-layer data.
 pub use crate::api::core::shape::Shape as UnfoldShape;
-
-use super::Delivery;
 
 /// Identity of the deconstructor **declaration** a plan's records came from.
 /// A `run`-signature artifact (e.g. a generated callback interface) is fully

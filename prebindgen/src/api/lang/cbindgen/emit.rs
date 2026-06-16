@@ -329,6 +329,30 @@ impl Cbindgen {
                 has_niche: false,
             };
         }
+        // `Cow<'_, [T]>` → `T_wire* + size_t`. The C side receives an owned
+        // malloc'd copy, just like `Vec<T>` outputs.
+        if let Some(elem) = cow_slice_elem(ty) {
+            let entry = registry.output_entry(&elem).unwrap_or_else(|| {
+                panic!(
+                    "Cbindgen: `Cow` slice element `{}` has no output converter",
+                    TypeKey::from_type(&elem)
+                )
+            });
+            let elem_wire = entry.destination.clone();
+            return ValueShape {
+                fields: vec![
+                    WireField {
+                        suffix: "",
+                        wire: syn::parse_quote!(*mut #elem_wire),
+                    },
+                    WireField {
+                        suffix: "_len",
+                        wire: syn::parse_quote!(usize),
+                    },
+                ],
+                has_niche: false,
+            };
+        }
         // `Option<T>` consumes one discriminant. If the inner value still has a
         // free pointer niche, reuse it (NULL = `None`); otherwise prepend an
         // explicit `present: bool`. Either way the result exposes no niche.
@@ -389,6 +413,22 @@ impl Cbindgen {
             return quote!(
                 let __arr: ::std::vec::Vec<#elem_wire> =
                     #val.into_iter().map(#elem_conv).collect();
+                let (__p, __n) = __cbg_alloc_array(__arr);
+                #t_ptr = __p;
+                #t_len = __n;
+            );
+        }
+        if let Some(elem) = cow_slice_elem(ty) {
+            let entry = registry
+                .output_entry(&elem)
+                .expect("Cow slice element converter");
+            let elem_conv = entry.function.sig.ident.clone();
+            let elem_wire = entry.destination.clone();
+            let t_ptr = &targets[0];
+            let t_len = &targets[1];
+            return quote!(
+                let __arr: ::std::vec::Vec<#elem_wire> =
+                    #val.iter().copied().map(#elem_conv).collect();
                 let (__p, __n) = __cbg_alloc_array(__arr);
                 #t_ptr = __p;
                 #t_len = __n;

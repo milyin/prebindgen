@@ -1,5 +1,4 @@
-use super::builder::callback_fn_type;
-use super::*;
+use super::{builder::callback_fn_type, *};
 
 /// Per-category **input** terminal converter builders. Each returns
 /// `Some(ConverterImpl)` only for the type category it claims (and `None`
@@ -987,7 +986,11 @@ impl Cbindgen {
 /// lists the immediate inner(s) it looked up.
 impl Cbindgen {
     /// `Option<X>` and reference (`&`/`&mut`/`&[E]`/`&str`) **input** shapes.
-    pub(crate) fn in_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn in_wrappers(
+        &self,
+        ty: &syn::Type,
+        r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
         // `Option<X>` input: a single nullable C param, NULL = `None`. The inner
         // `X` is reused wholesale (its own converter — e.g. an `&T` borrow — does
         // the non-null decode), so `Option<&ZConfig>` binds the *reference*
@@ -1188,7 +1191,11 @@ impl Cbindgen {
     /// markers (`Option`/`Vec`/`Result`) carry a `()` destination — the real
     /// lowering is structural in `emit_function_wrapper` — and exist only to
     /// resolve the entry and make the inner(s) required.
-    pub(crate) fn out_wrappers(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+    pub(crate) fn out_wrappers(
+        &self,
+        ty: &syn::Type,
+        r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
         // `Option<T>` / `Vec<T>` marker.
         if is_option(ty) || is_vec(ty) {
             let inner = first_type_arg(ty)?;
@@ -1197,6 +1204,27 @@ impl Cbindgen {
             let name = format_ident!(
                 "__cbg_outmark_{}_{}",
                 kind,
+                sanitize(&TypeKey::from_type(&inner))
+            );
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused)]
+                pub(crate) fn #name() {}
+            );
+            return Some(ConverterImpl {
+                subs: vec![inner],
+                destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+        // `Cow<'_, [T]>` marker. The actual C ABI shape is structural in
+        // `lower_shape`/`encode_value`, like `Vec<T>`.
+        if let Some(inner) = cow_slice_elem(ty) {
+            r.output_entry(&inner)?;
+            let name = format_ident!(
+                "__cbg_outmark_cow_slice_{}",
                 sanitize(&TypeKey::from_type(&inner))
             );
             let function: syn::ItemFn = syn::parse_quote!(

@@ -12,15 +12,21 @@
 //! * Expansion/deconstruction sidecars — adapter declarations are resolved into
 //!   plans before type resolution, then consumed at wrapper-emission sites.
 
-use std::collections::{HashMap, HashSet};
-use std::fmt;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
-use crate::SourceLocation;
 use quote::ToTokens;
 
-use crate::api::core::niches::Niches;
-use crate::api::core::prebindgen::{Prebindgen, Stage};
-use crate::api::core::types_util::bare_path_ident;
+use crate::{
+    api::core::{
+        niches::Niches,
+        prebindgen::{Prebindgen, Stage},
+        types_util::bare_path_ident,
+    },
+    SourceLocation,
+};
 
 /// Canonical type-shape key — the `to_token_stream().to_string()` form of a
 /// `syn::Type`. Whitespace-normalised (`"Vec<u8>"` and `"Vec < u8 >"` produce
@@ -970,11 +976,15 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::api::core::niches::Niches;
-    use crate::api::core::prebindgen::{ConverterImpl, Prebindgen};
-    use proc_macro2::TokenStream;
     use std::collections::HashSet;
+
+    use proc_macro2::TokenStream;
+
+    use super::*;
+    use crate::api::core::{
+        niches::Niches,
+        prebindgen::{ConverterImpl, Prebindgen},
+    };
 
     /// Minimal `Prebindgen` for scan-pipeline tests. Carries the
     /// declared sets the test wants and stubs every emission/converter
@@ -1135,18 +1145,24 @@ mod tests {
         let entry = TypeEntry {
             destination: syn::parse_quote!(jni::sys::jlong),
             function: syn::parse_quote!(
-                fn __wire(v: Owned) -> jni::sys::jlong { 0 }
+                fn __wire(v: Owned) -> jni::sys::jlong {
+                    0
+                }
             ),
             pre_stages: vec![
                 Stage {
                     function: syn::parse_quote!(
-                        fn __stage_rust(v: Rust) -> Result<Mid, Err> { todo!() }
+                        fn __stage_rust(v: Rust) -> Result<Mid, Err> {
+                            todo!()
+                        }
                     ),
                     metadata: (),
                 },
                 Stage {
                     function: syn::parse_quote!(
-                        fn __stage_wire(v: Mid) -> Result<Owned, Err> { todo!() }
+                        fn __stage_wire(v: Mid) -> Result<Owned, Err> {
+                            todo!()
+                        }
                     ),
                     metadata: (),
                 },
@@ -1158,7 +1174,10 @@ mod tests {
         };
 
         assert_eq!(entry.converter_ident(), "__wire");
-        assert_eq!(TypeKey::from_type(entry.wire_type()), TypeKey::parse("jni::sys::jlong"));
+        assert_eq!(
+            TypeKey::from_type(entry.wire_type()),
+            TypeKey::parse("jni::sys::jlong")
+        );
         assert_eq!(
             entry
                 .output_stage_order()

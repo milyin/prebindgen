@@ -280,9 +280,14 @@ pub(crate) fn build_typed_handle(
     );
     for m in members.iter().filter(|m| m.kind == MemberKind::Constructor) {
         if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
-            if let Some(f) =
-                render_wrapper_fn(ext, item_fn, registry, imports, Some(m.kotlin_name.as_str()), None)
-            {
+            if let Some(f) = render_wrapper_fn(
+                ext,
+                item_fn,
+                registry,
+                imports,
+                Some(m.kotlin_name.as_str()),
+                None,
+            ) {
                 companion = companion.member(f);
             }
         }

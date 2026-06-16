@@ -6,14 +6,20 @@
 //! `crate::collect::Destination::write` (which does prettyplease
 //! formatting and resolves the path against `OUT_DIR`).
 
-use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::{Path, PathBuf},
+};
 
-use crate::collect::Destination;
 use proc_macro2::TokenStream;
 
-use crate::api::core::prebindgen::Prebindgen;
-use crate::api::core::registry::{Registry, TypeEntry, TypeKey};
+use crate::{
+    api::core::{
+        prebindgen::Prebindgen,
+        registry::{Registry, TypeEntry, TypeKey},
+    },
+    collect::Destination,
+};
 
 /// Errors surfaced by the file-emission phase.
 #[derive(Debug)]
@@ -30,7 +36,11 @@ impl std::fmt::Display for WriteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WriteError::BadTokens { phase, source } => {
-                write!(f, "generated tokens from {} did not parse: {}", phase, source)
+                write!(
+                    f,
+                    "generated tokens from {} did not parse: {}",
+                    phase, source
+                )
             }
         }
     }
@@ -162,8 +172,8 @@ fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
         if ts.is_empty() {
             continue;
         }
-        let file: syn::File = syn::parse2(ts.clone())
-            .map_err(|source| WriteError::BadTokens { phase, source })?;
+        let file: syn::File =
+            syn::parse2(ts.clone()).map_err(|source| WriteError::BadTokens { phase, source })?;
         out.extend(file.items);
     }
     Ok(out)
@@ -171,12 +181,16 @@ fn parse_items_from_tokens<I: IntoIterator<Item = TokenStream>>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::SourceLocation;
+    use std::{
+        collections::HashSet,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
     use proc_macro2::TokenStream;
     use quote::ToTokens;
-    use std::collections::HashSet;
-    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::*;
+    use crate::SourceLocation;
 
     struct IdentityExt;
 

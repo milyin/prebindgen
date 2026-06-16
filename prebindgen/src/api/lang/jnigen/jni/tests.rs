@@ -1,7 +1,10 @@
-use super::*;
-use crate::api::core::niches::{NicheSlot, Niches};
-use crate::api::core::registry::{Registry, TypeEntry, TypeKey};
 use quote::ToTokens;
+
+use super::*;
+use crate::api::core::{
+    niches::{NicheSlot, Niches},
+    registry::{Registry, TypeEntry, TypeKey},
+};
 
 /// A process-unique temp directory for a snapshot pipeline run. Keyed by pid +
 /// a monotonic counter so the snapshot tests (which share a helper and run on
@@ -505,7 +508,9 @@ fn jni_native_init_emits_init_block() {
     registry
         .write_rust(&jni, dir.join("gen.rs"))
         .expect("write_rust");
-    let paths = jni.write_kotlin(&registry, &dir.join("kotlin")).expect("write_kotlin");
+    let paths = jni
+        .write_kotlin(&registry, &dir.join("kotlin"))
+        .expect("write_kotlin");
     let native = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -521,7 +526,10 @@ fn jni_native_init_emits_init_block() {
     );
     let init_pos = native.find("init {").expect("init block present");
     let extern_pos = native.find("external fun").expect("externs present");
-    assert!(init_pos < extern_pos, "init must precede externs:\n{native}");
+    assert!(
+        init_pos < extern_pos,
+        "init must precede externs:\n{native}"
+    );
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -575,8 +583,10 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
         .accessor(syn::parse_quote!(z_thing_name), "name")
-        .flatten_output().field_self()
-        .flatten_output().field("name")
+        .flatten_output()
+        .field_self()
+        .flatten_output()
+        .field("name")
         // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
         .ptr_class(syn::parse_quote!(ZOther))
         .fun(syn::parse_quote!(z_thing_sub))
@@ -748,13 +758,17 @@ fn callback_root_identity_moved_after_nested_borrow() {
         // Child handle: canonical output = identity (clone) + its name string.
         .ptr_class(syn::parse_quote!(ZChild))
         .accessor(syn::parse_quote!(z_child_name), "name")
-        .flatten_output().field_self()
-        .flatten_output().field("name")
+        .flatten_output()
+        .field_self()
+        .flatten_output()
+        .field("name")
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .ptr_class(syn::parse_quote!(ZParent))
         .accessor(syn::parse_quote!(z_parent_child), "child")
-        .flatten_output().field("child")
-        .flatten_output().field_self()
+        .flatten_output()
+        .field("child")
+        .flatten_output()
+        .field_self()
         .fun(syn::parse_quote!(z_parent_sub));
 
     let dir = unique_snapshot_dir("jnigen_root_id_order");
@@ -828,28 +842,38 @@ fn callback_double_option_unwrap_pipeline() {
         .value_class(syn::parse_quote!(ZId))
         .ptr_class(syn::parse_quote!(ZKeyExpr))
         .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
-        .flatten_output().field_self()
-        .flatten_output().field("asStr")
+        .flatten_output()
+        .field_self()
+        .flatten_output()
+        .field("asStr")
         .ptr_class(syn::parse_quote!(ZTs))
         .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
-        .flatten_output().field("ntp64")
+        .flatten_output()
+        .field("ntp64")
         .ptr_class(syn::parse_quote!(ZSample))
         .accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
         .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
-        .flatten_output().field("keyExpr")
-        .flatten_output().field("timestamp")
+        .flatten_output()
+        .field("keyExpr")
+        .flatten_output()
+        .field("timestamp")
         .ptr_class(syn::parse_quote!(ZErr))
         .accessor(syn::parse_quote!(z_err_payload), "payload")
-        .flatten_output().field("payload")
+        .flatten_output()
+        .field("payload")
         .ptr_class(syn::parse_quote!(ZReply))
         .accessor(syn::parse_quote!(z_reply_zid), "zid")
         .accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
         .accessor(syn::parse_quote!(z_reply_sample), "sample")
         .accessor(syn::parse_quote!(z_reply_err), "err")
-        .flatten_output().field("zid")
-        .flatten_output().field("isOk")
-        .flatten_output().field("sample")
-        .flatten_output().field("err")
+        .flatten_output()
+        .field("zid")
+        .flatten_output()
+        .field("isOk")
+        .flatten_output()
+        .field("sample")
+        .flatten_output()
+        .field("err")
         .fun(syn::parse_quote!(z_get));
 
     let dir = unique_snapshot_dir("jnigen_double_opt");
@@ -968,7 +992,9 @@ fn inline_output_gets_own_builder() {
         .accessor(syn::parse_quote!(z_thing_name), "name")
         .accessor(syn::parse_quote!(z_thing_size), "size")
         // Default output: name + size (2 leaves ⇒ builder callback).
-        .flatten_output().field("name").field("size")
+        .flatten_output()
+        .field("name")
+        .field("size")
         .fun(syn::parse_quote!(z_make_a))
         // Per-fn inline fields: name + size + name again (different shape). The
         // third field reuses the `z_thing_name` accessor but must carry a
@@ -1052,15 +1078,19 @@ fn error_unwrap_universal_records() {
         .package("errors")
         .ptr_class(syn::parse_quote!(ZDetail))
         .accessor(syn::parse_quote!(z_detail_code), "code")
-        .flatten_output().field("code")
+        .flatten_output()
+        .field("code")
         .ptr_class(syn::parse_quote!(ZErr))
         .accessor(syn::parse_quote!(z_err_message), "message")
         .accessor(syn::parse_quote!(z_err_detail), "detail")
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
-        .flatten_output().field_self()
-        .flatten_output().field("message")
-        .flatten_output().field("detail")
+        .flatten_output()
+        .field_self()
+        .flatten_output()
+        .field("message")
+        .flatten_output()
+        .field("detail")
         .fun(syn::parse_quote!(z_fallible));
 
     let dir = unique_snapshot_dir("jnigen_err_universal");
@@ -1150,7 +1180,8 @@ fn flatten_output_field_unknown_accessor_panics() {
         .ptr_class(syn::parse_quote!(ZThing))
         .accessor(syn::parse_quote!(z_thing_name), "name")
         // References a name that was never declared via `.accessor`.
-        .flatten_output().field("size");
+        .flatten_output()
+        .field("size");
 }
 
 /// `.method(f, name)` binds the `&Class` receiver to `this` (dropped from the

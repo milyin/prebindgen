@@ -222,8 +222,9 @@ fn process_attributes(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quote::ToTokens;
+
+    use super::*;
 
     fn rules(enabled: &[&str], disabled: &[&str]) -> CfgExprRules {
         CfgExprRules {

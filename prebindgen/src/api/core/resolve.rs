@@ -21,10 +21,13 @@
 
 use std::collections::VecDeque;
 
-use crate::SourceLocation;
-
-use crate::api::core::prebindgen::{ConverterImpl, Prebindgen};
-use crate::api::core::registry::{Direction, Registry, TypeEntry, TypeKey};
+use crate::{
+    api::core::{
+        prebindgen::{ConverterImpl, Prebindgen},
+        registry::{Direction, Registry, TypeEntry, TypeKey},
+    },
+    SourceLocation,
+};
 
 /// Errors surfaced by the resolution phase.
 #[derive(Debug)]
@@ -427,8 +430,10 @@ mod tests {
     /// that the resolved converter doesn't actually depend on.
     #[test]
     fn final_invariant_stops_at_resolved_nodes() {
-        use crate::api::core::registry::{Direction, Registry, TypeEntry, TypeKey};
-        use crate::SourceLocation as Loc;
+        use crate::{
+            api::core::registry::{Direction, Registry, TypeEntry, TypeKey},
+            SourceLocation as Loc,
+        };
 
         let mut reg: Registry<()> = Registry::default();
 

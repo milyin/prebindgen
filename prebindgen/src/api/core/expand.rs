@@ -29,8 +29,10 @@ use std::collections::HashSet;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
-use crate::api::core::registry::{Registry, TypeKey};
-use crate::api::core::types_util::{ident, option_inner_type, result_ok_type};
+use crate::api::core::{
+    registry::{Registry, TypeKey},
+    types_util::{ident, option_inner_type, result_ok_type},
+};
 
 mod error;
 mod plan;
@@ -1126,9 +1128,10 @@ fn opt(ty: &syn::Type) -> syn::Type {
 
 #[cfg(test)]
 mod tests {
+    use quote::ToTokens;
+
     use super::*;
     use crate::api::core::registry::Registry;
-    use quote::ToTokens;
 
     fn reg_with(fns: &[&str]) -> Registry<()> {
         let items = fns
@@ -1157,7 +1160,14 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_try_from"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()).expect("apply");
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1188,7 +1198,14 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()).expect("apply");
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1241,7 +1258,13 @@ mod tests {
         exp.add_constructor_variant(ident("z_keyexpr_autocanonize"));
         exp.add_construct(ident("z_keyexpr_intersects"), ident("a"));
 
-        match apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()) {
+        match apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        ) {
             Err(ExpandError::AmbiguousConstructor { candidates, .. }) => {
                 assert_eq!(candidates.len(), 2);
             }
@@ -1270,8 +1293,14 @@ mod tests {
             ident("autocanon"),
         );
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
-            .expect("explicit selection resolves");
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("explicit selection resolves");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_keyexpr_intersects"), ident("a")))
@@ -1295,8 +1324,14 @@ mod tests {
         exp.add_constructor_variant(ident("z_zbytes_from_vec"));
         exp.add_construct(ident("z_session_delete"), ident("attachment"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
-            .expect("apply optional by-value");
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply optional by-value");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_delete"), ident("attachment")))
@@ -1336,8 +1371,14 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_string"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
-            .expect("apply optional by-ref");
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply optional by-ref");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
@@ -1370,8 +1411,14 @@ mod tests {
         exp.add_constructor_variant(ident("z_encoding_from_id"));
         exp.add_construct(ident("z_session_put"), ident("encoding"));
 
-        apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default())
-            .expect("apply optional multi-arg by-ref");
+        apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply optional multi-arg by-ref");
         let plan = reg
             .expansion_plans
             .get(&(ident("z_session_put"), ident("encoding")))
@@ -1421,7 +1468,13 @@ mod tests {
         exp.add_constructor_variant_id();
         exp.add_construct(ident("z_session_get"), ident("ke"));
 
-        match apply(&mut reg, &exp, &Default::default(), &Default::default(), &Default::default()) {
+        match apply(
+            &mut reg,
+            &exp,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+        ) {
             Err(ExpandError::UnsupportedOptional { .. }) => {}
             other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
         }
@@ -1484,7 +1537,14 @@ mod tests {
                 .iter()
                 .map(|s| ident(s))
                 .collect();
-        apply(&mut reg, &exp, &declared, &Default::default(), &Default::default()).expect("apply");
+        apply(
+            &mut reg,
+            &exp,
+            &declared,
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply");
 
         // Both `&ZKeyExpr` params of intersects are constructed.
         assert!(reg
@@ -1567,7 +1627,14 @@ mod tests {
         exp.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_reply_sample"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &exp, &declared, &Default::default(), &Default::default()).expect("apply");
+        apply(
+            &mut reg,
+            &exp,
+            &declared,
+            &Default::default(),
+            &Default::default(),
+        )
+        .expect("apply");
 
         let plan = reg
             .expansion_plans
@@ -1629,7 +1696,14 @@ mod tests {
         exp.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["consume_a"].iter().map(|s| ident(s)).collect();
-        let err = apply(&mut reg, &exp, &declared, &Default::default(), &Default::default()).unwrap_err();
+        let err = apply(
+            &mut reg,
+            &exp,
+            &declared,
+            &Default::default(),
+            &Default::default(),
+        )
+        .unwrap_err();
         assert!(matches!(err, ExpandError::InputCycle { .. }), "got {err:?}");
     }
 }

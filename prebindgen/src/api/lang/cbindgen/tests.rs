@@ -393,6 +393,38 @@ fn vec_u8_returns_scalar_array() {
     assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
 }
 
+/// `Cow<'_, [u8]>` lowers to the same owned scalar array ABI as `Vec<u8>`.
+#[test]
+fn cow_u8_returns_scalar_array() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_zbytes_as_bytes(z: &ZZBytes) -> ::std::borrow::Cow<'_, [u8]> {
+            unimplemented!()
+        }
+    );
+    let mut registry =
+        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .opaque_ptr(syn::parse_quote!(ZZBytes))
+        .base_name("z_zbytes")
+        .function(syn::parse_quote!(z_zbytes_as_bytes))
+        .panic();
+
+    let src = write(&cbindgen, &mut registry, "cow_u8");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(compact.contains("->*mutu8"), "{src}");
+    assert!(compact.contains("len:*mutusize"), "{src}");
+    assert!(
+        compact.contains(".iter().copied().map(__cbg_out_u8).collect()"),
+        "{src}"
+    );
+    assert!(compact.contains("__cbg_alloc_array(__arr)"), "{src}");
+}
+
 /// An `opaque_owned_struct` type is passed BY VALUE via transmute to/from an opaque
 /// counterpart (no `Box`): output `ptr::read`s the bytes, consume reads them
 /// out by `*mut` and writes a gravestone back, `_drop` runs the live value's

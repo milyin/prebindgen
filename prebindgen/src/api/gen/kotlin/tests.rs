@@ -1,7 +1,6 @@
 //! Golden-string tests: one per Kotlin construct the jnigen back-end emits.
 
-use super::types::ImportSet;
-use super::*;
+use super::{types::ImportSet, *};
 
 fn body_of(src: &str) -> &str {
     // Strip banner + package + imports + the separating blank line.

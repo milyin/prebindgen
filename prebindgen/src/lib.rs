@@ -209,13 +209,15 @@ pub use crate::api::core::gravestone::{Gravestone, Transmute};
 /// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
 /// classes, exception classes).
 pub mod lang {
-    pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
-    pub use crate::api::lang::jnigen::{
-        box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
-        box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
-        null_byte_array, null_string, CachedIfaceMethod, EnumClass, Function, JniBindingError,
-        JniGen, JniGenState, KotlinFile, Package, PackageState, PtrClass, Root, TypeDeclState,
-        TypeKeyState, TypeMeta, WrapperNonMeta, WriteKotlinError,
+    pub use crate::api::lang::{
+        cbindgen::{snake_case, Cbindgen},
+        jnigen::{
+            box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
+            box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
+            null_byte_array, null_string, CachedIfaceMethod, EnumClass, Function, JniBindingError,
+            JniGen, JniGenState, KotlinFile, Package, PackageState, PtrClass, Root, TypeDeclState,
+            TypeKeyState, TypeMeta, WrapperNonMeta, WriteKotlinError,
+        },
     };
 }
 

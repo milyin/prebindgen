@@ -14,10 +14,12 @@
 
 use std::sync::OnceLock;
 
-use jni::objects::{GlobalRef, JMethodID, JObject};
-use jni::signature::ReturnType;
-use jni::sys::jvalue;
-use jni::JNIEnv;
+use jni::{
+    objects::{GlobalRef, JMethodID, JObject},
+    signature::ReturnType,
+    sys::jvalue,
+    JNIEnv,
+};
 
 /// A `(pinned interface class, method ID)` pair resolved once per process.
 /// Declare as `static`; the embedded [`OnceLock`] handles the one-time

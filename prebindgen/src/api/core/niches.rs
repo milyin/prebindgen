@@ -132,8 +132,9 @@ impl Niches {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quote::ToTokens;
+
+    use super::*;
 
     fn slot_strs(s: &NicheSlot) -> (String, String) {
         (

@@ -30,7 +30,9 @@ pub mod types_util;
 pub mod unfold;
 pub(crate) mod write;
 
-pub use self::gravestone::{Gravestone, Transmute};
-pub use self::niches::{NicheSlot, Niches};
-pub use self::prebindgen::{ConverterImpl, Prebindgen, Stage};
-pub use self::registry::{Direction, Registry, ScanError, TypeEntry, TypeKey, WriteRustError};
+pub use self::{
+    gravestone::{Gravestone, Transmute},
+    niches::{NicheSlot, Niches},
+    prebindgen::{ConverterImpl, Prebindgen, Stage},
+    registry::{Direction, Registry, ScanError, TypeEntry, TypeKey, WriteRustError},
+};

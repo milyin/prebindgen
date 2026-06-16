@@ -269,7 +269,11 @@ impl<S: JniGenState> JniGen<S> {
                         .vis(Vis::Public),
                 );
             let mut imports: BTreeSet<String> = BTreeSet::new();
-            let members = self.class_members.get(key).map(Vec::as_slice).unwrap_or(&[]);
+            let members = self
+                .class_members
+                .get(key)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
             if !members.is_empty() && !self.package.is_empty() {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
@@ -689,7 +693,10 @@ impl<S: JniGenState> JniGen<S> {
         if let Some(code) = &self.jni_native_init {
             obj = obj.member(kt::KtDecl::Raw {
                 name: "native_init".to_string(),
-                code: Code::new().line("init {").line(format!("    {code}")).line("}"),
+                code: Code::new()
+                    .line("init {")
+                    .line(format!("    {code}"))
+                    .line("}"),
             });
         }
         // One compact run of `external fun` lines (no blank lines between

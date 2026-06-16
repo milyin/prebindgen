@@ -9,8 +9,10 @@
 //! clashes with a sibling `bytes/` directory, so the layout is
 //! collision-free.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Path, PathBuf},
+};
 
 use super::model::KtFile;
 

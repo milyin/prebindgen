@@ -13,10 +13,12 @@
 
 use std::sync::OnceLock;
 
-use jni::objects::{GlobalRef, JObject, JStaticMethodID};
-use jni::signature::ReturnType;
-use jni::sys::jvalue;
-use jni::JNIEnv;
+use jni::{
+    objects::{GlobalRef, JObject, JStaticMethodID},
+    signature::ReturnType,
+    sys::jvalue,
+    JNIEnv,
+};
 
 /// A `java.lang.*` box class pinned by a process-wide `GlobalRef`, plus its
 /// static `valueOf` method ID. The pin keeps the class from unloading, which

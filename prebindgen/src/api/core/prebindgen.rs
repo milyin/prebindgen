@@ -21,8 +21,10 @@ use std::collections::HashSet;
 
 use proc_macro2::TokenStream;
 
-use crate::api::core::niches::Niches;
-use crate::api::core::registry::{Registry, TypeKey};
+use crate::api::core::{
+    niches::Niches,
+    registry::{Registry, TypeKey},
+};
 
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
 /// a value-inspecting step that sits between the rust value the

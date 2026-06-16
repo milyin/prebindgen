@@ -24,6 +24,7 @@ pub use jni::{
     null_string, CachedIfaceMethod, EnumClass, Function, JniBindingError, JniGen, JniGenState,
     Package, PackageState, PtrClass, Root, TypeDeclState, TypeKeyState, TypeMeta, WrapperNonMeta,
 };
+
 // Kotlin emission types now live in the standalone generator module
 // (`api::gen::kotlin`); re-exported here so the public `lang::` surface is
 // unchanged (`KotlinFile` aliases the model's `KtFile`).

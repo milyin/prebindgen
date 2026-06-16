@@ -28,9 +28,8 @@ pub(crate) mod wire_access;
 // (`builder`, `trait_impl`, `emit`, `prim`, `kotlin_emit`, `render`, `fold`,
 // `tests`). They are re-exported `pub(crate)` so each sibling only needs
 // `use super::*;`.
-pub(crate) use std::collections::{BTreeMap, HashMap};
 pub(crate) use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -128,7 +127,6 @@ impl MethodEntry {
             kotlin_name_override: None,
         }
     }
-
 }
 
 /// All configuration the structured builder accumulates for one

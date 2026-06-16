@@ -330,8 +330,9 @@ pub(crate) fn ident(s: &str) -> syn::Ident {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use quote::ToTokens;
+
+    use super::*;
 
     fn ty(s: &str) -> syn::Type {
         syn::parse_str(s).unwrap()
