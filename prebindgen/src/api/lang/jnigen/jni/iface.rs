@@ -273,32 +273,133 @@ impl IfaceSpec {
             format!("<{}>", bare_generics.join(", "))
         };
         let recv = format!("{}{gen_args}.asRaw", self.name);
-        let arg_list = self
-            .params
-            .iter()
-            .map(|p| p.name.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
         let wrapped = self
             .params
             .iter()
             .map(|p| p.wrap.wrap_expr(&p.name, p.raw.is_nullable()))
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect::<Vec<_>>();
         let body = if self.params.is_empty() {
-            format!("{}{gen_args} {{ run() }}", self.raw_name())
+            kt::Code::new().blk(format!("{}{gen_args} {{", self.raw_name()), |c| {
+                c.line("run()")
+            })
         } else {
-            format!(
-                "{}{gen_args} {{ {arg_list} -> run({wrapped}) }}",
-                self.raw_name()
-            )
+            kt::Code::new().blk(format!("{}{gen_args} {{", self.raw_name()), |mut c| {
+                for (idx, name) in self.params.iter().map(|p| p.name.as_str()).enumerate() {
+                    let suffix = if idx + 1 == self.params.len() {
+                        " ->"
+                    } else {
+                        ","
+                    };
+                    c = c.line(format!("{name}{suffix}"));
+                }
+                c.blk_with("run(", ")", |mut call| {
+                    for (idx, expr) in wrapped.iter().enumerate() {
+                        let suffix = if idx + 1 == wrapped.len() { "" } else { "," };
+                        call = call.line(format!("{expr}{suffix}"));
+                    }
+                    call
+                })
+            })
         };
         let mut f = kt::KtFun::new(recv).vis(kt::Vis::Public);
         for g in &bare_generics {
             f = f.generic(g);
         }
         f = f.returns(kt::KtType::cls(format!("{}{gen_args}", self.raw_name())));
-        f.expr_body(kt::Code::new().line(body))
+        f.expr_body(body)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render_as_raw(spec: IfaceSpec) -> String {
+        kt::KtFile::new(&spec.package)
+            .decl(spec.to_as_raw_fun())
+            .render()
+    }
+
+    #[test]
+    fn as_raw_adapter_is_multiline_even_when_short() {
+        let spec = IfaceSpec {
+            package: "io.test".to_string(),
+            name: "ThingCallback".to_string(),
+            type_params: vec![],
+            params: vec![IfaceParam {
+                name: "handle".to_string(),
+                typed: kt::KtType::cls("io.test.Thing"),
+                raw: kt::KtType::long(),
+                wrap: WrapKind::Handle("io.test.Thing".to_string()),
+            }],
+            ret: kt::KtType::unit(),
+            descr: "(J)V".to_string(),
+        };
+
+        let src = render_as_raw(spec);
+        assert!(
+            src.contains(
+                "public fun ThingCallback.asRaw(): ThingCallbackRaw =\n    \
+                 ThingCallbackRaw {\n        \
+                 handle ->\n        \
+                 run(\n            \
+                 Thing(handle)\n        \
+                 )\n    \
+                 }"
+            ),
+            "{src}"
+        );
+    }
+
+    #[test]
+    fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
+        let spec = IfaceSpec {
+            package: "io.test".to_string(),
+            name: "ReplyCallback".to_string(),
+            type_params: vec![],
+            params: vec![
+                IfaceParam {
+                    name: "replierZid".to_string(),
+                    typed: kt::KtType::cls("io.test.ZenohId").nullable(),
+                    raw: kt::KtType::byte_array().nullable(),
+                    wrap: WrapKind::Blob("io.test.ZenohId".to_string()),
+                },
+                IfaceParam::same("replierEid".to_string(), kt::KtType::int()),
+                IfaceParam::same("isOk".to_string(), kt::KtType::boolean()),
+                IfaceParam {
+                    name: "sample__keyExpr".to_string(),
+                    typed: kt::KtType::cls("io.test.KeyExpr").nullable(),
+                    raw: kt::KtType::long().nullable(),
+                    wrap: WrapKind::Handle("io.test.KeyExpr".to_string()),
+                },
+                IfaceParam {
+                    name: "sample__payload".to_string(),
+                    typed: kt::KtType::cls("io.test.ZBytes").nullable(),
+                    raw: kt::KtType::long().nullable(),
+                    wrap: WrapKind::Handle("io.test.ZBytes".to_string()),
+                },
+            ],
+            ret: kt::KtType::unit(),
+            descr: "([BIZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
+        };
+
+        let src = render_as_raw(spec);
+        assert!(
+            src.contains("public fun ReplyCallback.asRaw(): ReplyCallbackRaw =\n"),
+            "{src}"
+        );
+        assert!(src.contains("    ReplyCallbackRaw {\n"), "{src}");
+        assert!(src.contains("        replierZid,\n"), "{src}");
+        assert!(src.contains("        sample__payload ->\n"), "{src}");
+        assert!(src.contains("        run(\n"), "{src}");
+        assert!(
+            src.contains("            replierZid?.let { ZenohId(it) },\n"),
+            "{src}"
+        );
+        assert!(
+            src.contains("            sample__payload?.let { ZBytes(it) }\n"),
+            "{src}"
+        );
     }
 }
 
