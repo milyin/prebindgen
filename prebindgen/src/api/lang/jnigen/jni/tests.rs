@@ -585,7 +585,6 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .accessor(syn::parse_quote!(z_thing_name), "name")
         .flatten_output()
         .field_self()
-        .flatten_output()
         .field("name")
         // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
         .ptr_class(syn::parse_quote!(ZOther))
@@ -760,14 +759,12 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .accessor(syn::parse_quote!(z_child_name), "name")
         .flatten_output()
         .field_self()
-        .flatten_output()
         .field("name")
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .ptr_class(syn::parse_quote!(ZParent))
         .accessor(syn::parse_quote!(z_parent_child), "child")
         .flatten_output()
         .field("child")
-        .flatten_output()
         .field_self()
         .fun(syn::parse_quote!(z_parent_sub));
 
@@ -844,7 +841,6 @@ fn callback_double_option_unwrap_pipeline() {
         .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
         .flatten_output()
         .field_self()
-        .flatten_output()
         .field("asStr")
         .ptr_class(syn::parse_quote!(ZTs))
         .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
@@ -855,7 +851,6 @@ fn callback_double_option_unwrap_pipeline() {
         .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
         .flatten_output()
         .field("keyExpr")
-        .flatten_output()
         .field("timestamp")
         .ptr_class(syn::parse_quote!(ZErr))
         .accessor(syn::parse_quote!(z_err_payload), "payload")
@@ -868,11 +863,8 @@ fn callback_double_option_unwrap_pipeline() {
         .accessor(syn::parse_quote!(z_reply_err), "err")
         .flatten_output()
         .field("zid")
-        .flatten_output()
         .field("isOk")
-        .flatten_output()
         .field("sample")
-        .flatten_output()
         .field("err")
         .fun(syn::parse_quote!(z_get));
 
@@ -1087,9 +1079,7 @@ fn error_unwrap_universal_records() {
         // message, and the Option-nested detail spliced to its code leaf.
         .flatten_output()
         .field_self()
-        .flatten_output()
         .field("message")
-        .flatten_output()
         .field("detail")
         .fun(syn::parse_quote!(z_fallible));
 
