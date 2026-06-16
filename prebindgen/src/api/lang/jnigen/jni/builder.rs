@@ -61,6 +61,7 @@ impl JniGen<Root> {
                 emit_handle_locks: true,
                 expansions: crate::api::core::expand::Expansions::default(),
                 deconstructors: crate::api::core::unfold::Deconstructors::default(),
+                class_accessors: HashMap::new(),
             },
             state: Root,
         };
@@ -376,23 +377,6 @@ impl<S: PackageState> JniGen<S> {
 }
 
 impl JniGen<Function> {
-    /// Mark this package function as a `#[prebindgen]` **read accessor**
-    /// (`f(&T) -> ...`). Accessors are still exported wrappers, but the
-    /// parameter composer is never applied to them (explicit [`Self::input`] on
-    /// their params is a build error, and constructor `.default()` auto-apply
-    /// skips them). They are the only functions that pointer-class
-    /// output/deconstructor records may reference.
-    pub fn accessor(mut self) -> Self {
-        let package = self.state.package.clone();
-        let index = self.state.index;
-        let pkg = self
-            .packages
-            .get_mut(&package)
-            .expect("package entry vanished");
-        pkg.functions[index].is_accessor = true;
-        self
-    }
-
     /// Override the Kotlin-side function name for this [`Self::package_fun`]
     /// entry. Default (without `.name(...)`) is
     /// `snake_to_camel(rust_ident)` (e.g. `z_hello_whatami` → `zHelloWhatami`).
@@ -466,13 +450,32 @@ impl JniGen<PtrClass> {
     }
 
     /// **Accessor output record**: the current `ptr_class`'s canonical output
-    /// includes `func`'s result, unwrapped per the return type's own canonical
-    /// output (one leaf for a scalar/string/enum; spliced for a nested ptr_class).
-    /// `name` is the literal callback-parameter name for this leaf (emitted
-    /// verbatim — no casing/escaping); it must be unique within the
-    /// deconstructor and must not contain the reserved `"__"` separator. For a
-    /// spliced nested ptr_class it prefixes the child leaf names (`name__<child>`).
-    pub fn ptr_class_output(mut self, func: syn::Ident, name: impl Into<String>) -> Self {
+    /// includes the result of the accessor previously declared via
+    /// [`JniGen::class_accessor`] under the method name `name`, unwrapped per the
+    /// return type's own canonical output (one leaf for a scalar/string/enum;
+    /// spliced for a nested ptr_class). `name` is also the literal
+    /// callback-parameter name for this leaf (emitted verbatim); it must be
+    /// unique within the deconstructor and must not contain the reserved `"__"`
+    /// separator. For a spliced nested ptr_class it prefixes the child leaf
+    /// names (`name__<child>`). The accessor must be declared on this class
+    /// before it is referenced here.
+    pub fn ptr_class_output(mut self, name: impl Into<String>) -> Self {
+        let name = name.into();
+        let key = self.state.key.clone();
+        let func = self
+            .class_accessors
+            .get(&key)
+            .and_then(|accs| accs.iter().find(|a| a.method_name == name))
+            .unwrap_or_else(|| {
+                panic!(
+                    "ptr_class_output(\"{name}\"): no `.class_accessor(.., \"{name}\")` declared on \
+                     `{}` — declare the accessor on this class before referencing it as an output \
+                     record.",
+                    key.as_str()
+                )
+            })
+            .rust_ident
+            .clone();
         let t = self.current_ptr_class();
         self.deconstructors.ensure_canonical_deconstructor(t);
         self.deconstructors.add_deconstructor_record(func, name);
@@ -709,6 +712,29 @@ impl<S: TypeKeyState> JniGen<S> {
         self
     }
 
+    /// Declare a `#[prebindgen]` **read accessor** (`f(&Self) -> R`) as an
+    /// **instance method** of the current class (`ptr_class` / `value_class`),
+    /// named `method_name`. The receiver parameter (the first `&Self` /
+    /// `Self`) is dropped from the Kotlin signature and bound to `this`; the
+    /// remaining parameters/return are emitted exactly as a free wrapper would.
+    ///
+    /// Replaces the former `.package_fun(f).accessor()`: the accessor is the
+    /// membership token for the input/output composers — its params are never
+    /// input-composed and its return is never output-decomposed — and a
+    /// decomposition record selects it via [`JniGen::ptr_class_output`] by its
+    /// `method_name` (which doubles as the leaf/parameter name). Declare an
+    /// accessor BEFORE any `.ptr_class_output(name)` that references it.
+    pub fn class_accessor(mut self, rust_fun: syn::Ident, method_name: impl Into<String>) -> Self {
+        let key = self.state.type_key().clone();
+        self.class_accessors
+            .entry(key)
+            .or_default()
+            .push(crate::api::lang::jnigen::jni::ClassAccessor {
+                rust_ident: rust_fun,
+                method_name: method_name.into(),
+            });
+        self
+    }
 }
 
 impl<S> JniGen<S> {

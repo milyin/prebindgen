@@ -524,9 +524,9 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .ptr_class(syn::parse_quote!(ZThing))
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
+        .class_accessor(syn::parse_quote!(z_thing_name), "name")
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_thing_name), "name")
-        .package_fun(syn::parse_quote!(z_thing_name)).accessor()
+        .ptr_class_output("name")
         // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
         .ptr_class(syn::parse_quote!(ZOther))
         .package_fun(syn::parse_quote!(z_thing_sub))
@@ -697,14 +697,14 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .package("thing")
         // Child handle: canonical output = identity (clone) + its name string.
         .ptr_class(syn::parse_quote!(ZChild))
+        .class_accessor(syn::parse_quote!(z_child_name), "name")
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_child_name), "name")
-        .package_fun(syn::parse_quote!(z_child_name)).accessor()
+        .ptr_class_output("name")
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .ptr_class(syn::parse_quote!(ZParent))
-        .ptr_class_output(syn::parse_quote!(z_parent_child), "child")
+        .class_accessor(syn::parse_quote!(z_parent_child), "child")
+        .ptr_class_output("child")
         .ptr_class_output_direct()
-        .package_fun(syn::parse_quote!(z_parent_child)).accessor()
         .package_fun(syn::parse_quote!(z_parent_sub));
 
     let dir = unique_snapshot_dir("jnigen_root_id_order");
@@ -777,29 +777,29 @@ fn callback_double_option_unwrap_pipeline() {
         .package("query")
         .value_class(syn::parse_quote!(ZId))
         .ptr_class(syn::parse_quote!(ZKeyExpr))
+        .class_accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_keyexpr_as_str), "asStr")
-        .package_fun(syn::parse_quote!(z_keyexpr_as_str)).accessor()
+        .ptr_class_output("asStr")
         .ptr_class(syn::parse_quote!(ZTs))
-        .ptr_class_output(syn::parse_quote!(z_ts_ntp64), "ntp64")
-        .package_fun(syn::parse_quote!(z_ts_ntp64)).accessor()
+        .class_accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
+        .ptr_class_output("ntp64")
         .ptr_class(syn::parse_quote!(ZSample))
-        .ptr_class_output(syn::parse_quote!(z_sample_key_expr), "keyExpr")
-        .ptr_class_output(syn::parse_quote!(z_sample_timestamp), "timestamp")
-        .package_fun(syn::parse_quote!(z_sample_key_expr)).accessor()
-        .package_fun(syn::parse_quote!(z_sample_timestamp)).accessor()
+        .class_accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
+        .class_accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
+        .ptr_class_output("keyExpr")
+        .ptr_class_output("timestamp")
         .ptr_class(syn::parse_quote!(ZErr))
-        .ptr_class_output(syn::parse_quote!(z_err_payload), "payload")
-        .package_fun(syn::parse_quote!(z_err_payload)).accessor()
+        .class_accessor(syn::parse_quote!(z_err_payload), "payload")
+        .ptr_class_output("payload")
         .ptr_class(syn::parse_quote!(ZReply))
-        .ptr_class_output(syn::parse_quote!(z_reply_zid), "zid")
-        .ptr_class_output(syn::parse_quote!(z_reply_is_ok), "isOk")
-        .ptr_class_output(syn::parse_quote!(z_reply_sample), "sample")
-        .ptr_class_output(syn::parse_quote!(z_reply_err), "err")
-        .package_fun(syn::parse_quote!(z_reply_zid)).accessor()
-        .package_fun(syn::parse_quote!(z_reply_is_ok)).accessor()
-        .package_fun(syn::parse_quote!(z_reply_sample)).accessor()
-        .package_fun(syn::parse_quote!(z_reply_err)).accessor()
+        .class_accessor(syn::parse_quote!(z_reply_zid), "zid")
+        .class_accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
+        .class_accessor(syn::parse_quote!(z_reply_sample), "sample")
+        .class_accessor(syn::parse_quote!(z_reply_err), "err")
+        .ptr_class_output("zid")
+        .ptr_class_output("isOk")
+        .ptr_class_output("sample")
+        .ptr_class_output("err")
         .package_fun(syn::parse_quote!(z_get));
 
     let dir = unique_snapshot_dir("jnigen_double_opt");
@@ -917,14 +917,14 @@ fn named_error_deconstructor_gets_own_handler() {
         .package_prefix("io.test.jni")
         .package("errors")
         .ptr_class(syn::parse_quote!(ZErr))
+        .class_accessor(syn::parse_quote!(z_err_message), "message")
+        .class_accessor(syn::parse_quote!(z_err_code), "code")
         // Canonical error decomposition: message only.
-        .ptr_class_output(syn::parse_quote!(z_err_message), "message")
+        .ptr_class_output("message")
         // Named alternative: message + code.
         .ptr_class_deconstructor("full")
-        .ptr_class_output(syn::parse_quote!(z_err_message), "message")
-        .ptr_class_output(syn::parse_quote!(z_err_code), "code")
-        .package_fun(syn::parse_quote!(z_err_message)).accessor()
-        .package_fun(syn::parse_quote!(z_err_code)).accessor()
+        .ptr_class_output("message")
+        .ptr_class_output("code")
         .package_fun(syn::parse_quote!(z_simple))
         .package_fun(syn::parse_quote!(z_detailed))
         .error_named("full");
@@ -1010,11 +1010,11 @@ fn inline_output_gets_own_builder() {
         .package_prefix("io.test.jni")
         .package("thing")
         .ptr_class(syn::parse_quote!(ZThing))
+        .class_accessor(syn::parse_quote!(z_thing_name), "name")
+        .class_accessor(syn::parse_quote!(z_thing_size), "size")
         // Canonical output: name + size (2 leaves ⇒ builder callback).
-        .ptr_class_output(syn::parse_quote!(z_thing_name), "name")
-        .ptr_class_output(syn::parse_quote!(z_thing_size), "size")
-        .package_fun(syn::parse_quote!(z_thing_name)).accessor()
-        .package_fun(syn::parse_quote!(z_thing_size)).accessor()
+        .ptr_class_output("name")
+        .ptr_class_output("size")
         .package_fun(syn::parse_quote!(z_make_a))
         // Per-fn inline records: identity handle + name (different shape). The
         // third record reuses the `z_thing_name` accessor but must carry a
@@ -1098,16 +1098,16 @@ fn error_unwrap_universal_records() {
         .package_prefix("io.test.jni")
         .package("errors")
         .ptr_class(syn::parse_quote!(ZDetail))
-        .ptr_class_output(syn::parse_quote!(z_detail_code), "code")
-        .package_fun(syn::parse_quote!(z_detail_code)).accessor()
+        .class_accessor(syn::parse_quote!(z_detail_code), "code")
+        .ptr_class_output("code")
         .ptr_class(syn::parse_quote!(ZErr))
+        .class_accessor(syn::parse_quote!(z_err_message), "message")
+        .class_accessor(syn::parse_quote!(z_err_detail), "detail")
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
         .ptr_class_output_direct()
-        .ptr_class_output(syn::parse_quote!(z_err_message), "message")
-        .ptr_class_output(syn::parse_quote!(z_err_detail), "detail")
-        .package_fun(syn::parse_quote!(z_err_message)).accessor()
-        .package_fun(syn::parse_quote!(z_err_detail)).accessor()
+        .ptr_class_output("message")
+        .ptr_class_output("detail")
         .package_fun(syn::parse_quote!(z_fallible));
 
     let dir = unique_snapshot_dir("jnigen_err_universal");
@@ -1183,4 +1183,19 @@ fn error_unwrap_universal_records() {
     // Wrapper: nullable capture slots, `!!` redispatch for the non-null ze,
     // pass-through for the nullable one — NO `?:` default coalescing.
     assert!(!all.contains("?:\"\""), "{all}");
+}
+
+/// `.ptr_class_output(name)` must reference a `.class_accessor` declared on the
+/// same class; an unknown method name is a loud build-script panic.
+#[test]
+#[should_panic(expected = "no `.class_accessor")]
+fn ptr_class_output_unknown_accessor_panics() {
+    let _ = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("thing")
+        .ptr_class(syn::parse_quote!(ZThing))
+        .class_accessor(syn::parse_quote!(z_thing_name), "name")
+        // References a name that was never declared via `.class_accessor`.
+        .ptr_class_output("size");
 }

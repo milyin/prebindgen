@@ -119,11 +119,6 @@ pub struct MethodEntry {
     /// the entry's registration. `None` = derive from `rust_ident` via
     /// `snake_to_camel`.
     pub kotlin_name_override: Option<String>,
-    /// `true` when marked with `.accessor()` (a read accessor): the
-    /// parameter composer (constructor `.default()` / explicit `.construct`) is
-    /// never applied to it, and it is the only kind of function a decomposer
-    /// record (`.deconstructor_record`/`.converter`/`_nested`) may reference.
-    pub is_accessor: bool,
 }
 
 impl MethodEntry {
@@ -131,7 +126,6 @@ impl MethodEntry {
         Self {
             rust_ident,
             kotlin_name_override: None,
-            is_accessor: false,
         }
     }
 
@@ -171,6 +165,23 @@ pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
     /// subpackage via [`JniGen::package_fun`].
     pub functions: Vec<MethodEntry>,
+}
+
+/// One `#[prebindgen]` read accessor (`f(&T) -> R`) attached to a declared
+/// class (`ptr_class` / `value_class`) via [`JniGen::class_accessor`]. The
+/// accessor is emitted as an **instance method** of that class's Kotlin
+/// type (dropping the receiver param) instead of a flat free function, and it
+/// is the membership source for [`crate::api::core::unfold`]/`expand`
+/// (replacing the old `.accessor()` modifier): its parameters are never
+/// input-composed, its return is never output-decomposed, and a decomposition
+/// record (`.ptr_class_output`) may reference it by `method_name`.
+#[derive(Clone, Debug)]
+pub(crate) struct ClassAccessor {
+    /// Rust function ident (`registry.functions[ident]`).
+    pub rust_ident: syn::Ident,
+    /// Kotlin method name on the owning class — also the leaf/parameter name
+    /// when referenced by `.ptr_class_output(method_name)`.
+    pub method_name: String,
 }
 
 /// Boxed closure that builds a converter when applied to the wildcard
@@ -487,8 +498,8 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 ///
 /// fn add_keyexpr(jni: JniGen<Package>) -> JniGen<Package> {
 ///     jni.ptr_class(pq!(ZKeyExpr))
+///         .class_accessor(pq!(z_keyexpr_as_str), "getStr")
 ///         .ptr_class_output_direct()
-///         .package_fun(pq!(z_keyexpr_as_str)).accessor()
 ///         .package("next")
 /// }
 /// ```
@@ -624,6 +635,14 @@ pub struct JniGenInner {
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
+
+    /// Read accessors attached to a declared class via
+    /// [`JniGen::class_accessor`], keyed by the class's canonical Rust type.
+    /// Each is emitted as an instance method of that class and supplies the
+    /// accessor-membership set for the input/output composers (see
+    /// [`ClassAccessor`]). Insertion order within a class is preserved (the Vec);
+    /// class emission iterates `types` by sorted key, so map order is irrelevant.
+    pub(crate) class_accessors: HashMap<TypeKey, Vec<ClassAccessor>>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

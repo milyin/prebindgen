@@ -243,8 +243,11 @@ pub(crate) fn build_data_class(
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
     ext: &JniGen<impl JniGenState>,
+    registry: &Registry<KotlinMeta>,
     class_name: &str,
     rust_doc_name: &str,
+    key: &TypeKey,
+    imports: &mut BTreeSet<String>,
 ) -> kt::KtClass {
     // The typed handle is a pure shell — `ptr` slot + `close()`/`take()` +
     // the `freePtr` extern. All functions are emitted as flat free functions
@@ -261,7 +264,7 @@ pub(crate) fn build_typed_handle(
     } else {
         format!("{}.NativeHandle", ext.package)
     };
-    kt::KtClass::new(kt::ClassKind::Plain, class_name)
+    let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
         .kdoc(format!(
             "Typed handle for a native Zenoh `{rust_doc_name}`."
@@ -305,7 +308,30 @@ pub(crate) fn build_typed_handle(
                     .modifier("external")
                     .param(kt::KtParam::new("ptr", kt::KtType::long())),
             ),
-        )
+        );
+
+    // Promoted read-accessor methods: each `.class_accessor(f, name)` becomes
+    // an instance method (receiver bound to `this`), delegating to the same
+    // centralized `JNINative` extern as a free wrapper would.
+    let accessors = ext.class_accessors.get(key).map(Vec::as_slice).unwrap_or(&[]);
+    if !accessors.is_empty() && !ext.package.is_empty() {
+        imports.insert(format!("{}.{}", ext.package, ext.jni_native_class_name()));
+    }
+    for acc in accessors {
+        if let Some((item_fn, _)) = registry.functions.get(&acc.rust_ident) {
+            if let Some(m) = render_wrapper_fn(
+                ext,
+                item_fn,
+                registry,
+                imports,
+                Some(acc.method_name.as_str()),
+                Some(key),
+            ) {
+                class = class.member(m);
+            }
+        }
+    }
+    class
 }
 
 /// Render one `external fun <mangle_fun(name)>(…): <wire-return>` line
@@ -552,6 +578,32 @@ struct Opaque {
     nullable: bool,
 }
 
+/// Peel `&` / `Option<…>` / `Option<&…>` layers and return the inner type's
+/// [`TypeKey`] — used to match an accessor's receiver parameter against its
+/// owning class key in [`render_wrapper_fn`].
+fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
+    let core = match ty {
+        syn::Type::Reference(r) => &*r.elem,
+        other => other,
+    };
+    if let syn::Type::Path(tp) = core {
+        if let Some(seg) = tp.path.segments.last() {
+            if seg.ident == "Option" {
+                if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
+                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
+                        let inner_core = match inner {
+                            syn::Type::Reference(r) => &*r.elem,
+                            other => other,
+                        };
+                        return TypeKey::from_type(inner_core);
+                    }
+                }
+            }
+        }
+    }
+    TypeKey::from_type(core)
+}
+
 /// Build a single top-level (free-function) wrapper as a [`kt::KtFun`].
 /// Returns `None` if the function has a parameter whose Kotlin type isn't
 /// registered (in that case we skip the function rather than panicking — the
@@ -560,16 +612,27 @@ struct Opaque {
 ///
 /// Every `#[prebindgen]` function is emitted as a flat namespaced free function
 /// — opaque-handle parameters are ordinary `NativeHandle` params, locked via the
-/// per-call `withSortedHandleLocks` scaffold. There is no receiver promotion /
-/// instance-method representation: the base library is flat.
+/// per-call `withSortedHandleLocks` scaffold.
+///
+/// When `receiver_key` is `Some(class_key)` the function is emitted as an
+/// **instance method** of that class: the first parameter whose (peeled) Rust
+/// type equals `class_key` is dropped from the signature and bound to `this`
+/// (the inherited `NativeHandle` scope for a `ptr_class` — `this.ptr` + lock —
+/// or `this.bytes` for a `value_class` blob). The JNINative extern/call is
+/// unchanged (keyed on the Rust ident), so only the Kotlin wrapper relocates.
 pub(crate) fn render_wrapper_fn(
     ext: &JniGen<impl JniGenState>,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
+    receiver_key: Option<&TypeKey>,
 ) -> Option<kt::KtFun> {
     let rust_name = f.sig.ident.to_string();
+    // Index of the parameter bound to `this` for an instance-method emission
+    // (the first param whose peeled type matches `receiver_key`); dropped from
+    // the rendered signature.
+    let mut receiver_idx: Option<usize> = None;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident
     // (`kt_snake_to_camel(rust_name)` → `ext.mangle_fun`). The per-entry
     // `.name("...")` override only changes the *user-facing* Kotlin
@@ -585,8 +648,21 @@ pub(crate) fn render_wrapper_fn(
     // Classify each parameter.
     let mut params: Vec<Param> = Vec::new();
     for (eff_ident, eff_ty) in effective_inputs(registry, f) {
-        let name = kt_param_name(&eff_ident.to_string());
+        let mut name = kt_param_name(&eff_ident.to_string());
         let arg_ty = &eff_ty;
+
+        // Instance-method receiver: the first parameter whose peeled Rust type
+        // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
+        // `this.bytes` fall out of the normal param handling) and is dropped
+        // from the rendered signature.
+        if receiver_idx.is_none() {
+            if let Some(rk) = receiver_key {
+                if &peel_receiver_key(arg_ty) == rk {
+                    receiver_idx = Some(params.len());
+                    name = "this".to_string();
+                }
+            }
+        }
 
         // `impl Fn(args)` param: a generated typed `fun interface`
         // (`<ArgShorts>Callback`) whose `run` parameters are the flattened
@@ -1126,7 +1202,11 @@ pub(crate) fn render_wrapper_fn(
     if let Some(g) = &generic {
         fun = fun.generic(g);
     }
-    for p in &params {
+    for (i, p) in params.iter().enumerate() {
+        // The receiver param is bound to `this` — not a rendered parameter.
+        if Some(i) == receiver_idx {
+            continue;
+        }
         fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
     }
     // The error callback — **required**: the generated code never throws; the

@@ -792,23 +792,28 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
                 out.insert(m.rust_ident.clone());
             }
         }
+        // Class accessors are declared via `.class_accessor` (not
+        // `.package_fun`) but are still real `#[prebindgen]` wrappers: they need
+        // a Rust extern + JNINative `external fun` + JSONL inclusion. Only their
+        // Kotlin surface differs (an instance method instead of a free fn).
+        out.extend(
+            self.class_accessors
+                .values()
+                .flatten()
+                .map(|a| a.rust_ident.clone()),
+        );
         out
     }
 
-    /// Subset of [`Self::declared_functions`] declared via
-    /// `.package_fun(...).accessor()`
-    /// — read accessors excluded from the parameter composer and required for
-    /// decomposer records.
+    /// Read accessors declared via [`JniGen::class_accessor`] — emitted as
+    /// class instance methods, excluded from the parameter composer, and the
+    /// only functions a decomposition record may reference.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        let mut out = std::collections::HashSet::new();
-        for pkg in self.packages.values() {
-            for m in &pkg.functions {
-                if m.is_accessor {
-                    out.insert(m.rust_ident.clone());
-                }
-            }
-        }
-        out
+        self.class_accessors
+            .values()
+            .flatten()
+            .map(|a| a.rust_ident.clone())
+            .collect()
     }
 
     /// Every type registered via `.ptr_class`,

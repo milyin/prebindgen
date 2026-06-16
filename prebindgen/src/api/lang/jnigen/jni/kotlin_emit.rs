@@ -47,6 +47,9 @@ pub(crate) struct TypedHandle<'a> {
     /// Package-qualified Kotlin class name (e.g.
     /// `"io.zenoh.jni.JNIPublisher"`).
     pub kotlin_fqn: &'a str,
+    /// Canonical Rust type key of the handle — used to look up the class's
+    /// [`crate::api::lang::jnigen::jni::ClassAccessor`]s (promoted methods).
+    pub key: &'a TypeKey,
 }
 
 impl<S: JniGenState> JniGen<S> {
@@ -66,7 +69,7 @@ impl<S: JniGenState> JniGen<S> {
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
         fragments.extend(self.write_data_classes(registry));
-        fragments.extend(self.write_value_blobs()?);
+        fragments.extend(self.write_value_blobs(registry)?);
 
         // Build the borrowed `TypedHandle<'_>` view from internal config.
         let owned = self.collect_typed_handles();
@@ -75,9 +78,10 @@ impl<S: JniGenState> JniGen<S> {
             .map(|h| TypedHandle {
                 rust_doc: &h.rust_doc,
                 kotlin_fqn: &h.kotlin_fqn,
+                key: &h.key,
             })
             .collect();
-        fragments.extend(self.write_typed_handles(&typed_handles));
+        fragments.extend(self.write_typed_handles(registry, &typed_handles));
         fragments.extend(self.write_callback_ifaces(registry));
         for (subpackage, pkg_cfg) in &self.packages {
             if pkg_cfg.functions.is_empty() {
@@ -231,7 +235,10 @@ impl<S: JniGenState> JniGen<S> {
     /// erased to its `ByteArray` field at the JVM/ABI level, so the `JNINative`
     /// extern (and the wire) stays `ByteArray` while wrappers speak the typed
     /// class. The single field name `bytes` matches `value_projection_field`.
-    pub(crate) fn write_value_blobs(&self) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
+    pub(crate) fn write_value_blobs(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
         let mut written = Vec::new();
         // Deterministic order by canonical Rust type-key (the `types` map is a
         // HashMap, so iterate sorted keys rather than raw map order).
@@ -249,20 +256,40 @@ impl<S: JniGenState> JniGen<S> {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), fqn.clone()),
             };
-            written.push(kt::KtFile::new(package).decl(
-                KtClass::new(ClassKind::ValueInline, class_name)
-                    .vis(Vis::Public)
-                    .kdoc(format!(
-                        "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                         as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
-                        key.as_str()
-                    ))
-                    .ctor_param(
-                        KtCtorParam::new("bytes", KtType::byte_array())
-                            .val()
-                            .vis(Vis::Public),
-                    ),
-            ));
+            let mut class = KtClass::new(ClassKind::ValueInline, class_name)
+                .vis(Vis::Public)
+                .kdoc(format!(
+                    "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
+                     as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
+                    key.as_str()
+                ))
+                .ctor_param(
+                    KtCtorParam::new("bytes", KtType::byte_array())
+                        .val()
+                        .vis(Vis::Public),
+                );
+            // Promoted read-accessor methods (receiver bound to `this`, passing
+            // `this.bytes` to the extern).
+            let mut imports: BTreeSet<String> = BTreeSet::new();
+            let accessors = self.class_accessors.get(key).map(Vec::as_slice).unwrap_or(&[]);
+            if !accessors.is_empty() && !self.package.is_empty() {
+                imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
+            }
+            for acc in accessors {
+                if let Some((item_fn, _)) = registry.functions.get(&acc.rust_ident) {
+                    if let Some(m) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+                        self,
+                        item_fn,
+                        registry,
+                        &mut imports,
+                        Some(acc.method_name.as_str()),
+                        Some(key),
+                    ) {
+                        class = class.member(m);
+                    }
+                }
+            }
+            written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }
         Ok(written)
     }
@@ -295,6 +322,7 @@ impl<S: JniGenState> JniGen<S> {
             handles.push(OwnedTypedHandle {
                 rust_doc,
                 kotlin_fqn: kotlin_fqn.clone(),
+                key: key.clone(),
             });
         }
         handles
@@ -307,6 +335,7 @@ impl<S: JniGenState> JniGen<S> {
 pub(crate) struct OwnedTypedHandle {
     pub rust_doc: String,
     pub kotlin_fqn: String,
+    pub key: TypeKey,
 }
 
 impl<S: JniGenState> JniGen<S> {
@@ -585,6 +614,7 @@ impl<S: JniGenState> JniGen<S> {
                 registry,
                 &mut imports,
                 entry.kotlin_name_override.as_deref(),
+                None,
             ) {
                 file = file.decl(f);
             }
@@ -662,18 +692,27 @@ impl<S: JniGenState> JniGen<S> {
     /// [`Self::kotlin_type_fqn`] so the generator can map it back to its
     /// Rust type-key (which identifies the first param to drop in each
     /// promoted method's signature).
-    pub(crate) fn write_typed_handles(&self, handles: &[TypedHandle<'_>]) -> Vec<kt::KtFile> {
+    pub(crate) fn write_typed_handles(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        handles: &[TypedHandle<'_>],
+    ) -> Vec<kt::KtFile> {
         let mut written = Vec::new();
         for handle in handles {
             let (package, class_name) = match handle.kotlin_fqn.rsplit_once('.') {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), handle.kotlin_fqn.to_string()),
             };
-            written.push(kt::KtFile::new(package).decl(build_typed_handle(
+            let mut imports: BTreeSet<String> = BTreeSet::new();
+            let class = build_typed_handle(
                 self,
+                registry,
                 &class_name,
                 handle.rust_doc,
-            )));
+                handle.key,
+                &mut imports,
+            );
+            written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }
         written
     }
