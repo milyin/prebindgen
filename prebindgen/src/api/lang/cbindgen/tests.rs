@@ -1328,6 +1328,51 @@ fn callback_subscriber_emits_closure_structs() {
     assert!(compact.contains("e:*mutz_error"), "{src}");
 }
 
+/// A callback with a built-in scalar argument (`impl Fn(f64)`) must NOT have its
+/// argument module-qualified — `f64` lives in no source module, so emitting
+/// `zenoh_flat::f64` would be invalid Rust. Regression for the primitive
+/// callback-arg qualification bug.
+#[test]
+fn callback_scalar_arg_not_module_qualified() {
+    let loc = SourceLocation::default();
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_on_value(
+            callback: impl Fn(f64) + Send + Sync + 'static,
+        ) -> Result<(), Error> {
+            unimplemented!()
+        }
+    );
+    let mut registry = Registry::<()>::from_items([
+        (syn::Item::Fn(func), loc.clone()),
+        (syn::Item::Struct(error_struct()), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .free_memory_function("z_free")
+        .data_struct(syn::parse_quote!(Error))
+        .base_name("z_error")
+        .error()
+        .callback(syn::parse_quote!(impl Fn(f64) + Send + Sync + 'static))
+        .base_name("z_closure_value_t")
+        .function(syn::parse_quote!(z_on_value));
+
+    let src = write(&cbindgen, &mut registry, "cb_scalar");
+    let compact: String = src.split_whitespace().collect();
+
+    // The bug was `f64` qualified to `zenoh_flat::f64`.
+    assert!(!compact.contains("zenoh_flat::f64"), "{src}");
+    // Closure param + `impl Fn` return keep `f64` bare.
+    assert!(compact.contains("move|__a0:f64|"), "{src}");
+    assert!(
+        compact.contains(
+            "fn__cbg_in_z_closure_value_t(c:z_closure_value_t,)->implFn(f64)+Send+Sync+'static"
+        ),
+        "{src}"
+    );
+}
+
 /// Without a `.name(...)` override the closure-struct C name is composed
 /// generically from the args' configured C type names (`closure_<argCname>`)
 /// — `lang::Cbindgen` invents no target-language convention of its own.

@@ -383,6 +383,12 @@ impl Cbindgen {
     /// Anything already qualified, or with no `source_module` set, is returned
     /// unchanged.
     pub(super) fn src_ty(&self, ty: &syn::Type) -> syn::Type {
+        // Built-in scalar primitives (`f64`, `i32`, …) live in no source module;
+        // qualifying them would produce invalid paths like `zenoh_flat::f64` (hit by
+        // callback args, e.g. `impl Fn(f64)`). Leave them bare.
+        if is_scalar(ty) {
+            return ty.clone();
+        }
         if let (Some(m), syn::Type::Path(tp)) = (&self.source_module, ty) {
             if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1
             {

@@ -141,13 +141,13 @@ pub fn calculator_get_history(c: &Calculator) -> Vec<f64> {
     c.history.clone()
 }
 
-/// Invoke `f` with a borrowed view of this calculator (demonstrates callback /
-/// closure-struct generation). The C closure receives a `const calculator_t*` and
-/// may read it through the accessors — mirroring a borrowed-item delivery like
-/// zenoh-flat's `impl Fn(&Sample)`.
+/// Invoke `f` once per recorded value in application order — replays the history
+/// into a C closure (demonstrates callback / closure-struct generation).
 #[prebindgen]
-pub fn calculator_inspect(c: &Calculator, f: impl Fn(&Calculator) + Send + Sync + 'static) {
-    f(c);
+pub fn calculator_for_each(c: &Calculator, f: impl Fn(f64) + Send + Sync + 'static) {
+    for v in &c.history {
+        f(*v);
+    }
 }
 
 /// Reset the accumulator to zero (feature-gated, mirroring zenoh-flat's

@@ -58,12 +58,11 @@ fn generate_ffi_bindings() -> PathBuf {
     // The primitive-repr `Operation` enum -> a C enum.
     cbindgen = cbindgen.enum_type(pq!(Operation));
 
-    // The borrowed-handle callback signature -> a `closure_calculator_t` closure
-    // struct. `.base_name` pins the name (otherwise the `&` reference base carries
-    // an internal `__` prefix into the mangled struct name).
+    // The history-replay callback signature -> a `closure_value_t` closure struct
+    // (`.base_name` gives the otherwise `f64`-derived struct a descriptive name).
     cbindgen = cbindgen
-        .callback(pq!(impl Fn(&Calculator) + Send + Sync + 'static))
-        .base_name("calculator");
+        .callback(pq!(impl Fn(f64) + Send + Sync + 'static))
+        .base_name("value");
 
     // Constructors and `Result`-returning operations: their fallible inputs route
     // through the error out-param, so no `.panic()`.
@@ -91,7 +90,7 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_is),
         pq!(calculator_to_string),
         pq!(calculator_get_history),
-        pq!(calculator_inspect),
+        pq!(calculator_for_each),
     ] {
         cbindgen = cbindgen.function(function).panic();
     }

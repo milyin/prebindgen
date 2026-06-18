@@ -23,11 +23,11 @@ typedef struct calculator_t {
   uint8_t _private[0];
 } calculator_t;
 
-typedef struct closure_calculator_t {
+typedef struct closure_value_t {
   void *context;
-  void (*call)(const struct calculator_t*, void*);
+  void (*call)(double, void*);
   void (*drop)(void*);
-} closure_calculator_t;
+} closure_value_t;
 
 extern void *malloc(uintptr_t size);
 
@@ -43,13 +43,13 @@ bool calculator_apply(struct calculator_t *c,
                       double *out,
                       char **e);
 
+void calculator_for_each(const struct calculator_t *c, struct closure_value_t f);
+
 uint64_t calculator_get_count(const struct calculator_t *c);
 
 double *calculator_get_history(const struct calculator_t *c, uintptr_t *len);
 
 double calculator_get_value(const struct calculator_t *c);
-
-void calculator_inspect(const struct calculator_t *c, struct closure_calculator_t f);
 
 bool calculator_is(const struct calculator_t *c, double value);
 

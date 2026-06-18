@@ -58,10 +58,10 @@ pub enum operation_t {
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
-pub struct closure_calculator_t {
+pub struct closure_value_t {
     pub context: *mut ::core::ffi::c_void,
     pub call: ::core::option::Option<
-        unsafe extern "C" fn(*const calculator_t, *mut ::core::ffi::c_void),
+        unsafe extern "C" fn(f64, *mut ::core::ffi::c_void),
     >,
     pub drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
 }
@@ -128,9 +128,9 @@ pub(crate) unsafe fn __cbg_in___str<'a>(
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) unsafe fn __cbg_in_closure_calculator_t(
-    c: closure_calculator_t,
-) -> impl Fn(&example_flat::Calculator) + Send + Sync + 'static {
+pub(crate) unsafe fn __cbg_in_closure_value_t(
+    c: closure_value_t,
+) -> impl Fn(f64) + Send + Sync + 'static {
     struct __Ctx {
         context: *mut ::core::ffi::c_void,
         drop: ::core::option::Option<unsafe extern "C" fn(*mut ::core::ffi::c_void)>,
@@ -149,8 +149,8 @@ pub(crate) unsafe fn __cbg_in_closure_calculator_t(
         context: c.context,
         drop: c.drop,
     });
-    move |__a0: &example_flat::Calculator| {
-        let __w0 = __cbg_out_ref_Calculator(__a0);
+    move |__a0: f64| {
+        let __w0 = __cbg_out_f64(__a0);
         if let ::core::option::Option::Some(__f) = __call {
             unsafe { __f(__w0, __ctx.context) }
         }
@@ -190,12 +190,6 @@ pub(crate) fn __cbg_out_bool(v: bool) -> bool {
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
     v
-}
-#[allow(non_snake_case, dead_code, unused)]
-pub(crate) unsafe fn __cbg_out_ref_Calculator(
-    v: &example_flat::Calculator,
-) -> *const calculator_t {
-    v as *const example_flat::Calculator as *const calculator_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_u64(v: u64) -> u64 {
@@ -248,6 +242,21 @@ pub unsafe extern "C" fn calculator_apply(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn calculator_for_each(
+    c: *const calculator_t,
+    f: closure_value_t,
+) {
+    let c = match __cbg_in___Calculator(c) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let f = __cbg_in_closure_value_t(f);
+    example_flat::calculator_for_each(c, f);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn calculator_get_count(c: *const calculator_t) -> u64 {
     let c = match __cbg_in___Calculator(c) {
         ::core::result::Result::Ok(__v) => __v,
@@ -293,21 +302,6 @@ pub unsafe extern "C" fn calculator_get_value(c: *const calculator_t) -> f64 {
     let __ret: f64;
     __ret = __cbg_out_f64(__v);
     __ret
-}
-#[no_mangle]
-#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-pub unsafe extern "C" fn calculator_inspect(
-    c: *const calculator_t,
-    f: closure_calculator_t,
-) {
-    let c = match __cbg_in___Calculator(c) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__msg) => {
-            panic!("{}", __msg);
-        }
-    };
-    let f = __cbg_in_closure_calculator_t(f);
-    example_flat::calculator_inspect(c, f);
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
