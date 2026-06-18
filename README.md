@@ -58,39 +58,42 @@ It's important to keep in mind that `[build-dependencies]` and `[dependencies]` 
 
 ## Usage
 
-### 1. In the Common FFI Library Crate (e.g., `example-ffi`)
+### 1. In the Common FFI Library Crate (e.g., `example-flat`)
 
-Mark structures and functions that are part of the FFI interface with the `prebindgen` macro and export the prebindgen output directory path:
+Mark the types and functions that form your FFI surface with the `prebindgen` macro and export the prebindgen output directory path. The source crate stays **plain idiomatic Rust** — opaque handles are ordinary types returned by value, fallible calls return `Result<T, E>`; the language adapter does the C-ABI lowering, so there is no `#[repr(C)]` here.
 
 ```rust
-// example-ffi/src/lib.rs
-use prebindgen_proc_macro::prebindgen;
+// example-flat/src/lib.rs
+use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 
 // Path to the prebindgen output directory; the destination crate's `build.rs`
 // reads the collected code from this path.
-pub const PREBINDGEN_OUT_DIR: &str = prebindgen_proc_macro::prebindgen_out_dir!();
+pub const PREBINDGEN_OUT_DIR: &str = prebindgen_out_dir!();
 
 // Features with which the crate is compiled. This constant is used
 // in the generated code to validate that it's compatible with the actual crate.
-pub const FEATURES: &str = prebindgen_proc_macro::features!();
+pub const FEATURES: &str = features!();
 
-// Group structures and functions for selective handling
-#[prebindgen]
-#[repr(C)]
-pub struct MyStruct {
-    pub field: i32,
+// An opaque handle — a plain Rust type, returned by value.
+pub struct Calculator {
+    value: f64,
 }
 
 #[prebindgen]
-pub fn my_function(arg: i32) -> i32 {
-    arg * 2
+pub fn calculator_new() -> Calculator {
+    Calculator { value: 0.0 }
+}
+
+#[prebindgen]
+pub fn calculator_get_value(c: &Calculator) -> f64 {
+    c.value
 }
 ```
 
 Call `init_prebindgen_out_dir()` in the source crate's `build.rs`:
 
 ```rust
-// example-ffi/build.rs
+// example-flat/build.rs
 fn main() {
     prebindgen::init_prebindgen_out_dir();
 }
@@ -98,50 +101,49 @@ fn main() {
 
 ### 2. In the Language-Specific FFI Binding Crate (e.g., `example-cbindgen`)
 
-Add the source FFI library to both dependencies and build-dependencies:
+Add the source FFI library to both dependencies and build-dependencies, and drive the `lang::Cbindgen` adapter from `build.rs`:
 
 ```toml
 # example-cbindgen/Cargo.toml
 [dependencies]
-example_ffi = { path = "../example_ffi" }
+example-flat = { path = "../example-flat" }
+prebindgen = "0.4"
+konst = "0.3"      # the generated file emits a konst feature guard
 
 [build-dependencies]
-example_ffi = { path = "../example_ffi" }
+example-flat = { path = "../example-flat" }
 prebindgen = "0.4"
 cbindgen = "0.29"
-itertools = "0.14"
+syn = { version = "2", features = ["full"] }
 ```
 
-Convert `#[prebindgen]`-marked items to an FFI-compatible API (`repr(C)` structures, `extern "C"` functions, constants). Items that are not valid for FFI will be rejected by `FfiConverter`.
-
-Generate target language bindings based on this source.
-
-Custom filters can be applied if necessary.
+Declare which `#[prebindgen]`-marked items to export and how to name them, then let the adapter resolve types and emit the Rust file of `extern "C"` wrappers. Items are opt-in — only what you declare is generated.
 
 ```rust
 // example-cbindgen/build.rs
-use itertools::Itertools;
+use syn::parse_quote as pq;
 
 fn main() {
-    // Create a source from the common FFI crate's prebindgen data
-    let source = prebindgen::Source::new(example_ffi::PREBINDGEN_OUT_DIR);
+    // Read the items captured from the common FFI crate.
+    let source = prebindgen::Source::new(example_flat::PREBINDGEN_OUT_DIR);
 
-    // Create a converter with transparent wrapper stripping
-    let converter = prebindgen::batching::FfiConverter::builder(source.crate_name())
-        .edition(prebindgen::RustEdition::Edition2024)
-        .strip_transparent_wrapper("std::mem::MaybeUninit")
-        .strip_transparent_wrapper("std::option::Option")
-        .prefixed_exported_type("foo::Foo")
-        .build();
+    // Configure the C adapter: declare the items to export and how to name them.
+    let cbindgen = prebindgen::lang::Cbindgen::new()
+        .source_module(pq!(example_flat))
+        .free_memory_function("example_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .mangle_function(|n| n.to_string())
+        .opaque_ptr(pq!(Calculator))
+        .function(pq!(calculator_new))
+        .function(pq!(calculator_get_value)).panic();
 
-    // Process items with filtering and conversion
-    let bindings_file = source
-        .items_all()
-        .batching(converter.into_closure())
-        .collect::<prebindgen::collect::Destination>()
-        .write("ffi_bindings.rs");
+    // Resolve types and write the Rust file of `extern "C"` wrappers.
+    let mut registry =
+        prebindgen::core::Registry::from_items(source.items_all()).unwrap();
+    let bindings_file = registry.write_rust(&cbindgen, "example_flat.rs").unwrap();
 
-    // Pass the generated file to cbindgen for C header generation
+    // Pass the generated file to cbindgen for C header generation.
     generate_c_headers(&bindings_file);
 }
 ```
@@ -150,15 +152,15 @@ Include the generated Rust file in your project to build the static or dynamic F
 
 ```rust
 // lib.rs
-include!(concat!(env!("OUT_DIR"), "/ffi_bindings.rs"));
+include!(concat!(env!("OUT_DIR"), "/example_flat.rs"));
 ```
 
 ## Examples
 
 See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples):
 
-- **example-ffi**: Common FFI library demonstrating prebindgen usage
-- **example-cbindgen**: Language-specific binding using cbindgen for C headers
+- **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
+- **example-cbindgen**: Language-specific binding using `lang::Cbindgen` + cbindgen for C headers
 
 ## Documentation
 

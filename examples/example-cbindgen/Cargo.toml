@@ -5,20 +5,19 @@ edition = { workspace = true }
 build = "build.rs"
 
 [features]
-unstable = ["example-ffi/unstable"]
-internal = ["example-ffi/internal"]
+unstable = ["example-flat/unstable"]
+internal = ["example-flat/internal"]
 
 [lib]
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
 prebindgen = { workspace = true }
-example-ffi = { path = "../example-ffi" }
+example-flat = { path = "../example-flat" }
 konst = "0.3.0"
 
 [build-dependencies]
 prebindgen = { workspace = true }
-serde_json = { workspace = true }
-itertools = { workspace = true }
+syn = { workspace = true }
 cbindgen = "0.29.0"
-example-ffi = { path = "../example-ffi" }
+example-flat = { path = "../example-flat" }

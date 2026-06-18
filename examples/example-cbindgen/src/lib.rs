@@ -1,2 +1,3 @@
-// Include the combined example_ffi bindings file from OUT_DIR
-include!(concat!(env!("OUT_DIR"), "/example_ffi.rs"));
+// Include the generated example-flat FFI bindings (committed under generated/,
+// (re)produced by build.rs from example-flat's #[prebindgen] surface).
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generated/example_flat.rs"));

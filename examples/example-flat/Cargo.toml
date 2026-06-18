@@ -1,5 +1,5 @@
 [package]
-name = "example-ffi"
+name = "example-flat"
 version = { workspace = true }
 edition = { workspace = true }
 build = "build.rs"

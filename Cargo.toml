@@ -5,10 +5,10 @@ members = [
     "prebindgen-project-root",
     "prebindgen-opaque-types",
     "examples/example-cbindgen",
-    "examples/example-ffi",
+    "examples/example-flat",
 ]
 resolver = "2"
-package.version = "0.4.1"
+package.version = "0.5.0"
 package.edition = "2021"
 package.rust-version = "1.75"
 package.license = "MIT OR Apache-2.0"
