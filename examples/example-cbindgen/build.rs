@@ -6,13 +6,27 @@
 //! that file to produce a C header.
 //!
 //! Both generated artifacts are also published into this crate's tree so they can
-//! be committed and inspected:
-//!   - `generated/example_flat.rs` — the Rust FFI layer (also `include!`d by `lib.rs`)
-//!   - `include/example_flat.h`    — the C header
+//! be committed and inspected, with a **per-target-architecture** file name —
+//! because `#[prebindgen]` `cfg` handling makes the output differ per target
+//! (see `Foo` / `InsideFoo` in `example-flat`):
+//!   - `generated/example_flat_<arch>.rs` — the Rust FFI layer (`include!`d per-target by `lib.rs`)
+//!   - `include/example_flat_<arch>.h`    — the C header
+//!
+//! Build for several targets (e.g. via the bundled `CMakeLists.txt`, or
+//! `cargo build -p example-cbindgen --target x86_64-... ` then `--target aarch64-...`)
+//! to produce both and see that they differ.
 
 use std::path::{Path, PathBuf};
 
 use syn::parse_quote as pq;
+
+/// The target architecture this build targets (`x86_64`, `aarch64`, …), used to
+/// name the per-target generated artifacts. `CARGO_CFG_TARGET_ARCH` is set by
+/// cargo for the *target* being built, so a `--target` cross-build names its own
+/// file.
+fn target_arch() -> String {
+    std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string())
+}
 
 fn main() {
     // prebindgen part: build the Rust file of extern "C" wrappers.
@@ -58,18 +72,31 @@ fn generate_ffi_bindings() -> PathBuf {
     // The primitive-repr `Operation` enum -> a C enum.
     cbindgen = cbindgen.enum_type(pq!(Operation));
 
+    // Multi-target cfg demonstration: `InsideFoo` (a fieldless enum whose
+    // discriminants vary by `target_arch`) and `Foo` (a by-value data struct whose
+    // field set varies by `target_arch` + feature). Declared unconditionally —
+    // exactly one `InsideFoo` and one field-shape of `Foo` survive the target's
+    // cfg filtering, so the generated `inside_foo_t` / `foo_t` differ per target.
+    cbindgen = cbindgen.enum_type(pq!(InsideFoo));
+    cbindgen = cbindgen.data_struct(pq!(Foo));
+
     // The history-replay callback signature -> a `closure_value_t` closure struct
     // (`.base_name` gives the otherwise `f64`-derived struct a descriptive name).
     cbindgen = cbindgen
         .callback(pq!(impl Fn(f64) + Send + Sync + 'static))
         .base_name("value");
 
-    // Constructors and `Result`-returning operations: their fallible inputs route
-    // through the error out-param, so no `.panic()`.
+    // Constructors / `Result`-returning ops (fallible inputs route through the
+    // error out-param), plus the infallible by-value `Foo`/`InsideFoo` accessors —
+    // none need `.panic()`.
     for function in [
         pq!(calculator_new),
         pq!(calculator_new_from_str),
         pq!(calculator_apply),
+        pq!(foo_new),
+        pq!(foo_get_id),
+        pq!(inside_foo_default),
+        pq!(inside_foo_value),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -97,15 +124,18 @@ fn generate_ffi_bindings() -> PathBuf {
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    // Always written to OUT_DIR under a stable name too, so the commented-out
+    // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
     let out_file = registry
         .write_rust(&cbindgen, "example_flat.rs")
         .expect("write generated bindings");
 
-    // Publish the generated Rust into the crate tree (committed artifact). Write
-    // only on change so cargo doesn't rebuild-loop on the `include!`d file.
+    // Publish the generated Rust into the crate tree under a per-target-arch name
+    // (committed artifact; `lib.rs` `include!`s the one matching its target).
+    // Write only on change so cargo doesn't rebuild-loop on the `include!`d file.
     let in_tree = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("generated")
-        .join("example_flat.rs");
+        .join(format!("example_flat_{}.rs", target_arch()));
     write_if_changed(&in_tree, &std::fs::read_to_string(&out_file).unwrap());
 
     println!("cargo:warning=Generated bindings at: {}", in_tree.display());
@@ -113,7 +143,7 @@ fn generate_ffi_bindings() -> PathBuf {
 }
 
 /// Generate the C header from the prebindgen-generated Rust file via cbindgen, and
-/// publish it to `include/example_flat.h`.
+/// publish it to `include/example_flat_<arch>.h` (per-target, like the Rust file).
 fn generate_c_headers(bindings_file: &Path) {
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let out_dir = std::env::var("OUT_DIR").unwrap();
@@ -129,10 +159,10 @@ fn generate_c_headers(bindings_file: &Path) {
     {
         Ok(bindings) => {
             bindings.write_to_file(&header_path);
-            // Publish the header to the in-tree, committed `include/` dir.
+            // Publish the header to the in-tree, committed `include/` dir, per-arch.
             let stable = PathBuf::from(&crate_dir)
                 .join("include")
-                .join("example_flat.h");
+                .join(format!("example_flat_{}.h", target_arch()));
             write_if_changed(&stable, &std::fs::read_to_string(&header_path).unwrap());
             println!(
                 "cargo:warning=Generated C header at: {}",

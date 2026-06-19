@@ -48,6 +48,20 @@ pub unsafe extern "C" fn calculator_drop(this_: *mut calculator_t) {
     }
 }
 #[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct foo_t {
+    pub id: u64,
+    pub x86_64_field: u64,
+    pub stable_field: u64,
+}
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum inside_foo_t {
+    DouddleDee = 42,
+    DouddleDum = 24,
+}
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum operation_t {
@@ -77,6 +91,21 @@ pub(crate) unsafe fn __cbg_in_Calculator(
     ::core::result::Result::Ok(
         *::std::boxed::Box::from_raw(v as *mut example_flat::Calculator),
     )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
+    example_flat::Foo {
+        id: v.id,
+        x86_64_field: v.x86_64_field,
+        stable_field: v.stable_field,
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_in_InsideFoo(v: inside_foo_t) -> example_flat::InsideFoo {
+    match v {
+        inside_foo_t::DouddleDee => example_flat::InsideFoo::DouddleDee,
+        inside_foo_t::DouddleDum => example_flat::InsideFoo::DouddleDum,
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_in_Operation(v: operation_t) -> example_flat::Operation {
@@ -163,12 +192,31 @@ pub(crate) fn __cbg_in_f64(v: f64) -> f64 {
 #[allow(non_snake_case, dead_code, unused_variables)]
 pub(crate) fn __cbg_in_str() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_in_u64(v: u64) -> u64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Calculator(v: example_flat::Calculator) -> *mut calculator_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut calculator_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Error(v: example_flat::Error) -> *mut ::core::ffi::c_char {
     __cbg_alloc_cstr(example_flat::error_get_message(&v))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Foo(v: example_flat::Foo) -> foo_t {
+    foo_t {
+        id: v.id,
+        x86_64_field: v.x86_64_field,
+        stable_field: v.stable_field,
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_InsideFoo(v: example_flat::InsideFoo) -> inside_foo_t {
+    match v {
+        example_flat::InsideFoo::DouddleDee => inside_foo_t::DouddleDee,
+        example_flat::InsideFoo::DouddleDum => inside_foo_t::DouddleDum,
+    }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Operation(v: example_flat::Operation) -> operation_t {
@@ -189,6 +237,10 @@ pub(crate) fn __cbg_out_bool(v: bool) -> bool {
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_f64(v: f64) -> f64 {
+    v
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_i32(v: i32) -> i32 {
     v
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -389,6 +441,41 @@ pub unsafe extern "C" fn calculator_to_string(
     let __v = example_flat::calculator_to_string(c);
     let __ret: *mut ::core::ffi::c_char;
     __ret = __cbg_out_String(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn foo_get_id(f: foo_t) -> u64 {
+    let f = __cbg_in_Foo(f);
+    let __v = example_flat::foo_get_id(f);
+    let __ret: u64;
+    __ret = __cbg_out_u64(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn foo_new(id: u64) -> foo_t {
+    let id = __cbg_in_u64(id);
+    let __v = example_flat::foo_new(id);
+    let __ret: foo_t;
+    __ret = __cbg_out_Foo(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn inside_foo_default() -> inside_foo_t {
+    let __v = example_flat::inside_foo_default();
+    let __ret: inside_foo_t;
+    __ret = __cbg_out_InsideFoo(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn inside_foo_value(x: inside_foo_t) -> i32 {
+    let x = __cbg_in_InsideFoo(x);
+    let __v = example_flat::inside_foo_value(x);
+    let __ret: i32;
+    __ret = __cbg_out_i32(__v);
     __ret
 }
 const _: () = {

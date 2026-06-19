@@ -12,6 +12,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum inside_foo_t {
+  DouddleDee = 42,
+  DouddleDum = 24,
+} inside_foo_t;
+
 typedef enum operation_t {
   Add = 0,
   Sub = 1,
@@ -28,6 +33,12 @@ typedef struct closure_value_t {
   void (*call)(double, void*);
   void (*drop)(void*);
 } closure_value_t;
+
+typedef struct foo_t {
+  uint64_t id;
+  uint64_t x86_64_field;
+  uint64_t stable_field;
+} foo_t;
 
 extern void *malloc(uintptr_t size);
 
@@ -60,5 +71,13 @@ struct calculator_t *calculator_new_clone(const struct calculator_t *c);
 struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 char *calculator_to_string(const struct calculator_t *c);
+
+uint64_t foo_get_id(struct foo_t f);
+
+struct foo_t foo_new(uint64_t id);
+
+enum inside_foo_t inside_foo_default(void);
+
+int32_t inside_foo_value(enum inside_foo_t x);
 
 #endif  /* EXAMPLE_FLAT_H */

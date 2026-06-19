@@ -158,3 +158,78 @@ pub fn calculator_reset(c: &mut Calculator) {
     c.value = 0.0;
     c.history.clear();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-target cfg demonstration.
+//
+// These items show that `#[prebindgen]` captures per-target `cfg` and that the C
+// binding crate (`example-cbindgen`) then generates *different* code per target:
+// `InsideFoo`'s discriminants and `Foo`'s field set change with `target_arch`
+// (and `Foo` also varies by feature). Build for x86_64 vs aarch64 to get two
+// different `inside_foo_t` / `foo_t` in the generated header.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A fieldless enum whose **discriminants differ by target architecture**. The two
+/// definitions are mutually exclusive — the `#[prebindgen(cfg = ...)]` macro emits a
+/// matching real `#[cfg]`, so each target compiles exactly one and the generated C
+/// enum carries that target's values. (`lang::Cbindgen` `.enum_type`.)
+#[prebindgen("structs", cfg = "target_arch = \"x86_64\"")]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InsideFoo {
+    DouddleDee = 42,
+    DouddleDum = 24,
+}
+#[prebindgen("structs", cfg = "target_arch = \"aarch64\"")]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InsideFoo {
+    DouddleDee = 14,
+    DouddleDum = 88,
+}
+
+/// A by-value data struct whose **field set varies by target architecture and by
+/// feature**. `#[prebindgen]` records every `cfg`-gated field; the binding crate
+/// keeps only those matching the build target, so the generated `#[repr(C)] foo_t`
+/// differs per target. (`lang::Cbindgen` `.data_struct`.)
+#[prebindgen("structs")]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Foo {
+    /// Always present.
+    pub id: u64,
+    #[cfg(target_arch = "x86_64")]
+    pub x86_64_field: u64,
+    #[cfg(target_arch = "aarch64")]
+    pub aarch64_field: u64,
+    #[cfg(feature = "unstable")]
+    pub unstable_field: u64,
+    #[cfg(not(feature = "unstable"))]
+    pub stable_field: u64,
+}
+
+/// Construct a `Foo` (the target-specific fields default to zero).
+#[prebindgen]
+pub fn foo_new(id: u64) -> Foo {
+    Foo {
+        id,
+        ..Foo::default()
+    }
+}
+
+/// Read a `Foo`'s always-present field (consumes the value-struct by value).
+#[prebindgen]
+pub fn foo_get_id(f: Foo) -> u64 {
+    f.id
+}
+
+/// The default `InsideFoo` variant (its numeric value is target-specific).
+#[prebindgen]
+pub fn inside_foo_default() -> InsideFoo {
+    InsideFoo::DouddleDee
+}
+
+/// The numeric value of an `InsideFoo` (consumes the enum by value).
+#[prebindgen]
+pub fn inside_foo_value(x: InsideFoo) -> i32 {
+    x as i32
+}
