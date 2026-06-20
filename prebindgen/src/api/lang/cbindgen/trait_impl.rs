@@ -415,6 +415,43 @@ impl Cbindgen {
             }
             let src = self.src_ty(&ty);
             let opaque = &cfg.opaque;
+            // `repr_c_struct`: the opaque counterpart is an auto-generated
+            // **visible-field** `#[repr(C)]` mirror (so C reads the fields directly),
+            // not an externally-provided blob. Each field is lowered by
+            // `mirror_field_wire` (scalar / enum / opaque pointer). The size/align
+            // assert below then proves the whole-struct reinterpret sound.
+            if cfg.generate_mirror {
+                let mirror_ident = self.c_type_ident(&ty);
+                let fields = self.struct_fields(registry, &ty).unwrap_or_else(|| {
+                    panic!(
+                        "Cbindgen::repr_c_struct: `{}` is not a named struct",
+                        type_short(&ty)
+                    )
+                });
+                let field_defs: Vec<TokenStream> = fields
+                    .iter()
+                    .map(|(fname, fty)| {
+                        let wire = self.mirror_field_wire(fty).unwrap_or_else(|| {
+                            panic!(
+                                "Cbindgen::repr_c_struct: field `{}` of `{}` has unsupported \
+                                 type `{}` (expected a scalar, a declared `enum_type`, or an \
+                                 opaque pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
+                                fname,
+                                type_short(&ty),
+                                fty.to_token_stream()
+                            )
+                        });
+                        quote!(pub #fname: #wire)
+                    })
+                    .collect();
+                items.push(syn::parse_quote!(
+                    #[repr(C)]
+                    #[allow(non_camel_case_types)]
+                    pub struct #mirror_ident {
+                        #(#field_defs,)*
+                    }
+                ));
+            }
             // Fail-closed size/align equality guard (proves the transmute sound).
             items.push(syn::parse_quote!(
                 const _: () = {
@@ -810,9 +847,11 @@ impl Cbindgen {
             });
         }
 
-        // `String` output: encode into the owning `cbg_string_t` helper so C
-        // callers get an explicit destructor instead of a raw `char **`.
-        if is_string(ty) {
+        // `String` output: a `malloc`'d `char*` raw block freed via the
+        // `free_memory_function`. A `String` explicitly declared `opaque_ptr`
+        // (held by C as `string_t *`) opts out — the opaque-handle branch below
+        // owns it then (mirroring the input side, where `in_opaque_handle` wins).
+        if is_string(ty) && !self.opaque.contains_key(&TypeKey::from_type(ty)) {
             let name = Self::out_name(ty);
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]

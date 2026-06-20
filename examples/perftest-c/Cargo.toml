@@ -1,0 +1,19 @@
+[package]
+name = "perftest-c"
+version = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+
+[lib]
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+prebindgen = { workspace = true }
+perftest-flat = { path = "../perftest-flat" }
+konst = "0.3.0"
+
+[build-dependencies]
+prebindgen = { workspace = true }
+syn = { workspace = true }
+cbindgen = "0.29.0"
+perftest-flat = { path = "../perftest-flat" }

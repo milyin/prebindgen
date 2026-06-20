@@ -1,0 +1,87 @@
+/*
+ * C micro-benchmark over the prebindgen-generated `perftest` C ABI.
+ *
+ * Mirrors `perftest-flat/examples/perftest.rs`: it runs the same three benchmarks
+ * (`payload_put`, `payload_get`, `payload_callback`) through the generated C
+ * bindings. Because `Payload` is declared `.repr_c_struct`, it crosses the C ABI by
+ * direct reinterpret (zero-copy): `payload_put(&p)` hands Rust the C struct's memory
+ * as a `const Payload &`, and the callback receives a `const payload_t *` borrow.
+ * The `label` string is an opaque `string_t *` (built by `string_new`, freed by
+ * `string_drop`).
+ *
+ * Compare the printed ns/op against the Rust runner to see the cost of crossing the
+ * (zero-copy) C boundary vs calling the Rust functions natively.
+ */
+#include <stdint.h>
+#include <stdio.h>
+#include <time.h>
+
+#include "perftest.h"
+
+#define N 50000000ULL
+
+static double now_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1.0e9 + (double)ts.tv_nsec;
+}
+
+static void report(const char *name, uint64_t n, double elapsed_ns) {
+    double ns_per_op = elapsed_ns / (double)n;
+    double mops = (double)n / (elapsed_ns / 1.0e9) / 1.0e6;
+    printf("%-10s %8.2f ns/op   %8.1f Mops/s\n", name, ns_per_op, mops);
+}
+
+/* Callback: a pure observer of the borrowed payload. */
+static void on_payload(const struct payload_t *pl, void *ctx) {
+    *(uint64_t *)ctx += pl->id;
+}
+
+int main(void) {
+    struct payload_t p;
+    p.id = 42;
+    p.seq = 7;
+    p.value = 3.5;
+    p.flag = true;
+    p.label = string_new("hello, payload");
+
+    payload_put(&p); /* seed the thread-local slot */
+
+    printf("perftest-c (generated C ABI), N = %llu iterations per op\n\n",
+           (unsigned long long)N);
+
+    uint64_t sink = 0;
+    double t0, t1;
+
+    t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        payload_put(&p);
+    }
+    t1 = now_ns();
+    report("put", N, t1 - t0);
+
+    t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        struct payload_t g = payload_get();
+        sink += g.id;
+        payload_drop(&g); /* frees the cloned `string_t *` each iteration */
+    }
+    t1 = now_ns();
+    report("get", N, t1 - t0);
+
+    struct closure_payload_t closure;
+    closure.context = &sink;
+    closure.call = on_payload;
+    closure.drop = NULL;
+    t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        payload_callback(closure);
+    }
+    t1 = now_ns();
+    report("callback", N, t1 - t0);
+
+    string_drop(p.label);
+
+    printf("\n(sink = %llu)\n", (unsigned long long)sink);
+    return 0;
+}

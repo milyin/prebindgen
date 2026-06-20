@@ -217,6 +217,45 @@ impl Cbindgen {
             ValueOpaqueCfg {
                 opaque: opaque_ty,
                 kind,
+                generate_mirror: false,
+                cfg: TypeCfg::default(),
+            },
+        );
+        self.current = Some(CurrentDecl::ValueOpaque(key));
+        self
+    }
+
+    /// Declare a **`#[repr(C)]`, FFI-safe value struct** crossed **by direct
+    /// reinterpret** (zero-copy) — the C struct's memory *is* the Rust struct's
+    /// memory. Unlike [`Self::data_struct`] (which copies each field, lowering a
+    /// `String` to `char*`), this passes the whole struct by value via
+    /// [`crate::core::Transmute`] and a `&T` borrow / `impl Fn(&T)` callback as a
+    /// zero-copy `*const` pointer cast — the value-opaque machinery, but with an
+    /// **auto-generated visible-field** `#[repr(C)]` C mirror (so C reads the
+    /// fields directly) instead of an opaque blob.
+    ///
+    /// Every field must be FFI-safe: an [`is_scalar`] primitive, a declared
+    /// [`Self::enum_type`], or an **opaque pointer** `Option<Box<T>>` / `Box<T>`
+    /// where `T` is a declared [`Self::opaque_ptr`] (rendered `*mut t_t`; this is
+    /// how a heap `String` rides along — `Option<Box<String>>` → `string_t *`). The
+    /// source type **must** be `#[repr(C)]`; a fail-closed `size_of`/`align_of`
+    /// assert against the generated mirror proves the reinterpret sound at compile
+    /// time. Call after the manglers are configured (the mirror name is resolved
+    /// via [`Self::c_type_ident`]). A `<base>_drop` is generated.
+    pub fn repr_c_struct(mut self, ty: syn::Type) -> Self {
+        let key = TypeKey::from_type(&ty);
+        assert!(
+            !self.ignored_types.contains(&key),
+            "Cbindgen::repr_c_struct cannot declare `{}` because it is already ignored",
+            key
+        );
+        let mirror = self.c_type_ident(&ty);
+        self.value_opaque.insert(
+            key.clone(),
+            ValueOpaqueCfg {
+                opaque: syn::parse_quote!(#mirror),
+                kind: OpaqueKind::Data,
+                generate_mirror: true,
                 cfg: TypeCfg::default(),
             },
         );
@@ -388,6 +427,12 @@ impl Cbindgen {
         // callback args, e.g. `impl Fn(f64)`). Leave them bare.
         if is_scalar(ty) {
             return ty.clone();
+        }
+        // Std `String` likewise lives in no source module — qualifying it would
+        // produce `zenoh_flat::String`. It can be declared `opaque_ptr` (a boxed
+        // pointer the C side holds as `string_t *`), so resolve it to the std path.
+        if is_string(ty) {
+            return syn::parse_quote!(::std::string::String);
         }
         if let (Some(m), syn::Type::Path(tp)) = (&self.source_module, ty) {
             if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1

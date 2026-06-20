@@ -122,6 +122,12 @@ struct ValueOpaqueCfg {
     opaque: syn::Type,
     /// Plain-data vs owns-external-data (gravestone write-back on consume).
     kind: OpaqueKind,
+    /// When `true`, the `opaque` counterpart is **not** supplied externally but is
+    /// an auto-generated **visible-field** `#[repr(C)]` mirror of the source struct,
+    /// emitted by [`Cbindgen::prereq_value_opaque`]. Set by
+    /// [`Cbindgen::repr_c_struct`]; `false` for `opaque_data_struct` /
+    /// `opaque_owned_struct` (counterpart defined elsewhere).
+    generate_mirror: bool,
     /// Name config (`.base_name()` override; default naming via the manglers).
     cfg: TypeCfg,
 }
@@ -324,6 +330,15 @@ fn is_string(ty: &syn::Type) -> bool {
 
 fn is_str(ty: &syn::Type) -> bool {
     type_path_tail(ty).map(|i| i == "str").unwrap_or(false)
+}
+
+/// If `ty` is `Box<T>`, return `T` (used to peel an opaque-pointer struct field
+/// such as `Box<String>` / the inner of `Option<Box<String>>`).
+fn box_inner(ty: &syn::Type) -> Option<syn::Type> {
+    if type_path_tail(ty).map(|i| i == "Box").unwrap_or(false) {
+        return first_type_arg(ty);
+    }
+    None
 }
 
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged

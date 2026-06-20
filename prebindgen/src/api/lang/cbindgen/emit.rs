@@ -6,7 +6,11 @@ impl Cbindgen {
     /// a `String` field. When true, a `free_memory_function` must be declared.
     pub(super) fn needs_free(&self, registry: &Registry<()>) -> bool {
         let string_ty: syn::Type = syn::parse_quote!(String);
-        if registry.output_entry(&string_ty).is_some() {
+        // A `String` return hands out a `char*` — unless `String` is declared
+        // `opaque_ptr` (then it crosses as `string_t *`, freed by `string_drop`).
+        if registry.output_entry(&string_ty).is_some()
+            && !self.opaque.contains_key(&TypeKey::from_type(&string_ty))
+        {
             return true;
         }
         // Opaque error types are marshalled to a malloc'd `char*` message.
@@ -63,6 +67,36 @@ impl Cbindgen {
         } else {
             None
         }
+    }
+
+    /// Wire type of a `repr_c_struct` field in the generated **visible** mirror: a
+    /// scalar passes through; a declared [`Cbindgen::enum_type`] becomes its C enum;
+    /// an opaque pointer `Option<Box<T>>` / `Box<T>` (with `T` a declared
+    /// [`Cbindgen::opaque_ptr`]) becomes `*mut t_t`. The whole-struct `Transmute`
+    /// (size/align-equal, asserted) then reinterprets each source field's bits into
+    /// this wire. `None` ⇒ the field type is unsupported in a `repr_c_struct`.
+    pub(super) fn mirror_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
+        if is_scalar(fty) {
+            return Some(fty.clone());
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            let c = self.c_type_ident(fty);
+            return Some(syn::parse_quote!(#c));
+        }
+        // Opaque pointer: `Option<Box<T>>` (nullable, null-niche ↔ NULL) or `Box<T>`
+        // where `T` is a declared `opaque_ptr` → `*mut t_t`.
+        let boxed = if is_option(fty) {
+            first_type_arg(fty).and_then(|inner| box_inner(&inner))
+        } else {
+            box_inner(fty)
+        };
+        if let Some(inner) = boxed {
+            if self.opaque.contains_key(&TypeKey::from_type(&inner)) {
+                let c = self.c_type_ident(&inner);
+                return Some(syn::parse_quote!(*mut #c));
+            }
+        }
+        None
     }
 
     /// Exported `#[no_mangle]` symbol for a declared function:

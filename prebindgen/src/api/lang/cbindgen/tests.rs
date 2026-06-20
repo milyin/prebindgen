@@ -586,6 +586,99 @@ fn opaque_data_no_gravestone_writeback() {
     );
 }
 
+/// A `repr_c_struct` is a `#[repr(C)]`, FFI-safe value struct crossed by direct
+/// reinterpret: it emits a **visible-field** `#[repr(C)]` mirror (opaque-pointer
+/// fields `Option<Box<String>>` → `*mut string_t`), the value-opaque `Transmute`
+/// glue + size/align assert, a zero-copy `&T` borrow (`*const foo_t`,
+/// `&*(v as *const Foo)`), and an `impl Fn(&T)` closure taking `const foo_t*`.
+#[test]
+fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        pub struct Foo {
+            pub a: u64,
+            pub s: Option<Box<String>>,
+        }
+    );
+    let make_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn foo_make() -> Foo {
+            unimplemented!()
+        }
+    );
+    let put_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn foo_put(p: &Foo) {
+            unimplemented!()
+        }
+    );
+    let cb_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn foo_cb(f: impl Fn(&Foo) + Send + Sync + 'static) {
+            unimplemented!()
+        }
+    );
+    let string_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn string_make() -> String {
+            unimplemented!()
+        }
+    );
+    let mut registry = Registry::<()>::from_items([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(make_fn), loc.clone()),
+        (syn::Item::Fn(put_fn), loc.clone()),
+        (syn::Item::Fn(cb_fn), loc.clone()),
+        (syn::Item::Fn(string_fn), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .mangle_callback(|bases| format!("closure_{}_t", bases.join("_")))
+        .mangle_function(|n| n.to_string())
+        .opaque_ptr(syn::parse_quote!(String))
+        .repr_c_struct(syn::parse_quote!(Foo))
+        .callback(syn::parse_quote!(impl Fn(&Foo) + Send + Sync + 'static))
+        .function(syn::parse_quote!(foo_make))
+        .function(syn::parse_quote!(foo_put))
+        .panic()
+        .function(syn::parse_quote!(foo_cb))
+        .function(syn::parse_quote!(string_make));
+
+    let src = write(&cbindgen, &mut registry, "repr_c_struct");
+    let compact: String = src.split_whitespace().collect();
+
+    // Visible `#[repr(C)]` mirror: scalar passes through, the `Option<Box<String>>`
+    // opaque-pointer field becomes `*mut string_t`.
+    assert!(compact.contains("pubstructfoo_t"), "{src}");
+    assert!(compact.contains("puba:u64"), "{src}");
+    assert!(compact.contains("pubs:*mutstring_t"), "{src}");
+    // The `String` opaque handle and its drop are emitted.
+    assert!(compact.contains("pubstructstring_t"), "{src}");
+    assert!(compact.contains("fnstring_drop(this_:*mutstring_t)"), "{src}");
+
+    // Value-opaque transmute glue + fail-closed size/align assert prove the
+    // whole-struct reinterpret sound.
+    assert!(
+        compact.contains("impl::prebindgen::Transmuteforfoo_t"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("size_of::<zenoh_flat::Foo>()==::core::mem::size_of::<foo_t>()"),
+        "{src}"
+    );
+
+    // `&Foo` input is a zero-copy `*const foo_t` pointer cast (no field copy).
+    assert!(compact.contains("p:*constfoo_t"), "{src}");
+    assert!(compact.contains("&*(vas*constzenoh_flat::Foo)"), "{src}");
+
+    // `impl Fn(&Foo)` callback: the closure `call` takes a `const foo_t*`.
+    assert!(
+        compact.contains("*constfoo_t,*mut::core::ffi::c_void"),
+        "{src}"
+    );
+}
+
 /// A `.takeable_param(idx)` callback arg is delivered as `*mut z_x_t`: the
 /// closure `call` takes a pointer, the trampoline drops it after the call, and
 /// a public `z_x_take(dst, src)` move function is emitted.
