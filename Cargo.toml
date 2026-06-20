@@ -8,6 +8,7 @@ members = [
     "examples/example-flat",
     "examples/perftest-flat",
     "examples/perftest-c",
+    "examples/perftest-kotlin",
 ]
 resolver = "2"
 package.version = "0.5.0"

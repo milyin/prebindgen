@@ -1055,6 +1055,34 @@ impl<S: JniGenState> JniGen<S> {
                 metadata: self.framework_meta(kotlin_name),
             });
         }
+        // `Box<String>`: a heap string carried as an opaque-pointer struct field
+        // (e.g. an FFI-safe `#[repr(C)]` struct's `Option<Box<String>>`). Decode
+        // the `JString` to an owned `String` and box it; surfaces as Kotlin
+        // `String` (and `Option<Box<String>>` composes to `String?` via the
+        // `Option<_>` wrapper). Dual of the `Box<String>` output arm.
+        if TypeKey::from_type(ty).as_str() == "Box < String >" {
+            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+            let body: syn::Expr = syn::parse_quote!({
+                let s = env.get_string(v).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!(
+                        "decode_string: {}",
+                        e
+                    ))
+                })?;
+                ::std::boxed::Box::new(::std::string::String::from(s))
+            });
+            let rust_ty: syn::Type = syn::parse_quote!(::std::boxed::Box<::std::string::String>);
+            let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
+            let niches = default_niches_for_wire(&wire);
+            return Some(ConverterImpl {
+                subs: vec![],
+                pre_stages: vec![],
+                function: self.build_input_fn(&rust_ty, &wire, &body, None),
+                destination: wire,
+                niches,
+                metadata: self.framework_meta(kotlin_name),
+            });
+        }
         if let Some((wire, body)) = primitive_input(ty) {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
@@ -1207,6 +1235,30 @@ impl<S: JniGenState> JniGen<S> {
         // name) so required-propagation doesn't flag it unresolved.
         if TypeKey::from_type(ty).as_str() == "str" {
             return Some(self.str_ref_output());
+        }
+        // `Box<String>`: read the heap string through the box and encode it as a
+        // `JString`; surfaces as Kotlin `String` (and `Option<Box<String>>` →
+        // `String?` via the `Option<_>` wrapper). Dual of the `Box<String>`
+        // input arm — together they let an opaque-pointer `String` struct field
+        // map to a plain Kotlin `String`.
+        if TypeKey::from_type(ty).as_str() == "Box < String >" {
+            let wire: syn::Type = syn::parse_quote!(jni::objects::JString);
+            let body: syn::Expr = syn::parse_quote!({
+                env.new_string(v.as_str()).map_err(|e| {
+                    <__JniErr as ::core::convert::From<String>>::from(format!("encode_str: {}", e))
+                })?
+            });
+            let rust_ty: syn::Type = syn::parse_quote!(::std::boxed::Box<::std::string::String>);
+            let kotlin_name = self.override_kotlin_name(ty, Some(kt::KtType::string()));
+            let niches = default_niches_for_wire(&wire);
+            return Some(ConverterImpl {
+                subs: vec![],
+                pre_stages: vec![],
+                function: self.build_output_fn(&rust_ty, &wire, &body, None),
+                destination: wire,
+                niches,
+                metadata: self.framework_meta(kotlin_name),
+            });
         }
         // `Cow<'_, [u8]>` (any lifetime): a borrow-or-owned byte container —
         // one copy into the JVM array straight off the `Deref<[u8]>`, no

@@ -12,13 +12,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct storage_t {
+  uint8_t _private[0];
+} storage_t;
+
 typedef struct string_t {
   uint8_t _private[0];
 } string_t;
 
 typedef struct payload_t {
-  uint64_t id;
-  uint32_t seq;
+  int64_t id;
+  int32_t seq;
   double value;
   bool flag;
   struct string_t *label;
@@ -30,15 +34,19 @@ typedef struct closure_payload_t {
   void (*drop)(void*);
 } closure_payload_t;
 
+void storage_drop(struct storage_t *this_);
+
 void string_drop(struct string_t *this_);
 
 void payload_drop(struct payload_t *this_);
 
-void payload_callback(struct closure_payload_t f);
+void storage_callback(const struct storage_t *s, struct closure_payload_t f);
 
-struct payload_t payload_get(void);
+struct payload_t storage_get(const struct storage_t *s);
 
-void payload_put(const struct payload_t *p);
+struct storage_t *storage_new(void);
+
+void storage_put(struct storage_t *s, const struct payload_t *p);
 
 uintptr_t string_len(const struct string_t *s);
 

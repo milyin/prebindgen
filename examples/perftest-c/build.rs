@@ -45,6 +45,10 @@ fn generate_ffi_bindings() -> PathBuf {
     // what lets the FFI-safe `Payload` carry a heap string by opaque pointer.
     cbindgen = cbindgen.opaque_ptr(pq!(String));
 
+    // `Storage` as an opaque handle (`storage_t *` = `Box<Storage>`, `storage_drop`):
+    // it owns the payload that the functions read/write.
+    cbindgen = cbindgen.opaque_ptr(pq!(Storage));
+
     // The zero-copy, `#[repr(C)]` value struct. Emits a visible-field `payload_t`
     // mirror (`Option<Box<String>>` -> `string_t *label`) + a `Transmute` and a
     // compile-time size/align assert proving the reinterpret sound.
@@ -57,12 +61,13 @@ fn generate_ffi_bindings() -> PathBuf {
         .callback(pq!(impl Fn(&Payload) + Send + Sync + 'static))
         .base_name("payload");
 
-    // Functions. `payload_put`/`string_len` take null-checked borrows with no
-    // `Result`, so they `.panic()` on a null pointer; `string_new` decodes a
-    // null-checked `&str`.
-    cbindgen = cbindgen.function(pq!(payload_get));
-    cbindgen = cbindgen.function(pq!(payload_put)).panic();
-    cbindgen = cbindgen.function(pq!(payload_callback));
+    // Functions. `storage_new` returns a fresh handle (no fallible input). The
+    // others take null-checked `&Storage`/`&mut Storage`/`&Payload`/`&str` borrows
+    // with no `Result`, so they `.panic()` on a null pointer.
+    cbindgen = cbindgen.function(pq!(storage_new));
+    cbindgen = cbindgen.function(pq!(storage_get)).panic();
+    cbindgen = cbindgen.function(pq!(storage_put)).panic();
+    cbindgen = cbindgen.function(pq!(storage_callback)).panic();
     cbindgen = cbindgen.function(pq!(string_new)).panic();
     cbindgen = cbindgen.function(pq!(string_len)).panic();
 

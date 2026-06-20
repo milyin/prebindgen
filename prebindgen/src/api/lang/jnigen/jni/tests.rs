@@ -477,6 +477,80 @@ fn snapshot_kotlin_side() {
     );
 }
 
+/// A `data_class` struct with an opaque-pointer string field
+/// (`label: Option<Box<String>>`) maps that field to a nullable Kotlin `String?`
+/// (via the `Box<String>` terminal converter + the `Option<_>` wrapper), and the
+/// generated Rust glue encodes/decodes it through `JString` (boxing on input,
+/// `new_string` on output). This lets an FFI-safe struct carry a heap string
+/// while surfacing as a plain Kotlin `String?`.
+#[test]
+fn box_string_field_maps_to_nullable_kotlin_string() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Payload {
+                    pub id: i64,
+                    pub label: Option<Box<String>>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn payload_get() -> Payload {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn payload_put(p: &Payload) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .data_class(syn::parse_quote!(Payload))
+        .package("payload")
+        .fun(syn::parse_quote!(payload_get))
+        .fun(syn::parse_quote!(payload_put));
+
+    let dir = unique_snapshot_dir("jnigen_boxstr");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // Kotlin `data class Payload` carries the heap-string field as `String?`.
+    assert!(kc.contains("dataclassPayload"), "{kotlin}");
+    assert!(kc.contains("label:String?"), "{kotlin}");
+
+    // Rust glue: output boxes-out via `new_string`; input re-boxes via `Box::new`.
+    assert!(rc.contains("new_string"), "{rust}");
+    assert!(rc.contains("Box::new") || rc.contains("Box<::std::string::String>"), "{rust}");
+}
+
 /// `.jni_native_init(code)` injects an `init { code }` block into the generated
 /// centralized externs object (`JNINative`) — the single static-init point a
 /// consumer uses to trigger native-library loading. Unset (the `snapshot_*`

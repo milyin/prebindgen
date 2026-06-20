@@ -9,7 +9,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use perftest_flat::{payload_callback, payload_get, payload_put, Payload};
+use perftest_flat::{storage_callback, storage_get, storage_new, storage_put, Payload};
 
 const N: u64 = 50_000_000;
 
@@ -32,24 +32,25 @@ fn main() {
         flag: true,
         label: Some(Box::new("hello, payload".to_string())),
     };
-    payload_put(&seed);
+    let mut storage = storage_new();
+    storage_put(&mut storage, &seed);
 
     println!("perftest-flat (native Rust), N = {N} iterations per op\n");
 
-    let mut sink: u64 = 0;
+    let mut sink: i64 = 0;
 
     bench("put", N, || {
-        payload_put(black_box(&seed));
+        storage_put(&mut storage, black_box(&seed));
     });
 
     bench("get", N, || {
-        let g = payload_get();
+        let g = storage_get(&storage);
         sink = sink.wrapping_add(g.id);
         black_box(&g);
     });
 
     bench("callback", N, || {
-        payload_callback(move |p| {
+        storage_callback(&storage, move |p| {
             black_box(p);
         });
     });
