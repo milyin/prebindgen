@@ -49,6 +49,11 @@ fn generate_ffi_bindings() -> PathBuf {
     // it owns the payload that the functions read/write.
     cbindgen = cbindgen.opaque_ptr(pq!(Storage));
 
+    // `PayloadHandler` as an opaque handle (`payload_handler_t *`, `payload_handler_drop`):
+    // a prepared callback built once via `payload_handler_new` and fired by
+    // `storage_callback` — the registered-subscriber pattern.
+    cbindgen = cbindgen.opaque_ptr(pq!(PayloadHandler));
+
     // The zero-copy, `#[repr(C)]` value struct. Emits a visible-field `payload_t`
     // mirror (`Option<Box<String>>` -> `string_t *label`) + a `Transmute` and a
     // compile-time size/align assert proving the reinterpret sound. Owned-ness is
@@ -77,6 +82,7 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(storage_put_by_read_and_update)).panic();
     cbindgen = cbindgen.function(pq!(storage_get_into_init)).panic();
     cbindgen = cbindgen.function(pq!(storage_get_into_uninit)).panic();
+    cbindgen = cbindgen.function(pq!(payload_handler_new));
     cbindgen = cbindgen.function(pq!(storage_callback)).panic();
     cbindgen = cbindgen.function(pq!(string_new)).panic();
     cbindgen = cbindgen.function(pq!(string_len)).panic();

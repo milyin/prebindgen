@@ -66,6 +66,30 @@ public data class Payload(val id: Long, val seq: Int, val value: Double, val fla
     }
 }
 
+/** Typed handle for a native Zenoh `PayloadHandler`. */
+public class PayloadHandler(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L) {
+            ptr = 0L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): PayloadHandler {
+        val p = ptr
+        ptr = 0L
+        return PayloadHandler(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
 /** Typed handle for a native Zenoh `Storage`. */
 public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -140,7 +164,8 @@ internal object JNINative {
         io.prebindgen.perftest.NativeLibrary.ensureLoaded()
     }
 
-    external fun storageCallback(s: Long, f: Any, errorSink: Any)
+    external fun payloadHandlerNew(f: Any, errorSink: Any): Long
+    external fun storageCallback(s: Long, handler: Long, errorSink: Any)
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
     external fun storageNew(errorSink: Any): Long
     external fun storagePutByRead(

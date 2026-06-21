@@ -12,6 +12,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct payload_handler_t {
+  uint8_t _private[0];
+} payload_handler_t;
+
 typedef struct storage_t {
   uint8_t _private[0];
 } storage_t;
@@ -34,13 +38,17 @@ typedef struct closure_payload_t {
   void (*drop)(void*);
 } closure_payload_t;
 
+void payload_handler_drop(struct payload_handler_t *this_);
+
 void storage_drop(struct storage_t *this_);
 
 void string_drop(struct string_t *this_);
 
 void payload_drop(struct payload_t *this_);
 
-void storage_callback(const struct storage_t *s, struct closure_payload_t f);
+struct payload_handler_t *payload_handler_new(struct closure_payload_t f);
+
+void storage_callback(const struct storage_t *s, const struct payload_handler_t *handler);
 
 struct payload_t storage_get(const struct storage_t *s);
 

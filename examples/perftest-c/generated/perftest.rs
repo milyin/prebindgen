@@ -1,5 +1,17 @@
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub struct payload_handler_t {
+    _private: [u8; 0],
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub unsafe extern "C" fn payload_handler_drop(this_: *mut payload_handler_t) {
+    if !this_.is_null() {
+        drop(::std::boxed::Box::from_raw(this_ as *mut perftest_flat::PayloadHandler));
+    }
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct storage_t {
     _private: [u8; 0],
 }
@@ -95,6 +107,19 @@ pub(crate) unsafe fn __cbg_in_Payload(
     ::core::result::Result::Ok(__live)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_PayloadHandler(
+    v: *mut payload_handler_t,
+) -> ::core::result::Result<perftest_flat::PayloadHandler, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null PayloadHandler handle passed by value"),
+        );
+    }
+    ::core::result::Result::Ok(
+        *::std::boxed::Box::from_raw(v as *mut perftest_flat::PayloadHandler),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Storage(
     v: *mut storage_t,
 ) -> ::core::result::Result<perftest_flat::Storage, ::std::string::String> {
@@ -130,6 +155,17 @@ pub(crate) unsafe fn __cbg_in___Payload<'a>(
         );
     }
     ::core::result::Result::Ok(&*(v as *const perftest_flat::Payload))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in___PayloadHandler<'a>(
+    v: *const payload_handler_t,
+) -> ::core::result::Result<&'a perftest_flat::PayloadHandler, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null PayloadHandler pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&*(v as *const perftest_flat::PayloadHandler))
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in___Storage<'a>(
@@ -261,6 +297,12 @@ pub(crate) fn __cbg_out_Payload(v: perftest_flat::Payload) -> payload_t {
     <payload_t as ::prebindgen::Transmute>::from_rust(v)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_PayloadHandler(
+    v: perftest_flat::PayloadHandler,
+) -> *mut payload_handler_t {
+    ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut payload_handler_t
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Storage(v: perftest_flat::Storage) -> *mut storage_t {
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut storage_t
 }
@@ -298,15 +340,34 @@ pub(crate) fn __cbg_out_usize(v: usize) -> usize {
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-pub unsafe extern "C" fn storage_callback(s: *const storage_t, f: closure_payload_t) {
+pub unsafe extern "C" fn payload_handler_new(
+    f: closure_payload_t,
+) -> *mut payload_handler_t {
+    let f = __cbg_in_closure_payload_t(f);
+    let __v = perftest_flat::payload_handler_new(f);
+    let __ret: *mut payload_handler_t;
+    __ret = __cbg_out_PayloadHandler(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_callback(
+    s: *const storage_t,
+    handler: *const payload_handler_t,
+) {
     let s = match __cbg_in___Storage(s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let f = __cbg_in_closure_payload_t(f);
-    perftest_flat::storage_callback(s, f);
+    let handler = match __cbg_in___PayloadHandler(handler) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    perftest_flat::storage_callback(s, handler);
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]

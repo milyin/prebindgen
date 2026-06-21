@@ -13,7 +13,8 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use perftest_flat::{
-    storage_callback, storage_get, storage_new, storage_put_by_take, Payload, Storage,
+    payload_handler_new, storage_callback, storage_get, storage_new, storage_put_by_take, Payload,
+    Storage,
 };
 
 /// Iterations per measured variant. Overridable via `PERFTEST_N` so the shared
@@ -70,13 +71,17 @@ fn run_category(storage: &mut Storage, label: Option<&str>, cat: &str, n: u64, s
         black_box(&g);
     });
 
+    // Callback prepared ONCE into a reusable handler (a real "declare the subscriber
+    // once" step), then `storage_callback` fires it each iteration — so the loop
+    // measures `storage_callback` itself, not callback creation. The bound is
+    // `Fn(&Payload) + 'static`, so it can't capture `sink` by reference; touch the
+    // borrowed payload through `black_box` (parity with C's "observe the payload"
+    // callback — the point is the dispatch cost).
+    let cb = payload_handler_new(|p| {
+        black_box(p.id);
+    });
     bench("callback", &format!("native.{cat}"), n, || {
-        // The callback bound is `Fn(&Payload) + 'static`, so it can't capture `sink`
-        // by reference; touch the borrowed payload through `black_box` (parity with
-        // C's "observe the payload" callback — the point is the dispatch cost).
-        storage_callback(storage, |p| {
-            black_box(p.id);
-        });
+        storage_callback(storage, &cb);
     });
 }
 

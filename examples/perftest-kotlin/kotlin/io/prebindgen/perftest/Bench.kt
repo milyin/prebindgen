@@ -1,5 +1,6 @@
 package io.prebindgen.perftest
 
+import io.prebindgen.perftest.storage.payloadHandlerNew
 import io.prebindgen.perftest.storage.storageCallback
 import io.prebindgen.perftest.storage.storageGet
 import io.prebindgen.perftest.storage.storageNew
@@ -19,15 +20,19 @@ import io.prebindgen.perftest.storage.storagePutByTake
  *   * **get** — `storageGet(s)` returns a whole `Payload`; its fields cross as leaves
  *     and are reassembled on the Kotlin side via the generated `Payload.fromParts(...)`
  *     factory (no Java object built on the Rust side).
- *   * **callback** — `storageCallback(s) { p -> … }` delivers the borrowed `Payload` as
- *     a whole object; its fields cross as leaves and a generated adapter reassembles
- *     them before invoking `PayloadCallback.run(Payload)`.
+ *   * **callback** — the callback is prepared ONCE into a reusable handle
+ *     (`payloadHandlerNew { p -> … }`, which builds the JNI trampoline a single time, like
+ *     declaring a subscriber); the loop then measures `storageCallback(s, cb)` itself firing
+ *     it (two cheap handle decodes + one upcall — no per-call trampoline creation). Each fire
+ *     delivers a whole `Payload`: its fields cross as leaves and a generated adapter
+ *     reassembles them before invoking `PayloadCallback.run(Payload)`.
  *
  * Note on the numbers: the JNI `get`/`callback` are intrinsically slower than the Rust
  * and C equivalents because they cross the boundary in the native→JVM *upcall* direction
  * (delivering the leaves to the Kotlin reassembler), which is far costlier than a
  * JVM→native downcall. That asymmetry — not the codegen — is the floor; this benchmark
- * measures it honestly with the same whole-struct surface as Rust and C.
+ * measures it honestly with the same whole-struct surface as Rust and C. With the callback
+ * measured per-dispatch (above), `callback` ≈ `get` (both one upcall per delivery).
  */
 // Iterations per measured variant. Overridable (so the shared `perftest-bench.sh`
 // harness can run all three languages at one N + a fast smoke): the `-Dperftest.n`
@@ -59,12 +64,14 @@ fun main() {
 
     var sink = 0L
 
-    // The borrowed `&Payload` is composed natively (via the same `fromParts` factory as
-    // `storageGet`) and delivered to the callback as a whole `Payload` object in one
-    // `run(Payload)` upcall. Hoisted (like the C `bench_callback` closure) so the
-    // measurement isn't per-iteration lambda allocations. (A `.str` payload also encodes
-    // the `label` String inside `fromParts`; a `.null` payload does not.)
-    val cb = PayloadCallback { p -> sink += p.id }
+    // Prepare the callback ONCE into a reusable native handle (`payloadHandlerNew` builds
+    // the JNI trampoline — global ref + method-id lookup — a single time, like declaring a
+    // subscriber). The `callback` bench then loops `storageCallback(s, cb)`, measuring
+    // `storage_callback` itself (each call decodes two cheap handles + one upcall), not the
+    // per-call trampoline creation. Each fire delivers a whole `Payload` to `run(Payload)`
+    // (its fields cross as leaves and are reassembled on the Kotlin side; a `.str` payload
+    // also encodes the `label` String, `.null` does not).
+    val cb = payloadHandlerNew(PayloadCallback { p -> sink += p.id }, onError)
 
     // Run put/get/callback for one string category (`str` = a heap `label`, `null` = no
     // `label`). Emits `<op> <variant>.<cat>` rows so the harness can compare like-for-like.
@@ -80,7 +87,7 @@ fun main() {
             sink += g.id
         }
         bench("callback", "native.$cat", N) {
-            storageCallback(s, cb, onError) // whole Payload delivered to the callback
+            storageCallback(s, cb, onError) // fire the prepared handler (no per-call decode)
         }
     }
 
@@ -88,7 +95,8 @@ fun main() {
     // `N` smoke run stays fast).
     val warm = Payload(42L, 7, 3.5, true, "hello, payload")
     storagePutByTake(s, warm, onError)
-    repeat(minOf(N, 200_000L).toInt()) {
+    val warmN = minOf(N, 200_000L)
+    repeat(warmN.toInt()) {
         storagePutByTake(s, warm, onError)
         storageGet(s, onError)
         storageCallback(s, cb, onError)
@@ -99,6 +107,7 @@ fun main() {
     runCategory(null, "null")
     println("END_PERFTEST")
 
+    cb.close()
     s.close()
     println("(sink = $sink)")
 }

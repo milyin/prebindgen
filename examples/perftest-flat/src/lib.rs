@@ -61,6 +61,16 @@ pub struct Storage {
     payload: Payload,
 }
 
+/// An opaque, reusable handle wrapping a **prepared** `Fn(&Payload)` callback.
+/// The foreign-side trampoline (e.g. the JNI global ref + method lookup that turn a
+/// JVM callback into a Rust closure) is built **once** when the handle is created
+/// ([`payload_handler_new`]); [`storage_callback`] then fires it many times without
+/// rebuilding it. This is the registered-subscriber pattern: declare the handler
+/// once, deliver events to it (cf. zenoh's `session_declare_subscriber` →
+/// `Subscriber`). Like [`Storage`], it is a boxed handle (not `#[prebindgen]`/
+/// `#[repr(C)]`); the adapter emits a typed destructor.
+pub struct PayloadHandler(Box<dyn Fn(&Payload) + Send + Sync>);
+
 /// Create a new, empty storage handle.
 #[prebindgen]
 pub fn storage_new() -> Storage {
@@ -127,14 +137,25 @@ pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) 
     payload.write(s.payload.clone());
 }
 
-/// Invoke `f` with a borrow of the stored payload. In C this is a pure zero-copy
-/// struct crossing (the closure receives a `const payload_t *`, no heap work). In
-/// Kotlin the borrowed `Payload` is delivered whole to a generated
+/// Prepare a reusable [`PayloadHandler`] from a callback `f`. The (foreign) closure
+/// is decoded into the handler **once** here — reuse the handler across many
+/// [`storage_callback`] calls instead of passing a fresh callback each time. This
+/// is the "declare the subscriber once" step (its trampoline + per-call setup are
+/// built here, amortized over every later delivery).
+#[prebindgen]
+pub fn payload_handler_new(f: impl Fn(&Payload) + Send + Sync + 'static) -> PayloadHandler {
+    PayloadHandler(Box::new(f))
+}
+
+/// Invoke the prepared `handler` with a borrow of the stored payload — reuses the
+/// handler's already-built foreign trampoline, so there is **no per-call callback
+/// decoding** (only firing). In C the closure receives a `const payload_t *`
+/// (zero-copy); in Kotlin the borrowed `Payload` is delivered whole to the handler's
 /// `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
 /// reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
 #[prebindgen]
-pub fn storage_callback(s: &Storage, f: impl Fn(&Payload) + Send + Sync + 'static) {
-    f(&s.payload);
+pub fn storage_callback(s: &Storage, handler: &PayloadHandler) {
+    (handler.0)(&s.payload);
 }
 
 /// Build the opaque string the C side stores in [`Payload::label`]. To C this

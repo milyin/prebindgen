@@ -195,7 +195,9 @@ static double bench_get(struct storage_t *s, const char *label, uint64_t *sink) 
 }
 
 /* callback: a `const payload_t *` borrow — never touches the label, so both variants
- * measure ~the same (the FFI trampoline + the upcall). */
+ * measure ~the same (the FFI trampoline dispatch). The callback is prepared ONCE into a
+ * reusable `payload_handler_t *` (the "declare the subscriber once" step), then the loop
+ * measures `storage_callback` itself firing it — matching the Rust/Kotlin benches. */
 static double bench_callback(struct storage_t *s, const char *label, uint64_t *sink) {
     struct payload_t seed = make_payload(55, 5, label);
     storage_put_by_take(s, &seed);
@@ -203,11 +205,14 @@ static double bench_callback(struct storage_t *s, const char *label, uint64_t *s
     closure.context = sink;
     closure.call = on_payload;
     closure.drop = NULL;
+    struct payload_handler_t *handler = payload_handler_new(closure);
     double t0 = now_ns();
     for (uint64_t i = 0; i < g_n; i++) {
-        storage_callback(s, closure);
+        storage_callback(s, handler);
     }
-    return now_ns() - t0;
+    double dt = now_ns() - t0;
+    payload_handler_drop(handler);
+    return dt;
 }
 
 typedef double (*bench_fn)(struct storage_t *s, const char *label, uint64_t *sink);

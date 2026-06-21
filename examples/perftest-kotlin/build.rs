@@ -37,6 +37,10 @@ fn main() {
         // `Storage` as an opaque Kotlin handle class (`NativeHandle`, closeable);
         // the functions read/write the payload it owns.
         .ptr_class(pq!(Storage))
+        // `PayloadHandler` as an opaque Kotlin handle class: a prepared callback built
+        // once via `payloadHandlerNew` and fired by `storageCallback` — the
+        // registered-subscriber pattern (the JNI trampoline is built once, not per call).
+        .ptr_class(pq!(PayloadHandler))
         .package("storage")
         // Only the value/ref-input put forms map to JNI: `storage_put_by_take`
         // (by-value `Payload`) and `storage_put_by_read` (`&Payload`). The
@@ -45,13 +49,16 @@ fn main() {
         // Kotlin `data class` is an immutable value with no out-param/uninit
         // semantics — so they are left undeclared here.
         //
-        // `storage_callback(s, impl Fn(&Payload))` delivers a borrowed `Payload` to a
-        // callback: its fields cross as leaves and a generated adapter reassembles them
-        // into a whole `Payload` before invoking `PayloadCallback.run(Payload)`.
+        // `payload_handler_new(impl Fn(&Payload)) -> PayloadHandler` prepares the callback
+        // ONCE (decodes the JVM callback into the reusable native trampoline); then
+        // `storage_callback(s, &PayloadHandler)` fires it. The callback arg still crosses
+        // as decoupled leaves reassembled into a whole `PayloadCallback.run(Payload)` — only
+        // WHERE the trampoline is built changes (once, in `payloadHandlerNew`).
         .fun(pq!(storage_new))
         .fun(pq!(storage_get))
         .fun(pq!(storage_put_by_take))
         .fun(pq!(storage_put_by_read))
+        .fun(pq!(payload_handler_new))
         .fun(pq!(storage_callback));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
