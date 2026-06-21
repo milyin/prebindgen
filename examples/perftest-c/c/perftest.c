@@ -104,7 +104,7 @@ static void correctness(struct storage_t *s) {
      * (zero-copy reinterpret of the block to `&[Payload]`), so the caller's input
      * array — including its `label` strings — is untouched and still C-owned.
      * storage_get_vec returns a malloc'd `(payload_t *, size_t)` batch; the C side
-     * frees each element's `label` with `payload_drop`, then the block with `z_free`. */
+     * frees each element's `label` with `payload_drop`, then the block with `perftest_free`. */
     struct payload_t batch[3] = {
         make_payload(10, 1, "a"),
         make_payload(20, 2, NULL),
@@ -122,7 +122,7 @@ static void correctness(struct storage_t *s) {
     assert(out[1].label == NULL);
     assert(out[2].label != NULL && string_len(out[2].label) == 3); /* "ccc" */
     for (uintptr_t i = 0; i < out_len; i++) payload_drop(&out[i]); /* free each label */
-    z_free(out);                                                   /* free the block */
+    perftest_free(out);                                            /* free the block */
     string_drop(batch[0].label); /* the input labels are still C-owned (by-clone read) */
     string_drop(batch[2].label);
 

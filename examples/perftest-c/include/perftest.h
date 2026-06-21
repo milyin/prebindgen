@@ -38,11 +38,7 @@ typedef struct closure_payload_t {
   void (*drop)(void*);
 } closure_payload_t;
 
-extern void *malloc(uintptr_t size);
-
-extern void free(void *ptr);
-
-void z_free(void *p);
+void perftest_free(void *p);
 
 void payload_handler_drop(struct payload_handler_t *this_);
 

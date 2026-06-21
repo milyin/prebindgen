@@ -42,8 +42,11 @@ fn generate_ffi_bindings() -> PathBuf {
         // The universal raw-memory freer for the malloc'd `(payload_t *, size_t)`
         // array returned by `storage_get_vec` (Vec<Payload>). The C side releases
         // each element's `label` with `payload_drop`, then frees the block with
-        // this `z_free`.
-        .free_memory_function("z_free");
+        // this `perftest_free`. (Library-namespaced, like `sqlite3_free` /
+        // `curl_free` — it MUST run inside this cdylib so the block is released on
+        // the same heap it was allocated on, which a plain `free()` from the
+        // consumer cannot guarantee across module/CRT boundaries.)
+        .free_memory_function("perftest_free");
 
     // `String` as an opaque handle: C holds it as `string_t *` (= `Box<String>`),
     // built by `string_new`, read via `string_len`, freed by `string_drop`. This is

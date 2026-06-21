@@ -17,7 +17,7 @@ pub(crate) fn __cbg_alloc_cstr(s: ::std::string::String) -> *mut ::core::ffi::c_
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
-pub unsafe extern "C" fn z_free(p: *mut ::core::ffi::c_void) {
+pub unsafe extern "C" fn perftest_free(p: *mut ::core::ffi::c_void) {
     free(p);
 }
 #[allow(non_snake_case, dead_code)]
