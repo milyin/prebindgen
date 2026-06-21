@@ -112,6 +112,58 @@ impl Cbindgen {
         Some(idents)
     }
 
+    /// The gravestone write-back statements for a by-value **consume** / `_take` of a
+    /// value-opaque type, writing into the slot pointed to by `slot` (a `*mut #opaque`).
+    /// `None` ⇒ no write-back needed (plain data — the moved-from bitwise copy drops
+    /// harmlessly). Owned-ness is **inferred** for a `repr_c_struct` mirror (the
+    /// generator knows the fields): nullable owned-pointer fields are nulled in place
+    /// (cheap, no `Default`); a bare `Box<T>` field falls back to the full `gravestone()`
+    /// write. A non-mirror (`opaque_data_struct`/`opaque_owned_struct`) uses its explicit
+    /// declared `kind` (its fields are an opaque blob the generator can't introspect).
+    fn value_opaque_writeback(
+        &self,
+        registry: &Registry<()>,
+        ty: &syn::Type,
+        slot: &syn::Ident,
+    ) -> Option<TokenStream> {
+        let cfg = self.value_opaque.get(&TypeKey::from_type(ty))?;
+        let opaque = &cfg.opaque;
+        if cfg.generate_mirror {
+            match self.nullable_owned_ptr_fields(registry, ty) {
+                // No owned-pointer fields ⇒ plain data, nothing to clean up.
+                Some(fields) if fields.is_empty() => None,
+                // All owned-pointer fields nullable ⇒ null them in place (drop-safe).
+                Some(fields) => Some(quote!(#( (*#slot).#fields = ::core::ptr::null_mut(); )*)),
+                // Bare `Box<T>` field ⇒ a NULL would be an invalid `Box`; full gravestone.
+                None => Some(
+                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen::Gravestone>::gravestone());),
+                ),
+            }
+        } else {
+            // Non-mirror opaque: the consumer chose the kind explicitly.
+            match cfg.kind {
+                OpaqueKind::Owned => Some(
+                    quote!(::core::ptr::write(#slot, <#opaque as ::prebindgen::Gravestone>::gravestone());),
+                ),
+                OpaqueKind::Data => None,
+            }
+        }
+    }
+
+    /// Whether the auto-generated `Gravestone` impl is needed for a `repr_c_struct`
+    /// mirror: only when its consume/`_take` write-back uses `gravestone()` — i.e. it
+    /// has a bare `Box<T>` owned-pointer field (a null `Box` is invalid). Nullable
+    /// (`Option<Box<T>>`) mirrors null in place and need no `Gravestone`/`Default`;
+    /// non-mirror owned types get their `Gravestone` impl from the consumer.
+    fn mirror_needs_gravestone_impl(&self, registry: &Registry<()>, ty: &syn::Type) -> bool {
+        match self.value_opaque.get(&TypeKey::from_type(ty)) {
+            Some(cfg) if cfg.generate_mirror => {
+                self.nullable_owned_ptr_fields(registry, ty).is_none()
+            }
+            _ => false,
+        }
+    }
+
     /// Inline-opaque, by-`*mut` consume: read the live Rust value out by
     /// transmute (move). For an `opaque_owned_struct` type, write a gravestone back so a
     /// later `_drop` is a no-op (safe drop-after-move); an `opaque_data_struct` type
@@ -135,17 +187,13 @@ impl Cbindgen {
         registry: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
         let opaque = self.value_opaque_ty(ty)?.clone();
-        let owned = self.opaque_kind(ty) == Some(OpaqueKind::Owned);
         let name = Self::in_name(ty);
         let src = self.src_ty(ty);
         let short = type_short(ty);
         let null_msg = format!("null {short} value passed by value");
-        let writeback = owned.then(|| match self.nullable_owned_ptr_fields(registry, ty) {
-            Some(fields) => quote!(#( (*v).#fields = ::core::ptr::null_mut(); )*),
-            None => {
-                quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());)
-            }
-        });
+        // Owned-ness (whether to clean up the moved-from slot) is inferred from the
+        // mirror's fields for a `repr_c_struct`, or the explicit kind for a non-mirror.
+        let writeback = self.value_opaque_writeback(registry, ty, &format_ident!("v"));
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name(
@@ -495,12 +543,11 @@ impl Cbindgen {
                         #(#field_defs,)*
                     }
                 ));
-                // An owned mirror (`.repr_c_struct(..).owned()`) gets an
-                // auto-generated `Gravestone`: the empty, safely-droppable value is
-                // the source type's `Default` (e.g. an `Option<Box<String>>` field
-                // defaults to `None`). A by-value consume writes this back into the
-                // caller's slot so its later `_drop` is a no-op.
-                if cfg.kind == OpaqueKind::Owned {
+                // A mirror that needs `gravestone()` (only the bare-`Box<T>` fallback —
+                // nullable owned-pointer fields are nulled in place) gets an
+                // auto-generated `Gravestone` from the source type's `Default`. Nullable
+                // mirrors emit nothing here, so they impose no `Default` requirement.
+                if self.mirror_needs_gravestone_impl(registry, &ty) {
                     items.push(syn::parse_quote!(
                         impl ::prebindgen::Gravestone for #mirror_ident {
                             #[inline]
@@ -577,12 +624,9 @@ impl Cbindgen {
             // no write-back is needed. This is the C user's "take" operation.
             if takeable_keys.contains(key) {
                 let take_ident = self.take_symbol(&ty);
-                let writeback = (cfg.kind == OpaqueKind::Owned).then(|| {
-                    quote!(::core::ptr::write(
-                        src,
-                        <#opaque as ::prebindgen::Gravestone>::gravestone(),
-                    );)
-                });
+                // Same inferred write-back as a consume (field-null for a nullable
+                // mirror, `gravestone()` for a bare-`Box` mirror / non-mirror owned).
+                let writeback = self.value_opaque_writeback(registry, &ty, &format_ident!("src"));
                 items.push(syn::parse_quote!(
                     #[no_mangle]
                     #[allow(non_snake_case, unused_variables)]

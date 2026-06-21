@@ -2,9 +2,9 @@
  * C micro-benchmark over the prebindgen-generated `perftest` C ABI.
  *
  * Operates on an opaque `storage_t *` handle (`storage_new` / `storage_drop`). Because
- * `Payload` is declared `.repr_c_struct().owned()`, it crosses the C ABI by direct
- * reinterpret (zero-copy), and the generator emits the right wrapper for each of the
- * five parameter-passing semantics:
+ * `Payload` is declared `.repr_c_struct()` (owned-ness inferred from its `label` field),
+ * it crosses the C ABI by direct reinterpret (zero-copy), and the generator emits the
+ * right wrapper for each of the five parameter-passing semantics:
  *   - storage_put_by_take(payload_t *)              by-value consume (move out + gravestone)
  *   - storage_put_by_read(const payload_t *)        shared read borrow
  *   - storage_put_by_read_and_update(payload_t *)   read + write back (bumps a counter)

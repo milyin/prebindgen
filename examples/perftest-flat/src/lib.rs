@@ -85,7 +85,7 @@ pub fn storage_get(s: &Storage) -> Payload {
 /// Move `payload` into the storage. Taken **by value**: across the C ABI this is a
 /// consume — Rust reads the `payload_t` out through a `*mut` and writes a gravestone
 /// back (nulling the owned `label` pointer) so the caller's later free is a no-op
-/// (see `perftest-c`'s `.repr_c_struct(Payload).owned()`).
+/// (see `perftest-c`'s `.repr_c_struct(Payload)` — owned-ness is inferred from `label`).
 #[prebindgen]
 pub fn storage_put_by_take(s: &mut Storage, payload: Payload) {
     s.payload = payload;

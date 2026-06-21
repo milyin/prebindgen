@@ -51,12 +51,12 @@ fn generate_ffi_bindings() -> PathBuf {
 
     // The zero-copy, `#[repr(C)]` value struct. Emits a visible-field `payload_t`
     // mirror (`Option<Box<String>>` -> `string_t *label`) + a `Transmute` and a
-    // compile-time size/align assert proving the reinterpret sound. `.owned()`:
-    // `Payload` owns its `label` string, so a by-value consume (`storage_put`) reads
-    // it out through a `*mut payload_t` and writes a gravestone back (nulls `label`),
-    // making the caller's later free a no-op. The `Gravestone` impl is auto-generated
-    // from `Payload::default()`.
-    cbindgen = cbindgen.repr_c_struct(pq!(Payload)).owned();
+    // compile-time size/align assert proving the reinterpret sound. Owned-ness is
+    // INFERRED from the fields: `Payload` has an opaque-pointer `label`, so a by-value
+    // consume (`storage_put_by_take`) reads the value out through a `*mut payload_t` and
+    // nulls the moved-out `label` in place, making the caller's later free a no-op (no
+    // `.owned()` modifier, no `Default` requirement — the `label` is nullable).
+    cbindgen = cbindgen.repr_c_struct(pq!(Payload));
 
     // The `&Payload` callback signature -> a `closure_payload_t` closure struct
     // whose `call` takes a `const payload_t *` (zero-copy borrow). `.base_name`

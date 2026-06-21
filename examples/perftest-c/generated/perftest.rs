@@ -31,12 +31,6 @@ pub struct payload_t {
     pub flag: bool,
     pub label: *mut string_t,
 }
-impl ::prebindgen::Gravestone for payload_t {
-    #[inline]
-    fn rust_gravestone() -> perftest_flat::Payload {
-        <perftest_flat::Payload as ::core::default::Default>::default()
-    }
-}
 const _: () = {
     assert!(
         ::core::mem::size_of:: < perftest_flat::Payload > () == ::core::mem::size_of:: <
