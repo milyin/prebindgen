@@ -13,9 +13,11 @@
 #   <op> <variant> <ns_per_op> <mops>
 #   END_PERFTEST
 #
-# This script runs them all at one iteration count `N` (so the numbers are
-# comparable), then prints a merged table of the BEST ns/op per operation
-# (put / get / callback) per language, followed by each language's full report.
+# Every op runs in two string categories — `.null` (no heap `label`) and `.str` (a
+# real `label` string) — so the comparison is apples-to-apples. This script runs all
+# three at one iteration count `N`, then prints, per category, a table of the BEST
+# ns/op per operation (put / get / callback) per language, followed by each
+# language's full report.
 #
 # Usage:
 #   examples/perftest-bench.sh            # full run (N = 5,000,000)
@@ -38,7 +40,8 @@ while [ $# -gt 0 ]; do
         --n) N="${2:?--n needs a value}"; shift 2 ;;
         --n=*) N="${1#--n=}"; shift ;;
         -h | --help)
-            sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            awk 'NR>=3 && /^#/ { sub(/^# ?/, ""); print; next } NR>=3 { exit }' \
+                "${BASH_SOURCE[0]}"
             exit 0
             ;;
         *)
@@ -105,7 +108,10 @@ if [ ${#FILES[@]} -eq 0 ]; then
     echo "No benchmark output captured — all runners failed or were skipped." >&2
     exit 1
 fi
+# Index of the last "." in s (0 if none) — splits a variant into <sub>.<category>.
 awk -v want_n="$N" '
+    function lastdot(s,   i) { for (i = length(s); i >= 1; i--) if (substr(s, i, 1) == ".") return i; return 0 }
+
     /^BEGIN_PERFTEST/ {
         inblk = 1; lang = "?"
         for (i = 1; i <= NF; i++) if ($i ~ /^lang=/) lang = substr($i, 6)
@@ -116,9 +122,14 @@ awk -v want_n="$N" '
     inblk && NF >= 4 && $1 != "" {
         op = $1; variant = $2; ns = $3 + 0
         full[lang] = full[lang] sprintf("  %-10s %-16s %9.2f ns/op  %9.1f Mops/s\n", $1, $2, $3, $4)
-        key = lang SUBSEP op
-        if (!(key in best) || ns < best[key]) { best[key] = ns; bestvar[key] = variant }
-        ops_seen[op] = 1
+        # Split "<sub>.<cat>" (e.g. "by_take.null", "composition.str"); a variant with
+        # no "." falls into the catch-all category "-".
+        d = lastdot(variant)
+        if (d > 0) { subv = substr(variant, 1, d - 1); cat = substr(variant, d + 1) }
+        else       { subv = variant; cat = "-" }
+        cats_seen[cat] = 1
+        key = lang SUBSEP op SUBSEP cat
+        if (!(key in best) || ns < best[key]) { best[key] = ns; bestsub[key] = subv }
     }
     END {
         nlangs = 0
@@ -127,34 +138,48 @@ awk -v want_n="$N" '
         if (nlangs == 0) { print "No benchmark output captured." ; exit 1 }
 
         split("put get callback", ops, " ")
+        # Apples-to-apples: one table per string category, null-label first.
+        ncats = 0
+        if ("null" in cats_seen) cattab[++ncats] = "null"
+        if ("str"  in cats_seen) cattab[++ncats] = "str"
+        if ("-"    in cats_seen) cattab[++ncats] = "-"
 
-        printf "================================================================\n"
-        printf " perftest \xE2\x80\x94 best ns/op by operation (lower is better, N=%s)\n", want_n
-        printf "================================================================\n"
-        printf " %-10s", "operation"
-        for (l = 1; l <= nlangs; l++) printf " %14s", langs[l]
-        printf "\n"
-        for (o = 1; o <= 3; o++) {
-            op = ops[o]
-            printf " %-10s", op
-            for (l = 1; l <= nlangs; l++) {
-                key = langs[l] SUBSEP op
-                if (key in best) printf " %14.2f", best[key]; else printf " %14s", "-"
+        catdesc["null"] = "null-label (no heap string \xE2\x80\x94 FFI + ownership cost only)"
+        catdesc["str"]  = "with-string (realistic \xE2\x80\x94 includes the label heap alloc)"
+        catdesc["-"]    = "uncategorized"
+
+        for (c = 1; c <= ncats; c++) {
+            cat = cattab[c]
+            printf "================================================================\n"
+            printf " perftest \xE2\x80\x94 best ns/op, %s\n", catdesc[cat]
+            printf " (lower is better, N=%s)\n", want_n
+            printf "================================================================\n"
+            printf " %-10s", "operation"
+            for (l = 1; l <= nlangs; l++) printf " %14s", langs[l]
+            printf "\n"
+            for (o = 1; o <= 3; o++) {
+                op = ops[o]
+                printf " %-10s", op
+                for (l = 1; l <= nlangs; l++) {
+                    key = langs[l] SUBSEP op SUBSEP cat
+                    if (key in best) printf " %14.2f", best[key]; else printf " %14s", "-"
+                }
+                printf "\n"
+            }
+            printf "\n winning variant per cell:\n"
+            for (o = 1; o <= 3; o++) {
+                op = ops[o]
+                printf "   %-10s", op
+                for (l = 1; l <= nlangs; l++) {
+                    key = langs[l] SUBSEP op SUBSEP cat
+                    if (key in best) printf "  %s=%s", langs[l], bestsub[key]
+                }
+                printf "\n"
             }
             printf "\n"
         }
-        printf "\n winning variant per cell:\n"
-        for (o = 1; o <= 3; o++) {
-            op = ops[o]
-            printf "   %-10s", op
-            for (l = 1; l <= nlangs; l++) {
-                key = langs[l] SUBSEP op
-                if (key in best) printf "  %s=%s", langs[l], bestvar[key]
-            }
-            printf "\n"
-        }
 
-        printf "\n================================================================\n"
+        printf "================================================================\n"
         printf " full reports\n"
         printf "================================================================\n"
         for (l = 1; l <= nlangs; l++) {

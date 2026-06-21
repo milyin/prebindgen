@@ -12,7 +12,9 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use perftest_flat::{storage_callback, storage_get, storage_new, storage_put_by_take, Payload};
+use perftest_flat::{
+    storage_callback, storage_get, storage_new, storage_put_by_take, Payload, Storage,
+};
 
 /// Iterations per measured variant. Overridable via `PERFTEST_N` so the shared
 /// benchmark harness can run all three languages at one `N` (and a fast smoke).
@@ -36,44 +38,56 @@ fn bench(op: &str, variant: &str, n: u64, mut body: impl FnMut()) {
     println!("{op:<10} {variant:<16} {ns_per_op:>9.2} {mops:>9.1}");
 }
 
-fn main() {
-    let n = iterations();
-    let seed = Payload {
+/// Build a payload whose `label` is present (`Some`) or absent (`None`) — the two
+/// string categories the benchmark compares.
+fn make_seed(label: Option<&str>) -> Payload {
+    Payload {
         id: 42,
         seq: 7,
         value: 3.5,
         flag: true,
-        label: Some(Box::new("hello, payload".to_string())),
-    };
-    let mut storage = storage_new();
-    storage_put_by_take(&mut storage, seed.clone());
+        label: label.map(|s| Box::new(s.to_string())),
+    }
+}
 
-    let mut sink: i64 = 0;
+/// Run put/get/callback for one string category (`str` = a heap `label`, `null` = no
+/// `label`), emitting `<op> native.<cat>` rows. The `.null` rows isolate the FFI +
+/// ownership cost; the `.str` rows add the `label` heap (de)allocation.
+fn run_category(storage: &mut Storage, label: Option<&str>, cat: &str, n: u64, sink: &mut i64) {
+    // Seed the storage so `get`/`callback` read a payload of this category.
+    storage_put_by_take(storage, make_seed(label));
 
-    println!("BEGIN_PERFTEST lang=rust n={n}");
-
-    bench("put", "native", n, || {
+    bench("put", &format!("native.{cat}"), n, || {
         // `storage_put_by_take` consumes its argument by value, so provide a fresh
-        // owned payload each call (the clone re-allocates the `label`, mirroring the C
-        // benchmark's per-iter `string_new`).
-        storage_put_by_take(&mut storage, black_box(seed.clone()));
+        // owned payload each call (a `.str` clone re-allocates the `label`, mirroring
+        // the C benchmark's per-iter `string_new`; `.null` allocates nothing).
+        storage_put_by_take(storage, black_box(make_seed(label)));
     });
 
-    bench("get", "native", n, || {
-        let g = storage_get(&storage);
-        sink = sink.wrapping_add(g.id);
+    bench("get", &format!("native.{cat}"), n, || {
+        let g = storage_get(storage);
+        *sink = sink.wrapping_add(g.id);
         black_box(&g);
     });
 
-    bench("callback", "native", n, || {
+    bench("callback", &format!("native.{cat}"), n, || {
         // The callback bound is `Fn(&Payload) + 'static`, so it can't capture `sink`
         // by reference; touch the borrowed payload through `black_box` (parity with
         // C's "observe the payload" callback — the point is the dispatch cost).
-        storage_callback(&storage, |p| {
+        storage_callback(storage, |p| {
             black_box(p.id);
         });
     });
+}
 
+fn main() {
+    let n = iterations();
+    let mut storage = storage_new();
+    let mut sink: i64 = 0;
+
+    println!("BEGIN_PERFTEST lang=rust n={n}");
+    run_category(&mut storage, Some("hello, payload"), "str", n, &mut sink);
+    run_category(&mut storage, None, "null", n, &mut sink);
     println!("END_PERFTEST");
 
     // Keep `sink` observable so the benchmarks aren't optimized away.

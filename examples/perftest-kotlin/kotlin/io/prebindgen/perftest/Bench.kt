@@ -64,22 +64,51 @@ private fun bench(op: String, variant: String, n: Long, body: () -> Unit) {
 }
 
 fun main() {
-    val seed = Payload(42L, 7, 3.5, true, "hello, payload")
     val s = storageNew(onError)
-    storagePutByTake(s, seed, onError) // seed the storage
 
     var sink = 0L
 
     // The borrowed `&Payload` is composed natively (via the same `fromParts` factory as
     // `storageGet`) and delivered to the callback as a whole `Payload` object in one
     // `run(Payload)` upcall. Hoisted (like the C `bench_callback` closure) so the
-    // measurement isn't per-iteration lambda allocations.
+    // measurement isn't per-iteration lambda allocations. (A `.str` payload also encodes
+    // the `label` String inside `fromParts`; a `.null` payload does not.)
     val cb = PayloadCallback { p -> sink += p.id }
+
+    // Run put/get/callback for one string category (`str` = a heap `label`, `null` = no
+    // `label`). Emits `<op> <variant>.<cat>` rows so the harness can compare like-for-like.
+    fun runCategory(label: String?, cat: String) {
+        val seed = Payload(42L, 7, 3.5, true, label)
+        storagePutByTake(s, seed, onError) // seed so get/callback read this category
+
+        bench("put", "native.$cat", N) {
+            storagePutByTake(s, seed, onError)
+        }
+        bench("get", "composition.$cat", N) {
+            val g = storageGet(s, onError) // 1 JNI crossing, composed via fromParts
+            sink += g.id
+        }
+        bench("get", "naive.$cat", N) {
+            val g = Payload( // 5 JNI crossings, composed in Kotlin
+                storageGetId(s, onError),
+                storageGetSeq(s, onError),
+                storageGetValue(s, onError),
+                storageGetFlag(s, onError),
+                storageGetLabel(s, onError),
+            )
+            sink += g.id
+        }
+        bench("callback", "whole.$cat", N) {
+            storageCallback(s, cb, onError)
+        }
+    }
 
     // Warm up the JIT on all paths so steady-state numbers are fair (capped so a small
     // `N` smoke run stays fast).
+    val warm = Payload(42L, 7, 3.5, true, "hello, payload")
+    storagePutByTake(s, warm, onError)
     repeat(minOf(N, 200_000L).toInt()) {
-        storagePutByTake(s, seed, onError)
+        storagePutByTake(s, warm, onError)
         storageGet(s, onError)
         storageGetId(s, onError)
         storageGetSeq(s, onError)
@@ -90,31 +119,8 @@ fun main() {
     }
 
     println("BEGIN_PERFTEST lang=kotlin n=$N")
-
-    bench("put", "native", N) {
-        storagePutByTake(s, seed, onError)
-    }
-
-    bench("get", "composition", N) {
-        val g = storageGet(s, onError) // 1 JNI crossing, composed via fromParts
-        sink += g.id
-    }
-
-    bench("get", "naive", N) {
-        val g = Payload( // 5 JNI crossings, composed in Kotlin
-            storageGetId(s, onError),
-            storageGetSeq(s, onError),
-            storageGetValue(s, onError),
-            storageGetFlag(s, onError),
-            storageGetLabel(s, onError),
-        )
-        sink += g.id
-    }
-
-    bench("callback", "whole", N) {
-        storageCallback(s, cb, onError)
-    }
-
+    runCategory("hello, payload", "str")
+    runCategory(null, "null")
     println("END_PERFTEST")
 
     s.close()
