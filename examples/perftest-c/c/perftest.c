@@ -1,20 +1,24 @@
 /*
  * C micro-benchmark over the prebindgen-generated `perftest` C ABI.
  *
- * Mirrors `perftest-flat/examples/perftest.rs`: it runs the same three benchmarks
- * (`storage_put`, `storage_get`, `storage_callback`) through the generated C
- * bindings, operating on an opaque `storage_t *` handle (`storage_new` /
- * `storage_drop`). Because `Payload` is declared `.repr_c_struct().owned()`, it
- * crosses the C ABI by direct reinterpret (zero-copy). `storage_put(s, &p)` takes the
- * payload **by value** (consume): Rust moves it out through the `payload_t *` and
- * writes a gravestone back, nulling `p.label` — so the caller must re-provide the
- * string before each `storage_put` (and must NOT double-free the moved-out string).
- * `storage_get` returns a fresh owned payload; the callback receives a
- * `const payload_t *` borrow. The `label` string is an opaque `string_t *` (built by
- * `string_new`, freed by `string_drop`).
+ * Operates on an opaque `storage_t *` handle (`storage_new` / `storage_drop`). Because
+ * `Payload` is declared `.repr_c_struct().owned()`, it crosses the C ABI by direct
+ * reinterpret (zero-copy), and the generator emits the right wrapper for each of the
+ * five parameter-passing semantics:
+ *   - storage_put_by_take(payload_t *)              by-value consume (move out + gravestone)
+ *   - storage_put_by_read(const payload_t *)        shared read borrow
+ *   - storage_put_by_read_and_update(payload_t *)   read + write back (bumps a counter)
+ *   - storage_get_into_init(payload_t *)            out-param; drops the old value first
+ *   - storage_get_into_uninit(payload_t *)          out-param into uninitialized memory
+ * plus `storage_get` (return-value) and `storage_callback` (a `const payload_t *` borrow).
  *
- * Compare the printed ns/op against the Rust runner to see the cost of crossing the
- * (zero-copy) C boundary vs calling the Rust functions natively.
+ * Each op is timed in TWO columns: with a realistic `label` string (the opaque
+ * `string_t *`, built by `string_new` / freed by `string_drop`) and with a NULL label.
+ * The string `malloc`/`free` dominates the per-op cost, so the NULL-label column
+ * isolates the FFI + ownership-machinery cost and reveals the per-semantic differences.
+ *
+ * Compare the printed ns/op against the Rust runner (`perftest-flat/examples/perftest.rs`)
+ * to see the cost of crossing the (zero-copy) C boundary vs calling Rust natively.
  */
 #include <assert.h>
 #include <stdint.h>
@@ -23,7 +27,8 @@
 
 #include "perftest.h"
 
-#define N 50000000ULL
+/* Iterations per op per column (7 ops × 2 columns). */
+#define N 20000000ULL
 
 static double now_ns(void) {
     struct timespec ts;
@@ -31,25 +36,20 @@ static double now_ns(void) {
     return (double)ts.tv_sec * 1.0e9 + (double)ts.tv_nsec;
 }
 
-static void report(const char *name, uint64_t n, double elapsed_ns) {
-    double ns_per_op = elapsed_ns / (double)n;
-    double mops = (double)n / (elapsed_ns / 1.0e9) / 1.0e6;
-    printf("%-10s %8.2f ns/op   %8.1f Mops/s\n", name, ns_per_op, mops);
-}
-
 /* Callback: a pure observer of the borrowed payload. */
 static void on_payload(const struct payload_t *pl, void *ctx) {
     *(uint64_t *)ctx += pl->id;
 }
 
-/* Build an initialized payload with a fresh `label` string the caller owns. */
+/* Build an initialized payload. `label == NULL` ⇒ no `label` string (no `string_new`);
+ * otherwise a fresh `string_t *` the caller owns. */
 static struct payload_t make_payload(int64_t id, int32_t seq, const char *label) {
     struct payload_t p;
     p.id = id;
     p.seq = seq;
     p.value = 3.5;
     p.flag = true;
-    p.label = string_new(label);
+    p.label = label ? string_new(label) : NULL;
     return p;
 }
 
@@ -96,16 +96,123 @@ static void correctness(struct storage_t *s) {
     string_drop(pun.label);
 }
 
-int main(void) {
-    struct payload_t p;
-    p.id = 42;
-    p.seq = 7;
-    p.value = 3.5;
-    p.flag = true;
-    p.label = string_new("hello, payload");
+/*
+ * Per-op benchmarks. Each times N iterations and returns the elapsed ns, parameterized
+ * by `label` (a string, or NULL for the isolated column). Each keeps correct
+ * per-iteration ownership so the loops neither leak nor double-free.
+ */
 
+/* by_take: the payload is consumed (moved out + gravestoned), so rebuild it each iter. */
+static double bench_put_by_take(struct storage_t *s, const char *label, uint64_t *sink) {
+    (void)sink;
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        struct payload_t p = make_payload(42, 7, label);
+        storage_put_by_take(s, &p); /* moves p in; p is now a gravestone */
+    }
+    return now_ns() - t0;
+}
+
+/* by_read: `const payload_t *` borrow — the caller's payload is untouched and reused
+ * across iters (Rust clones it into storage). One alloc before, one drop after. */
+static double bench_put_by_read(struct storage_t *s, const char *label, uint64_t *sink) {
+    (void)sink;
+    struct payload_t p = make_payload(7, 7, label);
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        storage_put_by_read(s, &p);
+    }
+    double el = now_ns() - t0;
+    if (p.label) string_drop(p.label);
+    return el;
+}
+
+/* by_read_and_update: like by_read, but bumps the caller's `seq` in place each iter. */
+static double bench_put_by_read_and_update(struct storage_t *s, const char *label,
+                                           uint64_t *sink) {
+    (void)sink;
+    struct payload_t p = make_payload(8, 0, label);
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        storage_put_by_read_and_update(s, &p);
+    }
+    double el = now_ns() - t0;
+    if (p.label) string_drop(p.label);
+    return el;
+}
+
+/* get_into_init: the slot stays initialized across iters; each call drops the slot's old
+ * label (inside Rust) and writes a fresh clone of the stored payload. */
+static double bench_get_into_init(struct storage_t *s, const char *label, uint64_t *sink) {
+    struct payload_t seed = make_payload(55, 5, label);
+    storage_put_by_take(s, &seed); /* storage now holds a matching-label payload */
+    struct payload_t p = make_payload(0, 0, label); /* an initialized slot */
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        storage_get_into_init(s, &p);
+        *sink += (uint64_t)p.id;
+    }
+    double el = now_ns() - t0;
+    if (p.label) string_drop(p.label); /* the final label */
+    return el;
+}
+
+/* get_into_uninit: Rust writes without dropping, so the C side must free the label each
+ * iter (the fair dual of get_into_init — both pay one free per iter, inside the loop). */
+static double bench_get_into_uninit(struct storage_t *s, const char *label, uint64_t *sink) {
+    struct payload_t seed = make_payload(55, 5, label);
+    storage_put_by_take(s, &seed);
+    struct payload_t p; /* uninitialized */
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        storage_get_into_uninit(s, &p);
+        *sink += (uint64_t)p.id;
+        if (p.label) string_drop(p.label);
+    }
+    return now_ns() - t0;
+}
+
+/* get: return-value — a fresh owned payload each iter (its cloned label freed by drop). */
+static double bench_get(struct storage_t *s, const char *label, uint64_t *sink) {
+    struct payload_t seed = make_payload(55, 5, label);
+    storage_put_by_take(s, &seed);
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        struct payload_t g = storage_get(s);
+        *sink += (uint64_t)g.id;
+        payload_drop(&g);
+    }
+    return now_ns() - t0;
+}
+
+/* callback: a `const payload_t *` borrow — never touches the label, so both columns
+ * measure ~the same (the FFI trampoline + the upcall). */
+static double bench_callback(struct storage_t *s, const char *label, uint64_t *sink) {
+    struct payload_t seed = make_payload(55, 5, label);
+    storage_put_by_take(s, &seed);
+    struct closure_payload_t closure;
+    closure.context = sink;
+    closure.call = on_payload;
+    closure.drop = NULL;
+    double t0 = now_ns();
+    for (uint64_t i = 0; i < N; i++) {
+        storage_callback(s, closure);
+    }
+    return now_ns() - t0;
+}
+
+typedef double (*bench_fn)(struct storage_t *s, const char *label, uint64_t *sink);
+
+/* Run one op in both columns and print `name  <with-string>   <null-label>`. */
+static void bench_row(const char *name, bench_fn fn, struct storage_t *s, uint64_t *sink) {
+    double ns_with = fn(s, "hello, payload", sink);
+    double ns_null = fn(s, NULL, sink);
+    printf("%-22s %9.2f ns/op   %9.2f ns/op\n", name, ns_with / (double)N,
+           ns_null / (double)N);
+}
+
+int main(void) {
     struct storage_t *s = storage_new();
-    storage_put_by_take(s, &p); /* seed the storage (consumes p.label, nulls it) */
 
     /* Verify the five parameter-passing semantics, then hammer them for leak/RSS. */
     correctness(s);
@@ -116,47 +223,18 @@ int main(void) {
 
     printf("perftest-c (generated C ABI), N = %llu iterations per op\n\n",
            (unsigned long long)N);
+    printf("%-22s %14s   %14s\n", "op", "with-string", "null-label");
 
     uint64_t sink = 0;
-    double t0, t1;
-
-    t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
-        /* `storage_put_by_take` consumes the payload: it moves the whole value out
-         * and writes a gravestone (Payload::default — every field reset, `label`
-         * nulled) back into `p`. So re-provide the full payload before each call. */
-        p.id = 42;
-        p.seq = 7;
-        p.value = 3.5;
-        p.flag = true;
-        p.label = string_new("hello, payload");
-        storage_put_by_take(s, &p);
-    }
-    t1 = now_ns();
-    report("put", N, t1 - t0);
-
-    t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
-        struct payload_t g = storage_get(s);
-        sink += g.id;
-        payload_drop(&g); /* frees the cloned `string_t *` each iteration */
-    }
-    t1 = now_ns();
-    report("get", N, t1 - t0);
-
-    struct closure_payload_t closure;
-    closure.context = &sink;
-    closure.call = on_payload;
-    closure.drop = NULL;
-    t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
-        storage_callback(s, closure);
-    }
-    t1 = now_ns();
-    report("callback", N, t1 - t0);
+    bench_row("put_by_take", bench_put_by_take, s, &sink);
+    bench_row("put_by_read", bench_put_by_read, s, &sink);
+    bench_row("put_by_read_and_update", bench_put_by_read_and_update, s, &sink);
+    bench_row("get_into_init", bench_get_into_init, s, &sink);
+    bench_row("get_into_uninit", bench_get_into_uninit, s, &sink);
+    bench_row("get", bench_get, s, &sink);
+    bench_row("callback", bench_callback, s, &sink);
 
     storage_drop(s);
-    string_drop(p.label);
 
     printf("\n(sink = %llu)\n", (unsigned long long)sink);
     return 0;
