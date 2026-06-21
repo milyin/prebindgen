@@ -242,6 +242,11 @@ impl Cbindgen {
     /// assert against the generated mirror proves the reinterpret sound at compile
     /// time. Call after the manglers are configured (the mirror name is resolved
     /// via [`Self::c_type_ident`]). A `<base>_drop` is generated.
+    ///
+    /// Defaults to plain-data semantics (like [`Self::opaque_data_struct`]): a
+    /// by-value crossing is a bitwise copy with no write-back. Chain [`Self::owned`]
+    /// when the struct **owns external resources** (e.g. an `Option<Box<T>>` field)
+    /// and is consumed **by value**, so a consume writes a gravestone back.
     pub fn repr_c_struct(mut self, ty: syn::Type) -> Self {
         let key = TypeKey::from_type(&ty);
         assert!(
@@ -260,6 +265,38 @@ impl Cbindgen {
             },
         );
         self.current = Some(CurrentDecl::ValueOpaque(key));
+        self
+    }
+
+    /// Mark the current [`Self::repr_c_struct`] declaration as **owning external
+    /// resources**: a by-value consume of it reads the live value out through a
+    /// `*mut` and writes a **gravestone** back into the caller's slot, so the
+    /// caller's later destructor is a no-op (no double-free of an owned pointer
+    /// field such as `Option<Box<String>>`). The `Gravestone` impl for the
+    /// auto-generated mirror is emitted automatically from the source type's
+    /// `Default` — so the source type **must** implement `Default` (its default
+    /// value is the empty, safely-droppable gravestone). Panics if the current
+    /// declaration is not a `repr_c_struct` (mirror) value-opaque.
+    pub fn owned(mut self) -> Self {
+        match &self.current {
+            Some(CurrentDecl::ValueOpaque(key)) => {
+                let cfg = self
+                    .value_opaque
+                    .get_mut(key)
+                    .expect("value-opaque entry vanished");
+                assert!(
+                    cfg.generate_mirror,
+                    "Cbindgen::owned must be chained after a `repr_c_struct(...)` call \
+                     (use `opaque_owned_struct` for an externally-defined opaque blob)"
+                );
+                cfg.kind = OpaqueKind::Owned;
+            }
+            other => panic!(
+                "Cbindgen::owned must be chained after a `repr_c_struct(...)` call, \
+                 not after {}",
+                describe_current(other)
+            ),
+        }
         self
     }
 

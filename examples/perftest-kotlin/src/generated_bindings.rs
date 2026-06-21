@@ -685,15 +685,15 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageNew<'a>(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
-pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
+pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     s: jni::sys::jlong,
-    p_id: jni::sys::jlong,
-    p_seq: jni::sys::jint,
-    p_value: jni::sys::jdouble,
-    p_flag: jni::sys::jboolean,
-    p_label: jni::objects::JString<'a>,
+    payload_id: jni::sys::jlong,
+    payload_seq: jni::sys::jint,
+    payload_value: jni::sys::jdouble,
+    payload_flag: jni::sys::jboolean,
+    payload_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(unused_variables)]
@@ -720,7 +720,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
             return ();
         }
     };
-    let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
+    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -736,7 +736,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
             return ();
         }
     };
-    let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
+    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -752,7 +752,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
             return ();
         }
     };
-    let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
+    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -768,7 +768,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
             return ();
         }
     };
-    let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
+    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -784,7 +784,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
             return ();
         }
     };
-    let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
+    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &payload_label,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -800,14 +803,159 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePut<'a>(
             return ();
         }
     };
-    let p = perftest_flat::Payload {
-        id: __p_id,
-        seq: __p_seq,
-        value: __p_value,
-        flag: __p_flag,
-        label: __p_label,
+    let payload = perftest_flat::Payload {
+        id: __payload_id,
+        seq: __payload_seq,
+        value: __payload_value,
+        flag: __payload_flag,
+        label: __payload_label,
     };
-    let __out = perftest_flat::storage_put(&mut s, &p);
+    let __out = perftest_flat::storage_put_by_read(&mut s, &payload);
+    match unit_to_unit_9ecccf8e(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    s: jni::sys::jlong,
+    payload_id: jni::sys::jlong,
+    payload_seq: jni::sys::jint,
+    payload_value: jni::sys::jdouble,
+    payload_flag: jni::sys::jboolean,
+    payload_label: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &payload_label,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let payload = perftest_flat::Payload {
+        id: __payload_id,
+        seq: __payload_seq,
+        value: __payload_value,
+        flag: __payload_flag,
+        label: __payload_label,
+    };
+    let __out = perftest_flat::storage_put_by_take(&mut s, payload);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {

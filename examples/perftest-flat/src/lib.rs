@@ -20,6 +20,7 @@
 //! exercise an opaque handle crossing alongside the value struct.
 
 use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
+use std::mem::MaybeUninit;
 
 /// Path to the directory where the `#[prebindgen]` macro records this crate's FFI
 /// surface; read by consumers via `prebindgen::Source::new`.
@@ -68,11 +69,57 @@ pub fn storage_get(s: &Storage) -> Payload {
     s.payload.clone()
 }
 
-/// Store a copy of `p` into the storage. The `&Payload` borrow crosses as a
-/// zero-copy `const payload_t *` pointer; the clone-into-storage happens in Rust.
+// ─────────────────────────────────────────────────────────────────────────────
+// Five parameter-passing semantics for a `Payload` value struct, demonstrating the
+// C wrappers the generator emits for each (see `perftest-c`):
+//   - by_take            : `Payload`                  — by-value consume (`*mut`, move
+//                                                       out + gravestone the owned ptr)
+//   - by_read            : `&Payload`                 — shared read borrow (`const *`)
+//   - by_read_and_update : `&mut Payload`             — read + write back in place
+//   - get_into_init      : `&mut Payload`             — out-param; drops the old value
+//                                                       (frees old label) before writing
+//   - get_into_uninit    : `&mut MaybeUninit<Payload>`— out-param into uninit memory
+//                                                       (writes without dropping)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Move `payload` into the storage. Taken **by value**: across the C ABI this is a
+/// consume — Rust reads the `payload_t` out through a `*mut` and writes a gravestone
+/// back (nulling the owned `label` pointer) so the caller's later free is a no-op
+/// (see `perftest-c`'s `.repr_c_struct(Payload).owned()`).
 #[prebindgen]
-pub fn storage_put(s: &mut Storage, p: &Payload) {
-    s.payload = p.clone();
+pub fn storage_put_by_take(s: &mut Storage, payload: Payload) {
+    s.payload = payload;
+}
+
+/// Store a clone of `payload`, read through a shared borrow (`const payload_t *`).
+/// The caller's payload is left untouched.
+#[prebindgen]
+pub fn storage_put_by_read(s: &mut Storage, payload: &Payload) {
+    s.payload = payload.clone();
+}
+
+/// Store a clone of `payload`, then **update the caller's payload in place** by
+/// bumping its `seq` counter (a `&mut Payload` read/write borrow → `payload_t *`).
+#[prebindgen]
+pub fn storage_put_by_read_and_update(s: &mut Storage, payload: &mut Payload) {
+    s.payload = payload.clone();
+    payload.seq += 1;
+}
+
+/// Write the stored payload into the caller's **already-initialized** `payload` slot.
+/// The assignment drops the old value first (freeing its old `label`) — so the slot
+/// must hold a valid payload (use [`storage_get_into_uninit`] for raw memory).
+#[prebindgen]
+pub fn storage_get_into_init(s: &Storage, payload: &mut Payload) {
+    *payload = s.payload.clone();
+}
+
+/// Write the stored payload into the caller's **uninitialized** `payload` slot,
+/// without dropping whatever bytes were there (`&mut MaybeUninit<Payload>` →
+/// `payload_t *`). The slot is initialized afterwards.
+#[prebindgen]
+pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) {
+    payload.write(s.payload.clone());
 }
 
 /// Invoke `f` with a borrow of the stored payload — a pure zero-copy struct

@@ -37,15 +37,22 @@ fn main() {
         // the functions read/write the payload it owns.
         .ptr_class(pq!(Storage))
         .package("storage")
-        // One-crossing composition path. (`storage_callback(s, impl Fn(&Payload))`
-        // is intentionally NOT declared here: a `data_class` supports by-value /
-        // `&T` *input* and by-value *output* (composed via `fromParts`), but not a
-        // borrowed data-class delivered to a callback — that shape needs a
-        // `ptr_class` + `flatten_output` builder. The `storage_get` → `fromParts`
-        // path already demonstrates Kotlin-side composition in one crossing.)
+        // One-crossing composition path. Only the value/ref-input put forms map to
+        // JNI: `storage_put_by_take` (by-value `Payload`) and `storage_put_by_read`
+        // (`&Payload`). The `&mut Payload` / `&mut MaybeUninit<Payload>` out-param
+        // forms (`storage_put_by_read_and_update`, `storage_get_into_*`) are C-only —
+        // a Kotlin `data class` is an immutable value with no out-param/uninit
+        // semantics — so they are left undeclared here.
+        //
+        // (`storage_callback(s, impl Fn(&Payload))` is also NOT declared: a
+        // `data_class` supports by-value / `&T` *input* and by-value *output*
+        // (composed via `fromParts`), but not a borrowed data-class delivered to a
+        // callback — that needs a `ptr_class` + `flatten_output` builder. The
+        // `storage_get` → `fromParts` path already shows Kotlin-side composition.)
         .fun(pq!(storage_new))
         .fun(pq!(storage_get))
-        .fun(pq!(storage_put))
+        .fun(pq!(storage_put_by_take))
+        .fun(pq!(storage_put_by_read))
         // Naive per-field baseline (one JNI call each).
         .fun(pq!(storage_get_id))
         .fun(pq!(storage_get_seq))

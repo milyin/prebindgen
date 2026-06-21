@@ -7,7 +7,7 @@ import io.prebindgen.perftest.storage.storageGetLabel
 import io.prebindgen.perftest.storage.storageGetSeq
 import io.prebindgen.perftest.storage.storageGetValue
 import io.prebindgen.perftest.storage.storageNew
-import io.prebindgen.perftest.storage.storagePut
+import io.prebindgen.perftest.storage.storagePutByTake
 
 /**
  * JVM micro-benchmark over the prebindgen-generated `perftest` JNI bindings.
@@ -17,7 +17,7 @@ import io.prebindgen.perftest.storage.storagePut
  * handle (a `NativeHandle` subclass), and exercise both the data-structure approach
  * and the foreign-side composition technique:
  *
- *   * **put** — `storagePut(s, p)` passes ALL fields of the `Payload` data class in
+ *   * **put** — `storagePutByTake(s, p)` passes ALL fields of the `Payload` data class in
  *     ONE downcall (the data-structure approach for input).
  *   * **get (composition)** — `storageGet(s)` returns a `Payload` composed on the
  *     Kotlin side via the generated `Payload.fromParts(...)` factory in a single
@@ -54,11 +54,11 @@ private fun bench(name: String, n: Long, body: () -> Unit) {
 fun main() {
     val seed = Payload(42L, 7, 3.5, true, "hello, payload")
     val s = storageNew(onError)
-    storagePut(s, seed, onError) // seed the storage
+    storagePutByTake(s, seed, onError) // seed the storage
 
     // Warm up the JIT on all three paths so steady-state numbers are fair.
     repeat(200_000) {
-        storagePut(s, seed, onError)
+        storagePutByTake(s, seed, onError)
         storageGet(s, onError)
         storageGetId(s, onError)
         storageGetSeq(s, onError)
@@ -72,7 +72,7 @@ fun main() {
     var sink = 0L
 
     bench("put", N) {
-        storagePut(s, seed, onError)
+        storagePutByTake(s, seed, onError)
     }
 
     bench("get (composition)", N) {

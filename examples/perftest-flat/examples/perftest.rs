@@ -9,7 +9,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use perftest_flat::{storage_callback, storage_get, storage_new, storage_put, Payload};
+use perftest_flat::{storage_callback, storage_get, storage_new, storage_put_by_take, Payload};
 
 const N: u64 = 50_000_000;
 
@@ -33,14 +33,17 @@ fn main() {
         label: Some(Box::new("hello, payload".to_string())),
     };
     let mut storage = storage_new();
-    storage_put(&mut storage, &seed);
+    storage_put_by_take(&mut storage, seed.clone());
 
     println!("perftest-flat (native Rust), N = {N} iterations per op\n");
 
     let mut sink: i64 = 0;
 
     bench("put", N, || {
-        storage_put(&mut storage, black_box(&seed));
+        // `storage_put_by_take` consumes its argument by value, so provide a fresh
+        // owned payload each call (the clone re-allocates the `label`, mirroring the C
+        // benchmark's per-iter `string_new`).
+        storage_put_by_take(&mut storage, black_box(seed.clone()));
     });
 
     bench("get", N, || {

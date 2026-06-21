@@ -451,6 +451,21 @@ impl Cbindgen {
                         #(#field_defs,)*
                     }
                 ));
+                // An owned mirror (`.repr_c_struct(..).owned()`) gets an
+                // auto-generated `Gravestone`: the empty, safely-droppable value is
+                // the source type's `Default` (e.g. an `Option<Box<String>>` field
+                // defaults to `None`). A by-value consume writes this back into the
+                // caller's slot so its later `_drop` is a no-op.
+                if cfg.kind == OpaqueKind::Owned {
+                    items.push(syn::parse_quote!(
+                        impl ::prebindgen::Gravestone for #mirror_ident {
+                            #[inline]
+                            fn rust_gravestone() -> #src {
+                                <#src as ::core::default::Default>::default()
+                            }
+                        }
+                    ));
+                }
             }
             // Fail-closed size/align equality guard (proves the transmute sound).
             items.push(syn::parse_quote!(
@@ -1158,21 +1173,62 @@ impl Cbindgen {
                 metadata: (),
             });
         }
-        // `&mut T` (mutable borrow) of an opaque handle.
+        // `&mut T` (mutable borrow). Three sub-cases, all wiring to a `*mut` of the
+        // wire (the C memory IS the Rust value for a value-opaque mirror — asserted
+        // layout-identical — so the cast is sound; `&mut` is a borrow, no gravestone).
         if rf.mutability.is_some() {
-            if !self.opaque.contains_key(&TypeKey::from_type(&elem)) {
-                return None;
+            // `&mut MaybeUninit<X>` (X value-opaque): out-param into uninitialized
+            // memory. Rust writes via the `MaybeUninit` (no drop of the garbage slot).
+            if let Some(inner) = maybe_uninit_inner(&elem) {
+                let Some(op) = self.value_opaque_ty(&inner) else {
+                    return None;
+                };
+                let op = op.clone();
+                let name = Self::in_name(ty);
+                let src = self.src_ty(&inner);
+                let short = type_short(&inner);
+                let null_ptr_msg = format!("null {short} pointer");
+                let function: syn::ItemFn = syn::parse_quote!(
+                    #[allow(non_snake_case, unused_variables, dead_code)]
+                    pub(crate) unsafe fn #name<'a>(
+                        v: *mut #op,
+                    ) -> ::core::result::Result<&'a mut ::core::mem::MaybeUninit<#src>, ::std::string::String> {
+                        if v.is_null() {
+                            return ::core::result::Result::Err(
+                                ::std::string::String::from(#null_ptr_msg),
+                            );
+                        }
+                        ::core::result::Result::Ok(&mut *(v as *mut ::core::mem::MaybeUninit<#src>))
+                    }
+                );
+                return Some(ConverterImpl {
+                    subs: vec![inner],
+                    destination: syn::parse_quote!(*mut #op),
+                    function,
+                    pre_stages: vec![],
+                    niches: Niches::empty(),
+                    metadata: (),
+                });
             }
-            let ref_ty: syn::Type = syn::parse_quote!(&mut #elem);
-            let name = Self::in_name(&ref_ty);
-            let c_struct = self.c_type_ident(&elem);
+            // `&mut` opaque handle, or `&mut` value-opaque: both reinterpret the C
+            // pointer as a mutable Rust reference. The wire is the handle's C struct
+            // or the value-opaque mirror.
+            let wire_ty: syn::Type = if self.opaque.contains_key(&TypeKey::from_type(&elem)) {
+                let c_struct = self.c_type_ident(&elem);
+                syn::parse_quote!(#c_struct)
+            } else if let Some(op) = self.value_opaque_ty(&elem) {
+                op.clone()
+            } else {
+                return None;
+            };
+            let name = Self::in_name(ty);
             let src = self.src_ty(&elem);
             let short = type_short(&elem);
             let null_ptr_msg = format!("null {short} pointer");
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, unused_variables, dead_code)]
                 pub(crate) unsafe fn #name<'a>(
-                    v: *mut #c_struct,
+                    v: *mut #wire_ty,
                 ) -> ::core::result::Result<&'a mut #src, ::std::string::String> {
                     if v.is_null() {
                         return ::core::result::Result::Err(
@@ -1184,7 +1240,7 @@ impl Cbindgen {
             );
             return Some(ConverterImpl {
                 subs: vec![elem],
-                destination: syn::parse_quote!(*mut #c_struct),
+                destination: syn::parse_quote!(*mut #wire_ty),
                 function,
                 pre_stages: vec![],
                 niches: Niches::empty(),

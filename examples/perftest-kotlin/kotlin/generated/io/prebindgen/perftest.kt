@@ -120,13 +120,22 @@ internal object JNINative {
     external fun storageGetSeq(s: Long, errorSink: Any): Int
     external fun storageGetValue(s: Long, errorSink: Any): Double
     external fun storageNew(errorSink: Any): Long
-    external fun storagePut(
+    external fun storagePutByRead(
         s: Long,
-        pId: Long,
-        pSeq: Int,
-        pValue: Double,
-        pFlag: Boolean,
-        pLabel: String?,
+        payloadId: Long,
+        payloadSeq: Int,
+        payloadValue: Double,
+        payloadFlag: Boolean,
+        payloadLabel: String?,
+        errorSink: Any,
+    )
+    external fun storagePutByTake(
+        s: Long,
+        payloadId: Long,
+        payloadSeq: Int,
+        payloadValue: Double,
+        payloadFlag: Boolean,
+        payloadLabel: String?,
         errorSink: Any,
     )
 }

@@ -341,6 +341,15 @@ fn box_inner(ty: &syn::Type) -> Option<syn::Type> {
     None
 }
 
+/// If `ty` is `MaybeUninit<T>` (any path form: `MaybeUninit` / `std::mem::…` /
+/// `core::mem::…`), return `T` — the inner of an uninitialized out-param slot.
+fn maybe_uninit_inner(ty: &syn::Type) -> Option<syn::Type> {
+    if type_path_tail(ty).map(|i| i == "MaybeUninit").unwrap_or(false) {
+        return first_type_arg(ty);
+    }
+    None
+}
+
 /// Whether `ty` is an FFI-safe scalar primitive that passes through unchanged
 /// (`bool`, the fixed-width / pointer-width integers, and floats).
 fn is_scalar(ty: &syn::Type) -> bool {

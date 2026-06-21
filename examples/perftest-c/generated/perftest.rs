@@ -31,6 +31,12 @@ pub struct payload_t {
     pub flag: bool,
     pub label: *mut string_t,
 }
+impl ::prebindgen::Gravestone for payload_t {
+    #[inline]
+    fn rust_gravestone() -> perftest_flat::Payload {
+        <perftest_flat::Payload as ::core::default::Default>::default()
+    }
+}
 const _: () = {
     assert!(
         ::core::mem::size_of:: < perftest_flat::Payload > () == ::core::mem::size_of:: <
@@ -91,6 +97,7 @@ pub(crate) unsafe fn __cbg_in_Payload(
         );
     }
     let __live = <payload_t as ::prebindgen::Transmute>::into_rust(::core::ptr::read(v));
+    ::core::ptr::write(v, <payload_t as ::prebindgen::Gravestone>::gravestone());
     ::core::result::Result::Ok(__live)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -151,6 +158,33 @@ pub(crate) unsafe fn __cbg_in___String<'a>(
         );
     }
     ::core::result::Result::Ok(&*(v as *const ::std::string::String))
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in___mut_MaybeUninit___Payload__<'a>(
+    v: *mut payload_t,
+) -> ::core::result::Result<
+    &'a mut ::core::mem::MaybeUninit<perftest_flat::Payload>,
+    ::std::string::String,
+> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload pointer"),
+        );
+    }
+    ::core::result::Result::Ok(
+        &mut *(v as *mut ::core::mem::MaybeUninit<perftest_flat::Payload>),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in___mut_Payload<'a>(
+    v: *mut payload_t,
+) -> ::core::result::Result<&'a mut perftest_flat::Payload, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null Payload pointer"),
+        );
+    }
+    ::core::result::Result::Ok(&mut *(v as *mut perftest_flat::Payload))
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in___mut_Storage<'a>(
@@ -296,6 +330,46 @@ pub unsafe extern "C" fn storage_get(s: *const storage_t) -> payload_t {
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_get_into_init(
+    s: *const storage_t,
+    payload: *mut payload_t,
+) {
+    let s = match __cbg_in___Storage(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let payload = match __cbg_in___mut_Payload(payload) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    perftest_flat::storage_get_into_init(s, payload);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_get_into_uninit(
+    s: *const storage_t,
+    payload: *mut payload_t,
+) {
+    let s = match __cbg_in___Storage(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let payload = match __cbg_in___mut_MaybeUninit___Payload__(payload) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    perftest_flat::storage_get_into_uninit(s, payload);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn storage_new() -> *mut storage_t {
     let __v = perftest_flat::storage_new();
     let __ret: *mut storage_t;
@@ -304,20 +378,63 @@ pub unsafe extern "C" fn storage_new() -> *mut storage_t {
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-pub unsafe extern "C" fn storage_put(s: *mut storage_t, p: *const payload_t) {
+pub unsafe extern "C" fn storage_put_by_read(
+    s: *mut storage_t,
+    payload: *const payload_t,
+) {
     let s = match __cbg_in___mut_Storage(s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    let p = match __cbg_in___Payload(p) {
+    let payload = match __cbg_in___Payload(payload) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__msg) => {
             panic!("{}", __msg);
         }
     };
-    perftest_flat::storage_put(s, p);
+    perftest_flat::storage_put_by_read(s, payload);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_put_by_read_and_update(
+    s: *mut storage_t,
+    payload: *mut payload_t,
+) {
+    let s = match __cbg_in___mut_Storage(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let payload = match __cbg_in___mut_Payload(payload) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    perftest_flat::storage_put_by_read_and_update(s, payload);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_put_by_take(
+    s: *mut storage_t,
+    payload: *mut payload_t,
+) {
+    let s = match __cbg_in___mut_Storage(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let payload = match __cbg_in_Payload(payload) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    perftest_flat::storage_put_by_take(s, payload);
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]

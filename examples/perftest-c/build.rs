@@ -51,8 +51,12 @@ fn generate_ffi_bindings() -> PathBuf {
 
     // The zero-copy, `#[repr(C)]` value struct. Emits a visible-field `payload_t`
     // mirror (`Option<Box<String>>` -> `string_t *label`) + a `Transmute` and a
-    // compile-time size/align assert proving the reinterpret sound.
-    cbindgen = cbindgen.repr_c_struct(pq!(Payload));
+    // compile-time size/align assert proving the reinterpret sound. `.owned()`:
+    // `Payload` owns its `label` string, so a by-value consume (`storage_put`) reads
+    // it out through a `*mut payload_t` and writes a gravestone back (nulls `label`),
+    // making the caller's later free a no-op. The `Gravestone` impl is auto-generated
+    // from `Payload::default()`.
+    cbindgen = cbindgen.repr_c_struct(pq!(Payload)).owned();
 
     // The `&Payload` callback signature -> a `closure_payload_t` closure struct
     // whose `call` takes a `const payload_t *` (zero-copy borrow). `.base_name`
@@ -61,12 +65,18 @@ fn generate_ffi_bindings() -> PathBuf {
         .callback(pq!(impl Fn(&Payload) + Send + Sync + 'static))
         .base_name("payload");
 
-    // Functions. `storage_new` returns a fresh handle (no fallible input). The
-    // others take null-checked `&Storage`/`&mut Storage`/`&Payload`/`&str` borrows
-    // with no `Result`, so they `.panic()` on a null pointer.
+    // Functions. `storage_new` returns a fresh handle (no fallible input). The others
+    // take null-checked borrows / by-value consumes with no `Result`, so they `.panic()`
+    // on a null pointer. The five `storage_put_*`/`storage_get_into_*` demonstrate the
+    // distinct C parameter semantics (by-value consume, `const *` read, `*` read/write,
+    // out-param-into-init, out-param-into-uninit).
     cbindgen = cbindgen.function(pq!(storage_new));
     cbindgen = cbindgen.function(pq!(storage_get)).panic();
-    cbindgen = cbindgen.function(pq!(storage_put)).panic();
+    cbindgen = cbindgen.function(pq!(storage_put_by_take)).panic();
+    cbindgen = cbindgen.function(pq!(storage_put_by_read)).panic();
+    cbindgen = cbindgen.function(pq!(storage_put_by_read_and_update)).panic();
+    cbindgen = cbindgen.function(pq!(storage_get_into_init)).panic();
+    cbindgen = cbindgen.function(pq!(storage_get_into_uninit)).panic();
     cbindgen = cbindgen.function(pq!(storage_callback)).panic();
     cbindgen = cbindgen.function(pq!(string_new)).panic();
     cbindgen = cbindgen.function(pq!(string_len)).panic();

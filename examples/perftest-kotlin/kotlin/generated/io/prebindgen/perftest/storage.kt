@@ -26,12 +26,38 @@ public fun storageGet(s: Storage, onError: JniErrorHandler<Payload>): Payload {
     return __ret
 }
 
-public fun storagePut(s: Storage, p: Payload, onError: JniErrorHandler<Unit>) {
+public fun storagePutByTake(s: Storage, payload: Payload, onError: JniErrorHandler<Unit>) {
     if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        JNINative.storagePut(s_ptr, p.id, p.seq, p.value, p.flag, p.label, __cap)
+        JNINative.storagePutByTake(
+            s_ptr,
+            payload.id,
+            payload.seq,
+            payload.value,
+            payload.flag,
+            payload.label,
+            __cap,
+        )
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+}
+
+public fun storagePutByRead(s: Storage, payload: Payload, onError: JniErrorHandler<Unit>) {
+    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    val __cap = JniErrorHandlerCapture.acquire()
+    withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        JNINative.storagePutByRead(
+            s_ptr,
+            payload.id,
+            payload.seq,
+            payload.value,
+            payload.flag,
+            payload.label,
+            __cap,
+        )
     }
     if (__cap.failed) return onError.run(__cap.je)
 }

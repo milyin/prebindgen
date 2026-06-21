@@ -679,6 +679,140 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
     );
 }
 
+/// An **owned** `repr_c_struct` (`.repr_c_struct(Foo).owned()`) consumed **by value**
+/// reads the live value out through a `*mut foo_t` and writes a **gravestone** back
+/// (so the caller's later `_drop` is a no-op — no double-free of the owned `Box<String>`
+/// field). The `Gravestone` impl is auto-generated from the source type's `Default`.
+#[test]
+fn owned_repr_c_struct_by_value_consume_gravestones() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        #[derive(Default)]
+        pub struct Foo {
+            pub a: u64,
+            pub s: Option<Box<String>>,
+        }
+    );
+    // Consumes `Foo` by value.
+    let put_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn foo_put(p: Foo) {
+            unimplemented!()
+        }
+    );
+    let string_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn string_make() -> String {
+            unimplemented!()
+        }
+    );
+    let mut registry = Registry::<()>::from_items([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(put_fn), loc.clone()),
+        (syn::Item::Fn(string_fn), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .mangle_function(|n| n.to_string())
+        .opaque_ptr(syn::parse_quote!(String))
+        .repr_c_struct(syn::parse_quote!(Foo))
+        .owned()
+        .function(syn::parse_quote!(foo_put))
+        .panic()
+        .function(syn::parse_quote!(string_make));
+
+    let src = write(&cbindgen, &mut registry, "owned_repr_c_struct");
+    let compact: String = src.split_whitespace().collect();
+
+    // Auto-generated `Gravestone` from `Default`.
+    assert!(
+        compact.contains("impl::prebindgen::Gravestoneforfoo_t"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("<zenoh_flat::Fooas::core::default::Default>::default()"),
+        "{src}"
+    );
+    // By-value consume: takes `*mut foo_t`, moves the value out, writes the gravestone.
+    assert!(compact.contains("v:*mutfoo_t"), "{src}");
+    assert!(
+        compact.contains("::core::ptr::write(v,<foo_tas::prebindgen::Gravestone>::gravestone())"),
+        "{src}"
+    );
+}
+
+/// A `repr_c_struct` crossed by **mutable** reference: `&mut Foo` (read/write borrow,
+/// or an out-param that reassigns) and `&mut MaybeUninit<Foo>` (out-param into
+/// uninitialized memory) both lower to a `*mut foo_t` wire — the C memory is the Rust
+/// value (layout-identical mirror) — and reinterpret it as the matching `&mut` Rust
+/// reference. No gravestone (a borrow, not a by-value consume).
+#[test]
+fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        #[derive(Default)]
+        pub struct Foo {
+            pub a: u64,
+            pub s: Option<Box<String>>,
+        }
+    );
+    // `&mut Foo` read/write borrow.
+    let upd_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn foo_update(p: &mut Foo) {
+            unimplemented!()
+        }
+    );
+    // `&mut MaybeUninit<Foo>` out-param into uninitialized memory.
+    let into_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn foo_into_uninit(p: &mut ::core::mem::MaybeUninit<Foo>) {
+            unimplemented!()
+        }
+    );
+    let string_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn string_make() -> String {
+            unimplemented!()
+        }
+    );
+    let mut registry = Registry::<()>::from_items([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(upd_fn), loc.clone()),
+        (syn::Item::Fn(into_fn), loc.clone()),
+        (syn::Item::Fn(string_fn), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .mangle_function(|n| n.to_string())
+        .opaque_ptr(syn::parse_quote!(String))
+        .repr_c_struct(syn::parse_quote!(Foo))
+        .function(syn::parse_quote!(foo_update))
+        .panic()
+        .function(syn::parse_quote!(foo_into_uninit))
+        .panic()
+        .function(syn::parse_quote!(string_make));
+
+    let src = write(&cbindgen, &mut registry, "repr_c_struct_mut");
+    let compact: String = src.split_whitespace().collect();
+
+    // Both lower to a `*mut foo_t` wire.
+    assert!(compact.contains("v:*mutfoo_t"), "{src}");
+    // `&mut Foo` reinterprets the pointer as a mutable Rust reference.
+    assert!(compact.contains("&mut*(vas*mutzenoh_flat::Foo)"), "{src}");
+    // `&mut MaybeUninit<Foo>` reinterprets it as a mutable `MaybeUninit` reference
+    // (write without dropping the uninitialized slot).
+    assert!(
+        compact.contains("&mut*(vas*mut::core::mem::MaybeUninit<zenoh_flat::Foo>)"),
+        "{src}"
+    );
+}
+
 /// A `.takeable_param(idx)` callback arg is delivered as `*mut z_x_t`: the
 /// closure `call` takes a pointer, the trampoline drops it after the call, and
 /// a public `z_x_take(dst, src)` move function is emitted.

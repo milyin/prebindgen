@@ -44,9 +44,17 @@ void storage_callback(const struct storage_t *s, struct closure_payload_t f);
 
 struct payload_t storage_get(const struct storage_t *s);
 
+void storage_get_into_init(const struct storage_t *s, struct payload_t *payload);
+
+void storage_get_into_uninit(const struct storage_t *s, struct payload_t *payload);
+
 struct storage_t *storage_new(void);
 
-void storage_put(struct storage_t *s, const struct payload_t *p);
+void storage_put_by_read(struct storage_t *s, const struct payload_t *payload);
+
+void storage_put_by_read_and_update(struct storage_t *s, struct payload_t *payload);
+
+void storage_put_by_take(struct storage_t *s, struct payload_t *payload);
 
 uintptr_t string_len(const struct string_t *s);
 
