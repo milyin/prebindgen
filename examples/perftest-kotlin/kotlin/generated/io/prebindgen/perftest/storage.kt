@@ -87,3 +87,24 @@ public fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErro
     }
     if (__cap.failed) return onError.run(__cap.je)
 }
+
+public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErrorHandler<Unit>) {
+    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    val __cap = JniErrorHandlerCapture.acquire()
+    withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        JNINative.storagePutSlice(s_ptr, payloads, __cap)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+}
+
+public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>>): List<Payload> {
+    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        JNINative.storageGetVec(s_ptr, __cap)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}

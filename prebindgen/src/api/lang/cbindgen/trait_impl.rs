@@ -1208,12 +1208,16 @@ impl Cbindgen {
             return None;
         };
         let elem = (*rf.elem).clone();
-        // `&[E]` slice (scalar `E`): marker only — the two-param (`*const E`,
-        // `usize`) lowering is done structurally in `emit_inputs`.
+        // `&[E]` slice: marker only — the two-param (`*const E_wire`, `usize`)
+        // lowering is done structurally in `emit_inputs`. A scalar `E` crosses as
+        // itself (`*const E`); a declared inline-opaque by-value `E` (e.g. a
+        // `repr_c_struct`) crosses as `*const E_counterpart` reinterpreted to
+        // `&[E]` zero-copy. `subs` marks `E`'s input required so its mirror /
+        // prerequisites are emitted.
         if rf.mutability.is_none() {
             if let syn::Type::Slice(s) = &*rf.elem {
-                if is_scalar(&s.elem) {
-                    let e = (*s.elem).clone();
+                let e = (*s.elem).clone();
+                if is_scalar(&e) {
                     let name =
                         format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(&e)));
                     let function: syn::ItemFn = syn::parse_quote!(
@@ -1223,6 +1227,23 @@ impl Cbindgen {
                     return Some(ConverterImpl {
                         subs: vec![e.clone()],
                         destination: syn::parse_quote!(*const #e),
+                        function,
+                        pre_stages: vec![],
+                        niches: Niches::empty(),
+                        metadata: (),
+                    });
+                }
+                if let Some(counterpart) = self.value_opaque_ty(&e) {
+                    let counterpart = counterpart.clone();
+                    let name =
+                        format_ident!("__cbg_inmark_slice_{}", sanitize(&TypeKey::from_type(&e)));
+                    let function: syn::ItemFn = syn::parse_quote!(
+                        #[allow(non_snake_case, dead_code, unused)]
+                        pub(crate) fn #name() {}
+                    );
+                    return Some(ConverterImpl {
+                        subs: vec![e],
+                        destination: syn::parse_quote!(*const #counterpart),
                         function,
                         pre_stages: vec![],
                         niches: Niches::empty(),

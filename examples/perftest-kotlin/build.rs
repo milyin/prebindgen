@@ -59,7 +59,14 @@ fn main() {
         .fun(pq!(storage_put_by_take))
         .fun(pq!(storage_put_by_read))
         .fun(pq!(payload_handler_new))
-        .fun(pq!(storage_callback));
+        .fun(pq!(storage_callback))
+        // Array (slice / Vec) API. `storage_put_slice(&[Payload])` takes a
+        // `List<Payload>` (decoded element-by-element into an owned `Vec`, then
+        // borrowed as a slice); `storage_get_vec() -> Vec<Payload>` returns a
+        // `List<Payload>`. Each element is a `data class`, so it crosses via the
+        // per-element struct object path.
+        .fun(pq!(storage_put_slice))
+        .fun(pq!(storage_get_vec));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

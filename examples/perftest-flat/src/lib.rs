@@ -42,7 +42,7 @@ pub const FEATURES: &str = features!();
 // consumer treats them as the corresponding fixed-width C types.
 #[prebindgen]
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Payload {
     pub id: i64,
     pub seq: i32,
@@ -51,14 +51,21 @@ pub struct Payload {
     pub label: Option<Box<String>>,
 }
 
-/// An opaque storage handle owning a single [`Payload`]. The bindings expose it as
-/// an opaque pointer/handle (`storage_t *` in C, a `Storage` class in Kotlin); its
-/// fields are never inspected across the FFI boundary — the adapter boxes it and
-/// emits a typed destructor. (Not `#[prebindgen]` and not `#[repr(C)]`: it is a
-/// boxed handle, like `Calculator` in `example-flat`.)
+/// An opaque storage handle owning the **most recently stored batch** of
+/// [`Payload`]s (a `Vec<Payload>`). The single-payload functions
+/// ([`storage_put_by_take`], [`storage_get`], …) operate on this batch as the
+/// array-of-one case ([`storage_put_by_take`] replaces it with a 1-element vec,
+/// [`storage_get`] returns its first element); the array functions
+/// ([`storage_put_slice`], [`storage_get_vec`]) store / return the whole batch.
+///
+/// The bindings expose it as an opaque pointer/handle (`storage_t *` in C, a
+/// `Storage` class in Kotlin); its fields are never inspected across the FFI
+/// boundary — the adapter boxes it and emits a typed destructor. (Not
+/// `#[prebindgen]` and not `#[repr(C)]`: it is a boxed handle, like `Calculator`
+/// in `example-flat`.)
 #[derive(Default)]
 pub struct Storage {
-    payload: Payload,
+    payloads: Vec<Payload>,
 }
 
 /// An opaque, reusable handle wrapping a **prepared** `Fn(&Payload)` callback.
@@ -77,11 +84,12 @@ pub fn storage_new() -> Storage {
     Storage::default()
 }
 
-/// Return a clone of the stored payload (by value; crosses by reinterpret, the
-/// `label` becoming a fresh owned `string_t *` the C caller must drop).
+/// Return a clone of the first stored payload (by value; crosses by reinterpret,
+/// the `label` becoming a fresh owned `string_t *` the C caller must drop). A
+/// freshly [`storage_new`]'d (empty) storage yields a [`Payload::default`].
 #[prebindgen]
 pub fn storage_get(s: &Storage) -> Payload {
-    s.payload.clone()
+    s.payloads.first().cloned().unwrap_or_default()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,21 +111,21 @@ pub fn storage_get(s: &Storage) -> Payload {
 /// (see `perftest-c`'s `.repr_c_struct(Payload)` — owned-ness is inferred from `label`).
 #[prebindgen]
 pub fn storage_put_by_take(s: &mut Storage, payload: Payload) {
-    s.payload = payload;
+    s.payloads = vec![payload];
 }
 
 /// Store a clone of `payload`, read through a shared borrow (`const payload_t *`).
 /// The caller's payload is left untouched.
 #[prebindgen]
 pub fn storage_put_by_read(s: &mut Storage, payload: &Payload) {
-    s.payload = payload.clone();
+    s.payloads = vec![payload.clone()];
 }
 
 /// Store a clone of `payload`, then **update the caller's payload in place** by
 /// bumping its `seq` counter (a `&mut Payload` read/write borrow → `payload_t *`).
 #[prebindgen]
 pub fn storage_put_by_read_and_update(s: &mut Storage, payload: &mut Payload) {
-    s.payload = payload.clone();
+    s.payloads = vec![payload.clone()];
     payload.seq += 1;
 }
 
@@ -126,7 +134,7 @@ pub fn storage_put_by_read_and_update(s: &mut Storage, payload: &mut Payload) {
 /// must hold a valid payload (use [`storage_get_into_uninit`] for raw memory).
 #[prebindgen]
 pub fn storage_get_into_init(s: &Storage, payload: &mut Payload) {
-    *payload = s.payload.clone();
+    *payload = s.payloads.first().cloned().unwrap_or_default();
 }
 
 /// Write the stored payload into the caller's **uninitialized** `payload` slot,
@@ -134,7 +142,7 @@ pub fn storage_get_into_init(s: &Storage, payload: &mut Payload) {
 /// `payload_t *`). The slot is initialized afterwards.
 #[prebindgen]
 pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) {
-    payload.write(s.payload.clone());
+    payload.write(s.payloads.first().cloned().unwrap_or_default());
 }
 
 /// Prepare a reusable [`PayloadHandler`] from a callback `f`. The (foreign) closure
@@ -147,15 +155,42 @@ pub fn payload_handler_new(f: impl Fn(&Payload) + Send + Sync + 'static) -> Payl
     PayloadHandler(Box::new(f))
 }
 
-/// Invoke the prepared `handler` with a borrow of the stored payload — reuses the
-/// handler's already-built foreign trampoline, so there is **no per-call callback
-/// decoding** (only firing). In C the closure receives a `const payload_t *`
-/// (zero-copy); in Kotlin the borrowed `Payload` is delivered whole to the handler's
+/// Invoke the prepared `handler` once **per stored payload** with a borrow of each
+/// — reuses the handler's already-built foreign trampoline, so there is **no
+/// per-call callback decoding** (only firing). After a single-payload put this
+/// fires exactly once; after a [`storage_put_slice`] it fires once per slice
+/// element. In C the closure receives a `const payload_t *` (zero-copy); in Kotlin
+/// the borrowed `Payload` is delivered whole to the handler's
 /// `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
 /// reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
 #[prebindgen]
 pub fn storage_callback(s: &Storage, handler: &PayloadHandler) {
-    (handler.0)(&s.payload);
+    for payload in &s.payloads {
+        (handler.0)(payload);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Array (slice / Vec) API: store and retrieve a whole batch in one FFI call,
+// amortizing per-call boundary overhead. The slice input crosses as
+// `(const payload_t *, size_t)` in C (zero-copy reinterpret — `Payload` is
+// `#[repr(C)]`) and as a `List<Payload>` in Kotlin; the `Vec` return crosses as a
+// malloc'd `(payload_t *, size_t)` array in C and a `List<Payload>` in Kotlin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Replace the stored batch with a clone of `payloads`. The single-payload puts
+/// are the array-of-one case of this.
+#[prebindgen]
+pub fn storage_put_slice(s: &mut Storage, payloads: &[Payload]) {
+    s.payloads = payloads.to_vec();
+}
+
+/// Return a clone of the whole stored batch (each `label` becoming a fresh owned
+/// `string_t *` the C caller must drop). [`storage_get`] is the first-element case
+/// of this.
+#[prebindgen]
+pub fn storage_get_vec(s: &Storage) -> Vec<Payload> {
+    s.payloads.clone()
 }
 
 /// Build the opaque string the C side stores in [`Payload::label`]. To C this
@@ -170,4 +205,83 @@ pub fn string_new(s: &str) -> String {
 #[prebindgen]
 pub fn string_len(s: &String) -> usize {
     s.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    fn payload(id: i64, label: Option<&str>) -> Payload {
+        Payload {
+            id,
+            seq: id as i32,
+            value: id as f64,
+            flag: id % 2 == 0,
+            label: label.map(|s| Box::new(s.to_string())),
+        }
+    }
+
+    #[test]
+    fn empty_storage_get_is_default() {
+        let s = storage_new();
+        assert_eq!(storage_get(&s), Payload::default());
+        assert!(storage_get_vec(&s).is_empty());
+    }
+
+    #[test]
+    fn single_put_get_roundtrip() {
+        let mut s = storage_new();
+        storage_put_by_take(&mut s, payload(1, Some("one")));
+        let got = storage_get(&s);
+        assert_eq!(got.id, 1);
+        assert_eq!(got.label.as_deref().map(String::as_str), Some("one"));
+        // A single put is the array-of-one case.
+        assert_eq!(storage_get_vec(&s).len(), 1);
+    }
+
+    #[test]
+    fn slice_put_vec_get_roundtrip() {
+        let mut s = storage_new();
+        let batch = vec![
+            payload(1, Some("a")),
+            payload(2, None),
+            payload(3, Some("c")),
+        ];
+        storage_put_slice(&mut s, &batch);
+
+        let out = storage_get_vec(&s);
+        assert_eq!(out, batch);
+        // The first element is what the single-payload `storage_get` returns.
+        assert_eq!(storage_get(&s), batch[0]);
+    }
+
+    #[test]
+    fn empty_slice_clears_batch() {
+        let mut s = storage_new();
+        storage_put_by_take(&mut s, payload(1, Some("one")));
+        storage_put_slice(&mut s, &[]);
+        assert!(storage_get_vec(&s).is_empty());
+    }
+
+    #[test]
+    fn callback_fires_once_per_payload() {
+        let count = Arc::new(AtomicUsize::new(0));
+        let c = count.clone();
+        let handler = payload_handler_new(move |_p| {
+            c.fetch_add(1, Ordering::Relaxed);
+        });
+
+        let mut s = storage_new();
+        // Single put → fires once.
+        storage_put_by_take(&mut s, payload(1, None));
+        storage_callback(&s, &handler);
+        assert_eq!(count.load(Ordering::Relaxed), 1);
+
+        // Slice of 3 → fires three more times.
+        storage_put_slice(&mut s, &[payload(1, None), payload(2, None), payload(3, None)]);
+        storage_callback(&s, &handler);
+        assert_eq!(count.load(Ordering::Relaxed), 4);
+    }
 }

@@ -465,6 +465,31 @@ impl Cbindgen {
         }
     }
 
+    /// If `ty` is `&[E]` (a shared slice borrow) whose element `E` is a declared
+    /// **inline-opaque by-value** type ([`Self::repr_c_struct`] /
+    /// [`Self::opaque_data_struct`] / [`Self::opaque_owned_struct`] — all in
+    /// `value_opaque`), return `E`. Such a type's C counterpart is layout-identical
+    /// to the Rust value (size+align asserted by a generated `const _`), so a
+    /// `*const counterpart` block reinterprets to `&[E]` zero-copy — exactly as the
+    /// single-`&E` input converter reinterprets one element. Scalar slices take the
+    /// separate [`scalar_slice_elem`](super::scalar_slice_elem) path; other element
+    /// kinds (e.g. `data_struct`, whose wire copies each field) are unsupported here.
+    pub(super) fn value_opaque_slice_elem(&self, ty: &syn::Type) -> Option<syn::Type> {
+        let syn::Type::Reference(r) = ty else {
+            return None;
+        };
+        if r.mutability.is_some() {
+            return None;
+        }
+        let syn::Type::Slice(s) = &*r.elem else {
+            return None;
+        };
+        let elem = (*s.elem).clone();
+        self.value_opaque
+            .contains_key(&TypeKey::from_type(&elem))
+            .then_some(elem)
+    }
+
     /// Like [`Self::src_ty`], but recurses into reference element types so
     /// `&ZSample` becomes `&zenoh_flat::ZSample`.
     pub(super) fn src_ty_deep(&self, ty: &syn::Type) -> syn::Type {

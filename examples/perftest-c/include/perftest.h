@@ -38,6 +38,12 @@ typedef struct closure_payload_t {
   void (*drop)(void*);
 } closure_payload_t;
 
+extern void *malloc(uintptr_t size);
+
+extern void free(void *ptr);
+
+void z_free(void *p);
+
 void payload_handler_drop(struct payload_handler_t *this_);
 
 void storage_drop(struct storage_t *this_);
@@ -56,6 +62,8 @@ void storage_get_into_init(const struct storage_t *s, struct payload_t *payload)
 
 void storage_get_into_uninit(const struct storage_t *s, struct payload_t *payload);
 
+struct payload_t *storage_get_vec(const struct storage_t *s, uintptr_t *len);
+
 struct storage_t *storage_new(void);
 
 void storage_put_by_read(struct storage_t *s, const struct payload_t *payload);
@@ -63,6 +71,10 @@ void storage_put_by_read(struct storage_t *s, const struct payload_t *payload);
 void storage_put_by_read_and_update(struct storage_t *s, struct payload_t *payload);
 
 void storage_put_by_take(struct storage_t *s, struct payload_t *payload);
+
+void storage_put_slice(struct storage_t *s,
+                       const struct payload_t *payloads,
+                       uintptr_t payloads_len);
 
 uintptr_t string_len(const struct string_t *s);
 

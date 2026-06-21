@@ -1,3 +1,40 @@
+extern "C" {
+    fn malloc(size: usize) -> *mut ::core::ffi::c_void;
+    fn free(ptr: *mut ::core::ffi::c_void);
+}
+#[allow(non_snake_case, dead_code)]
+pub(crate) fn __cbg_alloc_cstr(s: ::std::string::String) -> *mut ::core::ffi::c_char {
+    let c = ::std::ffi::CString::new(s).unwrap_or_default();
+    let bytes = c.as_bytes_with_nul();
+    unsafe {
+        let p = malloc(bytes.len()) as *mut u8;
+        if p.is_null() {
+            return ::core::ptr::null_mut();
+        }
+        ::core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len());
+        p as *mut ::core::ffi::c_char
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub unsafe extern "C" fn z_free(p: *mut ::core::ffi::c_void) {
+    free(p);
+}
+#[allow(non_snake_case, dead_code)]
+pub(crate) unsafe fn __cbg_alloc_array<W>(v: ::std::vec::Vec<W>) -> (*mut W, usize) {
+    let n = v.len();
+    if n == 0 {
+        return (::core::ptr::null_mut(), 0);
+    }
+    let p = malloc(n.wrapping_mul(::core::mem::size_of::<W>())) as *mut W;
+    if p.is_null() {
+        return (::core::ptr::null_mut(), 0);
+    }
+    for (i, e) in v.into_iter().enumerate() {
+        ::core::ptr::write(p.add(i), e);
+    }
+    (p, n)
+}
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub struct payload_handler_t {
@@ -292,6 +329,8 @@ pub(crate) fn __cbg_in_i64(v: i64) -> i64 {
 }
 #[allow(non_snake_case, dead_code, unused_variables)]
 pub(crate) fn __cbg_in_str() {}
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __cbg_inmark_slice_Payload() {}
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Payload(v: perftest_flat::Payload) -> payload_t {
     <payload_t as ::prebindgen::Transmute>::from_rust(v)
@@ -338,6 +377,8 @@ pub(crate) fn __cbg_out_unit(v: ()) {}
 pub(crate) fn __cbg_out_usize(v: usize) -> usize {
     v
 }
+#[allow(non_snake_case, dead_code, unused)]
+pub(crate) fn __cbg_outmark_vec_Payload() {}
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn payload_handler_new(
@@ -425,6 +466,29 @@ pub unsafe extern "C" fn storage_get_into_uninit(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_get_vec(
+    s: *const storage_t,
+    len: *mut usize,
+) -> *mut payload_t {
+    let s = match __cbg_in___Storage(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = perftest_flat::storage_get_vec(s);
+    let __ret: *mut payload_t;
+    let __arr: ::std::vec::Vec<payload_t> = __v
+        .into_iter()
+        .map(__cbg_out_Payload)
+        .collect();
+    let (__p, __n) = __cbg_alloc_array(__arr);
+    __ret = __p;
+    *len = __n;
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn storage_new() -> *mut storage_t {
     let __v = perftest_flat::storage_new();
     let __ret: *mut storage_t;
@@ -490,6 +554,29 @@ pub unsafe extern "C" fn storage_put_by_take(
         }
     };
     perftest_flat::storage_put_by_take(s, payload);
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn storage_put_slice(
+    s: *mut storage_t,
+    payloads: *const payload_t,
+    payloads_len: usize,
+) {
+    let s = match __cbg_in___mut_Storage(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let payloads: &[perftest_flat::Payload] = if payloads.is_null() {
+        &[]
+    } else {
+        ::core::slice::from_raw_parts(
+            payloads as *const perftest_flat::Payload,
+            payloads_len,
+        )
+    };
+    perftest_flat::storage_put_slice(s, payloads);
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]

@@ -3,8 +3,10 @@ package io.prebindgen.perftest
 import io.prebindgen.perftest.storage.payloadHandlerNew
 import io.prebindgen.perftest.storage.storageCallback
 import io.prebindgen.perftest.storage.storageGet
+import io.prebindgen.perftest.storage.storageGetVec
 import io.prebindgen.perftest.storage.storageNew
 import io.prebindgen.perftest.storage.storagePutByTake
+import io.prebindgen.perftest.storage.storagePutSlice
 
 /**
  * JVM micro-benchmark over the prebindgen-generated `perftest` JNI bindings.
@@ -59,8 +61,37 @@ private fun bench(op: String, variant: String, n: Long, body: () -> Unit) {
     println("%-10s %-16s %9.2f %9.1f".format(op, variant, nsPerOp, mops))
 }
 
+// Round-trip the array (slice / Vec) API across JNI, mirroring C's `correctness()`:
+// store a whole batch with `storagePutSlice` (crosses as a `List<Payload>` decoded
+// element-by-element into a Rust `Vec`), read it back with `storageGetVec` (a
+// `List<Payload>` reassembled on the Kotlin side), and assert structural equality.
+// `Payload` is a data class, so `==` compares fields (incl. the nullable `label`).
+private fun correctness(s: Storage) {
+    val batch = listOf(
+        Payload(10L, 1, 10.0, false, "a"),
+        Payload(20L, 2, 20.0, true, null),
+        Payload(30L, 3, 30.0, false, "ccc"),
+    )
+    storagePutSlice(s, batch, onError)
+
+    val out = storageGetVec(s, onError)
+    check(out == batch) { "storageGetVec round-trip mismatch: got $out, expected $batch" }
+
+    // The single-payload `storageGet` is the first element of the stored batch.
+    check(storageGet(s, onError) == batch[0]) { "storageGet should return the first payload" }
+
+    // An empty slice clears the batch.
+    storagePutSlice(s, emptyList(), onError)
+    check(storageGetVec(s, onError).isEmpty()) { "empty slice should clear the batch" }
+
+    System.err.println("correctness: array round-trip OK")
+}
+
 fun main() {
     val s = storageNew(onError)
+
+    // Verify the array API before benchmarking (parity with C running correctness first).
+    correctness(s)
 
     var sink = 0L
 

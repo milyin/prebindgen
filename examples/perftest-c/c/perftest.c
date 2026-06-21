@@ -99,6 +99,37 @@ static void correctness(struct storage_t *s) {
     storage_get_into_uninit(s, &pun);
     assert(pun.id == 55);
     string_drop(pun.label);
+
+    /* Array API. storage_put_slice takes a `const payload_t *` slice read BY CLONE
+     * (zero-copy reinterpret of the block to `&[Payload]`), so the caller's input
+     * array — including its `label` strings — is untouched and still C-owned.
+     * storage_get_vec returns a malloc'd `(payload_t *, size_t)` batch; the C side
+     * frees each element's `label` with `payload_drop`, then the block with `z_free`. */
+    struct payload_t batch[3] = {
+        make_payload(10, 1, "a"),
+        make_payload(20, 2, NULL),
+        make_payload(30, 3, "ccc"),
+    };
+    storage_put_slice(s, batch, 3);
+    assert(batch[0].label != NULL && batch[1].label == NULL && batch[2].label != NULL);
+
+    uintptr_t out_len = 0;
+    struct payload_t *out = storage_get_vec(s, &out_len);
+    assert(out_len == 3);
+    assert(out[0].id == 10 && out[1].id == 20 && out[2].id == 30);
+    assert(out[0].seq == 1 && out[1].seq == 2 && out[2].seq == 3);
+    assert(out[0].label != NULL && string_len(out[0].label) == 1); /* "a" */
+    assert(out[1].label == NULL);
+    assert(out[2].label != NULL && string_len(out[2].label) == 3); /* "ccc" */
+    for (uintptr_t i = 0; i < out_len; i++) payload_drop(&out[i]); /* free each label */
+    z_free(out);                                                   /* free the block */
+    string_drop(batch[0].label); /* the input labels are still C-owned (by-clone read) */
+    string_drop(batch[2].label);
+
+    /* The single-payload `storage_get` is the first element of the stored batch. */
+    struct payload_t first = storage_get(s);
+    assert(first.id == 10);
+    payload_drop(&first);
 }
 
 /*

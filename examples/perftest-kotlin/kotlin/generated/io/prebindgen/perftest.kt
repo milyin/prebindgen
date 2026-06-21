@@ -167,6 +167,7 @@ internal object JNINative {
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
     external fun storageCallback(s: Long, handler: Long, errorSink: Any)
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
+    external fun storageGetVec(s: Long, errorSink: Any): List<Payload>
     external fun storageNew(errorSink: Any): Long
     external fun storagePutByRead(
         s: Long,
@@ -186,4 +187,5 @@ internal object JNINative {
         payloadLabel: String?,
         errorSink: Any,
     )
+    external fun storagePutSlice(s: Long, payloads: List<Payload>, errorSink: Any)
 }

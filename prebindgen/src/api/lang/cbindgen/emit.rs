@@ -542,6 +542,34 @@ impl Cbindgen {
                 continue;
             }
 
+            // `&[E]` slice (inline-opaque by-value `E`, e.g. a `repr_c_struct`):
+            // two wire params (`*const E_counterpart`, `usize`), reinterpreted to
+            // `&[E]` zero-copy. The counterpart is layout-identical to `E` (asserted
+            // by a generated `const _`), so the whole block transmutes in one shot —
+            // the slice analogue of the single-`&E` `__cbg_in_*` converter. NULL ⇒
+            // empty slice.
+            if let Some(elem) = self.value_opaque_slice_elem(arg_ty) {
+                // The C wire element is the inline-opaque counterpart (e.g. the
+                // generated `payload_t` mirror), layout-identical to the Rust value.
+                let elem_wire = self
+                    .value_opaque_ty(&elem)
+                    .expect("value_opaque_slice_elem guaranteed a value_opaque element")
+                    .clone();
+                let src = self.src_ty(&elem);
+                let len_id = format_ident!("{}_len", ident);
+                params.push(quote!(#ident: *const #elem_wire));
+                params.push(quote!(#len_id: usize));
+                decodes.push(quote!(
+                    let #ident: &[#src] = if #ident.is_null() {
+                        &[]
+                    } else {
+                        ::core::slice::from_raw_parts(#ident as *const #src, #len_id)
+                    };
+                ));
+                call_args.push(quote!(#ident));
+                continue;
+            }
+
             let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
                 panic!(
                     "Cbindgen::on_function: input type `{}` of `{}` has no input converter",

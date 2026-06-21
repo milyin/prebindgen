@@ -148,6 +148,38 @@ pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Vec<perftest_flat::Payload>, __JniErr> {
+    Ok({
+        let __list = jni::objects::JList::from_env(env, v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        let mut __it = __list
+            .iter(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-iter: {}", e)))?;
+        let mut __out: Vec<perftest_flat::Payload> = Vec::new();
+        while let Some(__obj) = __it
+            .next(env)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-next: {}", e)))?
+        {
+            let __elem_wire: jni::objects::JObject = __obj.into();
+            let __elem: perftest_flat::Payload = JObject_to_Payload_98f64326(
+                env,
+                &__elem_wire,
+            )?;
+            __out.push(__elem);
+        }
+        __out
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -434,6 +466,33 @@ pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
                     String,
                 >>::from(format!("encode_string: {}", e))
             })?
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Vec<perftest_flat::Payload>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let __list_obj = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: new ArrayList: {}", e)))?;
+        let __list = jni::objects::JList::from_env(env, &__list_obj)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Vec<_>: list-from-env: {}", e)))?;
+        for __elem in v.into_iter() {
+            let __elem_wire = Payload_to_JObject_98f64326(env, __elem)?;
+            let __elem_obj: jni::objects::JObject = __elem_wire.into();
+            __list
+                .add(env, &__elem_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Vec<_>: list-add: {}", e)))?;
+        }
+        __list_obj
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -820,6 +879,56 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    s: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::storage_get_vec(&s);
+    match Vec_Payload_to_JObject_8b7084d2(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -1124,6 +1233,73 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
         label: __payload_label,
     };
     let __out = perftest_flat::storage_put_by_take(&mut s, payload);
+    match unit_to_unit_9ecccf8e(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    s: jni::sys::jlong,
+    payloads: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let payloads = match JObject_to_Vec_Payload_8b7084d2(&mut env, &payloads) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::storage_put_slice(&mut s, &payloads);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {

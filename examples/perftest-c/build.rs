@@ -38,7 +38,12 @@ fn generate_ffi_bindings() -> PathBuf {
         .mangle_type_name(|base| format!("{base}_t"))
         .mangle_destructor(|base| format!("{base}_drop"))
         .mangle_callback(|bases| format!("closure_{}_t", bases.join("_")))
-        .mangle_function(|n| n.to_string());
+        .mangle_function(|n| n.to_string())
+        // The universal raw-memory freer for the malloc'd `(payload_t *, size_t)`
+        // array returned by `storage_get_vec` (Vec<Payload>). The C side releases
+        // each element's `label` with `payload_drop`, then frees the block with
+        // this `z_free`.
+        .free_memory_function("z_free");
 
     // `String` as an opaque handle: C holds it as `string_t *` (= `Box<String>`),
     // built by `string_new`, read via `string_len`, freed by `string_drop`. This is
@@ -86,6 +91,15 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(storage_callback)).panic();
     cbindgen = cbindgen.function(pq!(string_new)).panic();
     cbindgen = cbindgen.function(pq!(string_len)).panic();
+
+    // Array (slice / Vec) API. `storage_put_slice` takes `&[Payload]` — a
+    // `repr_c_struct` slice — which lowers to `(const payload_t *, size_t)`
+    // reinterpreted zero-copy (the slice analogue of the `&Payload` borrow).
+    // `storage_get_vec` returns `Vec<Payload>` → a malloc'd `(payload_t *, size_t)`
+    // array the C side frees per-element. Both have only null-checked borrow inputs
+    // and no `Result`, so `.panic()`.
+    cbindgen = cbindgen.function(pq!(storage_put_slice)).panic();
+    cbindgen = cbindgen.function(pq!(storage_get_vec)).panic();
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");

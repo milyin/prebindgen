@@ -77,6 +77,24 @@ impl<S: JniGenState> JniGen<S> {
             return None;
         }
         if let syn::Type::Reference(r) = ty {
+            // `&[T]` shared slice borrow: there is no owned `[T]` to decode, so
+            // reuse the `Vec<_>` shape — decode the Java `List<T>` into an owned
+            // `Vec<T>`; the call site borrows it (`&Vec<T>` deref-coerces to
+            // `&[T]`). Wire/Kotlin type are `List<T>`, identical to a by-value
+            // `Vec<T>` input (the writer dedupes the shared converter fn by ident,
+            // so the two can coexist). `&mut [T]` is intentionally not supported
+            // (no write-back of the decoded Vec).
+            if r.mutability.is_none() {
+                if let syn::Type::Slice(s) = &*r.elem {
+                    let elem = (*s.elem).clone();
+                    let pat: syn::Type = syn::parse_quote!(Vec<_>);
+                    if let Some(mut c) = self.input_wrapper_shape(&pat, &elem, registry) {
+                        c.subs = vec![elem];
+                        return Some(c);
+                    }
+                    return None;
+                }
+            }
             let pat = ref_wildcard(r);
             let t1 = (*r.elem).clone();
             if let Some(mut c) = self.input_wrapper_shape(&pat, &t1, registry) {
