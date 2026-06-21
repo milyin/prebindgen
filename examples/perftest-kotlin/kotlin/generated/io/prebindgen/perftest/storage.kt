@@ -5,6 +5,7 @@ import io.prebindgen.perftest.JNINative
 import io.prebindgen.perftest.JniErrorHandler
 import io.prebindgen.perftest.JniErrorHandlerCapture
 import io.prebindgen.perftest.Payload
+import io.prebindgen.perftest.PayloadCallback
 import io.prebindgen.perftest.Storage
 import io.prebindgen.perftest.withSortedHandleLocks
 
@@ -58,6 +59,16 @@ public fun storagePutByRead(s: Storage, payload: Payload, onError: JniErrorHandl
             payload.label,
             __cap,
         )
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+}
+
+public fun storageCallback(s: Storage, f: PayloadCallback, onError: JniErrorHandler<Unit>) {
+    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    val __cap = JniErrorHandlerCapture.acquire()
+    withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        JNINative.storageCallback(s_ptr, f, __cap)
     }
     if (__cap.failed) return onError.run(__cap.je)
 }

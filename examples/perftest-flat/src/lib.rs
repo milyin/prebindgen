@@ -14,10 +14,15 @@
 //! still carrying heap data.
 //!
 //! The functions operate on an opaque [`Storage`] handle (a `storage_t *` in C, a
-//! `Storage` class in Kotlin) that owns the payload, so the matching Rust and C
-//! micro-benchmarks (`examples/perftest.rs` and `perftest-c/c/perftest.c`) measure
-//! the cost of the same operations natively vs across the generated C ABI — and
-//! exercise an opaque handle crossing alongside the value struct.
+//! `Storage` class in Kotlin) that owns the payload, so the matching Rust, C, and
+//! Kotlin micro-benchmarks (`examples/perftest.rs`, `perftest-c/c/perftest.c`, and
+//! `perftest-kotlin/.../Bench.kt`) measure the cost of the same operations natively
+//! vs across the generated C ABI / JNI boundary — and exercise an opaque handle
+//! crossing alongside the value struct.
+//!
+//! All three emit the same normalized `BEGIN_PERFTEST … END_PERFTEST` block;
+//! `examples/perftest-bench.sh` builds, runs, and tabulates them into one comparison
+//! (run `examples/perftest-bench.sh --quick` for a fast smoke).
 
 use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
 use std::mem::MaybeUninit;
@@ -124,9 +129,8 @@ pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) 
 
 /// Invoke `f` with a borrow of the stored payload. In C this is a pure zero-copy
 /// struct crossing (the closure receives a `const payload_t *`, no heap work). In
-/// Kotlin the borrowed `Payload` is flattened into a generated
-/// `PayloadCallback.run(id, seq, value, flag, label)` delivered in one crossing, and
-/// the consumer composes a `Payload` from the leaves on the Kotlin side.
+/// Kotlin the borrowed `Payload` is composed natively (via `fromParts`) and delivered
+/// whole to a generated `PayloadCallback.run(Payload)`.
 #[prebindgen]
 pub fn storage_callback(s: &Storage, f: impl Fn(&Payload) + Send + Sync + 'static) {
     f(&s.payload);

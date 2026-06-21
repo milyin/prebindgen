@@ -12,23 +12,28 @@
  *   - storage_get_into_uninit(payload_t *)          out-param into uninitialized memory
  * plus `storage_get` (return-value) and `storage_callback` (a `const payload_t *` borrow).
  *
- * Each op is timed in TWO columns: with a realistic `label` string (the opaque
- * `string_t *`, built by `string_new` / freed by `string_drop`) and with a NULL label.
- * The string `malloc`/`free` dominates the per-op cost, so the NULL-label column
- * isolates the FFI + ownership-machinery cost and reveals the per-semantic differences.
+ * Each op is timed in TWO variants: `.str` (a realistic `label` string, the opaque
+ * `string_t *` built by `string_new` / freed by `string_drop`) and `.null` (NULL label).
+ * The string `malloc`/`free` dominates the per-op cost, so the `.null` variant isolates
+ * the FFI + ownership-machinery cost.
  *
- * Compare the printed ns/op against the Rust runner (`perftest-flat/examples/perftest.rs`)
- * to see the cost of crossing the (zero-copy) C boundary vs calling Rust natively.
+ * Output is the shared normalized block (see `examples/perftest-bench.sh`):
+ *   BEGIN_PERFTEST lang=c n=<N>
+ *   <op> <variant> <ns_per_op> <mops>
+ *   END_PERFTEST
+ * `N` is overridable via the `PERFTEST_N` env var (default 5_000_000). Compare against the
+ * Rust runner (native) and the Kotlin runner (JNI) for the same operations.
  */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "perftest.h"
 
-/* Iterations per op per column (7 ops × 2 columns). */
-#define N 20000000ULL
+/* Iterations per measured variant; set from PERFTEST_N in main (default 5_000_000). */
+static uint64_t g_n = 5000000ULL;
 
 static double now_ns(void) {
     struct timespec ts;
@@ -97,8 +102,8 @@ static void correctness(struct storage_t *s) {
 }
 
 /*
- * Per-op benchmarks. Each times N iterations and returns the elapsed ns, parameterized
- * by `label` (a string, or NULL for the isolated column). Each keeps correct
+ * Per-op benchmarks. Each times `g_n` iterations and returns the elapsed ns, parameterized
+ * by `label` (a string, or NULL for the isolated variant). Each keeps correct
  * per-iteration ownership so the loops neither leak nor double-free.
  */
 
@@ -110,7 +115,7 @@ static double bench_put_by_take(struct storage_t *s, const char *label, uint64_t
     (void)sink;
     struct payload_t p = make_payload(42, 7, label);
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         if (label) p.label = string_new(label); /* re-provide the moved-out string */
         storage_put_by_take(s, &p);             /* moves p's value in; nulls p.label */
     }
@@ -123,7 +128,7 @@ static double bench_put_by_read(struct storage_t *s, const char *label, uint64_t
     (void)sink;
     struct payload_t p = make_payload(7, 7, label);
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         storage_put_by_read(s, &p);
     }
     double el = now_ns() - t0;
@@ -137,7 +142,7 @@ static double bench_put_by_read_and_update(struct storage_t *s, const char *labe
     (void)sink;
     struct payload_t p = make_payload(8, 0, label);
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         storage_put_by_read_and_update(s, &p);
     }
     double el = now_ns() - t0;
@@ -152,7 +157,7 @@ static double bench_get_into_init(struct storage_t *s, const char *label, uint64
     storage_put_by_take(s, &seed); /* storage now holds a matching-label payload */
     struct payload_t p = make_payload(0, 0, label); /* an initialized slot */
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         storage_get_into_init(s, &p);
         *sink += (uint64_t)p.id;
     }
@@ -168,7 +173,7 @@ static double bench_get_into_uninit(struct storage_t *s, const char *label, uint
     storage_put_by_take(s, &seed);
     struct payload_t p; /* uninitialized */
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         storage_get_into_uninit(s, &p);
         *sink += (uint64_t)p.id;
         if (p.label) string_drop(p.label);
@@ -181,7 +186,7 @@ static double bench_get(struct storage_t *s, const char *label, uint64_t *sink) 
     struct payload_t seed = make_payload(55, 5, label);
     storage_put_by_take(s, &seed);
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         struct payload_t g = storage_get(s);
         *sink += (uint64_t)g.id;
         payload_drop(&g);
@@ -189,7 +194,7 @@ static double bench_get(struct storage_t *s, const char *label, uint64_t *sink) 
     return now_ns() - t0;
 }
 
-/* callback: a `const payload_t *` borrow — never touches the label, so both columns
+/* callback: a `const payload_t *` borrow — never touches the label, so both variants
  * measure ~the same (the FFI trampoline + the upcall). */
 static double bench_callback(struct storage_t *s, const char *label, uint64_t *sink) {
     struct payload_t seed = make_payload(55, 5, label);
@@ -199,7 +204,7 @@ static double bench_callback(struct storage_t *s, const char *label, uint64_t *s
     closure.call = on_payload;
     closure.drop = NULL;
     double t0 = now_ns();
-    for (uint64_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < g_n; i++) {
         storage_callback(s, closure);
     }
     return now_ns() - t0;
@@ -207,39 +212,50 @@ static double bench_callback(struct storage_t *s, const char *label, uint64_t *s
 
 typedef double (*bench_fn)(struct storage_t *s, const char *label, uint64_t *sink);
 
-/* Run one op in both columns and print `name  <with-string>   <null-label>`. */
-static void bench_row(const char *name, bench_fn fn, struct storage_t *s, uint64_t *sink) {
-    double ns_with = fn(s, "hello, payload", sink);
-    double ns_null = fn(s, NULL, sink);
-    printf("%-22s %9.2f ns/op   %9.2f ns/op\n", name, ns_with / (double)N,
-           ns_null / (double)N);
+/* Run one op in both variants and print two normalized rows:
+ * `<op> <variant>.str <ns> <mops>` and `<op> <variant>.null <ns> <mops>`. */
+static void emit(const char *op, const char *variant, bench_fn fn, struct storage_t *s,
+                 uint64_t *sink) {
+    double ns_str = fn(s, "hello, payload", sink) / (double)g_n;
+    double ns_null = fn(s, NULL, sink) / (double)g_n;
+    char vbuf[32];
+    snprintf(vbuf, sizeof vbuf, "%s.str", variant);
+    printf("%-10s %-16s %9.2f %9.1f\n", op, vbuf, ns_str, 1000.0 / ns_str);
+    snprintf(vbuf, sizeof vbuf, "%s.null", variant);
+    printf("%-10s %-16s %9.2f %9.1f\n", op, vbuf, ns_null, 1000.0 / ns_null);
 }
 
 int main(void) {
+    const char *env = getenv("PERFTEST_N");
+    if (env) {
+        unsigned long long v = strtoull(env, NULL, 10);
+        if (v) g_n = (uint64_t)v;
+    }
+
     struct storage_t *s = storage_new();
 
-    /* Verify the five parameter-passing semantics, then hammer them for leak/RSS. */
+    /* Verify the five parameter-passing semantics, then hammer them for leak/RSS.
+     * Diagnostics go to stderr so stdout stays the clean parseable block. */
     correctness(s);
-    for (int i = 0; i < 2000000; i++) {
+    uint64_t corr = g_n < 1000000ULL ? g_n : 1000000ULL;
+    for (uint64_t i = 0; i < corr; i++) {
         correctness(s);
     }
-    printf("correctness: all 5 semantics OK (RSS stable)\n\n");
-
-    printf("perftest-c (generated C ABI), N = %llu iterations per op\n\n",
-           (unsigned long long)N);
-    printf("%-22s %14s   %14s\n", "op", "with-string", "null-label");
+    fprintf(stderr, "correctness: all 5 semantics OK (RSS stable)\n");
 
     uint64_t sink = 0;
-    bench_row("put_by_take", bench_put_by_take, s, &sink);
-    bench_row("put_by_read", bench_put_by_read, s, &sink);
-    bench_row("put_by_read_and_update", bench_put_by_read_and_update, s, &sink);
-    bench_row("get_into_init", bench_get_into_init, s, &sink);
-    bench_row("get_into_uninit", bench_get_into_uninit, s, &sink);
-    bench_row("get", bench_get, s, &sink);
-    bench_row("callback", bench_callback, s, &sink);
+    printf("BEGIN_PERFTEST lang=c n=%llu\n", (unsigned long long)g_n);
+    emit("put", "by_take", bench_put_by_take, s, &sink);
+    emit("put", "by_read", bench_put_by_read, s, &sink);
+    emit("put", "by_read_upd", bench_put_by_read_and_update, s, &sink);
+    emit("get", "return", bench_get, s, &sink);
+    emit("get", "into_init", bench_get_into_init, s, &sink);
+    emit("get", "into_uninit", bench_get_into_uninit, s, &sink);
+    emit("callback", "-", bench_callback, s, &sink);
+    printf("END_PERFTEST\n");
 
     storage_drop(s);
 
-    printf("\n(sink = %llu)\n", (unsigned long long)sink);
+    printf("(sink = %llu)\n", (unsigned long long)sink);
     return 0;
 }

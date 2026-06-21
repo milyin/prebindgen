@@ -1790,7 +1790,23 @@ pub(crate) fn callback_input(
             continue;
         }
 
-        let arg_entry = registry.output_entry(arg_ty)?;
+        // Whole-value delivery. A by-value arg (`impl Fn(T)`) has a `T` output
+        // converter and is passed by move. A borrowed whole-value arg
+        // (`impl Fn(&T)` for a type with no accessor plan — e.g. a field-based
+        // `data_class` like `Payload`) has no `&T` converter, so fall back to `T`'s
+        // converter and clone the borrow (the callback only borrows the value). The
+        // `data_class` converter composes the whole object via `fromParts`, so the
+        // Kotlin `run(t: T)` receives a ready-made `T`.
+        let (cb_val, arg_entry) = match registry.output_entry(arg_ty) {
+            Some(e) => (quote!(#cb_arg), e),
+            None => match arg_ty {
+                syn::Type::Reference(r) => {
+                    let core = (*r.elem).clone();
+                    (quote!((#cb_arg).clone()), registry.output_entry(&core)?)
+                }
+                _ => return None,
+            },
+        };
         let arg_wire = arg_entry.destination.clone();
         let conv = arg_entry.function.sig.ident.clone();
         let enc_ident = format_ident!("__cb{}_enc", i);
@@ -1807,7 +1823,7 @@ pub(crate) fn callback_input(
                 let java_path = handle_field_fqn(ext, h).replace('.', "/");
                 let java_path_lit = syn::LitStr::new(&java_path, Span::call_site());
                 preludes.push(quote! {
-                    let #enc_ident = #conv(&mut env, #cb_arg)?;
+                    let #enc_ident = #conv(&mut env, #cb_val)?;
                     let #obj_ident: jni::objects::JObject = env
                         .new_object(#java_path_lit, "(J)V", &[jni::objects::JValue::from(#enc_ident)])
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?;
@@ -1830,7 +1846,7 @@ pub(crate) fn callback_input(
         if arg_is_prim {
             let letter = jni_field_access(&arg_wire).unwrap().1;
             preludes.push(quote! {
-                let #enc_ident = #conv(&mut env, #cb_arg)?;
+                let #enc_ident = #conv(&mut env, #cb_val)?;
             });
             jvalue_exprs.push(quote!(jni::sys::jvalue { #letter: #enc_ident }));
             total += 1;
@@ -1838,7 +1854,7 @@ pub(crate) fn callback_input(
         }
         let cast = cast_wire_to_jobject(&enc_ident, &arg_wire, &fail);
         preludes.push(quote! {
-            let #enc_ident = #conv(&mut env, #cb_arg)?;
+            let #enc_ident = #conv(&mut env, #cb_val)?;
             let #obj_ident: jni::objects::JObject = #cast;
         });
         jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));

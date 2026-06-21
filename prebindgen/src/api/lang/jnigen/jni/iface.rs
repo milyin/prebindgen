@@ -617,6 +617,31 @@ pub(crate) fn leaf_iface_param(
         // Whole arg: typed class in both views (no proxy wrap).
         return Some(IfaceParam::same(name, nullable_kt(kt::KtType::cls(fqn))));
     }
+    // A whole generated class (e.g. a field-based `data_class` delivered to a
+    // callback by `impl Fn(&T)`): `builder_kt` carries the unqualified short name
+    // (the wrapper relies on an import), but the `raw` view — which drives the JNI
+    // method descriptor — must be the fully-qualified class so `get_method_id("run",
+    // …)` resolves. Apply only when `builder_kt` actually IS that class (its short
+    // name matches the registered FQN); never for enums (→ `Int`) or builtins. `wrap`
+    // stays `None` (typed and raw are the same JVM type, just spelled differently), so
+    // no `asRaw` proxy is generated.
+    if let kt::KtType::Named { fqn: bk_fqn, .. } = &builder_kt {
+        if !bk_fqn.contains('.') {
+            if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty).to_string()) {
+                let reg_short = reg_fqn.rsplit('.').next().unwrap_or(reg_fqn);
+                if reg_fqn.contains('.') && reg_short == bk_fqn {
+                    let raw = kt::KtType::cls(reg_fqn.to_string());
+                    let raw = if builder_kt.is_nullable() { raw.nullable() } else { raw };
+                    return Some(IfaceParam {
+                        name,
+                        typed: builder_kt.clone(),
+                        raw,
+                        wrap: WrapKind::None,
+                    });
+                }
+            }
+        }
+    }
     Some(IfaceParam::same(name, builder_kt))
 }
 

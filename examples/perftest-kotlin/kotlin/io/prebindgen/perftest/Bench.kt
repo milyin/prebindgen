@@ -25,10 +25,9 @@ import io.prebindgen.perftest.storage.storagePutByTake
  *     native→JVM upcall.
  *   * **get (naive)** — fetch each field with a separate downcall (5 crossings),
  *     then build `Payload` in Kotlin.
- *   * **callback** — `storageCallback(s) { … }` delivers the borrowed `Payload`'s
- *     fields as flat leaves to a generated `PayloadCallback.run(id, seq, value,
- *     flag, label)` in ONE native→JVM upcall; the lambda composes a `Payload` from
- *     them (the foreign-side composition technique, callback direction).
+ *   * **callback** — `storageCallback(s) { p -> … }` composes the borrowed `Payload`
+ *     natively (the same `fromParts` factory as `get (composition)`) and delivers it
+ *     as a whole `Payload` to a generated `PayloadCallback.run(Payload)`.
  *
  * Note on the result: for this FLAT, all-scalar struct the naive path is often
  * the faster one. A `storageGet` composition is a single native→JVM *upcall*
@@ -39,13 +38,21 @@ import io.prebindgen.perftest.storage.storagePutByTake
  * needing its own call — not when the fields are a handful of cheap scalars. This
  * benchmark makes that trade-off measurable.
  */
-private const val N = 5_000_000L
+// Iterations per measured variant. Overridable (so the shared `perftest-bench.sh`
+// harness can run all three languages at one N + a fast smoke): the `-Dperftest.n`
+// system property (set by the Gradle `run` task from `-PperftestN`), else the
+// `PERFTEST_N` env var, else the default.
+private val N: Long =
+    System.getProperty("perftest.n")?.toLongOrNull()
+        ?: System.getenv("PERFTEST_N")?.toLongOrNull()
+        ?: 5_000_000L
 
 private val onError = JniErrorHandler<Nothing> { je ->
     throw RuntimeException("native error: $je")
 }
 
-private fun bench(name: String, n: Long, body: () -> Unit) {
+// One normalized result row: `<op> <variant> <ns_per_op> <mops>`.
+private fun bench(op: String, variant: String, n: Long, body: () -> Unit) {
     val start = System.nanoTime()
     for (i in 0 until n) {
         body()
@@ -53,7 +60,7 @@ private fun bench(name: String, n: Long, body: () -> Unit) {
     val elapsed = (System.nanoTime() - start).toDouble()
     val nsPerOp = elapsed / n
     val mops = n.toDouble() / (elapsed / 1.0e9) / 1.0e6
-    println("%-18s %8.2f ns/op   %8.1f Mops/s".format(name, nsPerOp, mops))
+    println("%-10s %-16s %9.2f %9.1f".format(op, variant, nsPerOp, mops))
 }
 
 fun main() {
@@ -61,8 +68,17 @@ fun main() {
     val s = storageNew(onError)
     storagePutByTake(s, seed, onError) // seed the storage
 
-    // Warm up the JIT on all paths so steady-state numbers are fair.
-    repeat(200_000) {
+    var sink = 0L
+
+    // The borrowed `&Payload` is composed natively (via the same `fromParts` factory as
+    // `storageGet`) and delivered to the callback as a whole `Payload` object in one
+    // `run(Payload)` upcall. Hoisted (like the C `bench_callback` closure) so the
+    // measurement isn't per-iteration lambda allocations.
+    val cb = PayloadCallback { p -> sink += p.id }
+
+    // Warm up the JIT on all paths so steady-state numbers are fair (capped so a small
+    // `N` smoke run stays fast).
+    repeat(minOf(N, 200_000L).toInt()) {
         storagePutByTake(s, seed, onError)
         storageGet(s, onError)
         storageGetId(s, onError)
@@ -70,23 +86,21 @@ fun main() {
         storageGetValue(s, onError)
         storageGetFlag(s, onError)
         storageGetLabel(s, onError)
-        storageCallback(s, { _, _, _, _, _ -> }, onError)
+        storageCallback(s, cb, onError)
     }
 
-    println("perftest-kotlin (generated JNI), N = $N iterations per op\n")
+    println("BEGIN_PERFTEST lang=kotlin n=$N")
 
-    var sink = 0L
-
-    bench("put", N) {
+    bench("put", "native", N) {
         storagePutByTake(s, seed, onError)
     }
 
-    bench("get (composition)", N) {
+    bench("get", "composition", N) {
         val g = storageGet(s, onError) // 1 JNI crossing, composed via fromParts
         sink += g.id
     }
 
-    bench("get (naive)", N) {
+    bench("get", "naive", N) {
         val g = Payload( // 5 JNI crossings, composed in Kotlin
             storageGetId(s, onError),
             storageGetSeq(s, onError),
@@ -97,16 +111,12 @@ fun main() {
         sink += g.id
     }
 
-    // The borrowed Payload's fields arrive as flat leaves in one upcall; the lambda
-    // composes a Payload on the Kotlin side. Hoisted out of the loop (like the C
-    // `bench_callback` closure) so the measurement isn't per-iteration lambda allocs.
-    val cb = PayloadCallback { id, seq, value, flag, label ->
-        sink += Payload(id, seq, value, flag, label).id
-    }
-    bench("callback", N) {
+    bench("callback", "whole", N) {
         storageCallback(s, cb, onError)
     }
 
+    println("END_PERFTEST")
+
     s.close()
-    println("\n(sink = $sink)")
+    println("(sink = $sink)")
 }

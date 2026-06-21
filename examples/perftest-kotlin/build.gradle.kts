@@ -42,4 +42,8 @@ application {
 
 tasks.named<JavaExec>("run") {
     dependsOn(buildRustJni)
+    // `./gradlew run -PperftestN=<N>` → `-Dperftest.n=<N>` for the forked app JVM, so
+    // the shared `perftest-bench.sh` harness can set the iteration count (daemon-env
+    // independent, unlike reading PERFTEST_N from the Gradle process environment).
+    (project.findProperty("perftestN") as String?)?.let { systemProperty("perftest.n", it) }
 }

@@ -45,11 +45,9 @@ fn main() {
         // semantics — so they are left undeclared here.
         //
         // `storage_callback(s, impl Fn(&Payload))` is the dual direction: it
-        // delivers a borrowed `Payload` to a callback. JniGen flattens the
-        // data-class's leaves into a generated `PayloadCallback.run(id, seq, value,
-        // flag, label)` fun-interface (delivered in ONE native→JVM crossing), and
-        // the consumer composes a `Payload` on the Kotlin side from those leaves —
-        // the "compose the destination structure on the foreign side" technique.
+        // delivers a borrowed `Payload` to a callback. JniGen composes the data-class
+        // natively (the same `fromParts` factory as `storage_get`) and delivers it
+        // whole to a generated `PayloadCallback.run(Payload)` fun-interface.
         .fun(pq!(storage_new))
         .fun(pq!(storage_get))
         .fun(pq!(storage_put_by_take))

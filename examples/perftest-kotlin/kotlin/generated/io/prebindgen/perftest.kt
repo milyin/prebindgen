@@ -90,6 +90,10 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+public fun interface PayloadCallback {
+    public fun run(payload: Payload)
+}
+
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
 }
@@ -113,6 +117,7 @@ internal object JNINative {
         io.prebindgen.perftest.NativeLibrary.ensureLoaded()
     }
 
+    external fun storageCallback(s: Long, f: Any, errorSink: Any)
     external fun storageGet(s: Long, errorSink: Any): Payload
     external fun storageGetFlag(s: Long, errorSink: Any): Boolean
     external fun storageGetId(s: Long, errorSink: Any): Long
