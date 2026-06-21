@@ -880,6 +880,45 @@ pub(crate) fn render_wrapper_fn(
             .expect("Return delivery carries convert_out_ty");
         let rt: syn::ReturnType = syn::parse_quote!(-> #cv);
         classify_return(ext, &rt, registry, imports)?
+    } else if let Some(plan) = unfold.filter(|p| p.fixed_builder) {
+        use crate::api::core::unfold::UnfoldShape;
+        // Synthesized by-value `data_class` delivery: the builder is a **fixed,
+        // hoisted singleton** (`__<Name>Builder`, emitted once — see
+        // `write_value_struct_builders`) that calls the data class's `fromParts`
+        // factory. So the wrapper takes no caller `build`/`fold` param and is
+        // not generic over `R`/`A` — it returns the **concrete** class. The
+        // native side still receives the builder as an erased `Any` and calls
+        // its cached `run`, so the whole delivery machinery is reused; only the
+        // Rust-side `call_static_method("fromParts")` is gone.
+        // `Vec<data_class>` is never synthesized as a fixed plan (it stays on
+        // the existing per-element path — see `apply_value_structs`); a fixed
+        // *folder* with an internal accumulator is a later milestone.
+        debug_assert!(
+            !matches!(plan.shape, UnfoldShape::Iterable(_)),
+            "fixed-builder Iterable should not be synthesized"
+        );
+        let decon = plan
+            .decon
+            .as_ref()
+            .expect("synthesized plan carries its DeconId");
+        let spec = builder_iface_spec(ext, registry, decon)?;
+        // Reference the hoisted singleton (the raw twin when the builder needs
+        // one — synthesized data classes are all-simple-leaf today, so it
+        // doesn't, but keep the path general).
+        let singleton = format!("__{}", spec.raw_name());
+        imports.insert(format!("{}.{singleton}", spec.package));
+        unfold_call_args.push(singleton);
+        // Concrete return: the data class FQN, `?`-nullable for an `Option<T>`
+        // return.
+        let class_fqn = ext
+            .kotlin_fqn(&TypeKey::from_type(&plan.source).to_string())
+            .map(|s| s.to_string())?;
+        let class_ty = register_kt_type(&kt::KtType::cls(class_fqn), imports);
+        let kt = match &plan.shape {
+            UnfoldShape::Optional((), _) => class_ty.nullable(),
+            _ => class_ty,
+        };
+        (Some(kt), None)
     } else if let Some(plan) = unfold {
         use crate::api::core::unfold::UnfoldShape;
         // The builder / fold params are generated typed `fun interface`s

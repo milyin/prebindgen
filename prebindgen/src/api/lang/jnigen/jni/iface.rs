@@ -87,6 +87,27 @@ impl IfaceParam {
     }
 }
 
+/// One **typed-view group** over a run of raw leaf [`params`](IfaceSpec::params):
+/// the user-facing callback sees this single value, the JNI-called raw twin sees
+/// the leaves. Used for a by-value `data_class` callback arg, whose user
+/// callback receives the whole reassembled object (`run(p: Payload)`) while the
+/// wire carries decoupled leaves (so no Java object is built on the Rust side).
+#[derive(Clone, Debug)]
+pub(crate) struct TypedGroup {
+    /// User-facing (typed) parameter name.
+    pub name: String,
+    /// User-facing (typed) parameter type (the whole value, or a single leaf's
+    /// typed view for a passthrough group).
+    pub typed: kt::KtType,
+    /// `Some(class_short)` ⇒ reassemble this group's leaves via
+    /// `class_short.fromParts(leaves…)`; `None` ⇒ a single passthrough leaf
+    /// (the typed value IS the one raw param, optionally wrapped by its
+    /// [`IfaceParam::wrap`]).
+    pub reassemble: Option<String>,
+    /// Number of consecutive `params` (raw leaves) this group consumes.
+    pub leaf_count: usize,
+}
+
 /// One generated `fun interface`: identity, Kotlin surface (typed + raw
 /// views), and the JVM descriptor of the raw `run` the native side calls.
 #[derive(Clone, Debug)]
@@ -105,6 +126,12 @@ pub(crate) struct IfaceSpec {
     /// Full JVM descriptor of the RAW `run`, e.g. `"(JLjava/lang/String;)V"`.
     /// Generic positions erase to `Ljava/lang/Object;`.
     pub descr: String,
+    /// Typed-view grouping over [`Self::params`]. Empty ⇒ the typed view is the
+    /// params 1:1 (the default). Non-empty ⇒ the user-facing `run` takes one
+    /// param per group (a whole reassembled value), while the JNI-called raw
+    /// twin still takes the leaf `params`; the `asRaw` proxy reassembles. Always
+    /// forces a raw twin (see [`Self::needs_raw`]).
+    pub typed_groups: Vec<TypedGroup>,
 }
 
 impl IfaceSpec {
@@ -126,11 +153,12 @@ impl IfaceSpec {
         }
     }
 
-    /// True when any param's raw view differs from its typed view — only
+    /// True when the typed view differs from the JNI-called raw view — only
     /// then are a raw twin + `asRaw` proxy generated; otherwise the typed
-    /// interface IS the JNI-called shape.
+    /// interface IS the JNI-called shape. A per-param `wrap` (handle/blob) or a
+    /// non-empty [`Self::typed_groups`] (whole-value reassembly) both differ.
     pub fn needs_raw(&self) -> bool {
-        self.params.iter().any(|p| p.wrap != WrapKind::None)
+        !self.typed_groups.is_empty() || self.params.iter().any(|p| p.wrap != WrapKind::None)
     }
 
     /// Short name of the raw twin (`<Name>Raw`); = `name` when no twin.
@@ -229,11 +257,19 @@ impl IfaceSpec {
         }
     }
 
-    /// The typed (user-facing) Kotlin declaration.
+    /// The typed (user-facing) Kotlin declaration. With [`Self::typed_groups`]
+    /// the `run` parameters are the groups (each a whole reassembled value);
+    /// otherwise they are the `params` 1:1 (typed view).
     pub fn to_decl(&self) -> kt::KtFunInterface {
         let mut m = kt::KtFun::new(IFACE_METHOD).vis(kt::Vis::Public);
-        for p in &self.params {
-            m = m.param(kt::KtParam::new(&p.name, p.typed.clone()));
+        if self.typed_groups.is_empty() {
+            for p in &self.params {
+                m = m.param(kt::KtParam::new(&p.name, p.typed.clone()));
+            }
+        } else {
+            for g in &self.typed_groups {
+                m = m.param(kt::KtParam::new(&g.name, g.typed.clone()));
+            }
         }
         m = m.returns(self.ret.clone());
         let mut i = kt::KtFunInterface::new(&self.name, m).vis(kt::Vis::Public);
@@ -273,11 +309,31 @@ impl IfaceSpec {
             format!("<{}>", bare_generics.join(", "))
         };
         let recv = format!("{}{gen_args}.asRaw", self.name);
-        let wrapped = self
-            .params
-            .iter()
-            .map(|p| p.wrap.wrap_expr(&p.name, p.raw.is_nullable()))
-            .collect::<Vec<_>>();
+        // `run` arguments: per-param `wrap` (1:1 view) or, with `typed_groups`,
+        // one expression per group — a whole value reassembled from its leaves
+        // via `Class.fromParts(leaves…)`, or a single passthrough leaf's wrap.
+        let wrapped = if self.typed_groups.is_empty() {
+            self.params
+                .iter()
+                .map(|p| p.wrap.wrap_expr(&p.name, p.raw.is_nullable()))
+                .collect::<Vec<_>>()
+        } else {
+            let mut args = Vec::with_capacity(self.typed_groups.len());
+            let mut at = 0usize;
+            for g in &self.typed_groups {
+                let names: Vec<&str> =
+                    self.params[at..at + g.leaf_count].iter().map(|p| p.name.as_str()).collect();
+                match &g.reassemble {
+                    Some(cls) => args.push(format!("{cls}.fromParts({})", names.join(", "))),
+                    None => {
+                        let p = &self.params[at];
+                        args.push(p.wrap.wrap_expr(&p.name, p.raw.is_nullable()));
+                    }
+                }
+                at += g.leaf_count;
+            }
+            args
+        };
         let body = if self.params.is_empty() {
             kt::Code::new().blk(format!("{}{gen_args} {{", self.raw_name()), |c| {
                 c.line("run()")
@@ -334,6 +390,7 @@ mod tests {
             }],
             ret: kt::KtType::unit(),
             descr: "(J)V".to_string(),
+            typed_groups: Vec::new(),
         };
 
         let src = render_as_raw(spec);
@@ -381,6 +438,7 @@ mod tests {
             ],
             ret: kt::KtType::unit(),
             descr: "([BIZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
+            typed_groups: Vec::new(),
         };
 
         let src = render_as_raw(spec);
@@ -654,17 +712,63 @@ pub(crate) fn callback_iface_spec(
     registry: &Registry<KotlinMeta>,
     cb_args: &[syn::Type],
 ) -> Option<IfaceSpec> {
+    // Per-arg grouping over the flat raw leaves. A **fixed-builder** (by-value
+    // `data_class`) arg crosses the wire as decoupled leaves but the user
+    // callback receives the whole reassembled value (one group, reassembled via
+    // `fromParts`). Every other arg keeps the established behavior: an
+    // accessor-plan arg exposes its leaves to the user 1:1 (one passthrough
+    // group each), a plan-less arg crosses whole (one passthrough group).
+    struct GroupDesc {
+        name: String,
+        /// Whole-value typed view (`Some`) or `None` ⇒ use the leaf's own typed.
+        typed: Option<kt::KtType>,
+        reassemble: Option<String>,
+        leaf_count: usize,
+    }
     let mut leaf_tys: Vec<(String, syn::Type, bool, bool)> = Vec::new();
+    let mut groups: Vec<GroupDesc> = Vec::new();
+    let mut any_fixed = false;
+
     for (i, t) in cb_args.iter().enumerate() {
         if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(t)) {
-            leaf_tys.extend(
-                plan_leaf_names(&plan.leaves)
-                    .into_iter()
-                    .zip(plan.leaves.iter())
-                    .map(|(n, l)| (n, l.out_ty.clone(), l.nullable, true)),
-            );
+            let leaf_names = plan_leaf_names(&plan.leaves);
+            for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
+                leaf_tys.push((n.clone(), l.out_ty.clone(), l.nullable, true));
+            }
+            if plan.fixed_builder {
+                any_fixed = true;
+                let core = match t {
+                    syn::Type::Reference(r) => (*r.elem).clone(),
+                    other => other.clone(),
+                };
+                let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core).to_string())?;
+                let class_short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+                groups.push(GroupDesc {
+                    name: whole_value_name(t, i),
+                    typed: Some(kt::KtType::cls(fqn.to_string())),
+                    reassemble: Some(class_short),
+                    leaf_count: plan.leaves.len(),
+                });
+            } else {
+                // Accessor-plan arg: each leaf is its own passthrough group, so
+                // the user callback still sees the flattened leaves (unchanged).
+                for n in &leaf_names {
+                    groups.push(GroupDesc {
+                        name: n.clone(),
+                        typed: None,
+                        reassemble: None,
+                        leaf_count: 1,
+                    });
+                }
+            }
         } else {
             leaf_tys.push((whole_value_name(t, i), t.clone(), is_option_type(t), false));
+            groups.push(GroupDesc {
+                name: whole_value_name(t, i),
+                typed: None,
+                reassemble: None,
+                leaf_count: 1,
+            });
         }
     }
     let mut names: Vec<String> = leaf_tys.iter().map(|(n, _, _, _)| n.clone()).collect();
@@ -680,6 +784,28 @@ pub(crate) fn callback_iface_spec(
             *from_plan,
         )?);
     }
+    // Typed groups only when a fixed-builder arg is present — otherwise the
+    // typed view is the params 1:1 (preserving the established accessor /
+    // whole-value behavior for every other callback).
+    let typed_groups = if any_fixed {
+        let mut tg = Vec::with_capacity(groups.len());
+        let mut at = 0usize;
+        let mut group_names: Vec<String> = groups.iter().map(|g| g.name.clone()).collect();
+        dedup_names(&mut group_names);
+        for (gi, g) in groups.iter().enumerate() {
+            let typed = g.typed.clone().unwrap_or_else(|| params[at].typed.clone());
+            tg.push(TypedGroup {
+                name: group_names[gi].clone(),
+                typed,
+                reassemble: g.reassemble.clone(),
+                leaf_count: g.leaf_count,
+            });
+            at += g.leaf_count;
+        }
+        tg
+    } else {
+        Vec::new()
+    };
     let name = if cb_args.is_empty() {
         "VoidCallback".to_string()
     } else {
@@ -705,6 +831,7 @@ pub(crate) fn callback_iface_spec(
         params,
         ret,
         descr,
+        typed_groups,
     })
 }
 
@@ -736,6 +863,7 @@ pub(crate) fn builder_iface_spec(
         params,
         ret,
         descr,
+        typed_groups: Vec::new(),
     })
 }
 
@@ -768,6 +896,7 @@ pub(crate) fn folder_iface_spec(
         params,
         ret,
         descr,
+        typed_groups: Vec::new(),
     })
 }
 
@@ -801,6 +930,7 @@ pub(crate) fn whole_folder_iface_spec(
         params,
         ret,
         descr,
+        typed_groups: Vec::new(),
     })
 }
 
@@ -854,6 +984,7 @@ pub(crate) fn error_handler_iface_spec(
         params,
         ret,
         descr,
+        typed_groups: Vec::new(),
     })
 }
 
@@ -875,6 +1006,7 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen<impl JniGenState>) -> If
         params,
         ret,
         descr,
+        typed_groups: Vec::new(),
     }
 }
 

@@ -895,6 +895,12 @@ impl<M> Registry<M> {
         if let Some(dec) = ext.deconstructors() {
             crate::api::core::unfold::apply(self, dec, &declared.functions, &declared.accessors)?;
         }
+        // Synthesized by-value `data_class` decompositions: build the leaves
+        // (immutable borrow), then wire them into fixed-builder plans.
+        let value_decons = ext.value_struct_decons(self);
+        if !value_decons.is_empty() {
+            crate::api::core::unfold::apply_value_structs(self, value_decons, &declared.functions)?;
+        }
         Ok(())
     }
 }

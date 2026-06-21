@@ -36,7 +36,7 @@ mod plan;
 
 pub use self::{
     error::UnfoldError,
-    plan::{DeconId, DeconSpec, UnfoldLeaf, UnfoldPlan, UnfoldShape},
+    plan::{DeconId, DeconSpec, LeafSource, UnfoldLeaf, UnfoldPlan, UnfoldShape},
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -647,6 +647,156 @@ pub fn apply<M>(
     Ok(())
 }
 
+/// A synthesized by-value `data_class` decomposition, produced by the language
+/// adapter (which knows the per-field encoding — projections, enums, nested
+/// classes) and fed to [`apply_value_structs`]. Its [`leaves`](Self::leaves)
+/// are [`LeafSource::Field`] leaves: each crosses the boundary as its own field
+/// value and the foreign side reassembles the object (no Java object is built
+/// on the Rust side).
+pub struct ValueDecon {
+    /// Canonical key of the value struct (the `DeconId::Default` key).
+    pub key: TypeKey,
+    /// The struct type (owned) the leaves decompose.
+    pub source: syn::Type,
+    /// Field-access leaves in foreign-signature / `fromParts` order.
+    pub leaves: Vec<UnfoldLeaf>,
+}
+
+/// Wire the synthesized by-value `data_class` decompositions into the registry:
+/// register each as a `DeconId::Default` [`DeconSpec`], then build a
+/// **fixed-builder** [`UnfoldPlan`] for every declared function that returns the
+/// struct (`T` / `&T` / `Option<T>` / `Vec<T>`) and a callback-arg plan for
+/// every `impl Fn(&T)` / `impl Fn(T)` parameter. Each leaf's `out_ty` is
+/// registered as a required output. Mirrors the per-function matching of
+/// [`apply`], but the builder/folder is a fixed foreign singleton
+/// (`fixed_builder = true`) reconstructing the concrete class, so delivery is
+/// always `Callback` (never the single-leaf `Return` shortcut) and the wrapper
+/// stays non-generic.
+///
+/// Runs in `write_rust` right after [`apply`] and before `resolve`.
+pub fn apply_value_structs<M>(
+    registry: &mut Registry<M>,
+    decons: Vec<ValueDecon>,
+    declared_fns: &std::collections::HashSet<syn::Ident>,
+) -> Result<(), UnfoldError> {
+    for vd in &decons {
+        let decon = DeconId::Default(vd.key.to_string());
+        require_unique_leaf_names(&vd.source, &vd.leaves)?;
+        registry.decon_plans.entry(decon.clone()).or_insert_with(|| DeconSpec {
+            source: vd.source.clone(),
+            leaves: vd.leaves.clone(),
+        });
+
+        // Output position: a declared fn returning the struct
+        // (`T` / `&T` / `Option<T|&T>` / `Vec<T|&T>`) decomposes into a
+        // fixed-builder plan. (`Result<T, E>` is left to the whole-value
+        // converter — the synthesizer covers the infallible returns.)
+        for func in declared_fns {
+            let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+                continue;
+            };
+            let ret = fn_return(&item_fn);
+            if !returns_type(&ret, &vd.key) || registry.unfold_plans.contains_key(func) {
+                continue;
+            }
+            // Shape over the field decomposition: `Vec<T>` ⇒ Iterable,
+            // `Option<T>` ⇒ Optional, else Base. The element/inner borrow-ness
+            // sets `by_ref` (the field reach clones either way). A `Vec<T>`
+            // return is left to the existing per-element output path (a fixed
+            // *folder* with an internal accumulator is a later milestone), so it
+            // is not synthesized here — `returns_type` matched its element.
+            if vec_inner_type(&ret).is_some() {
+                continue;
+            }
+            let (shape, by_ref) = if let Some(inner) = option_inner_type(&ret) {
+                (
+                    UnfoldShape::Optional((), Box::new(UnfoldShape::Base)),
+                    matches!(&inner, syn::Type::Reference(_)),
+                )
+            } else {
+                (UnfoldShape::Base, matches!(&ret, syn::Type::Reference(_)))
+            };
+            for leaf in &vd.leaves {
+                registry.require_output(&leaf.out_ty, &loc);
+            }
+            let plan = UnfoldPlan {
+                source: vd.source.clone(),
+                decon: Some(decon.clone()),
+                by_ref,
+                shape,
+                leaves: vd.leaves.clone(),
+                element: None,
+                delivery: Delivery::Callback,
+                convert_out_ty: None,
+                fixed_builder: true,
+            };
+            registry.unfold_plans.insert(func.clone(), plan);
+        }
+
+        // Callback-argument position: an `impl Fn(&T)` / `impl Fn(T)` parameter
+        // of a declared fn delivers the flattened leaves to the foreign
+        // callback, which reassembles the whole value via the data class's
+        // `fromParts` before invoking the user's typed callback (the group
+        // reassembly lives in the JNI adapter's `asRaw` proxy).
+        apply_value_struct_callbacks(registry, vd, &decon, declared_fns)?;
+    }
+    Ok(())
+}
+
+/// Build a fixed-builder callback-arg plan for every `impl Fn(&T)` /
+/// `impl Fn(T)` parameter (of a declared fn) whose value is the value struct
+/// `vd`. The foreign callback receives the flattened leaves (reassembled there
+/// via the data class's `fromParts`) instead of a whole value built on the Rust
+/// side. Separate from the output-position wiring so the callback path (which
+/// needs the foreign-side group-reassembly adapter) can be enabled on its own.
+fn apply_value_struct_callbacks<M>(
+    registry: &mut Registry<M>,
+    vd: &ValueDecon,
+    decon: &DeconId,
+    declared_fns: &std::collections::HashSet<syn::Ident>,
+) -> Result<(), UnfoldError> {
+    for func in declared_fns {
+        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+            continue;
+        };
+        for input in &item_fn.sig.inputs {
+            let syn::FnArg::Typed(pt) = input else { continue };
+            let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
+                continue;
+            };
+            for arg_ty in args {
+                let (by_ref, core_ty) = match &arg_ty {
+                    syn::Type::Reference(r) => (true, (*r.elem).clone()),
+                    other => (false, other.clone()),
+                };
+                if TypeKey::from_type(&core_ty) != vd.key {
+                    continue;
+                }
+                let key = TypeKey::from_type(&arg_ty);
+                if registry.callback_arg_plans.contains_key(&key) {
+                    continue;
+                }
+                for leaf in &vd.leaves {
+                    registry.require_output(&leaf.out_ty, &loc);
+                }
+                let plan = UnfoldPlan {
+                    source: vd.source.clone(),
+                    decon: Some(decon.clone()),
+                    by_ref,
+                    shape: UnfoldShape::Base,
+                    leaves: vd.leaves.clone(),
+                    element: None,
+                    delivery: Delivery::Callback,
+                    convert_out_ty: None,
+                    fixed_builder: true,
+                };
+                registry.callback_arg_plans.insert(key, plan);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The function's return type (or `()` for a unit return).
 fn fn_return(item_fn: &syn::ItemFn) -> syn::Type {
     match &item_fn.sig.output {
@@ -746,6 +896,7 @@ fn process_decl<M>(
                     element: Some(inner.clone()),
                     delivery: ed.delivery,
                     convert_out_ty: None,
+                    fixed_builder: false,
                 }
             }
         } else {
@@ -969,6 +1120,7 @@ fn build_plan<M>(
         element: None,
         delivery: ed.delivery,
         convert_out_ty: None,
+        fixed_builder: false,
     })
 }
 
@@ -1041,6 +1193,7 @@ fn flatten<M>(
                     out_ty,
                     identity: true,
                     nullable,
+                    source: LeafSource::Accessor,
                 });
             }
             DeconRecord::Acc { func, name } => {
@@ -1095,6 +1248,7 @@ fn flatten<M>(
                         out_ty: ret,
                         identity: false,
                         nullable,
+                        source: LeafSource::Accessor,
                     });
                 }
             }

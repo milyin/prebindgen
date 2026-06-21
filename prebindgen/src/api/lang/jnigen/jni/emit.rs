@@ -1165,54 +1165,45 @@ pub(crate) fn encode_plan_leaves(
             continue;
         }
 
-        // Accessor leaf. A non-null primitive-wire leaf delivers its raw
-        // primitive as a typed `jvalue` — no boxing, no JNI call at all (the
-        // typed `run` descriptor declares the primitive). Everything else
-        // (object wires, and nullable leaves — whose `None` arm must yield a
-        // JVM null) walks the path — unwrapping every `Option` nesting step
-        // (`None` ⇒ a null leaf) — then encodes the final accessor's full
-        // return with the leaf's output converter and casts to JObject.
+        // Leaf reach. An `Accessor` leaf walks its accessor-fn path — unwrapping
+        // every `Option` nesting step (`None` ⇒ a null leaf). A `Field` leaf
+        // (synthesized `data_class`) reaches a struct field and clones it
+        // (`value.a.b.clone()`); the converter (`Option<Box<String>>` → nullable
+        // String, …) carries any nullability, so there is no path `Option` to
+        // unwrap. `reach(body)` dispatches on the source and feeds the reached
+        // Rust expression to `body`.
+        use crate::api::core::unfold::LeafSource;
+        let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
+            match leaf.source {
+                LeafSource::Accessor => reach_leaf(
+                    source_module,
+                    &leaf.path,
+                    &returns_option,
+                    value.clone(),
+                    by_ref,
+                    false,
+                    0,
+                    body,
+                ),
+                LeafSource::Field => {
+                    let segs = &leaf.path;
+                    body(quote!(#value #(.#segs)*.clone()))
+                }
+            }
+        };
+
+        // A non-null primitive-wire leaf delivers its raw primitive as a typed
+        // `jvalue` — no boxing, no JNI call at all (the typed `run` descriptor
+        // declares the primitive). Everything else (object wires, and nullable
+        // leaves whose `None` arm must yield a JVM null) encodes the reached
+        // value with the leaf's output converter and casts to JObject.
         let wire = out_entry.destination.clone();
         let enc_ident = format_ident!("__enc{}", idx);
         if leaf_is_prim(registry, leaf) {
             let letter = jni_field_access(&wire)
                 .expect("leaf_is_prim guarantees a primitive wire")
                 .1;
-            let expr = reach_leaf(
-                source_module,
-                &leaf.path,
-                &returns_option,
-                value.clone(),
-                by_ref,
-                false,
-                0,
-                &|reached| {
-                    quote! {{
-                        let #enc_ident = match #conv(&mut env, #reached) {
-                            ::core::result::Result::Ok(__w) => __w,
-                            ::core::result::Result::Err(__e) => {
-                                #conv_fail
-                            }
-                        };
-                        jni::sys::jvalue { #letter: #enc_ident }
-                    }}
-                },
-            );
-            stmts.extend(quote! {
-                let #obj_ident: jni::sys::jvalue = #expr;
-            });
-            continue;
-        }
-        let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
-        let expr = reach_leaf(
-            source_module,
-            &leaf.path,
-            &returns_option,
-            value.clone(),
-            by_ref,
-            false,
-            0,
-            &|reached| {
+            let expr = reach(&|reached| {
                 quote! {{
                     let #enc_ident = match #conv(&mut env, #reached) {
                         ::core::result::Result::Ok(__w) => __w,
@@ -1220,10 +1211,26 @@ pub(crate) fn encode_plan_leaves(
                             #conv_fail
                         }
                     };
-                    #cast
+                    jni::sys::jvalue { #letter: #enc_ident }
                 }}
-            },
-        );
+            });
+            stmts.extend(quote! {
+                let #obj_ident: jni::sys::jvalue = #expr;
+            });
+            continue;
+        }
+        let cast = cast_wire_to_jobject(&enc_ident, &wire, fail);
+        let expr = reach(&|reached| {
+            quote! {{
+                let #enc_ident = match #conv(&mut env, #reached) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        #conv_fail
+                    }
+                };
+                #cast
+            }}
+        });
         stmts.extend(bind_obj(obj_ident, expr));
     }
     (stmts, arg_exprs)
@@ -2526,6 +2533,105 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
         "D" => quote!(0.0f64),
         _ => quote!(jni::objects::JObject::null()),
     }
+}
+
+/// Synthesize the [`LeafSource::Field`](crate::api::core::unfold::LeafSource)
+/// leaves of a by-value `data_class` for the fixed-builder output/callback path
+/// — the pre-resolve analog of [`flatten_struct_encode`] (which runs at emit
+/// time). Each named field becomes one field-access leaf
+/// (`name`, `path = [..field idents]`, `out_ty = <field type>`); a non-optional
+/// nested data-class field recurses (inlined), so the whole graph crosses as
+/// decoupled leaves the foreign side reassembles.
+///
+/// Returns `None` (⇒ the type keeps the whole-value `fromParts` path) when a
+/// field needs a transform this fixed builder can't yet forward verbatim — a
+/// **projection** (opaque handle / value blob), an **enum**, or a nested
+/// data-class behind `Option` / `Vec`. (Those are handled by the slower
+/// [`struct_output_body`] until the synthesizer is widened to wrap them.)
+///
+/// Classification reads only `ext.types` (`opaque`/`enum_cfg`/`value_blob`) and
+/// `registry.structs` — both populated before `resolve` — never the output
+/// converter table (not yet built at this stage).
+pub(crate) fn synth_value_struct_leaves(
+    ext: &JniGen<impl JniGenState>,
+    registry: &Registry<KotlinMeta>,
+    s: &syn::ItemStruct,
+    path_prefix: &[syn::Ident],
+    name_prefix: &str,
+    depth: usize,
+) -> Option<Vec<crate::api::core::unfold::UnfoldLeaf>> {
+    use crate::api::core::unfold::{LeafSource, UnfoldLeaf};
+    if depth > 16 {
+        return None;
+    }
+    let syn::Fields::Named(named) = &s.fields else {
+        return None;
+    };
+    let mut leaves: Vec<UnfoldLeaf> = Vec::new();
+    for field in &named.named {
+        let fname = field.ident.as_ref()?.clone();
+        let effective_ty = field.ty.clone();
+        let camel = kt_snake_to_camel(&fname.to_string());
+        let leaf_name = if name_prefix.is_empty() {
+            camel
+        } else {
+            format!("{name_prefix}__{camel}")
+        };
+        let mut path = path_prefix.to_vec();
+        path.push(fname);
+
+        // A projection field (opaque handle / `value_blob`) or an enum field
+        // is delivered with a transform the fixed builder can't forward yet.
+        let probe = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
+        if let Some(cfg) = ext.types.get(&TypeKey::from_type(&probe)) {
+            if cfg.opaque.is_some() || cfg.value_blob || cfg.enum_cfg.is_some() {
+                return None;
+            }
+        }
+        if ext.is_kotlin_enum(&effective_ty) {
+            return None;
+        }
+
+        // Nested data-class field (a registered struct that isn't a projection
+        // /enum): a non-optional one inlines (recurse); `Option`/`Vec`-wrapped
+        // nesting is deferred to the whole-value path.
+        let nested = bare_path_ident(&probe).and_then(|name| {
+            let is_struct = registry.structs.contains_key(&name);
+            let cfg = ext.types.get(&TypeKey::from_type(&probe));
+            let is_plain = cfg
+                .map(|c| c.opaque.is_none() && !c.value_blob && c.enum_cfg.is_none())
+                .unwrap_or(false);
+            if is_struct && is_plain {
+                registry.structs.get(&name).map(|(st, _)| st.clone())
+            } else {
+                None
+            }
+        });
+        if let Some(child) = nested {
+            if option_inner_type(&effective_ty).is_some() || pat_match_top(&effective_ty, "Vec") {
+                return None;
+            }
+            let child_leaves =
+                synth_value_struct_leaves(ext, registry, &child, &path, &leaf_name, depth + 1)?;
+            leaves.extend(child_leaves);
+            continue;
+        }
+
+        // Simple leaf: scalar / String / Option<Box<String>> / ByteArray / Vec.
+        // The field's own output converter (resolved later) encodes it; the
+        // foreign `fromParts` forwards it verbatim. Nullability is carried by
+        // the converter (e.g. `Option<Box<String>>` → `String?`), so the leaf
+        // itself isn't path-nullable.
+        leaves.push(UnfoldLeaf {
+            name: leaf_name,
+            path,
+            out_ty: effective_ty,
+            identity: false,
+            nullable: false,
+            source: LeafSource::Field,
+        });
+    }
+    Some(leaves)
 }
 
 /// Recursively flatten a struct's output encode into a list of leaf wire slots

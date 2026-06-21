@@ -7,6 +7,8 @@ import io.prebindgen.perftest.JniErrorHandlerCapture
 import io.prebindgen.perftest.Payload
 import io.prebindgen.perftest.PayloadCallback
 import io.prebindgen.perftest.Storage
+import io.prebindgen.perftest.__PayloadBuilder
+import io.prebindgen.perftest.asRaw
 import io.prebindgen.perftest.withSortedHandleLocks
 
 public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
@@ -21,7 +23,7 @@ public fun storageGet(s: Storage, onError: JniErrorHandler<Payload>): Payload {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        JNINative.storageGet(s_ptr, __cap)
+        (JNINative.storageGet(s_ptr, __PayloadBuilder, __cap) as Payload)
     }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
@@ -68,7 +70,7 @@ public fun storageCallback(s: Storage, f: PayloadCallback, onError: JniErrorHand
     val __cap = JniErrorHandlerCapture.acquire()
     withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        JNINative.storageCallback(s_ptr, f, __cap)
+        JNINative.storageCallback(s_ptr, f.asRaw(), __cap)
     }
     if (__cap.failed) return onError.run(__cap.je)
 }

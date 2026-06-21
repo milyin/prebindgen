@@ -780,6 +780,55 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
         Some(&self.deconstructors)
     }
 
+    /// Synthesize a field-decomposition for every `.data_class` type whose
+    /// fields the fixed builder can forward verbatim (see
+    /// [`synth_value_struct_leaves`]). The result drives
+    /// [`crate::api::core::unfold::apply_value_structs`] so such a struct
+    /// crosses Rust→Kotlin as decoupled leaves (reassembled by the generated
+    /// `fromParts` builder singleton) instead of a `JObject` built on the Rust
+    /// side via `call_static_method`. Types the synthesizer declines (enums /
+    /// projections / `Option`/`Vec`-nested) keep the whole-value
+    /// [`struct_output_body`] path.
+    fn value_struct_decons(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<crate::api::core::unfold::ValueDecon> {
+        let mut out = Vec::new();
+        for (ident, (item_struct, _loc)) in &registry.structs {
+            let source: syn::Type = syn::parse_quote!(#ident);
+            let key = TypeKey::from_type(&source);
+            // A `data_class` is a registered type that is neither an opaque
+            // handle, an enum, nor a value blob.
+            let is_data_class = self
+                .types
+                .get(&key)
+                .map(|c| {
+                    c.kotlin_name.is_some()
+                        && c.opaque.is_none()
+                        && c.enum_cfg.is_none()
+                        && !c.value_blob
+                })
+                .unwrap_or(false);
+            if !is_data_class {
+                continue;
+            }
+            if let Some(leaves) =
+                crate::api::lang::jnigen::jni::synth_value_struct_leaves(
+                    self, registry, item_struct, &[], "", 0,
+                )
+            {
+                if !leaves.is_empty() {
+                    out.push(crate::api::core::unfold::ValueDecon {
+                        key,
+                        source,
+                        leaves,
+                    });
+                }
+            }
+        }
+        out
+    }
+
     /// Union of every `.fun(...)` list across all
     /// [`Self::package`] subpackage contexts. Each entry is a
     /// `#[prebindgen]` fn ident the user explicitly hooked into the

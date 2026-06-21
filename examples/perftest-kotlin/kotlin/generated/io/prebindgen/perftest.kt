@@ -94,6 +94,29 @@ public fun interface PayloadCallback {
     public fun run(payload: Payload)
 }
 
+public fun interface PayloadCallbackRaw {
+    public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?)
+}
+
+public fun PayloadCallback.asRaw(): PayloadCallbackRaw =
+    PayloadCallbackRaw {
+        id,
+        seq,
+        value,
+        flag,
+        label ->
+        run(
+            Payload.fromParts(id, seq, value, flag, label)
+        )
+    }
+
+public fun interface PayloadBuilder<out R> {
+    public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): R
+}
+
+internal val __PayloadBuilder: PayloadBuilder<Payload> =
+PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
+
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
 }
@@ -118,7 +141,7 @@ internal object JNINative {
     }
 
     external fun storageCallback(s: Long, f: Any, errorSink: Any)
-    external fun storageGet(s: Long, errorSink: Any): Payload
+    external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
     external fun storageGetFlag(s: Long, errorSink: Any): Boolean
     external fun storageGetId(s: Long, errorSink: Any): Long
     external fun storageGetLabel(s: Long, errorSink: Any): String?

@@ -61,6 +61,24 @@ pub struct DeconSpec {
     pub leaves: Vec<UnfoldLeaf>,
 }
 
+/// How a leaf's [`UnfoldLeaf::path`] is reached from the decomposed value.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum LeafSource {
+    /// The path is a chain of `#[prebindgen]` **accessor functions**:
+    /// `source_module::f(&value)`, composing nested accessors. Nesting steps
+    /// that return `Option` make the leaf nullable. This is the form produced
+    /// by `.deconstructor_record*` / `.fun_accessor` declarations.
+    #[default]
+    Accessor,
+    /// The path is a chain of **struct field idents** reached by field access
+    /// and cloned: `value.a.b.clone()`. Produced by the synthesized
+    /// decomposition of a by-value `data_class` (see
+    /// [`crate::api::core::unfold::apply_value_structs`]); the value's own
+    /// fields cross as decoupled leaves and the foreign side reassembles the
+    /// object (so no Java object is built on the Rust side).
+    Field,
+}
+
 /// A resolved output expansion for one function.
 #[derive(Clone)]
 pub struct UnfoldPlan {
@@ -93,6 +111,13 @@ pub struct UnfoldPlan {
     /// wrapper returns this value through its ordinary output converter (no
     /// callback). `None` for [`Delivery::Callback`].
     pub convert_out_ty: Option<syn::Type>,
+    /// `true` for a synthesized by-value `data_class` decomposition (see
+    /// [`crate::api::core::unfold::apply_value_structs`]): the builder/folder
+    /// is a **fixed, hoisted** foreign singleton that reconstructs the concrete
+    /// class (the wrapper takes no caller `build`/`fold` param and is not
+    /// generic over `R`/`A` — it returns the concrete type). `false` for the
+    /// accessor-declared deconstructors, whose builder is caller-supplied.
+    pub fixed_builder: bool,
 }
 
 /// One flattened output leaf of a decomposed return value.
@@ -119,4 +144,7 @@ pub struct UnfoldLeaf {
     /// destination side (e.g. a Kotlin `?` type); emit wraps the encode in a
     /// `match Some/None`.
     pub nullable: bool,
+    /// How [`Self::path`] is reached from the value — an accessor-fn chain
+    /// (default) or a struct-field chain (synthesized `data_class`).
+    pub source: LeafSource,
 }

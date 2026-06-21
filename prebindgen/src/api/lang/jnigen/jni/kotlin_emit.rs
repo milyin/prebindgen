@@ -520,6 +520,18 @@ impl<S: JniGenState> JniGen<S> {
         // types for Callback, the element type for WholeFolder).
         let mut uses: BTreeMap<Use, Vec<syn::Type>> = BTreeMap::new();
 
+        // DeconIds whose builder is a synthesized by-value `data_class`
+        // (`fixed_builder`): these get a hoisted `__<Name>Builder` singleton
+        // (the `fromParts` factory) emitted alongside the interface, so the
+        // wrapper references it instead of taking a caller `build` param.
+        let fixed_decons: std::collections::HashSet<DeconId> = registry
+            .unfold_plans
+            .values()
+            .chain(registry.callback_arg_plans.values())
+            .filter(|p| p.fixed_builder)
+            .filter_map(|p| p.decon.clone())
+            .collect();
+
         for pkg_cfg in self.packages.values() {
             for entry in &pkg_cfg.functions {
                 let Some((item_fn, _loc)) = registry.functions.get(&entry.rust_ident) else {
@@ -577,20 +589,27 @@ impl<S: JniGenState> JniGen<S> {
         uses.into_iter()
             .filter_map(|(u, tys)| {
                 // `is_error` ⇒ also emit the zero-alloc capture holder used by
-                // the generated wrappers' error channel.
-                let (spec, is_error) = match u {
-                    Use::Callback(_) => (callback_iface_spec(self, registry, &tys), false),
-                    Use::Builder(d) => (builder_iface_spec(self, registry, &d), false),
-                    Use::Folder(d) => (folder_iface_spec(self, registry, &d), false),
-                    Use::WholeFolder(_) => {
-                        (whole_folder_iface_spec(self, registry, &tys[0]), false)
+                // the generated wrappers' error channel. `fixed` carries the
+                // builder's DeconId when it is a synthesized `data_class`, so a
+                // hoisted `__<Name>Builder` singleton is emitted with it.
+                let (spec, is_error, fixed) = match u {
+                    Use::Callback(_) => (callback_iface_spec(self, registry, &tys), false, None),
+                    Use::Builder(d) => {
+                        let fixed = fixed_decons.contains(&d).then(|| d.clone());
+                        (builder_iface_spec(self, registry, &d), false, fixed)
                     }
-                    Use::Handler(d) => (error_handler_iface_spec(self, registry, &d), true),
-                    Use::JniErrorHandler => (Some(jni_error_handler_iface_spec(self)), true),
+                    Use::Folder(d) => (folder_iface_spec(self, registry, &d), false, None),
+                    Use::WholeFolder(_) => {
+                        (whole_folder_iface_spec(self, registry, &tys[0]), false, None)
+                    }
+                    Use::Handler(d) => (error_handler_iface_spec(self, registry, &d), true, None),
+                    Use::JniErrorHandler => {
+                        (Some(jni_error_handler_iface_spec(self)), true, None)
+                    }
                 };
-                spec.map(|s| (s, is_error))
+                spec.map(|s| (s, is_error, fixed))
             })
-            .map(|(s, is_error)| {
+            .map(|(s, is_error, fixed)| {
                 // Typed (user-facing) interface; when any leaf's raw view
                 // differs, also the JNI-called raw twin and the `asRaw()`
                 // proxy adapter that wraps raw leaves into typed objects.
@@ -606,9 +625,55 @@ impl<S: JniGenState> JniGen<S> {
                 if is_error {
                     file = file.decl(s.to_capture_decl());
                 }
+                if let Some(decon) = fixed {
+                    file = file.decl(self.value_struct_builder_singleton(registry, &s, &decon));
+                }
                 file
             })
             .collect()
+    }
+
+    /// The hoisted **fixed builder** singleton for a synthesized by-value
+    /// `data_class` decomposition: `internal val __<Name>Builder:
+    /// <Name>Builder<Class> = <Name>Builder { leaves… -> Class.fromParts(leaves…) }`.
+    /// One instance per process (a Kotlin SAM singleton — no per-call alloc);
+    /// the wrapper passes it to the native call instead of taking a caller
+    /// `build` param, so the object is reconstructed on the Kotlin side via the
+    /// existing `fromParts` factory and never built on the Rust side. The leaf
+    /// names/order come straight from the builder interface, so they line up
+    /// positionally with `fromParts`.
+    fn value_struct_builder_singleton(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+        decon: &crate::api::core::unfold::DeconId,
+    ) -> kt::KtDecl {
+        let source = &registry.decon_plans[decon].source;
+        let class_fqn = self
+            .kotlin_fqn(&TypeKey::from_type(source).to_string())
+            .unwrap_or_else(|| {
+                panic!(
+                    "value-struct builder: no Kotlin FQN for {}",
+                    TypeKey::from_type(source)
+                )
+            });
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        // The native side calls the raw twin's `run` (== the typed interface
+        // when the builder needs no twin — synthesized data classes are
+        // all-simple-leaf today). `fromParts` takes the raw wire types and
+        // applies any projection/enum wrap itself.
+        let builder = spec.raw_name();
+        let val_name = format!("__{builder}");
+        let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
+        let joined = names.join(", ");
+        let code = format!(
+            "internal val {val_name}: {builder}<{class_short}> =\n    \
+             {builder} {{ {joined} -> {class_short}.fromParts({joined}) }}"
+        );
+        kt::KtDecl::Raw {
+            name: val_name,
+            code: kt::Code::raw_reindent(&code),
+        }
     }
 
     pub(crate) fn write_jni_package(

@@ -175,6 +175,25 @@ pub trait Prebindgen {
         None
     }
 
+    /// Synthesized by-value `data_class` decompositions for this adapter. Each
+    /// names a value struct and its field-access leaves (the adapter knows the
+    /// per-field encoding — projections, enums, nested classes — so it builds
+    /// the leaves; the registry is available so field converters resolve).
+    /// Consulted by `write_rust` right after [`Self::deconstructors`]: each is
+    /// wired by [`crate::api::core::unfold::apply_value_structs`] into a
+    /// fixed-builder [`crate::api::core::unfold::UnfoldPlan`] for every function
+    /// that returns / callbacks the struct, so it crosses the boundary as
+    /// decoupled leaves (reassembled on the foreign side) instead of a Java
+    /// object built on the Rust side.
+    ///
+    /// Default: empty.
+    fn value_struct_decons(
+        &self,
+        _registry: &Registry<Self::Metadata>,
+    ) -> Vec<crate::api::core::unfold::ValueDecon> {
+        Vec::new()
+    }
+
     // ── Declaration queries ────────────────────────────────────────
 
     /// Idents of `#[prebindgen]` functions the adapter claims for emission.
