@@ -97,7 +97,7 @@ pub(crate) unsafe fn __cbg_in_Payload(
         );
     }
     let __live = <payload_t as ::prebindgen::Transmute>::into_rust(::core::ptr::read(v));
-    ::core::ptr::write(v, <payload_t as ::prebindgen::Gravestone>::gravestone());
+    (*v).label = ::core::ptr::null_mut();
     ::core::result::Result::Ok(__live)
 }
 #[allow(non_snake_case, unused_variables, dead_code)]

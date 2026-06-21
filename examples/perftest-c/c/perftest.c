@@ -102,13 +102,17 @@ static void correctness(struct storage_t *s) {
  * per-iteration ownership so the loops neither leak nor double-free.
  */
 
-/* by_take: the payload is consumed (moved out + gravestoned), so rebuild it each iter. */
+/* by_take: the payload is consumed (moved out), and the consume nulls only the owned
+ * `label` pointer — the scalar fields survive in the caller's slot. So re-provide just
+ * the consumed string each iter (the realistic "give away the owned part, keep the rest"
+ * pattern); for a null label there is nothing to re-provide and `p` is reused as-is. */
 static double bench_put_by_take(struct storage_t *s, const char *label, uint64_t *sink) {
     (void)sink;
+    struct payload_t p = make_payload(42, 7, label);
     double t0 = now_ns();
     for (uint64_t i = 0; i < N; i++) {
-        struct payload_t p = make_payload(42, 7, label);
-        storage_put_by_take(s, &p); /* moves p in; p is now a gravestone */
+        if (label) p.label = string_new(label); /* re-provide the moved-out string */
+        storage_put_by_take(s, &p);             /* moves p's value in; nulls p.label */
     }
     return now_ns() - t0;
 }

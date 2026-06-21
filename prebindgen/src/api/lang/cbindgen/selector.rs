@@ -12,7 +12,7 @@ impl Cbindgen {
     ) -> Option<ConverterImpl<()>> {
         self.in_opaque_handle(ty)
             .or_else(|| self.in_data_struct(ty, registry))
-            .or_else(|| self.in_value_opaque(ty))
+            .or_else(|| self.in_value_opaque(ty, registry))
             .or_else(|| self.in_enum(ty, registry))
             .or_else(|| self.in_string(ty))
             .or_else(|| self.in_str(ty))

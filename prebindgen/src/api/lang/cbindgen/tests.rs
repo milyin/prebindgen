@@ -680,9 +680,11 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
 }
 
 /// An **owned** `repr_c_struct` (`.repr_c_struct(Foo).owned()`) consumed **by value**
-/// reads the live value out through a `*mut foo_t` and writes a **gravestone** back
-/// (so the caller's later `_drop` is a no-op — no double-free of the owned `Box<String>`
-/// field). The `Gravestone` impl is auto-generated from the source type's `Default`.
+/// reads the live value out through a `*mut foo_t`, then makes a later `_drop` a no-op
+/// (no double-free of the owned `Box<String>` field). Because the mirror's owned-pointer
+/// field is nullable (`Option<Box<String>>`), the write-back nulls just that field
+/// (`(*v).s = null`) rather than rebuilding+writing the whole `Default` gravestone — the
+/// `Gravestone` impl is still emitted (used by the `_take` path / bare-`Box` fallback).
 #[test]
 fn owned_repr_c_struct_by_value_consume_gravestones() {
     let loc = SourceLocation::default();
@@ -736,10 +738,67 @@ fn owned_repr_c_struct_by_value_consume_gravestones() {
         compact.contains("<zenoh_flat::Fooas::core::default::Default>::default()"),
         "{src}"
     );
-    // By-value consume: takes `*mut foo_t`, moves the value out, writes the gravestone.
+    // By-value consume: takes `*mut foo_t`, moves the value out, and nulls only the
+    // nullable owned-pointer field (`s`) — not a full-struct `gravestone()` write.
     assert!(compact.contains("v:*mutfoo_t"), "{src}");
     assert!(
-        compact.contains("::core::ptr::write(v,<foo_tas::prebindgen::Gravestone>::gravestone())"),
+        compact.contains("(*v).s=::core::ptr::null_mut();"),
+        "{src}"
+    );
+    assert!(
+        !compact.contains("::core::ptr::write(v,<foo_tas::prebindgen::Gravestone>::gravestone())"),
+        "consume should null the owned field, not write the full gravestone: {src}"
+    );
+}
+
+/// A bare `Box<T>` owned-pointer field (NOT `Option<Box<T>>`) can't be nulled (a null
+/// `Box` is invalid), so its by-value consume keeps the full `gravestone()` write-back.
+#[test]
+fn owned_repr_c_struct_bare_box_field_keeps_full_gravestone() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        #[derive(Default)]
+        pub struct Bar {
+            pub a: u64,
+            pub s: Box<String>,
+        }
+    );
+    let put_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn bar_put(p: Bar) {
+            unimplemented!()
+        }
+    );
+    let string_fn: syn::ItemFn = syn::parse_quote!(
+        pub fn string_make() -> String {
+            unimplemented!()
+        }
+    );
+    let mut registry = Registry::<()>::from_items([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(put_fn), loc.clone()),
+        (syn::Item::Fn(string_fn), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .mangle_function(|n| n.to_string())
+        .opaque_ptr(syn::parse_quote!(String))
+        .repr_c_struct(syn::parse_quote!(Bar))
+        .owned()
+        .function(syn::parse_quote!(bar_put))
+        .panic()
+        .function(syn::parse_quote!(string_make));
+
+    let src = write(&cbindgen, &mut registry, "owned_bare_box");
+    let compact: String = src.split_whitespace().collect();
+
+    // A bare `Box<String>` field falls back to the full gravestone write.
+    assert!(
+        compact.contains("::core::ptr::write(v,<bar_tas::prebindgen::Gravestone>::gravestone())"),
         "{src}"
     );
 }

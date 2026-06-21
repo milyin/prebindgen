@@ -83,6 +83,35 @@ impl Cbindgen {
         })
     }
 
+    /// The mirror field idents to null in a by-value consume's gravestone write-back,
+    /// for a `repr_c_struct` (`generate_mirror`) whose owned-pointer fields are all
+    /// **nullable** (`Option<Box<T>>`). `Some(idents)` (possibly empty — a pure
+    /// scalar/enum mirror needs no write-back) enables the cheap field-nulling path;
+    /// `None` (not a generate_mirror, or a bare `Box<T>` field whose NULL would be an
+    /// invalid `Box`) forces the full `gravestone()` write.
+    fn nullable_owned_ptr_fields(
+        &self,
+        registry: &Registry<()>,
+        ty: &syn::Type,
+    ) -> Option<Vec<syn::Ident>> {
+        let cfg = self.value_opaque.get(&TypeKey::from_type(ty))?;
+        if !cfg.generate_mirror {
+            return None;
+        }
+        let mut idents = Vec::new();
+        for (fname, fty) in self.struct_fields(registry, ty)? {
+            // An owned-pointer field is one whose mirror wire is a raw pointer
+            // (`Option<Box<T>>` / `Box<T>` → `*mut t_t`); scalars/enums are not.
+            if matches!(self.mirror_field_wire(&fty), Some(syn::Type::Ptr(_))) {
+                if !is_option(&fty) {
+                    return None; // bare `Box<T>`: cannot be nulled (invalid `Box`)
+                }
+                idents.push(fname);
+            }
+        }
+        Some(idents)
+    }
+
     /// Inline-opaque, by-`*mut` consume: read the live Rust value out by
     /// transmute (move). For an `opaque_owned_struct` type, write a gravestone back so a
     /// later `_drop` is a no-op (safe drop-after-move); an `opaque_data_struct` type
@@ -92,16 +121,31 @@ impl Cbindgen {
     /// wire → None. (We do NOT reject gravestone values: for types whose
     /// gravestone coincides with a legitimate value — e.g. an *empty* `ZBytes` —
     /// that would wrongly reject valid inputs; the move + write-back is safe.)
-    pub(crate) fn in_value_opaque(&self, ty: &syn::Type) -> Option<ConverterImpl<()>> {
+    ///
+    /// **Write-back optimization for a `repr_c_struct` mirror:** the generator knows
+    /// the mirror's fields, so when all its owned-pointer fields are nullable
+    /// (`Option<Box<T>>`) it nulls just those fields (`(*v).label = null`) instead of
+    /// rebuilding+writing the whole `Default` gravestone — drop-safe (scalars are
+    /// `Copy`; nulling the owned pointers prevents the double-free) and far cheaper.
+    /// Non-mirror types (`opaque_owned_struct` blobs) and mirrors with a bare `Box<T>`
+    /// field (NULL would be an invalid `Box`) keep the full `gravestone()` write.
+    pub(crate) fn in_value_opaque(
+        &self,
+        ty: &syn::Type,
+        registry: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
         let opaque = self.value_opaque_ty(ty)?.clone();
         let owned = self.opaque_kind(ty) == Some(OpaqueKind::Owned);
         let name = Self::in_name(ty);
         let src = self.src_ty(ty);
         let short = type_short(ty);
         let null_msg = format!("null {short} value passed by value");
-        let writeback = owned.then(
-            || quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());),
-        );
+        let writeback = owned.then(|| match self.nullable_owned_ptr_fields(registry, ty) {
+            Some(fields) => quote!(#( (*v).#fields = ::core::ptr::null_mut(); )*),
+            None => {
+                quote!(::core::ptr::write(v, <#opaque as ::prebindgen::Gravestone>::gravestone());)
+            }
+        });
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
             pub(crate) unsafe fn #name(
