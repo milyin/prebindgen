@@ -7,6 +7,8 @@ import io.prebindgen.perftest.JniErrorHandlerCapture
 import io.prebindgen.perftest.Payload
 import io.prebindgen.perftest.PayloadCallback
 import io.prebindgen.perftest.PayloadHandler
+import io.prebindgen.perftest.PayloadListCallback
+import io.prebindgen.perftest.PayloadVecHandler
 import io.prebindgen.perftest.Storage
 import io.prebindgen.perftest.__PayloadBuilder
 import io.prebindgen.perftest.asRaw
@@ -19,12 +21,12 @@ public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
     return __ret
 }
 
-public fun storageGet(s: Storage, onError: JniErrorHandler<Payload>): Payload {
+public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (JNINative.storageGet(s_ptr, __PayloadBuilder, __cap) as Payload)
+        (JNINative.storageGet(s_ptr, __PayloadBuilder, __cap) as Payload?)
     }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
@@ -98,7 +100,7 @@ public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErro
     if (__cap.failed) return onError.run(__cap.je)
 }
 
-public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>>): List<Payload> {
+public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): List<Payload>? {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
@@ -107,4 +109,30 @@ public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>>): L
     }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
+}
+
+public fun payloadVecHandlerNew(
+    f: PayloadListCallback,
+    onError: JniErrorHandler<PayloadVecHandler>,
+): PayloadVecHandler {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = PayloadVecHandler(JNINative.payloadVecHandlerNew(f, __cap))
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun storageCallbackVec(
+    s: Storage,
+    handler: PayloadVecHandler,
+    onError: JniErrorHandler<Unit>,
+) {
+    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (handler.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    val __cap = JniErrorHandlerCapture.acquire()
+    withSortedHandleLocks(s, handler) {
+        val s_ptr = s.ptr
+        val handler_ptr = handler.ptr
+        JNINative.storageCallbackVec(s_ptr, handler_ptr, __cap)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
 }

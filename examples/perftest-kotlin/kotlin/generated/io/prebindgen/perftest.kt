@@ -90,6 +90,30 @@ public class PayloadHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+/** Typed handle for a native Zenoh `PayloadVecHandler`. */
+public class PayloadVecHandler(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L) {
+            ptr = 0L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): PayloadVecHandler {
+        val p = ptr
+        ptr = 0L
+        return PayloadVecHandler(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
 /** Typed handle for a native Zenoh `Storage`. */
 public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -134,6 +158,10 @@ public fun PayloadCallback.asRaw(): PayloadCallbackRaw =
         )
     }
 
+public fun interface PayloadListCallback {
+    public fun run(arg0: List<Payload>)
+}
+
 public fun interface PayloadBuilder<out R> {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): R
 }
@@ -165,9 +193,11 @@ internal object JNINative {
     }
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
+    external fun payloadVecHandlerNew(f: Any, errorSink: Any): Long
     external fun storageCallback(s: Long, handler: Long, errorSink: Any)
+    external fun storageCallbackVec(s: Long, handler: Long, errorSink: Any)
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
-    external fun storageGetVec(s: Long, errorSink: Any): List<Payload>
+    external fun storageGetVec(s: Long, errorSink: Any): List<Payload>?
     external fun storageNew(errorSink: Any): Long
     external fun storagePutByRead(
         s: Long,

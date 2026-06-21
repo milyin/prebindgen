@@ -87,6 +87,17 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_PayloadHandler_freeP
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_PayloadVecHandler_freePtr(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    ptr: jni::sys::jlong,
+) {
+    if ptr != 0 {
+        drop(Box::from_raw(ptr as *mut perftest_flat::PayloadVecHandler));
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_Storage_freePtr(
     _env: jni::JNIEnv,
     _class: jni::objects::JClass,
@@ -177,6 +188,94 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
             __out.push(__elem);
         }
         __out
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<
+    impl Fn(&[perftest_flat::Payload]) + Send + Sync + 'static,
+    __JniErr,
+> {
+    Ok({
+        use std::sync::Arc;
+        let java_vm = Arc::new(
+            env
+                .get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Unable to retrieve JVM: {}", e)))?,
+        );
+        let callback_global_ref = env
+            .new_global_ref(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to global-ref callback: {}", e)))?;
+        let __invoke_class = env
+            .get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!("Unable to get callback class for {}: {}", "Fn(& [Payload])", e),
+            ))?;
+        let __invoke_id = env
+            .get_method_id(&__invoke_class, "run", "(Ljava/util/List;)V")
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!("Unable to resolve run for {}: {}", "Fn(& [Payload])", e),
+            ))?;
+        Box::new(move |__cb_arg0: &[perftest_flat::Payload]| {
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!("Attach thread for {}: {}", "Fn(& [Payload])", e),
+                    ))?;
+                env.push_local_frame(16)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!("push local frame for {}: {}", "Fn(& [Payload])", e),
+                    ))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    let __cb0_enc = Payload_to_JObject_25cd94ea(&mut env, __cb_arg0)?;
+                    let __cb0_obj: jni::objects::JObject = __cb0_enc;
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Primitive(
+                                jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                jni::sys::jvalue {
+                                    l: __cb0_obj.as_raw(),
+                                },
+                            ],
+                        )
+                    }
+                        .map(|_| ())
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(e.to_string())
+                        });
+                    __call_res?;
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+                .map_err(|e| {
+                    tracing::error!("{} callback error: {e}", "Fn(& [Payload])")
+                });
+        })
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -403,11 +502,72 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<perftest_flat::Payload>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        match v {
+            Some(value) => Payload_to_JObject_98f64326(env, value)?,
+            None => jni::objects::JObject::null().into(),
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<Vec<perftest_flat::Payload>>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        match v {
+            Some(value) => Vec_Payload_to_JObject_8b7084d2(env, value)?,
+            None => jni::objects::JObject::null().into(),
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn PayloadHandler_to_jlong_d61fd890<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::PayloadHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn PayloadVecHandler_to_jlong_b32d2812<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::PayloadVecHandler,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Payload_to_JObject_25cd94ea<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: &[perftest_flat::Payload],
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let __list_obj = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("&[_]: new ArrayList: {}", e)))?;
+        let __list = jni::objects::JList::from_env(env, &__list_obj)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("&[_]: list-from-env: {}", e)))?;
+        for __elem in v.iter() {
+            let __elem_wire = Payload_to_JObject_98f64326(
+                env,
+                ::core::clone::Clone::clone(__elem),
+            )?;
+            let __elem_obj: jni::objects::JObject = __elem_wire.into();
+            __list
+                .add(env, &__elem_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("&[_]: list-add: {}", e)))?;
+        }
+        __list_obj
+    })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
@@ -552,6 +712,13 @@ pub(crate) unsafe fn jlong_to_PayloadHandler_d61fd890<'env, 'v>(
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadHandler) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn jlong_to_PayloadVecHandler_b32d2812<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<OwnedObject<perftest_flat::PayloadVecHandler>, __JniErr> {
+    Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadVecHandler) })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn jlong_to_Storage_1b233abd<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -638,6 +805,56 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadHandlerNew
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecHandlerNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    f: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_95073668(&mut env, &f) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::payload_vec_handler_new(f);
+    match PayloadVecHandler_to_jlong_b32d2812(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -705,6 +922,73 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallback<'
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageCallbackVec<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    s: jni::sys::jlong,
+    handler: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/perftest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let handler = match jlong_to_PayloadVecHandler_b32d2812(&mut env, &handler) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::storage_callback_vec(&s, &handler);
+    match unit_to_unit_9ecccf8e(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -741,140 +1025,151 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGet<'a>(
     const __CB_FQN: &str = "io/prebindgen/perftest/PayloadBuilder";
     const __CB_DESCR: &str = "(JIDZLjava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_get(&s);
-    let __obj0: jni::sys::jvalue = {
-        let __enc0 = match i64_to_jlong_fbf9a9bc(&mut env, __out.id.clone()) {
-            ::core::result::Result::Ok(__w) => __w,
-            ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+    match __out {
+        ::core::option::Option::Some(__inner) => {
+            let __obj0: jni::sys::jvalue = {
+                let __enc0 = match i64_to_jlong_fbf9a9bc(&mut env, __inner.id.clone()) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                jni::sys::jvalue { j: __enc0 }
+            };
+            let __obj1: jni::sys::jvalue = {
+                let __enc1 = match i32_to_jint_a3e3b6ef(&mut env, __inner.seq.clone()) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                jni::sys::jvalue { i: __enc1 }
+            };
+            let __obj2: jni::sys::jvalue = {
+                let __enc2 = match f64_to_jdouble_9e4a8f70(
                     &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        jni::sys::jvalue { j: __enc0 }
-    };
-    let __obj1: jni::sys::jvalue = {
-        let __enc1 = match i32_to_jint_a3e3b6ef(&mut env, __out.seq.clone()) {
-            ::core::result::Result::Ok(__w) => __w,
-            ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                    __inner.value.clone(),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                jni::sys::jvalue { d: __enc2 }
+            };
+            let __obj3: jni::sys::jvalue = {
+                let __enc3 = match bool_to_jboolean_31306d98(
                     &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        jni::sys::jvalue { i: __enc1 }
-    };
-    let __obj2: jni::sys::jvalue = {
-        let __enc2 = match f64_to_jdouble_9e4a8f70(&mut env, __out.value.clone()) {
-            ::core::result::Result::Ok(__w) => __w,
-            ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                    __inner.flag.clone(),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                jni::sys::jvalue { z: __enc3 }
+            };
+            let __obj4: jni::objects::JObject = {
+                let __enc4 = match Option_Box_String_to_JString_071e4c8c(
                     &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        jni::sys::jvalue { d: __enc2 }
-    };
-    let __obj3: jni::sys::jvalue = {
-        let __enc3 = match bool_to_jboolean_31306d98(&mut env, __out.flag.clone()) {
-            ::core::result::Result::Ok(__w) => __w,
-            ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                    __inner.label.clone(),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __enc4.into()
+            };
+            match __CB_MID
+                .call_object(
                     &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
-                );
-                return jni::objects::JObject::null().into();
+                    __CB_FQN,
+                    "run",
+                    __CB_DESCR,
+                    &__builder,
+                    &[
+                        __obj0,
+                        __obj1,
+                        __obj2,
+                        __obj3,
+                        jni::sys::jvalue {
+                            l: __obj4.as_raw(),
+                        },
+                    ],
+                )
+            {
+                ::core::result::Result::Ok(__o) => __o,
+                ::core::result::Result::Err(__e) => {
+                    let _ = env.exception_describe();
+                    let __e2 = <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string());
+                    let __zd = __ze_defaults(&mut env);
+                    signal_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        ::core::option::Option::Some(&__e2.to_string()),
+                        &__zd,
+                    );
+                    jni::objects::JObject::null().into()
+                }
             }
-        };
-        jni::sys::jvalue { z: __enc3 }
-    };
-    let __obj4: jni::objects::JObject = {
-        let __enc4 = match Option_Box_String_to_JString_071e4c8c(
-            &mut env,
-            __out.label.clone(),
-        ) {
-            ::core::result::Result::Ok(__w) => __w,
-            ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
-                    &mut env,
-                    &__error_sink,
-                    &__SINK_MID,
-                    __SINK_FQN,
-                    __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
-                );
-                return jni::objects::JObject::null().into();
-            }
-        };
-        __enc4.into()
-    };
-    match __CB_MID
-        .call_object(
-            &mut env,
-            __CB_FQN,
-            "run",
-            __CB_DESCR,
-            &__builder,
-            &[
-                __obj0,
-                __obj1,
-                __obj2,
-                __obj3,
-                jni::sys::jvalue {
-                    l: __obj4.as_raw(),
-                },
-            ],
-        )
-    {
-        ::core::result::Result::Ok(__o) => __o,
-        ::core::result::Result::Err(__e) => {
-            let _ = env.exception_describe();
-            let __e2 = <__JniErr as ::core::convert::From<
-                String,
-            >>::from(__e.to_string());
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                ::core::option::Option::Some(&__e2.to_string()),
-                &__zd,
-            );
-            jni::objects::JObject::null().into()
         }
+        ::core::option::Option::None => jni::objects::JObject::null().into(),
     }
 }
 #[no_mangle]
@@ -910,7 +1205,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
         }
     };
     let __out = perftest_flat::storage_get_vec(&s);
-    match Vec_Payload_to_JObject_8b7084d2(&mut env, __out) {
+    match Option_Vec_Payload_to_JObject_b9a4637e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);

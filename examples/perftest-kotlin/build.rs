@@ -41,6 +41,10 @@ fn main() {
         // once via `payloadHandlerNew` and fired by `storageCallback` — the
         // registered-subscriber pattern (the JNI trampoline is built once, not per call).
         .ptr_class(pq!(PayloadHandler))
+        // `PayloadVecHandler`: a prepared WHOLE-BATCH callback fired by
+        // `storageCallbackVec` — its `PayloadVecCallback.run(List<Payload>)` receives
+        // the entire batch in one upcall.
+        .ptr_class(pq!(PayloadVecHandler))
         .package("storage")
         // Only the value/ref-input put forms map to JNI: `storage_put_by_take`
         // (by-value `Payload`) and `storage_put_by_read` (`&Payload`). The
@@ -66,7 +70,10 @@ fn main() {
         // `List<Payload>`. Each element is a `data class`, so it crosses via the
         // per-element struct object path.
         .fun(pq!(storage_put_slice))
-        .fun(pq!(storage_get_vec));
+        .fun(pq!(storage_get_vec))
+        // Whole-batch callback: prepared once, fired with the entire `List<Payload>`.
+        .fun(pq!(payload_vec_handler_new))
+        .fun(pq!(storage_callback_vec));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

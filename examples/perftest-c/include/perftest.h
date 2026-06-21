@@ -16,6 +16,10 @@ typedef struct payload_handler_t {
   uint8_t _private[0];
 } payload_handler_t;
 
+typedef struct payload_vec_handler_t {
+  uint8_t _private[0];
+} payload_vec_handler_t;
+
 typedef struct storage_t {
   uint8_t _private[0];
 } storage_t;
@@ -38,9 +42,17 @@ typedef struct closure_payload_t {
   void (*drop)(void*);
 } closure_payload_t;
 
+typedef struct closure_payload_vec_t {
+  void *context;
+  void (*call)(const struct payload_t*, uintptr_t, void*);
+  void (*drop)(void*);
+} closure_payload_vec_t;
+
 void perftest_free(void *p);
 
 void payload_handler_drop(struct payload_handler_t *this_);
+
+void payload_vec_handler_drop(struct payload_vec_handler_t *this_);
 
 void storage_drop(struct storage_t *this_);
 
@@ -50,15 +62,19 @@ void payload_drop(struct payload_t *this_);
 
 struct payload_handler_t *payload_handler_new(struct closure_payload_t f);
 
+struct payload_vec_handler_t *payload_vec_handler_new(struct closure_payload_vec_t f);
+
 void storage_callback(const struct storage_t *s, const struct payload_handler_t *handler);
 
-struct payload_t storage_get(const struct storage_t *s);
+void storage_callback_vec(const struct storage_t *s, const struct payload_vec_handler_t *handler);
 
-void storage_get_into_init(const struct storage_t *s, struct payload_t *payload);
+bool storage_get(const struct storage_t *s, struct payload_t *out);
 
-void storage_get_into_uninit(const struct storage_t *s, struct payload_t *payload);
+bool storage_get_into_init(const struct storage_t *s, struct payload_t *payload);
 
-struct payload_t *storage_get_vec(const struct storage_t *s, uintptr_t *len);
+bool storage_get_into_uninit(const struct storage_t *s, struct payload_t *payload);
+
+bool storage_get_vec(const struct storage_t *s, struct payload_t **out, uintptr_t *out_len);
 
 struct storage_t *storage_new(void);
 

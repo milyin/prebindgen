@@ -62,6 +62,10 @@ fn generate_ffi_bindings() -> PathBuf {
     // `storage_callback` — the registered-subscriber pattern.
     cbindgen = cbindgen.opaque_ptr(pq!(PayloadHandler));
 
+    // `PayloadVecHandler` as an opaque handle: a prepared WHOLE-BATCH callback fired by
+    // `storage_callback_vec` (its closure receives the slice by reference).
+    cbindgen = cbindgen.opaque_ptr(pq!(PayloadVecHandler));
+
     // The zero-copy, `#[repr(C)]` value struct. Emits a visible-field `payload_t`
     // mirror (`Option<Box<String>>` -> `string_t *label`) + a `Transmute` and a
     // compile-time size/align assert proving the reinterpret sound. Owned-ness is
@@ -77,6 +81,13 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen
         .callback(pq!(impl Fn(&Payload) + Send + Sync + 'static))
         .base_name("payload");
+
+    // The whole-batch `&[Payload]` callback signature -> a `closure_payload_vec_t` whose
+    // `call` takes a `const payload_t *` + `size_t` — the slice delivered **by reference**
+    // (zero-copy, no per-element materialization).
+    cbindgen = cbindgen
+        .callback(pq!(impl Fn(&[Payload]) + Send + Sync + 'static))
+        .base_name("payload_vec");
 
     // Functions. `storage_new` returns a fresh handle (no fallible input). The others
     // take null-checked borrows / by-value consumes with no `Result`, so they `.panic()`
@@ -103,6 +114,10 @@ fn generate_ffi_bindings() -> PathBuf {
     // and no `Result`, so `.panic()`.
     cbindgen = cbindgen.function(pq!(storage_put_slice)).panic();
     cbindgen = cbindgen.function(pq!(storage_get_vec)).panic();
+
+    // Whole-batch callback: prepare once, fire with the slice by reference.
+    cbindgen = cbindgen.function(pq!(payload_vec_handler_new));
+    cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
 
     let mut registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");

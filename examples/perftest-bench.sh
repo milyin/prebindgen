@@ -16,13 +16,16 @@
 # Every op runs in two string categories — `.null` (no heap `label`) and `.str` (a
 # real `label` string) — so the comparison is apples-to-apples. This script runs all
 # three at one iteration count `N`, then prints, per category, a table of the BEST
-# ns/op per operation (put / get / callback) per language, followed by each
-# language's full report.
+# ns/op per operation (the single-payload put / get / callback and the whole-batch
+# put_vec / get_vec / callback_vec) per language, followed by each language's full
+# report. The vector ops process a batch of VEC_N payloads per call (ns reported per
+# call); they run N / VEC_N iterations.
 #
 # Usage:
-#   examples/perftest-bench.sh            # full run (N = 5,000,000)
+#   examples/perftest-bench.sh            # full run (N = 5,000,000, VEC_N = 16)
 #   examples/perftest-bench.sh --quick    # fast smoke (N = 100,000)
 #   examples/perftest-bench.sh --n 20000000
+#   examples/perftest-bench.sh --vec-n 64 # vector batch size (default 16)
 #
 # Requires: a Rust toolchain (always). C column needs cmake + a C compiler;
 # Kotlin column needs a JDK (Gradle's toolchain). A missing toolchain is skipped
@@ -34,11 +37,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)" # examples/.. = workspace root
 
 N=5000000
+VEC_N=16
 while [ $# -gt 0 ]; do
     case "$1" in
         --quick) N=100000; shift ;;
         --n) N="${2:?--n needs a value}"; shift 2 ;;
         --n=*) N="${1#--n=}"; shift ;;
+        --vec-n) VEC_N="${2:?--vec-n needs a value}"; shift 2 ;;
+        --vec-n=*) VEC_N="${1#--vec-n=}"; shift ;;
         -h | --help)
             awk 'NR>=3 && /^#/ { sub(/^# ?/, ""); print; next } NR>=3 { exit }' \
                 "${BASH_SOURCE[0]}"
@@ -51,6 +57,9 @@ while [ $# -gt 0 ]; do
     esac
 done
 export PERFTEST_N="$N"
+# Batch size for the vector ops (put_vec / get_vec / callback_vec). Rust & C read the
+# env var; Kotlin gets it via `-PperftestVecN` (the Gradle daemon ignores the env).
+export PERFTEST_VEC_N="$VEC_N"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -91,7 +100,7 @@ if have java; then
     # Gradle prints its own logs to stderr (suppressed with -q); the app's block
     # rides stdout. `-PperftestN` becomes `-Dperftest.n` for the forked app JVM.
     if ! (cd "$ROOT/examples/perftest-kotlin" &&
-        ./gradlew -q --console=plain run -PperftestN="$N") >"$KT_OUT" 2>/dev/null; then
+        ./gradlew -q --console=plain run -PperftestN="$N" -PperftestVecN="$VEC_N") >"$KT_OUT" 2>/dev/null; then
         echo "    Kotlin runner FAILED" >&2
     fi
 else
@@ -121,7 +130,7 @@ awk -v want_n="$N" '
     /^END_PERFTEST/ { inblk = 0; next }
     inblk && NF >= 4 && $1 != "" {
         op = $1; variant = $2; ns = $3 + 0
-        full[lang] = full[lang] sprintf("  %-10s %-16s %9.2f ns/op  %9.1f Mops/s\n", $1, $2, $3, $4)
+        full[lang] = full[lang] sprintf("  %-12s %-16s %9.2f ns/op  %9.1f Mops/s\n", $1, $2, $3, $4)
         # Split "<sub>.<cat>" (e.g. "by_take.null", "composition.str"); a variant with
         # no "." falls into the catch-all category "-".
         d = lastdot(variant)
@@ -137,7 +146,7 @@ awk -v want_n="$N" '
         for (i = 1; i <= 3; i++) if (canon[i] in order_seen) langs[++nlangs] = canon[i]
         if (nlangs == 0) { print "No benchmark output captured." ; exit 1 }
 
-        split("put get callback", ops, " ")
+        nops = split("put get callback put_vec get_vec callback_vec", ops, " ")
         # Apples-to-apples: one table per string category, null-label first.
         ncats = 0
         if ("null" in cats_seen) cattab[++ncats] = "null"
@@ -154,12 +163,12 @@ awk -v want_n="$N" '
             printf " perftest \xE2\x80\x94 best ns/op, %s\n", catdesc[cat]
             printf " (lower is better, N=%s)\n", want_n
             printf "================================================================\n"
-            printf " %-10s", "operation"
+            printf " %-12s", "operation"
             for (l = 1; l <= nlangs; l++) printf " %14s", langs[l]
             printf "\n"
-            for (o = 1; o <= 3; o++) {
+            for (o = 1; o <= nops; o++) {
                 op = ops[o]
-                printf " %-10s", op
+                printf " %-12s", op
                 for (l = 1; l <= nlangs; l++) {
                     key = langs[l] SUBSEP op SUBSEP cat
                     if (key in best) printf " %14.2f", best[key]; else printf " %14s", "-"
@@ -167,9 +176,9 @@ awk -v want_n="$N" '
                 printf "\n"
             }
             printf "\n winning variant per cell:\n"
-            for (o = 1; o <= 3; o++) {
+            for (o = 1; o <= nops; o++) {
                 op = ops[o]
-                printf "   %-10s", op
+                printf "   %-12s", op
                 for (l = 1; l <= nlangs; l++) {
                     key = langs[l] SUBSEP op SUBSEP cat
                     if (key in best) printf "  %s=%s", langs[l], bestsub[key]

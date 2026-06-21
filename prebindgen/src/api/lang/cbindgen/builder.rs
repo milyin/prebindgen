@@ -490,14 +490,38 @@ impl Cbindgen {
             .then_some(elem)
     }
 
-    /// Like [`Self::src_ty`], but recurses into reference element types so
-    /// `&ZSample` becomes `&zenoh_flat::ZSample`.
+    /// For a `&[E]` callback-argument slice, return `(src_elem, c_elem_wire)`:
+    /// the fully-qualified Rust element type and the C element wire it crosses as
+    /// (a scalar crosses as itself; an inline-opaque `E` crosses as its layout-
+    /// identical counterpart, e.g. `payload_t`). Drives the two-component
+    /// `(*const c_elem_wire, size_t)` lowering of the closure `call` param in
+    /// `prereq_callback_structs` / `dispatch_fn_input`. `None` for non-slice args.
+    pub(super) fn callback_slice_elem_wire(&self, ty: &syn::Type) -> Option<(syn::Type, syn::Type)> {
+        if let Some(elem) = self.value_opaque_slice_elem(ty) {
+            let wire = self
+                .value_opaque_ty(&elem)
+                .expect("value_opaque_slice_elem guaranteed a value_opaque element")
+                .clone();
+            return Some((self.src_ty(&elem), wire));
+        }
+        scalar_slice_elem(ty).map(|elem| (elem.clone(), elem))
+    }
+
+    /// Like [`Self::src_ty`], but recurses into reference and slice element types so
+    /// `&ZSample` becomes `&zenoh_flat::ZSample` and `&[Payload]` becomes
+    /// `&[perftest_flat::Payload]` (needed so a callback's `Fn(&[E])` closure type
+    /// names the qualified element).
     pub(super) fn src_ty_deep(&self, ty: &syn::Type) -> syn::Type {
         match ty {
             syn::Type::Reference(r) => {
                 let mut out = r.clone();
                 out.elem = Box::new(self.src_ty_deep(&r.elem));
                 syn::Type::Reference(out)
+            }
+            syn::Type::Slice(s) => {
+                let mut out = s.clone();
+                out.elem = Box::new(self.src_ty_deep(&s.elem));
+                syn::Type::Slice(out)
             }
             _ => self.src_ty(ty),
         }

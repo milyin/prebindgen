@@ -46,4 +46,6 @@ tasks.named<JavaExec>("run") {
     // the shared `perftest-bench.sh` harness can set the iteration count (daemon-env
     // independent, unlike reading PERFTEST_N from the Gradle process environment).
     (project.findProperty("perftestN") as String?)?.let { systemProperty("perftest.n", it) }
+    // `./gradlew run -PperftestVecN=<K>` → `-Dperftest.vec.n=<K>` (vector-op batch size).
+    (project.findProperty("perftestVecN") as String?)?.let { systemProperty("perftest.vec.n", it) }
 }

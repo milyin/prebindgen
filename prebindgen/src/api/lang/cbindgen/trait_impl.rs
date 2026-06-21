@@ -698,29 +698,33 @@ impl Cbindgen {
                 continue;
             }
             let takeable = &self.callbacks.get(key).expect("callback cfg").takeable;
-            let arg_wires: Vec<syn::Type> = args
-                .iter()
-                .enumerate()
-                .map(|(i, a)| {
-                    let wire = registry
-                        .output_entry(a)
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "Cbindgen: callback arg `{}` has no output converter (declare it \
-                                 as a opaque_ptr/data_struct/enum_type)",
-                                a.to_token_stream()
-                            )
-                        })
-                        .destination
-                        .clone();
-                    // Takeable params are delivered as an owned pointer.
-                    if takeable.contains(&i) {
-                        syn::parse_quote!(*mut #wire)
-                    } else {
-                        wire
-                    }
-                })
-                .collect();
+            let mut arg_wires: Vec<syn::Type> = Vec::new();
+            for (i, a) in args.iter().enumerate() {
+                // `&[E]` slice arg → TWO C `call` params: `const E_wire *` + `size_t`
+                // (the slice delivered by reference, zero-copy).
+                if let Some((_src, elem_wire)) = self.callback_slice_elem_wire(a) {
+                    arg_wires.push(syn::parse_quote!(*const #elem_wire));
+                    arg_wires.push(syn::parse_quote!(usize));
+                    continue;
+                }
+                let wire = registry
+                    .output_entry(a)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Cbindgen: callback arg `{}` has no output converter (declare it \
+                             as a opaque_ptr/data_struct/enum_type)",
+                            a.to_token_stream()
+                        )
+                    })
+                    .destination
+                    .clone();
+                // Takeable params are delivered as an owned pointer.
+                if takeable.contains(&i) {
+                    arg_wires.push(syn::parse_quote!(*mut #wire));
+                } else {
+                    arg_wires.push(wire);
+                }
+            }
             let c_struct = self.callback_c_ident(&args);
             items.push(syn::parse_quote!(
                 #[repr(C)]
@@ -847,6 +851,17 @@ impl Prebindgen for Cbindgen {
         let mut call_args: Vec<TokenStream> = Vec::new();
         let mut post_drops: Vec<TokenStream> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
+            // `&[E]` slice arg: deliver the slice to the C `call` **by reference** —
+            // `(*const E_wire, size_t)`, zero-copy (the closure borrows the slice for
+            // the call). The element wire is layout-identical to `E`, so the pointer
+            // cast is sound; no per-element encode and no post-call drop.
+            if let Some((src_elem, elem_wire)) = self.callback_slice_elem_wire(arg) {
+                let ai = format_ident!("__a{}", i);
+                closure_params.push(quote!(#ai: &[#src_elem]));
+                call_args.push(quote!(#ai.as_ptr() as *const #elem_wire));
+                call_args.push(quote!(#ai.len()));
+                continue;
+            }
             let entry = registry.output_entry(arg)?;
             let conv = entry.function.sig.ident.clone();
             let opaque = entry.destination.clone();
@@ -1437,6 +1452,32 @@ impl Cbindgen {
             );
             return Some(ConverterImpl {
                 subs: vec![inner],
+                destination: syn::parse_quote!(()),
+                function,
+                pre_stages: vec![],
+                niches: Niches::empty(),
+                metadata: (),
+            });
+        }
+        // `&[E]` shared slice borrow (a callback argument): marker only — the real
+        // two-component `(*const E_wire, size_t)` lowering of the closure `call`
+        // param is structural in `prereq_callback_structs` / `dispatch_fn_input`.
+        // `subs: [E]` forces E's output (its `payload_t` mirror / scalar) so the
+        // closure wire element type exists; `destination` is unused for the slice
+        // (the callback emitter reads the element wire directly).
+        if let Some(elem) = self
+            .value_opaque_slice_elem(ty)
+            .or_else(|| scalar_slice_elem(ty))
+        {
+            r.output_entry(&elem)?;
+            let name =
+                format_ident!("__cbg_outmark_slice_{}", sanitize(&TypeKey::from_type(&elem)));
+            let function: syn::ItemFn = syn::parse_quote!(
+                #[allow(non_snake_case, dead_code, unused)]
+                pub(crate) fn #name() {}
+            );
+            return Some(ConverterImpl {
+                subs: vec![elem],
                 destination: syn::parse_quote!(()),
                 function,
                 pre_stages: vec![],

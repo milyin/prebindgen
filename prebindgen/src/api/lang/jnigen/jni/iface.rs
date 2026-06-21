@@ -556,9 +556,19 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
     }
 }
 
-/// Short name of a Rust type key (`zenoh_flat::ZSample` → `ZSample`),
-/// peeled of `&` / `Option`.
+/// Short name of a Rust type key (`zenoh_flat::ZSample` → `ZSample`), peeled of
+/// `&` / `Option`. A slice element (`&[E]` / `[E]`, a collection callback arg that
+/// surfaces as `List<E>`) gets a `List` suffix — `<E>List` — so it yields a valid,
+/// distinct interface name (`<E>ListCallback`) instead of the bracketed `[E]` and
+/// without colliding with the scalar `&E` callback (`<E>Callback`).
 fn subject_short(ty: &syn::Type) -> String {
+    let no_ref = match ty {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    };
+    if let syn::Type::Slice(s) = &no_ref {
+        return format!("{}List", subject_short(&s.elem));
+    }
     let peeled = crate::api::core::types_util::peel_ref_option_vec(ty);
     if let syn::Type::Path(tp) = &peeled {
         if let Some(seg) = tp.path.segments.last() {

@@ -1515,12 +1515,16 @@ impl<S: JniGenState> JniGen<S> {
                 strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
                 ..h
             });
+            // The list conversion always builds a fresh non-null `ArrayList`, so
+            // `JObject` null is a free niche — lets `Option<Vec<T>>` ride it
+            // (None ⇒ null list) instead of needing a boxed wrapper.
+            let niches = default_niches_for_wire(&wire);
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
                 function: self.build_output_fn(&outer_ty, &wire, &body, None),
                 destination: wire,
-                niches: Niches::empty(),
+                niches,
                 metadata: KotlinMeta {
                     kotlin_name,
                     value_rust_key: None,
@@ -1529,5 +1533,62 @@ impl<S: JniGenState> JniGen<S> {
             });
         }
         None
+    }
+
+    /// `&[T]` borrowed-slice output (used for a **callback argument** that crosses
+    /// native→JVM, e.g. `impl Fn(&[Payload])`). The borrowed dual of the `Vec<T>`
+    /// output handler above: build a `java.util.ArrayList<InnerWire>` by iterating
+    /// the slice **by reference** and cloning each element through its output
+    /// converter (`v.iter()` + `Clone::clone` instead of `into_iter()`). Surfaces
+    /// as Kotlin `List<T>`. The element must have a JObject-shaped output wire
+    /// (struct / String / …) — scalar slices are not handled here.
+    pub(crate) fn output_slice(
+        &self,
+        elem: &syn::Type,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<ConverterImpl<KotlinMeta>> {
+        let inner = registry.output_entry(elem)?;
+        reject_vec_of_handle(&inner.metadata.projection, elem);
+        let inner_wire = inner.destination.clone();
+        if !is_jobject_shaped_wire(&inner_wire) {
+            return None;
+        }
+        let inner_conv = inner.function.sig.ident.clone();
+        let outer_ty: syn::Type = syn::parse_quote!(&[#elem]);
+        let wire: syn::Type = syn::parse_quote!(jni::objects::JObject);
+        let body: syn::Expr = syn::parse_quote!({
+            let __list_obj = env
+                .new_object("java/util/ArrayList", "()V", &[])
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: new ArrayList: {}", e)))?;
+            let __list = jni::objects::JList::from_env(env, &__list_obj)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: list-from-env: {}", e)))?;
+            for __elem in v.iter() {
+                let __elem_wire = #inner_conv(env, ::core::clone::Clone::clone(__elem))?;
+                let __elem_obj: jni::objects::JObject = __elem_wire.into();
+                __list.add(env, &__elem_obj)
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("&[_]: list-add: {}", e)))?;
+            }
+            __list_obj
+        });
+        let inner_kotlin = inner.metadata.kotlin_name.clone()?;
+        let kotlin_name =
+            self.override_kotlin_name(&outer_ty, Some(kt::KtType::generic("List", [inner_kotlin])));
+        let projection = inner.metadata.projection.clone().map(|h| Projection {
+            strategy: FoldStrategy::Iterable(Box::new(h.strategy)),
+            ..h
+        });
+        let niches = default_niches_for_wire(&wire);
+        Some(ConverterImpl {
+            subs: vec![elem.clone()],
+            pre_stages: vec![],
+            function: self.build_output_fn(&outer_ty, &wire, &body, None),
+            destination: wire,
+            niches,
+            metadata: KotlinMeta {
+                kotlin_name,
+                value_rust_key: None,
+                projection,
+            },
+        })
     }
 }

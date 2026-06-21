@@ -142,6 +142,14 @@ impl<S: JniGenState> JniGen<S> {
             return None;
         }
         if let syn::Type::Reference(r) = ty {
+            // `&[T]` shared slice (a callback argument crossing native→JVM): build a
+            // `List<T>` from the borrowed slice. Dual of the `&[T]` input branch.
+            if r.mutability.is_none() {
+                if let syn::Type::Slice(s) = &*r.elem {
+                    let elem = (*s.elem).clone();
+                    return self.output_slice(&elem, registry);
+                }
+            }
             let pat = ref_wildcard(r);
             let t1 = (*r.elem).clone();
             if let Some(mut c) = self.output_wrapper_shape(&pat, &t1, registry) {
