@@ -1,5 +1,6 @@
 package io.prebindgen.perftest
 
+import io.prebindgen.perftest.storage.storageCallback
 import io.prebindgen.perftest.storage.storageGet
 import io.prebindgen.perftest.storage.storageGetFlag
 import io.prebindgen.perftest.storage.storageGetId
@@ -24,6 +25,10 @@ import io.prebindgen.perftest.storage.storagePutByTake
  *     native→JVM upcall.
  *   * **get (naive)** — fetch each field with a separate downcall (5 crossings),
  *     then build `Payload` in Kotlin.
+ *   * **callback** — `storageCallback(s) { … }` delivers the borrowed `Payload`'s
+ *     fields as flat leaves to a generated `PayloadCallback.run(id, seq, value,
+ *     flag, label)` in ONE native→JVM upcall; the lambda composes a `Payload` from
+ *     them (the foreign-side composition technique, callback direction).
  *
  * Note on the result: for this FLAT, all-scalar struct the naive path is often
  * the faster one. A `storageGet` composition is a single native→JVM *upcall*
@@ -56,7 +61,7 @@ fun main() {
     val s = storageNew(onError)
     storagePutByTake(s, seed, onError) // seed the storage
 
-    // Warm up the JIT on all three paths so steady-state numbers are fair.
+    // Warm up the JIT on all paths so steady-state numbers are fair.
     repeat(200_000) {
         storagePutByTake(s, seed, onError)
         storageGet(s, onError)
@@ -65,6 +70,7 @@ fun main() {
         storageGetValue(s, onError)
         storageGetFlag(s, onError)
         storageGetLabel(s, onError)
+        storageCallback(s, { _, _, _, _, _ -> }, onError)
     }
 
     println("perftest-kotlin (generated JNI), N = $N iterations per op\n")
@@ -89,6 +95,16 @@ fun main() {
             storageGetLabel(s, onError),
         )
         sink += g.id
+    }
+
+    // The borrowed Payload's fields arrive as flat leaves in one upcall; the lambda
+    // composes a Payload on the Kotlin side. Hoisted out of the loop (like the C
+    // `bench_callback` closure) so the measurement isn't per-iteration lambda allocs.
+    val cb = PayloadCallback { id, seq, value, flag, label ->
+        sink += Payload(id, seq, value, flag, label).id
+    }
+    bench("callback", N) {
+        storageCallback(s, cb, onError)
     }
 
     s.close()

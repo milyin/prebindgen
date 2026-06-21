@@ -122,8 +122,11 @@ pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) 
     payload.write(s.payload.clone());
 }
 
-/// Invoke `f` with a borrow of the stored payload — a pure zero-copy struct
-/// crossing (the C closure receives a `const payload_t *`, no heap work).
+/// Invoke `f` with a borrow of the stored payload. In C this is a pure zero-copy
+/// struct crossing (the closure receives a `const payload_t *`, no heap work). In
+/// Kotlin the borrowed `Payload` is flattened into a generated
+/// `PayloadCallback.run(id, seq, value, flag, label)` delivered in one crossing, and
+/// the consumer composes a `Payload` from the leaves on the Kotlin side.
 #[prebindgen]
 pub fn storage_callback(s: &Storage, f: impl Fn(&Payload) + Send + Sync + 'static) {
     f(&s.payload);

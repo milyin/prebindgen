@@ -44,15 +44,17 @@ fn main() {
         // a Kotlin `data class` is an immutable value with no out-param/uninit
         // semantics — so they are left undeclared here.
         //
-        // (`storage_callback(s, impl Fn(&Payload))` is also NOT declared: a
-        // `data_class` supports by-value / `&T` *input* and by-value *output*
-        // (composed via `fromParts`), but not a borrowed data-class delivered to a
-        // callback — that needs a `ptr_class` + `flatten_output` builder. The
-        // `storage_get` → `fromParts` path already shows Kotlin-side composition.)
+        // `storage_callback(s, impl Fn(&Payload))` is the dual direction: it
+        // delivers a borrowed `Payload` to a callback. JniGen flattens the
+        // data-class's leaves into a generated `PayloadCallback.run(id, seq, value,
+        // flag, label)` fun-interface (delivered in ONE native→JVM crossing), and
+        // the consumer composes a `Payload` on the Kotlin side from those leaves —
+        // the "compose the destination structure on the foreign side" technique.
         .fun(pq!(storage_new))
         .fun(pq!(storage_get))
         .fun(pq!(storage_put_by_take))
         .fun(pq!(storage_put_by_read))
+        .fun(pq!(storage_callback))
         // Naive per-field baseline (one JNI call each).
         .fun(pq!(storage_get_id))
         .fun(pq!(storage_get_seq))

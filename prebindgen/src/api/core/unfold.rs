@@ -588,19 +588,30 @@ pub fn apply<M>(
                 continue;
             };
             for arg_ty in args {
-                // Only a bare path type can match a deconstructor target
-                // (`Option<T>` / `Vec<T>` / `&T` args are delivered whole).
-                if !matches!(&arg_ty, syn::Type::Path(_)) {
+                // A borrowed arg (`impl Fn(&T)`) decomposes through the same
+                // machinery as a `&T` return: strip the leading `&` to reach the
+                // deconstructor target and set `by_ref` so the leaves are read
+                // (cloned) through the reference instead of by move. The plan is
+                // keyed under the ACTUAL arg type (`&T`) — that is what
+                // `callback_input`/`callback_iface_spec` look up.
+                let (by_ref, core_ty) = match &arg_ty {
+                    syn::Type::Reference(r) => (true, (*r.elem).clone()),
+                    other => (false, other.clone()),
+                };
+                // Only a bare path core type can match a deconstructor target
+                // (`Option<T>` / `Vec<T>` / tuple args are delivered whole).
+                if !matches!(&core_ty, syn::Type::Path(_)) {
                     continue;
                 }
                 let key = TypeKey::from_type(&arg_ty);
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
+                let core_key = TypeKey::from_type(&core_ty);
                 let Some(d) = acc
                     .deconstructors
                     .iter()
-                    .find(|d| d.default.is_some() && TypeKey::from_type(&d.target) == key)
+                    .find(|d| d.default.is_some() && TypeKey::from_type(&d.target) == core_key)
                 else {
                     continue;
                 };
@@ -610,15 +621,15 @@ pub fn apply<M>(
                     target: DeconTarget::Output,
                     delivery: Delivery::Callback,
                 };
-                let decon = decl_id(&key, d);
+                let decon = decl_id(&core_key, d);
                 let records = d.records.clone();
-                register_decon_spec(registry, acc, func, &decon, &records, &arg_ty)?;
+                register_decon_spec(registry, acc, func, &decon, &records, &core_ty)?;
                 let plan = build_plan(
                     acc,
                     registry,
                     &ed,
-                    false,
-                    &arg_ty,
+                    by_ref,
+                    &core_ty,
                     UnfoldShape::Base,
                     &records,
                     decon,
@@ -1943,6 +1954,52 @@ mod tests {
             .contains(&TypeKey::from_type(&syn::parse_quote!(SampleKind))));
         // No return-position plan was created for the declaring fn.
         assert!(reg.unfold_plans.is_empty());
+    }
+
+    #[test]
+    fn callback_arg_borrowed_decomposed() {
+        // A BORROWED `impl Fn(&ZSample)` decomposes through the same default
+        // deconstructor as the by-value case, but with `by_ref = true` (leaves
+        // read through the reference) and keyed under the actual `&ZSample` arg
+        // type — so `callback_input`/`callback_iface_spec` find it.
+        let mut reg = reg_with(&[
+            "fn z_declare_sub(cb: impl Fn(&ZSample) + Send + Sync + 'static) { todo!() }",
+            "fn z_sample_key_expr(s: &ZSample) -> &ZKeyExpr { todo!() }",
+            "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
+            "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        ]);
+        let mut acc = Deconstructors::default();
+        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.add_deconstructor_record_id();
+        acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
+        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
+        acc.set_default();
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["z_declare_sub"].iter().map(|s| ident(s)).collect();
+        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
+
+        // No plan under the bare `ZSample` key — only under the borrowed arg type.
+        assert!(reg
+            .callback_arg_plans
+            .get(&TypeKey::from_type(&syn::parse_quote!(ZSample)))
+            .is_none());
+        let plan = reg
+            .callback_arg_plans
+            .get(&TypeKey::from_type(&syn::parse_quote!(&ZSample)))
+            .expect("callback-arg plan for &ZSample");
+        assert!(plan.by_ref, "the callback only borrows the delivered value");
+        assert_eq!(plan.source.to_token_stream().to_string(), "ZSample");
+        assert!(matches!(plan.shape, UnfoldShape::Base));
+        assert_eq!(plan.delivery, Delivery::Callback);
+        assert_eq!(plan.leaves.len(), 3);
+        assert!(plan.leaves[0].identity);
+        assert_eq!(plan.leaves[0].path[0].to_string(), "z_sample_key_expr");
+        assert_eq!(
+            plan.leaves[2].out_ty.to_token_stream().to_string(),
+            "SampleKind"
+        );
     }
 
     #[test]
