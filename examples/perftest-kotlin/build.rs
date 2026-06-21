@@ -4,13 +4,13 @@
 //!     `src/lib.rs`), and
 //!   * `kotlin/generated/**` — the matching typed Kotlin classes.
 //!
-//! The example contrasts two ways of bringing a `Payload` across the JNI
-//! boundary, benchmarked in `kotlin/.../Bench.kt`:
-//!   * **one-crossing composition** — `payload_get()` returns a Kotlin
-//!     `data class Payload` composed on the Kotlin side via a generated
-//!     `fromParts(...)` factory in a single JNI crossing (`.data_class`);
-//!   * **naive baseline** — `payload_stored_*()` fetch each field with a
-//!     separate JNI call (N crossings), then build `Payload`.
+//! The example mirrors the native Rust (`perftest-flat/examples/perftest.rs`) and
+//! C (`perftest-c/c/perftest.c`) micro-benchmarks: `put`/`get`/`callback`, each
+//! moving a **whole** `Payload` across the boundary. A `Payload` returned by
+//! `storage_get` or delivered to a `storage_callback` crosses as a Kotlin
+//! `data class` (`.data_class`) — its fields cross as decoupled primitive leaves
+//! and are reassembled on the Kotlin side via a generated `fromParts(...)` factory
+//! (no Java object is built on the Rust side).
 //!
 //! `Payload.label` is `Option<Box<String>>` (an opaque-pointer string field);
 //! JniGen maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
@@ -30,35 +30,29 @@ fn main() {
         // init (the single choke point through which every JNI call routes).
         .jni_native_init("io.prebindgen.perftest.NativeLibrary.ensureLoaded()")
         // `Payload` as a Kotlin `data class` with a `fromParts` companion factory:
-        // returning/accepting it crosses all fields in ONE JNI call and composes
-        // the object on the Kotlin side.
+        // returning/accepting it crosses its fields as decoupled leaves and the
+        // object is (re)assembled on the Kotlin side — no Java object is built on
+        // the Rust side.
         .data_class(pq!(Payload))
         // `Storage` as an opaque Kotlin handle class (`NativeHandle`, closeable);
         // the functions read/write the payload it owns.
         .ptr_class(pq!(Storage))
         .package("storage")
-        // One-crossing composition path. Only the value/ref-input put forms map to
-        // JNI: `storage_put_by_take` (by-value `Payload`) and `storage_put_by_read`
-        // (`&Payload`). The `&mut Payload` / `&mut MaybeUninit<Payload>` out-param
-        // forms (`storage_put_by_read_and_update`, `storage_get_into_*`) are C-only —
-        // a Kotlin `data class` is an immutable value with no out-param/uninit
+        // Only the value/ref-input put forms map to JNI: `storage_put_by_take`
+        // (by-value `Payload`) and `storage_put_by_read` (`&Payload`). The
+        // `&mut Payload` / `&mut MaybeUninit<Payload>` out-param forms
+        // (`storage_put_by_read_and_update`, `storage_get_into_*`) are C-only — a
+        // Kotlin `data class` is an immutable value with no out-param/uninit
         // semantics — so they are left undeclared here.
         //
-        // `storage_callback(s, impl Fn(&Payload))` is the dual direction: it
-        // delivers a borrowed `Payload` to a callback. JniGen composes the data-class
-        // natively (the same `fromParts` factory as `storage_get`) and delivers it
-        // whole to a generated `PayloadCallback.run(Payload)` fun-interface.
+        // `storage_callback(s, impl Fn(&Payload))` delivers a borrowed `Payload` to a
+        // callback: its fields cross as leaves and a generated adapter reassembles them
+        // into a whole `Payload` before invoking `PayloadCallback.run(Payload)`.
         .fun(pq!(storage_new))
         .fun(pq!(storage_get))
         .fun(pq!(storage_put_by_take))
         .fun(pq!(storage_put_by_read))
-        .fun(pq!(storage_callback))
-        // Naive per-field baseline (one JNI call each).
-        .fun(pq!(storage_get_id))
-        .fun(pq!(storage_get_seq))
-        .fun(pq!(storage_get_value))
-        .fun(pq!(storage_get_flag))
-        .fun(pq!(storage_get_label));
+        .fun(pq!(storage_callback));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

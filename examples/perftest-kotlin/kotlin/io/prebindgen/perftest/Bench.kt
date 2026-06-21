@@ -2,11 +2,6 @@ package io.prebindgen.perftest
 
 import io.prebindgen.perftest.storage.storageCallback
 import io.prebindgen.perftest.storage.storageGet
-import io.prebindgen.perftest.storage.storageGetFlag
-import io.prebindgen.perftest.storage.storageGetId
-import io.prebindgen.perftest.storage.storageGetLabel
-import io.prebindgen.perftest.storage.storageGetSeq
-import io.prebindgen.perftest.storage.storageGetValue
 import io.prebindgen.perftest.storage.storageNew
 import io.prebindgen.perftest.storage.storagePutByTake
 
@@ -14,29 +9,25 @@ import io.prebindgen.perftest.storage.storagePutByTake
  * JVM micro-benchmark over the prebindgen-generated `perftest` JNI bindings.
  *
  * Mirrors `perftest-flat/examples/perftest.rs` (native Rust) and
- * `perftest-c/c/perftest.c` (C ABI). All operations go through an opaque `Storage`
- * handle (a `NativeHandle` subclass), and exercise both the data-structure approach
- * and the foreign-side composition technique:
+ * `perftest-c/c/perftest.c` (C ABI) one-for-one: `put`/`get`/`callback`, each moving a
+ * **whole** `Payload` across the boundary (no special per-field accessors — the same
+ * surface every language benchmarks). All operations go through an opaque `Storage`
+ * handle (a `NativeHandle` subclass):
  *
- *   * **put** — `storagePutByTake(s, p)` passes ALL fields of the `Payload` data class in
- *     ONE downcall (the data-structure approach for input).
- *   * **get (composition)** — `storageGet(s)` returns a `Payload` composed on the
- *     Kotlin side via the generated `Payload.fromParts(...)` factory in a single
- *     native→JVM upcall.
- *   * **get (naive)** — fetch each field with a separate downcall (5 crossings),
- *     then build `Payload` in Kotlin.
- *   * **callback** — `storageCallback(s) { p -> … }` composes the borrowed `Payload`
- *     natively (the same `fromParts` factory as `get (composition)`) and delivers it
- *     as a whole `Payload` to a generated `PayloadCallback.run(Payload)`.
+ *   * **put** — `storagePutByTake(s, p)` passes the `Payload`'s fields as decoupled
+ *     leaves in ONE downcall; Rust reassembles the struct.
+ *   * **get** — `storageGet(s)` returns a whole `Payload`; its fields cross as leaves
+ *     and are reassembled on the Kotlin side via the generated `Payload.fromParts(...)`
+ *     factory (no Java object built on the Rust side).
+ *   * **callback** — `storageCallback(s) { p -> … }` delivers the borrowed `Payload` as
+ *     a whole object; its fields cross as leaves and a generated adapter reassembles
+ *     them before invoking `PayloadCallback.run(Payload)`.
  *
- * Note on the result: for this FLAT, all-scalar struct the naive path is often
- * the faster one. A `storageGet` composition is a single native→JVM *upcall*
- * (`call_static_method` on `fromParts`, which resolves the class + method by name
- * each call), while each naive accessor is a cheap JVM→native *downcall*. The
- * composition technique pays off when the naive alternative would be many
- * EXPENSIVE crossings — e.g. nested fields delivered as opaque handles, each
- * needing its own call — not when the fields are a handful of cheap scalars. This
- * benchmark makes that trade-off measurable.
+ * Note on the numbers: the JNI `get`/`callback` are intrinsically slower than the Rust
+ * and C equivalents because they cross the boundary in the native→JVM *upcall* direction
+ * (delivering the leaves to the Kotlin reassembler), which is far costlier than a
+ * JVM→native downcall. That asymmetry — not the codegen — is the floor; this benchmark
+ * measures it honestly with the same whole-struct surface as Rust and C.
  */
 // Iterations per measured variant. Overridable (so the shared `perftest-bench.sh`
 // harness can run all three languages at one N + a fast smoke): the `-Dperftest.n`
@@ -84,22 +75,12 @@ fun main() {
         bench("put", "native.$cat", N) {
             storagePutByTake(s, seed, onError)
         }
-        bench("get", "composition.$cat", N) {
-            val g = storageGet(s, onError) // 1 JNI crossing, composed via fromParts
+        bench("get", "native.$cat", N) {
+            val g = storageGet(s, onError) // whole Payload, reassembled on the Kotlin side
             sink += g.id
         }
-        bench("get", "naive.$cat", N) {
-            val g = Payload( // 5 JNI crossings, composed in Kotlin
-                storageGetId(s, onError),
-                storageGetSeq(s, onError),
-                storageGetValue(s, onError),
-                storageGetFlag(s, onError),
-                storageGetLabel(s, onError),
-            )
-            sink += g.id
-        }
-        bench("callback", "whole.$cat", N) {
-            storageCallback(s, cb, onError)
+        bench("callback", "native.$cat", N) {
+            storageCallback(s, cb, onError) // whole Payload delivered to the callback
         }
     }
 
@@ -110,11 +91,6 @@ fun main() {
     repeat(minOf(N, 200_000L).toInt()) {
         storagePutByTake(s, warm, onError)
         storageGet(s, onError)
-        storageGetId(s, onError)
-        storageGetSeq(s, onError)
-        storageGetValue(s, onError)
-        storageGetFlag(s, onError)
-        storageGetLabel(s, onError)
         storageCallback(s, cb, onError)
     }
 

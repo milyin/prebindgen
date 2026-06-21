@@ -129,8 +129,9 @@ pub fn storage_get_into_uninit(s: &Storage, payload: &mut MaybeUninit<Payload>) 
 
 /// Invoke `f` with a borrow of the stored payload. In C this is a pure zero-copy
 /// struct crossing (the closure receives a `const payload_t *`, no heap work). In
-/// Kotlin the borrowed `Payload` is composed natively (via `fromParts`) and delivered
-/// whole to a generated `PayloadCallback.run(Payload)`.
+/// Kotlin the borrowed `Payload` is delivered whole to a generated
+/// `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
+/// reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
 #[prebindgen]
 pub fn storage_callback(s: &Storage, f: impl Fn(&Payload) + Send + Sync + 'static) {
     f(&s.payload);
@@ -148,41 +149,4 @@ pub fn string_new(s: &str) -> String {
 #[prebindgen]
 pub fn string_len(s: &String) -> usize {
     s.len()
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Per-field getters reading one field of a storage's payload — the "naive"
-// baseline for the Kotlin benchmark: fetching all fields takes N separate FFI
-// crossings, vs the single crossing of `storage_get` (which composes the whole
-// struct on the foreign side).
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// `id` of the stored payload.
-#[prebindgen]
-pub fn storage_get_id(s: &Storage) -> i64 {
-    s.payload.id
-}
-
-/// `seq` of the stored payload.
-#[prebindgen]
-pub fn storage_get_seq(s: &Storage) -> i32 {
-    s.payload.seq
-}
-
-/// `value` of the stored payload.
-#[prebindgen]
-pub fn storage_get_value(s: &Storage) -> f64 {
-    s.payload.value
-}
-
-/// `flag` of the stored payload.
-#[prebindgen]
-pub fn storage_get_flag(s: &Storage) -> bool {
-    s.payload.flag
-}
-
-/// `label` of the stored payload (an owned copy; `None` when unset).
-#[prebindgen]
-pub fn storage_get_label(s: &Storage) -> Option<String> {
-    s.payload.label.as_deref().map(|s| s.to_string())
 }

@@ -142,11 +142,6 @@ internal object JNINative {
 
     external fun storageCallback(s: Long, f: Any, errorSink: Any)
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
-    external fun storageGetFlag(s: Long, errorSink: Any): Boolean
-    external fun storageGetId(s: Long, errorSink: Any): Long
-    external fun storageGetLabel(s: Long, errorSink: Any): String?
-    external fun storageGetSeq(s: Long, errorSink: Any): Int
-    external fun storageGetValue(s: Long, errorSink: Any): Double
     external fun storageNew(errorSink: Any): Long
     external fun storagePutByRead(
         s: Long,
