@@ -1411,3 +1411,99 @@ fn method_constructor_and_inline_field_self() {
         "{all}"
     );
 }
+
+/// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
+/// crosses as a decoupled `(present: Boolean, value: <prim>)` pair instead of a
+/// boxed `java.lang.*` `JObject`. The Rust side reassembles the `Option` from
+/// two raw scalars (`if <p>_present != 0u8 { Some(..) } else { None }`) with no
+/// reflective `intValue()`/`longValue()` unbox. The public Kotlin signature
+/// keeps `T?`; the call site passes `<name> != null` and `<name> ?: <zero>`
+/// (`<name>?.value ?: 0` for an enum).
+#[test]
+fn option_scalar_param_crosses_as_present_value_pair() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Mode {
+                    A,
+                    B,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_set_timeout(ms: Option<i64>, count: Option<i32>, mode: Option<Mode>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .enum_class(syn::parse_quote!(Mode))
+        .package("cfg")
+        .fun(syn::parse_quote!(z_set_timeout));
+
+    let dir = unique_snapshot_dir("jnigen_optscalar");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // Public wrapper signature keeps the nullable typed params.
+    assert!(kc.contains("ms:Long?"), "{kotlin}");
+    assert!(kc.contains("count:Int?"), "{kotlin}");
+    assert!(kc.contains("mode:Mode?"), "{kotlin}");
+
+    // Extern declares the decomposed `(present, value)` pairs, never a boxed
+    // `Long?`/`Int?` value wire.
+    assert!(kc.contains("msPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("msValue:Long"), "{kotlin}");
+    assert!(kc.contains("countPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("countValue:Int"), "{kotlin}");
+    assert!(kc.contains("modePresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("modeValue:Int"), "{kotlin}");
+
+    // Call site splits each param into present-flag + value-or-zero (enum reads
+    // `?.value`).
+    assert!(kc.contains("ms!=null"), "{kotlin}");
+    assert!(kc.contains("ms?:0L"), "{kotlin}");
+    assert!(kc.contains("count?:0"), "{kotlin}");
+    assert!(kc.contains("mode?.value?:0"), "{kotlin}");
+
+    // Rust native wrapper takes the two raw scalars and rebuilds the `Option`
+    // with no boxed-object unbox, then passes the rebuilt values to the source
+    // fn. (The `Option<i64>`/`Option<i32>`/`Option<Mode>` boxed converters are
+    // still emitted but are now dead `#[allow(dead_code)]` — the param path no
+    // longer references them, exactly like the Phase-1 dead Vec converters.)
+    assert!(rc.contains("ms_present:jni::sys::jboolean"), "{rust}");
+    assert!(rc.contains("ms_value:jni::sys::jlong"), "{rust}");
+    assert!(rc.contains("count_value:jni::sys::jint"), "{rust}");
+    assert!(rc.contains("mode_value:jni::sys::jint"), "{rust}");
+    assert!(rc.contains("ifms_present!=0u8"), "{rust}");
+    // The live path feeds the three rebuilt `Option`s straight to the source
+    // call — no boxed `JObject` param anywhere in the wrapper.
+    assert!(
+        rc.contains("myflat::z_set_timeout(ms,count,mode)"),
+        "{rust}"
+    );
+}

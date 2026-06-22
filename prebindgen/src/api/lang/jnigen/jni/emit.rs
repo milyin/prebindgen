@@ -403,6 +403,38 @@ fn emit_input_param(
         return Some((wire_params, prelude, call_arg));
     }
 
+    // Bare `Option<primitive>` / `Option<enum>` param: cross as a
+    // `(present: jboolean, value: <wire>)` pair instead of a boxed
+    // `java.lang.*` `JObject`. The Rust side rebuilds the `Option` from two
+    // raw scalars — no `env.call_method("intValue", …)` unbox. The `JNINative`
+    // extern decl and the Kotlin call site read the same plan (see
+    // `ParamMode::OptionScalar`), so the three sites can't drift.
+    if let Some(sp) = build_option_scalar_input_plan(ext, registry, arg_ident, arg_ty) {
+        let pid = &sp.present_ident;
+        let vid = &sp.value_ident;
+        let vwire = &sp.value_wire;
+        wire_params.push(quote!(#pid: jni::sys::jboolean));
+        wire_params.push(quote!(#vid: #vwire));
+        let conv = &sp.inner_conv;
+        let tmp = format_ident!("__{}_val", arg_ident);
+        prelude.push(quote! {
+            let #arg_ident = if #pid != 0u8 {
+                let #tmp = match #conv(&mut env, &#vid) {
+                    ::core::result::Result::Ok(__v) => __v,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        return #on_err;
+                    }
+                };
+                ::core::option::Option::Some(#tmp)
+            } else {
+                ::core::option::Option::None
+            };
+        });
+        return Some((wire_params, prelude, quote!(#arg_ident)));
+    }
+
     // Slice / `Vec` of a flattenable data_class: the param crosses as a single
     // `jlong` handle to a Rust-side `Vec<T>` that the Kotlin wrapper builds by
     // pushing each element's decoupled leaves in a loop (see
@@ -2656,6 +2688,84 @@ pub(crate) fn render_flat_input_decode(
         quote!(#arg_ident)
     };
     (prelude, call_arg)
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Bare `Option<primitive>` / `Option<enum>` input → (present, value) leaves
+// ──────────────────────────────────────────────────────────────────────
+
+/// A decomposed plan for an `Option<primitive>` / `Option<enum>` **input**
+/// parameter that would otherwise box into a `java.lang.*` and cross as a
+/// single `JObject` (decoded with a reflective `intValue()`/`longValue()`
+/// unbox). Instead the value crosses as a
+/// `(<param>_present: jboolean, <param>_value: <wire>)` pair — no boxed object
+/// on the wire, and the Rust side reassembles the `Option` from two raw scalars
+/// with zero `env.call_method(...)`. The single-scalar dual of
+/// [`FlatInputPlan`]'s `Option<struct>` present-gate path.
+pub(crate) struct OptionScalarInputPlan {
+    /// Native `<param>_present: jboolean` ident.
+    pub present_ident: syn::Ident,
+    /// Native `<param>_value: <wire>` ident.
+    pub value_ident: syn::Ident,
+    /// JNI primitive wire of the inner value (`jint`/`jlong`/`jboolean`/…).
+    pub value_wire: syn::Type,
+    /// Inner converter (`<wire> -> T`), called inside the `present` branch.
+    pub inner_conv: syn::Ident,
+    /// Kotlin camelCase extern param name for the present flag.
+    pub present_kt: String,
+    /// Kotlin camelCase extern param name for the value.
+    pub value_kt: String,
+    /// Non-null Kotlin type of the value leaf (`Int`/`Long`/…) for the extern.
+    pub value_kt_type: String,
+    /// Kotlin zero literal filling the value leaf when the option is absent.
+    pub value_kt_zero: String,
+    /// `true` when the inner is an `enum_class` — the call site reads `?.value`.
+    pub is_enum: bool,
+}
+
+/// Build an [`OptionScalarInputPlan`] for a bare `Option<primitive>` /
+/// `Option<enum>` parameter, or `None` to keep the existing single-`JObject`
+/// boxed path. Mirrors exactly the boxed-fallback condition of [`option_input`]
+/// (primitive inner wire, no niche, no projection, no composed pre-stages) so
+/// only the cases that *would* box are intercepted — niche cases (already
+/// unboxed / ABI-clean) and opaque/value projections are left untouched.
+pub(crate) fn build_option_scalar_input_plan(
+    ext: &JniGen<impl JniGenState>,
+    registry: &Registry<KotlinMeta>,
+    param_name: &syn::Ident,
+    arg_ty: &syn::Type,
+) -> Option<OptionScalarInputPlan> {
+    let inner = option_inner_type(arg_ty)?;
+    // `Option<&T>` is the nullable-borrow / handle path, not a scalar.
+    if matches!(inner, syn::Type::Reference(_)) {
+        return None;
+    }
+    let inner_entry = registry.input_entry(&inner)?;
+    let value_wire = inner_entry.destination.clone();
+    // Only the boxed-primitive fallback shape: primitive wire, no niche,
+    // no projection, no composed pre-stages.
+    let prim = JniPrim::from_wire(&value_wire)?;
+    if inner_entry.niches.clone().carve().is_some() {
+        return None;
+    }
+    if inner_entry.metadata.projection.is_some() {
+        return None;
+    }
+    if !inner_entry.pre_stages.is_empty() {
+        return None;
+    }
+    let is_enum = ext.is_kotlin_enum(&inner);
+    Some(OptionScalarInputPlan {
+        present_ident: format_ident!("{}_present", param_name),
+        value_ident: format_ident!("{}_value", param_name),
+        value_wire,
+        inner_conv: inner_entry.function.sig.ident.clone(),
+        present_kt: snake_to_camel(&format!("{}_present", param_name)),
+        value_kt: snake_to_camel(&format!("{}_value", param_name)),
+        value_kt_type: prim.kotlin_type().to_string(),
+        value_kt_zero: prim.kotlin_zero().to_string(),
+        is_enum,
+    })
 }
 
 // ──────────────────────────────────────────────────────────────────────

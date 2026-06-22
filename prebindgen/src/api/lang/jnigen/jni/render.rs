@@ -432,6 +432,19 @@ pub(crate) fn render_extern_decl(
             continue;
         }
 
+        // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
+        // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire). Same plan
+        // the native wrapper + Kotlin call site use.
+        if let Some(sp) = crate::api::lang::jnigen::jni::build_option_scalar_input_plan(
+            ext, registry, &eff_ident, arg_ty,
+        ) {
+            let pshort = register_fqn(&"Boolean".to_string(), imports);
+            params.push((sp.present_kt.clone(), pshort));
+            let vshort = register_fqn(&sp.value_kt_type, imports);
+            params.push((sp.value_kt.clone(), vshort));
+            continue;
+        }
+
         // Slice/Vec of a flattenable data_class → a single `jlong` Vec-handle
         // param (the Rust extern decodes the boxed `Vec<T>`). Elements cross
         // through the synthetic `…VecPush` extern, not this one. Must match the
@@ -609,6 +622,16 @@ enum ParamMode {
     /// value-blob rebuilding adapter.
     Callback {
         call_arg: String,
+    },
+    /// Bare `Option<primitive>` / `Option<enum>` param decomposed into a
+    /// `(present: Boolean, value: <prim>)` pair so no boxed `java.lang.*`
+    /// crosses (and the Rust side does no `intValue()` unboxing). The public
+    /// Kotlin signature keeps `T?`; the call site passes `present_expr`
+    /// (`<name> != null`) then `value_expr` (`<name> ?: 0` / `<name>?.value ?:
+    /// 0`). See [`crate::api::lang::jnigen::jni::OptionScalarInputPlan`].
+    OptionScalar {
+        present_expr: String,
+        value_expr: String,
     },
 }
 
@@ -821,6 +844,22 @@ pub(crate) fn render_wrapper_fn(
             ParamMode::VecBuild {
                 base: h.base,
                 elem_accesses,
+            }
+        } else if let Some(sp) = crate::api::lang::jnigen::jni::build_option_scalar_input_plan(
+            ext, registry, &eff_ident, arg_ty,
+        ) {
+            // Bare `Option<primitive>` / `Option<enum>`: cross as a `(present,
+            // value)` pair (no boxed object). The high-level signature keeps
+            // `T?` (computed below); only the call-site args split in two.
+            let present_expr = format!("{name} != null");
+            let value_expr = if sp.is_enum {
+                format!("{name}?.value ?: {}", sp.value_kt_zero)
+            } else {
+                format!("{name} ?: {}", sp.value_kt_zero)
+            };
+            ParamMode::OptionScalar {
+                present_expr,
+                value_expr,
             }
         } else if let Some(plan) = flat_plan {
             ParamMode::FlattenStruct {
@@ -1052,6 +1091,17 @@ pub(crate) fn render_wrapper_fn(
                 args.push(format!("__vec_{}", p.kt_name));
                 continue;
             }
+            // OptionScalar param expands into two call args: the present flag
+            // and the value-or-zero expression (in that order).
+            if let ParamMode::OptionScalar {
+                present_expr,
+                value_expr,
+            } = &p.mode
+            {
+                args.push(present_expr.clone());
+                args.push(value_expr.clone());
+                continue;
+            }
             let arg = match &p.mode {
                 ParamMode::Borrow
                 | ParamMode::Consume
@@ -1088,6 +1138,9 @@ pub(crate) fn render_wrapper_fn(
                 }
                 ParamMode::VecBuild { .. } => {
                     unreachable!("VecBuild expanded before the single-arg match")
+                }
+                ParamMode::OptionScalar { .. } => {
+                    unreachable!("OptionScalar expanded before the single-arg match")
                 }
             };
             args.push(arg);

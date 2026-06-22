@@ -57,6 +57,23 @@ impl JniPrim {
         }
     }
 
+    /// The non-null Kotlin type name carrying this primitive wire (the type an
+    /// `external fun` value-leaf param declares). Distinct from a Rust enum's
+    /// `kotlin_name` (`Priority`) — an `Option<enum>` value leaf crosses as the
+    /// raw `Int` discriminant, so the extern must name `Int`, not the enum.
+    pub(crate) fn kotlin_type(self) -> &'static str {
+        match self {
+            Self::Boolean => "Boolean",
+            Self::Byte => "Byte",
+            Self::Char => "Char",
+            Self::Short => "Short",
+            Self::Int => "Int",
+            Self::Long => "Long",
+            Self::Float => "Float",
+            Self::Double => "Double",
+        }
+    }
+
     /// `<prim>Value()` unboxing accessor method on the boxed class.
     pub(crate) fn unbox_method(self) -> &'static str {
         match self {
