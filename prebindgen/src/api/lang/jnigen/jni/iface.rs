@@ -952,12 +952,55 @@ pub(crate) fn folder_iface_for_plan(
     registry: &Registry<KotlinMeta>,
     plan: &UnfoldPlan,
 ) -> Option<IfaceSpec> {
-    debug_assert!(matches!(plan.shape, UnfoldShape::Iterable(_)));
+    debug_assert!(
+        matches!(plan.shape, UnfoldShape::Iterable(_))
+            || matches!(&plan.shape, UnfoldShape::Optional((), i) if matches!(**i, UnfoldShape::Iterable(_))),
+        "folder_iface_for_plan requires an Iterable (or Option<Iterable>) plan"
+    );
     match (&plan.element, &plan.decon) {
         (Some(el), _) => whole_folder_iface_spec(ext, registry, el),
-        (None, Some(d)) => folder_iface_spec(ext, registry, d),
+        (None, Some(d)) => {
+            let mut spec = folder_iface_spec(ext, registry, d)?;
+            if plan.fixed_builder {
+                spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)?;
+            }
+            Some(spec)
+        }
         (None, None) => None,
     }
+}
+
+/// The typed-view groups for a **fixed-builder** decomposed fold (synthesized
+/// by-value `data_class` element). `folder_iface_spec` lays its `run` params out
+/// as `[acc: A, leaf0, …]`; this groups them so the user-facing folder receives
+/// `(acc, element)` while the JNI-called raw twin keeps the decoupled leaves and
+/// the `asRaw` proxy reassembles the whole value via `Class.fromParts(leaves…)`.
+/// So no Java object is built on the Rust side — only raw leaves cross. Applied
+/// in both `folder_iface_for_plan` (the wrapper's view) and the interface
+/// emission (`write_iface_files`), keyed by the element's deconstructor so the
+/// two stay in lockstep.
+pub(crate) fn fixed_folder_typed_groups(
+    ext: &JniGen<impl JniGenState>,
+    registry: &Registry<KotlinMeta>,
+    decon: &DeconId,
+) -> Option<Vec<TypedGroup>> {
+    let spec = registry.decon_plans.get(decon)?;
+    let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source).to_string())?;
+    let class_short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+    Some(vec![
+        TypedGroup {
+            name: "acc".to_string(),
+            typed: kt::KtType::var_("A"),
+            reassemble: None,
+            leaf_count: 1,
+        },
+        TypedGroup {
+            name: "element".to_string(),
+            typed: kt::KtType::cls(fqn.to_string()),
+            reassemble: Some(class_short),
+            leaf_count: spec.leaves.len(),
+        },
+    ])
 }
 
 /// Interface for a fallible function's **onError** handler: `run(je: String?,

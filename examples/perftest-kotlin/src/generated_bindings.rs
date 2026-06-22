@@ -1178,6 +1178,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     s: jni::sys::jlong,
+    __acc: jni::objects::JObject<'a>,
+    __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(unused_variables)]
@@ -1204,22 +1206,169 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storageGetVec<'a>
             return jni::objects::JObject::null().into();
         }
     };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/perftest/PayloadFolderRaw";
+    const __CB_DESCR: &str = "(Ljava/lang/Object;JIDZLjava/lang/String;)Ljava/lang/Object;";
     let __out = perftest_flat::storage_get_vec(&s);
-    match Option_Vec_Payload_to_JObject_b9a4637e(&mut env, __out) {
-        ::core::result::Result::Ok(__w) => __w,
-        ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
-            );
-            jni::objects::JObject::null().into()
+    match __out {
+        ::core::option::Option::Some(__vec) => {
+            let mut __acc = __acc;
+            for __elem in __vec.into_iter() {
+                let __obj0: jni::sys::jvalue = {
+                    let __enc0 = match i64_to_jlong_fbf9a9bc(
+                        &mut env,
+                        __elem.id.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { j: __enc0 }
+                };
+                let __obj1: jni::sys::jvalue = {
+                    let __enc1 = match i32_to_jint_a3e3b6ef(
+                        &mut env,
+                        __elem.seq.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { i: __enc1 }
+                };
+                let __obj2: jni::sys::jvalue = {
+                    let __enc2 = match f64_to_jdouble_9e4a8f70(
+                        &mut env,
+                        __elem.value.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { d: __enc2 }
+                };
+                let __obj3: jni::sys::jvalue = {
+                    let __enc3 = match bool_to_jboolean_31306d98(
+                        &mut env,
+                        __elem.flag.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { z: __enc3 }
+                };
+                let __obj4: jni::objects::JObject = {
+                    let __enc4 = match Option_Box_String_to_JString_071e4c8c(
+                        &mut env,
+                        __elem.label.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __enc4.into()
+                };
+                __acc = match __CB_MID
+                    .call_object(
+                        &mut env,
+                        __CB_FQN,
+                        "run",
+                        __CB_DESCR,
+                        &__fold,
+                        &[
+                            jni::sys::jvalue {
+                                l: __acc.as_raw(),
+                            },
+                            __obj0,
+                            __obj1,
+                            __obj2,
+                            __obj3,
+                            jni::sys::jvalue {
+                                l: __obj4.as_raw(),
+                            },
+                        ],
+                    )
+                {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        let _ = env.exception_describe();
+                        let __e2 = <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(__e.to_string());
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e2.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+            }
+            __acc
         }
+        ::core::option::Option::None => jni::objects::JObject::null().into(),
     }
 }
 #[no_mangle]

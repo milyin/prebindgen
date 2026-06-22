@@ -396,6 +396,15 @@ pub(crate) fn effective_inputs(
     out
 }
 
+/// True for an `Iterable` fold delivery, including one wrapped in a single
+/// `Optional` layer (`Option<Vec<T>>` → a nullable `List`). Selects the fold
+/// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
+pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) -> bool {
+    use crate::api::core::unfold::UnfoldShape;
+    matches!(shape, UnfoldShape::Iterable(_))
+        || matches!(shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)))
+}
+
 pub(crate) fn render_extern_decl(
     ext: &JniGen<impl JniGenState>,
     f: &syn::ItemFn,
@@ -464,10 +473,7 @@ pub(crate) fn render_extern_decl(
     let unfold = registry.unfold_plans.get(&f.sig.ident);
     let callback_unfold = unfold.filter(|p| p.delivery == Delivery::Callback);
     if let Some(plan) = callback_unfold {
-        if matches!(
-            plan.shape,
-            crate::api::core::unfold::UnfoldShape::Iterable(_)
-        ) {
+        if is_iterable_fold(&plan.shape) {
             // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
             // `fold` is the non-null adapter callback.
             params.push(("acc".to_string(), "Any?".to_string()));
@@ -882,43 +888,53 @@ pub(crate) fn render_wrapper_fn(
         classify_return(ext, &rt, registry, imports)?
     } else if let Some(plan) = unfold.filter(|p| p.fixed_builder) {
         use crate::api::core::unfold::UnfoldShape;
-        // Synthesized by-value `data_class` delivery: the builder is a **fixed,
-        // hoisted singleton** (`__<Name>Builder`, emitted once — see
-        // `write_value_struct_builders`) that calls the data class's `fromParts`
-        // factory. So the wrapper takes no caller `build`/`fold` param and is
-        // not generic over `R`/`A` — it returns the **concrete** class. The
-        // native side still receives the builder as an erased `Any` and calls
-        // its cached `run`, so the whole delivery machinery is reused; only the
-        // Rust-side `call_static_method("fromParts")` is gone.
-        // `Vec<data_class>` is never synthesized as a fixed plan (it stays on
-        // the existing per-element path — see `apply_value_structs`); a fixed
-        // *folder* with an internal accumulator is a later milestone.
-        debug_assert!(
-            !matches!(plan.shape, UnfoldShape::Iterable(_)),
-            "fixed-builder Iterable should not be synthesized"
-        );
-        let decon = plan
-            .decon
-            .as_ref()
-            .expect("synthesized plan carries its DeconId");
-        let spec = builder_iface_spec(ext, registry, decon)?;
-        // Reference the hoisted singleton (the raw twin when the builder needs
-        // one — synthesized data classes are all-simple-leaf today, so it
-        // doesn't, but keep the path general).
-        let singleton = format!("__{}", spec.raw_name());
-        imports.insert(format!("{}.{singleton}", spec.package));
-        unfold_call_args.push(singleton);
-        // Concrete return: the data class FQN, `?`-nullable for an `Option<T>`
-        // return.
+        // Synthesized by-value `data_class` delivery via a **fixed, hoisted
+        // singleton** — the wrapper takes no caller `build`/`fold` param and is
+        // not generic over `R`/`A`. The native side still receives the singleton
+        // as an erased `Any` and calls its cached `run`, so the whole delivery
+        // machinery is reused; only the Rust-side object construction is gone.
+        // The concrete return is the data class (`T` / `Option<T>`) or, for a
+        // `Vec<data_class>` fold, a `List<Class>` composed on the Kotlin side.
         let class_fqn = ext
             .kotlin_fqn(&TypeKey::from_type(&plan.source).to_string())
             .map(|s| s.to_string())?;
         let class_ty = register_kt_type(&kt::KtType::cls(class_fqn), imports);
-        let kt = match &plan.shape {
-            UnfoldShape::Optional((), _) => class_ty.nullable(),
-            _ => class_ty,
-        };
-        (Some(kt), None)
+        if is_iterable_fold(&plan.shape) {
+            // `Vec<data_class>` fold: allocate an `ArrayList<Class>` accumulator,
+            // pass the hoisted **folder-appender** singleton as `fold` (it
+            // rebuilds each element via `fromParts` and appends it), and return
+            // the threaded accumulator as `List<Class>` (`?`-nullable for an
+            // `Option<Vec<…>>` return — `None` yields a null list). Per element
+            // only the raw leaves cross — no Java object is built on the Rust side.
+            let spec = folder_iface_for_plan(ext, registry, plan)?;
+            let singleton = format!("__{}", spec.raw_name());
+            imports.insert(format!("{}.{singleton}", spec.package));
+            unfold_call_args.push(format!("ArrayList<{class_ty}>()"));
+            unfold_call_args.push(singleton);
+            let list_ty = kt::KtType::generic("List", [class_ty]);
+            let kt = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
+                list_ty.nullable()
+            } else {
+                list_ty
+            };
+            (Some(kt), None)
+        } else {
+            // Scalar: the hoisted `__<Name>Builder` singleton calls `fromParts`;
+            // the wrapper returns the concrete class (`?`-nullable for `Option`).
+            let decon = plan
+                .decon
+                .as_ref()
+                .expect("synthesized plan carries its DeconId");
+            let spec = builder_iface_spec(ext, registry, decon)?;
+            let singleton = format!("__{}", spec.raw_name());
+            imports.insert(format!("{}.{singleton}", spec.package));
+            unfold_call_args.push(singleton);
+            let kt = match &plan.shape {
+                UnfoldShape::Optional((), _) => class_ty.nullable(),
+                _ => class_ty,
+            };
+            (Some(kt), None)
+        }
     } else if let Some(plan) = unfold {
         use crate::api::core::unfold::UnfoldShape;
         // The builder / fold params are generated typed `fun interface`s

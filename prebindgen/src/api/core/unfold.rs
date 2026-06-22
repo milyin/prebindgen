@@ -699,22 +699,32 @@ pub fn apply_value_structs<M>(
             if !returns_type(&ret, &vd.key) || registry.unfold_plans.contains_key(func) {
                 continue;
             }
-            // Shape over the field decomposition: `Vec<T>` ⇒ Iterable,
-            // `Option<T>` ⇒ Optional, else Base. The element/inner borrow-ness
-            // sets `by_ref` (the field reach clones either way). A `Vec<T>`
-            // return is left to the existing per-element output path (a fixed
-            // *folder* with an internal accumulator is a later milestone), so it
-            // is not synthesized here — `returns_type` matched its element.
-            if vec_inner_type(&ret).is_some() {
-                continue;
-            }
-            let (shape, by_ref) = if let Some(inner) = option_inner_type(&ret) {
-                (
-                    UnfoldShape::Optional((), Box::new(UnfoldShape::Base)),
-                    matches!(&inner, syn::Type::Reference(_)),
-                )
+            // Shape over the field decomposition: peel an outer `Option`, then a
+            // `Vec`, then a leading `&`. `Vec<T|&T>` ⇒ Iterable (a **fixed
+            // folder**: each element's field leaves cross raw and the foreign
+            // folder rebuilds it via `fromParts` + appends, so no Java object is
+            // built on the Rust side); `Option<…>` wraps the inner shape in
+            // Optional (`None` ⇒ a null result). `element: None` keeps the
+            // decomposed-leaf path. The element/inner borrow-ness sets `by_ref`
+            // (the field reach clones either way).
+            let (optional, after_opt) = match option_inner_type(&ret) {
+                Some(inner) => (true, inner),
+                None => (false, ret.clone()),
+            };
+            let (iterable, core) = match vec_inner_type(&after_opt) {
+                Some(inner) => (true, inner),
+                None => (false, after_opt),
+            };
+            let by_ref = matches!(&core, syn::Type::Reference(_));
+            let inner_shape = if iterable {
+                UnfoldShape::Iterable(Box::new(UnfoldShape::Base))
             } else {
-                (UnfoldShape::Base, matches!(&ret, syn::Type::Reference(_)))
+                UnfoldShape::Base
+            };
+            let shape = if optional {
+                UnfoldShape::Optional((), Box::new(inner_shape))
+            } else {
+                inner_shape
             };
             for leaf in &vd.leaves {
                 registry.require_output(&leaf.out_ty, &loc);
@@ -810,11 +820,13 @@ fn fn_return(item_fn: &syn::ItemFn) -> syn::Type {
 /// fallible factory (`-> Result<T, E>`) keeps its handle return; the error
 /// position is matched separately on `E`.
 fn returns_type(ret: &syn::Type, key: &TypeKey) -> bool {
-    // Peel Vec / Option (one layer each, in either order) then a leading `&`.
+    // Peel an outer `Option`, then a `Vec` (so `Option<Vec<T>>` matches too),
+    // then a leading `&`.
     let mut core = ret.clone();
-    if let Some(inner) = vec_inner_type(&core) {
+    if let Some(inner) = option_inner_type(&core) {
         core = inner;
-    } else if let Some(inner) = option_inner_type(&core) {
+    }
+    if let Some(inner) = vec_inner_type(&core) {
         core = inner;
     }
     let bare = match &core {
@@ -1951,6 +1963,57 @@ mod tests {
             .expect("plan");
         assert!(matches!(&plan.shape, UnfoldShape::Iterable(_)));
         assert_eq!(plan.delivery, Delivery::Callback);
+    }
+
+    #[test]
+    fn value_struct_vec_is_fixed_iterable_fold() {
+        // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
+        // `storage_get_vec` contract) synthesizes a FIXED-BUILDER fold wrapped in
+        // an Optional layer: the field leaves cross raw per element and the
+        // foreign folder rebuilds + appends them (no Java object is built on the
+        // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
+        let mut reg =
+            reg_with(&["fn storage_get_vec(s: &Storage) -> Option<Vec<Payload>> { todo!() }"]);
+        let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+            name: name.to_string(),
+            path: vec![ident(name)],
+            out_ty: ty,
+            identity: false,
+            nullable: false,
+            source: LeafSource::Field,
+        };
+        let vd = ValueDecon {
+            key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+            source: syn::parse_quote!(Payload),
+            leaves: vec![
+                leaf("id", syn::parse_quote!(i64)),
+                leaf("seq", syn::parse_quote!(i32)),
+            ],
+        };
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["storage_get_vec"].iter().map(|s| ident(s)).collect();
+        apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+        let plan = reg
+            .unfold_plans
+            .get(&ident("storage_get_vec"))
+            .expect("fixed-builder fold plan");
+        assert!(plan.fixed_builder, "Vec<data_class> ⇒ fixed builder");
+        assert!(
+            matches!(&plan.shape,
+                UnfoldShape::Optional((), inner)
+                    if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))),
+            "Option<Vec<T>> ⇒ Optional(Iterable(Base))"
+        );
+        assert_eq!(plan.delivery, Delivery::Callback);
+        assert!(plan.decon.is_some(), "carries the field decon");
+        assert!(
+            plan.element.is_none(),
+            "decomposed-leaf fold, not whole-element"
+        );
+        assert_eq!(plan.leaves.len(), 2, "field leaves cross raw per element");
+        assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
+        assert!(!plan.by_ref, "owned Vec<Payload> elements");
     }
 
     #[test]

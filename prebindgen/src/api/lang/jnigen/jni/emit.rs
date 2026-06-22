@@ -327,10 +327,9 @@ fn output_target_type(
 }
 
 fn unfold_builder_param(plan: &crate::api::core::unfold::UnfoldPlan) -> TokenStream {
-    if matches!(
-        plan.shape,
-        crate::api::core::unfold::UnfoldShape::Iterable(_)
-    ) {
+    // An `Iterable` fold (incl. `Option<Vec<T>>`) takes `(acc, fold)`; every
+    // other delivery takes a single `build`.
+    if super::render::is_iterable_fold(&plan.shape) {
         quote!(__acc: jni::objects::JObject<'a>, __fold: jni::objects::JObject<'a>,)
     } else {
         quote!(__builder: jni::objects::JObject<'a>,)
@@ -723,6 +722,120 @@ pub(crate) fn emit_unfold_delivery(
         quote! { #leaves #invoke }
     };
 
+    // Iterable (fold) delivery — possibly wrapped in ONE `Optional` layer.
+    // `Vec<T>` folds the elements through the typed `<Element>Folder<A>.run(acc,
+    // …)`, threading `__acc` and returning the final accumulator; per element the
+    // fold args are either the element WHOLE (M4) or its decomposed leaves (M5),
+    // with `acc` the erased `A` (`Object`). `Option<Vec<T>>` additionally yields a
+    // null result for `None` (the fold is skipped).
+    let opt_iterable = match &plan.shape {
+        UnfoldShape::Iterable(_) => Some(false),
+        UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)) => {
+            Some(true)
+        }
+        _ => None,
+    };
+    if let Some(optional) = opt_iterable {
+        let statics = iface_statics(
+            &folder_iface_for_plan(ext, registry, plan)
+                .expect("folder interface spec derivable for a resolved plan"),
+        );
+        let fold_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {
+            quote! {
+                __acc = match __CB_MID.call_object(
+                    &mut env, __CB_FQN, "run", __CB_DESCR, &__fold,
+                    &[jni::sys::jvalue { l: __acc.as_raw() }, #(#arg_exprs),*],
+                ) {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        let _ = env.exception_describe();
+                        let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), &__zd);
+                        return #on_err;
+                    }
+                };
+            }
+        };
+
+        let loop_body = if let Some(element) = plan.element.as_ref() {
+            // Whole-element (M4): encode the element via its own converter —
+            // a raw typed jvalue for a primitive-wire element, a JObject
+            // otherwise (mirrors `leaf_is_prim`; the folder interface
+            // declares the matching typed param).
+            let out_entry = registry.output_entry(element).unwrap_or_else(|| {
+                panic!(
+                    "emit_unfold_delivery: Vec element `{}` has no registered output converter",
+                    TypeKey::from_type(element)
+                )
+            });
+            let elem_conv = out_entry.function.sig.ident.clone();
+            let elem_wire = out_entry.destination.clone();
+            let elem_is_prim = out_entry.metadata.projection.is_none()
+                && matches!(jni_field_access(&elem_wire), Some((_, _, false)));
+            let enc = format_ident!("__enc");
+            let (bind_obj, arg_expr) = if elem_is_prim {
+                let letter = jni_field_access(&elem_wire).unwrap().1;
+                (
+                    TokenStream::new(),
+                    quote!(jni::sys::jvalue { #letter: __enc }),
+                )
+            } else {
+                let cast = cast_wire_to_jobject(&enc, &elem_wire, &fail);
+                (
+                    quote! { let __obj: jni::objects::JObject = #cast; },
+                    quote!(jni::sys::jvalue { l: __obj.as_raw() }),
+                )
+            };
+            let invoke = fold_invoke(&[arg_expr]);
+            quote! {
+                let __enc = match #elem_conv(&mut env, __elem) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        return #on_err;
+                    }
+                };
+                #bind_obj
+                #invoke
+            }
+        } else {
+            // Decomposed (M5): encode each element's leaves, fold over them.
+            let (leaves, arg_exprs) = encode_leaves(&quote!(__elem));
+            let invoke = fold_invoke(&arg_exprs);
+            quote! {
+                #leaves
+                #invoke
+            }
+        };
+        // Fold the elements of `__vec` into `__acc` (`into_iter()` yields the
+        // element type exactly as written — owned `T`, or `&T` for a borrow).
+        let fold = quote! {
+            let mut __acc = __acc;
+            for __elem in __vec.into_iter() {
+                #loop_body
+            }
+            __acc
+        };
+        // `Option<Vec<T>>`: `None` ⇒ null result; `Some(vec)` ⇒ fold. A bare
+        // `Vec<T>` folds the returned value directly.
+        return if optional {
+            quote! {
+                #statics
+                let __out = #call_expr;
+                match __out {
+                    ::core::option::Option::Some(__vec) => { #fold }
+                    ::core::option::Option::None => #on_err,
+                }
+            }
+        } else {
+            quote! {
+                #statics
+                let __vec = #call_expr;
+                #fold
+            }
+        };
+    }
+
     match &plan.shape {
         UnfoldShape::Base => {
             let decon = plan
@@ -744,8 +857,8 @@ pub(crate) fn emit_unfold_delivery(
             match **inner {
                 UnfoldShape::Base => {}
                 _ => panic!(
-                    "emit_unfold_delivery: only Optional(Decompose) is implemented (M2); \
-                     nested Optional/Iterable is M3/M4"
+                    "emit_unfold_delivery: Optional inner must be Base (scalar) or \
+                     Iterable (`Option<Vec<T>>`, handled above)"
                 ),
             }
             let decon = plan
@@ -768,93 +881,7 @@ pub(crate) fn emit_unfold_delivery(
             }
         }
         UnfoldShape::Iterable(_) => {
-            // `Vec<T>` fold: iterate the elements and thread `__acc` through
-            // the typed `<Element>Folder<A>.run(acc, …)`, returning the final
-            // accumulator. Per element the fold args are either the element
-            // WHOLE (M4) or its decomposed leaves (M5); primitives cross as
-            // raw typed jvalues, `acc` is the erased `A` (`Object`).
-            let statics = iface_statics(
-                &folder_iface_for_plan(ext, registry, plan)
-                    .expect("folder interface spec derivable for a resolved plan"),
-            );
-            let fold_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {
-                quote! {
-                    __acc = match __CB_MID.call_object(
-                        &mut env, __CB_FQN, "run", __CB_DESCR, &__fold,
-                        &[jni::sys::jvalue { l: __acc.as_raw() }, #(#arg_exprs),*],
-                    ) {
-                        ::core::result::Result::Ok(__o) => __o,
-                        ::core::result::Result::Err(__e) => {
-                            let _ = env.exception_describe();
-                            let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), &__zd);
-                            return #on_err;
-                        }
-                    };
-                }
-            };
-
-            let loop_body = if let Some(element) = plan.element.as_ref() {
-                // Whole-element (M4): encode the element via its own converter —
-                // a raw typed jvalue for a primitive-wire element, a JObject
-                // otherwise (mirrors `leaf_is_prim`; the folder interface
-                // declares the matching typed param).
-                let out_entry = registry.output_entry(element).unwrap_or_else(|| {
-                    panic!(
-                        "emit_unfold_delivery: Vec element `{}` has no registered output converter",
-                        TypeKey::from_type(element)
-                    )
-                });
-                let elem_conv = out_entry.function.sig.ident.clone();
-                let elem_wire = out_entry.destination.clone();
-                let elem_is_prim = out_entry.metadata.projection.is_none()
-                    && matches!(jni_field_access(&elem_wire), Some((_, _, false)));
-                let enc = format_ident!("__enc");
-                let (bind_obj, arg_expr) = if elem_is_prim {
-                    let letter = jni_field_access(&elem_wire).unwrap().1;
-                    (
-                        TokenStream::new(),
-                        quote!(jni::sys::jvalue { #letter: __enc }),
-                    )
-                } else {
-                    let cast = cast_wire_to_jobject(&enc, &elem_wire, &fail);
-                    (
-                        quote! { let __obj: jni::objects::JObject = #cast; },
-                        quote!(jni::sys::jvalue { l: __obj.as_raw() }),
-                    )
-                };
-                let invoke = fold_invoke(&[arg_expr]);
-                quote! {
-                    let __enc = match #elem_conv(&mut env, __elem) {
-                        ::core::result::Result::Ok(__w) => __w,
-                        ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
-                            return #on_err;
-                        }
-                    };
-                    #bind_obj
-                    #invoke
-                }
-            } else {
-                // Decomposed (M5): encode each element's leaves, fold over them.
-                let (leaves, arg_exprs) = encode_leaves(&quote!(__elem));
-                let invoke = fold_invoke(&arg_exprs);
-                quote! {
-                    #leaves
-                    #invoke
-                }
-            };
-            // `into_iter()` yields the element type exactly as written (owned
-            // `T`, or `&T` for a borrowed element).
-            quote! {
-                #statics
-                let __out = #call_expr;
-                let mut __acc = __acc;
-                for __elem in __out.into_iter() {
-                    #loop_body
-                }
-                __acc
-            }
+            unreachable!("Iterable delivery is handled by the `opt_iterable` branch above")
         }
     }
 }

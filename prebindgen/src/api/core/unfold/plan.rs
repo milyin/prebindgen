@@ -8,11 +8,11 @@ use super::Delivery;
 ///     [leaves](`UnfoldPlan::leaves`) and invoking the builder once;
 ///   * `Optional((), inner)` — `Option<T>`/`Option<&T>` return: `None` ⇒ a null
 ///     result (builder skipped), `Some` ⇒ decompose the inner;
-///   * `Iterable(inner)` — `Vec<T>` return: deliver each element whole (via its
-///     own output converter + projection — see [`UnfoldPlan::element`]) to a
-///     caller-supplied fold `(acc, element) -> acc`; inner is `Base` (a
-///     degenerate single whole-element step; per-element accessor decomposition
-///     is future work).
+///   * `Iterable(inner)` — `Vec<T>` return: fold the elements through an
+///     accumulator `(acc, …) -> acc`. Each element is delivered either WHOLE (via
+///     its own output converter + projection — see [`UnfoldPlan::element`]) or
+///     DECOMPOSED into per-element leaves (explicit accessors, or a synthesized
+///     `data_class` — see [`UnfoldPlan::fixed_builder`]); inner is `Base`.
 ///
 /// The `()` payload is unused here — only the JNI adapter's
 /// `Shape<NullableKind>` carries per-layer data.
@@ -96,12 +96,16 @@ pub struct UnfoldPlan {
     /// `T`/`&T` return).
     pub shape: UnfoldShape,
     /// Flattened output leaves, in builder-argument order. Populated for
-    /// `Decompose`/`Optional` (accessor decomposition); **empty** for
-    /// `Iterable`, which delivers each element whole (see [`Self::element`]).
+    /// `Decompose`/`Optional` (accessor decomposition) and for a **decomposed**
+    /// `Iterable` fold (per-element leaves — explicit-accessor or a synthesized
+    /// `data_class` [`Self::fixed_builder`]); **empty** only for a
+    /// **whole-element** `Iterable`, which delivers each element via
+    /// [`Self::element`].
     pub leaves: Vec<UnfoldLeaf>,
-    /// For an `Iterable` plan: the owned/ref element type, delivered to the fold
-    /// via its own output converter + projection (not decomposed). `None` for
-    /// `Decompose`/`Optional`.
+    /// For a **whole-element** `Iterable` plan: the owned/ref element type,
+    /// delivered to the fold via its own output converter + projection (not
+    /// decomposed). `None` for `Decompose`/`Optional` and for a **decomposed**
+    /// `Iterable` fold (which uses [`Self::leaves`]).
     pub element: Option<syn::Type>,
     /// Callback (`deconstruct_output`) vs return-value (`convert_output`)
     /// delivery.

@@ -66,9 +66,11 @@ fn main() {
         .fun(pq!(storage_callback))
         // Array (slice / Vec) API. `storage_put_slice(&[Payload])` takes a
         // `List<Payload>` (decoded element-by-element into an owned `Vec`, then
-        // borrowed as a slice); `storage_get_vec() -> Vec<Payload>` returns a
-        // `List<Payload>`. Each element is a `data class`, so it crosses via the
-        // per-element struct object path.
+        // borrowed as a slice); `storage_get_vec() -> Option<Vec<Payload>>` returns
+        // a `List<Payload>?`. The element is a `data class`, so the return is a
+        // **fixed fold**: each element's fields cross as decoupled raw leaves and a
+        // hoisted Kotlin folder reassembles them via `fromParts` and appends to the
+        // list — no `ArrayList` and no per-element Java object on the Rust side.
         .fun(pq!(storage_put_slice))
         .fun(pq!(storage_get_vec))
         // Whole-batch callback: prepared once, fired with the entire `List<Payload>`.

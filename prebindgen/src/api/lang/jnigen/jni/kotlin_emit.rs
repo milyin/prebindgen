@@ -499,7 +499,7 @@ impl<S: JniGenState> JniGen<S> {
     /// the same source the native emitters read, so all sites agree by
     /// construction (no dedup, no signature reconciliation).
     pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
-        use crate::api::core::unfold::{DeconId, Delivery, UnfoldShape};
+        use crate::api::core::unfold::{DeconId, Delivery};
 
         /// One distinct interface identity in use. Ordered so emission is
         /// deterministic.
@@ -554,7 +554,7 @@ impl<S: JniGenState> JniGen<S> {
                     .get(&item_fn.sig.ident)
                     .filter(|p| p.delivery == Delivery::Callback)
                 {
-                    let iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
+                    let iterable = is_iterable_fold(&plan.shape);
                     match (iterable, &plan.element, &plan.decon) {
                         (true, Some(el), _) => {
                             uses.insert(
@@ -592,13 +592,31 @@ impl<S: JniGenState> JniGen<S> {
                 // the generated wrappers' error channel. `fixed` carries the
                 // builder's DeconId when it is a synthesized `data_class`, so a
                 // hoisted `__<Name>Builder` singleton is emitted with it.
+                // `fixed` carries a hoisted-singleton request: `(decon, is_folder)`.
+                // `is_folder` picks the folder-appender singleton (`Vec<data_class>`
+                // fold) over the scalar `fromParts` builder.
                 let (spec, is_error, fixed) = match u {
                     Use::Callback(_) => (callback_iface_spec(self, registry, &tys), false, None),
                     Use::Builder(d) => {
-                        let fixed = fixed_decons.contains(&d).then(|| d.clone());
+                        let fixed = fixed_decons.contains(&d).then(|| (d.clone(), false));
                         (builder_iface_spec(self, registry, &d), false, fixed)
                     }
-                    Use::Folder(d) => (folder_iface_spec(self, registry, &d), false, None),
+                    Use::Folder(d) => {
+                        // A fixed-builder fold groups the leaves into a typed
+                        // `(acc, element)` view (raw twin keeps the leaves) so the
+                        // emitted interface matches the wrapper's
+                        // `folder_iface_for_plan`; an explicit-accessor fold keeps
+                        // its 1:1 leaf view unchanged.
+                        let is_fixed = fixed_decons.contains(&d);
+                        let spec = folder_iface_spec(self, registry, &d).map(|mut s| {
+                            if is_fixed {
+                                s.typed_groups =
+                                    fixed_folder_typed_groups(self, registry, &d).unwrap_or_default();
+                            }
+                            s
+                        });
+                        (spec, false, is_fixed.then(|| (d.clone(), true)))
+                    }
                     Use::WholeFolder(_) => {
                         (whole_folder_iface_spec(self, registry, &tys[0]), false, None)
                     }
@@ -625,8 +643,13 @@ impl<S: JniGenState> JniGen<S> {
                 if is_error {
                     file = file.decl(s.to_capture_decl());
                 }
-                if let Some(decon) = fixed {
-                    file = file.decl(self.value_struct_builder_singleton(registry, &s, &decon));
+                if let Some((decon, is_folder)) = fixed {
+                    let decl = if is_folder {
+                        self.value_struct_folder_singleton(registry, &s, &decon)
+                    } else {
+                        self.value_struct_builder_singleton(registry, &s, &decon)
+                    };
+                    file = file.decl(decl);
                 }
                 file
             })
@@ -669,6 +692,51 @@ impl<S: JniGenState> JniGen<S> {
         let code = format!(
             "internal val {val_name}: {builder}<{class_short}> =\n    \
              {builder} {{ {joined} -> {class_short}.fromParts({joined}) }}"
+        );
+        kt::KtDecl::Raw {
+            name: val_name,
+            code: kt::Code::raw_reindent(&code),
+        }
+    }
+
+    /// The hoisted **folder-appender** singleton for a synthesized by-value
+    /// `data_class` element fold (`Vec<data_class>` return): an instance of the
+    /// folder's raw twin (`__<Name>FolderRaw`) that, per element, rebuilds the
+    /// value via `fromParts` and appends it to the accumulator `ArrayList`,
+    /// returning the same list. The wrapper allocates the `ArrayList`, passes this
+    /// singleton as the `fold`, and returns the threaded accumulator as a
+    /// `List<Class>` — so the list is composed on the Kotlin side and no Java
+    /// object is built on the Rust side. The folder's `run` params are
+    /// `[acc, leaf0, …]`; `fromParts` takes the element leaves (all but `acc`).
+    fn value_struct_folder_singleton(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+        decon: &crate::api::core::unfold::DeconId,
+    ) -> kt::KtDecl {
+        let source = &registry.decon_plans[decon].source;
+        let class_fqn = self
+            .kotlin_fqn(&TypeKey::from_type(source).to_string())
+            .unwrap_or_else(|| {
+                panic!(
+                    "value-struct folder: no Kotlin FQN for {}",
+                    TypeKey::from_type(source)
+                )
+            });
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        // The native side calls the raw twin's `run(acc, leaves…)`; `acc` is the
+        // accumulator list and the remaining params are the element leaves.
+        let folder = spec.raw_name();
+        let val_name = format!("__{folder}");
+        let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
+        let lambda_params = names.join(", ");
+        let acc = &names[0];
+        let leaf_args = names[1..].join(", ");
+        let acc_ty = format!("ArrayList<{class_short}>");
+        let code = format!(
+            "internal val {val_name}: {folder}<{acc_ty}> =\n    \
+             {folder} {{ {lambda_params} -> \
+             {acc}.add({class_short}.fromParts({leaf_args})); {acc} }}"
         );
         kt::KtDecl::Raw {
             name: val_name,

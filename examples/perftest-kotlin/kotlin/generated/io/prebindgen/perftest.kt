@@ -169,6 +169,31 @@ public fun interface PayloadBuilder<out R> {
 internal val __PayloadBuilder: PayloadBuilder<Payload> =
 PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
 
+public fun interface PayloadFolder<A> {
+    public fun run(acc: A, element: Payload): A
+}
+
+public fun interface PayloadFolderRaw<A> {
+    public fun run(acc: A, id: Long, seq: Int, value: Double, flag: Boolean, label: String?): A
+}
+
+public fun <A> PayloadFolder<A>.asRaw(): PayloadFolderRaw<A> =
+    PayloadFolderRaw<A> {
+        acc,
+        id,
+        seq,
+        value,
+        flag,
+        label ->
+        run(
+            acc,
+            Payload.fromParts(id, seq, value, flag, label)
+        )
+    }
+
+internal val __PayloadFolderRaw: PayloadFolderRaw<ArrayList<Payload>> =
+PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
+
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
 }
@@ -197,7 +222,7 @@ internal object JNINative {
     external fun storageCallback(s: Long, handler: Long, errorSink: Any)
     external fun storageCallbackVec(s: Long, handler: Long, errorSink: Any)
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
-    external fun storageGetVec(s: Long, errorSink: Any): List<Payload>?
+    external fun storageGetVec(s: Long, acc: Any?, fold: Any, errorSink: Any): Any?
     external fun storageNew(errorSink: Any): Long
     external fun storagePutByRead(
         s: Long,
