@@ -551,6 +551,100 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     assert!(rc.contains("Box::new") || rc.contains("Box<::std::string::String>"), "{rust}");
 }
 
+/// A `&[T]` / `Vec<T>` input of a flattenable `data_class` is built as a
+/// Rust-side `Vec` handle: Kotlin allocates the handle, pushes each element's
+/// decoupled leaves in a loop, passes the `jlong` handle, then frees it in a
+/// `finally` — no `List` `JObject` crosses, so the Rust side skips per-element
+/// `env.get_field(...)`. `&[T]` borrows the boxed Vec; by-value `Vec<T>`
+/// `mem::take`s it (the always-emitted free then drops an empty Vec). The
+/// synthetic `…VecNew/Push/Free` trio is emitted once per element type and
+/// shared by both functions.
+#[test]
+fn slice_input_builds_vec_handle() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                    pub label: Option<Box<String>>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_slice(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_vec(v: Vec<Foo>) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .data_class(syn::parse_quote!(Foo))
+        .package("foo")
+        .fun(syn::parse_quote!(put_slice))
+        .fun(syn::parse_quote!(put_vec));
+
+    let dir = unique_snapshot_dir("jnigen_slice_vec_handle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // One synthetic extern trio (shared by both functions).
+    assert!(kc.contains("externalfunfooVecNew(cap:Int):Long"), "{kotlin}");
+    assert!(kc.contains("externalfunfooVecPush(handle:Long,"), "{kotlin}");
+    assert!(kc.contains("externalfunfooVecFree(handle:Long)"), "{kotlin}");
+
+    // Public surface stays `List<Foo>`; the body builds/pushes/frees the handle.
+    assert!(kc.contains("v:List<Foo>"), "{kotlin}");
+    assert!(kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"), "{kotlin}");
+    assert!(kc.contains("for(__einv){"), "{kotlin}");
+    assert!(
+        kc.contains("JNINative.fooVecPush(__vec_v,__e.id,__e.label)"),
+        "{kotlin}"
+    );
+    assert!(kc.contains("}finally{"), "{kotlin}");
+    assert!(kc.contains("JNINative.fooVecFree(__vec_v)"), "{kotlin}");
+
+    // Rust: the three helper symbols + both decode shapes (borrow / take).
+    assert!(rc.contains("fnJava_io_test_jni_JNINative_fooVecNew"), "{rust}");
+    assert!(rc.contains("fnJava_io_test_jni_JNINative_fooVecPush"), "{rust}");
+    assert!(rc.contains("fnJava_io_test_jni_JNINative_fooVecFree"), "{rust}");
+    assert!(rc.contains("&*(v_handleas*constVec<myflat::Foo>)"), "{rust}");
+    assert!(
+        rc.contains("mem::take(&mut*(v_handleas*mutVec<myflat::Foo>))"),
+        "{rust}"
+    );
+}
+
 /// `.jni_native_init(code)` injects an `init { code }` block into the generated
 /// centralized externs object (`JNINative`) — the single static-init point a
 /// consumer uses to trigger native-library loading. Unset (the `snapshot_*`

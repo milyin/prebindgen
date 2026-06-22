@@ -917,6 +917,12 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
         // non-suppressed opaque handle (the Rust half of the typed-handle
         // `free()` pair the Kotlin emitter generates).
         items.extend(build_handle_destructor_items(self, registry));
+        // Slice/Vec input helpers — a `…VecNew/Push/Free` trio per flattenable
+        // element type a scanned `&[T]`/`Vec<T>` param takes. Kotlin builds the
+        // Rust-side `Vec` by pushing each element's decoupled leaves, then passes
+        // the handle (see `ParamMode::VecBuild`), avoiding per-element
+        // `env.get_field(...)` upcalls on the Rust side.
+        items.extend(build_vec_build_helper_items(self, registry));
         // Compile-time `Copy` assertion per `value_blob` type — the blob
         // converters reinterpret raw bytes by value, which is only sound for
         // `Copy` types. A mis-declared non-`Copy` type fails to compile here

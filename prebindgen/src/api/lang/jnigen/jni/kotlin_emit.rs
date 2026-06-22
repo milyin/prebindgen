@@ -828,6 +828,31 @@ impl<S: JniGenState> JniGen<S> {
             }
         }
 
+        // Synthetic slice/Vec-input helpers: a `…VecNew/Push/Free` trio per
+        // flattenable element type a scanned `&[T]`/`Vec<T>` param takes — the
+        // `external fun` halves of `build_vec_build_helper_items`. Kotlin builds
+        // the Rust-side `Vec` by pushing each element's leaves (decoupled raw
+        // params), then passes the handle (see `ParamMode::VecBuild`).
+        for elem in crate::api::lang::jnigen::jni::collect_vec_build_elem_types(self, registry) {
+            let Some(h) = crate::api::lang::jnigen::jni::vec_build_helpers(self, registry, &elem)
+            else {
+                continue;
+            };
+            let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "New");
+            let push_m =
+                crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Push");
+            let free_m = crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Free");
+            let mut push_params = vec!["handle: Long".to_string()];
+            for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
+                let short = register_fqn(&leaf.kt_wire_ty, &mut imports);
+                push_params.push(format!("{}: {}", leaf.kt_name, short));
+            }
+            externs = externs
+                .line(format!("external fun {new_m}(cap: Int): Long"))
+                .line(format!("external fun {push_m}({})", push_params.join(", ")))
+                .line(format!("external fun {free_m}(handle: Long)"));
+        }
+
         let mut obj = KtClass::object_(class_name).vis(Vis::Internal);
         // Optional native-load trigger: emitted FIRST so the object's static
         // initializer runs the consumer's loader before any extern resolves.

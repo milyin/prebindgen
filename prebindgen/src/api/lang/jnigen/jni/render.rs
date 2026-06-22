@@ -432,6 +432,15 @@ pub(crate) fn render_extern_decl(
             continue;
         }
 
+        // Slice/Vec of a flattenable data_class → a single `jlong` Vec-handle
+        // param (the Rust extern decodes the boxed `Vec<T>`). Elements cross
+        // through the synthetic `…VecPush` extern, not this one. Must match the
+        // `jlong` wire emitted by `emit_input_param`'s VecBuild branch.
+        if crate::api::lang::jnigen::jni::vec_build_elem(ext, registry, arg_ty).is_some() {
+            params.push((name, "Long".to_string()));
+            continue;
+        }
+
         let entry = registry.input_entry(arg_ty)?;
 
         // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`, or
@@ -580,6 +589,18 @@ enum ParamMode {
     /// expressions in plan order.
     FlattenStruct {
         accesses: Vec<String>,
+    },
+    /// `&[T]` / `Vec<T>` of a flattenable data_class `T`: the public Kotlin
+    /// signature keeps `List<T>`, but the wrapper allocates a Rust-side `Vec<T>`
+    /// (opaque `jlong` handle), pushes each element's decoupled leaves in a loop
+    /// via `<base>Push`, passes the handle to the extern, then frees it in a
+    /// `finally`. No `JObject` list crosses, so the Rust side skips per-element
+    /// `env.get_field(...)`. `base` is the helper method base (`payloadVec`);
+    /// `elem_accesses` are the per-element leaf push expressions rooted at the
+    /// loop variable (`__e.id`, `__e.seq`, …), in plan order.
+    VecBuild {
+        base: String,
+        elem_accesses: Vec<String>,
     },
     /// `impl Fn(args)` callback param: typed Kotlin lambda over the flattened
     /// leaves of each arg's callback plan (whole arg when plan-less), erased to
@@ -781,7 +802,27 @@ pub(crate) fn render_wrapper_fn(
             arg_ty,
             name.as_str(),
         );
-        let mode = if let Some(plan) = flat_plan {
+        let mode = if let Some((elem, _by_ref)) =
+            crate::api::lang::jnigen::jni::vec_build_elem(ext, registry, arg_ty)
+        {
+            // Slice/Vec of a flattenable data_class: build the Rust-side Vec by
+            // pushing each element's leaves, pass the handle (see the body
+            // assembly + `build_vec_build_helper_items`). High-level signature
+            // stays `List<T>` (kt_type_raw, registered below).
+            let h = crate::api::lang::jnigen::jni::vec_build_helpers(ext, registry, &elem)
+                .expect("vec_build_elem Some ⇒ vec_build_helpers Some");
+            let elem_accesses = h
+                .plan
+                .leaves
+                .iter()
+                .filter(|l| !l.is_present_flag)
+                .map(|l| l.kt_access.clone())
+                .collect();
+            ParamMode::VecBuild {
+                base: h.base,
+                elem_accesses,
+            }
+        } else if let Some(plan) = flat_plan {
             ParamMode::FlattenStruct {
                 accesses: plan.leaves.iter().map(|l| l.kt_access.clone()).collect(),
             }
@@ -995,6 +1036,12 @@ pub(crate) fn render_wrapper_fn(
                 args.extend(accesses.iter().cloned());
                 continue;
             }
+            // VecBuild param: the extern receives the `jlong` Vec handle the
+            // wrapper body allocated and filled (`__vec_<name>`), not the `List`.
+            if let ParamMode::VecBuild { .. } = &p.mode {
+                args.push(format!("__vec_{}", p.kt_name));
+                continue;
+            }
             let arg = match &p.mode {
                 ParamMode::Borrow
                 | ParamMode::Consume
@@ -1028,6 +1075,9 @@ pub(crate) fn render_wrapper_fn(
                 ParamMode::Callback { call_arg } => call_arg.clone(),
                 ParamMode::FlattenStruct { .. } => {
                     unreachable!("FlattenStruct expanded before the single-arg match")
+                }
+                ParamMode::VecBuild { .. } => {
+                    unreachable!("VecBuild expanded before the single-arg match")
                 }
             };
             args.push(arg);
@@ -1312,6 +1362,21 @@ pub(crate) fn render_wrapper_fn(
     // calls the user's `onError.run` and returns its `R` if a failure was
     // recorded. A pre-lock closed-handle guard short-circuits straight to
     // `onError.run` (it can't reach the capture).
+    // Slice/Vec params built as Rust-side `Vec` handles: allocate the handle
+    // before the lock, fill it by pushing each element's leaves, and free it in
+    // a `finally` (always — the target wrapper either borrows the boxed `Vec` or
+    // `mem::take`s it, leaving an empty `Vec` to drop). The transient handle is
+    // not a `NativeHandle`, so it never joins the lock set.
+    let vec_build: Vec<(&String, &String, &Vec<String>)> = params
+        .iter()
+        .filter_map(|p| match &p.mode {
+            ParamMode::VecBuild {
+                base,
+                elem_accesses,
+            } => Some((&p.kt_name, base, elem_accesses)),
+            _ => None,
+        })
+        .collect();
     let body: String = {
         let mut b = String::new();
         b.push_str(&prelock_guards);
@@ -1319,17 +1384,48 @@ pub(crate) fn render_wrapper_fn(
         // extern writes its `@JvmField` slots via `run`, the wrapper reads
         // them after the (synchronous) call. `acquire()` resets the slots.
         b.push_str(&format!("val __cap = {sink_capture_short}.acquire()\n"));
-        if is_unit {
-            b.push_str(&format!("{core_expr}\n"));
-            b.push_str(&format!(
-                "if (__cap.failed) return onError.run({onerr_call_args})\n"
-            ));
+        let failed_check = format!("if (__cap.failed) return onError.run({onerr_call_args})\n");
+        if vec_build.is_empty() {
+            if is_unit {
+                b.push_str(&format!("{core_expr}\n"));
+                b.push_str(&failed_check);
+            } else {
+                b.push_str(&format!("val __ret = {core_expr}\n"));
+                b.push_str(&failed_check);
+                b.push_str("return __ret\n");
+            }
         } else {
-            b.push_str(&format!("val __ret = {core_expr}\n"));
-            b.push_str(&format!(
-                "if (__cap.failed) return onError.run({onerr_call_args})\n"
-            ));
-            b.push_str("return __ret\n");
+            let native = ext.jni_native_class_name();
+            for (name, base, _) in &vec_build {
+                let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "New");
+                b.push_str(&format!("val __vec_{name} = {native}.{new_m}({name}.size)\n"));
+            }
+            // `try { fill…; <core_expr> } finally { free… }`: Kotlin `try` is an
+            // expression, so for a non-unit fn `__ret` binds to `core_expr`
+            // (the block's last expression). A push runs no JVM upcall, so the
+            // loop needs no per-element failure check.
+            b.push_str(if is_unit { "try {\n" } else { "val __ret = try {\n" });
+            for (name, base, accesses) in &vec_build {
+                let push_m =
+                    crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Push");
+                let args = std::iter::once(format!("__vec_{name}"))
+                    .chain(accesses.iter().cloned())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                b.push_str(&format!("for (__e in {name}) {{\n{native}.{push_m}({args})\n}}\n"));
+            }
+            b.push_str(&format!("{core_expr}\n"));
+            b.push_str("} finally {\n");
+            for (name, base, _) in &vec_build {
+                let free_m =
+                    crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Free");
+                b.push_str(&format!("{native}.{free_m}(__vec_{name})\n"));
+            }
+            b.push_str("}\n");
+            b.push_str(&failed_check);
+            if !is_unit {
+                b.push_str("return __ret\n");
+            }
         }
         b
     };

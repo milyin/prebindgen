@@ -245,5 +245,8 @@ internal object JNINative {
         payloadLabel: String?,
         errorSink: Any,
     )
-    external fun storagePutSlice(s: Long, payloads: List<Payload>, errorSink: Any)
+    external fun storagePutSlice(s: Long, payloads: Long, errorSink: Any)
+    external fun payloadVecNew(cap: Int): Long
+    external fun payloadVecPush(handle: Long, eId: Long, eSeq: Int, eValue: Double, eFlag: Boolean, eLabel: String?)
+    external fun payloadVecFree(handle: Long)
 }

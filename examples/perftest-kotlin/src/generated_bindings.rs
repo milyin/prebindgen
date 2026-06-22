@@ -107,6 +107,88 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_Storage_freePtr(
         drop(Box::from_raw(ptr as *mut perftest_flat::Storage));
     }
 }
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecFree(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    handle: jni::sys::jlong,
+) {
+    if handle != 0 {
+        drop(Box::from_raw(handle as *mut Vec<perftest_flat::Payload>));
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecNew(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    cap: jni::sys::jint,
+) -> jni::sys::jlong {
+    let __cap = if cap > 0 { cap as usize } else { 0usize };
+    Box::into_raw(Box::new(Vec::<perftest_flat::Payload>::with_capacity(__cap)))
+        as jni::sys::jlong
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_payloadVecPush<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    handle: jni::sys::jlong,
+    e_id: jni::sys::jlong,
+    e_seq: jni::sys::jint,
+    e_value: jni::sys::jdouble,
+    e_flag: jni::sys::jboolean,
+    e_label: jni::objects::JString<'a>,
+) {
+    if handle == 0 {
+        return;
+    }
+    let __e_id = match jlong_to_i64_fbf9a9bc(&mut env, &e_id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            tracing::error!("vecPush: decoding `{}`: {}", stringify!(id), __e);
+            return;
+        }
+    };
+    let __e_seq = match jint_to_i32_a3e3b6ef(&mut env, &e_seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            tracing::error!("vecPush: decoding `{}`: {}", stringify!(seq), __e);
+            return;
+        }
+    };
+    let __e_value = match jdouble_to_f64_9e4a8f70(&mut env, &e_value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            tracing::error!("vecPush: decoding `{}`: {}", stringify!(value), __e);
+            return;
+        }
+    };
+    let __e_flag = match jboolean_to_bool_31306d98(&mut env, &e_flag) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            tracing::error!("vecPush: decoding `{}`: {}", stringify!(flag), __e);
+            return;
+        }
+    };
+    let __e_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &e_label) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            tracing::error!("vecPush: decoding `{}`: {}", stringify!(label), __e);
+            return;
+        }
+    };
+    let __elem = perftest_flat::Payload {
+        id: __e_id,
+        seq: __e_seq,
+        value: __e_value,
+        flag: __e_flag,
+        label: __e_label,
+    };
+    let __vec = &mut *(handle as *mut Vec<perftest_flat::Payload>);
+    __vec.push(__elem);
+}
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
@@ -1877,7 +1959,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     s: jni::sys::jlong,
-    payloads: jni::objects::JObject<'a>,
+    payloads_handle: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
     #[allow(unused_variables)]
@@ -1904,23 +1986,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutSlice<'
             return ();
         }
     };
-    let payloads = match JObject_to_Vec_Payload_8b7084d2(&mut env, &payloads) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
-            );
-            return ();
-        }
+    let payloads: &[perftest_flat::Payload] = unsafe {
+        &*(payloads_handle as *const Vec<perftest_flat::Payload>)
     };
-    let __out = perftest_flat::storage_put_slice(&mut s, &payloads);
+    let __out = perftest_flat::storage_put_slice(&mut s, payloads);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
