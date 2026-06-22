@@ -790,11 +790,12 @@ fn callback_snapshot_rust_side() {
     // void return; on_close ⇒ zero-arg `()V`.
     assert!(rc.contains(r#""(JLjava/lang/String;)V""#), "{rust}");
     assert!(rc.contains(r#""()V""#), "{rust}");
-    // Fallback ZOther arg: 1 typed handle param + post-invoke `close()` of
-    // the boxed handle. The decomposed path never closes (ownership
-    // transfers).
-    assert!(rc.contains(r#""(Lio/test/jni/thing/ZOther;)V""#), "{rust}");
-    assert!(rc.contains(r#""close""#), "{rust}");
+    // Plan-less ZOther arg (Phase 3): crosses as a raw `jlong` (`(J)V`), NOT a
+    // boxed handle object — so the Rust trampoline neither `new_object`s the
+    // typed class nor `close()`s it (the Kotlin `asRaw` proxy wraps + closes).
+    assert!(rc.contains(r#""(J)V""#), "{rust}");
+    assert!(!rc.contains(r#""close""#), "{rust}");
+    assert!(!rc.contains("io/test/jni/thing/ZOther"), "{rust}");
     // Daemon-thread attachment + local-frame bracketing kept from the old
     // trampoline.
     assert!(rc.contains("attach_current_thread_as_daemon"), "{rust}");
@@ -858,7 +859,15 @@ fn callback_snapshot_kotlin_side() {
         all.contains("funZThingCallback.asRaw():ZThingCallbackRaw=ZThingCallbackRaw{handle,name->run(ZThing(handle),name)}"),
         "{all}"
     );
-    assert!(!all.contains("ZOtherCallbackRaw"), "{all}");
+    // Plan-less ZOther arg (Phase 3): a raw twin `run(zOther: Long)` + an `asRaw`
+    // proxy that wraps the pointer into the handle class AND `close()`s it in a
+    // `finally` (close-unless-taken) — the Rust side delivers only the raw jlong.
+    assert!(
+        all.contains("funinterfaceZOtherCallbackRaw{publicfunrun(zOther:Long)"),
+        "{all}"
+    );
+    assert!(all.contains("val__own0=ZOther(zOther)"), "{all}");
+    assert!(all.contains("finally{__own0.close()}"), "{all}");
     assert!(!all.contains("VoidCallbackRaw"), "{all}");
 
     // Wrapper tier: the params are the typed interfaces, forwarded bare.
@@ -1506,4 +1515,171 @@ fn option_scalar_param_crosses_as_present_value_pair() {
         rc.contains("myflat::z_set_timeout(ms,count,mode)"),
         "{rust}"
     );
+}
+
+/// Phase 2: a `Vec<opaque-handle>` / `Option<Vec<handle>>` **return** crosses as
+/// a Kotlin-side leaf fold — each element's raw `jlong` pointer crosses and the
+/// generated `<Handle>Folder` singleton wraps it into the typed handle class and
+/// appends to an `ArrayList`. No Rust-side `java.util.ArrayList` of handle
+/// objects is built (the `reject_vec_of_handle` guard is lifted for outputs).
+#[test]
+fn vec_of_handle_output_folds_kotlin_side() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThing {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn thing_list() -> Vec<ZThing> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn thing_list_opt() -> Option<Vec<ZThing>> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .ptr_class(syn::parse_quote!(ZThing))
+        .package("thing")
+        .fun(syn::parse_quote!(thing_list))
+        .fun(syn::parse_quote!(thing_list_opt));
+
+    let dir = unique_snapshot_dir("jnigen_vec_handle_out");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // A `ZThingFolder<A>` interface is generated, and the wrapper returns a typed
+    // list, allocating the `ArrayList<ZThing>` accumulator on the Kotlin side.
+    assert!(kc.contains("interfaceZThingFolder<A>"), "{kotlin}");
+    assert!(kc.contains("List<ZThing>"), "{kotlin}");
+    assert!(kc.contains("ArrayList<ZThing>()"), "{kotlin}");
+    // The folder singleton wraps each raw `jlong` element into the typed handle
+    // class and appends it — no Rust object construction.
+    assert!(kc.contains("ZThing(element)") || kc.contains("acc.add(ZThing("), "{kotlin}");
+    // `Option<Vec<…>>` surfaces as a nullable list.
+    assert!(kc.contains("List<ZThing>?"), "{kotlin}");
+
+    // Rust: each element's pointer is delivered as a raw `jvalue { j: … }` to the
+    // folder's `run`, NOT wrapped into a Java object; no Rust-side `ArrayList` is
+    // built for the handle vec.
+    assert!(rc.contains("jvalue{j:__enc}"), "{rust}");
+    assert!(
+        !rc.contains(r#"new_object("java/util/ArrayList""#),
+        "no Rust-side ArrayList for Vec<handle>: {rust}"
+    );
+}
+
+/// Phase 5: a `data_class` **input** param carrying an `Option<primitive>` /
+/// `Option<enum>` field — which used to decline field-flattening and box the
+/// whole struct into a `JObject` (Rust `env.get_field(...)`) — now flattens, the
+/// `Option` field crossing as a `(<field>Present: Boolean, <field>Value: <prim>)`
+/// leaf pair the Rust side rebuilds with no reflective unbox.
+#[test]
+fn option_scalar_struct_field_flattens() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Opts {
+                    pub id: i64,
+                    pub ttl: Option<i64>,
+                    pub flag: Option<bool>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn opts_put(o: &Opts) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .data_class(syn::parse_quote!(Opts))
+        .package("opts")
+        .fun(syn::parse_quote!(opts_put));
+
+    let dir = unique_snapshot_dir("jnigen_optfield");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // The public wrapper keeps the typed `Opts` param; the extern crosses the
+    // option fields as decomposed `(present, value)` pairs (the plain `id` field
+    // stays a single leaf).
+    assert!(kc.contains("oTtlPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("oTtlValue:Long"), "{kotlin}");
+    assert!(kc.contains("oFlagPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("oFlagValue:Boolean"), "{kotlin}");
+    // Call site destructures the typed object: present-flag + value-or-zero.
+    assert!(kc.contains("o.ttl!=null"), "{kotlin}");
+    assert!(kc.contains("o.ttl?:0L"), "{kotlin}");
+    assert!(kc.contains("o.flag?:false"), "{kotlin}");
+
+    // Rust rebuilds each field's `Option` from the raw scalars (gated on present)
+    // and reconstructs the struct inline from the flat leaves, passing it to the
+    // source fn. (The whole-struct `JObject_to_Opts` `get_field` converter is
+    // still emitted but is now dead `#[allow(dead_code)]`, like Phase 4's boxed
+    // converters — the live param path no longer references it.)
+    assert!(rc.contains("o_ttl_present:jni::sys::jboolean"), "{rust}");
+    assert!(rc.contains("o_ttl_value:jni::sys::jlong"), "{rust}");
+    assert!(rc.contains("ifo_ttl_present!=0u8"), "{rust}");
+    assert!(
+        rc.contains("myflat::Opts{id:__o_id,ttl:__o_ttl,flag:__o_flag"),
+        "{rust}"
+    );
+    assert!(rc.contains("myflat::opts_put(&o)"), "{rust}");
 }

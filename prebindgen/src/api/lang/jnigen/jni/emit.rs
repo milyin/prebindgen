@@ -826,8 +826,12 @@ pub(crate) fn emit_unfold_delivery(
             });
             let elem_conv = out_entry.function.sig.ident.clone();
             let elem_wire = out_entry.destination.clone();
-            let elem_is_prim = out_entry.metadata.projection.is_none()
-                && matches!(jni_field_access(&elem_wire), Some((_, _, false)));
+            // Primitive-wire elements (including an opaque **handle**, whose wire
+            // is `jlong`) cross as a raw typed jvalue; object wires (String /
+            // value blob) cross as a `JObject`. Keyed purely on the wire shape —
+            // a handle's `Some(Handle)` projection still rides its `jlong`, and
+            // the folder interface declares the matching `Long` (raw) param.
+            let elem_is_prim = matches!(jni_field_access(&elem_wire), Some((_, _, false)));
             let enc = format_ident!("__enc");
             let (bind_obj, arg_expr) = if elem_is_prim {
                 let letter = jni_field_access(&elem_wire).unwrap().1;
@@ -1850,9 +1854,6 @@ pub(crate) fn callback_input(
     let mut preludes: Vec<TokenStream> = Vec::new();
     let mut jvalue_exprs: Vec<TokenStream> = Vec::new();
     let mut total: usize = 0;
-    // Plan-less opaque-handle args, closed after the invoke returns so the
-    // per-invocation `Box` is freed.
-    let mut handle_obj_idents: Vec<syn::Ident> = Vec::new();
     // One-time setup statements (folder singleton + method id for an
     // `&[data_class]` fold arg), spliced before the `Box::new` so the move
     // closure captures them.
@@ -2000,24 +2001,20 @@ pub(crate) fn callback_input(
         let enc_ident = format_ident!("__cb{}_enc", i);
         let obj_ident = format_ident!("__cb{}_obj", i);
 
-        // Plan-less opaque-handle arg: encode to `jlong` (`Box::into_raw`)
-        // then wrap into the typed handle class via its `(J)V` ctor. By-value
-        // non-optional, so no null guard. The box is freed after the invoke
-        // via `close()` in the body below — this is what lets a queryable
+        // Plan-less opaque-handle arg: encode to a raw `jlong` (`Box::into_raw`)
+        // and deliver it as-is. The typed handle class is constructed Kotlin-side
+        // by the generated `asRaw` proxy (`WrapKind::HandleOwned`), which also
+        // `close()`s it after `run` (close-unless-taken) — so no Rust
+        // `new_object` and no post-invoke close. The Kotlin wrap lets a queryable
         // consumer reply through the handle inside the callback (a consuming
-        // reply zeroes the slot, making the close a no-op).
+        // reply zeroes the slot, making the proxy's `close` a no-op). See
+        // `owned_handle_iface_param`.
         if let Some(h) = &arg_entry.metadata.projection {
             if matches!(h.kind, ProjectionKind::Handle) {
-                let java_path = handle_field_fqn(ext, h).replace('.', "/");
-                let java_path_lit = syn::LitStr::new(&java_path, Span::call_site());
                 preludes.push(quote! {
                     let #enc_ident = #conv(&mut env, #cb_val)?;
-                    let #obj_ident: jni::objects::JObject = env
-                        .new_object(#java_path_lit, "(J)V", &[jni::objects::JValue::from(#enc_ident)])
-                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("wrap typed handle {}: {}", #java_path_lit, e)))?;
                 });
-                handle_obj_idents.push(obj_ident.clone());
-                jvalue_exprs.push(quote!(jni::sys::jvalue { l: #obj_ident.as_raw() }));
+                jvalue_exprs.push(quote!(jni::sys::jvalue { j: #enc_ident }));
                 total += 1;
                 continue;
             }
@@ -2113,18 +2110,13 @@ pub(crate) fn callback_input(
                     }
                     .map(|_| ())
                     .map_err(|e| {
-                        // `exception_describe` also clears the pending exception,
-                        // so subsequent JNI calls (the handle closes below) are safe.
+                        // `exception_describe` also clears the pending exception.
                         let _ = env.exception_describe();
                         <__JniErr as ::core::convert::From<String>>::from(e.to_string())
                     });
-                    // Free each plan-less opaque-handle arg's per-invocation
-                    // `Box` once the lambda returns — a no-op if the consumer
-                    // `take()`-ed the handle (its slot is then already 0). Runs
-                    // even when the lambda threw, so a throwing consumer never
-                    // leaks. Decomposed identity-leaf handles are NOT closed:
-                    // their ownership transferred to the lambda.
-                    #(let _ = env.call_method(&#handle_obj_idents, "close", "()V", &[]);)*
+                    // A plan-less opaque-handle arg's per-invocation `Box` is
+                    // freed Kotlin-side by the `asRaw` proxy's `finally { close() }`
+                    // (close-unless-taken), so there is no Rust-side close here.
                     __call_res?;
                     Ok(())
                 })();
@@ -2402,11 +2394,18 @@ pub(crate) struct FlatLeaf {
     pub kt_access: String,
     /// Per-field input converter ident (`None` for the synthetic present flag).
     pub conv: Option<syn::Ident>,
-    /// Struct field this leaf populates (`None` for the present flag).
+    /// Struct field this leaf populates. `None` for the struct-level present
+    /// flag of an `Option<struct>` param. `Some` for ordinary field leaves AND
+    /// for a per-field present flag (Phase 5 `Option<primitive>` field).
     pub field: Option<syn::Ident>,
-    /// `true` for the synthetic `<param>Present: Boolean` gate leaf emitted
-    /// for an `Option<struct>` param.
+    /// `true` for a synthetic `…Present: Boolean` gate leaf: the struct-level
+    /// gate of an `Option<struct>` param (`field == None`) or a per-field gate
+    /// of an `Option<primitive>`/`Option<enum>` field (`field == Some`).
     pub is_present_flag: bool,
+    /// `true` for the **value** leaf of an `Option<primitive>`/`Option<enum>`
+    /// field — its `field`'s reconstruct is `if <field>_present { Some(conv(v)) }
+    /// else { None }`, gated by the matching per-field present leaf. (Phase 5.)
+    pub opt_scalar: bool,
 }
 
 /// A flattened plan for one struct input parameter. Built once by
@@ -2481,10 +2480,83 @@ pub(crate) fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
     )
 }
 
+/// Decompose an `Option<primitive>` / `Option<enum>` **struct field** into a
+/// `(<field>_present: Boolean, <field>_value: <prim>)` [`FlatLeaf`] pair, or
+/// `None` to keep the boxed-`JObject` decline. The field-level dual of
+/// [`build_option_scalar_input_plan`]: same boxed-fallback condition (primitive
+/// inner wire, no niche, no projection, no pre-stages). `kt_param` is the call
+/// object expression and `optional` whether the enclosing struct param is itself
+/// `Option<struct>` — when so, the access safe-navigates (`obj?.field`), so an
+/// absent struct yields `present = false` for every field.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn option_scalar_field_leaves(
+    ext: &JniGen<impl JniGenState>,
+    registry: &Registry<KotlinMeta>,
+    param_name: &syn::Ident,
+    kt_param: &str,
+    optional: bool,
+    fident: &syn::Ident,
+    fcamel: &str,
+    field_ty: &syn::Type,
+) -> Option<Vec<FlatLeaf>> {
+    let inner = option_inner_type(field_ty)?;
+    if matches!(inner, syn::Type::Reference(_)) {
+        return None;
+    }
+    let ie = registry.input_entry(&inner)?;
+    let value_wire = ie.destination.clone();
+    let prim = JniPrim::from_wire(&value_wire)?;
+    if ie.niches.clone().carve().is_some()
+        || ie.metadata.projection.is_some()
+        || !ie.pre_stages.is_empty()
+    {
+        return None;
+    }
+    let is_enum = ext.is_kotlin_enum(&inner);
+    // `obj.field` / `obj?.field` (safe-nav under an absent `Option<struct>`).
+    let field_ref = if optional {
+        format!("{kt_param}?.{fcamel}")
+    } else {
+        format!("{kt_param}.{fcamel}")
+    };
+    let present_access = format!("{field_ref} != null");
+    let value_access = if is_enum {
+        format!("{field_ref}?.value ?: {}", prim.kotlin_zero())
+    } else {
+        format!("{field_ref} ?: {}", prim.kotlin_zero())
+    };
+    let pres_ident = format_ident!("{}_{}_present", param_name, fident);
+    let val_ident = format_ident!("{}_{}_value", param_name, fident);
+    Some(vec![
+        FlatLeaf {
+            native_ident: pres_ident,
+            native_wire_ty: quote!(jni::sys::jboolean),
+            kt_name: snake_to_camel(&format!("{}_{}_present", param_name, fident)),
+            kt_wire_ty: "Boolean".to_string(),
+            kt_access: present_access,
+            conv: None,
+            field: Some(fident.clone()),
+            is_present_flag: true,
+            opt_scalar: false,
+        },
+        FlatLeaf {
+            native_ident: val_ident,
+            native_wire_ty: quote!(#value_wire),
+            kt_name: snake_to_camel(&format!("{}_{}_value", param_name, fident)),
+            kt_wire_ty: prim.kotlin_type().to_string(),
+            kt_access: value_access,
+            conv: Some(ie.function.sig.ident.clone()),
+            field: Some(fident.clone()),
+            is_present_flag: false,
+            opt_scalar: true,
+        },
+    ])
+}
+
 /// Build a [`FlatInputPlan`] for a struct input parameter, or `None` to keep
 /// the existing single-`JObject` path. Returns `None` (safe fallback) for any
 /// shape outside the conservative v1 leaf set — handle/value projections,
-/// enums, nested data classes, boxed `Option<primitive>`, `Vec<non-u8>`,
+/// enums, nested data classes, `Vec<non-u8>`,
 /// converters with `pre_stages`, and `impl Into<S>` dispatch (`Any`). This is
 /// the single source of truth shared by the native wrapper signature, the
 /// `JNINative` extern declaration, and the Kotlin call-site destructure.
@@ -2567,6 +2639,7 @@ pub(crate) fn build_flat_input_plan(
             conv: None,
             field: None,
             is_present_flag: true,
+            opt_scalar: false,
         });
         Some(id)
     } else {
@@ -2576,6 +2649,21 @@ pub(crate) fn build_flat_input_plan(
     for field in &named.named {
         let fident = field.ident.clone()?;
         let fcamel = snake_to_camel(&fident.to_string());
+
+        // Phase 5: an `Option<primitive>` / `Option<enum>` field that would
+        // otherwise box into a `java.lang.*` `JObject` (declining the whole
+        // struct) crosses instead as a `(<field>_present: Boolean,
+        // <field>_value: <prim>)` leaf pair — the field dual of the param-level
+        // `OptionScalarInputPlan`. The Rust reconstruct rebuilds the `Option`
+        // from the two raw scalars (no `intValue()` unbox). Detected before the
+        // enum-decline guard below so `Option<enum>` fields take this path too.
+        if let Some(pair) =
+            option_scalar_field_leaves(ext, registry, param_name, &kt_param, optional, &fident, &fcamel, &field.ty)
+        {
+            leaves.extend(pair);
+            continue;
+        }
+
         let fentry = registry.input_entry(&field.ty)?;
         // Reject anything outside the simple-leaf set (keeps the object path).
         if !fentry.pre_stages.is_empty() {
@@ -2618,6 +2706,7 @@ pub(crate) fn build_flat_input_plan(
             conv: Some(fentry.function.sig.ident.clone()),
             field: Some(fident),
             is_present_flag: false,
+            opt_scalar: false,
         });
     }
 
@@ -2644,6 +2733,14 @@ pub(crate) fn render_flat_input_decode(
 ) -> (TokenStream, TokenStream) {
     let module = &plan.struct_module;
     let sid = &plan.struct_ident;
+    // Per-field present gates (Phase 5 `Option<primitive>` fields): map the
+    // field ident to its `<field>_present` native param ident.
+    let field_present: std::collections::HashMap<String, syn::Ident> = plan
+        .leaves
+        .iter()
+        .filter(|l| l.is_present_flag && l.field.is_some())
+        .map(|l| (l.field.clone().unwrap().to_string(), l.native_ident.clone()))
+        .collect();
     let mut field_decodes: Vec<TokenStream> = Vec::new();
     let mut field_inits: Vec<TokenStream> = Vec::new();
     for leaf in &plan.leaves {
@@ -2654,15 +2751,33 @@ pub(crate) fn render_flat_input_decode(
         let wid = &leaf.native_ident;
         let fid = leaf.field.clone().unwrap();
         let tmp = format_ident!("__{}_{}", arg_ident, fid);
-        field_decodes.push(quote! {
-            let #tmp = match #conv(&mut env, &#wid) {
+        let decode_value = quote! {
+            match #conv(&mut env, &#wid) {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
                     let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
                     return #on_err;
                 }
-            };
-        });
+            }
+        };
+        if leaf.opt_scalar {
+            // `Option<primitive>` field: gate the decode on the per-field present
+            // flag; an absent field skips the converter entirely.
+            let present = field_present.get(&fid.to_string()).unwrap_or_else(|| {
+                panic!("opt_scalar value leaf for field `{fid}` has no matching present leaf")
+            });
+            field_decodes.push(quote! {
+                let #tmp = if #present != 0u8 {
+                    ::core::option::Option::Some(#decode_value)
+                } else {
+                    ::core::option::Option::None
+                };
+            });
+        } else {
+            field_decodes.push(quote! {
+                let #tmp = #decode_value;
+            });
+        }
         field_inits.push(quote!(#fid: #tmp));
     }
     let build = quote!(#module::#sid { #(#field_inits),* });

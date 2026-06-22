@@ -37,6 +37,13 @@ pub(crate) enum WrapKind {
     None,
     /// Opaque handle: raw `Long` → typed handle class (dotted FQN).
     Handle(String),
+    /// Opaque handle delivered to a callback as a **transient owned** value
+    /// (raw `Long` → typed handle class, dotted FQN): the `asRaw` proxy wraps it
+    /// AND closes it in a `finally` after `run` returns — the close-unless-taken
+    /// contract (a no-op if the user consumed/`take()`-ed the handle, which
+    /// zeroes its `ptr`). Replaces the former Rust-side `new_object` + post-invoke
+    /// `close()` for a plan-less `impl Fn(Handle)` arg (Phase 3).
+    HandleOwned(String),
     /// `Copy` value blob: raw `ByteArray` → `@JvmInline` value class (FQN).
     Blob(String),
 }
@@ -46,8 +53,14 @@ impl WrapKind {
     pub fn class_fqn(&self) -> Option<&str> {
         match self {
             WrapKind::None => None,
-            WrapKind::Handle(f) | WrapKind::Blob(f) => Some(f),
+            WrapKind::Handle(f) | WrapKind::HandleOwned(f) | WrapKind::Blob(f) => Some(f),
         }
+    }
+
+    /// `true` for [`Self::HandleOwned`] — the proxy must close the wrapped handle
+    /// after `run`.
+    pub fn is_owned_handle(&self) -> bool {
+        matches!(self, WrapKind::HandleOwned(_))
     }
 
     /// The wrapping expression over `arg` (`raw_nullable` adds a null-safe
@@ -339,11 +352,22 @@ impl IfaceSpec {
         // `run` arguments: per-param `wrap` (1:1 view) or, with `typed_groups`,
         // one expression per group — a whole value reassembled from its leaves
         // via `Class.fromParts(leaves…)`, or a single passthrough leaf's wrap.
-        let wrapped = if self.typed_groups.is_empty() {
+        // An owned-handle arg (`HandleOwned`) must be bound to a local and
+        // `close()`-d after `run` (close-unless-taken), so track it per arg.
+        struct RunArg {
+            expr: String,
+            owned: bool,
+            nullable: bool,
+        }
+        let run_args: Vec<RunArg> = if self.typed_groups.is_empty() {
             self.params
                 .iter()
-                .map(|p| p.wrap.wrap_expr(&p.name, p.raw.is_nullable()))
-                .collect::<Vec<_>>()
+                .map(|p| RunArg {
+                    expr: p.wrap.wrap_expr(&p.name, p.raw.is_nullable()),
+                    owned: p.wrap.is_owned_handle(),
+                    nullable: p.raw.is_nullable(),
+                })
+                .collect()
         } else {
             let mut args = Vec::with_capacity(self.typed_groups.len());
             let mut at = 0usize;
@@ -351,28 +375,34 @@ impl IfaceSpec {
                 let names: Vec<&str> =
                     self.params[at..at + g.leaf_count].iter().map(|p| p.name.as_str()).collect();
                 match &g.reassemble {
-                    Some(cls) => args.push(format!("{cls}.fromParts({})", names.join(", "))),
+                    Some(cls) => args.push(RunArg {
+                        expr: format!("{cls}.fromParts({})", names.join(", ")),
+                        owned: false,
+                        nullable: false,
+                    }),
                     None => {
                         let p = &self.params[at];
-                        args.push(p.wrap.wrap_expr(&p.name, p.raw.is_nullable()));
+                        args.push(RunArg {
+                            expr: p.wrap.wrap_expr(&p.name, p.raw.is_nullable()),
+                            owned: p.wrap.is_owned_handle(),
+                            nullable: p.raw.is_nullable(),
+                        });
                     }
                 }
                 at += g.leaf_count;
             }
             args
         };
+        let any_owned = run_args.iter().any(|a| a.owned);
+        let lambda_open = format!("{}{gen_args} {{", self.raw_name());
         let body = if self.params.is_empty() {
-            kt::Code::new().blk(format!("{}{gen_args} {{", self.raw_name()), |c| {
-                c.line("run()")
-            })
-        } else {
-            kt::Code::new().blk(format!("{}{gen_args} {{", self.raw_name()), |mut c| {
+            kt::Code::new().blk(lambda_open, |c| c.line("run()"))
+        } else if !any_owned {
+            // Common case: a single `run(<wrapped…>)` call (no transient handle).
+            let wrapped: Vec<&str> = run_args.iter().map(|a| a.expr.as_str()).collect();
+            kt::Code::new().blk(lambda_open, |mut c| {
                 for (idx, name) in self.params.iter().map(|p| p.name.as_str()).enumerate() {
-                    let suffix = if idx + 1 == self.params.len() {
-                        " ->"
-                    } else {
-                        ","
-                    };
+                    let suffix = if idx + 1 == self.params.len() { " ->" } else { "," };
                     c = c.line(format!("{name}{suffix}"));
                 }
                 c.blk_with("run(", ")", |mut call| {
@@ -383,6 +413,44 @@ impl IfaceSpec {
                     call
                 })
             })
+        } else {
+            // Owned-handle arg(s): bind each to a local, `run(...)` with the
+            // locals, and `close()` every owned local in a `finally` so the
+            // per-invocation handle's `Box` is freed even if `run` threw — a
+            // no-op when the consumer `take()`-ed it (its `ptr` is then 0).
+            let lambda_params = self
+                .params
+                .iter()
+                .map(|p| p.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut lines: Vec<String> = Vec::new();
+            let mut call_args: Vec<String> = Vec::with_capacity(run_args.len());
+            let mut closes: Vec<String> = Vec::new();
+            let mut owned_idx = 0usize;
+            for a in &run_args {
+                if a.owned {
+                    let local = format!("__own{owned_idx}");
+                    owned_idx += 1;
+                    lines.push(format!("val {local} = {}", a.expr));
+                    call_args.push(local.clone());
+                    let dot = if a.nullable { "?." } else { "." };
+                    closes.push(format!("{local}{dot}close()"));
+                } else {
+                    call_args.push(a.expr.clone());
+                }
+            }
+            let mut src = format!("{lambda_open}\n    {lambda_params} ->\n");
+            for l in &lines {
+                src.push_str(&format!("    {l}\n"));
+            }
+            src.push_str(&format!("    try {{\n        run({})\n", call_args.join(", ")));
+            src.push_str("    } finally {\n");
+            for cl in &closes {
+                src.push_str(&format!("        {cl}\n"));
+            }
+            src.push_str("    }\n}");
+            kt::Code::raw_reindent(&src)
         };
         let mut f = kt::KtFun::new(recv).vis(kt::Vis::Public);
         for g in &bare_generics {
@@ -740,6 +808,35 @@ pub(crate) fn leaf_iface_param(
     Some(IfaceParam::same(name, builder_kt))
 }
 
+/// The [`IfaceParam`] for a **plan-less opaque-handle callback arg** (Phase 3):
+/// typed = the handle class, raw = `Long` (the `jlong` pointer the native
+/// trampoline delivers), wrap = [`WrapKind::HandleOwned`] so the generated
+/// `asRaw` proxy wraps the pointer into the handle class and `close()`s it after
+/// `run` (close-unless-taken). Replaces the former Rust-side `new_object` +
+/// post-invoke `close()`. `None` if the arg's projection FQN can't be resolved.
+pub(crate) fn owned_handle_iface_param(
+    ext: &JniGen<impl JniGenState>,
+    registry: &Registry<KotlinMeta>,
+    name: String,
+    out_ty: &syn::Type,
+    nullable: bool,
+) -> Option<IfaceParam> {
+    let proj = registry.output_entry(out_ty)?.metadata.projection.clone()?;
+    let fqn = ext.kotlin_fqn(&proj.leaf_key)?.to_string();
+    let typed = kt::KtType::cls(fqn.clone());
+    let (typed, raw) = if nullable {
+        (typed.nullable(), kt::KtType::long().nullable())
+    } else {
+        (typed, kt::KtType::long())
+    };
+    Some(IfaceParam {
+        name,
+        typed,
+        raw,
+        wrap: WrapKind::HandleOwned(fqn),
+    })
+}
+
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
 /// flattened leaf of each arg's callback plan (the arg whole when plan-less),
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
@@ -762,7 +859,10 @@ pub(crate) fn callback_iface_spec(
         reassemble: Option<String>,
         leaf_count: usize,
     }
-    let mut leaf_tys: Vec<(String, syn::Type, bool, bool)> = Vec::new();
+    // (leaf name, out_ty, nullable, from_plan, owned_handle). `owned_handle`
+    // marks a plan-less opaque-handle arg delivered as a raw `jlong` and wrapped
+    // + closed Kotlin-side (Phase 3).
+    let mut leaf_tys: Vec<(String, syn::Type, bool, bool, bool)> = Vec::new();
     let mut groups: Vec<GroupDesc> = Vec::new();
     let mut any_fixed = false;
 
@@ -779,7 +879,7 @@ pub(crate) fn callback_iface_spec(
         if let Some(plan) = plan {
             let leaf_names = plan_leaf_names(&plan.leaves);
             for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
-                leaf_tys.push((n.clone(), l.out_ty.clone(), l.nullable, true));
+                leaf_tys.push((n.clone(), l.out_ty.clone(), l.nullable, true, false));
             }
             if plan.fixed_builder {
                 any_fixed = true;
@@ -808,7 +908,20 @@ pub(crate) fn callback_iface_spec(
                 }
             }
         } else {
-            leaf_tys.push((whole_value_name(t, i), t.clone(), is_option_type(t), false));
+            // A plan-less opaque-handle arg is delivered as a raw `jlong` and
+            // wrapped + closed Kotlin-side (Phase 3 — no Rust `new_object`).
+            let owned_handle = registry
+                .output_entry(t)
+                .and_then(|e| e.metadata.projection.as_ref())
+                .map(|p| p.kind == ProjectionKind::Handle)
+                .unwrap_or(false);
+            leaf_tys.push((
+                whole_value_name(t, i),
+                t.clone(),
+                is_option_type(t),
+                false,
+                owned_handle,
+            ));
             groups.push(GroupDesc {
                 name: whole_value_name(t, i),
                 typed: None,
@@ -817,18 +930,16 @@ pub(crate) fn callback_iface_spec(
             });
         }
     }
-    let mut names: Vec<String> = leaf_tys.iter().map(|(n, _, _, _)| n.clone()).collect();
+    let mut names: Vec<String> = leaf_tys.iter().map(|(n, ..)| n.clone()).collect();
     dedup_names(&mut names);
     let mut params = Vec::with_capacity(leaf_tys.len());
-    for (k, (_, out_ty, nullable, from_plan)) in leaf_tys.iter().enumerate() {
-        params.push(leaf_iface_param(
-            ext,
-            registry,
-            names[k].clone(),
-            out_ty,
-            *nullable,
-            *from_plan,
-        )?);
+    for (k, (_, out_ty, nullable, from_plan, owned_handle)) in leaf_tys.iter().enumerate() {
+        let param = if *owned_handle {
+            owned_handle_iface_param(ext, registry, names[k].clone(), out_ty, *nullable)?
+        } else {
+            leaf_iface_param(ext, registry, names[k].clone(), out_ty, *nullable, *from_plan)?
+        };
+        params.push(param);
     }
     // Typed groups only when a fixed-builder arg is present — otherwise the
     // typed view is the params 1:1 (preserving the established accessor /
@@ -956,13 +1067,18 @@ pub(crate) fn whole_folder_iface_spec(
 ) -> Option<IfaceSpec> {
     let mut params: Vec<IfaceParam> =
         vec![IfaceParam::same("acc".to_string(), kt::KtType::var_("A"))];
+    // `raw_handle = true`: an opaque-handle element crosses the JNI border as
+    // its raw `jlong` (the folder wraps it into the typed handle class in Kotlin
+    // bytecode — a native `new_object` per element would cost descriptor parse +
+    // FindClass + GetMethodID + NewObjectA). Value blobs / String are unaffected
+    // (they ignore the flag; see [`leaf_iface_param`]).
     params.push(leaf_iface_param(
         ext,
         registry,
         "element".to_string(),
         element,
         false,
-        false,
+        true,
     )?);
     let name = format!("{}Folder", subject_short(element));
     let package = subject_package(ext, element);

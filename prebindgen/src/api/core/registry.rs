@@ -625,6 +625,19 @@ impl<M> Registry<M> {
         let _ = self.register_type_recursive(Direction::Output, ty, true, loc);
     }
 
+    /// Drop `ty` from the required-output scan set. The type's table entry is
+    /// left intact (so [`crate::api::core::resolve`]'s PASS A still resolves it
+    /// if it can, and emits it when resolved), but a `None` resolution no longer
+    /// counts as an unresolved-required error. Used by
+    /// [`crate::api::core::unfold::apply_leaf_vec_folds`]: when a `Vec<T>` /
+    /// `Option<Vec<T>>` return is delivered element-by-element through a fold,
+    /// the whole-collection converter is genuinely not needed — and for a
+    /// `Vec<opaque-handle>` it cannot resolve at all (a `jlong` wire is not
+    /// JObject-shaped), so requiring it would wrongly fail resolution.
+    pub(crate) fn unrequire_output(&mut self, ty: &syn::Type) {
+        self.required_outputs_scan.remove(&TypeKey::from_type(ty));
+    }
+
     fn index_item(&mut self, item: syn::Item, loc: SourceLocation) -> Result<(), ScanError> {
         match item {
             syn::Item::Fn(f) => {

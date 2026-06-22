@@ -759,10 +759,12 @@ impl<S: JniGenState> JniGen<S> {
     /// **before** type resolution, exactly like [`Self::value_struct_decons`].
     fn is_leaf_vec_element(&self, elem: &syn::Type) -> bool {
         match self.types.get(&TypeKey::from_type(elem)) {
-            // A declared value blob crosses as a single `ByteArray` leaf.
-            // (Handles are gated separately; enums and multi-field data classes
-            // are not leaf-folded — data classes go through `value_struct_decons`.)
-            Some(cfg) => cfg.value_blob,
+            // A declared value blob crosses as a single `ByteArray` leaf; a
+            // declared opaque handle crosses as a single `jlong` (pointer) leaf
+            // that the Kotlin folder wraps into its typed handle class. Enums
+            // and multi-field data classes are not leaf-folded — data classes go
+            // through `value_struct_decons`.
+            Some(cfg) => cfg.value_blob || cfg.opaque.is_some(),
             // Undeclared: only the `String` builtin crosses as a single
             // JObject-shaped leaf (`JString`); other builtins are primitives.
             None => is_string_type(elem),
@@ -870,10 +872,11 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
     /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
     /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection
     /// through a foreign-built fold (no Rust `ArrayList`). A single-leaf element
-    /// is a value blob (→ `ByteArray`) or a non-`data_class` builtin with a
-    /// JObject-shaped output wire (e.g. String). Multi-field `data_class`
-    /// elements are excluded — they go through [`Self::value_struct_decons`] —
-    /// and opaque handles are excluded here (their `Vec` is gated separately).
+    /// is a value blob (→ `ByteArray`), an opaque handle (→ a `jlong` pointer
+    /// the Kotlin folder wraps into its typed handle class), or a non-`data_class`
+    /// builtin with a JObject-shaped output wire (e.g. String). Multi-field
+    /// `data_class` elements are excluded — they go through
+    /// [`Self::value_struct_decons`].
     fn leaf_vec_fold_elements(
         &self,
         registry: &Registry<KotlinMeta>,
@@ -1563,7 +1566,11 @@ impl<S: JniGenState> JniGen<S> {
         // rank-0 (primitive_output → JByteArray) so rank-1 never sees it.
         if pat_match(pat, "Vec < _ >") {
             let inner = registry.output_entry(t1)?;
-            reject_vec_of_handle(&inner.metadata.projection, t1);
+            // `Vec<opaque-handle>` output is delivered by the Kotlin-side leaf
+            // fold (`apply_leaf_vec_folds` → typed-handle wrap), so this
+            // whole-`ArrayList` converter is bypassed for it. A handle's `jlong`
+            // wire isn't JObject-shaped, so it returns `None` below; the
+            // fold-covered return is de-required, so the `None` is not an error.
             let inner_wire = inner.destination.clone();
             if !is_jobject_shaped_wire(&inner_wire) {
                 return None;
@@ -1635,7 +1642,9 @@ impl<S: JniGenState> JniGen<S> {
         registry: &Registry<KotlinMeta>,
     ) -> Option<ConverterImpl<KotlinMeta>> {
         let inner = registry.output_entry(elem)?;
-        reject_vec_of_handle(&inner.metadata.projection, elem);
+        // A `&[opaque-handle]` callback arg is delivered by the Kotlin-side leaf
+        // fold (typed-handle wrap), bypassing this whole-`ArrayList` converter; a
+        // handle's `jlong` wire isn't JObject-shaped, so it returns `None` here.
         let inner_wire = inner.destination.clone();
         if !is_jobject_shaped_wire(&inner_wire) {
             return None;

@@ -867,6 +867,14 @@ pub fn apply_leaf_vec_folds<M>(
                         inner_shape
                     };
                     registry.require_output(&vec_elem, &loc);
+                    // The fold delivers the return element-by-element, so the
+                    // whole `Vec<T>` / `Option<Vec<T>>` converter is not needed.
+                    // De-require it: for String / value-blob elements it still
+                    // resolves (and is emitted as harmless dead code); for an
+                    // opaque-handle element it cannot resolve (`jlong` wire isn't
+                    // JObject-shaped), and de-requiring keeps that `None` from
+                    // being flagged as an unresolved-required error.
+                    registry.unrequire_output(&ret);
                     registry.unfold_plans.insert(
                         func.clone(),
                         whole_leaf_fold_plan(&vec_elem, shape),
