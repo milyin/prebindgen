@@ -520,6 +520,16 @@ impl<S: JniGenState> JniGen<S> {
         // types for Callback, the element type for WholeFolder).
         let mut uses: BTreeMap<Use, Vec<syn::Type>> = BTreeMap::new();
 
+        /// A hoisted-singleton request emitted alongside an interface: the
+        /// `fromParts` builder / folder for a synthesized `data_class`, or the
+        /// single-leaf appender for a whole-element leaf fold. The wrapper
+        /// references the singleton instead of taking a caller `build`/`fold`.
+        enum FixedSingleton {
+            StructBuilder(DeconId),
+            StructFolder(DeconId),
+            LeafFolder,
+        }
+
         // DeconIds whose builder is a synthesized by-value `data_class`
         // (`fixed_builder`): these get a hoisted `__<Name>Builder` singleton
         // (the `fromParts` factory) emitted alongside the interface, so the
@@ -531,10 +541,36 @@ impl<S: JniGenState> JniGen<S> {
             .filter(|p| p.fixed_builder)
             .filter_map(|p| p.decon.clone())
             .collect();
+        // Element type keys whose whole-element fold is fixed (a synthesized
+        // single-leaf `Vec<T>` fold): these get a hoisted `__<Elem>FolderRaw`
+        // appender singleton, the leaf dual of `fixed_decons`.
+        let fixed_leaf_elements: std::collections::HashSet<String> = registry
+            .unfold_plans
+            .values()
+            .chain(registry.callback_arg_plans.values())
+            .filter(|p| p.fixed_builder)
+            .filter_map(|p| p.element.as_ref())
+            .map(|el| TypeKey::from_type(el).to_string())
+            .collect();
 
-        for pkg_cfg in self.packages.values() {
-            for entry in &pkg_cfg.functions {
-                let Some((item_fn, _loc)) = registry.functions.get(&entry.rust_ident) else {
+        // Walk every declared function — free `.fun`s AND class members
+        // (`.method`/`.accessor`/`.constructor`): a method can also need a
+        // generated interface (e.g. a `Vec<T>` whole-element folder). The `uses`
+        // map dedups, so an identity shared across positions emits once.
+        let declared_idents: std::collections::BTreeSet<syn::Ident> = self
+            .packages
+            .values()
+            .flat_map(|p| p.functions.iter().map(|e| e.rust_ident.clone()))
+            .chain(
+                self.class_members
+                    .values()
+                    .flatten()
+                    .map(|m| m.rust_ident.clone()),
+            )
+            .collect();
+        for ident in &declared_idents {
+            {
+                let Some((item_fn, _loc)) = registry.functions.get(ident) else {
                     continue;
                 };
                 for input in &item_fn.sig.inputs {
@@ -598,7 +634,9 @@ impl<S: JniGenState> JniGen<S> {
                 let (spec, is_error, fixed) = match u {
                     Use::Callback(_) => (callback_iface_spec(self, registry, &tys), false, None),
                     Use::Builder(d) => {
-                        let fixed = fixed_decons.contains(&d).then(|| (d.clone(), false));
+                        let fixed = fixed_decons
+                            .contains(&d)
+                            .then(|| FixedSingleton::StructBuilder(d.clone()));
                         (builder_iface_spec(self, registry, &d), false, fixed)
                     }
                     Use::Folder(d) => {
@@ -615,10 +653,20 @@ impl<S: JniGenState> JniGen<S> {
                             }
                             s
                         });
-                        (spec, false, is_fixed.then(|| (d.clone(), true)))
+                        (
+                            spec,
+                            false,
+                            is_fixed.then(|| FixedSingleton::StructFolder(d.clone())),
+                        )
                     }
                     Use::WholeFolder(_) => {
-                        (whole_folder_iface_spec(self, registry, &tys[0]), false, None)
+                        // A synthesized single-leaf `Vec<T>` fold gets a hoisted
+                        // appender singleton; an explicit caller-fold whole-element
+                        // deconstruction (not `fixed_builder`) does not.
+                        let fixed = fixed_leaf_elements
+                            .contains(&TypeKey::from_type(&tys[0]).to_string())
+                            .then_some(FixedSingleton::LeafFolder);
+                        (whole_folder_iface_spec(self, registry, &tys[0]), false, fixed)
                     }
                     Use::Handler(d) => (error_handler_iface_spec(self, registry, &d), true, None),
                     Use::JniErrorHandler => {
@@ -643,11 +691,15 @@ impl<S: JniGenState> JniGen<S> {
                 if is_error {
                     file = file.decl(s.to_capture_decl());
                 }
-                if let Some((decon, is_folder)) = fixed {
-                    let decl = if is_folder {
-                        self.value_struct_folder_singleton(registry, &s, &decon)
-                    } else {
-                        self.value_struct_builder_singleton(registry, &s, &decon)
+                if let Some(fixed) = fixed {
+                    let decl = match fixed {
+                        FixedSingleton::StructBuilder(decon) => {
+                            self.value_struct_builder_singleton(registry, &s, &decon)
+                        }
+                        FixedSingleton::StructFolder(decon) => {
+                            self.value_struct_folder_singleton(registry, &s, &decon)
+                        }
+                        FixedSingleton::LeafFolder => self.whole_value_folder_singleton(&s),
                     };
                     file = file.decl(decl);
                 }
@@ -745,6 +797,44 @@ impl<S: JniGenState> JniGen<S> {
              {folder} {{ {lambda_params} -> \
              {acc}.add({class_short}.fromParts({leaf_args})); {acc} }}\n\
              }}"
+        );
+        kt::KtDecl::Raw {
+            name: holder,
+            code: kt::Code::raw_reindent(&code),
+        }
+    }
+
+    /// The hoisted **folder-appender** singleton for a **whole single-leaf
+    /// element** fold (`Vec<String>` / `Vec<value-blob>` return, or the matching
+    /// slice callback): an instance of the folder's raw twin (`__<Elem>FolderRaw`)
+    /// that, per element, wraps the raw leaf into its typed Kotlin value and
+    /// appends it to the accumulator `ArrayList`, returning the same list. The
+    /// single-leaf analog of [`Self::value_struct_folder_singleton`] — there is no
+    /// `fromParts`; reassembly is just `acc.add(<wrap>(element))`, where `<wrap>`
+    /// is the value-class ctor for a value blob, the handle ctor for a handle, or
+    /// identity for a String. So the list is composed on the Kotlin side and no
+    /// Java object is built on the Rust side. The folder's `run` params are
+    /// `[acc, element]`.
+    fn whole_value_folder_singleton(
+        &self,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+    ) -> kt::KtDecl {
+        let folder = spec.raw_name();
+        let holder = spec.singleton_holder_name();
+        let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
+        // params[0] is the accumulator `acc`; params[1] is the single element leaf.
+        let acc = &spec.params[0].name;
+        let elem = &spec.params[1];
+        let elem_short = elem.typed.simple_name().unwrap_or("Any");
+        let wrap = elem.wrap.wrap_expr(&elem.name, false);
+        let acc_ty = format!("ArrayList<{elem_short}>");
+        let code = format!(
+            "internal object {holder} {{\n    \
+             @JvmField\n    \
+             val {field}: {folder}<{acc_ty}> =\n        \
+             {folder} {{ {acc}, {elem} -> {acc}.add({wrap}); {acc} }}\n\
+             }}",
+            elem = elem.name,
         );
         kt::KtDecl::Raw {
             name: holder,

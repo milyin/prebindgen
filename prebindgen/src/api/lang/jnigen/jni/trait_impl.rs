@@ -334,6 +334,22 @@ impl<S> JniGen<S> {
 /// `err` is generic over `Display`, so both the framework `__JniErr`
 /// (`JniBindingError`, a `String` wrapper) and a domain `Result<T, E>`'s `E`
 /// funnel through one function with no per-type routing.
+/// Strip a single leading `&` (one level) from a type, leaving non-references
+/// unchanged. Used to reach a `Vec`/slice element's bare type for nomination.
+fn peel_leading_ref(ty: &syn::Type) -> syn::Type {
+    match ty {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    }
+}
+
+/// True for the `String` builtin (final path segment `String`) — the one
+/// undeclared type that crosses as a single JObject-shaped leaf (`JString`).
+fn is_string_type(ty: &syn::Type) -> bool {
+    matches!(ty, syn::Type::Path(tp)
+        if tp.path.segments.last().is_some_and(|s| s.ident == "String"))
+}
+
 pub(crate) fn build_signal_error_item() -> syn::Item {
     syn::parse_quote!(
         #[allow(non_snake_case, dead_code)]
@@ -731,6 +747,27 @@ impl<S: JniGenState> JniGen<S> {
         }
         None
     }
+
+    /// True when `elem` crosses the boundary as a **single leaf** the foreign
+    /// side can reassemble from one wire value — a value blob (→ `ByteArray`) or
+    /// the `String` builtin (→ `JString`). Multi-field `data_class` elements
+    /// (whose output is a `fromParts` object), enums, and opaque handles are
+    /// excluded. Drives [`Self::leaf_vec_fold_elements`].
+    ///
+    /// Classified from the adapter's declared [`TypeConfig`] table (and the
+    /// `String` builtin), not the resolver's output converters — this runs
+    /// **before** type resolution, exactly like [`Self::value_struct_decons`].
+    fn is_leaf_vec_element(&self, elem: &syn::Type) -> bool {
+        match self.types.get(&TypeKey::from_type(elem)) {
+            // A declared value blob crosses as a single `ByteArray` leaf.
+            // (Handles are gated separately; enums and multi-field data classes
+            // are not leaf-folded — data classes go through `value_struct_decons`.)
+            Some(cfg) => cfg.value_blob,
+            // Undeclared: only the `String` builtin crosses as a single
+            // JObject-shaped leaf (`JString`); other builtins are primitives.
+            None => is_string_type(elem),
+        }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -823,6 +860,50 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
                         source,
                         leaves,
                     });
+                }
+            }
+        }
+        out
+    }
+
+    /// Nominate every **single-leaf** element type that appears in a `Vec<T>` /
+    /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
+    /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection
+    /// through a foreign-built fold (no Rust `ArrayList`). A single-leaf element
+    /// is a value blob (→ `ByteArray`) or a non-`data_class` builtin with a
+    /// JObject-shaped output wire (e.g. String). Multi-field `data_class`
+    /// elements are excluded — they go through [`Self::value_struct_decons`] —
+    /// and opaque handles are excluded here (their `Vec` is gated separately).
+    fn leaf_vec_fold_elements(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<syn::Type> {
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        let mut consider = |bare: syn::Type| {
+            if seen.insert(TypeKey::from_type(&bare)) && self.is_leaf_vec_element(&bare) {
+                out.push(bare);
+            }
+        };
+        for (item_fn, _loc) in registry.functions.values() {
+            // `Vec<T>` / `Option<Vec<T>>` return.
+            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
+                let after_opt =
+                    crate::api::core::types_util::option_inner_type(ret).unwrap_or((**ret).clone());
+                if let Some(elem) = crate::api::core::types_util::vec_inner_type(&after_opt) {
+                    consider(peel_leading_ref(&elem));
+                }
+            }
+            // `impl Fn(&[T])` / `impl Fn([T])` callback arg.
+            for input in &item_fn.sig.inputs {
+                let syn::FnArg::Typed(pt) = input else { continue };
+                let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
+                    continue;
+                };
+                for arg in args {
+                    if let syn::Type::Slice(s) = &peel_leading_ref(&arg) {
+                        consider(peel_leading_ref(&s.elem));
+                    }
                 }
             }
         }

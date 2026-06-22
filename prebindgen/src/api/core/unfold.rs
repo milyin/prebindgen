@@ -820,6 +820,114 @@ fn apply_value_struct_callbacks<M>(
     Ok(())
 }
 
+/// Wire **whole-element** `Iterable` fold plans for bare `Vec<T>` /
+/// `Option<Vec<T>>` returns and `impl Fn(&[T])` callback args whose element `T`
+/// is a single leaf (String, value blob, opaque handle) nominated by the adapter
+/// via [`crate::api::core::prebindgen::Prebindgen::leaf_vec_fold_elements`]. Each
+/// such position crosses as decoupled raw leaves folded into a **foreign-built**
+/// list — the single-leaf dual of [`apply_value_structs`] (which handles
+/// multi-field `data_class` elements). The fold is a **fixed** foreign singleton
+/// (`fixed_builder = true`): the wrapper allocates the list, passes the hoisted
+/// appender, and returns the concrete `List<T>` (never a caller `fold` param), so
+/// no `java.util.ArrayList` is built on the Rust side.
+///
+/// Runs right after [`apply_value_structs`]; skips any function/arg that already
+/// carries a plan (an explicit `.deconstruct_output`, a `data_class` fold, …) so
+/// declared decompositions and value-struct folds win.
+pub fn apply_leaf_vec_folds<M>(
+    registry: &mut Registry<M>,
+    elements: Vec<syn::Type>,
+    declared_fns: &std::collections::HashSet<syn::Ident>,
+) -> Result<(), UnfoldError> {
+    if elements.is_empty() {
+        return Ok(());
+    }
+    let elem_keys: Vec<TypeKey> = elements.iter().map(TypeKey::from_type).collect();
+    // Is the leading-`&`-peeled `bare` one of the nominated single-leaf elements?
+    let is_nominated = |bare: &syn::Type| elem_keys.contains(&TypeKey::from_type(bare));
+    for func in declared_fns {
+        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+            continue;
+        };
+        // Output position: `Vec<T>` / `Option<Vec<T>>` return. Skip if a plan
+        // already exists (declared deconstructor / value-struct fold).
+        if !registry.unfold_plans.contains_key(func) {
+            let ret = fn_return(&item_fn);
+            let (optional, after_opt) = match option_inner_type(&ret) {
+                Some(inner) => (true, inner),
+                None => (false, ret.clone()),
+            };
+            if let Some(vec_elem) = vec_inner_type(&after_opt) {
+                let bare = peel_ref(&vec_elem);
+                if is_nominated(&bare) {
+                    let inner_shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
+                    let shape = if optional {
+                        UnfoldShape::Optional((), Box::new(inner_shape))
+                    } else {
+                        inner_shape
+                    };
+                    registry.require_output(&vec_elem, &loc);
+                    registry.unfold_plans.insert(
+                        func.clone(),
+                        whole_leaf_fold_plan(&vec_elem, shape),
+                    );
+                }
+            }
+        }
+        // Callback-arg position: `impl Fn(&[T])` / `impl Fn([T])`.
+        for input in &item_fn.sig.inputs {
+            let syn::FnArg::Typed(pt) = input else { continue };
+            let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
+                continue;
+            };
+            for arg_ty in args {
+                let after_ref = peel_ref(&arg_ty);
+                let syn::Type::Slice(s) = &after_ref else {
+                    continue;
+                };
+                let elem = (*s.elem).clone();
+                if !is_nominated(&peel_ref(&elem)) {
+                    continue;
+                }
+                let key = TypeKey::from_type(&arg_ty);
+                if registry.callback_arg_plans.contains_key(&key) {
+                    continue;
+                }
+                registry.require_output(&elem, &loc);
+                let plan =
+                    whole_leaf_fold_plan(&elem, UnfoldShape::Iterable(Box::new(UnfoldShape::Base)));
+                registry.callback_arg_plans.insert(key, plan);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Build a fixed-builder whole-element fold [`UnfoldPlan`] for a single-leaf
+/// element `vec_elem` (the `Vec`/slice element as written, keeping any leading
+/// `&` so `into_iter()`'s yield matches the element's own output converter).
+fn whole_leaf_fold_plan(vec_elem: &syn::Type, shape: UnfoldShape) -> UnfoldPlan {
+    UnfoldPlan {
+        source: vec_elem.clone(),
+        decon: None,
+        by_ref: matches!(vec_elem, syn::Type::Reference(_)),
+        shape,
+        leaves: vec![],
+        element: Some(vec_elem.clone()),
+        delivery: Delivery::Callback,
+        convert_out_ty: None,
+        fixed_builder: true,
+    }
+}
+
+/// Strip a single leading `&` (one level) from a type.
+fn peel_ref(ty: &syn::Type) -> syn::Type {
+    match ty {
+        syn::Type::Reference(r) => (*r.elem).clone(),
+        other => other.clone(),
+    }
+}
+
 /// The function's return type (or `()` for a unit return).
 fn fn_return(item_fn: &syn::ItemFn) -> syn::Type {
     match &item_fn.sig.output {
@@ -2336,5 +2444,100 @@ mod tests {
             ["z_batched"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
         assert!(reg.callback_arg_plans.is_empty());
+    }
+
+    #[test]
+    fn leaf_vec_fold_synthesizes_whole_element_plans() {
+        // `Vec<String>` / `Option<Vec<ZenohId>>` returns and an `impl Fn(&[String])`
+        // callback arg synthesize FIXED **whole-element** folds (no decon, element
+        // set, no leaves) — the single-leaf dual of the `data_class` Vec fold.
+        let mut reg = reg_with(&[
+            "fn hello_get_locators(h: &Hello) -> Vec<String> { todo!() }",
+            "fn session_peers(s: &Session) -> Option<Vec<ZenohId>> { todo!() }",
+            "fn on_strings(f: impl Fn(&[String]) + Send + Sync + 'static) { todo!() }",
+        ]);
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["hello_get_locators", "session_peers", "on_strings"]
+                .iter()
+                .map(|s| ident(s))
+                .collect();
+        let elements = vec![syn::parse_quote!(String), syn::parse_quote!(ZenohId)];
+        apply_leaf_vec_folds(&mut reg, elements, &declared).expect("apply_leaf_vec_folds");
+
+        // `Vec<String>` return ⇒ Iterable(Base), whole element.
+        let p = reg
+            .unfold_plans
+            .get(&ident("hello_get_locators"))
+            .expect("Vec<String> plan");
+        assert!(p.fixed_builder, "synthesized leaf fold is fixed");
+        assert!(matches!(&p.shape, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base)));
+        assert_eq!(p.delivery, Delivery::Callback);
+        assert!(p.decon.is_none(), "whole-element fold carries no decon");
+        assert!(p.leaves.is_empty(), "no decomposed leaves");
+        assert_eq!(
+            p.element.as_ref().map(|t| t.to_token_stream().to_string()),
+            Some("String".to_string())
+        );
+
+        // `Option<Vec<ZenohId>>` ⇒ Optional(Iterable(Base)).
+        let p2 = reg
+            .unfold_plans
+            .get(&ident("session_peers"))
+            .expect("Option<Vec<ZenohId>> plan");
+        assert!(p2.fixed_builder);
+        assert!(matches!(&p2.shape,
+            UnfoldShape::Optional((), inner)
+                if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))));
+        assert_eq!(
+            p2.element.as_ref().map(|t| t.to_token_stream().to_string()),
+            Some("ZenohId".to_string())
+        );
+
+        // `impl Fn(&[String])` callback arg ⇒ Iterable fold keyed by `&[String]`.
+        let key = TypeKey::from_type(&syn::parse_quote!(&[String]));
+        let cb = reg
+            .callback_arg_plans
+            .get(&key)
+            .expect("slice callback fold plan");
+        assert!(cb.fixed_builder);
+        assert!(matches!(&cb.shape, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base)));
+        assert!(cb.element.is_some());
+        assert!(cb.decon.is_none());
+    }
+
+    #[test]
+    fn leaf_vec_fold_skips_unnominated_and_preexisting() {
+        // An un-nominated element is left on the ArrayList path (no plan); a fn
+        // that already has a plan is never overwritten.
+        let mut reg = reg_with(&[
+            "fn other(x: &X) -> Vec<NotNominated> { todo!() }",
+            "fn strings() -> Vec<String> { todo!() }",
+        ]);
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["other", "strings"].iter().map(|s| ident(s)).collect();
+        // Pre-seed `strings` with a sentinel plan to prove it is preserved.
+        let sentinel = UnfoldPlan {
+            source: syn::parse_quote!(String),
+            decon: None,
+            by_ref: false,
+            shape: UnfoldShape::Base,
+            leaves: vec![],
+            element: None,
+            delivery: Delivery::Return,
+            convert_out_ty: None,
+            fixed_builder: false,
+        };
+        reg.unfold_plans.insert(ident("strings"), sentinel);
+        apply_leaf_vec_folds(&mut reg, vec![syn::parse_quote!(String)], &declared)
+            .expect("apply_leaf_vec_folds");
+        assert!(
+            reg.unfold_plans.get(&ident("other")).is_none(),
+            "un-nominated `NotNominated` element ⇒ no fold plan"
+        );
+        assert_eq!(
+            reg.unfold_plans.get(&ident("strings")).map(|p| p.delivery),
+            Some(Delivery::Return),
+            "pre-existing plan preserved (not overwritten)"
+        );
     }
 }

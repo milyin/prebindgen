@@ -901,6 +901,17 @@ impl<M> Registry<M> {
         if !value_decons.is_empty() {
             crate::api::core::unfold::apply_value_structs(self, value_decons, &declared.functions)?;
         }
+        // Single-leaf `Vec<T>`/`&[T]` whole-element folds — the dual of the
+        // `data_class` folds above, for String / value-blob / handle elements
+        // (so the list is built on the foreign side, not via a Rust ArrayList).
+        let leaf_elements = ext.leaf_vec_fold_elements(self);
+        if !leaf_elements.is_empty() {
+            crate::api::core::unfold::apply_leaf_vec_folds(
+                self,
+                leaf_elements,
+                &declared.functions,
+            )?;
+        }
         Ok(())
     }
 }

@@ -936,10 +936,20 @@ pub(crate) fn render_wrapper_fn(
         // machinery is reused; only the Rust-side object construction is gone.
         // The concrete return is the data class (`T` / `Option<T>`) or, for a
         // `Vec<data_class>` fold, a `List<Class>` composed on the Kotlin side.
-        let class_fqn = ext
-            .kotlin_fqn(&TypeKey::from_type(&plan.source).to_string())
-            .map(|s| s.to_string())?;
-        let class_ty = register_kt_type(&kt::KtType::cls(class_fqn), imports);
+        // The concrete element/return Kotlin type. For a decomposed `data_class`
+        // builder/fold it is the data class (`plan.source`'s registered FQN); for
+        // a **whole-element leaf** fold (`plan.element` set — String / value blob
+        // / handle) `plan.source` (e.g. `String`) has no class FQN, so take the
+        // element's typed view from the folder interface's element param instead.
+        let class_ty = if plan.element.is_some() {
+            let spec = folder_iface_for_plan(ext, registry, plan)?;
+            register_kt_type(&spec.params[1].typed, imports)
+        } else {
+            let class_fqn = ext
+                .kotlin_fqn(&TypeKey::from_type(&plan.source).to_string())
+                .map(|s| s.to_string())?;
+            register_kt_type(&kt::KtType::cls(class_fqn), imports)
+        };
         if is_iterable_fold(&plan.shape) {
             // `Vec<data_class>` fold: allocate an `ArrayList<Class>` accumulator,
             // pass the hoisted **folder-appender** singleton as `fold` (it

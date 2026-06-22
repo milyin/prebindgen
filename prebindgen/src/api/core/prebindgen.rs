@@ -194,6 +194,22 @@ pub trait Prebindgen {
         Vec::new()
     }
 
+    /// Element types the adapter nominates for a **whole-element leaf fold**: a
+    /// `Vec<T>` / `Option<Vec<T>>` return (or `impl Fn(&[T])` callback arg) whose
+    /// element `T` is a single boundary leaf (e.g. a String, a value blob, an
+    /// opaque handle) the foreign side can reassemble from one wire value. The
+    /// single-leaf analog of [`Self::value_struct_decons`]: consulted right after
+    /// it and wired by [`crate::api::core::unfold::apply_leaf_vec_folds`] so the
+    /// collection crosses as decoupled raw leaves folded into a foreign-built list
+    /// instead of a `java.util.ArrayList` built on the Rust side. Multi-field
+    /// `data_class` elements are excluded (they go through
+    /// [`Self::value_struct_decons`]).
+    ///
+    /// Default: empty.
+    fn leaf_vec_fold_elements(&self, _registry: &Registry<Self::Metadata>) -> Vec<syn::Type> {
+        Vec::new()
+    }
+
     // ── Declaration queries ────────────────────────────────────────
 
     /// Idents of `#[prebindgen]` functions the adapter claims for emission.
