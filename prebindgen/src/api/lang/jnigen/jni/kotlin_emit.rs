@@ -727,19 +727,27 @@ impl<S: JniGenState> JniGen<S> {
         // The native side calls the raw twin's `run(acc, leaves…)`; `acc` is the
         // accumulator list and the remaining params are the element leaves.
         let folder = spec.raw_name();
-        let val_name = format!("__{folder}");
+        let holder = spec.singleton_holder_name();
+        let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
         let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
         let lambda_params = names.join(", ");
         let acc = &names[0];
         let leaf_args = names[1..].join(", ");
         let acc_ty = format!("ArrayList<{class_short}>");
+        // The folder appender lives as a `@JvmField` in a holder `object` (not a
+        // top-level `val`) so it has a stable JVM class + static field that the
+        // callback trampoline can fetch via `FindClass` + `GetStaticField`; the
+        // output `Vec` wrapper references it as `{holder}.{field}`.
         let code = format!(
-            "internal val {val_name}: {folder}<{acc_ty}> =\n    \
+            "internal object {holder} {{\n    \
+             @JvmField\n    \
+             val {field}: {folder}<{acc_ty}> =\n        \
              {folder} {{ {lambda_params} -> \
-             {acc}.add({class_short}.fromParts({leaf_args})); {acc} }}"
+             {acc}.add({class_short}.fromParts({leaf_args})); {acc} }}\n\
+             }}"
         );
         kt::KtDecl::Raw {
-            name: val_name,
+            name: holder,
             code: kt::Code::raw_reindent(&code),
         }
     }

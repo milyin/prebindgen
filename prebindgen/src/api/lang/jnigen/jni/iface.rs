@@ -25,6 +25,10 @@ use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan, UnfoldShape};
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
 
+/// The `@JvmField` name holding a hoisted singleton inside its holder object
+/// (see [`IfaceSpec::singleton_holder_name`]).
+pub(crate) const SINGLETON_FIELD: &str = "instance";
+
 /// How a raw leaf value is wrapped into its typed form by the generated
 /// `asRaw` proxy adapter (and by the onError redispatch / guard defaults).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -181,6 +185,29 @@ impl IfaceSpec {
     /// Slash form of the JNI-called interface for `FindClass`.
     pub fn raw_slash_fqn(&self) -> String {
         self.raw_fqn().replace('.', "/")
+    }
+
+    /// Short name of the hoisted-singleton **holder object** (`<RawName>Holder`).
+    /// A fixed builder/folder singleton lives as a `@JvmField` in this object so
+    /// it has a stable JVM class + static field that native code can fetch
+    /// (`FindClass` + `GetStaticField`) — unlike a top-level `val`, whose backing
+    /// field hides behind a file-name-derived facade class.
+    pub fn singleton_holder_name(&self) -> String {
+        format!("__{}Holder", self.raw_name())
+    }
+
+    /// Dotted FQN of the singleton holder object.
+    pub fn singleton_holder_fqn(&self) -> String {
+        if self.package.is_empty() {
+            self.singleton_holder_name()
+        } else {
+            format!("{}.{}", self.package, self.singleton_holder_name())
+        }
+    }
+
+    /// Slash form of the singleton holder FQN (for `FindClass`).
+    pub fn singleton_holder_slash_fqn(&self) -> String {
+        self.singleton_holder_fqn().replace('.', "/")
     }
 
     /// Short name of the generated capture holder (`<RawName>Capture`).
@@ -740,7 +767,16 @@ pub(crate) fn callback_iface_spec(
     let mut any_fixed = false;
 
     for (i, t) in cb_args.iter().enumerate() {
-        if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(t)) {
+        // An `Iterable` fixed-folder plan (an `&[data_class]` arg) is delivered by
+        // FOLDING in the trampoline — the user callback still sees ONE whole
+        // `List<Element>`, so it takes the plain whole-value path below (no leaf
+        // params, no reassembly group). Only `Base`/accessor plans decompose the
+        // arg into the callback's `run` params here.
+        let plan = registry
+            .callback_arg_plans
+            .get(&TypeKey::from_type(t))
+            .filter(|p| !super::render::is_iterable_fold(&p.shape));
+        if let Some(plan) = plan {
             let leaf_names = plan_leaf_names(&plan.leaves);
             for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
                 leaf_tys.push((n.clone(), l.out_ty.clone(), l.nullable, true));

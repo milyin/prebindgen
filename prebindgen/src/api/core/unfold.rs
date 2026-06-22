@@ -775,11 +775,24 @@ fn apply_value_struct_callbacks<M>(
                 continue;
             };
             for arg_ty in args {
-                let (by_ref, core_ty) = match &arg_ty {
+                // Peel a leading `&`, then detect a slice element. An
+                // `impl Fn(&T)` / `impl Fn(T)` arg of the value struct decomposes
+                // into a `Base` fixed builder (foreign side reassembles the whole
+                // value via `fromParts`); an `impl Fn(&[T])` / `impl Fn([T])` arg
+                // becomes an `Iterable` fixed FOLDER (the trampoline folds each
+                // element's leaves into a foreign list — see the callback emitter).
+                let (by_ref, after_ref) = match &arg_ty {
                     syn::Type::Reference(r) => (true, (*r.elem).clone()),
                     other => (false, other.clone()),
                 };
-                if TypeKey::from_type(&core_ty) != vd.key {
+                let (shape, matches_key) = match &after_ref {
+                    syn::Type::Slice(s) => (
+                        UnfoldShape::Iterable(Box::new(UnfoldShape::Base)),
+                        TypeKey::from_type(&s.elem) == vd.key,
+                    ),
+                    other => (UnfoldShape::Base, TypeKey::from_type(other) == vd.key),
+                };
+                if !matches_key {
                     continue;
                 }
                 let key = TypeKey::from_type(&arg_ty);
@@ -793,7 +806,7 @@ fn apply_value_struct_callbacks<M>(
                     source: vd.source.clone(),
                     decon: Some(decon.clone()),
                     by_ref,
-                    shape: UnfoldShape::Base,
+                    shape,
                     leaves: vd.leaves.clone(),
                     element: None,
                     delivery: Delivery::Callback,
@@ -2014,6 +2027,70 @@ mod tests {
         assert_eq!(plan.leaves.len(), 2, "field leaves cross raw per element");
         assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
         assert!(!plan.by_ref, "owned Vec<Payload> elements");
+    }
+
+    #[test]
+    fn value_struct_slice_callback_is_fixed_iterable_fold() {
+        // An `impl Fn(&[data_class])` callback arg (perftest's
+        // `storage_callback_vec`) synthesizes an Iterable fixed-folder
+        // `callback_arg_plans` entry keyed by the `&[Payload]` arg: the
+        // trampoline folds each element's field leaves into a foreign list, the
+        // user callback still sees the whole `List<Payload>`.
+        let mut reg = reg_with(&[
+            "fn storage_callback_vec(f: impl Fn(&[Payload]) + Send + Sync + 'static) { todo!() }",
+        ]);
+        let leaf = |name: &str, ty: syn::Type| UnfoldLeaf {
+            name: name.to_string(),
+            path: vec![ident(name)],
+            out_ty: ty,
+            identity: false,
+            nullable: false,
+            source: LeafSource::Field,
+        };
+        let vd = ValueDecon {
+            key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+            source: syn::parse_quote!(Payload),
+            leaves: vec![
+                leaf("id", syn::parse_quote!(i64)),
+                leaf("seq", syn::parse_quote!(i32)),
+            ],
+        };
+        let declared: std::collections::HashSet<syn::Ident> =
+            ["storage_callback_vec"].iter().map(|s| ident(s)).collect();
+        apply_value_structs(&mut reg, vec![vd], &declared).expect("apply_value_structs");
+
+        let key = TypeKey::from_type(&syn::parse_quote!(&[Payload]));
+        let plan = reg
+            .callback_arg_plans
+            .get(&key)
+            .expect("slice callback-arg fold plan");
+        assert!(plan.fixed_builder, "&[data_class] ⇒ fixed folder");
+        assert!(
+            matches!(&plan.shape, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base)),
+            "&[T] ⇒ Iterable(Base)"
+        );
+        assert_eq!(plan.delivery, Delivery::Callback);
+        assert!(plan.decon.is_some(), "carries the field decon");
+        assert!(plan.element.is_none(), "decomposed-leaf fold");
+        assert_eq!(plan.leaves.len(), 2);
+        assert!(plan.leaves.iter().all(|l| l.source == LeafSource::Field));
+        // A scalar `&Payload` callback arg must stay a Base fixed builder.
+        let mut reg2 = reg_with(&[
+            "fn storage_callback(f: impl Fn(&Payload) + Send + Sync + 'static) { todo!() }",
+        ]);
+        let vd2 = ValueDecon {
+            key: TypeKey::from_type(&syn::parse_quote!(Payload)),
+            source: syn::parse_quote!(Payload),
+            leaves: vec![leaf("id", syn::parse_quote!(i64))],
+        };
+        let declared2: std::collections::HashSet<syn::Ident> =
+            ["storage_callback"].iter().map(|s| ident(s)).collect();
+        apply_value_structs(&mut reg2, vec![vd2], &declared2).expect("apply_value_structs");
+        let scalar = reg2
+            .callback_arg_plans
+            .get(&TypeKey::from_type(&syn::parse_quote!(&Payload)))
+            .expect("scalar callback-arg plan");
+        assert!(matches!(scalar.shape, UnfoldShape::Base), "&T ⇒ Base");
     }
 
     #[test]

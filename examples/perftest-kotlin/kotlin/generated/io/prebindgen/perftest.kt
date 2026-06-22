@@ -191,8 +191,11 @@ public fun <A> PayloadFolder<A>.asRaw(): PayloadFolderRaw<A> =
         )
     }
 
-internal val __PayloadFolderRaw: PayloadFolderRaw<ArrayList<Payload>> =
-PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
+internal object __PayloadFolderRawHolder {
+    @JvmField
+    val instance: PayloadFolderRaw<ArrayList<Payload>> =
+    PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
+}
 
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R

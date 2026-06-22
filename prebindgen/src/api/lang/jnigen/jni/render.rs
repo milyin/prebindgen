@@ -907,10 +907,11 @@ pub(crate) fn render_wrapper_fn(
             // `Option<Vec<…>>` return — `None` yields a null list). Per element
             // only the raw leaves cross — no Java object is built on the Rust side.
             let spec = folder_iface_for_plan(ext, registry, plan)?;
-            let singleton = format!("__{}", spec.raw_name());
-            imports.insert(format!("{}.{singleton}", spec.package));
+            let holder = spec.singleton_holder_name();
+            let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
+            imports.insert(spec.singleton_holder_fqn());
             unfold_call_args.push(format!("ArrayList<{class_ty}>()"));
-            unfold_call_args.push(singleton);
+            unfold_call_args.push(format!("{holder}.{field}"));
             let list_ty = kt::KtType::generic("List", [class_ty]);
             let kt = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
                 list_ty.nullable()

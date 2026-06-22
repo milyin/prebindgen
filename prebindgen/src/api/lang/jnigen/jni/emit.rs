@@ -1797,9 +1797,107 @@ pub(crate) fn callback_input(
     // Plan-less opaque-handle args, closed after the invoke returns so the
     // per-invocation `Box` is freed.
     let mut handle_obj_idents: Vec<syn::Ident> = Vec::new();
+    // One-time setup statements (folder singleton + method id for an
+    // `&[data_class]` fold arg), spliced before the `Box::new` so the move
+    // closure captures them.
+    let mut fold_setups: Vec<TokenStream> = Vec::new();
 
     for (i, arg_ty) in args.iter().enumerate() {
         let cb_arg = &arg_names[i];
+
+        // `&[data_class]` fold arg: instead of building the whole `List` on the
+        // Rust side, allocate an empty `ArrayList` and fold each element's raw
+        // leaves through the hoisted `__<Folder>Holder.instance` (Kotlin does
+        // `fromParts` + `add`), then deliver the assembled list whole to the
+        // user callback's `run(List<T>)`. Reuses the OUTPUT fold's folder
+        // interface + appender singleton, driven from the trampoline.
+        if let Some(plan) = registry
+            .callback_arg_plans
+            .get(&TypeKey::from_type(arg_ty))
+            .filter(|p| super::render::is_iterable_fold(&p.shape))
+        {
+            // Every leaf converter must already be resolved (deferral safety).
+            for leaf in &plan.leaves {
+                registry.output_entry(&leaf.out_ty)?;
+            }
+            let spec = folder_iface_for_plan(ext, registry, plan)?;
+            let holder_slash = syn::LitStr::new(&spec.singleton_holder_slash_fqn(), Span::call_site());
+            let field_lit = syn::LitStr::new(
+                crate::api::lang::jnigen::jni::SINGLETON_FIELD,
+                Span::call_site(),
+            );
+            let field_sig = syn::LitStr::new(&format!("L{};", spec.raw_slash_fqn()), Span::call_site());
+            let run_cls = syn::LitStr::new(&spec.raw_slash_fqn(), Span::call_site());
+            let run_descr = syn::LitStr::new(&spec.descr, Span::call_site());
+            let fold_obj = format_ident!("__fold{}_obj", i);
+            let fold_id = format_ident!("__fold{}_id", i);
+            // Setup once (captured): fetch the appender singleton (a `@JvmField`
+            // in its holder object) as a global ref, and resolve its `run`
+            // method id on the folder interface class.
+            fold_setups.push(quote! {
+                let #fold_obj = {
+                    let __cls = env.find_class(#holder_slash)
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("find folder holder {}: {}", #holder_slash, e)))?;
+                    let __field = env.get_static_field(&__cls, #field_lit, #field_sig)
+                        .and_then(|__v| __v.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fetch folder singleton {}.{}: {}", #holder_slash, #field_lit, e)))?;
+                    env.new_global_ref(&__field)
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("global-ref folder singleton: {}", e)))?
+                };
+                let #fold_id = {
+                    let __cls = env.find_class(#run_cls)
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("find folder iface {}: {}", #run_cls, e)))?;
+                    env.get_method_id(&__cls, "run", #run_descr)
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("resolve folder run {}: {}", #run_cls, e)))?
+                };
+            });
+            // Per fire: one `ArrayList`, fold each element's leaves through the
+            // appender (which mutates the list in place and returns it — the
+            // return is ignored). Each element's leaf locals live in a nested
+            // local frame so they are freed per element (the daemon-thread
+            // local-ref discipline — only the `acc` ref crosses iterations).
+            let acc = format_ident!("__fold{}_acc", i);
+            let obj_idents: Vec<syn::Ident> = (0..plan.leaves.len())
+                .map(|k| format_ident!("__cbfold{}_obj{}", i, k))
+                .collect();
+            let (leaf_stmts, leaf_args) =
+                encode_plan_leaves(ext, registry, plan, &obj_idents, &quote!(__cb_elem), &fail);
+            let elem_frame = std::cmp::max(16, 2 * plan.leaves.len() + 6);
+            let elem_frame_lit = syn::LitInt::new(&elem_frame.to_string(), Span::call_site());
+            preludes.push(quote! {
+                let #acc: jni::objects::JObject = env
+                    .new_object("java/util/ArrayList", "()V", &[])
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: new ArrayList: {}", e)))?;
+                for __cb_elem in #cb_arg.iter() {
+                    env.push_local_frame(#elem_frame_lit)
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("fold: push frame: {}", e)))?;
+                    let __fold_res = (|| -> ::core::result::Result<(), __JniErr> {
+                        #leaf_stmts
+                        // The appender returns the same list it mutates, so the
+                        // result is discarded; `#acc` (an outer-frame ref) stays
+                        // valid across the nested frame.
+                        let _ = unsafe {
+                            env.call_method_unchecked(
+                                &#fold_obj,
+                                #fold_id,
+                                jni::signature::ReturnType::Object,
+                                &[jni::sys::jvalue { l: #acc.as_raw() }, #(#leaf_args),*],
+                            )
+                        }
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<String>>::from(format!("fold run: {}", e))
+                        })?;
+                        ::core::result::Result::Ok(())
+                    })();
+                    let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                    __fold_res?;
+                }
+            });
+            jvalue_exprs.push(quote!(jni::sys::jvalue { l: #acc.as_raw() }));
+            total += 1;
+            continue;
+        }
 
         // Decomposed arg: deliver the leaves of its type-level canonical
         // output, exactly like a return delivery.
@@ -1922,6 +2020,9 @@ pub(crate) fn callback_input(
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to get callback class for {}: {}", #name_lit, e)))?;
         let __invoke_id = env.get_method_id(&__invoke_class, "run", #descr_lit)
             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Unable to resolve run for {}: {}", #name_lit, e)))?;
+        // One-time fold setup (folder singleton global ref + `run` method id),
+        // captured by the move closure below.
+        #(#fold_setups)*
         Box::new(move |#(#arg_names: #arg_pat_ty),*| {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm

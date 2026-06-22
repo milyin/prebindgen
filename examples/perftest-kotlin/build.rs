@@ -42,8 +42,11 @@ fn main() {
         // registered-subscriber pattern (the JNI trampoline is built once, not per call).
         .ptr_class(pq!(PayloadHandler))
         // `PayloadVecHandler`: a prepared WHOLE-BATCH callback fired by
-        // `storageCallbackVec` — its `PayloadVecCallback.run(List<Payload>)` receives
-        // the entire batch in one upcall.
+        // `storageCallbackVec` — its `PayloadListCallback.run(List<Payload>)` receives
+        // the entire batch in one upcall. Because `Payload` is a `data_class`, the
+        // `List` is assembled by a **fold**: the trampoline allocates the list and
+        // folds each element's raw leaves through the hoisted folder (Kotlin does
+        // `fromParts` + `add`) — no per-element Java object is built on the Rust side.
         .ptr_class(pq!(PayloadVecHandler))
         .package("storage")
         // Only the value/ref-input put forms map to JNI: `storage_put_by_take`

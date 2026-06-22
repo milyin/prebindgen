@@ -226,6 +226,62 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 
             >>::from(
                 format!("Unable to resolve run for {}: {}", "Fn(& [Payload])", e),
             ))?;
+        let __fold0_obj = {
+            let __cls = env
+                .find_class("io/prebindgen/perftest/__PayloadFolderRawHolder")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        "find folder holder {}: {}",
+                        "io/prebindgen/perftest/__PayloadFolderRawHolder", e
+                    ),
+                ))?;
+            let __field = env
+                .get_static_field(
+                    &__cls,
+                    "instance",
+                    "Lio/prebindgen/perftest/PayloadFolderRaw;",
+                )
+                .and_then(|__v| __v.l())
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        "fetch folder singleton {}.{}: {}",
+                        "io/prebindgen/perftest/__PayloadFolderRawHolder", "instance", e
+                    ),
+                ))?;
+            env.new_global_ref(&__field)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("global-ref folder singleton: {}", e)))?
+        };
+        let __fold0_id = {
+            let __cls = env
+                .find_class("io/prebindgen/perftest/PayloadFolderRaw")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        "find folder iface {}: {}",
+                        "io/prebindgen/perftest/PayloadFolderRaw", e
+                    ),
+                ))?;
+            env.get_method_id(
+                    &__cls,
+                    "run",
+                    "(Ljava/lang/Object;JIDZLjava/lang/String;)Ljava/lang/Object;",
+                )
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        "resolve folder run {}: {}",
+                        "io/prebindgen/perftest/PayloadFolderRaw", e
+                    ),
+                ))?
+        };
         Box::new(move |__cb_arg0: &[perftest_flat::Payload]| {
             let _ = (|| -> ::core::result::Result<(), __JniErr> {
                 let mut env = java_vm
@@ -242,8 +298,129 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 
                         format!("push local frame for {}: {}", "Fn(& [Payload])", e),
                     ))?;
                 let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
-                    let __cb0_enc = Payload_to_JObject_25cd94ea(&mut env, __cb_arg0)?;
-                    let __cb0_obj: jni::objects::JObject = __cb0_enc;
+                    let __fold0_acc: jni::objects::JObject = env
+                        .new_object("java/util/ArrayList", "()V", &[])
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("fold: new ArrayList: {}", e)))?;
+                    for __cb_elem in __cb_arg0.iter() {
+                        env.push_local_frame(16)
+                            .map_err(|e| <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(format!("fold: push frame: {}", e)))?;
+                        let __fold_res = (|| -> ::core::result::Result<(), __JniErr> {
+                            let __cbfold0_obj0: jni::sys::jvalue = {
+                                let __enc0 = match i64_to_jlong_fbf9a9bc(
+                                    &mut env,
+                                    __cb_elem.id.clone(),
+                                ) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        return ::core::result::Result::Err(
+                                            <__JniErr as ::core::convert::From<
+                                                String,
+                                            >>::from(__e.to_string()),
+                                        );
+                                    }
+                                };
+                                jni::sys::jvalue { j: __enc0 }
+                            };
+                            let __cbfold0_obj1: jni::sys::jvalue = {
+                                let __enc1 = match i32_to_jint_a3e3b6ef(
+                                    &mut env,
+                                    __cb_elem.seq.clone(),
+                                ) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        return ::core::result::Result::Err(
+                                            <__JniErr as ::core::convert::From<
+                                                String,
+                                            >>::from(__e.to_string()),
+                                        );
+                                    }
+                                };
+                                jni::sys::jvalue { i: __enc1 }
+                            };
+                            let __cbfold0_obj2: jni::sys::jvalue = {
+                                let __enc2 = match f64_to_jdouble_9e4a8f70(
+                                    &mut env,
+                                    __cb_elem.value.clone(),
+                                ) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        return ::core::result::Result::Err(
+                                            <__JniErr as ::core::convert::From<
+                                                String,
+                                            >>::from(__e.to_string()),
+                                        );
+                                    }
+                                };
+                                jni::sys::jvalue { d: __enc2 }
+                            };
+                            let __cbfold0_obj3: jni::sys::jvalue = {
+                                let __enc3 = match bool_to_jboolean_31306d98(
+                                    &mut env,
+                                    __cb_elem.flag.clone(),
+                                ) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        return ::core::result::Result::Err(
+                                            <__JniErr as ::core::convert::From<
+                                                String,
+                                            >>::from(__e.to_string()),
+                                        );
+                                    }
+                                };
+                                jni::sys::jvalue { z: __enc3 }
+                            };
+                            let __cbfold0_obj4: jni::objects::JObject = {
+                                let __enc4 = match Option_Box_String_to_JString_071e4c8c(
+                                    &mut env,
+                                    __cb_elem.label.clone(),
+                                ) {
+                                    ::core::result::Result::Ok(__w) => __w,
+                                    ::core::result::Result::Err(__e) => {
+                                        return ::core::result::Result::Err(
+                                            <__JniErr as ::core::convert::From<
+                                                String,
+                                            >>::from(__e.to_string()),
+                                        );
+                                    }
+                                };
+                                __enc4.into()
+                            };
+                            let _ = unsafe {
+                                env.call_method_unchecked(
+                                    &__fold0_obj,
+                                    __fold0_id,
+                                    jni::signature::ReturnType::Object,
+                                    &[
+                                        jni::sys::jvalue {
+                                            l: __fold0_acc.as_raw(),
+                                        },
+                                        __cbfold0_obj0,
+                                        __cbfold0_obj1,
+                                        __cbfold0_obj2,
+                                        __cbfold0_obj3,
+                                        jni::sys::jvalue {
+                                            l: __cbfold0_obj4.as_raw(),
+                                        },
+                                    ],
+                                )
+                            }
+                                .map_err(|e| {
+                                    let _ = env.exception_describe();
+                                    <__JniErr as ::core::convert::From<
+                                        String,
+                                    >>::from(format!("fold run: {}", e))
+                                })?;
+                            ::core::result::Result::Ok(())
+                        })();
+                        let _ = unsafe {
+                            env.pop_local_frame(&jni::objects::JObject::null())
+                        };
+                        __fold_res?;
+                    }
                     let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
                         env.call_method_unchecked(
                             &callback_global_ref,
@@ -253,7 +430,7 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 
                             ),
                             &[
                                 jni::sys::jvalue {
-                                    l: __cb0_obj.as_raw(),
+                                    l: __fold0_acc.as_raw(),
                                 },
                             ],
                         )

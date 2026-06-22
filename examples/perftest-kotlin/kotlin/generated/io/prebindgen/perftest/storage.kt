@@ -11,7 +11,7 @@ import io.prebindgen.perftest.PayloadListCallback
 import io.prebindgen.perftest.PayloadVecHandler
 import io.prebindgen.perftest.Storage
 import io.prebindgen.perftest.__PayloadBuilder
-import io.prebindgen.perftest.__PayloadFolderRaw
+import io.prebindgen.perftest.__PayloadFolderRawHolder
 import io.prebindgen.perftest.asRaw
 import io.prebindgen.perftest.withSortedHandleLocks
 
@@ -106,7 +106,7 @@ public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): 
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (JNINative.storageGetVec(s_ptr, ArrayList<Payload>(), __PayloadFolderRaw, __cap) as List<Payload>?)
+        (JNINative.storageGetVec(s_ptr, ArrayList<Payload>(), __PayloadFolderRawHolder.instance, __cap) as List<Payload>?)
     }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
