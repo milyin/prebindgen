@@ -161,6 +161,8 @@ See example projects in the [examples directory](https://github.com/milyin/prebi
 
 - **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
 - **example-cbindgen**: Language-specific binding using `lang::Cbindgen` + cbindgen for C headers
+- **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
+- **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `lang::JniGen` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
 
 ## Documentation
 

@@ -1380,6 +1380,40 @@ pub(crate) fn emit_expanded_param(
         });
         let local = format_ident!("__exp_{}", leaf.name);
 
+        // `Option<scalar>` / `Option<enum>` leaf (only produced by a
+        // selector-dispatched constructor variant, where each arm's args are
+        // `Option`-wrapped by presence): cross as a decoupled
+        // `(present: jboolean, value: <wire>)` pair instead of a boxed
+        // `java.lang.*` `JObject`. This matches the Kotlin extern — which
+        // applies the same `build_option_scalar_input_plan` per expanded leaf in
+        // `render_extern_decl` — and the bare top-level `Option<scalar>` param
+        // path, so the JNI arity/types agree on both sides of the wire.
+        if let Some(sp) = build_option_scalar_input_plan(ext, registry, &leaf.name, leaf_ty) {
+            let present_ident = &sp.present_ident;
+            let value_ident = &sp.value_ident;
+            let value_wire = &sp.value_wire;
+            let inner_conv = &sp.inner_conv;
+            wire_params.push(quote!(#present_ident: jni::sys::jboolean));
+            wire_params.push(quote!(#value_ident: #value_wire));
+            prelude.push(quote!(
+                let #local: #leaf_ty = if #present_ident != 0u8 {
+                    let __v = match #inner_conv(&mut env, &#value_ident) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                            return #on_err;
+                        }
+                    };
+                    ::core::option::Option::Some(__v)
+                } else {
+                    ::core::option::Option::None
+                };
+            ));
+            leaf_locals.push(local);
+            continue;
+        }
+
         // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
         // jlong handle inline, mirroring the normal by-value-handle path.
         let is_consume =
@@ -3616,17 +3650,22 @@ pub(crate) fn struct_module_path(ext: &JniGen<impl JniGenState>, s: &syn::ItemSt
 /// upstream type a bare `<ident>` resolves to in their include-site
 /// `use` statements. Pairs with output body below.
 pub(crate) fn enum_input_body(
-    _ext: &JniGen<impl JniGenState>,
+    ext: &JniGen<impl JniGenState>,
     e: &syn::ItemEnum,
 ) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let ident = &e.ident;
     let ident_name = ident.to_string();
+    // Qualify the variant constructors with `source_module`, exactly as the
+    // type-position pass qualifies the enum's return type — otherwise a bare
+    // `Enum::Variant` fails to resolve when the enum lives in the source crate
+    // (the usual flat-library case).
+    let source_module = &ext.source_module;
     let arms = crate::api::lang::jnigen::util::enum_discriminant_values(e)
         .into_iter()
         .map(|(variant, value)| {
             let lit = proc_macro2::Literal::i64_unsuffixed(value);
-            quote! { #lit => #ident::#variant, }
+            quote! { #lit => #source_module::#ident::#variant, }
         });
     let body: syn::Expr = syn::parse_quote!({
         match *v as i64 {
