@@ -10,11 +10,16 @@ import io.prebindgen.covertest.PayloadHandler
 import io.prebindgen.covertest.PayloadListCallback
 import io.prebindgen.covertest.PayloadVecHandler
 import io.prebindgen.covertest.Storage
+import io.prebindgen.covertest.StorageCallback
+import io.prebindgen.covertest.StorageHandler
 import io.prebindgen.covertest.__PayloadBuilder
 import io.prebindgen.covertest.__PayloadFolderRawHolder
+import io.prebindgen.covertest.__StorageFolderRawHolder
+import io.prebindgen.covertest.__StringFolderHolder
 import io.prebindgen.covertest.asRaw
+import io.prebindgen.covertest.errors.StorageError
 import io.prebindgen.covertest.errors.StorageErrorHandler
-import io.prebindgen.covertest.errors.StorageErrorHandlerCapture
+import io.prebindgen.covertest.errors.StorageErrorHandlerRawCapture
 import io.prebindgen.covertest.withSortedHandleLocks
 
 public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
@@ -149,9 +154,104 @@ public fun storageCallbackVec(
 }
 
 public fun storageTryWithLabel(label: String, onError: StorageErrorHandler<Storage>): Storage {
-    val __cap = StorageErrorHandlerCapture.acquire()
+    val __cap = StorageErrorHandlerRawCapture.acquire()
     val __ret = Storage(CovNative.storageTryWithLabel(label, __cap))
-    if (__cap.failed) return onError.run(__cap.je, __cap.ze0!!)
+    if (__cap.failed) return onError.run(__cap.je, __cap.ze0!!, StorageError(__cap.ze1!!))
+    return __ret
+}
+
+public fun storageShards(
+    count: Long,
+    each: Long,
+    onError: JniErrorHandler<List<Storage>>,
+): List<Storage> {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = (CovNative.storageShards(count, each, ArrayList<Storage>(), __StorageFolderRawHolder.instance, __cap) as List<Storage>)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun storageShardsOpt(
+    count: Long,
+    each: Long,
+    onError: JniErrorHandler<List<Storage>?>,
+): List<Storage>? {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = (CovNative.storageShardsOpt(count, each, ArrayList<Storage>(), __StorageFolderRawHolder.instance, __cap) as List<Storage>?)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun storageHandlerNew(
+    f: StorageCallback,
+    onError: JniErrorHandler<StorageHandler>,
+): StorageHandler {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = StorageHandler(CovNative.storageHandlerNew(f.asRaw(), __cap))
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun storageEmit(n: Long, h: StorageHandler, onError: JniErrorHandler<Unit>) {
+    if (h.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    val __cap = JniErrorHandlerCapture.acquire()
+    withSortedHandleLocks(h) {
+        val h_ptr = h.ptr
+        CovNative.storageEmit(n, h_ptr, __cap)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+}
+
+public fun storageTotalLen(a: Storage, b: Storage, c: Storage, onError: JniErrorHandler<Long>): Long {
+    if (a.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (b.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (c.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(a, b, c) {
+        val a_ptr = a.ptr
+        val b_ptr = b.ptr
+        val c_ptr = c.ptr
+        CovNative.storageTotalLen(a_ptr, b_ptr, c_ptr, __cap)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun storageLabels(s: Storage, onError: JniErrorHandler<List<String>>): List<String> {
+    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        (CovNative.storageLabels(s_ptr, ArrayList<String>(), __StringFolderHolder.instance, __cap) as List<String>)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun storagePutOpt(s: Storage, p: Payload?, onError: JniErrorHandler<Boolean>): Boolean {
+    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        CovNative.storagePutOpt(
+            s_ptr,
+            p != null,
+            p?.id ?: 0L,
+            p?.seq ?: 0,
+            p?.value ?: 0.0,
+            p?.flag ?: false,
+            p?.label,
+            __cap,
+        )
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun stringNew(s: String, onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.stringNew(s, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }
 

@@ -8,6 +8,30 @@ import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Storage
 import io.prebindgen.covertest.withSortedHandleLocks
 
+/** Typed handle for a native Zenoh `Archive`. */
+public class Archive(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L) {
+            ptr = 0L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Archive {
+        val p = ptr
+        ptr = 0L
+        return Archive(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
 /** Typed handle for a native Zenoh `Summary`. */
 public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
@@ -225,6 +249,61 @@ public fun storageExpectSummary(
                 expected1?.let { it.ptr = 0L }
             }
         }
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun archiveNew(onError: JniErrorHandler<Archive>): Archive {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = Archive(CovNative.archiveNew(__cap))
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun archiveStore(
+    a: Archive,
+    sSel: Int,
+    s00: Long?,
+    s01: Double?,
+    s1: Summary?,
+    onError: JniErrorHandler<Unit>,
+) {
+    if (a.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (s1 != null && s1.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    val __cap = JniErrorHandlerCapture.acquire()
+    run {
+        val __locks = ArrayList<NativeHandle>()
+        __locks.add(a)
+        s1?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val a_ptr = a.ptr
+            val s1_ptr = s1?.ptr ?: 0L
+            try {
+                CovNative.archiveStore(
+                    a_ptr,
+                    sSel,
+                    s00 != null,
+                    s00 ?: 0L,
+                    s01 != null,
+                    s01 ?: 0.0,
+                    s1_ptr,
+                    __cap,
+                )
+            } finally {
+                s1?.let { it.ptr = 0L }
+            }
+        }
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+}
+
+public fun archiveLatest(a: Archive, onError: JniErrorHandler<Summary?>): Summary? {
+    if (a.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(a) {
+        val a_ptr = a.ptr
+        CovNative.archiveLatest(a_ptr, __cap).let { if (it == 0L) null else Summary(it) }
     }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret

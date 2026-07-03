@@ -177,6 +177,22 @@ pub(crate) fn flatten_struct_factory(
             parts.push(format!("{short}.fromInt({base})"));
             continue;
         }
+        // `Option<enum>` leaf: the native encoder delivers the discriminant
+        // `box_jint`-boxed (JVM `Ljava/lang/Integer;`, null for `None`), so
+        // the factory takes `Int?` and rebuilds the nullable enum.
+        if let Some(inner) = option_inner_type(effective_ty) {
+            if ext.is_kotlin_enum(&inner) {
+                let kt = registry
+                    .output_entry(&inner)?
+                    .metadata
+                    .kotlin_name
+                    .clone()?;
+                let short = register_kt_type(&kt, imports).to_string();
+                params.push((base.clone(), kt::KtType::int().nullable()));
+                parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
+                continue;
+            }
+        }
         // Nested data-class field — inline its leaves and reconstruct via the
         // child's own `fromParts` (in bytecode, no JNI crossing).
         let inner_ty = option_inner_type(effective_ty).unwrap_or_else(|| effective_ty.clone());

@@ -522,14 +522,17 @@ pub(crate) fn render_extern_decl(
         // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
         // The public wrapper converts back using `EnumType.fromInt(Int)`.
         let is_enum_return = return_is_kotlin_enum(ext, &ret_decl, registry);
+        // `Option<enum>` returns cross as the boxed discriminant → `Int?`.
+        let is_option_enum_return = return_is_kotlin_option_enum(ext, &ret_decl, registry);
         // JNI extern's wire return: handle projections wire as `Long` (the boxed
         // jlong gets wrapped); value-class projections wire as their inner
         // converter's Kotlin type folded through the projection's strategy (the
-        // value class is erased to that inner). Enums wire as `Int`; everything
-        // else is the declared return.
+        // value class is erased to that inner). Enums wire as `Int` (`Int?`
+        // under `Option`); everything else is the declared return.
         match &projection {
             Some(p) => projection_wire_return(p),
             None if is_enum_return => "Int".to_string(),
+            None if is_option_enum_return => "Int?".to_string(),
             None => kt_return.map(|t| t.to_string()).unwrap_or_default(),
         }
     };
@@ -1073,6 +1076,10 @@ pub(crate) fn render_wrapper_fn(
     // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
     // Detect this so `build_call` can wrap the result with `fromInt`.
     let is_enum_return = unfold.is_none() && return_is_kotlin_enum(ext, &f.sig.output, registry);
+    // `Option<enum>` returns cross as the boxed discriminant (`Int?`);
+    // `build_call` maps back with `?.let { EnumType.fromInt(it) }`.
+    let is_option_enum_return =
+        unfold.is_none() && return_is_kotlin_option_enum(ext, &f.sig.output, registry);
 
     // Build the JNINative call. Every param maps to exactly one call arg
     // (or several, for a flattened data_class).
@@ -1171,6 +1178,15 @@ pub(crate) fn render_wrapper_fn(
         } else if is_enum_return {
             let enum_kt = kt_return.as_ref().expect("enum return has a Kotlin type");
             call = format!("{enum_kt}.fromInt({call})");
+        } else if is_option_enum_return {
+            // `kt_return` renders nullable (`Priority?`); the companion lives
+            // on the non-null class name.
+            let enum_kt = kt_return
+                .as_ref()
+                .expect("Option<enum> return has a Kotlin type")
+                .to_string();
+            let enum_kt = enum_kt.trim_end_matches('?');
+            call = format!("{call}?.let {{ {enum_kt}.fromInt(it) }}");
         } else if unfold.is_some() && !is_convert {
             // Callback delivery: the extern returns the builder's erased `Any?`;
             // cast to the shape type (`R` / `R?` / `List<R>`). The builder always
@@ -1461,13 +1477,19 @@ pub(crate) fn render_wrapper_fn(
             let native = ext.jni_native_class_name();
             for (name, base, _) in &vec_build {
                 let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "New");
-                b.push_str(&format!("val __vec_{name} = {native}.{new_m}({name}.size)\n"));
+                b.push_str(&format!(
+                    "val __vec_{name} = {native}.{new_m}({name}.size)\n"
+                ));
             }
             // `try { fill…; <core_expr> } finally { free… }`: Kotlin `try` is an
             // expression, so for a non-unit fn `__ret` binds to `core_expr`
             // (the block's last expression). A push runs no JVM upcall, so the
             // loop needs no per-element failure check.
-            b.push_str(if is_unit { "try {\n" } else { "val __ret = try {\n" });
+            b.push_str(if is_unit {
+                "try {\n"
+            } else {
+                "val __ret = try {\n"
+            });
             for (name, base, accesses) in &vec_build {
                 let push_m =
                     crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Push");
@@ -1475,7 +1497,9 @@ pub(crate) fn render_wrapper_fn(
                     .chain(accesses.iter().cloned())
                     .collect::<Vec<_>>()
                     .join(", ");
-                b.push_str(&format!("for (__e in {name}) {{\n{native}.{push_m}({args})\n}}\n"));
+                b.push_str(&format!(
+                    "for (__e in {name}) {{\n{native}.{push_m}({args})\n}}\n"
+                ));
             }
             b.push_str(&format!("{core_expr}\n"));
             b.push_str("} finally {\n");
@@ -1727,17 +1751,36 @@ pub(crate) fn return_is_kotlin_enum(
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
 ) -> bool {
+    ext.is_kotlin_enum(&canonical_return_ty(output, registry))
+}
+
+/// Returns `true` when the function's return type resolves to `Option<E>` with
+/// `E` a [`JniGen::enum_class`] enum. The native side delivers the discriminant
+/// `box_jint`-boxed (null for `None`), so the extern returns `Int?` and the
+/// public wrapper converts back with `?.let { EnumType.fromInt(it) }`.
+pub(crate) fn return_is_kotlin_option_enum(
+    ext: &JniGen<impl JniGenState>,
+    output: &syn::ReturnType,
+    registry: &Registry<KotlinMeta>,
+) -> bool {
+    crate::api::core::types_util::option_inner_type(&canonical_return_ty(output, registry))
+        .map(|inner| ext.is_kotlin_enum(&inner))
+        .unwrap_or(false)
+}
+
+/// The return type with the error channel peeled: the resolved output entry's
+/// canonical value key (`Result<T, E>` → `T`) when present, else the declared
+/// type verbatim.
+fn canonical_return_ty(output: &syn::ReturnType, registry: &Registry<KotlinMeta>) -> syn::Type {
     let ty = match output {
-        syn::ReturnType::Default => return false,
+        syn::ReturnType::Default => return syn::parse_quote!(()),
         syn::ReturnType::Type(_, t) => &**t,
     };
-    let outer_meta = registry.output_entry(ty).map(|e| e.metadata.clone());
-    let inner_canon = outer_meta
-        .as_ref()
-        .and_then(|m| m.value_rust_key.clone())
-        .unwrap_or_else(|| ty.to_token_stream().to_string());
-    let inner: syn::Type = syn::parse_str(&inner_canon).unwrap_or_else(|_| ty.clone());
-    ext.is_kotlin_enum(&inner)
+    registry
+        .output_entry(ty)
+        .and_then(|e| e.metadata.value_rust_key.clone())
+        .and_then(|canon| syn::parse_str(&canon).ok())
+        .unwrap_or_else(|| ty.clone())
 }
 
 pub(crate) fn kt_snake_to_camel(s: &str) -> String {

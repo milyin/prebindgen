@@ -1912,12 +1912,14 @@ pub(crate) fn callback_input(
                 registry.output_entry(&leaf.out_ty)?;
             }
             let spec = folder_iface_for_plan(ext, registry, plan)?;
-            let holder_slash = syn::LitStr::new(&spec.singleton_holder_slash_fqn(), Span::call_site());
+            let holder_slash =
+                syn::LitStr::new(&spec.singleton_holder_slash_fqn(), Span::call_site());
             let field_lit = syn::LitStr::new(
                 crate::api::lang::jnigen::jni::SINGLETON_FIELD,
                 Span::call_site(),
             );
-            let field_sig = syn::LitStr::new(&format!("L{};", spec.raw_slash_fqn()), Span::call_site());
+            let field_sig =
+                syn::LitStr::new(&format!("L{};", spec.raw_slash_fqn()), Span::call_site());
             let run_cls = syn::LitStr::new(&spec.raw_slash_fqn(), Span::call_site());
             let run_descr = syn::LitStr::new(&spec.descr, Span::call_site());
             let fold_obj = format_ident!("__fold{}_obj", i);
@@ -2365,6 +2367,51 @@ pub(crate) fn struct_input_body(
             continue;
         }
 
+        // Enum-typed field (bare or `Option`-wrapped): the Kotlin data class
+        // stores the TYPED enum object (`Priority` / `Priority?`), so read the
+        // slot with the enum-class descriptor and decode the discriminant via
+        // its `value` getter (`getValue()I`); a null object is the `None` arm.
+        // (The generic converters can't be used here: the bare-enum one is
+        // jint-keyed, the `Option<enum>` one unboxes `java.lang.Integer`.)
+        let f_inner = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+        if ext.is_kotlin_enum(&f_inner) {
+            if let Some(fqn) = bare_path_ident(&f_inner)
+                .and_then(|n| ext.kotlin_fqn(&n.to_string()))
+                .map(|v| v.to_string())
+            {
+                let sig = format!("L{};", fqn.replace('.', "/"));
+                let inner_conv = registry.input_entry(&f_inner)?.function.sig.ident.clone();
+                let tmp_ident = format_ident!("__{}_jobj", fname_ident);
+                let decode = if option_inner_type(&field.ty).is_some() {
+                    quote! {
+                        let #fname_ident = if #tmp_ident.is_null() {
+                            ::core::option::Option::None
+                        } else {
+                            let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
+                                .and_then(|val| val.i())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                            ::core::option::Option::Some(#inner_conv(env, &#raw_ident)?)
+                        };
+                    }
+                } else {
+                    quote! {
+                        let #raw_ident: jni::sys::jint = env.call_method(&#tmp_ident, "getValue", "()I", &[])
+                            .and_then(|val| val.i())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                        let #fname_ident = #inner_conv(env, &#raw_ident)?;
+                    }
+                };
+                field_preludes.push(quote! {
+                    let #tmp_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                    #decode
+                });
+                field_init.push(quote!(#fname_ident));
+                continue;
+            }
+        }
+
         match jni_field_access(&field_wire) {
             Some((sig, accessor, false)) => {
                 field_preludes.push(quote! {
@@ -2385,9 +2432,39 @@ pub(crate) fn struct_input_body(
                 });
             }
             None => {
-                // Wire is JObject — fetch via .l() and pass by reference.
+                // Wire is JObject — fetch via .l() and pass by reference. JNI
+                // `GetFieldID` needs the slot's EXACT static descriptor: the
+                // box class for an `Option`-boxed primitive, the registered
+                // Kotlin class for a nested data-class field (Option-stripped
+                // — a nullable field keeps the same descriptor), `List` for a
+                // `Vec` field.
+                let slot_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+                let sig = registry
+                    .input_entry(&slot_ty)
+                    .and_then(|e| jni_field_access(&e.destination))
+                    .and_then(|(sig, _, is_obj)| {
+                        if is_obj {
+                            Some(sig.to_string())
+                        } else {
+                            box_descriptor_for_primitive(sig).map(str::to_string)
+                        }
+                    })
+                    .or_else(|| {
+                        bare_path_ident(&slot_ty).and_then(|name| {
+                            ext.kotlin_fqn(&name.to_string())
+                                .map(|v| format!("L{};", v.replace('.', "/")))
+                        })
+                    })
+                    .or_else(|| {
+                        if pat_match_top(&slot_ty, "Vec") {
+                            Some("Ljava/util/List;".to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
                 field_preludes.push(quote! {
-                    let #raw_ident: jni::objects::JObject = env.get_field(v, #camel, "Ljava/lang/Object;")
+                    let #raw_ident: jni::objects::JObject = env.get_field(v, #camel, #sig)
                         .and_then(|val| val.l())
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
                     let #fname_ident = #field_conv(env, &#raw_ident)?;
@@ -2691,9 +2768,9 @@ pub(crate) fn build_flat_input_plan(
         // `OptionScalarInputPlan`. The Rust reconstruct rebuilds the `Option`
         // from the two raw scalars (no `intValue()` unbox). Detected before the
         // enum-decline guard below so `Option<enum>` fields take this path too.
-        if let Some(pair) =
-            option_scalar_field_leaves(ext, registry, param_name, &kt_param, optional, &fident, &fcamel, &field.ty)
-        {
+        if let Some(pair) = option_scalar_field_leaves(
+            ext, registry, param_name, &kt_param, optional, &fident, &fcamel, &field.ty,
+        ) {
             leaves.extend(pair);
             continue;
         }
@@ -2968,8 +3045,7 @@ pub(crate) fn collect_vec_build_elem_types(
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Type> {
     let declared = ext.declared_functions();
-    let mut seen: std::collections::BTreeMap<String, syn::Type> =
-        std::collections::BTreeMap::new();
+    let mut seen: std::collections::BTreeMap<String, syn::Type> = std::collections::BTreeMap::new();
     for (ident, (item_fn, _)) in &registry.functions {
         if !declared.contains(ident) {
             continue;
@@ -3036,7 +3112,11 @@ pub(crate) fn vec_helper_method_name(
 /// [`mangle_jni_name`]); these helpers live on the `JNINative` object, so they
 /// share its class path.
 fn vec_helper_symbol(ext: &JniGen<impl JniGenState>, base: &str, suffix: &str) -> String {
-    format!("{}_{}", ext.jni_class_path, vec_helper_method_name(ext, base, suffix))
+    format!(
+        "{}_{}",
+        ext.jni_class_path,
+        vec_helper_method_name(ext, base, suffix)
+    )
 }
 
 /// One `#[no_mangle] extern "C"` `…VecNew/Push/Free` trio per flattenable
@@ -3526,7 +3606,17 @@ fn encode_struct_field(
             let typed_slot = registry
                 .output_entry(&slot_ty)
                 .and_then(|e| jni_field_access(&e.destination))
-                .map(|(sig, _, _)| sig.to_string())
+                .and_then(|(sig, _, is_obj)| {
+                    if is_obj {
+                        Some(sig.to_string())
+                    } else {
+                        // The inner type's own wire is a primitive, so this
+                        // field is an `Option<primitive-wire>` whose converter
+                        // delivers the `box_j*`-boxed OBJECT (null for `None`)
+                        // — the JVM slot is the box class, not the primitive.
+                        box_descriptor_for_primitive(sig).map(str::to_string)
+                    }
+                })
                 .or_else(|| {
                     bare_path_ident(&slot_ty).and_then(|name| {
                         ext.kotlin_fqn(&name.to_string())

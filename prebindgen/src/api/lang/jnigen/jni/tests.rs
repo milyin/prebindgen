@@ -548,7 +548,10 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
 
     // Rust glue: output boxes-out via `new_string`; input re-boxes via `Box::new`.
     assert!(rc.contains("new_string"), "{rust}");
-    assert!(rc.contains("Box::new") || rc.contains("Box<::std::string::String>"), "{rust}");
+    assert!(
+        rc.contains("Box::new") || rc.contains("Box<::std::string::String>"),
+        "{rust}"
+    );
 }
 
 /// A `&[T]` / `Vec<T>` input of a flattenable `data_class` is built as a
@@ -619,13 +622,25 @@ fn slice_input_builds_vec_handle() {
     let kc: String = kotlin.split_whitespace().collect();
 
     // One synthetic extern trio (shared by both functions).
-    assert!(kc.contains("externalfunfooVecNew(cap:Int):Long"), "{kotlin}");
-    assert!(kc.contains("externalfunfooVecPush(handle:Long,"), "{kotlin}");
-    assert!(kc.contains("externalfunfooVecFree(handle:Long)"), "{kotlin}");
+    assert!(
+        kc.contains("externalfunfooVecNew(cap:Int):Long"),
+        "{kotlin}"
+    );
+    assert!(
+        kc.contains("externalfunfooVecPush(handle:Long,"),
+        "{kotlin}"
+    );
+    assert!(
+        kc.contains("externalfunfooVecFree(handle:Long)"),
+        "{kotlin}"
+    );
 
     // Public surface stays `List<Foo>`; the body builds/pushes/frees the handle.
     assert!(kc.contains("v:List<Foo>"), "{kotlin}");
-    assert!(kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"), "{kotlin}");
+    assert!(
+        kc.contains("val__vec_v=JNINative.fooVecNew(v.size)"),
+        "{kotlin}"
+    );
     assert!(kc.contains("for(__einv){"), "{kotlin}");
     assert!(
         kc.contains("JNINative.fooVecPush(__vec_v,__e.id,__e.label)"),
@@ -635,10 +650,22 @@ fn slice_input_builds_vec_handle() {
     assert!(kc.contains("JNINative.fooVecFree(__vec_v)"), "{kotlin}");
 
     // Rust: the three helper symbols + both decode shapes (borrow / take).
-    assert!(rc.contains("fnJava_io_test_jni_JNINative_fooVecNew"), "{rust}");
-    assert!(rc.contains("fnJava_io_test_jni_JNINative_fooVecPush"), "{rust}");
-    assert!(rc.contains("fnJava_io_test_jni_JNINative_fooVecFree"), "{rust}");
-    assert!(rc.contains("&*(v_handleas*constVec<myflat::Foo>)"), "{rust}");
+    assert!(
+        rc.contains("fnJava_io_test_jni_JNINative_fooVecNew"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("fnJava_io_test_jni_JNINative_fooVecPush"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("fnJava_io_test_jni_JNINative_fooVecFree"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("&*(v_handleas*constVec<myflat::Foo>)"),
+        "{rust}"
+    );
     assert!(
         rc.contains("mem::take(&mut*(v_handleas*mutVec<myflat::Foo>))"),
         "{rust}"
@@ -1587,7 +1614,10 @@ fn vec_of_handle_output_folds_kotlin_side() {
     assert!(kc.contains("ArrayList<ZThing>()"), "{kotlin}");
     // The folder singleton wraps each raw `jlong` element into the typed handle
     // class and appends it — no Rust object construction.
-    assert!(kc.contains("ZThing(element)") || kc.contains("acc.add(ZThing("), "{kotlin}");
+    assert!(
+        kc.contains("ZThing(element)") || kc.contains("acc.add(ZThing("),
+        "{kotlin}"
+    );
     // `Option<Vec<…>>` surfaces as a nullable list.
     assert!(kc.contains("List<ZThing>?"), "{kotlin}");
 
@@ -1682,4 +1712,144 @@ fn option_scalar_struct_field_flattens() {
         "{rust}"
     );
     assert!(rc.contains("myflat::opts_put(&o)"), "{rust}");
+}
+
+/// A `data_class` with a NESTED data-class field plus enum / `Option<prim>` /
+/// `Option<enum>` fields — the shape that declines BOTH the fixed-builder
+/// output synthesis and the input leaf-flatten, so it round-trips through the
+/// whole-value `fromParts` / `get_field` converters. Pins three fixes those
+/// paths needed (each surfaced at runtime by `examples/covertest-kotlin`):
+///  * output `fromParts` descriptor: an `Option`-boxed primitive slot is the
+///    BOX class (`Ljava/lang/Long;` / `Ljava/lang/Integer;`), not the bare
+///    primitive — and the Kotlin factory takes `Int?` for `Option<enum>`,
+///    rebuilding via `?.let { E.fromInt(it) }`;
+///  * input `get_field` descriptors are the slots' EXACT static types (nested
+///    class FQN, box class, enum class + `getValue()I` decode), not the erased
+///    `Ljava/lang/Object;`;
+///  * a bare `Option<enum>` RETURN wires as `Int?` (the boxed discriminant),
+///    mapped back in the wrapper — previously the extern claimed the enum
+///    class while the native side returned a boxed `Integer`.
+#[test]
+fn fromparts_fallback_boxes_option_fields() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Level {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Inner {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Job {
+                    pub inner: Inner,
+                    pub level: Level,
+                    pub ttl: Option<i64>,
+                    pub mode: Option<Level>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn job_make(tag: i64) -> Job {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn job_mode(j: &Job) -> Option<Level> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .package_prefix("io.test.jni")
+        .package("model")
+        .enum_class(syn::parse_quote!(Level))
+        .data_class(syn::parse_quote!(Inner))
+        .data_class(syn::parse_quote!(Job))
+        .package("job")
+        .fun(syn::parse_quote!(job_make))
+        .fun(syn::parse_quote!(job_mode));
+
+    let dir = unique_snapshot_dir("jnigen_fromparts_optbox");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // OUTPUT (`job_make` → `fromParts`): the nested `inner` inlines to its `J`
+    // leaf, the bare enum stays a raw `I`, and the two `Option` fields occupy
+    // their BOX-class slots.
+    assert!(
+        rc.contains(r#""(JILjava/lang/Long;Ljava/lang/Integer;)Lio/test/jni/model/Job;""#),
+        "{rust}"
+    );
+    // Kotlin factory: `Long?` / `Int?` params, enum rebuilt nullably; nested
+    // child reassembled via its own factory.
+    assert!(kc.contains("ttl:Long?"), "{kotlin}");
+    assert!(kc.contains("mode:Int?"), "{kotlin}");
+    assert!(kc.contains("mode?.let{Level.fromInt(it)}"), "{kotlin}");
+    assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
+
+    // INPUT (`job_mode`'s whole-`Job` param): every `get_field` names the
+    // slot's exact static type; enum-typed slots decode via `getValue()I`.
+    assert!(
+        rc.contains(r#"get_field(v,"inner","Lio/test/jni/model/Inner;")"#),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(r#"get_field(v,"level","Lio/test/jni/model/Level;")"#),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(r#"get_field(v,"ttl","Ljava/lang/Long;")"#),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(r#"get_field(v,"mode","Lio/test/jni/model/Level;")"#),
+        "{rust}"
+    );
+    assert!(rc.contains(r#""getValue","()I""#), "{rust}");
+    assert!(!rc.contains("Ljava/lang/Object;\")"), "{rust}");
+
+    // RETURN (`job_mode` → `Option<Level>`): the extern wires `Int?`; the
+    // wrapper maps the boxed discriminant back to the nullable enum.
+    assert!(
+        kc.contains("funjobMode(j:Job,errorSink:Any):Int?"),
+        "{kotlin}"
+    );
+    assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
 }

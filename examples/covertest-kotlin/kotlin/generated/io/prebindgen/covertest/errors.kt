@@ -43,19 +43,36 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
 }
 
 public fun interface StorageErrorHandler<out R> {
-    public fun run(je: String?, message: String): R
+    public fun run(je: String?, message: String, handle: StorageError): R
 }
 
-internal class StorageErrorHandlerCapture : StorageErrorHandler<Unit> {
+public fun interface StorageErrorHandlerRaw<out R> {
+    public fun run(je: String?, message: String, handle: Long): R
+}
+
+public fun <R> StorageErrorHandler<R>.asRaw(): StorageErrorHandlerRaw<R> =
+    StorageErrorHandlerRaw<R> {
+        je,
+        message,
+        handle ->
+        run(
+            je,
+            message,
+            StorageError(handle)
+        )
+    }
+
+internal class StorageErrorHandlerRawCapture : StorageErrorHandlerRaw<Unit> {
     @JvmField var failed: Boolean = false
     @JvmField var je: String? = null
     @JvmField var ze0: String? = null
-    override fun run(je: String?, message: String) { failed = true; this.je = je; this.ze0 = message }
+    @JvmField var ze1: Long? = null
+    override fun run(je: String?, message: String, handle: Long) { failed = true; this.je = je; this.ze0 = message; this.ze1 = handle }
     companion object {
-        private val TL: ThreadLocal<StorageErrorHandlerCapture> = ThreadLocal.withInitial { StorageErrorHandlerCapture() }
-        @JvmStatic fun acquire(): StorageErrorHandlerCapture {
+        private val TL: ThreadLocal<StorageErrorHandlerRawCapture> = ThreadLocal.withInitial { StorageErrorHandlerRawCapture() }
+        @JvmStatic fun acquire(): StorageErrorHandlerRawCapture {
             val c = TL.get()
-            c.failed = false; c.je = null; c.ze0 = null
+            c.failed = false; c.je = null; c.ze0 = null; c.ze1 = null
             return c
         }
     }

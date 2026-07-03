@@ -18,6 +18,21 @@ public enum class Priority(public val value: Int) {
     }
 }
 
+public data class Annotated(val payload: Payload, val ttl: Long?, val priority: Priority?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            payload_id: Long,
+            payload_seq: Int,
+            payload_value: Double,
+            payload_flag: Boolean,
+            payload_label: String?,
+            ttl: Long?,
+            priority: Int?,
+        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), ttl, priority?.let { Priority.fromInt(it) })
+    }
+}
+
 /**
  * Typed by-value wrapper for the native Rust `Stamp` (a `Copy` blob carried
  * as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).
@@ -107,6 +122,57 @@ public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List
 public fun payloadLabelLen(p: Payload, onError: JniErrorHandler<Long?>): Long? {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.payloadLabelLen(p.id, p.seq, p.value, p.flag, p.label, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun freshnessFlip(f: Freshness, onError: JniErrorHandler<Freshness>): Freshness {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = Freshness.fromInt(CovNative.freshnessFlip(f.value, __cap))
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun annotatedNew(
+    payload: Payload,
+    ttl: Long?,
+    priority: Priority?,
+    onError: JniErrorHandler<Annotated>,
+): Annotated {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedNew(
+        payload.id,
+        payload.seq,
+        payload.value,
+        payload.flag,
+        payload.label,
+        ttl != null,
+        ttl ?: 0L,
+        priority != null,
+        priority?.value ?: 0,
+        __cap,
+    )
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedTtl(a, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedPriority(a, __cap)?.let { Priority.fromInt(it) }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedPayloadValue(a, __cap)
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }

@@ -58,7 +58,7 @@ pub(crate) use crate::api::{
     },
     gen::kotlin::WriteKotlinError,
     lang::jnigen::{
-        jni::wire_access::{box_helper_for_wire, jni_field_access},
+        jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
         util::snake_to_camel,
     },
 };

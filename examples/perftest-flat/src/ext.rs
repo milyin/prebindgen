@@ -18,8 +18,9 @@
 //! * [`Millis`] — a newtype crossing as a plain `Long` via a custom
 //!   input/output wrapper.
 
-use crate::{Payload, Storage};
 use prebindgen_proc_macro::prebindgen;
+
+use crate::{Payload, Storage};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Priority — a primitive-repr enum (→ Kotlin `enum class`, jint wire).
@@ -104,10 +105,7 @@ pub fn stamp_nanos(s: &Stamp) -> i64 {
 #[prebindgen]
 pub fn stamp_series(count: i64) -> Vec<Stamp> {
     (0..count.max(0))
-        .map(|i| Stamp {
-            secs: i,
-            nanos: 0,
-        })
+        .map(|i| Stamp { secs: i, nanos: 0 })
         .collect()
 }
 
@@ -158,6 +156,10 @@ pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
 /// their `value`s. An opaque handle in the binding, but its default
 /// flatten-output decomposes it into `(count, total)` leaves and its
 /// flatten-input rebuilds it from the same leaves (via [`summary_new`]).
+/// `Clone` because [`archive_latest`] returns it *borrowed* (`Option<&Summary>`)
+/// and the JVM binding's only sound lowering of a borrowed handle is a clone
+/// into a fresh owned handle.
+#[derive(Clone)]
 pub struct Summary {
     count: i64,
     total: f64,
@@ -295,6 +297,210 @@ pub fn payload_label_len(p: &Payload) -> Option<i64> {
     p.label.as_ref().map(|s| s.len() as i64)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Freshness — a second enum whose Kotlin class is hand-written
+// (`enum_class(...).suppress_kotlin_code()`).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Whether a value is up to date. Its binding declares it an `enum_class` but
+/// **suppresses** the generated Kotlin file — the consumer hand-writes a
+/// wire-compatible `enum class` instead (the enum dual of
+/// `PayloadVecHandler`'s suppressed handle class).
+#[prebindgen]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Freshness {
+    Fresh = 0,
+    Stale = 1,
+}
+
+/// Toggle a freshness value (enum in + enum out through the hand-written
+/// Kotlin class).
+#[prebindgen]
+pub fn freshness_flip(f: Freshness) -> Freshness {
+    match f {
+        Freshness::Fresh => Freshness::Stale,
+        Freshness::Stale => Freshness::Fresh,
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Annotated — a data class with a NESTED data-class field and Option<scalar> /
+// Option<enum> fields.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A [`Payload`] with optional delivery metadata. As a `data_class` it
+/// exercises the shapes flat `Payload` cannot: a **nested** data-class field
+/// (`payload`, recursive `fromParts` on output / recursive leaf decode on
+/// input) and `Option<primitive>` / `Option<enum>` **fields** (each crossing
+/// as a decoupled `(present, value)` leaf pair).
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Annotated {
+    pub payload: Payload,
+    pub ttl: Option<i64>,
+    pub priority: Option<Priority>,
+}
+
+/// Assemble an [`Annotated`] (nested data-class **output** + bare
+/// `Option<scalar>` / `Option<enum>` inputs).
+#[prebindgen]
+pub fn annotated_new(payload: Payload, ttl: Option<i64>, priority: Option<Priority>) -> Annotated {
+    Annotated {
+        payload,
+        ttl,
+        priority,
+    }
+}
+
+/// The metadata TTL (`Option<prim>` field read back through a data-class
+/// **input**).
+#[prebindgen]
+pub fn annotated_ttl(a: &Annotated) -> Option<i64> {
+    a.ttl
+}
+
+/// The metadata priority (`Option<enum>` **return**).
+#[prebindgen]
+pub fn annotated_priority(a: &Annotated) -> Option<Priority> {
+    a.priority
+}
+
+/// The nested payload's `value` (proves the nested field survived the
+/// input decode).
+#[prebindgen]
+pub fn annotated_payload_value(a: &Annotated) -> f64 {
+    a.payload.value
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vec<opaque-handle> outputs — the Kotlin-side handle fold.
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn synthetic_storage(shard: i64, each: i64) -> Storage {
+    let mut s = Storage::default();
+    s.payloads = (0..each.max(0))
+        .map(|k| Payload {
+            id: shard * 1000 + k,
+            seq: k as i32,
+            value: k as f64,
+            flag: false,
+            label: None,
+        })
+        .collect();
+    s
+}
+
+/// Build `count` independent storages of `each` payloads (a
+/// `Vec<opaque-handle>` **return** — each element crosses as a raw pointer the
+/// Kotlin folder wraps into a typed `Storage` handle).
+#[prebindgen]
+pub fn storage_shards(count: i64, each: i64) -> Vec<Storage> {
+    (0..count.max(0))
+        .map(|i| synthetic_storage(i, each))
+        .collect()
+}
+
+/// Like [`storage_shards`] but `None` when `count == 0`
+/// (`Option<Vec<opaque-handle>>` — the fold under the null niche).
+#[prebindgen]
+pub fn storage_shards_opt(count: i64, each: i64) -> Option<Vec<Storage>> {
+    if count <= 0 {
+        None
+    } else {
+        Some(storage_shards(count, each))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StorageHandler — a callback receiving an OWNED opaque handle.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A prepared callback receiving an **owned [`Storage`] handle** (`Fn(Storage)`,
+/// by value). Unlike [`PayloadHandler`] (whose arg is a flattened data class),
+/// the handle crosses as a raw pointer and the generated Kotlin proxy wraps it
+/// into a typed `Storage` and `close()`s it after `run` (close-unless-taken).
+pub struct StorageHandler(Box<dyn Fn(Storage) + Send + Sync>);
+
+/// Wrap a `Fn(Storage)` closure into a reusable [`StorageHandler`].
+#[prebindgen]
+pub fn storage_handler_new(f: impl Fn(Storage) + Send + Sync + 'static) -> StorageHandler {
+    StorageHandler(Box::new(f))
+}
+
+/// Build a synthetic storage of `n` payloads and hand **ownership** of it to
+/// the handler's callback.
+#[prebindgen]
+pub fn storage_emit(n: i64, h: &StorageHandler) {
+    (h.0)(synthetic_storage(0, n));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Archive — a borrowed-opaque output (`Option<&Summary>` → cloned owned handle).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Holds the most recently stored [`Summary`]. Its accessor returns the summary
+/// **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
+/// zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
+/// owned handle (the JVM keeps its handle past the call).
+#[derive(Default)]
+pub struct Archive {
+    latest: Option<Summary>,
+}
+
+/// Create an empty archive.
+#[prebindgen]
+pub fn archive_new() -> Archive {
+    Archive::default()
+}
+
+/// Store a summary, consuming it (owned-handle input).
+#[prebindgen]
+pub fn archive_store(a: &mut Archive, s: Summary) {
+    a.latest = Some(s);
+}
+
+/// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
+/// empty, otherwise cloned into a fresh owned handle by the JVM binding).
+#[prebindgen]
+pub fn archive_latest(a: &Archive) -> Option<&Summary> {
+    a.latest.as_ref()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Misc coverage shapes: 3-handle call, Vec<String> return, Option<data-class>
+// input.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Combined length of three storages (a **3-opaque-handle** call — the
+/// generated wrapper must sort-lock all three).
+#[prebindgen]
+pub fn storage_total_len(a: &Storage, b: &Storage, c: &Storage) -> i64 {
+    (a.payloads.len() + b.payloads.len() + c.payloads.len()) as i64
+}
+
+/// All present labels, in storage order (`Vec<String>` **return** — the
+/// single-leaf string fold).
+#[prebindgen]
+pub fn storage_labels(s: &Storage) -> Vec<String> {
+    s.payloads
+        .iter()
+        .filter_map(|p| p.label.as_deref().cloned())
+        .collect()
+}
+
+/// Push `p` if present; whether it was pushed (`Option<data-class>` **input**).
+#[prebindgen]
+pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
+    match p {
+        Some(p) => {
+            s.payloads.push(p);
+            true
+        }
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,7 +523,10 @@ mod tests {
         assert_eq!(payload_priority(&payload(1, 500.0, None)), Priority::Normal);
         assert_eq!(priority_weight(Priority::High), 10);
         assert_eq!(priority_or(None, Priority::Normal), Priority::Normal);
-        assert_eq!(priority_or(Some(Priority::Low), Priority::High), Priority::Low);
+        assert_eq!(
+            priority_or(Some(Priority::Low), Priority::High),
+            Priority::Low
+        );
     }
 
     #[test]
@@ -375,5 +584,68 @@ mod tests {
     fn label_len_is_optional() {
         assert_eq!(payload_label_len(&payload(1, 0.0, Some("abcd"))), Some(4));
         assert_eq!(payload_label_len(&payload(1, 0.0, None)), None);
+    }
+
+    #[test]
+    fn freshness_flips() {
+        assert_eq!(freshness_flip(Freshness::Fresh), Freshness::Stale);
+        assert_eq!(freshness_flip(Freshness::Stale), Freshness::Fresh);
+    }
+
+    #[test]
+    fn annotated_roundtrips() {
+        let a = annotated_new(payload(1, 2.5, Some("x")), Some(30), Some(Priority::High));
+        assert_eq!(annotated_ttl(&a), Some(30));
+        assert_eq!(annotated_priority(&a), Some(Priority::High));
+        assert_eq!(annotated_payload_value(&a), 2.5);
+        let b = annotated_new(payload(1, 0.0, None), None, None);
+        assert_eq!(annotated_ttl(&b), None);
+        assert_eq!(annotated_priority(&b), None);
+    }
+
+    #[test]
+    fn shards_are_independent() {
+        let shards = storage_shards(3, 2);
+        assert_eq!(shards.len(), 3);
+        assert!(shards.iter().all(|s| storage_len(s) == 2));
+        assert!(storage_contains(&shards[2], 2001));
+        assert!(!storage_contains(&shards[0], 2001));
+        assert!(storage_shards(0, 2).is_empty());
+        assert!(storage_shards_opt(0, 2).is_none());
+        assert_eq!(storage_shards_opt(2, 1).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn storage_handler_receives_owned_storage() {
+        use std::sync::{
+            atomic::{AtomicI64, Ordering},
+            Arc,
+        };
+        let seen = Arc::new(AtomicI64::new(-1));
+        let seen2 = seen.clone();
+        let h = storage_handler_new(move |s| seen2.store(storage_len(&s), Ordering::SeqCst));
+        storage_emit(4, &h);
+        assert_eq!(seen.load(Ordering::SeqCst), 4);
+    }
+
+    #[test]
+    fn archive_borrows_latest() {
+        let mut a = archive_new();
+        assert!(archive_latest(&a).is_none());
+        archive_store(&mut a, summary_new(2, 40.0));
+        assert_eq!(summary_count(archive_latest(&a).unwrap()), 2);
+    }
+
+    #[test]
+    fn misc_shapes() {
+        let s1 = storage_with_payload(payload(1, 0.0, Some("a")));
+        let s2 = storage_with_payload(payload(2, 0.0, None));
+        let mut s3 = storage_new();
+        assert_eq!(storage_total_len(&s1, &s2, &s3), 2);
+        assert_eq!(storage_labels(&s1), vec!["a".to_string()]);
+        assert!(storage_labels(&s2).is_empty());
+        assert!(storage_put_opt(&mut s3, Some(payload(3, 0.0, None))));
+        assert!(!storage_put_opt(&mut s3, None));
+        assert_eq!(storage_len(&s3), 1);
     }
 }

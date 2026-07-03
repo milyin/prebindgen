@@ -33,6 +33,24 @@ pub(crate) fn jni_field_access(jni_type: &syn::Type) -> Option<(&'static str, sy
     Some((sig, format_ident!("{}", accessor), is_obj))
 }
 
+/// Map a JNI **primitive** field descriptor to the descriptor of its
+/// `java.lang.*` box class — the JVM slot an `Option`-boxed primitive leaf
+/// occupies ([`box_helper_for_wire`] produces the boxed value; this names its
+/// type in a method signature).
+pub(crate) fn box_descriptor_for_primitive(sig: &str) -> Option<&'static str> {
+    Some(match sig {
+        "Z" => "Ljava/lang/Boolean;",
+        "B" => "Ljava/lang/Byte;",
+        "C" => "Ljava/lang/Character;",
+        "S" => "Ljava/lang/Short;",
+        "I" => "Ljava/lang/Integer;",
+        "J" => "Ljava/lang/Long;",
+        "F" => "Ljava/lang/Float;",
+        "D" => "Ljava/lang/Double;",
+        _ => return None,
+    })
+}
+
 /// Map a JNI **primitive** wire type to the `prebindgen::lang` cached-boxing
 /// runtime helper that boxes it into its `java.lang.*` wrapper. Used when a
 /// primitive leaf must be delivered through an *erased* `Object`-typed call
