@@ -47,6 +47,12 @@
 //!     remove the `withSortedHandleLocks` codegen this example asserts against;
 //!     a single binding can only be in one lock mode, so we keep the locked one.
 //!
+//! `perftest-kotlin`'s declared surface is a strict subset of this binding
+//! (verified 2026-07-03): its only unique configurations are the unset
+//! defaults — the `JNINative` harness name (`Cov`-mangled here) and the unset
+//! per-kind name hooks (≡ the identity closures registered here) — which are
+//! binding-exclusive like the lock toggle above and add no code-path coverage.
+//!
 //! One perf-surface function stays undeclared like the `storage_get_into_*`
 //! group: `string_len` (`&String` param / `usize` return are C-tier shapes with
 //! no JVM mapping).

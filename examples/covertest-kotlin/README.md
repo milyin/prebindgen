@@ -109,6 +109,16 @@ The asserts are grouped into these sections (run order):
 20. `3-handle locking + 2-thread smoke`
 21. `high-volume callback (localref pressure)`
 
+### Relationship to perftest-kotlin
+
+`perftest-kotlin`'s declared surface is a **strict subset** of this binding
+(verified 2026-07-03): every type and function it declares is declared here,
+via the same builder methods. The only perftest-only configurations are the
+unset defaults, which are mutually exclusive with this binding's registered
+ones and add no code-path coverage — the default harness name (`JNINative`;
+mangled to `CovNative` here) and the unset per-kind name hooks (behaviorally
+identical to the identity closures registered here).
+
 ## Configuration toggles
 
 - **`suppress_kotlin_code`** — *exercised in both of its forms.* On the
