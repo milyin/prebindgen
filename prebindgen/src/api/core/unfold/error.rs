@@ -10,15 +10,6 @@ pub enum UnfoldError {
         func: syn::Ident,
         target: String,
     },
-    AmbiguousDeconstructor {
-        func: syn::Ident,
-        target: String,
-        candidates: Vec<String>,
-    },
-    UnknownDeconstructor {
-        func: syn::Ident,
-        name: String,
-    },
     AccessorTargetMismatch {
         accessor: String,
         takes: String,
@@ -32,14 +23,14 @@ pub enum UnfoldError {
     Cycle {
         target: String,
     },
-    /// `.convert_output()` on a deconstructor that does not flatten to exactly
-    /// one leaf, or whose shape is `Iterable` (use `.deconstruct_output()`).
+    /// A single-value (`Return`) delivery on a decomposition that does not
+    /// flatten to exactly one leaf, or whose shape is `Iterable`.
     ConvertNotSingle {
         func: syn::Ident,
         reason: &'static str,
     },
     /// A decomposer record references a function that was not declared via
-    /// `.fun_accessor`.
+    /// `.accessor`.
     RecordNotAccessor {
         func: syn::Ident,
     },
@@ -60,6 +51,12 @@ pub enum UnfoldError {
     ReservedSeparator {
         name: String,
     },
+    /// An owned decomposition declared `.field_self()` (the root identity,
+    /// which MOVES the value) before a field that splices a nested identity
+    /// (which borrows it) — the generated Rust would not compile.
+    RootIdentityBeforeNested {
+        target: String,
+    },
 }
 
 impl std::fmt::Display for UnfoldError {
@@ -79,22 +76,6 @@ impl std::fmt::Display for UnfoldError {
                 f,
                 "output expansion: no deconstructor registered for `{}` (return of `{}`)",
                 target, func
-            ),
-            UnfoldError::AmbiguousDeconstructor {
-                func,
-                target,
-                candidates,
-            } => write!(
-                f,
-                "output expansion: multiple deconstructors for `{}` (return of `{}`): {} — disambiguate with `.deconstruct_output_with` / `.convert_output_with`",
-                target,
-                func,
-                candidates.join(", ")
-            ),
-            UnfoldError::UnknownDeconstructor { func, name } => write!(
-                f,
-                "output expansion: no deconstructor named `{}` (for `{}`)",
-                name, func
             ),
             UnfoldError::AccessorTargetMismatch {
                 accessor,
@@ -142,6 +123,14 @@ impl std::fmt::Display for UnfoldError {
                 "output record name `{}` contains the reserved `__` separator (used to join \
                  nested deconstructor segments)",
                 name
+            ),
+            UnfoldError::RootIdentityBeforeNested { target } => write!(
+                f,
+                "output flatten of `{}`: `.field_self()` (the root identity) must be declared \
+                 AFTER fields that splice a nested identity — the root identity moves the owned \
+                 value while nested identities borrow it, so this order would generate \
+                 non-compiling Rust. Declare `.field_self()` last.",
+                target
             ),
         }
     }

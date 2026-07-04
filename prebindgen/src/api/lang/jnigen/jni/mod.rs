@@ -76,15 +76,11 @@ pub(crate) use crate::api::{
 /// value-context Kotlin name for the same type (`"Long"`) is produced
 /// independently by the rank-0 opaque handler in [`KotlinMeta`], so
 /// the two roles don't collide despite sharing the `TypeConfig`.
+/// Presence marker: a type registered via `JniGen::ptr_class`. The unified
+/// Kotlin emitter writes a typed-handle `.kt` file (and the Rust side its
+/// `freePtr` destructor) for every opaque type.
 #[derive(Clone, Default)]
-pub(crate) struct OpaqueConfig {
-    /// When `false` (default), the unified Kotlin emitter writes a
-    /// typed-handle `.kt` file for this opaque type. Set to `true` by
-    /// [`JniGen::suppress_kotlin_code`] to indicate the Kotlin file is
-    /// hand-maintained — only the Rust-side converter and `instanceof`
-    /// dispatch wire up.
-    pub suppress_kotlin_code: bool,
-}
+pub(crate) struct OpaqueConfig {}
 
 /// Per-enum configuration (driven by `JniGen::enum_class`).
 ///
@@ -95,14 +91,10 @@ pub(crate) struct OpaqueConfig {
 /// discriminant-keyed `fromInt(...)` companion. The Kotlin FQN lives in
 /// the surrounding [`TypeConfig::kotlin_name`] slot, same as
 /// [`OpaqueConfig`].
+/// Presence marker: a type registered via `JniGen::enum_class`. The unified
+/// Kotlin emitter writes an `enum class` `.kt` file for every declared enum.
 #[derive(Clone, Default)]
-pub(crate) struct EnumConfig {
-    /// When `false` (default), the unified Kotlin emitter writes an
-    /// `enum class` `.kt` file for this enum. Set to `true` by
-    /// [`JniGen::suppress_kotlin_code`] when the Kotlin source is
-    /// hand-maintained — only the Rust-side converter wires up.
-    pub suppress_kotlin_code: bool,
-}
+pub(crate) struct EnumConfig {}
 
 /// One registered `.fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
@@ -488,8 +480,10 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // Suppression is valid for generated pointer/enum classes, not data classes.
-/// let _ = JniGen::new().data_class(pq!(Config)).suppress_kotlin_code();
+/// // `kotlin_type` is only for data/value classes and rank-0 wrappers — on a
+/// // ptr_class it would corrupt the FQN that typed-handle emission and
+/// // instanceof dispatch consume.
+/// let _ = JniGen::new().ptr_class(pq!(ZSession)).kotlin_type("Long");
 /// ```
 ///
 /// Type declarations are allowed before a subpackage is selected, but declaring
@@ -603,6 +597,14 @@ pub struct JniGenInner {
     /// [`Self::output_wrappers`]. The rank-0 dispatch order is opaque →
     /// enum → wrapper-table → primitive → struct.
     pub(crate) types: HashMap<TypeKey, TypeConfig>,
+
+    /// Set by the first type / function / wrapper declaration. Guards the
+    /// order-sensitive global config ([`JniGen::package_prefix`] and the
+    /// `kotlin_*_name_mangle` closures): those are baked into each
+    /// declaration's FQN at declaration time, so setting them afterwards
+    /// would silently mis-name everything already declared — a hard panic
+    /// instead.
+    pub(crate) declarations_started: bool,
 
     /// Free-standing package-level wrappers, keyed by subpackage path
     /// (relative to [`Self::package`], dot-separated; never empty for an

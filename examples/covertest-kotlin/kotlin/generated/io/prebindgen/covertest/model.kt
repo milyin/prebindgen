@@ -126,13 +126,6 @@ public fun payloadLabelLen(p: Payload, onError: JniErrorHandler<Long?>): Long? {
     return __ret
 }
 
-public fun freshnessFlip(f: Freshness, onError: JniErrorHandler<Freshness>): Freshness {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = Freshness.fromInt(CovNative.freshnessFlip(f.value, __cap))
-    if (__cap.failed) return onError.run(__cap.je)
-    return __ret
-}
-
 public fun annotatedNew(
     payload: Payload,
     ttl: Long?,

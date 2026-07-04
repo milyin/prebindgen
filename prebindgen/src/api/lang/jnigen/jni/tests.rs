@@ -1714,6 +1714,45 @@ fn option_scalar_struct_field_flattens() {
     assert!(rc.contains("myflat::opts_put(&o)"), "{rust}");
 }
 
+/// Order-sensitive global config (`package_prefix`, the mangle closures) is
+/// baked into FQNs at declaration time — configuring it after the first
+/// declaration is a hard builder error, not a silent mis-naming.
+#[test]
+#[should_panic(expected = "package_prefix must be configured before")]
+fn late_package_prefix_panics() {
+    let _ = JniGen::new()
+        .ptr_class(syn::parse_quote!(ZThing))
+        .package_prefix("io.test.jni");
+}
+
+/// Same guard for the per-kind name-mangle closures.
+#[test]
+#[should_panic(expected = "kotlin_fun_name_mangle must be configured before")]
+fn late_mangle_closure_panics() {
+    let _ = JniGen::new()
+        .package("thing")
+        .fun(syn::parse_quote!(thing_get))
+        .kotlin_fun_name_mangle(|n| n.to_string());
+}
+
+/// A rank-0 wrapper on a Rust builtin generates a converter qualified with the
+/// `source_module` (`myflat::usize`) — invalid Rust — so the registration is
+/// rejected up front.
+#[test]
+#[should_panic(expected = "wrapper on builtin `usize`")]
+fn builtin_wrapper_pattern_panics() {
+    let _ = JniGen::new().output_wrapper(
+        syn::parse_quote!(usize),
+        |_r: &Registry<KotlinMeta>| -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
+            Some((
+                syn::parse_quote!(jni::sys::jlong),
+                None,
+                syn::parse_quote!(v as jni::sys::jlong),
+            ))
+        },
+    );
+}
+
 /// A `data_class` with a NESTED data-class field plus enum / `Option<prim>` /
 /// `Option<enum>` fields — the shape that declines BOTH the fixed-builder
 /// output synthesis and the input leaf-flatten, so it round-trips through the

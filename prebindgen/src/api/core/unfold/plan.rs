@@ -27,13 +27,10 @@ pub use crate::api::core::shape::Shape as UnfoldShape;
 /// string.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DeconId {
-    /// The type's unnamed (top-level / `.default()`-applied) deconstructor.
+    /// The type's default (`.flatten_output()`-declared) deconstructor.
     Default(String),
-    /// A named declaration (`.deconstructor_name(name)`), selected per fn
-    /// via the `_with(name)` selectors.
-    Named(String, String),
-    /// Per-fn inline records (`.fun_output(...)`) — unique to the function
-    /// (second field = the fn ident).
+    /// Per-fn inline records (`.flatten_output_with()`) — unique to the
+    /// function (second field = the fn ident).
     PerFn(String, String),
 }
 

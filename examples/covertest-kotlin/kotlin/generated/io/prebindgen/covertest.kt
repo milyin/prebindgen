@@ -4,7 +4,6 @@ package io.prebindgen.covertest
 import io.prebindgen.covertest.analytics.Archive
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.model.Annotated
-import io.prebindgen.covertest.model.Freshness
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 
@@ -89,6 +88,30 @@ public class PayloadHandler(initialPtr: Long) : NativeHandle(initialPtr) {
         val p = ptr
         ptr = 0L
         return PayloadHandler(p)
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+    }
+}
+
+/** Typed handle for a native Zenoh `PayloadVecHandler`. */
+public class PayloadVecHandler(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L) {
+            ptr = 0L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): PayloadVecHandler {
+        val p = ptr
+        ptr = 0L
+        return PayloadVecHandler(p)
     }
 
     public companion object {
@@ -345,7 +368,6 @@ internal object CovNative {
         s1: Long,
         errorSink: Any,
     )
-    external fun freshnessFlip(f: Int, errorSink: Any): Int
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
     external fun payloadLabelLen(

@@ -12,11 +12,10 @@ benchmark.
 | Verifies | throughput | behavior, via Kotlin `check(...)` |
 
 The shared Rust library lives in `perftest-flat`. The coverage-only items
-(`Priority`, `Freshness`, `Stamp`, `Annotated`, `StorageError`, `Summary`,
-`Archive`, `StorageHandler`, `Millis`, and the analytics/shape functions) are
-additive and opt-in: they sit in `perftest_flat::ext` and are only pulled in by
-a binding that declares them, so `perftest-c` / `perftest-kotlin` are
-unaffected.
+(`Priority`, `Stamp`, `Annotated`, `StorageError`, `Summary`, `Archive`,
+`StorageHandler`, `Millis`, and the analytics/shape functions) are additive and
+opt-in: they sit in `perftest_flat::ext` and are only pulled in by a binding
+that declares them, so `perftest-c` / `perftest-kotlin` are unaffected.
 
 ## Running
 
@@ -31,7 +30,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 21 sections, every JniGen feature exercised
+PASS - 20 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -46,11 +45,9 @@ toolchain). The native library is loaded from `target/release` via
 | Path | Hand-written? | Purpose |
 |---|---|---|
 | `build.rs` | yes | **The centerpiece.** Drives `JniGen` through every feature; its module doc-comment holds the authoritative coverage matrix. |
-| `src/lib.rs` | yes | `include!`s the generated Rust wrappers + the hand-written `PayloadVecHandler::freePtr` (see below). |
+| `src/lib.rs` | yes | `include!`s the generated Rust wrappers. |
 | `kotlin/.../Test.kt` | yes | The assert harness — `main()` with one `section { … }` per feature group. |
 | `kotlin/.../NativeLibrary.kt` | yes | Native-library loader invoked by `jni_native_init`. |
-| `kotlin/.../PayloadVecHandler.kt` | yes | The typed handle for the `suppress_kotlin_code` ptr_class (see below). |
-| `kotlin/.../model/Freshness.kt` | yes | The enum class for the `suppress_kotlin_code` enum_class (see below). |
 | `src/generated_bindings.rs`, `kotlin/generated/**` | no — regenerated each build | The generated Rust JNI wrappers and matching typed Kotlin classes. |
 
 ## Feature coverage
@@ -63,7 +60,7 @@ for the full table; in brief:
   name-mangle closures.
 - **types:** `data_class` (`Payload`; nested/Option-field `Annotated`),
   `ptr_class` (`Storage` / `Summary` / `StorageError` / `Archive` / handlers),
-  `enum_class` (`Priority`; suppressed `Freshness`), `value_class` (`Stamp`),
+  `enum_class` (`Priority`), `value_class` (`Stamp`),
   `kotlin_type` (`Millis` → `Long`).
 - **members:** `accessor` / `method` / `constructor`.
 - **flatten:** `flatten_input` / `flatten_output` (+ `variant`/`variant_self`,
@@ -103,11 +100,10 @@ The asserts are grouped into these sections (run order):
 14. `nested data_class Annotated + Option fields`
 15. `borrowed-opaque output archiveLatest`
 16. `Vec<String> storageLabels + Option<Payload> input + String return`
-17. `enum_class suppress_kotlin_code Freshness`
-18. `binding error je != null (malformed Stamp bytes)`
-19. `callback exceptions are swallowed (no-throw contract)`
-20. `3-handle locking + 2-thread smoke`
-21. `high-volume callback (localref pressure)`
+17. `binding error je != null (malformed Stamp bytes)`
+18. `callback exceptions are swallowed (no-throw contract)`
+19. `3-handle locking + 2-thread smoke`
+20. `high-volume callback (localref pressure)`
 
 ### Relationship to perftest-kotlin
 
@@ -121,14 +117,6 @@ identical to the identity closures registered here).
 
 ## Configuration toggles
 
-- **`suppress_kotlin_code`** — *exercised in both of its forms.* On the
-  ptr_class `PayloadVecHandler` it drops **both** the generated Kotlin class
-  and the generated Rust `freePtr` destructor extern, so both are hand-written
-  (`kotlin/.../PayloadVecHandler.kt` and the `freePtr` extern in `src/lib.rs`).
-  On the enum_class `Freshness` it drops the generated Kotlin `enum class`,
-  hand-written as `kotlin/.../model/Freshness.kt` (wire-compatible `value` +
-  `fromInt`). This is the flag's intended use: take over the type by hand
-  while still generating the surrounding wrappers.
 - **`disable_handle_locks`** — *kept at its default (locks ON).* This is a
   global, binary toggle: a single binding can only be in one lock mode.
   Keeping the default covers the richer `withSortedHandleLocks` scaffold that

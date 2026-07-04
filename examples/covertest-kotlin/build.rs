@@ -16,7 +16,7 @@
 //! | 6 name-mangle closures               | harness (`Cov*`) + the five per-kind hooks |
 //! | `data_class`                         | `Payload`; `Annotated` (NESTED field + `Option<prim>`/`Option<enum>` fields) |
 //! | `ptr_class`                          | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
-//! | `enum_class`                         | `Priority`; `Freshness` (+ its `suppress_kotlin_code`, hand-written Kotlin) |
+//! | `enum_class`                         | `Priority` |
 //! | `value_class`                        | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `kotlin_type`                        | `Millis` → `Long` |
 //! | `accessor` / `method` / `constructor`| `Storage` + `Summary` + `Stamp` members |
@@ -106,16 +106,10 @@ fn main() {
             },
         )
         .kotlin_type("Long")
-        // ── Subpackage `model`: enums + value class + nested data class ─────
+        // ── Subpackage `model`: enum + value class + nested data class ──────
         .package("model")
         // `Priority` as a Kotlin `enum class` (jint wire, `fromInt` companion).
         .enum_class(pq!(Priority))
-        // `Freshness` exercises the ENUM variant of `suppress_kotlin_code`
-        // (the dual of `PayloadVecHandler`'s suppressed handle class): the
-        // wire stays jint, but the Kotlin `enum class` is hand-written
-        // (kotlin/io/prebindgen/covertest/model/Freshness.kt).
-        .enum_class(pq!(Freshness))
-        .suppress_kotlin_code()
         // `Annotated` exercises a NESTED data-class field (`payload`,
         // recursive fromParts / recursive leaf decode) plus Option<prim> and
         // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
@@ -173,14 +167,7 @@ fn main() {
         // (`Fn(Storage)`): the raw pointer crosses and the generated Kotlin
         // proxy wraps it into a typed `Storage` and closes it after `run`.
         .ptr_class(pq!(StorageHandler))
-        // `PayloadVecHandler` exercises `suppress_kotlin_code`: this flag drops
-        // BOTH its generated Kotlin typed-handle class AND its Rust `freePtr`
-        // destructor, so both are hand-written (see
-        // kotlin/io/prebindgen/covertest/PayloadVecHandler.kt and the matching
-        // extern in src/lib.rs). The handle's constructor/converters are still
-        // generated, so `payloadVecHandlerNew` / `storageCallbackVec` work.
         .ptr_class(pq!(PayloadVecHandler))
-        .suppress_kotlin_code()
         // ── Free functions, grouped by subpackage ───────────────────────────
         // model: enum return/param/option + value-class return + Vec<value> +
         //        Option<scalar>.
@@ -191,7 +178,6 @@ fn main() {
         .fun(pq!(stamp_new))
         .fun(pq!(stamp_series))
         .fun(pq!(payload_label_len))
-        .fun(pq!(freshness_flip))
         .fun(pq!(annotated_new))
         .fun(pq!(annotated_ttl))
         .fun(pq!(annotated_priority))

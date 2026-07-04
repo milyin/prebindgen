@@ -6,8 +6,7 @@
 //! generator module `api::gen::kotlin` owns formatting and imports):
 //!   * the shared `NativeHandle` base + lock helpers (root package, e.g.
 //!     `io.zenoh.jni`).
-//!   * one typed-handle class per `ptr_class` entry without
-//!     `.suppress_kotlin_code()`.
+//!   * one typed-handle class per `ptr_class` entry.
 //!   * one enum / data / `@JvmInline value` class per declaration.
 //!   * one top-level free-function bucket per `package()` context.
 //!   * the centralized `external fun` holder (`JNINative`). (`impl Fn(...)`
@@ -334,8 +333,7 @@ impl<S: JniGenState> JniGen<S> {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
             let cfg = &self.types[key];
-            let Some(opaque) = &cfg.opaque else { continue };
-            if opaque.suppress_kotlin_code {
+            if cfg.opaque.is_none() {
                 continue;
             }
             let Some(kotlin_fqn) = &cfg.kotlin_name else {
@@ -369,9 +367,8 @@ pub(crate) struct OwnedTypedHandle {
 }
 
 impl<S: JniGenState> JniGen<S> {
-    /// Emit one Kotlin `enum class` file per `enum_class`-declared type
-    /// (skipping any flagged with `.suppress_kotlin_code()`). Variants
-    /// render in declaration order using SCREAMING_SNAKE_CASE names; the
+    /// Emit one Kotlin `enum class` file per `enum_class`-declared type.
+    /// Variants render in declaration order using SCREAMING_SNAKE_CASE names; the
     /// constructor stores the Rust discriminant value (or the ordinal as
     /// a fallback when the discriminant isn't a bare integer literal).
     /// A `fromInt(value: Int)` companion mirrors the `Priority.fromInt`
@@ -387,10 +384,7 @@ impl<S: JniGenState> JniGen<S> {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         for key in keys {
             let cfg = &self.types[key];
-            let Some(enum_cfg) = &cfg.enum_cfg else {
-                continue;
-            };
-            if enum_cfg.suppress_kotlin_code {
+            if cfg.enum_cfg.is_none() {
                 continue;
             }
             let Some(kotlin_fqn) = &cfg.kotlin_name else {
@@ -648,8 +642,8 @@ impl<S: JniGenState> JniGen<S> {
                         let is_fixed = fixed_decons.contains(&d);
                         let spec = folder_iface_spec(self, registry, &d).map(|mut s| {
                             if is_fixed {
-                                s.typed_groups =
-                                    fixed_folder_typed_groups(self, registry, &d).unwrap_or_default();
+                                s.typed_groups = fixed_folder_typed_groups(self, registry, &d)
+                                    .unwrap_or_default();
                             }
                             s
                         });
@@ -666,12 +660,14 @@ impl<S: JniGenState> JniGen<S> {
                         let fixed = fixed_leaf_elements
                             .contains(&TypeKey::from_type(&tys[0]).to_string())
                             .then_some(FixedSingleton::LeafFolder);
-                        (whole_folder_iface_spec(self, registry, &tys[0]), false, fixed)
+                        (
+                            whole_folder_iface_spec(self, registry, &tys[0]),
+                            false,
+                            fixed,
+                        )
                     }
                     Use::Handler(d) => (error_handler_iface_spec(self, registry, &d), true, None),
-                    Use::JniErrorHandler => {
-                        (Some(jni_error_handler_iface_spec(self)), true, None)
-                    }
+                    Use::JniErrorHandler => (Some(jni_error_handler_iface_spec(self)), true, None),
                 };
                 spec.map(|s| (s, is_error, fixed))
             })
@@ -931,7 +927,8 @@ impl<S: JniGenState> JniGen<S> {
             let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "New");
             let push_m =
                 crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Push");
-            let free_m = crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Free");
+            let free_m =
+                crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Free");
             let mut push_params = vec!["handle: Long".to_string()];
             for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
                 let short = register_fqn(&leaf.kt_wire_ty, &mut imports);

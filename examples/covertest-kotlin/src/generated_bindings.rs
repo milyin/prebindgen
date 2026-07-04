@@ -87,6 +87,17 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_PayloadHandler_free
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_PayloadVecHandler_freePtr(
+    _env: jni::JNIEnv,
+    _class: jni::objects::JClass,
+    ptr: jni::sys::jlong,
+) {
+    if ptr != 0 {
+        drop(Box::from_raw(ptr as *mut perftest_flat::PayloadVecHandler));
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_StorageHandler_freePtr(
     _env: jni::JNIEnv,
     _class: jni::objects::JClass,
@@ -291,13 +302,6 @@ pub(crate) unsafe fn Archive_to_jlong_cd73502c<'a>(
     v: perftest_flat::Archive,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
-}
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn Freshness_to_jint_51e5b425<'a>(
-    env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::Freshness,
-) -> ::core::result::Result<jni::sys::jint, __JniErr> {
-    Ok({ v as jni::sys::jint })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn JByteArray_to_Stamp_2fc9bd18<'env, 'v>(
@@ -1451,25 +1455,6 @@ pub(crate) unsafe fn jdouble_to_f64_9e4a8f70<'env, 'v>(
     Ok(*v)
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn jint_to_Freshness_51e5b425<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jint,
-) -> ::core::result::Result<perftest_flat::Freshness, __JniErr> {
-    Ok({
-        match *v as i64 {
-            0 => perftest_flat::Freshness::Fresh,
-            1 => perftest_flat::Freshness::Stale,
-            other => {
-                return ::core::result::Result::Err(
-                    <__JniErr as ::core::convert::From<
-                        String,
-                    >>::from(format!("invalid {} discriminant: {}", "Freshness", other)),
-                );
-            }
-        }
-    })
-}
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn jint_to_Priority_447102d2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -2185,56 +2170,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
                 &__zd,
             );
             ()
-        }
-    }
-}
-#[no_mangle]
-#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
-pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_freshnessFlip<'a>(
-    mut env: jni::JNIEnv<'a>,
-    _class: jni::objects::JClass<'a>,
-    f: jni::sys::jint,
-    __error_sink: jni::objects::JObject<'a>,
-) -> jni::sys::jint {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
-    #[allow(non_upper_case_globals)]
-    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
-    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
-    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let f = match jint_to_Freshness_51e5b425(&mut env, &f) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
-            );
-            return 0 as jni::sys::jint;
-        }
-    };
-    let __out = perftest_flat::freshness_flip(f);
-    match Freshness_to_jint_51e5b425(&mut env, __out) {
-        ::core::result::Result::Ok(__w) => __w,
-        ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
-            );
-            0 as jni::sys::jint
         }
     }
 }

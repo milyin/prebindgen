@@ -298,33 +298,6 @@ pub fn payload_label_len(p: &Payload) -> Option<i64> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Freshness — a second enum whose Kotlin class is hand-written
-// (`enum_class(...).suppress_kotlin_code()`).
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Whether a value is up to date. Its binding declares it an `enum_class` but
-/// **suppresses** the generated Kotlin file — the consumer hand-writes a
-/// wire-compatible `enum class` instead (the enum dual of
-/// `PayloadVecHandler`'s suppressed handle class).
-#[prebindgen]
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Freshness {
-    Fresh = 0,
-    Stale = 1,
-}
-
-/// Toggle a freshness value (enum in + enum out through the hand-written
-/// Kotlin class).
-#[prebindgen]
-pub fn freshness_flip(f: Freshness) -> Freshness {
-    match f {
-        Freshness::Fresh => Freshness::Stale,
-        Freshness::Stale => Freshness::Fresh,
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Annotated — a data class with a NESTED data-class field and Option<scalar> /
 // Option<enum> fields.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -584,12 +557,6 @@ mod tests {
     fn label_len_is_optional() {
         assert_eq!(payload_label_len(&payload(1, 0.0, Some("abcd"))), Some(4));
         assert_eq!(payload_label_len(&payload(1, 0.0, None)), None);
-    }
-
-    #[test]
-    fn freshness_flips() {
-        assert_eq!(freshness_flip(Freshness::Fresh), Freshness::Stale);
-        assert_eq!(freshness_flip(Freshness::Stale), Freshness::Fresh);
     }
 
     #[test]

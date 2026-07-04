@@ -372,8 +372,10 @@ impl IfaceSpec {
             let mut args = Vec::with_capacity(self.typed_groups.len());
             let mut at = 0usize;
             for g in &self.typed_groups {
-                let names: Vec<&str> =
-                    self.params[at..at + g.leaf_count].iter().map(|p| p.name.as_str()).collect();
+                let names: Vec<&str> = self.params[at..at + g.leaf_count]
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect();
                 match &g.reassemble {
                     Some(cls) => args.push(RunArg {
                         expr: format!("{cls}.fromParts({})", names.join(", ")),
@@ -402,7 +404,11 @@ impl IfaceSpec {
             let wrapped: Vec<&str> = run_args.iter().map(|a| a.expr.as_str()).collect();
             kt::Code::new().blk(lambda_open, |mut c| {
                 for (idx, name) in self.params.iter().map(|p| p.name.as_str()).enumerate() {
-                    let suffix = if idx + 1 == self.params.len() { " ->" } else { "," };
+                    let suffix = if idx + 1 == self.params.len() {
+                        " ->"
+                    } else {
+                        ","
+                    };
                     c = c.line(format!("{name}{suffix}"));
                 }
                 c.blk_with("run(", ")", |mut call| {
@@ -444,7 +450,10 @@ impl IfaceSpec {
             for l in &lines {
                 src.push_str(&format!("    {l}\n"));
             }
-            src.push_str(&format!("    try {{\n        run({})\n", call_args.join(", ")));
+            src.push_str(&format!(
+                "    try {{\n        run({})\n",
+                call_args.join(", ")
+            ));
             src.push_str("    } finally {\n");
             for cl in &closes {
                 src.push_str(&format!("        {cl}\n"));
@@ -629,9 +638,8 @@ fn method_descr(params: &[IfaceParam], ret: &kt::KtType, type_params: &[String])
 
 /// The interface base name for a decomposition: the subject type's short
 /// name, extended by the deconstructor declaration's identity. The type's
-/// canonical (unnamed) declaration keeps the bare short; a named alternative
-/// appends its UpperCamel name (`ZError` + `"full"` → `ZErrorFull`); per-fn
-/// inline records (`.output`) append the function's UpperCamel ident.
+/// default declaration keeps the bare short; per-fn inline records
+/// (`.flatten_output_with()`) append the function's UpperCamel ident.
 /// This is what makes interface identity == declaration identity: functions
 /// sharing a declaration share the interface, differently-declared
 /// decompositions of one type get distinct interfaces.
@@ -646,7 +654,6 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
     };
     match decon {
         None | Some(DeconId::Default(_)) => short.to_string(),
-        Some(DeconId::Named(_, n)) => format!("{short}{}", upper_camel(n)),
         Some(DeconId::PerFn(_, f)) => format!("{short}{}", upper_camel(f)),
     }
 }
@@ -794,7 +801,11 @@ pub(crate) fn leaf_iface_param(
                 let reg_short = reg_fqn.rsplit('.').next().unwrap_or(reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
-                    let raw = if builder_kt.is_nullable() { raw.nullable() } else { raw };
+                    let raw = if builder_kt.is_nullable() {
+                        raw.nullable()
+                    } else {
+                        raw
+                    };
                     return Some(IfaceParam {
                         name,
                         typed: builder_kt.clone(),
@@ -937,7 +948,14 @@ pub(crate) fn callback_iface_spec(
         let param = if *owned_handle {
             owned_handle_iface_param(ext, registry, names[k].clone(), out_ty, *nullable)?
         } else {
-            leaf_iface_param(ext, registry, names[k].clone(), out_ty, *nullable, *from_plan)?
+            leaf_iface_param(
+                ext,
+                registry,
+                names[k].clone(),
+                out_ty,
+                *nullable,
+                *from_plan,
+            )?
         };
         params.push(param);
     }

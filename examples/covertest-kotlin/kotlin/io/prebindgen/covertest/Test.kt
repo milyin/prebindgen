@@ -12,14 +12,12 @@ import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.model.Annotated
-import io.prebindgen.covertest.model.Freshness
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
-import io.prebindgen.covertest.model.freshnessFlip
 import io.prebindgen.covertest.model.payloadLabelLen
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
@@ -160,7 +158,7 @@ fun main() {
         s.close()
     }
 
-    // ── impl Fn callbacks: single-payload + whole-batch (suppressed handle) ──
+    // ── impl Fn callbacks: single-payload + whole-batch ──────────────────────
     section("callbacks (impl Fn single + slice)") {
         val s = storageNew(boom)
         storagePutSlice(
@@ -177,8 +175,6 @@ fun main() {
         h.close()
 
         // payload_vec_handler_new: whole batch delivered once as List<Payload>.
-        // PayloadVecHandler is the `.suppress_kotlin_code()` type — both its
-        // Kotlin class and Rust freePtr are hand-written.
         var batchSize = -1
         var batchSum = 0L
         val vh: PayloadVecHandler = payloadVecHandlerNew(
@@ -188,7 +184,7 @@ fun main() {
         storageCallbackVec(s, vh, boom)
         check(batchSize == 3)
         check(batchSum == 6L)
-        vh.close() // exercises the hand-written PayloadVecHandler.freePtr
+        vh.close()
         s.close()
     }
 
@@ -368,12 +364,6 @@ fun main() {
         check(stringNew("hello", boom) == "hello")
         check(stringNew("", boom) == "")
         s.close()
-    }
-
-    // ── enum_class suppress_kotlin_code: hand-written Freshness ──────────────
-    section("enum_class suppress_kotlin_code Freshness") {
-        check(freshnessFlip(Freshness.FRESH, boom) == Freshness.STALE)
-        check(freshnessFlip(Freshness.STALE, boom) == Freshness.FRESH)
     }
 
     // ── binding error: je != null (value-blob length guard) ──────────────────

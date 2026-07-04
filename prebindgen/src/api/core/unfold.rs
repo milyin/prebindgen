@@ -2,19 +2,20 @@
 //! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
-//! A **deconstructor** (`.deconstructor(T)` + `.deconstructor_record(f)` /
-//! `.deconstructor_record_id()` / `.deconstructor_record_nested(g)`) is a
+//! A **deconstructor** (a type's `.flatten_output()` + `.field(name)` /
+//! `.field_self()`, or the per-fn `.flatten_output_with()` override) is a
 //! **deterministic product**: every record always runs and contributes its leaf
 //! — there is no selector (unlike a *constructor*, whose selector picks one
 //! variant). A record's accessor is a `#[prebindgen]` function `f(&T) -> &F` (a
-//! reference return where possible, for zero-copy). A **converter**
-//! (`.converter(T, f)`) is the single-record special case.
+//! reference return where possible, for zero-copy); an accessor whose return
+//! type has its own deconstructor splices the child's records with prefixed
+//! leaf names.
 //!
-//! Two **deliveries** (see [`Delivery`]):
-//! * `.deconstruct_output()` — replaces the return with a foreign **callback**
-//!   receiving all the leaves (any leaf count).
-//! * `.convert_output()` — **returns** the single leaf value directly (no
-//!   callback); requires a single-value deconstructor.
+//! Two **deliveries** (see [`Delivery`]), derived from the resolved leaf count:
+//! * `Callback` — replaces the return with a foreign **callback** receiving
+//!   all the leaves (any leaf count).
+//! * `Return` — **returns** the single leaf value directly (no callback);
+//!   requires a single-leaf decomposition.
 //!
 //! Resolution is language-agnostic: [`apply`] turns declarations into
 //! [`UnfoldPlan`]s (stored on the registry, keyed by function ident) and
@@ -50,38 +51,34 @@ enum DeconRecord {
     /// Read this field by calling the accessor function `f(&T) -> &F`. `name`
     /// is the author-supplied leaf name, used **literally** (no casing /
     /// stripping); it may not contain the reserved `"__"` chain separator.
+    /// An accessor whose return type has its own deconstructor splices that
+    /// child's records with the leaf names prefixed `name__<child>`.
     Acc { func: syn::Ident, name: String },
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
     /// moved for an owned `T`, copied for a `Copy` value_blob). At most one per
     /// deconstructor.
     Identity,
-    /// Splice in another type's deconstructor via the accessor function
-    /// `f(&T) -> &Child` (or `-> Option<&Child>`): the child type's records are
-    /// flattened with the access path prefixed by `f` (and marked nullable when
-    /// `f` returns `Option`). `name` is the author-supplied segment prefix for
-    /// the spliced child leaves, joined with `"__"`; it may not contain `"__"`.
-    Nested { func: syn::Ident, name: String },
 }
 
 #[derive(Clone)]
 struct DeconstructorDecl {
-    name: Option<String>,
     target: syn::Type,
     records: Vec<DeconRecord>,
-    /// `.default()` — auto-apply this deconstructor to every matching declared
-    /// fn (`Some` carries the inferred `(target-position, delivery)` to use).
+    /// Auto-apply this deconstructor to every matching declared fn (`Some`
+    /// carries the inferred `(target-position, delivery)` to use). Always
+    /// `Some` for `.flatten_output()`-created declarations.
     default: Option<(DeconTarget, Delivery)>,
 }
 
-/// How an output-expansion `.deconstruct_output`/`.convert_output` (and their
-/// `_with` variants) chooses the deconstructor for a function's return type.
+/// How an output expansion chooses the deconstructor for a function's return
+/// type: the type's default flatten (`.flatten_output()`) or a per-fn
+/// inline record list (`.flatten_output_with()`).
 #[derive(Clone)]
 enum DeconSel {
     /// Use the return type's unique deconstructor (error if ambiguous).
     TopLevel,
-    /// Use the deconstructor named by this string.
-    Explicit(String),
-    /// Per-fn override (`.fun_output`): use exactly these accessor-fn records.
+    /// Per-fn override (`.flatten_output_with()`): use exactly these
+    /// accessor-fn records.
     Inline(Vec<DeconRecord>),
 }
 
@@ -93,15 +90,16 @@ pub enum DeconTarget {
     Error,
 }
 
-/// How the decomposed value(s) are delivered to the foreign side.
+/// How the decomposed value(s) are delivered to the foreign side. Derived
+/// from the resolved leaf count (1 ⇒ `Return`, N ⇒ `Callback`); errors are
+/// always `Callback`-shaped.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Delivery {
-    /// `.deconstruct_output()` / `.deconstruct_error()` — deliver the leaves to a
-    /// foreign **callback** (builder / fold). Any leaf count.
+    /// Deliver the leaves to a foreign **callback** (builder / fold). Any
+    /// leaf count.
     Callback,
-    /// `.convert_output()` / `.convert_error()` — **return**/deliver the single
-    /// decomposed value (no builder). Requires exactly one leaf and a
-    /// non-`Iterable` shape.
+    /// **Return**/deliver the single decomposed value (no builder). Requires
+    /// exactly one leaf and a non-`Iterable` shape.
     Return,
 }
 
@@ -121,96 +119,40 @@ struct OutputDecl {
 pub struct Deconstructors {
     deconstructors: Vec<DeconstructorDecl>,
     outputs: Vec<OutputDecl>,
-    /// Cursor for the deconstructor builder (`.deconstructor_record*` /
-    /// `.default`).
+    /// Cursor for the type-level flatten builder (`.flatten_output()` →
+    /// `.field`/`.field_self`).
     cur_deconstructor: Option<usize>,
     /// Cursor for an in-progress per-fn inline output flatten
     /// (`.flatten_output_with()` → `.field`/`.field_self`): index into
     /// [`Self::outputs`].
     cur_output: Option<usize>,
-    /// `.skip_default_*` opt-outs: fns excluded from a `.default()` auto-apply.
+    /// `.flatten_output_suppress()` opt-outs: fns excluded from the
+    /// default auto-apply.
     skip_output: std::collections::HashSet<syn::Ident>,
-    skip_error: std::collections::HashSet<syn::Ident>,
 }
 
 impl Deconstructors {
-    /// `.deconstructor(target)` — begin a deconstructor for `target`.
-    pub fn add_deconstructor(&mut self, target: syn::Type) {
-        self.deconstructors.push(DeconstructorDecl {
-            name: None,
-            target,
-            records: Vec::new(),
-            default: None,
-        });
-        self.cur_deconstructor = Some(self.deconstructors.len() - 1);
-    }
-
-    /// `.deconstructor_name(name)` — name the cursor declaration so per-fn
-    /// `_with(name)` selectors can pick it. A named declaration is an
-    /// *alternative* decomposition of its target type; the type's bare
-    /// (unnamed) declaration stays the default one. Panics without a live
-    /// deconstructor cursor.
-    pub fn add_deconstructor_name(&mut self, name: impl Into<String>) {
-        let i = self
-            .cur_deconstructor
-            .expect("deconstructor_name must be chained after `.deconstructor(...)`");
-        self.deconstructors[i].name = Some(name.into());
-    }
-
-    /// True when a `.deconstructor` / `.converter` is the live cursor (so a
-    /// chained `.default()` routes here rather than to a constructor).
-    pub fn has_current(&self) -> bool {
-        self.cur_deconstructor.is_some()
-    }
-
-    /// Clear the deconstructor cursor so a following `.default()` doesn't route
-    /// here. Called when a *constructor* declaration starts (the two cursors are
-    /// mutually exclusive — `.default()` targets the most recent decl).
-    pub fn clear_cursor(&mut self) {
-        self.cur_deconstructor = None;
-    }
-
-    /// `.default()` — auto-apply the current deconstructor to every declared fn
-    /// whose output (`Output`) or `Result` error (`Error`) matches `target`,
-    /// unless skipped. The `(target-position, delivery)` is inferred at [`apply`]:
-    /// a single-`Acc`-record deconstructor (a converter) ⇒ `Return`; otherwise
-    /// `Callback`. The position (`Output` vs `Error`) is chosen by `apply` per
-    /// fn (a fn whose return is a borrow of `target` ⇒ Output; whose `Result`
-    /// error is `target` ⇒ Error). Panics without a current `.deconstructor`.
-    pub fn set_default(&mut self) {
-        let i = self
-            .cur_deconstructor
-            .expect(".default called without a current .deconstructor / .converter");
-        // Placeholder delivery; `apply` recomputes per use. Stored just to mark
-        // "is a default".
-        self.deconstructors[i].default = Some((DeconTarget::Output, Delivery::Callback));
-    }
-
     /// Find-or-create the default (always-`default`) deconstructor for `target`
     /// and set the cursor to it. Idempotent across a `.flatten_output()` chain.
     /// Delivery is derived from leaf count at emit time (1 ⇒ return, N ⇒ callback),
     /// so the stored `Delivery` is just a marker.
     pub fn ensure_default_deconstructor(&mut self, target: syn::Type) {
         let key = TypeKey::from_type(&target);
-        // Already building a deconstructor of this type — default OR a
-        // named alternative begun via `add_deconstructor` +
-        // `add_deconstructor_name` — keep the cursor so records append to it.
+        // Already building a deconstructor of this type — keep the cursor so
+        // records append to it.
         if let Some(i) = self.cur_deconstructor {
             if TypeKey::from_type(&self.deconstructors[i].target) == key {
                 return;
             }
         }
-        // Only the UNNAMED declaration is the default one; named
-        // alternatives of the same type must not receive default records.
         if let Some(i) = self
             .deconstructors
             .iter()
-            .position(|d| d.name.is_none() && TypeKey::from_type(&d.target) == key)
+            .position(|d| TypeKey::from_type(&d.target) == key)
         {
             self.cur_deconstructor = Some(i);
         } else {
             self.deconstructors.push(DeconstructorDecl {
-                name: None,
                 target,
                 records: Vec::new(),
                 default: Some((DeconTarget::Output, Delivery::Callback)),
@@ -219,115 +161,31 @@ impl Deconstructors {
         }
     }
 
-    /// `.skip_default_deconstruct_output()` / `.skip_default_convert_output()` —
-    /// exclude `func` from output-position `.default()` auto-apply.
+    /// `.flatten_output_suppress()` — exclude `func` from output-position
+    /// default auto-apply.
     pub fn add_skip_default_output(&mut self, func: syn::Ident) {
         self.skip_output.insert(func);
     }
 
-    /// `.skip_default_convert_error()` — exclude `func` from error-position
-    /// `.default()` auto-apply.
-    pub fn add_skip_default_error(&mut self, func: syn::Ident) {
-        self.skip_error.insert(func);
-    }
-
-    /// `.converter(target, func, name)` — a single-value deconstructor: one
-    /// accessor record `func` (`f(&target) -> F`) named `name`. Sugar for
-    /// `.deconstructor(target)` + `.deconstructor_record(func, name)`; usable via
-    /// `.convert_output`/`.convert_error` and as a nested record source. Leaves
-    /// the cursor on it so `.default()` can chain.
-    pub fn add_converter(&mut self, target: syn::Type, func: syn::Ident, name: impl Into<String>) {
-        self.add_deconstructor(target);
-        self.add_deconstructor_record(func, name);
-    }
-
-    /// `.deconstructor_name(name)` — name the current deconstructor so it can be
-    /// selected via `.deconstruct_output_with` / `.convert_output_with`.
-    pub fn set_deconstructor_name(&mut self, name: impl Into<String>) {
-        let i = self
-            .cur_deconstructor
-            .expect(".deconstructor_name called without a current .deconstructor");
-        self.deconstructors[i].name = Some(name.into());
-    }
-
-    /// `.deconstructor_record(func, name)` — add an accessor-function record
-    /// with the author-supplied (literal) leaf `name`.
+    /// `.field(name)` inside `.flatten_output()` — add an accessor-function
+    /// record with the author-supplied (literal) leaf `name`.
     pub fn add_deconstructor_record(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
             .cur_deconstructor
-            .expect(".deconstructor_record called without a current .deconstructor");
+            .expect(".field called without a current .flatten_output");
         self.deconstructors[i].records.push(DeconRecord::Acc {
             func,
             name: name.into(),
         });
     }
 
-    /// `.deconstructor_record_id()` — add the identity record (the value
-    /// itself).
+    /// `.field_self()` inside `.flatten_output()` — add the identity record
+    /// (the value itself).
     pub fn add_deconstructor_record_id(&mut self) {
         let i = self
             .cur_deconstructor
-            .expect(".deconstructor_record_id called without a current .deconstructor");
+            .expect(".field_self called without a current .flatten_output");
         self.deconstructors[i].records.push(DeconRecord::Identity);
-    }
-
-    /// `.deconstructor_record_nested(func, name)` — splice another type's
-    /// deconstructor via the accessor `func` (`f(&T) -> &Child` or
-    /// `-> Option<&Child>`); `Child`'s records are flattened with the access
-    /// path prefixed by `func` and the leaf names prefixed by `name__`.
-    pub fn add_deconstructor_record_nested(&mut self, func: syn::Ident, name: impl Into<String>) {
-        let i = self
-            .cur_deconstructor
-            .expect(".deconstructor_record_nested called without a current .deconstructor");
-        self.deconstructors[i].records.push(DeconRecord::Nested {
-            func,
-            name: name.into(),
-        });
-    }
-
-    fn push_output(
-        &mut self,
-        func: syn::Ident,
-        sel: DeconSel,
-        target: DeconTarget,
-        delivery: Delivery,
-    ) {
-        self.outputs.push(OutputDecl {
-            func,
-            sel,
-            target,
-            delivery,
-        });
-        self.cur_deconstructor = None;
-        self.cur_output = None;
-    }
-
-    /// `.deconstruct_output()` — decompose the fn's return value and deliver the
-    /// leaves to a foreign **callback**.
-    pub fn add_deconstruct_output(&mut self, func: syn::Ident) {
-        self.push_output(
-            func,
-            DeconSel::TopLevel,
-            DeconTarget::Output,
-            Delivery::Callback,
-        );
-    }
-
-    /// `.fun_output(records)` — per-fn override: decompose the return via exactly
-    /// these `(accessor-fn, leaf-name)` records (each unwrapped per its return
-    /// type's default output). Recorded as an explicit decl so the
-    /// auto-`default` skips it.
-    pub fn add_output_inline(&mut self, func: syn::Ident, funcs: Vec<(syn::Ident, String)>) {
-        let records = funcs
-            .into_iter()
-            .map(|(func, name)| DeconRecord::Acc { func, name })
-            .collect();
-        self.push_output(
-            func,
-            DeconSel::Inline(records),
-            DeconTarget::Output,
-            Delivery::Callback,
-        );
     }
 
     /// Begin a per-fn inline output flatten (`.flatten_output_with()`):
@@ -370,86 +228,6 @@ impl Deconstructors {
             records.push(DeconRecord::Identity);
         }
     }
-
-    /// `.deconstruct_output_with(name)` — by named deconstructor.
-    pub fn add_deconstruct_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(
-            func,
-            DeconSel::Explicit(name.into()),
-            DeconTarget::Output,
-            Delivery::Callback,
-        );
-    }
-
-    /// `.convert_output()` — decompose the fn's return via a single-value
-    /// deconstructor and **return** the value directly (no callback).
-    pub fn add_convert_output(&mut self, func: syn::Ident) {
-        self.push_output(
-            func,
-            DeconSel::TopLevel,
-            DeconTarget::Output,
-            Delivery::Return,
-        );
-    }
-
-    /// `.convert_output_with(name)` — by named deconstructor.
-    pub fn add_convert_output_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(
-            func,
-            DeconSel::Explicit(name.into()),
-            DeconTarget::Output,
-            Delivery::Return,
-        );
-    }
-
-    /// `.deconstruct_error()` — decompose the fn's `Result<_, E>` domain error
-    /// and deliver its leaves to the foreign error callback (after the fixed
-    /// `je: String?` binding param).
-    pub fn add_deconstruct_error(&mut self, func: syn::Ident) {
-        self.push_output(
-            func,
-            DeconSel::TopLevel,
-            DeconTarget::Error,
-            Delivery::Callback,
-        );
-    }
-
-    /// `.deconstruct_error_with(name)` — by named deconstructor.
-    pub fn add_deconstruct_error_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(
-            func,
-            DeconSel::Explicit(name.into()),
-            DeconTarget::Error,
-            Delivery::Callback,
-        );
-    }
-
-    /// `.convert_error()` — convert the fn's domain error to a single value
-    /// (one ze leaf after `je`).
-    pub fn add_convert_error(&mut self, func: syn::Ident) {
-        self.push_output(
-            func,
-            DeconSel::TopLevel,
-            DeconTarget::Error,
-            Delivery::Return,
-        );
-    }
-
-    /// `.convert_error_with(name)` — by named deconstructor.
-    pub fn add_convert_error_with(&mut self, func: syn::Ident, name: impl Into<String>) {
-        self.push_output(
-            func,
-            DeconSel::Explicit(name.into()),
-            DeconTarget::Error,
-            Delivery::Return,
-        );
-    }
-
-    /// True iff no output expansion was declared (lets `write_rust` skip
-    /// [`apply`]). A `.default()` deconstructor counts (it synthesizes decls).
-    pub fn is_empty(&self) -> bool {
-        self.outputs.is_empty() && !self.deconstructors.iter().any(|d| d.default.is_some())
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -479,9 +257,7 @@ pub fn apply<M>(
     for d in &acc.deconstructors {
         for rec in &d.records {
             let (func, name) = match rec {
-                DeconRecord::Acc { func, name } | DeconRecord::Nested { func, name } => {
-                    (func, name)
-                }
+                DeconRecord::Acc { func, name } => (func, name),
                 DeconRecord::Identity => continue,
             };
             // `"__"` is the reserved nesting/chain separator — author leaf names
@@ -513,13 +289,7 @@ pub fn apply<M>(
             continue;
         }
         let dkey = TypeKey::from_type(&d.target);
-        // Select THIS declaration explicitly: a defaulted *named* declaration
-        // must not be re-resolved through the bare top-level lookup (which
-        // would be ambiguous or pick the type's unnamed declaration).
-        let sel = match &d.name {
-            Some(n) => DeconSel::Explicit(n.clone()),
-            None => DeconSel::TopLevel,
-        };
+        let sel = DeconSel::TopLevel;
         for func in declared_fns {
             // Read accessors are never output-decomposed (they ARE the records).
             if accessor_fns.contains(func) {
@@ -532,7 +302,6 @@ pub fn apply<M>(
             // Error position: fn returns `Result<_, E>` and `E == d.target`.
             if let Some(err_ty) = result_err_type(&ret) {
                 if TypeKey::from_type(&err_ty) == dkey
-                    && !acc.skip_error.contains(func)
                     && done.insert((func.clone(), DeconTarget::Error))
                 {
                     process_decl(
@@ -623,7 +392,7 @@ pub fn apply<M>(
                 };
                 let decon = decl_id(&core_key, d);
                 let records = d.records.clone();
-                register_decon_spec(registry, acc, func, &decon, &records, &core_ty)?;
+                register_decon_spec(registry, acc, &decon, &records, &core_ty)?;
                 let plan = build_plan(
                     acc,
                     registry,
@@ -682,10 +451,13 @@ pub fn apply_value_structs<M>(
     for vd in &decons {
         let decon = DeconId::Default(vd.key.to_string());
         require_unique_leaf_names(&vd.source, &vd.leaves)?;
-        registry.decon_plans.entry(decon.clone()).or_insert_with(|| DeconSpec {
-            source: vd.source.clone(),
-            leaves: vd.leaves.clone(),
-        });
+        registry
+            .decon_plans
+            .entry(decon.clone())
+            .or_insert_with(|| DeconSpec {
+                source: vd.source.clone(),
+                leaves: vd.leaves.clone(),
+            });
 
         // Output position: a declared fn returning the struct
         // (`T` / `&T` / `Option<T|&T>` / `Vec<T|&T>`) decomposes into a
@@ -770,7 +542,9 @@ fn apply_value_struct_callbacks<M>(
             continue;
         };
         for input in &item_fn.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else { continue };
+            let syn::FnArg::Typed(pt) = input else {
+                continue;
+            };
             let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
                 continue;
             };
@@ -875,16 +649,17 @@ pub fn apply_leaf_vec_folds<M>(
                     // JObject-shaped), and de-requiring keeps that `None` from
                     // being flagged as an unresolved-required error.
                     registry.unrequire_output(&ret);
-                    registry.unfold_plans.insert(
-                        func.clone(),
-                        whole_leaf_fold_plan(&vec_elem, shape),
-                    );
+                    registry
+                        .unfold_plans
+                        .insert(func.clone(), whole_leaf_fold_plan(&vec_elem, shape));
                 }
             }
         }
         // Callback-arg position: `impl Fn(&[T])` / `impl Fn([T])`.
         for input in &item_fn.sig.inputs {
-            let syn::FnArg::Typed(pt) = input else { continue };
+            let syn::FnArg::Typed(pt) = input else {
+                continue;
+            };
             let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
                 continue;
             };
@@ -1011,11 +786,11 @@ fn process_decl<M>(
                 other => (false, other.clone()),
             };
             let ekey = TypeKey::from_type(&element);
-            if let Ok(d) = find_deconstructor_by_type(acc, &ekey) {
+            if let Some(d) = find_deconstructor_by_type(acc, &ekey) {
                 // Decomposed: reuse the shared flatten (M3 nesting composes).
                 let records = d.records.clone();
                 let decon = decl_id(&ekey, d);
-                register_decon_spec(registry, acc, &ed.func, &decon, &records, &element)?;
+                register_decon_spec(registry, acc, &decon, &records, &element)?;
                 let plan = build_plan(acc, registry, ed, by_ref, &element, shape, &records, decon)?;
                 for leaf in &plan.leaves {
                     registry.require_output(&leaf.out_ty, &loc);
@@ -1056,7 +831,7 @@ fn process_decl<M>(
                 UnfoldShape::Base
             };
             let (records, decon) = resolve_deconstructor(acc, &source_key, ed)?;
-            register_decon_spec(registry, acc, &ed.func, &decon, &records, &source)?;
+            register_decon_spec(registry, acc, &decon, &records, &source)?;
             let plan = build_plan(acc, registry, ed, by_ref, &source, shape, &records, decon)?;
             for leaf in &plan.leaves {
                 registry.require_output(&leaf.out_ty, &loc);
@@ -1099,13 +874,9 @@ fn process_decl<M>(
     Ok(())
 }
 
-/// The identity of a found declaration: `Named` when it carries a name,
-/// `Default` otherwise.
-fn decl_id(type_key: &TypeKey, decl: &DeconstructorDecl) -> DeconId {
-    match &decl.name {
-        Some(n) => DeconId::Named(type_key.to_string(), n.clone()),
-        None => DeconId::Default(type_key.to_string()),
-    }
+/// The identity of a found declaration — the type's default deconstructor.
+fn decl_id(type_key: &TypeKey, _decl: &DeconstructorDecl) -> DeconId {
+    DeconId::Default(type_key.to_string())
 }
 
 /// Register the declaration-default [`DeconSpec`] for `decon` (no-op when
@@ -1115,7 +886,6 @@ fn decl_id(type_key: &TypeKey, decl: &DeconstructorDecl) -> DeconId {
 fn register_decon_spec<M>(
     registry: &mut Registry<M>,
     acc: &Deconstructors,
-    top_func: &syn::Ident,
     decon: &DeconId,
     records: &[DeconRecord],
     source: &syn::Type,
@@ -1129,7 +899,6 @@ fn register_decon_spec<M>(
     flatten(
         acc,
         registry,
-        top_func,
         records,
         source,
         &[],
@@ -1162,61 +931,25 @@ fn resolve_deconstructor(
             records.clone(),
             DeconId::PerFn(source_key.to_string(), ed.func.to_string()),
         )),
-        DeconSel::Explicit(name) => acc
-            .deconstructors
-            .iter()
-            .find(|c| c.name.as_deref() == Some(name.as_str()))
-            .map(|c| (c.records.clone(), decl_id(source_key, c)))
-            .ok_or_else(|| UnfoldError::UnknownDeconstructor {
-                func: ed.func.clone(),
-                name: name.clone(),
-            }),
         DeconSel::TopLevel => find_deconstructor_by_type(acc, source_key)
-            .map(|d| (d.records.clone(), decl_id(source_key, d)))
-            .map_err(|candidates| match candidates {
-                None => UnfoldError::NoDeconstructor {
-                    func: ed.func.clone(),
-                    target: source_key.to_string(),
-                },
-                Some(candidates) => UnfoldError::AmbiguousDeconstructor {
-                    func: ed.func.clone(),
-                    target: source_key.to_string(),
-                    candidates,
-                },
+            .map(|d| (d.records.clone(), DeconId::Default(source_key.to_string())))
+            .ok_or_else(|| UnfoldError::NoDeconstructor {
+                func: ed.func.clone(),
+                target: source_key.to_string(),
             }),
     }
 }
 
-/// Find the unique deconstructor whose target is `type_key`. `Err(None)` =
-/// none registered; `Err(Some(candidates))` = ambiguous (>1). Used for both the
-/// top-level output expansion and nested-record resolution.
+/// Find the deconstructor whose target is `type_key` (unique per type:
+/// `ensure_default_deconstructor` dedups by type key). Used for both the
+/// top-level output expansion and nested-record splicing.
 fn find_deconstructor_by_type<'a>(
     acc: &'a Deconstructors,
     type_key: &TypeKey,
-) -> Result<&'a DeconstructorDecl, Option<Vec<String>>> {
-    // Only the UNNAMED declaration is the type's default decomposition —
-    // named alternatives are reachable solely via the `_with(name)` selectors
-    // and never shadow the default one (so `.default()` auto-apply and
-    // nested-child splicing stay unambiguous when alternatives exist).
-    let matches: Vec<&DeconstructorDecl> = acc
-        .deconstructors
+) -> Option<&'a DeconstructorDecl> {
+    acc.deconstructors
         .iter()
-        .filter(|c| c.name.is_none() && TypeKey::from_type(&c.target) == *type_key)
-        .collect();
-    match matches.len() {
-        1 => Ok(matches[0]),
-        0 => Err(None),
-        _ => Err(Some(
-            matches
-                .iter()
-                .map(|c| {
-                    c.name
-                        .clone()
-                        .unwrap_or_else(|| "<deconstructor>".to_string())
-                })
-                .collect(),
-        )),
-    }
+        .find(|c| TypeKey::from_type(&c.target) == *type_key)
 }
 
 /// Build the [`UnfoldPlan`] for a chosen accessor. `shape` is the outer
@@ -1240,7 +973,6 @@ fn build_plan<M>(
     flatten(
         acc,
         registry,
-        &ed.func,
         records,
         source,
         &[],
@@ -1251,6 +983,7 @@ fn build_plan<M>(
         &mut leaves,
     )?;
     require_unique_leaf_names(source, &leaves)?;
+    require_root_identity_last(by_ref, source, &leaves)?;
 
     Ok(UnfoldPlan {
         source: source.clone(),
@@ -1263,6 +996,35 @@ fn build_plan<M>(
         convert_out_ty: None,
         fixed_builder: false,
     })
+}
+
+/// Error when an **owned** decomposition emits the root identity leaf before a
+/// nested identity leaf. Leaves are emitted in declaration order, and the root
+/// identity MOVES the owned value while a nested identity clones from a borrow
+/// of it — the wrong order generates non-compiling Rust ("use of moved value")
+/// with a cryptic rustc message. Caught here instead, with the fix in the
+/// error: declare `.field_self()` after the nested-identity fields. (Borrowed
+/// decompositions clone the root identity, so any order is fine.)
+fn require_root_identity_last(
+    by_ref: bool,
+    source: &syn::Type,
+    leaves: &[UnfoldLeaf],
+) -> Result<(), UnfoldError> {
+    if by_ref {
+        return Ok(());
+    }
+    let root_at = leaves.iter().position(|l| l.identity && l.path.is_empty());
+    let last_nested_at = leaves
+        .iter()
+        .rposition(|l| l.identity && !l.path.is_empty());
+    if let (Some(root), Some(nested)) = (root_at, last_nested_at) {
+        if root < nested {
+            return Err(UnfoldError::RootIdentityBeforeNested {
+                target: TypeKey::from_type(source).to_string(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Recursively flatten an accessor's records into [`UnfoldLeaf`]s.
@@ -1284,7 +1046,6 @@ fn build_plan<M>(
 fn flatten<M>(
     acc: &Deconstructors,
     registry: &Registry<M>,
-    top_func: &syn::Ident,
     records: &[DeconRecord],
     source: &syn::Type,
     path_prefix: &[syn::Ident],
@@ -1352,23 +1113,18 @@ fn flatten<M>(
                     other => other.clone(),
                 };
                 let child_key = TypeKey::from_type(&child_ty);
-                let has_default = find_deconstructor_by_type(acc, &child_key).is_ok();
-                if has_default {
+                if let Some(child_decl) = find_deconstructor_by_type(acc, &child_key) {
                     if !visited.insert(child_key.clone()) {
                         return Err(UnfoldError::Cycle {
                             target: child_key.to_string(),
                         });
                     }
-                    let child_records = find_deconstructor_by_type(acc, &child_key)
-                        .expect("checked is_ok")
-                        .records
-                        .clone();
+                    let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
                     child_path.push(func.clone());
                     flatten(
                         acc,
                         registry,
-                        top_func,
                         &child_records,
                         &child_ty,
                         &child_path,
@@ -1392,50 +1148,6 @@ fn flatten<M>(
                         source: LeafSource::Accessor,
                     });
                 }
-            }
-            DeconRecord::Nested { func, name } => {
-                let (takes, ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, source)?;
-                // Peel an `Option` (nested value may be absent) then a leading
-                // `&` to reach the nested child type.
-                let (opt, core) = match option_inner_type(&ret) {
-                    Some(inner) => (true, inner),
-                    None => (false, ret),
-                };
-                let child_ty = match &core {
-                    syn::Type::Reference(r) => (*r.elem).clone(),
-                    other => other.clone(),
-                };
-                let child_key = TypeKey::from_type(&child_ty);
-                if !visited.insert(child_key.clone()) {
-                    return Err(UnfoldError::Cycle {
-                        target: child_key.to_string(),
-                    });
-                }
-                let child_records = find_deconstructor_by_type(acc, &child_key)
-                    .map_err(|_| UnfoldError::NoDeconstructor {
-                        func: top_func.clone(),
-                        target: child_key.to_string(),
-                    })?
-                    .records
-                    .clone();
-                let mut child_path = path_prefix.to_vec();
-                child_path.push(func.clone());
-                flatten(
-                    acc,
-                    registry,
-                    top_func,
-                    &child_records,
-                    &child_ty,
-                    &child_path,
-                    &seg_name(name),
-                    by_ref,
-                    nullable || opt,
-                    visited,
-                    leaves,
-                )?;
-                // Chain-scoped: let a sibling record reuse the same child type.
-                visited.remove(&child_key);
             }
         }
     }
@@ -1577,6 +1289,15 @@ mod tests {
         .collect()
     }
 
+    /// [`acc_set`] minus the decomposed fn: the default auto-apply skips
+    /// accessor fns, and some tests decompose a fn that doubles as a record
+    /// accessor elsewhere in the shared set.
+    fn acc_set_without(f: &str) -> std::collections::HashSet<syn::Ident> {
+        let mut s = acc_set();
+        s.remove(&ident(f));
+        s
+    }
+
     #[test]
     fn accessor_optional_primitive() {
         // M2: `z_sample_timestamp(&ZSample) -> Option<&ZTimestamp>` decomposed
@@ -1587,11 +1308,16 @@ mod tests {
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
         acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
-        acc.add_deconstruct_output(ident("z_sample_timestamp"));
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_sample_timestamp")].into_iter().collect(),
+            &acc_set_without("z_sample_timestamp"),
+        )
+        .expect("apply");
 
         let plan = reg
             .unfold_plans
@@ -1621,12 +1347,17 @@ mod tests {
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstruct_output(ident("z_sample_key_expr"));
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_sample_key_expr")].into_iter().collect(),
+            &acc_set_without("z_sample_key_expr"),
+        )
+        .expect("apply");
 
         let plan = reg
             .unfold_plans
@@ -1658,16 +1389,49 @@ mod tests {
     }
 
     #[test]
-    fn ambiguous_accessor_errors() {
-        let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
+    fn root_identity_before_nested_identity_errors() {
+        // Owned return: the root `.field_self()` MOVES the value, a nested
+        // identity (spliced ZKeyExpr handle) borrows it — id-first is the
+        // order that would generate non-compiling Rust, caught at apply time.
+        let mut reg = reg_with(&[
+            "fn z_take_query(q: &ZQuery) -> ZQuery { todo!() }",
+            "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
+        ]);
+        let accessors: std::collections::HashSet<syn::Ident> =
+            ["z_query_key_expr"].iter().map(|s| ident(s)).collect();
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
-        acc.add_deconstructor_record_id();
-        acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
-        assert!(matches!(err, UnfoldError::AmbiguousDeconstructor { .. }));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZQuery));
+        acc.add_deconstructor_record_id(); // root identity FIRST — wrong
+        acc.add_deconstructor_record(ident("z_query_key_expr"), "key_expr");
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_take_query")].into_iter().collect(),
+            &accessors,
+        )
+        .unwrap_err();
+        assert!(matches!(err, UnfoldError::RootIdentityBeforeNested { .. }));
+
+        // Root identity LAST (the zenoh `Query` shape) is accepted.
+        let mut reg2 = reg_with(&[
+            "fn z_take_query(q: &ZQuery) -> ZQuery { todo!() }",
+            "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
+        ]);
+        let mut acc2 = Deconstructors::default();
+        acc2.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc2.add_deconstructor_record_id();
+        acc2.ensure_default_deconstructor(syn::parse_quote!(ZQuery));
+        acc2.add_deconstructor_record(ident("z_query_key_expr"), "key_expr");
+        acc2.add_deconstructor_record_id(); // root identity last — ok
+        apply(
+            &mut reg2,
+            &acc2,
+            &[ident("z_take_query")].into_iter().collect(),
+            &accessors,
+        )
+        .expect("root identity last is the supported order");
     }
 
     #[test]
@@ -1678,10 +1442,15 @@ mod tests {
             "fn wrong(x: &ZSample) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record(ident("wrong"), "wrong");
-        acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_foo")].into_iter().collect(),
+            &acc_set(),
+        )
+        .unwrap_err();
         assert!(matches!(err, UnfoldError::AccessorTargetMismatch { .. }));
     }
 
@@ -1689,11 +1458,16 @@ mod tests {
     fn multiple_identity_errors() {
         let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record_id();
-        acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_foo")].into_iter().collect(),
+            &acc_set(),
+        )
+        .unwrap_err();
         assert!(matches!(err, UnfoldError::MultipleIdentity { .. }));
     }
 
@@ -1705,12 +1479,17 @@ mod tests {
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstruct_output(ident("z_foo"));
         // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
-        let err = apply(&mut reg, &acc, &Default::default(), &Default::default()).unwrap_err();
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_foo")].into_iter().collect(),
+            &Default::default(),
+        )
+        .unwrap_err();
         assert!(matches!(err, UnfoldError::RecordNotAccessor { .. }));
         // With it declared as an accessor, the gate passes.
         let accset: std::collections::HashSet<syn::Ident> =
@@ -1728,11 +1507,16 @@ mod tests {
             "fn z_sample_payload(s: &ZSample) -> Vec<u8> { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
         acc.add_deconstructor_record(ident("z_sample_key_expr"), "field");
         acc.add_deconstructor_record(ident("z_sample_payload"), "field");
-        acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_foo")].into_iter().collect(),
+            &acc_set(),
+        )
+        .unwrap_err();
         assert!(
             matches!(err, UnfoldError::DuplicateLeafName { .. }),
             "{err:?}"
@@ -1747,10 +1531,15 @@ mod tests {
             "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
         acc.add_deconstructor_record(ident("z_sample_key_expr"), "key__expr");
-        acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_foo")].into_iter().collect(),
+            &acc_set(),
+        )
+        .unwrap_err();
         assert!(
             matches!(err, UnfoldError::ReservedSeparator { .. }),
             "{err:?}"
@@ -1775,22 +1564,27 @@ mod tests {
         ]);
         let mut acc = Deconstructors::default();
         // Child accessors (reused via nesting).
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstructor(syn::parse_quote!(ZZBytes));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZZBytes));
         acc.add_deconstructor_record(ident("z_zbytes_to_bytes"), "z_zbytes_to_bytes");
-        acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
         acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
         // Parent accessor with nested + direct records.
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
-        acc.add_deconstructor_record_nested(ident("z_sample_payload"), "z_sample_payload");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.add_deconstructor_record(ident("z_sample_payload"), "z_sample_payload");
         acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
-        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"), "z_sample_timestamp");
-        acc.add_deconstruct_output(ident("z_reply_sample"));
+        acc.add_deconstructor_record(ident("z_sample_timestamp"), "z_sample_timestamp");
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_reply_sample")].into_iter().collect(),
+            &acc_set_without("z_reply_sample"),
+        )
+        .expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_reply_sample"))
@@ -1851,29 +1645,31 @@ mod tests {
             "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
         acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
-        acc.add_deconstructor(syn::parse_quote!(ZZBytes));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZZBytes));
         acc.add_deconstructor_record(ident("z_zbytes_to_bytes"), "z_zbytes_to_bytes");
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
-        acc.add_deconstructor_record_nested(ident("z_sample_timestamp"), "z_sample_timestamp");
-        acc.add_deconstructor(syn::parse_quote!(ZReplyError));
-        acc.add_deconstructor_record_nested(
-            ident("z_reply_error_payload"),
-            "z_reply_error_payload",
-        );
-        acc.add_deconstructor(syn::parse_quote!(ZReply));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.add_deconstructor_record(ident("z_sample_timestamp"), "z_sample_timestamp");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZReplyError));
+        acc.add_deconstructor_record(ident("z_reply_error_payload"), "z_reply_error_payload");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZReply));
         acc.add_deconstructor_record(ident("z_reply_replier_zid"), "z_reply_replier_zid");
         acc.add_deconstructor_record(ident("z_reply_is_ok"), "z_reply_is_ok");
-        acc.add_deconstructor_record_nested(ident("z_reply_sample"), "z_reply_sample");
-        acc.add_deconstructor_record_nested(ident("z_reply_err"), "z_reply_err");
-        acc.add_deconstruct_output(ident("z_recv_reply"));
+        acc.add_deconstructor_record(ident("z_reply_sample"), "z_reply_sample");
+        acc.add_deconstructor_record(ident("z_reply_err"), "z_reply_err");
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_recv_reply")].into_iter().collect(),
+            &acc_set(),
+        )
+        .expect("apply");
         let plan = reg.unfold_plans.get(&ident("z_recv_reply")).expect("plan");
         assert!(!plan.by_ref, "owned ZReply return");
         assert_eq!(plan.source.to_token_stream().to_string(), "ZReply");
@@ -1930,25 +1726,38 @@ mod tests {
             "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZA));
-        acc.add_deconstructor_record_nested(ident("a_to_b"), "a_to_b");
-        acc.add_deconstructor(syn::parse_quote!(ZB));
-        acc.add_deconstructor_record_nested(ident("b_to_a"), "b_to_a");
-        acc.add_deconstruct_output(ident("z_foo"));
-        let err = apply(&mut reg, &acc, &Default::default(), &acc_set()).unwrap_err();
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZA));
+        acc.add_deconstructor_record(ident("a_to_b"), "a_to_b");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZB));
+        acc.add_deconstructor_record(ident("b_to_a"), "b_to_a");
+        let err = apply(
+            &mut reg,
+            &acc,
+            &[ident("z_foo")].into_iter().collect(),
+            &acc_set(),
+        )
+        .unwrap_err();
         assert!(matches!(err, UnfoldError::Cycle { .. }));
     }
 
     #[test]
     fn iterable_whole_element_plan() {
         // M4: `z_session_peers_zid(&ZSession) -> Vec<ZZenohId>` → Iterable;
-        // each element delivered WHOLE (no accessor, no leaves).
+        // each element delivered WHOLE (no accessor, no leaves): a per-fn
+        // flatten with an empty record list on an element type that has no
+        // deconstructor of its own.
         let mut reg =
             reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstruct_output(ident("z_session_peers_zid"));
+        acc.begin_inline_output(ident("z_session_peers_zid"));
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_session_peers_zid")].into_iter().collect(),
+            &acc_set(),
+        )
+        .expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_session_peers_zid"))
@@ -1984,12 +1793,17 @@ mod tests {
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZZenohId));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZZenohId));
         acc.add_deconstructor_record(ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
         acc.add_deconstructor_record_id();
-        acc.add_deconstruct_output(ident("z_session_peers_zid"));
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_session_peers_zid")].into_iter().collect(),
+            &acc_set(),
+        )
+        .expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_session_peers_zid"))
@@ -2022,14 +1836,16 @@ mod tests {
             "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(
-            syn::parse_quote!(ZTimestamp),
-            ident("z_timestamp_ntp64"),
-            "z_timestamp_ntp64",
-        );
-        acc.add_convert_output(ident("z_sample_timestamp"));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
+        acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
 
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_sample_timestamp")].into_iter().collect(),
+            &acc_set_without("z_sample_timestamp"),
+        )
+        .expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_sample_timestamp"))
@@ -2057,11 +1873,16 @@ mod tests {
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstruct_output(ident("z_sample_key_expr"));
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_sample_key_expr")].into_iter().collect(),
+            &acc_set_without("z_sample_key_expr"),
+        )
+        .expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_sample_key_expr"))
@@ -2079,13 +1900,15 @@ mod tests {
             "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(
-            syn::parse_quote!(ZZenohId),
-            ident("z_zenoh_id_to_string"),
-            "z_zenoh_id_to_string",
-        );
-        acc.add_deconstruct_output(ident("z_session_peers_zid"));
-        apply(&mut reg, &acc, &Default::default(), &acc_set()).expect("apply");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZZenohId));
+        acc.add_deconstructor_record(ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
+        apply(
+            &mut reg,
+            &acc,
+            &[ident("z_session_peers_zid")].into_iter().collect(),
+            &acc_set(),
+        )
+        .expect("apply");
         let plan = reg
             .unfold_plans
             .get(&ident("z_session_peers_zid"))
@@ -2220,12 +2043,8 @@ mod tests {
             "fn z_infallible(s: &ZSample) -> bool { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_converter(
-            syn::parse_quote!(ZError),
-            ident("z_error_message"),
-            "z_error_message",
-        );
-        acc.set_default();
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZError));
+        acc.add_deconstructor_record(ident("z_error_message"), "z_error_message");
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_try_from", "z_infallible"]
                 .iter()
@@ -2264,10 +2083,9 @@ mod tests {
             "fn z_keyexpr_as_str(k: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.set_default();
         // Only the record fn is an accessor; the two return fns are plain.
         let accset: std::collections::HashSet<syn::Ident> =
             ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
@@ -2289,26 +2107,6 @@ mod tests {
     }
 
     #[test]
-    fn skip_default_error_opts_out() {
-        let mut reg = reg_with(&[
-            "fn z_fallible(s: String) -> Result<ZKeyExpr, ZError> { todo!() }",
-            "fn z_error_message(e: &ZError) -> String { todo!() }",
-        ]);
-        let mut acc = Deconstructors::default();
-        acc.add_converter(
-            syn::parse_quote!(ZError),
-            ident("z_error_message"),
-            "z_error_message",
-        );
-        acc.set_default();
-        acc.add_skip_default_error(ident("z_fallible"));
-        let declared: std::collections::HashSet<syn::Ident> =
-            ["z_fallible"].iter().map(|s| ident(s)).collect();
-        apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
-        assert!(reg.error_plans.is_empty(), "skipped fn gets no error plan");
-    }
-
-    #[test]
     fn callback_arg_plan_derived() {
         // An `impl Fn(ZSample)` parameter of a declared fn gets a type-level
         // plan from ZSample's default deconstructor — same leaves a return of
@@ -2320,13 +2118,12 @@ mod tests {
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
         acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
-        acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_declare_sub"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
@@ -2379,13 +2176,12 @@ mod tests {
             "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZKeyExpr));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
         acc.add_deconstructor_record_id();
         acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
-        acc.add_deconstructor_record_nested(ident("z_sample_key_expr"), "z_sample_key_expr");
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
+        acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
         acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
-        acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_declare_sub"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
@@ -2445,9 +2241,8 @@ mod tests {
             "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
         ]);
         let mut acc = Deconstructors::default();
-        acc.add_deconstructor(syn::parse_quote!(ZSample));
+        acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
         acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
-        acc.set_default();
         let declared: std::collections::HashSet<syn::Ident> =
             ["z_batched"].iter().map(|s| ident(s)).collect();
         apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
