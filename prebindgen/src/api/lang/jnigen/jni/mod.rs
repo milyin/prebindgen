@@ -145,6 +145,12 @@ pub(crate) struct TypeConfig {
     /// projection — it surfaces as `ByteArray`. Mutually exclusive with
     /// `opaque` / `enum_cfg`.
     pub value_blob: bool,
+    /// Set by the four class declarators (`ptr_class` / `enum_class` /
+    /// `data_class` / `value_class`), NOT by wrapper registration. Declared
+    /// classes are required in **both** directions at scan (their converters
+    /// always resolve both ways); a wrapper-only entry is required per
+    /// **usage** direction, so an output-only wrapper needs no input twin.
+    pub class_decl: bool,
 }
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
@@ -460,11 +466,14 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// let _ = JniGen::new().fun(pq!(z_open));
 /// ```
 ///
-/// ```compile_fail
+/// `.name(...)` applies to the current declaration — a function OR a type:
+///
+/// ```
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // `.name(...)` only applies immediately after `.fun(...)`.
+/// // Per-class rename: the Kotlin class becomes `Session` (literal; the
+/// // mangle closures do not apply).
 /// let _ = JniGen::new().ptr_class(pq!(ZSession)).name("Session");
 /// ```
 ///
@@ -486,17 +495,9 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// let _ = JniGen::new().ptr_class(pq!(ZSession)).kotlin_type("Long");
 /// ```
 ///
-/// Type declarations are allowed before a subpackage is selected, but declaring
-/// functions still requires calling [`JniGen::package`].
-/// Until the root/type states are split further, a root-level type declaration
-/// followed directly by `.fun(...)` is rejected at runtime:
-///
-/// ```should_panic
-/// use prebindgen::lang::JniGen;
-/// use syn::parse_quote as pq;
-///
-/// let _ = JniGen::new().ptr_class(pq!(ZSession)).fun(pq!(z_open));
-/// ```
+/// Classes AND functions may be declared before any subpackage is selected
+/// (or after `.package("")`): both land in the **base** package set by
+/// [`JniGen::package_prefix`].
 ///
 /// State types are public so large build scripts can be factored into helpers
 /// without losing type safety:
@@ -607,8 +608,8 @@ pub struct JniGenInner {
     pub(crate) declarations_started: bool,
 
     /// Free-standing package-level wrappers, keyed by subpackage path
-    /// (relative to [`Self::package`], dot-separated; never empty for an
-    /// entry to be emitted). Populated by [`Self::fun`] under the
+    /// (relative to [`Self::package`], dot-separated; the empty key is the
+    /// base package itself). Populated by [`Self::fun`] under the
     /// currently-active [`Self::active_subpackage`].
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 

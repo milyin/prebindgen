@@ -1,6 +1,7 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.analytics.Summary
+import io.prebindgen.covertest.analytics.SummaryVault
 import io.prebindgen.covertest.analytics.archiveLatest
 import io.prebindgen.covertest.analytics.archiveNew
 import io.prebindgen.covertest.analytics.archiveStore
@@ -43,7 +44,6 @@ import io.prebindgen.covertest.storage.storageShards
 import io.prebindgen.covertest.storage.storageShardsOpt
 import io.prebindgen.covertest.storage.storageTotalLen
 import io.prebindgen.covertest.storage.storageTryWithLabel
-import io.prebindgen.covertest.storage.stringNew
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
@@ -326,8 +326,10 @@ fun main() {
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────
+    // `Archive` is renamed to `SummaryVault` via the per-class `.name()`
+    // override — the explicit type annotation asserts the rename.
     section("borrowed-opaque output archiveLatest") {
-        val a = archiveNew(boom)
+        val a: SummaryVault = archiveNew(boom)
         check(archiveLatest(a, boom) == null)               // None → null
         val s = Summary.of(2L, 40.0, boom)
         archiveStore(a, 1, null, null, s, boom)             // flatten-input, handle arm

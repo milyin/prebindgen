@@ -248,13 +248,6 @@ public fun storagePutOpt(s: Storage, p: Payload?, onError: JniErrorHandler<Boole
     return __ret
 }
 
-public fun stringNew(s: String, onError: JniErrorHandler<String>): String {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.stringNew(s, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
-    return __ret
-}
-
 public fun addMillis(a: Long, b: Long, onError: JniErrorHandler<Long>): Long {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.millisAdd(a, b, __cap)

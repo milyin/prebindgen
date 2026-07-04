@@ -23,6 +23,8 @@
 //! | `flatten_input` (+`variant`/self)    | `Summary` default input |
 //! | `flatten_output` (+`field`/self)     | `Summary` fields + `StorageError` `message` + `field_self` (error handle → `onError`) |
 //! | `fun` / `name`                       | every free function; `.name` renames `millis_add` → `addMillis` |
+//! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
+//! | base-package functions               | `string_new` (declared after `.package("")`) |
 //! | `flatten_input_suppress`             | `summary_total_raw` |
 //! | `flatten_output_suppress`            | `storage_summary_handle` / `archive_latest` |
 //! | `flatten_input_with` (+`variant`/self)| `storage_expect_summary` |
@@ -150,8 +152,11 @@ fn main() {
         .field("total")
         // `Archive` holds the latest `Summary` and returns it BORROWED
         // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
-        // handle (the zenoh-flat borrowed-accessor shape).
+        // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
+        // RENAMED via the per-declaration `.name()` override (the type-level
+        // dual of the per-fn `.name`; literal, bypasses the mangle closures).
         .ptr_class(pq!(Archive))
+        .name("SummaryVault")
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Cleared back to the base package so the typed handle classes live
         // alongside `Payload`.
@@ -232,15 +237,17 @@ fn main() {
         .fun(pq!(storage_labels))
         // Option<data-class> input.
         .fun(pq!(storage_put_opt))
-        // Plain String return. (`string_len` stays undeclared like the
-        // `storage_get_into_*` group: its `&String` param / `usize` return
-        // are C-tier shapes with no JVM mapping.)
-        .fun(pq!(string_new))
         // `.name(...)`: per-function Kotlin rename override. The default name
         // would be `millisAdd`; force it to `addMillis` to exercise the
         // override path (the Rust symbol/extern is unaffected).
         .fun(pq!(millis_add))
-        .name("addMillis");
+        .name("addMillis")
+        // Plain String return, declared in the BASE package (`.package("")`,
+        // mirroring the base-package classes). (`string_len` stays undeclared
+        // like the `storage_get_into_*` group: its `&String` param / `usize`
+        // return are C-tier shapes with no JVM mapping.)
+        .package("")
+        .fun(pq!(string_new));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

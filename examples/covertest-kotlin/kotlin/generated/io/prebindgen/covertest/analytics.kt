@@ -9,7 +9,7 @@ import io.prebindgen.covertest.Storage
 import io.prebindgen.covertest.withSortedHandleLocks
 
 /** Typed handle for a native Zenoh `Archive`. */
-public class Archive(initialPtr: Long) : NativeHandle(initialPtr) {
+public class SummaryVault(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -20,10 +20,10 @@ public class Archive(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 
     @Synchronized
-    public fun take(): Archive {
+    public fun take(): SummaryVault {
         val p = ptr
         ptr = 0L
-        return Archive(p)
+        return SummaryVault(p)
     }
 
     public companion object {
@@ -254,15 +254,15 @@ public fun storageExpectSummary(
     return __ret
 }
 
-public fun archiveNew(onError: JniErrorHandler<Archive>): Archive {
+public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = Archive(CovNative.archiveNew(__cap))
+    val __ret = SummaryVault(CovNative.archiveNew(__cap))
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }
 
 public fun archiveStore(
-    a: Archive,
+    a: SummaryVault,
     sSel: Int,
     s00: Long?,
     s01: Double?,
@@ -298,7 +298,7 @@ public fun archiveStore(
     if (__cap.failed) return onError.run(__cap.je)
 }
 
-public fun archiveLatest(a: Archive, onError: JniErrorHandler<Summary?>): Summary? {
+public fun archiveLatest(a: SummaryVault, onError: JniErrorHandler<Summary?>): Summary? {
     if (a.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(a) {

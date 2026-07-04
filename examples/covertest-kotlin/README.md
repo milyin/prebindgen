@@ -67,7 +67,11 @@ for the full table; in brief:
   `field`/`field_self` — the latter delivering the owned `StorageError` handle
   to `onError`) and the per-fn overrides `flatten_input_suppress` /
   `flatten_output_suppress` / `flatten_input_with` / `flatten_output_with`.
-- **per-fn:** `fun`, and `name` (renames `millis_add` → `addMillis`).
+- **per-fn:** `fun` (in subpackages AND the base package — `string_new` is
+  declared after `.package("")`), and `name` (renames `millis_add` →
+  `addMillis`).
+- **per-class:** `.name()` on a type declaration (renames `Archive` → Kotlin
+  `SummaryVault`; literal, bypasses the mangle closures).
 - **wrappers:** `input_wrapper` / `output_wrapper` (`Millis` ⇄ `Long`).
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
   return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in

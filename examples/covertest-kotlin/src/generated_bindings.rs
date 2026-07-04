@@ -120,7 +120,7 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_Storage_freePtr(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
-pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_Archive_freePtr(
+pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_SummaryVault_freePtr(
     _env: jni::JNIEnv,
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,

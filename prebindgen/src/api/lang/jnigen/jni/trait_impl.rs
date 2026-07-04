@@ -961,13 +961,19 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             .collect()
     }
 
-    /// Every type registered via `.ptr_class`,
-    /// `.data_class`, or `.enum_class` — anything in
-    /// the adapter's type map. These are the only structs/enums the
-    /// per-item emitter walks; bodies of undeclared types are
-    /// skipped.
+    /// Every type registered via one of the four **class declarators**
+    /// (`.ptr_class` / `.enum_class` / `.data_class` / `.value_class`).
+    /// These are the only structs/enums the per-item emitter walks, and the
+    /// scan requires them in BOTH directions (their converters always resolve
+    /// both ways). Wrapper-only registrations are deliberately excluded: a
+    /// wrapper type is required per **usage** direction, so an output-only
+    /// wrapper needs no input twin.
     fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.types.keys().cloned().collect()
+        self.types
+            .iter()
+            .filter(|(_, c)| c.class_decl)
+            .map(|(k, _)| k.clone())
+            .collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by
