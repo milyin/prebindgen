@@ -1036,6 +1036,7 @@ fn classify_params(
 ///     (L0, …) -> R` once; `<R>`, returns `R` / `R?`.
 ///   * `Iterable` (M4 whole / M5 decomposed): per element, fold
 ///     `(acc, leaves…) -> acc`; `<A>`, returns `A`, threads the accumulator.
+///
 /// Each leaf is delivered with its final Kotlin type; a **value_blob** leaf
 /// (`@JvmInline value class`) can't be constructed Rust-side, so the wrapper
 /// installs an **adapter** that applies the Kotlin-side projection wrap

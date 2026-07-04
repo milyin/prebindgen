@@ -152,6 +152,29 @@ pub(crate) struct IfaceSpec {
 }
 
 impl IfaceSpec {
+    /// Assemble a spec, deriving the JVM `run` descriptor — the only
+    /// computed field — from the `params` / `ret` / `type_params` triple.
+    /// `typed_groups` starts empty (callback specs override it via struct
+    /// update).
+    fn assemble(
+        package: String,
+        name: String,
+        type_params: Vec<String>,
+        params: Vec<IfaceParam>,
+        ret: kt::KtType,
+    ) -> Self {
+        let descr = method_descr(&params, &ret, &type_params);
+        IfaceSpec {
+            package,
+            name,
+            type_params,
+            params,
+            ret,
+            descr,
+            typed_groups: Vec::new(),
+        }
+    }
+
     pub fn fqn(&self) -> String {
         if self.package.is_empty() {
             self.name.clone()
@@ -480,7 +503,7 @@ mod tests;
 ///
 /// Loud panic on anything unrecognized: a silently-wrong descriptor would
 /// surface as a runtime `GetMethodID` failure (or worse, a mistyped jvalue).
-pub(crate) fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> String {
+fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> String {
     let kt::KtType::Named {
         fqn,
         args,
@@ -626,7 +649,7 @@ fn plan_leaf_params(
 ///   (plan-less callback) arg keeps the typed handle class in BOTH views —
 ///   the close-unless-taken contract needs the native side to `close()` the
 ///   wrapped object after the invoke.
-pub(crate) fn leaf_iface_param(
+fn leaf_iface_param(
     ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     name: String,
@@ -894,16 +917,9 @@ pub(crate) fn callback_iface_spec(
         .first()
         .map(|t| subject_package(ext, t))
         .unwrap_or_else(|| ext.package.clone());
-    let ret = kt::KtType::unit();
-    let descr = method_descr(&params, &ret, &[]);
     Some(IfaceSpec {
-        package,
-        name,
-        type_params: vec![],
-        params,
-        ret,
-        descr,
         typed_groups,
+        ..IfaceSpec::assemble(package, name, vec![], params, kt::KtType::unit())
     })
 }
 
@@ -925,18 +941,13 @@ pub(crate) fn builder_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    let type_params = vec!["out R".to_string()];
-    let ret = kt::KtType::var_r();
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["out R".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_r(),
+    ))
 }
 
 /// Interface for a **decomposed-element fold** (`Iterable` delivery over a
@@ -958,18 +969,13 @@ pub(crate) fn folder_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    let type_params = vec!["A".to_string()];
-    let ret = kt::KtType::var_("A");
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["A".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_("A"),
+    ))
 }
 
 /// Interface for a **whole-element fold** (`Iterable` delivery of a type
@@ -997,18 +1003,13 @@ pub(crate) fn whole_folder_iface_spec(
     )?);
     let name = format!("{}Folder", subject_short(element));
     let package = subject_package(ext, element);
-    let type_params = vec!["A".to_string()];
-    let ret = kt::KtType::var_("A");
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["A".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_("A"),
+    ))
 }
 
 /// The folder spec for an `Iterable` plan: declaration-keyed when the
@@ -1094,18 +1095,13 @@ pub(crate) fn error_handler_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    let type_params = vec!["out R".to_string()];
-    let ret = kt::KtType::var_r();
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["out R".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_r(),
+    ))
 }
 
 /// The shared infallible handler `JniErrorHandler<out R> { run(je: String?): R }`
@@ -1116,18 +1112,13 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen<impl JniGenState>) -> If
         "je".to_string(),
         kt::KtType::string().nullable(),
     )];
-    let type_params = vec!["out R".to_string()];
-    let ret = kt::KtType::var_r();
-    let descr = method_descr(&params, &ret, &type_params);
-    IfaceSpec {
-        package: ext.package.clone(),
-        name: "JniErrorHandler".to_string(),
-        type_params,
+    IfaceSpec::assemble(
+        ext.package.clone(),
+        "JniErrorHandler".to_string(),
+        vec!["out R".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    }
+        kt::KtType::var_r(),
+    )
 }
 
 /// The onError handler spec for a declared function: its error plan's
