@@ -675,6 +675,7 @@ pub struct JniGenInner {
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────
 mod builder;
+mod classify;
 mod emit;
 mod iface;
 mod prim;
@@ -688,6 +689,7 @@ mod kotlin_emit;
 mod render;
 
 pub(crate) use builder::*;
+pub(crate) use classify::*;
 pub(crate) use emit::*;
 pub(crate) use fold::*;
 pub(crate) use iface::*;

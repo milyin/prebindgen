@@ -196,19 +196,10 @@ pub(crate) fn flatten_struct_factory(
         // Nested data-class field — inline its leaves and reconstruct via the
         // child's own `fromParts` (in bytecode, no JNI crossing).
         let inner_ty = option_inner_type(effective_ty).unwrap_or_else(|| effective_ty.clone());
-        let nested = bare_path_ident(&inner_ty).and_then(|name| {
-            let is_struct = registry.structs.contains_key(&name);
-            let is_vc = ext
-                .types
-                .get(&TypeKey::from_type(&inner_ty))
-                .map(|c| c.value_blob)
-                .unwrap_or(false);
-            if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
-                registry.structs.get(&name).map(|(st, _)| st.clone())
-            } else {
-                None
-            }
-        });
+        let nested = match ext.type_kind(registry, &inner_ty) {
+            TypeKind::DataStruct { st, .. } => Some(st.clone()),
+            _ => None,
+        };
         if let Some(child) = nested {
             let child_name = bare_path_ident(&inner_ty)?;
             let child_fqn = ext

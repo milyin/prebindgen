@@ -2694,10 +2694,10 @@ pub(crate) fn build_flat_input_plan(
     let cfg = ext.types.get(&key);
     // Exclude value-blob / enum structs — they have their own
     // erasure and are not field-flattened here.
-    if cfg.map(|c| c.value_blob).unwrap_or(false) {
-        return None;
-    }
-    if ext.is_kotlin_enum(&struct_ty) {
+    if matches!(
+        ext.type_kind(registry, &struct_ty),
+        TypeKind::ValueBlob | TypeKind::Enum
+    ) {
         return None;
     }
     // Identity / pass-through guard: the resolved param must decode to the
@@ -3315,31 +3315,15 @@ pub(crate) fn synth_value_struct_leaves(
 
         // A projection field (opaque handle / `value_blob`) or an enum field
         // is delivered with a transform the fixed builder can't forward yet.
+        // A nested data-class field (a *declared* plain struct) inlines when
+        // non-optional (recurse); `Option`/`Vec`-wrapped nesting is deferred
+        // to the whole-value path.
         let probe = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-        if let Some(cfg) = ext.types.get(&TypeKey::from_type(&probe)) {
-            if cfg.opaque.is_some() || cfg.value_blob || cfg.enum_cfg.is_some() {
-                return None;
-            }
-        }
-        if ext.is_kotlin_enum(&effective_ty) {
-            return None;
-        }
-
-        // Nested data-class field (a registered struct that isn't a projection
-        // /enum): a non-optional one inlines (recurse); `Option`/`Vec`-wrapped
-        // nesting is deferred to the whole-value path.
-        let nested = bare_path_ident(&probe).and_then(|name| {
-            let is_struct = registry.structs.contains_key(&name);
-            let cfg = ext.types.get(&TypeKey::from_type(&probe));
-            let is_plain = cfg
-                .map(|c| c.opaque.is_none() && !c.value_blob && c.enum_cfg.is_none())
-                .unwrap_or(false);
-            if is_struct && is_plain {
-                registry.structs.get(&name).map(|(st, _)| st.clone())
-            } else {
-                None
-            }
-        });
+        let nested = match ext.type_kind(registry, &probe) {
+            TypeKind::Handle | TypeKind::Enum | TypeKind::ValueBlob => return None,
+            TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
+            _ => None,
+        };
         if let Some(child) = nested {
             if option_inner_type(&effective_ty).is_some() || pat_match_top(&effective_ty, "Vec") {
                 return None;
@@ -3483,19 +3467,10 @@ fn encode_struct_field(
     // recurse and inline its leaves instead of building the child via its
     // own `fromParts` call.
     let inner_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-    let nested_child = bare_path_ident(&inner_ty).and_then(|name| {
-        let is_struct = registry.structs.contains_key(&name);
-        let is_vc = ext
-            .types
-            .get(&TypeKey::from_type(&inner_ty))
-            .map(|c| c.value_blob)
-            .unwrap_or(false);
-        if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
-            registry.structs.get(&name).map(|(st, _)| st.clone())
-        } else {
-            None
-        }
-    });
+    let nested_child = match ext.type_kind(registry, &inner_ty) {
+        TypeKind::DataStruct { st, .. } => Some(st.clone()),
+        _ => None,
+    };
     if let Some(child) = nested_child {
         if pat_match_top(&effective_ty, "Vec") {
             panic!(

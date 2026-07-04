@@ -427,7 +427,7 @@ impl<S: JniGenState> JniGen<S> {
             // Opaque handles, enums and `value_blob` (`@JvmInline value`)
             // types each have their own emitter; only plain structs become
             // data classes here.
-            if cfg.opaque.is_some() || cfg.enum_cfg.is_some() || cfg.value_blob {
+            if cfg.special_decl() {
                 continue;
             }
             let Some(kotlin_fqn) = &cfg.kotlin_name else {

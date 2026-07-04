@@ -833,16 +833,10 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             let key = TypeKey::from_type(&source);
             // A `data_class` is a registered type that is neither an opaque
             // handle, an enum, nor a value blob.
-            let is_data_class = self
-                .types
-                .get(&key)
-                .map(|c| {
-                    c.kotlin_name.is_some()
-                        && c.opaque.is_none()
-                        && c.enum_cfg.is_none()
-                        && !c.value_blob
-                })
-                .unwrap_or(false);
+            let is_data_class = matches!(
+                self.type_kind(registry, &source),
+                TypeKind::DataStruct { cfg: Some(c), .. } if c.kotlin_name.is_some()
+            );
             if !is_data_class {
                 continue;
             }
