@@ -45,6 +45,80 @@ impl JniPrim {
         })
     }
 
+    /// Classify from the Kotlin builtin type name (`"Int"` → `Int`); `None`
+    /// for non-primitive Kotlin types (`String`, `Unit`, classes, …).
+    pub(crate) fn from_kotlin_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "Boolean" => Self::Boolean,
+            "Byte" => Self::Byte,
+            "Char" => Self::Char,
+            "Short" => Self::Short,
+            "Int" => Self::Int,
+            "Long" => Self::Long,
+            "Float" => Self::Float,
+            "Double" => Self::Double,
+            _ => return None,
+        })
+    }
+
+    /// Reverse lookup from a JVM field descriptor (`"J"` → `Long`).
+    pub(crate) fn from_descriptor(sig: &str) -> Option<Self> {
+        Some(match sig {
+            "Z" => Self::Boolean,
+            "B" => Self::Byte,
+            "C" => Self::Char,
+            "S" => Self::Short,
+            "I" => Self::Int,
+            "J" => Self::Long,
+            "F" => Self::Float,
+            "D" => Self::Double,
+            _ => return None,
+        })
+    }
+
+    /// The wire ident (`jboolean` … `jdouble`) as written in generated Rust.
+    pub(crate) fn wire_name(self) -> &'static str {
+        match self {
+            Self::Boolean => "jboolean",
+            Self::Byte => "jbyte",
+            Self::Char => "jchar",
+            Self::Short => "jshort",
+            Self::Int => "jint",
+            Self::Long => "jlong",
+            Self::Float => "jfloat",
+            Self::Double => "jdouble",
+        }
+    }
+
+    /// JVM field-descriptor chunk (`"Z"` … `"D"`).
+    pub(crate) fn descriptor(self) -> &'static str {
+        match self {
+            Self::Boolean => "Z",
+            Self::Byte => "B",
+            Self::Char => "C",
+            Self::Short => "S",
+            Self::Int => "I",
+            Self::Long => "J",
+            Self::Float => "F",
+            Self::Double => "D",
+        }
+    }
+
+    /// JVM descriptor of the `java.lang.*` box class — the slot an
+    /// `Option`-boxed primitive occupies in a method signature.
+    pub(crate) fn box_descriptor(self) -> &'static str {
+        match self {
+            Self::Boolean => "Ljava/lang/Boolean;",
+            Self::Byte => "Ljava/lang/Byte;",
+            Self::Char => "Ljava/lang/Character;",
+            Self::Short => "Ljava/lang/Short;",
+            Self::Int => "Ljava/lang/Integer;",
+            Self::Long => "Ljava/lang/Long;",
+            Self::Float => "Ljava/lang/Float;",
+            Self::Double => "Ljava/lang/Double;",
+        }
+    }
+
     /// The Kotlin zero/default literal for the primitive.
     pub(crate) fn kotlin_zero(self) -> &'static str {
         match self {

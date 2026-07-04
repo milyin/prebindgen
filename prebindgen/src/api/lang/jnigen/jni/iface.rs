@@ -500,22 +500,11 @@ pub(crate) fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> Stri
     }
     if !fqn.contains('.') {
         // Kotlin builtins (the only dot-free names a leaf type may use).
-        let prim = match simple {
-            "Int" => Some(("I", "Ljava/lang/Integer;")),
-            "Long" => Some(("J", "Ljava/lang/Long;")),
-            "Boolean" => Some(("Z", "Ljava/lang/Boolean;")),
-            "Byte" => Some(("B", "Ljava/lang/Byte;")),
-            "Short" => Some(("S", "Ljava/lang/Short;")),
-            "Char" => Some(("C", "Ljava/lang/Character;")),
-            "Float" => Some(("F", "Ljava/lang/Float;")),
-            "Double" => Some(("D", "Ljava/lang/Double;")),
-            _ => None,
-        };
-        if let Some((p, boxed)) = prim {
+        if let Some(p) = JniPrim::from_kotlin_name(simple) {
             return if *nullable {
-                boxed.to_string()
+                p.box_descriptor().to_string()
             } else {
-                p.to_string()
+                p.descriptor().to_string()
             };
         }
         return match simple {

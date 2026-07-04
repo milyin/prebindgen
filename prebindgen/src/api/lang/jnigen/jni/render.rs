@@ -1649,22 +1649,15 @@ fn ze_default_kotlin(d: &LeafDefault, kt_nullable: bool) -> String {
 /// a `?` suffix when the entry's Rust type is `Option<…>` (via
 /// [`is_option_type`]), so this helper must not double up.
 pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
+    if let Some(p) = JniPrim::from_wire(wire) {
+        return Some(kt::KtType::cls(p.kotlin_type()));
+    }
     if let syn::Type::Path(tp) = wire {
         if let Some(last) = tp.path.segments.last() {
-            let name = last.ident.to_string();
-            let kt = match name.as_str() {
-                "jboolean" => "Boolean",
-                "jbyte" => "Byte",
-                "jchar" => "Char",
-                "jshort" => "Short",
-                "jint" => "Int",
-                "jlong" => "Long",
-                "jfloat" => "Float",
-                "jdouble" => "Double",
+            let kt = match last.ident.to_string().as_str() {
                 "JString" | "jstring" => "String",
                 "JByteArray" | "jbyteArray" => "ByteArray",
-                "JObject" | "jobject" => "Any",
-                "JClass" => "Any",
+                "JObject" | "jobject" | "JClass" => "Any",
                 _ => return None,
             };
             return Some(kt::KtType::cls(kt));
