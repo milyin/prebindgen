@@ -701,10 +701,6 @@ pub(crate) fn render_wrapper_fn(
     receiver_key: Option<&TypeKey>,
 ) -> Option<kt::KtFun> {
     let rust_name = f.sig.ident.to_string();
-    // Index of the parameter bound to `this` for an instance-method emission
-    // (the first param whose peeled type matches `receiver_key`); dropped from
-    // the rendered signature.
-    let mut receiver_idx: Option<usize> = None;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident
     // (`kt_snake_to_camel(rust_name)` → `ext.mangle_fun`). The per-entry
     // `.name("...")` override only changes the *user-facing* Kotlin
@@ -717,7 +713,108 @@ pub(crate) fn render_wrapper_fn(
     };
     let jni_call = ext.mangle_fun(&default_kt_name);
 
-    // Classify each parameter.
+    let (params, receiver_idx) = classify_params(ext, f, registry, imports, receiver_key)?;
+    let out = classify_output(ext, f, registry, imports)?;
+    let body_expr = build_native_call(ext, &jni_call, &params, &out);
+
+    // Collect the opaque-handle params so we can scaffold pointer-ordered
+    // synchronized blocks around them.
+    let opaques = collect_opaques(&params);
+    let is_unit = out.kt_return.is_none();
+    let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
+    let sink = error_sink_parts(ext, f, registry, imports, &r_ty)?;
+    let prelock_guards = render_prelock_guards(&opaques, &sink.guard_args, is_unit);
+    let core_expr = render_core_expr(ext, &opaques, &body_expr, imports);
+
+    let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
+    if let Some(g) = &out.generic {
+        fun = fun.generic(g);
+    }
+    for (i, p) in params.iter().enumerate() {
+        // The receiver param is bound to `this` — not a rendered parameter.
+        if Some(i) == receiver_idx {
+            continue;
+        }
+        fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
+    }
+    // The error callback — **required**: the generated code never throws; the
+    // consumer decides how a failure surfaces (e.g. by throwing its own type).
+    // When an output-expansion builder/fold lambda exists, it must remain the
+    // **trailing** lambda (Kotlin trailing-lambda call syntax), so `onError` is
+    // placed *before* it — but *after* any non-lambda `builder_lead` (`acc: A`),
+    // which is passed positionally. Without a builder lambda, `onError` is the
+    // last param.
+    let onerr = kt::KtParam::new("onError", sink.onerr_type.clone());
+    if let Some((bp_name, bp_ty)) = &out.builder_param {
+        if let Some((lead_name, lead_ty)) = &out.builder_lead {
+            fun = fun.param(kt::KtParam::new(lead_name, lead_ty.clone()));
+        }
+        fun = fun
+            .param(onerr)
+            .param(kt::KtParam::new(bp_name, bp_ty.clone()))
+            .annotation("Suppress(\"UNCHECKED_CAST\")");
+    } else {
+        fun = fun.param(onerr);
+    }
+    if let Some(rt) = &out.kt_return {
+        fun = fun.returns(rt.clone());
+    }
+    let body = render_body(ext, &params, &prelock_guards, &sink, &core_expr, is_unit);
+    // The body is assembled as flat text (`core_expr` nests run/lock blocks);
+    // the generator recomputes its indentation from brace structure.
+    Some(fun.body(kt::Code::raw_reindent_wrapped(body.trim_end())))
+}
+
+/// The classified output side of a wrapper: return type, projection wrap,
+/// output-expansion (builder/fold) params, and the extra call-site args —
+/// everything the call-expression builder and the signature assembly must
+/// agree on.
+struct OutputPlan {
+    kt_return: Option<kt::KtType>,
+    /// Kotlin-newtype return (opaque handle / value class) — the wrap the
+    /// call expression folds around the extern result.
+    projection: Option<Projection>,
+    /// Trailing **lambda** param (`build` / `fold`) of an output expansion.
+    builder_param: Option<(String, kt::KtType)>,
+    /// Non-lambda lead param (`acc: A`) — precedes `onError` positionally.
+    builder_lead: Option<(String, kt::KtType)>,
+    /// Type variable (`R` / `A`) when the wrapper is generic.
+    generic: Option<String>,
+    /// Extra call-site args injected before `__cap` (builder/adapter, or
+    /// `acc` + fold callback for `Iterable`).
+    unfold_call_args: Vec<String>,
+    /// Callback delivery: cast the extern's erased `Any?` to `R`/`A`.
+    cast_return: bool,
+    /// enum_class return crossing as jint — wrap with `fromInt`.
+    is_enum_return: bool,
+    /// `Option<enum>` return crossing boxed — `?.let { fromInt(it) }`.
+    is_option_enum_return: bool,
+}
+
+/// The `onError` wiring: the handler's Kotlin type, the capture holder, and
+/// the two prebuilt argument lists (post-call redispatch / pre-lock guard).
+struct ErrorSink {
+    onerr_type: kt::KtType,
+    /// Short name of the generated per-thread raw capture holder.
+    capture_short: String,
+    /// je/ze args for the post-call `onError.run(...)` redispatch.
+    call_args: String,
+    /// Wrapped-default args for the pre-lock closed-handle guard.
+    guard_args: String,
+}
+
+/// Classify every effective input into a [`Param`] (Kotlin name/type +
+/// call-site [`ParamMode`]). Returns the params plus the index of the
+/// instance-method receiver (the first param whose peeled type matches
+/// `receiver_key`), which is bound to `this` and dropped from the signature.
+fn classify_params(
+    ext: &JniGen<impl JniGenState>,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    receiver_key: Option<&TypeKey>,
+) -> Option<(Vec<Param>, Option<usize>)> {
+    let mut receiver_idx: Option<usize> = None;
     let mut params: Vec<Param> = Vec::new();
     for (eff_ident, eff_ty) in effective_inputs(registry, f) {
         let mut name = kt_param_name(&eff_ident.to_string());
@@ -928,19 +1025,29 @@ pub(crate) fn render_wrapper_fn(
             as_enum_value,
         });
     }
+    Some((params, receiver_idx))
+}
 
-    // Output (data) expansion. The return value is delivered to a caller
-    // callback per shape:
-    //   * `Decompose`/`Optional` (M1–M3): decompose into leaves → `build:
-    //     (L0, …) -> R` once; `<R>`, returns `R` / `R?`.
-    //   * `Iterable` (M4 whole / M5 decomposed): per element, fold
-    //     `(acc, leaves…) -> acc`; `<A>`, returns `A`, threads the accumulator.
-    // Each leaf is delivered with its final Kotlin type; a **value_blob** leaf
-    // (`@JvmInline value class`) can't be constructed Rust-side, so the wrapper
-    // installs an **adapter** that applies the Kotlin-side projection wrap
-    // (`ZZenohId(raw)`) before the user callback. Leaves with no value_blob ⇒
-    // the callback is passed directly (M1–M4 unchanged).
-    use crate::api::core::unfold::Delivery;
+/// Classify the output side into an [`OutputPlan`].
+///
+/// Output (data) expansion: the return value is delivered to a caller
+/// callback per shape:
+///   * `Decompose`/`Optional` (M1–M3): decompose into leaves → `build:
+///     (L0, …) -> R` once; `<R>`, returns `R` / `R?`.
+///   * `Iterable` (M4 whole / M5 decomposed): per element, fold
+///     `(acc, leaves…) -> acc`; `<A>`, returns `A`, threads the accumulator.
+/// Each leaf is delivered with its final Kotlin type; a **value_blob** leaf
+/// (`@JvmInline value class`) can't be constructed Rust-side, so the wrapper
+/// installs an **adapter** that applies the Kotlin-side projection wrap
+/// (`ZZenohId(raw)`) before the user callback. Leaves with no value_blob ⇒
+/// the callback is passed directly (M1–M4 unchanged).
+fn classify_output(
+    ext: &JniGen<impl JniGenState>,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+) -> Option<OutputPlan> {
+    use crate::api::core::unfold::{Delivery, UnfoldShape};
     let unfold = registry.unfold_plans.get(&f.sig.ident);
     let is_convert = unfold.is_some_and(|p| p.delivery == Delivery::Return);
     // `builder_param` is the trailing **lambda** param (build / fold) as a
@@ -970,7 +1077,6 @@ pub(crate) fn render_wrapper_fn(
         let rt: syn::ReturnType = syn::parse_quote!(-> #cv);
         classify_return(ext, &rt, registry, imports)?
     } else if let Some(plan) = unfold.filter(|p| p.fixed_builder) {
-        use crate::api::core::unfold::UnfoldShape;
         // Synthesized by-value `data_class` delivery via a **fixed, hoisted
         // singleton** — the wrapper takes no caller `build`/`fold` param and is
         // not generic over `R`/`A`. The native side still receives the singleton
@@ -1030,7 +1136,6 @@ pub(crate) fn render_wrapper_fn(
             (Some(kt), None)
         }
     } else if let Some(plan) = unfold {
-        use crate::api::core::unfold::UnfoldShape;
         // The builder / fold params are generated typed `fun interface`s
         // (`<Source>Builder<out R>` / `<Element>Folder<A>`); the native side
         // calls their typed `run` with raw jvalues (value-blob leaves surface
@@ -1081,130 +1186,156 @@ pub(crate) fn render_wrapper_fn(
     let is_option_enum_return =
         unfold.is_none() && return_is_kotlin_option_enum(ext, &f.sig.output, registry);
 
-    // Build the JNINative call. Every param maps to exactly one call arg
-    // (or several, for a flattened data_class).
-    let build_call = || -> String {
-        let mut args: Vec<String> = Vec::with_capacity(params.len());
-        for p in params.iter() {
-            // Flattened data_class param expands into multiple call args
-            // (the leaf destructure expressions, in plan order).
-            if let ParamMode::FlattenStruct { accesses } = &p.mode {
-                args.extend(accesses.iter().cloned());
-                continue;
+    Some(OutputPlan {
+        kt_return,
+        projection,
+        builder_param,
+        builder_lead,
+        generic,
+        unfold_call_args,
+        cast_return: unfold.is_some() && !is_convert,
+        is_enum_return,
+        is_option_enum_return,
+    })
+}
+
+/// Build the JNINative call expression. Every param maps to exactly one call
+/// arg (or several, for a flattened data_class); the output plan's extra args
+/// and the trailing `__cap` follow; the result is wrapped per the return
+/// classification (projection / enum / erased-`Any` cast).
+fn build_native_call(
+    ext: &JniGen<impl JniGenState>,
+    jni_call: &str,
+    params: &[Param],
+    out: &OutputPlan,
+) -> String {
+    let mut args: Vec<String> = Vec::with_capacity(params.len());
+    for p in params.iter() {
+        // Flattened data_class param expands into multiple call args
+        // (the leaf destructure expressions, in plan order).
+        if let ParamMode::FlattenStruct { accesses } = &p.mode {
+            args.extend(accesses.iter().cloned());
+            continue;
+        }
+        // VecBuild param: the extern receives the `jlong` Vec handle the
+        // wrapper body allocated and filled (`__vec_<name>`), not the `List`.
+        if let ParamMode::VecBuild { .. } = &p.mode {
+            args.push(format!("__vec_{}", p.kt_name));
+            continue;
+        }
+        // OptionScalar param expands into two call args: the present flag
+        // and the value-or-zero expression (in that order).
+        if let ParamMode::OptionScalar {
+            present_expr,
+            value_expr,
+        } = &p.mode
+        {
+            args.push(present_expr.clone());
+            args.push(value_expr.clone());
+            continue;
+        }
+        let arg = match &p.mode {
+            ParamMode::Borrow
+            | ParamMode::Consume
+            | ParamMode::BorrowNullable
+            | ParamMode::ConsumeNullable => format!("{}_ptr", p.kt_name),
+            ParamMode::ValueUnwrap { field } => {
+                // Inline value class → pass its erased inner field to the
+                // extern (e.g. `z.bytes`: a `ByteArray`). A nullable value
+                // class (`ZBytes?`) safe-navigates so it stays `ByteArray?`.
+                if p.kt_type.is_nullable() {
+                    format!("{}?.{}", p.kt_name, field)
+                } else {
+                    format!("{}.{}", p.kt_name, field)
+                }
             }
-            // VecBuild param: the extern receives the `jlong` Vec handle the
-            // wrapper body allocated and filled (`__vec_<name>`), not the `List`.
-            if let ParamMode::VecBuild { .. } = &p.mode {
-                args.push(format!("__vec_{}", p.kt_name));
-                continue;
-            }
-            // OptionScalar param expands into two call args: the present flag
-            // and the value-or-zero expression (in that order).
-            if let ParamMode::OptionScalar {
-                present_expr,
-                value_expr,
-            } = &p.mode
-            {
-                args.push(present_expr.clone());
-                args.push(value_expr.clone());
-                continue;
-            }
-            let arg = match &p.mode {
-                ParamMode::Borrow
-                | ParamMode::Consume
-                | ParamMode::BorrowNullable
-                | ParamMode::ConsumeNullable => format!("{}_ptr", p.kt_name),
-                ParamMode::ValueUnwrap { field } => {
-                    // Inline value class → pass its erased inner field to the
-                    // extern (e.g. `z.bytes`: a `ByteArray`). A nullable value
-                    // class (`ZBytes?`) safe-navigates so it stays `ByteArray?`.
+            ParamMode::PassThrough => {
+                if p.as_enum_value {
+                    // Enum → its `Int` discriminant for the extern. Nullable
+                    // enum (`Enum?`) uses `?.value` so it stays `Int?`.
                     if p.kt_type.is_nullable() {
-                        format!("{}?.{}", p.kt_name, field)
+                        format!("{}?.value", p.kt_name)
                     } else {
-                        format!("{}.{}", p.kt_name, field)
+                        format!("{}.value", p.kt_name)
                     }
+                } else {
+                    p.kt_name.clone()
                 }
-                ParamMode::PassThrough => {
-                    if p.as_enum_value {
-                        // Enum → its `Int` discriminant for the extern. Nullable
-                        // enum (`Enum?`) uses `?.value` so it stays `Int?`.
-                        if p.kt_type.is_nullable() {
-                            format!("{}?.value", p.kt_name)
-                        } else {
-                            format!("{}.value", p.kt_name)
-                        }
-                    } else {
-                        p.kt_name.clone()
-                    }
-                }
-                // Callback lambda → the param itself (the extern takes the
-                // erased `Any`), or its value-blob rebuilding adapter.
-                ParamMode::Callback { call_arg } => call_arg.clone(),
-                ParamMode::FlattenStruct { .. } => {
-                    unreachable!("FlattenStruct expanded before the single-arg match")
-                }
-                ParamMode::VecBuild { .. } => {
-                    unreachable!("VecBuild expanded before the single-arg match")
-                }
-                ParamMode::OptionScalar { .. } => {
-                    unreachable!("OptionScalar expanded before the single-arg match")
-                }
-            };
-            args.push(arg);
-        }
-        // Output expansion: the builder / (acc, fold) cross just before the
-        // error callback.
-        args.extend(unfold_call_args.iter().cloned());
-        // Every extern takes a trailing error callback. The wrapper passes a
-        // **capture** (`__cap`) that records `(je, ze…)` and sets a flag — no
-        // throw on the Rust upcall. The wrapper calls the user's `onError` after
-        // the native call returns (see the body below).
-        args.push("__cap".to_string());
-        let mut call = format!(
-            "{}.{jni_call}({})",
-            ext.jni_native_class_name(),
-            args.join(", ")
-        );
-        if let Some(p) = &projection {
-            // Fold the wrap through the projection strategy. The wrap class is
-            // the projection leaf's typed short name (Handle's typed-handle
-            // class or value-class wrapper). The sentinel is the Kotlin
-            // null-representation literal for the leaf wire — used only by
-            // the `Niche+primitive` arm of `fold_projection_wrap`.
-            let leaf_fqn = ext.kotlin_fqn(&p.leaf_key).unwrap_or(&p.leaf_key);
-            let short = leaf_fqn.rsplit('.').next().unwrap_or(leaf_fqn).to_string();
-            let sentinel = projection_leaf_sentinel(p);
-            call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
-        } else if is_enum_return {
-            let enum_kt = kt_return.as_ref().expect("enum return has a Kotlin type");
-            call = format!("{enum_kt}.fromInt({call})");
-        } else if is_option_enum_return {
-            // `kt_return` renders nullable (`Priority?`); the companion lives
-            // on the non-null class name.
-            let enum_kt = kt_return
-                .as_ref()
-                .expect("Option<enum> return has a Kotlin type")
-                .to_string();
-            let enum_kt = enum_kt.trim_end_matches('?');
-            call = format!("{call}?.let {{ {enum_kt}.fromInt(it) }}");
-        } else if unfold.is_some() && !is_convert {
-            // Callback delivery: the extern returns the builder's erased `Any?`;
-            // cast to the shape type (`R` / `R?` / `List<R>`). The builder always
-            // produces `R`, so the unchecked cast is sound — suppressed below.
-            let cast_kt = kt_return.as_ref().expect("callback delivery returns R/A");
-            call = format!("({call} as {cast_kt})");
-        }
-        // Return delivery (`convert_output`): the extern returns the real typed
-        // wire; the projection wrap above (if any) already produced the value
-        // class / handle — no cast needed.
-        call
-    };
+            }
+            // Callback lambda → the param itself (the extern takes the
+            // erased `Any`), or its value-blob rebuilding adapter.
+            ParamMode::Callback { call_arg } => call_arg.clone(),
+            ParamMode::FlattenStruct { .. } => {
+                unreachable!("FlattenStruct expanded before the single-arg match")
+            }
+            ParamMode::VecBuild { .. } => {
+                unreachable!("VecBuild expanded before the single-arg match")
+            }
+            ParamMode::OptionScalar { .. } => {
+                unreachable!("OptionScalar expanded before the single-arg match")
+            }
+        };
+        args.push(arg);
+    }
+    // Output expansion: the builder / (acc, fold) cross just before the
+    // error callback.
+    args.extend(out.unfold_call_args.iter().cloned());
+    // Every extern takes a trailing error callback. The wrapper passes a
+    // **capture** (`__cap`) that records `(je, ze…)` and sets a flag — no
+    // throw on the Rust upcall. The wrapper calls the user's `onError` after
+    // the native call returns (see the body below).
+    args.push("__cap".to_string());
+    let mut call = format!(
+        "{}.{jni_call}({})",
+        ext.jni_native_class_name(),
+        args.join(", ")
+    );
+    if let Some(p) = &out.projection {
+        // Fold the wrap through the projection strategy. The wrap class is
+        // the projection leaf's typed short name (Handle's typed-handle
+        // class or value-class wrapper). The sentinel is the Kotlin
+        // null-representation literal for the leaf wire — used only by
+        // the `Niche+primitive` arm of `fold_projection_wrap`.
+        let leaf_fqn = ext.kotlin_fqn(&p.leaf_key).unwrap_or(&p.leaf_key);
+        let short = leaf_fqn.rsplit('.').next().unwrap_or(leaf_fqn).to_string();
+        let sentinel = projection_leaf_sentinel(p);
+        call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
+    } else if out.is_enum_return {
+        let enum_kt = out
+            .kt_return
+            .as_ref()
+            .expect("enum return has a Kotlin type");
+        call = format!("{enum_kt}.fromInt({call})");
+    } else if out.is_option_enum_return {
+        // `kt_return` renders nullable (`Priority?`); the companion lives
+        // on the non-null class name.
+        let enum_kt = out
+            .kt_return
+            .as_ref()
+            .expect("Option<enum> return has a Kotlin type")
+            .to_string();
+        let enum_kt = enum_kt.trim_end_matches('?');
+        call = format!("{call}?.let {{ {enum_kt}.fromInt(it) }}");
+    } else if out.cast_return {
+        // Callback delivery: the extern returns the builder's erased `Any?`;
+        // cast to the shape type (`R` / `R?` / `List<R>`). The builder always
+        // produces `R`, so the unchecked cast is sound — suppressed below.
+        let cast_kt = out
+            .kt_return
+            .as_ref()
+            .expect("callback delivery returns R/A");
+        call = format!("({call} as {cast_kt})");
+    }
+    // Return delivery (`convert_output`): the extern returns the real typed
+    // wire; the projection wrap above (if any) already produced the value
+    // class / handle — no cast needed.
+    call
+}
 
-    let body_expr = build_call();
-
-    // Collect the opaque-handle params so we can scaffold pointer-ordered
-    // synchronized blocks around them.
-    let opaques: Vec<Opaque> = params
+/// The opaque-handle params (Borrow/Consume modes) — the set the lock
+/// scaffold, pre-lock guards, and consume `try/finally` operate on.
+fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
+    params
         .iter()
         .filter_map(|p| {
             let (target, consume_null, nullable) = match p.mode {
@@ -1230,20 +1361,25 @@ pub(crate) fn render_wrapper_fn(
                 nullable,
             })
         })
-        .collect();
+        .collect()
+}
 
-    let is_unit = kt_return.is_none();
-
-    // Error callback `onError: <Err>Handler<R>` / `JniErrorHandler<R>` — a
-    // generated typed fun interface `run(je: String?, ze…): R` whose ze params
-    // are typed EXACTLY like a builder's leaves (the error channel is the
-    // output channel with a fixed leading `je`). Contract: `je != null` ⇒
-    // binding/system error, the native side fills the ze with defaults;
-    // `je == null` ⇒ domain error, the ze carry the decomposed error. The
-    // wrapper passes a SAM **capture** to the extern, then — after the native
-    // call — calls `onError.run(je, ze…)` and returns its `R` if a failure
-    // was recorded (no throw on the Rust upcall).
-    let r_ty = kt_return.clone().unwrap_or_else(kt::KtType::unit);
+/// Error callback `onError: <Err>Handler<R>` / `JniErrorHandler<R>` — a
+/// generated typed fun interface `run(je: String?, ze…): R` whose ze params
+/// are typed EXACTLY like a builder's leaves (the error channel is the
+/// output channel with a fixed leading `je`). Contract: `je != null` ⇒
+/// binding/system error, the native side fills the ze with defaults;
+/// `je == null` ⇒ domain error, the ze carry the decomposed error. The
+/// wrapper passes a SAM **capture** to the extern, then — after the native
+/// call — calls `onError.run(je, ze…)` and returns its `R` if a failure
+/// was recorded (no throw on the Rust upcall).
+fn error_sink_parts(
+    ext: &JniGen<impl JniGenState>,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    r_ty: &kt::KtType,
+) -> Option<ErrorSink> {
     let sink_spec = onerror_iface_spec(ext, registry, &f.sig.ident)?;
     let error_plan = registry.error_plans.get(&f.sig.ident);
     // Per ze leaf: (raw capture Kotlin type, raw default literal, raw→typed
@@ -1273,12 +1409,12 @@ pub(crate) fn render_wrapper_fn(
     // twin (no SAM lambda, no `Ref`-boxed captured vars) — its short name in
     // raw body text needs the import registered.
     imports.insert(sink_spec.capture_fqn());
-    let sink_capture_short = sink_spec.capture_name();
+    let capture_short = sink_spec.capture_name();
     // The je/ze argument list to call the user's typed `onError.run`. The
     // native side ALWAYS fills the raw ze (real values or defaults), so the
     // nullable capture slots are non-null whenever `__cap_failed` — assert
     // with `!!` for non-null params, then wrap raw → typed.
-    let onerr_call_args = std::iter::once("__cap.je".to_string())
+    let call_args = std::iter::once("__cap.je".to_string())
         .chain((0..n_ze).map(|i| {
             let (raw, _, wrap) = &ze_info[i];
             if raw.is_nullable() {
@@ -1292,7 +1428,7 @@ pub(crate) fn render_wrapper_fn(
     // Default-ze args for a synchronous (pre-call) closed-handle guard, which
     // calls the typed `onError.run` directly (a binding-class error ⇒ wrapped
     // raw defaults: `ZErr(0L)`, `ZId(ByteArray(0))`, …).
-    let onerr_guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
+    let guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
         .chain(ze_info.iter().map(|(raw, def, wrap)| {
             if raw.is_nullable() {
                 "null".to_string()
@@ -1302,10 +1438,19 @@ pub(crate) fn render_wrapper_fn(
         }))
         .collect::<Vec<_>>()
         .join(", ");
-    // Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
-    // lock, returning `onError.run(...)` (function-level return; no throw).
+    Some(ErrorSink {
+        onerr_type,
+        capture_short,
+        call_args,
+        guard_args,
+    })
+}
+
+/// Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
+/// lock, returning `onError.run(...)` (function-level return; no throw).
+fn render_prelock_guards(opaques: &[Opaque], guard_args: &str, is_unit: bool) -> String {
     let mut prelock_guards = String::new();
-    for o in &opaques {
+    for o in opaques {
         let cond = if o.nullable {
             format!("{n} != null && {t}.ptr == 0L", n = o.name, t = o.target)
         } else {
@@ -1313,23 +1458,34 @@ pub(crate) fn render_wrapper_fn(
         };
         if is_unit {
             prelock_guards.push_str(&format!(
-                "if ({cond}) {{ onError.run({onerr_guard_args}); return }}\n"
+                "if ({cond}) {{ onError.run({guard_args}); return }}\n"
             ));
         } else {
-            prelock_guards.push_str(&format!(
-                "if ({cond}) return onError.run({onerr_guard_args})\n"
-            ));
+            prelock_guards.push_str(&format!("if ({cond}) return onError.run({guard_args})\n"));
         }
     }
+    prelock_guards
+}
 
-    // Build `value_expr`: the (projection-wrapped) JNINative call, wrapped in
-    // a consume `try/finally` when any handle is consumed.
+/// `core_expr`: a single Kotlin **expression** evaluating to the call's
+/// result. Handle params contribute pointer-binding statements and a
+/// deadlock-safe `withSortedHandleLocks` acquisition; the whole thing is
+/// expression-shaped (via `run { … }` where statements are needed) so the
+/// caller can bind it to `__ret`, rethrow a captured sink error, then
+/// return. A consume `try/finally` wraps the call when any handle is
+/// consumed.
+fn render_core_expr(
+    ext: &JniGen<impl JniGenState>,
+    opaques: &[Opaque],
+    body_expr: &str,
+    imports: &mut BTreeSet<String>,
+) -> String {
     let consume_stmts: Vec<&str> = opaques
         .iter()
         .filter_map(|o| o.consume_null.as_deref())
         .collect();
     let value_expr = if consume_stmts.is_empty() {
-        body_expr.clone()
+        body_expr.to_string()
     } else {
         format!(
             "try {{\n{body_expr}\n}} finally {{\n{}\n}}",
@@ -1337,16 +1493,10 @@ pub(crate) fn render_wrapper_fn(
         )
     };
 
-    // `core_expr`: a single Kotlin **expression** evaluating to the call's
-    // result. Handle params contribute pointer-binding statements and a
-    // deadlock-safe `withSortedHandleLocks` acquisition; the whole thing is
-    // expression-shaped (via `run { … }` where statements are needed) so the
-    // caller can bind it to `__ret`, rethrow a captured sink error, then
-    // return.
     // Under-lock pointer reads. The closed-handle check is done pre-lock
     // (`prelock_guards`, → `onError`); these just bind the ptr the call passes.
     let mut ptr_binds = String::new();
-    for o in &opaques {
+    for o in opaques {
         if o.nullable {
             ptr_binds.push_str(&format!(
                 "val {n}_ptr = {t}?.ptr ?: 0L\n",
@@ -1362,7 +1512,7 @@ pub(crate) fn render_wrapper_fn(
         }
     }
 
-    let core_expr: String = if opaques.is_empty() {
+    if opaques.is_empty() {
         // No handles — the call expression stands alone.
         value_expr
     } else if !ext.emit_handle_locks {
@@ -1389,7 +1539,7 @@ pub(crate) fn render_wrapper_fn(
             format!("withSortedHandleLocks({targets}) {{\n{ptr_binds}{value_expr}\n}}")
         } else {
             let mut adds = String::new();
-            for o in &opaques {
+            for o in opaques {
                 if o.nullable {
                     adds.push_str(&format!("{n}?.let {{ __locks.add(it) }}\n", n = o.name));
                 } else {
@@ -1400,52 +1550,32 @@ pub(crate) fn render_wrapper_fn(
                 "run {{\nval __locks = ArrayList<NativeHandle>()\n{adds}withSortedHandleLocks(__locks) {{\n{ptr_binds}{value_expr}\n}}\n}}"
             )
         }
-    };
+    }
+}
 
-    let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
-    if let Some(g) = &generic {
-        fun = fun.generic(g);
-    }
-    for (i, p) in params.iter().enumerate() {
-        // The receiver param is bound to `this` — not a rendered parameter.
-        if Some(i) == receiver_idx {
-            continue;
-        }
-        fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
-    }
-    // The error callback — **required**: the generated code never throws; the
-    // consumer decides how a failure surfaces (e.g. by throwing its own type).
-    // When an output-expansion builder/fold lambda exists, it must remain the
-    // **trailing** lambda (Kotlin trailing-lambda call syntax), so `onError` is
-    // placed *before* it — but *after* any non-lambda `builder_lead` (`acc: A`),
-    // which is passed positionally. Without a builder lambda, `onError` is the
-    // last param.
-    let onerr = kt::KtParam::new("onError", onerr_type);
-    if let Some((bp_name, bp_ty)) = &builder_param {
-        if let Some((lead_name, lead_ty)) = &builder_lead {
-            fun = fun.param(kt::KtParam::new(lead_name, lead_ty.clone()));
-        }
-        fun = fun
-            .param(onerr)
-            .param(kt::KtParam::new(bp_name, bp_ty.clone()))
-            .annotation("Suppress(\"UNCHECKED_CAST\")");
-    } else {
-        fun = fun.param(onerr);
-    }
-    if let Some(rt) = &kt_return {
-        fun = fun.returns(rt.clone());
-    }
-    // No throw from the binding: the wrapper installs a **capture** the extern
-    // invokes on `Err` (a SAM literal of the same handler interface — the
-    // native side calls its typed `run`), then — after the native call —
-    // calls the user's `onError.run` and returns its `R` if a failure was
-    // recorded. A pre-lock closed-handle guard short-circuits straight to
-    // `onError.run` (it can't reach the capture).
-    // Slice/Vec params built as Rust-side `Vec` handles: allocate the handle
-    // before the lock, fill it by pushing each element's leaves, and free it in
-    // a `finally` (always — the target wrapper either borrows the boxed `Vec` or
-    // `mem::take`s it, leaving an empty `Vec` to drop). The transient handle is
-    // not a `NativeHandle`, so it never joins the lock set.
+/// Assemble the wrapper's body text: pre-lock guards, the per-thread error
+/// capture, the (possibly Vec-building) core call, the post-call failure
+/// redispatch, and the return.
+///
+/// No throw from the binding: the wrapper installs a **capture** the extern
+/// invokes on `Err` (a SAM literal of the same handler interface — the
+/// native side calls its typed `run`), then — after the native call —
+/// calls the user's `onError.run` and returns its `R` if a failure was
+/// recorded. A pre-lock closed-handle guard short-circuits straight to
+/// `onError.run` (it can't reach the capture).
+/// Slice/Vec params built as Rust-side `Vec` handles: allocate the handle
+/// before the lock, fill it by pushing each element's leaves, and free it in
+/// a `finally` (always — the target wrapper either borrows the boxed `Vec` or
+/// `mem::take`s it, leaving an empty `Vec` to drop). The transient handle is
+/// not a `NativeHandle`, so it never joins the lock set.
+fn render_body(
+    ext: &JniGen<impl JniGenState>,
+    params: &[Param],
+    prelock_guards: &str,
+    sink: &ErrorSink,
+    core_expr: &str,
+    is_unit: bool,
+) -> String {
     let vec_build: Vec<(&String, &String, &Vec<String>)> = params
         .iter()
         .filter_map(|p| match &p.mode {
@@ -1456,69 +1586,62 @@ pub(crate) fn render_wrapper_fn(
             _ => None,
         })
         .collect();
-    let body: String = {
-        let mut b = String::new();
-        b.push_str(&prelock_guards);
-        // The capture is a per-thread reusable holder (zero allocation): the
-        // extern writes its `@JvmField` slots via `run`, the wrapper reads
-        // them after the (synchronous) call. `acquire()` resets the slots.
-        b.push_str(&format!("val __cap = {sink_capture_short}.acquire()\n"));
-        let failed_check = format!("if (__cap.failed) return onError.run({onerr_call_args})\n");
-        if vec_build.is_empty() {
-            if is_unit {
-                b.push_str(&format!("{core_expr}\n"));
-                b.push_str(&failed_check);
-            } else {
-                b.push_str(&format!("val __ret = {core_expr}\n"));
-                b.push_str(&failed_check);
-                b.push_str("return __ret\n");
-            }
-        } else {
-            let native = ext.jni_native_class_name();
-            for (name, base, _) in &vec_build {
-                let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "New");
-                b.push_str(&format!(
-                    "val __vec_{name} = {native}.{new_m}({name}.size)\n"
-                ));
-            }
-            // `try { fill…; <core_expr> } finally { free… }`: Kotlin `try` is an
-            // expression, so for a non-unit fn `__ret` binds to `core_expr`
-            // (the block's last expression). A push runs no JVM upcall, so the
-            // loop needs no per-element failure check.
-            b.push_str(if is_unit {
-                "try {\n"
-            } else {
-                "val __ret = try {\n"
-            });
-            for (name, base, accesses) in &vec_build {
-                let push_m =
-                    crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Push");
-                let args = std::iter::once(format!("__vec_{name}"))
-                    .chain(accesses.iter().cloned())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                b.push_str(&format!(
-                    "for (__e in {name}) {{\n{native}.{push_m}({args})\n}}\n"
-                ));
-            }
+    let mut b = String::new();
+    b.push_str(prelock_guards);
+    // The capture is a per-thread reusable holder (zero allocation): the
+    // extern writes its `@JvmField` slots via `run`, the wrapper reads
+    // them after the (synchronous) call. `acquire()` resets the slots.
+    b.push_str(&format!("val __cap = {}.acquire()\n", sink.capture_short));
+    let failed_check = format!("if (__cap.failed) return onError.run({})\n", sink.call_args);
+    if vec_build.is_empty() {
+        if is_unit {
             b.push_str(&format!("{core_expr}\n"));
-            b.push_str("} finally {\n");
-            for (name, base, _) in &vec_build {
-                let free_m =
-                    crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Free");
-                b.push_str(&format!("{native}.{free_m}(__vec_{name})\n"));
-            }
-            b.push_str("}\n");
             b.push_str(&failed_check);
-            if !is_unit {
-                b.push_str("return __ret\n");
-            }
+        } else {
+            b.push_str(&format!("val __ret = {core_expr}\n"));
+            b.push_str(&failed_check);
+            b.push_str("return __ret\n");
         }
-        b
-    };
-    // The body is assembled as flat text (`core_expr` nests run/lock blocks);
-    // the generator recomputes its indentation from brace structure.
-    Some(fun.body(kt::Code::raw_reindent_wrapped(body.trim_end())))
+    } else {
+        let native = ext.jni_native_class_name();
+        for (name, base, _) in &vec_build {
+            let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "New");
+            b.push_str(&format!(
+                "val __vec_{name} = {native}.{new_m}({name}.size)\n"
+            ));
+        }
+        // `try { fill…; <core_expr> } finally { free… }`: Kotlin `try` is an
+        // expression, so for a non-unit fn `__ret` binds to `core_expr`
+        // (the block's last expression). A push runs no JVM upcall, so the
+        // loop needs no per-element failure check.
+        b.push_str(if is_unit {
+            "try {\n"
+        } else {
+            "val __ret = try {\n"
+        });
+        for (name, base, accesses) in &vec_build {
+            let push_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Push");
+            let args = std::iter::once(format!("__vec_{name}"))
+                .chain(accesses.iter().cloned())
+                .collect::<Vec<_>>()
+                .join(", ");
+            b.push_str(&format!(
+                "for (__e in {name}) {{\n{native}.{push_m}({args})\n}}\n"
+            ));
+        }
+        b.push_str(&format!("{core_expr}\n"));
+        b.push_str("} finally {\n");
+        for (name, base, _) in &vec_build {
+            let free_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Free");
+            b.push_str(&format!("{native}.{free_m}(__vec_{name})\n"));
+        }
+        b.push_str("}\n");
+        b.push_str(&failed_check);
+        if !is_unit {
+            b.push_str("return __ret\n");
+        }
+    }
+    b
 }
 
 /// The Kotlin typing of one delivered lambda leaf: `(builder_kt, wire_kt,
