@@ -723,8 +723,6 @@ pub(crate) fn render_wrapper_fn(
     let is_unit = out.kt_return.is_none();
     let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
     let sink = error_sink_parts(ext, f, registry, imports, &r_ty)?;
-    let prelock_guards = render_prelock_guards(&opaques, &sink.guard_args, is_unit);
-    let core_expr = render_core_expr(ext, &opaques, &body_expr, imports);
 
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
     if let Some(g) = &out.generic {
@@ -759,10 +757,8 @@ pub(crate) fn render_wrapper_fn(
     if let Some(rt) = &out.kt_return {
         fun = fun.returns(rt.clone());
     }
-    let body = render_body(ext, &params, &prelock_guards, &sink, &core_expr, is_unit);
-    // The body is assembled as flat text (`core_expr` nests run/lock blocks);
-    // the generator recomputes its indentation from brace structure.
-    Some(fun.body(kt::Code::raw_reindent_wrapped(body.trim_end())))
+    let body = render_body(ext, &params, &opaques, &sink, &body_expr, is_unit, imports);
+    Some(fun.body(body))
 }
 
 /// The classified output side of a wrapper: return type, projection wrap,
@@ -1449,76 +1445,80 @@ fn error_sink_parts(
 
 /// Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
 /// lock, returning `onError.run(...)` (function-level return; no throw).
-fn render_prelock_guards(opaques: &[Opaque], guard_args: &str, is_unit: bool) -> String {
-    let mut prelock_guards = String::new();
+fn render_prelock_guards(opaques: &[Opaque], guard_args: &str, is_unit: bool) -> kt::Code {
+    let mut guards = kt::Code::new();
     for o in opaques {
         let cond = if o.nullable {
             format!("{n} != null && {t}.ptr == 0L", n = o.name, t = o.target)
         } else {
             format!("{t}.ptr == 0L", t = o.target)
         };
-        if is_unit {
-            prelock_guards.push_str(&format!(
-                "if ({cond}) {{ onError.run({guard_args}); return }}\n"
-            ));
+        guards = if is_unit {
+            guards.wline(format!(
+                "if ({cond}) {{ onError.run({guard_args}); return }}"
+            ))
         } else {
-            prelock_guards.push_str(&format!("if ({cond}) return onError.run({guard_args})\n"));
-        }
+            guards.wline(format!("if ({cond}) return onError.run({guard_args})"))
+        };
     }
-    prelock_guards
+    guards
 }
 
-/// `core_expr`: a single Kotlin **expression** evaluating to the call's
-/// result. Handle params contribute pointer-binding statements and a
-/// deadlock-safe `withSortedHandleLocks` acquisition; the whole thing is
-/// expression-shaped (via `run { … }` where statements are needed) so the
-/// caller can bind it to `__ret`, rethrow a captured sink error, then
-/// return. A consume `try/finally` wraps the call when any handle is
-/// consumed.
-fn render_core_expr(
-    ext: &JniGen<impl JniGenState>,
-    opaques: &[Opaque],
-    body_expr: &str,
-    imports: &mut BTreeSet<String>,
-) -> String {
+/// The call in statement position, `bind`-prefixed (`""` / `"val __ret = "`),
+/// wrapped in a consume `try/finally` when any handle is consumed.
+fn render_value_stmt(bind: &str, body_expr: &str, opaques: &[Opaque]) -> kt::Code {
     let consume_stmts: Vec<&str> = opaques
         .iter()
         .filter_map(|o| o.consume_null.as_deref())
         .collect();
-    let value_expr = if consume_stmts.is_empty() {
-        body_expr.to_string()
+    if consume_stmts.is_empty() {
+        kt::Code::new().wline(format!("{bind}{body_expr}"))
     } else {
-        format!(
-            "try {{\n{body_expr}\n}} finally {{\n{}\n}}",
-            consume_stmts.join("\n")
-        )
-    };
+        let mut fin = kt::Code::new();
+        for s in consume_stmts {
+            fin = fin.line(s);
+        }
+        kt::Code::new().try_finally(bind, kt::Code::new().wline(body_expr), fin)
+    }
+}
 
+/// The core call statement: `bind` + a single Kotlin **expression**
+/// evaluating to the call's result. Handle params contribute
+/// pointer-binding statements and a deadlock-safe `withSortedHandleLocks`
+/// acquisition; the whole thing is expression-shaped (via `run { … }` where
+/// statements are needed) so the caller can bind it to `__ret`, rethrow a
+/// captured sink error, then return.
+fn render_core_stmt(
+    ext: &JniGen<impl JniGenState>,
+    opaques: &[Opaque],
+    body_expr: &str,
+    imports: &mut BTreeSet<String>,
+    bind: &str,
+) -> kt::Code {
     // Under-lock pointer reads. The closed-handle check is done pre-lock
     // (`prelock_guards`, → `onError`); these just bind the ptr the call passes.
-    let mut ptr_binds = String::new();
+    let mut ptr_binds = kt::Code::new();
     for o in opaques {
-        if o.nullable {
-            ptr_binds.push_str(&format!(
-                "val {n}_ptr = {t}?.ptr ?: 0L\n",
+        ptr_binds = if o.nullable {
+            ptr_binds.line(format!(
+                "val {n}_ptr = {t}?.ptr ?: 0L",
                 n = o.name,
                 t = o.target
-            ));
+            ))
         } else {
-            ptr_binds.push_str(&format!(
-                "val {n}_ptr = {t}.ptr\n",
-                n = o.name,
-                t = o.target
-            ));
-        }
+            ptr_binds.line(format!("val {n}_ptr = {t}.ptr", n = o.name, t = o.target))
+        };
     }
 
     if opaques.is_empty() {
         // No handles — the call expression stands alone.
-        value_expr
+        render_value_stmt(bind, body_expr, opaques)
     } else if !ext.emit_handle_locks {
         // Lock-free mode: ptr binds then the value, wrapped as an expression.
-        format!("run {{\n{ptr_binds}{value_expr}\n}}")
+        kt::Code::new().blk(format!("{bind}run {{"), |c| {
+            c.push(ptr_binds)
+                .push(render_value_stmt("", body_expr, opaques))
+        })
     } else {
         // Fast path: a statically-known, small (1–3), all-non-null handle set.
         // Pass the handles positionally to the allocation-free fixed-arity
@@ -1537,19 +1537,27 @@ fn render_core_expr(
                 .map(|o| o.target.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("withSortedHandleLocks({targets}) {{\n{ptr_binds}{value_expr}\n}}")
+            kt::Code::new().blk(format!("{bind}withSortedHandleLocks({targets}) {{"), |c| {
+                c.push(ptr_binds)
+                    .push(render_value_stmt("", body_expr, opaques))
+            })
         } else {
-            let mut adds = String::new();
+            let mut adds = kt::Code::new();
             for o in opaques {
-                if o.nullable {
-                    adds.push_str(&format!("{n}?.let {{ __locks.add(it) }}\n", n = o.name));
+                adds = if o.nullable {
+                    adds.line(format!("{n}?.let {{ __locks.add(it) }}", n = o.name))
                 } else {
-                    adds.push_str(&format!("__locks.add({t})\n", t = o.target));
-                }
+                    adds.line(format!("__locks.add({t})", t = o.target))
+                };
             }
-            format!(
-                "run {{\nval __locks = ArrayList<NativeHandle>()\n{adds}withSortedHandleLocks(__locks) {{\n{ptr_binds}{value_expr}\n}}\n}}"
-            )
+            kt::Code::new().blk(format!("{bind}run {{"), |c| {
+                c.line("val __locks = ArrayList<NativeHandle>()")
+                    .push(adds)
+                    .blk("withSortedHandleLocks(__locks) {", |l| {
+                        l.push(ptr_binds)
+                            .push(render_value_stmt("", body_expr, opaques))
+                    })
+            })
         }
     }
 }
@@ -1572,11 +1580,12 @@ fn render_core_expr(
 fn render_body(
     ext: &JniGen<impl JniGenState>,
     params: &[Param],
-    prelock_guards: &str,
+    opaques: &[Opaque],
     sink: &ErrorSink,
-    core_expr: &str,
+    body_expr: &str,
     is_unit: bool,
-) -> String {
+    imports: &mut BTreeSet<String>,
+) -> kt::Code {
     let vec_build: Vec<(&String, &String, &Vec<String>)> = params
         .iter()
         .filter_map(|p| match &p.mode {
@@ -1587,60 +1596,50 @@ fn render_body(
             _ => None,
         })
         .collect();
-    let mut b = String::new();
-    b.push_str(prelock_guards);
     // The capture is a per-thread reusable holder (zero allocation): the
     // extern writes its `@JvmField` slots via `run`, the wrapper reads
     // them after the (synchronous) call. `acquire()` resets the slots.
-    b.push_str(&format!("val __cap = {}.acquire()\n", sink.capture_short));
-    let failed_check = format!("if (__cap.failed) return onError.run({})\n", sink.call_args);
+    let mut b = render_prelock_guards(opaques, &sink.guard_args, is_unit)
+        .line(format!("val __cap = {}.acquire()", sink.capture_short));
+    let failed_check = format!("if (__cap.failed) return onError.run({})", sink.call_args);
+    let bind = if is_unit { "" } else { "val __ret = " };
     if vec_build.is_empty() {
-        if is_unit {
-            b.push_str(&format!("{core_expr}\n"));
-            b.push_str(&failed_check);
-        } else {
-            b.push_str(&format!("val __ret = {core_expr}\n"));
-            b.push_str(&failed_check);
-            b.push_str("return __ret\n");
-        }
+        b = b
+            .push(render_core_stmt(ext, opaques, body_expr, imports, bind))
+            .wline(failed_check);
     } else {
         let native = ext.jni_native_class_name();
         for (name, base, _) in &vec_build {
             let new_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "New");
-            b.push_str(&format!(
-                "val __vec_{name} = {native}.{new_m}({name}.size)\n"
-            ));
+            b = b.wline(format!("val __vec_{name} = {native}.{new_m}({name}.size)"));
         }
-        // `try { fill…; <core_expr> } finally { free… }`: Kotlin `try` is an
-        // expression, so for a non-unit fn `__ret` binds to `core_expr`
+        // `try { fill…; <core> } finally { free… }`: Kotlin `try` is an
+        // expression, so for a non-unit fn `__ret` binds to the core call
         // (the block's last expression). A push runs no JVM upcall, so the
         // loop needs no per-element failure check.
-        b.push_str(if is_unit {
-            "try {\n"
-        } else {
-            "val __ret = try {\n"
-        });
+        let mut fill = kt::Code::new();
         for (name, base, accesses) in &vec_build {
             let push_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Push");
             let args = std::iter::once(format!("__vec_{name}"))
                 .chain(accesses.iter().cloned())
                 .collect::<Vec<_>>()
                 .join(", ");
-            b.push_str(&format!(
-                "for (__e in {name}) {{\n{native}.{push_m}({args})\n}}\n"
-            ));
+            fill = fill.blk(format!("for (__e in {name}) {{"), |c| {
+                c.wline(format!("{native}.{push_m}({args})"))
+            });
         }
-        b.push_str(&format!("{core_expr}\n"));
-        b.push_str("} finally {\n");
+        let mut free = kt::Code::new();
         for (name, base, _) in &vec_build {
             let free_m = crate::api::lang::jnigen::jni::vec_helper_method_name(ext, base, "Free");
-            b.push_str(&format!("{native}.{free_m}(__vec_{name})\n"));
+            free = free.wline(format!("{native}.{free_m}(__vec_{name})"));
         }
-        b.push_str("}\n");
-        b.push_str(&failed_check);
-        if !is_unit {
-            b.push_str("return __ret\n");
-        }
+        let core = render_core_stmt(ext, opaques, body_expr, imports, "");
+        b = b
+            .try_finally(bind, fill.push(core), free)
+            .wline(failed_check);
+    }
+    if !is_unit {
+        b = b.line("return __ret");
     }
     b
 }

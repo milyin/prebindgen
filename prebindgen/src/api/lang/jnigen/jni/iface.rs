@@ -276,12 +276,13 @@ impl IfaceSpec {
         let raw = self.raw_name();
         let n_ze = self.params.len() - 1;
 
-        let mut fields = String::from("@JvmField var failed: Boolean = false\n");
-        fields.push_str("@JvmField var je: String? = null\n");
+        let mut fields = kt::Code::new()
+            .line("@JvmField var failed: Boolean = false")
+            .line("@JvmField var je: String? = null");
         for (i, p) in self.params[1..].iter().enumerate() {
             // The slot is nullable (null until the capture fires).
             let ty = p.raw.clone().nullable();
-            fields.push_str(&format!("@JvmField var ze{i}: {ty} = null\n"));
+            fields = fields.line(format!("@JvmField var ze{i}: {ty} = null"));
         }
 
         let run_params = self
@@ -300,24 +301,19 @@ impl IfaceSpec {
             reset.push_str(&format!("; c.ze{i} = null"));
         }
 
-        let code = format!(
-            "internal class {cap} : {raw}<Unit> {{\n\
-             {fields}\
-             override fun run({run_params}) {{ {run_body} }}\n\
-             companion object {{\n\
-             private val TL: ThreadLocal<{cap}> = ThreadLocal.withInitial {{ {cap}() }}\n\
-             @JvmStatic fun acquire(): {cap} {{\n\
-             val c = TL.get()\n\
-             {reset}\n\
-             return c\n\
-             }}\n\
-             }}\n\
-             }}"
-        );
-        kt::KtDecl::Raw {
-            name: cap,
-            code: kt::Code::raw_reindent(&code),
-        }
+        let code = kt::Code::new().blk(format!("internal class {cap} : {raw}<Unit> {{"), |c| {
+            c.push(fields)
+                .wline(format!("override fun run({run_params}) {{ {run_body} }}"))
+                .blk("companion object {", |comp| {
+                    comp.line(format!(
+                        "private val TL: ThreadLocal<{cap}> = ThreadLocal.withInitial {{ {cap}() }}"
+                    ))
+                    .blk(format!("@JvmStatic fun acquire(): {cap} {{"), |acq| {
+                        acq.line("val c = TL.get()").wline(reset).line("return c")
+                    })
+                })
+        });
+        kt::KtDecl::Raw { name: cap, code }
     }
 
     /// The typed (user-facing) Kotlin declaration. With [`Self::typed_groups`]
@@ -469,20 +465,21 @@ impl IfaceSpec {
                     call_args.push(a.expr.clone());
                 }
             }
-            let mut src = format!("{lambda_open}\n    {lambda_params} ->\n");
-            for l in &lines {
-                src.push_str(&format!("    {l}\n"));
-            }
-            src.push_str(&format!(
-                "    try {{\n        run({})\n",
-                call_args.join(", ")
-            ));
-            src.push_str("    } finally {\n");
-            for cl in &closes {
-                src.push_str(&format!("        {cl}\n"));
-            }
-            src.push_str("    }\n}");
-            kt::Code::raw_reindent(&src)
+            kt::Code::new().blk(lambda_open, |mut c| {
+                c = c.line(format!("{lambda_params} ->"));
+                for l in &lines {
+                    c = c.wline(l.clone());
+                }
+                let mut fin = kt::Code::new();
+                for cl in &closes {
+                    fin = fin.line(cl.clone());
+                }
+                c.try_finally(
+                    "",
+                    kt::Code::new().wline(format!("run({})", call_args.join(", "))),
+                    fin,
+                )
+            })
         };
         let mut f = kt::KtFun::new(recv).vis(kt::Vis::Public);
         for g in &bare_generics {

@@ -100,7 +100,9 @@ public fun priorityOr(
     onError: JniErrorHandler<Priority>,
 ): Priority {
     val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = Priority.fromInt(CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __cap))
+    val __ret = Priority.fromInt(
+        CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __cap),
+    )
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }

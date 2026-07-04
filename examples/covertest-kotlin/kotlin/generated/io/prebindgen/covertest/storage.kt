@@ -82,7 +82,14 @@ public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErro
     val __vec_payloads = CovNative.payloadVecNew(payloads.size)
     try {
         for (__e in payloads) {
-            CovNative.payloadVecPush(__vec_payloads, __e.id, __e.seq, __e.value, __e.flag, __e.label)
+            CovNative.payloadVecPush(
+                __vec_payloads,
+                __e.id,
+                __e.seq,
+                __e.value,
+                __e.flag,
+                __e.label,
+            )
         }
         withSortedHandleLocks(s) {
             val s_ptr = s.ptr

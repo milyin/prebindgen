@@ -8,8 +8,15 @@
 enum Item {
     /// A single raw line (no leading indentation; may be empty).
     Line(String),
+    /// A line broken across multiple lines **at render time** (when its
+    /// rendered level is known) if it exceeds the width budget — one call
+    /// argument / lambda parameter per line, same layout as
+    /// [`Code::raw_reindent_wrapped`].
+    Wrapped(String),
     /// `opener` + indented children + `closer` (`}` / `})` / `} finally {`-style
-    /// continuations are expressed as sibling blocks).
+    /// continuations are expressed as sibling blocks). An **empty** opener or
+    /// closer emits no line at all — children still indent — which is how
+    /// block *continuations* (the `finally` half of a `try/finally`) attach.
     Block {
         opener: String,
         children: Code,
@@ -48,6 +55,26 @@ impl Code {
             self.items.push(Item::Line(l.to_string()));
         }
         self
+    }
+
+    /// Append one line that is width-broken at render time (one call
+    /// argument / lambda parameter per line) if it exceeds the budget at its
+    /// actual nesting level. Use for composed statements of unbounded width
+    /// (call expressions, guards); plain [`Self::line`] for short fixed text.
+    pub fn wline(mut self, s: impl Into<String>) -> Self {
+        self.items.push(Item::Wrapped(s.into()));
+        self
+    }
+
+    /// Append `try { body } finally { fin }`. `opener_prefix` glues a binding
+    /// onto the `try` (e.g. `"val __ret = "`).
+    pub fn try_finally(self, opener_prefix: impl Into<String>, body: Code, fin: Code) -> Self {
+        self.blk_with(
+            format!("{}try {{", opener_prefix.into()),
+            "} finally {",
+            |c| c.push(body),
+        )
+        .blk_with("", "}", |c| c.push(fin))
     }
 
     /// Append a nested block: `opener` at the current level, children one
@@ -158,22 +185,34 @@ impl Code {
                         out.push('\n');
                     }
                 }
+                Item::Wrapped(l) => {
+                    // Break against the budget at the now-known level; the
+                    // produced lines carry their absolute indentation, so the
+                    // temp renders at level 0.
+                    let mut tmp = Code::new();
+                    wrap_line(l, level, &mut tmp);
+                    tmp.render(0, out);
+                }
                 Item::Block {
                     opener,
                     children,
                     closer,
                 } => {
-                    for _ in 0..level {
-                        out.push_str("    ");
+                    if !opener.is_empty() {
+                        for _ in 0..level {
+                            out.push_str("    ");
+                        }
+                        out.push_str(opener);
+                        out.push('\n');
                     }
-                    out.push_str(opener);
-                    out.push('\n');
                     children.render(level + 1, out);
-                    for _ in 0..level {
-                        out.push_str("    ");
+                    if !closer.is_empty() {
+                        for _ in 0..level {
+                            out.push_str("    ");
+                        }
+                        out.push_str(closer);
+                        out.push('\n');
                     }
-                    out.push_str(closer);
-                    out.push('\n');
                 }
             }
         }

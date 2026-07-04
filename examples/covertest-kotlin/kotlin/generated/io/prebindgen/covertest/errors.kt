@@ -67,7 +67,9 @@ internal class StorageErrorHandlerRawCapture : StorageErrorHandlerRaw<Unit> {
     @JvmField var je: String? = null
     @JvmField var ze0: String? = null
     @JvmField var ze1: Long? = null
-    override fun run(je: String?, message: String, handle: Long) { failed = true; this.je = je; this.ze0 = message; this.ze1 = handle }
+    override fun run(je: String?, message: String, handle: Long) {
+        failed = true; this.je = je; this.ze0 = message; this.ze1 = handle
+    }
     companion object {
         private val TL: ThreadLocal<StorageErrorHandlerRawCapture> = ThreadLocal.withInitial { StorageErrorHandlerRawCapture() }
         @JvmStatic fun acquire(): StorageErrorHandlerRawCapture {
