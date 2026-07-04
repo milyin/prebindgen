@@ -344,7 +344,10 @@ fn box_inner(ty: &syn::Type) -> Option<syn::Type> {
 /// If `ty` is `MaybeUninit<T>` (any path form: `MaybeUninit` / `std::mem::…` /
 /// `core::mem::…`), return `T` — the inner of an uninitialized out-param slot.
 fn maybe_uninit_inner(ty: &syn::Type) -> Option<syn::Type> {
-    if type_path_tail(ty).map(|i| i == "MaybeUninit").unwrap_or(false) {
+    if type_path_tail(ty)
+        .map(|i| i == "MaybeUninit")
+        .unwrap_or(false)
+    {
         return first_type_arg(ty);
     }
     None

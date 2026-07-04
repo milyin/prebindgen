@@ -8,4 +8,6 @@ pub(crate) mod lang;
 pub(crate) mod map;
 pub(crate) mod record;
 pub(crate) mod source;
+#[cfg(test)]
+pub(crate) mod test_util;
 pub(crate) mod utils;

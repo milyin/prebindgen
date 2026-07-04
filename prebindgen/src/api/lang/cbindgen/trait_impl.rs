@@ -1470,8 +1470,10 @@ impl Cbindgen {
             .or_else(|| scalar_slice_elem(ty))
         {
             r.output_entry(&elem)?;
-            let name =
-                format_ident!("__cbg_outmark_slice_{}", sanitize(&TypeKey::from_type(&elem)));
+            let name = format_ident!(
+                "__cbg_outmark_slice_{}",
+                sanitize(&TypeKey::from_type(&elem))
+            );
             let function: syn::ItemFn = syn::parse_quote!(
                 #[allow(non_snake_case, dead_code, unused)]
                 pub(crate) fn #name() {}
