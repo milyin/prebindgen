@@ -687,6 +687,7 @@ mod trait_impl;
 mod fold;
 mod kotlin_emit;
 mod render;
+mod struct_plan;
 
 pub(crate) use builder::*;
 pub(crate) use classify::*;
@@ -695,3 +696,4 @@ pub(crate) use fold::*;
 pub(crate) use iface::*;
 pub(crate) use prim::*;
 pub(crate) use render::*;
+pub(crate) use struct_plan::*;

@@ -145,17 +145,18 @@ pub(crate) fn synth_value_struct_leaves(
     Some(leaves)
 }
 
-/// Recursively flatten a struct's output encode into a list of leaf wire slots
-/// + the preludes that compute them, so the whole object graph can be built by
-/// a **single** Kotlin `fromParts` call (no per-nested-struct
+/// Recursively flatten a struct's output encode into a list of leaf wire
+/// slots plus the preludes that compute them, so the whole object graph can
+/// be built by a **single** Kotlin `fromParts` call (no per-nested-struct
 /// `call_static_method`). Nested non-optional data-class fields are inlined;
 /// nested `Option<data-class>` fields emit a `present` `jboolean` slot followed
 /// by the child's leaves (encoded in the `Some` arm, defaulted in the `None`
 /// arm). Leaves (primitives, handles→`jlong`, value classes/blobs→`ByteArray`,
-/// enums→`jint`, strings, `Vec`) terminate the recursion. `access` is the Rust
-/// expression yielding the current struct value (`v`, `v.field`, or the matched
-/// `__cN` under an Option); `prefix` namespaces the generated idents.
-#[allow(clippy::too_many_arguments)]
+/// enums→`jint`, strings, `Vec`) terminate the recursion.
+///
+/// The field classification is the shared [`build_struct_plan`] — the same
+/// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
+/// order and JVM descriptors agree by construction.
 pub(crate) fn flatten_struct_encode(
     ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
@@ -165,85 +166,64 @@ pub(crate) fn flatten_struct_encode(
     depth: usize,
     env_expr: &TokenStream,
 ) -> Option<(TokenStream, Vec<EncSlot>)> {
-    assert!(
-        depth <= 16,
-        "flatten_struct_encode: recursion too deep at struct `{}` (cyclic data_class?)",
-        s.ident
-    );
-    let syn::Fields::Named(named) = &s.fields else {
-        return None;
-    };
-    let mut preludes = TokenStream::new();
-    let mut slots: Vec<EncSlot> = Vec::new();
-
-    for field in &named.named {
-        let (pre, sl) =
-            encode_struct_field(ext, registry, s, access, prefix, depth, env_expr, field)?;
-        preludes.extend(pre);
-        slots.extend(sl);
-    }
-    Some((preludes, slots))
+    let plan = build_struct_plan(ext, registry, s, depth)?;
+    Some(encode_plan(&plan, access, prefix, depth, env_expr))
 }
 
-/// Encode one field of a flattened data-class into its wire slots: the four
-/// disjoint field kinds (projection leaf, enum leaf, nested data-class —
-/// recursing back into [`flatten_struct_encode`] — and primitive/object leaf),
-/// in priority order. Returns the field's prelude statements and [`EncSlot`]s,
-/// or `None` to abort the whole flatten (an unresolved field converter).
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn encode_struct_field(
-    ext: &JniGen<impl JniGenState>,
-    registry: &Registry<KotlinMeta>,
-    s: &syn::ItemStruct,
+/// Walk a [`StructPlan`] emitting the Rust-side wire encode: per leaf a
+/// prelude statement binding `__<prefix>_<field>` to the converted wire and
+/// an [`EncSlot`] describing its `JValue` slot. `access` is the Rust
+/// expression yielding the current struct value (`v`, `v.field`, or the
+/// matched `__cN` under an Option); `prefix` namespaces the generated idents.
+fn encode_plan(
+    plan: &StructPlan,
     access: &TokenStream,
     prefix: &str,
     depth: usize,
     env_expr: &TokenStream,
-    field: &syn::Field,
-) -> Option<(TokenStream, Vec<EncSlot>)> {
+) -> (TokenStream, Vec<EncSlot>) {
     let mut preludes = TokenStream::new();
     let mut slots: Vec<EncSlot> = Vec::new();
 
-    let fname = field.ident.as_ref().unwrap().clone();
-    let effective_ty = field.ty.clone();
-    let field_entry = registry.output_entry(&effective_ty)?;
-    let field_wire = field_entry.destination.clone();
-    let field_conv = field_entry.function.sig.ident.clone();
-    let value_expr = quote! { #field_conv(#env_expr, #access.#fname.clone())? };
-    let base = format!("{}_{}", prefix, fname);
-    let id = format_ident!("__{}", base);
-
-    // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
-    if let Some(proj) = &field_entry.metadata.projection {
-        match proj.kind {
-            ProjectionKind::Handle => {
-                preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::sys::jlong),
-                    descriptor: "J".to_string(),
-                    is_object: false,
-                    default: quote!(0i64),
-                });
+    for f in &plan.fields {
+        let fname = &f.fname;
+        let base = format!("{}_{}", prefix, fname);
+        let id = format_ident!("__{}", base);
+        let conv_value = |conv: &syn::Ident| -> TokenStream {
+            quote! { #conv(#env_expr, #access.#fname.clone())? }
+        };
+        match &f.kind {
+            // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
+            PlanFieldKind::Projection { conv, proj, .. } => {
+                let value_expr = conv_value(conv);
+                match proj.kind {
+                    ProjectionKind::Handle => {
+                        preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
+                        slots.push(EncSlot {
+                            ident: id,
+                            wire_ty: quote!(jni::sys::jlong),
+                            descriptor: "J".to_string(),
+                            is_object: false,
+                            default: quote!(0i64),
+                        });
+                    }
+                    ProjectionKind::ValueBlob => {
+                        preludes.extend(
+                            quote! { let #id: jni::objects::JObject = { #value_expr }.into(); },
+                        );
+                        slots.push(EncSlot {
+                            ident: id,
+                            wire_ty: quote!(jni::objects::JObject),
+                            descriptor: "[B".to_string(),
+                            is_object: true,
+                            default: quote!(jni::objects::JObject::null()),
+                        });
+                    }
+                }
             }
-            ProjectionKind::ValueBlob => {
-                preludes
-                    .extend(quote! { let #id: jni::objects::JObject = { #value_expr }.into(); });
-                slots.push(EncSlot {
-                    ident: id,
-                    wire_ty: quote!(jni::objects::JObject),
-                    descriptor: "[B".to_string(),
-                    is_object: true,
-                    default: quote!(jni::objects::JObject::null()),
-                });
-            }
-        }
-        return Some((preludes, slots));
-    }
-    // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
-    if ext.is_kotlin_enum(&effective_ty) {
-        if let Some(name) = bare_path_ident(&effective_ty) {
-            if ext.kotlin_fqn(&name.to_string()).is_some() {
+            // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
+            PlanFieldKind::Enum { conv, .. } => {
+                let value_expr = conv_value(conv);
                 preludes.extend(quote! { let #id: jni::sys::jint = #value_expr; });
                 slots.push(EncSlot {
                     ident: id,
@@ -252,173 +232,128 @@ fn encode_struct_field(
                     is_object: false,
                     default: quote!(0i32),
                 });
-                return Some((preludes, slots));
             }
-        }
-    }
-    // Nested data-class field (not a projection / not an enum, and its
-    // option-stripped bare type is a registered non-value-class struct):
-    // recurse and inline its leaves instead of building the child via its
-    // own `fromParts` call.
-    let inner_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-    let nested_child = match ext.type_kind(registry, &inner_ty) {
-        TypeKind::DataStruct { st, .. } => Some(st.clone()),
-        _ => None,
-    };
-    if let Some(child) = nested_child {
-        if pat_match_top(&effective_ty, "Vec") {
-            panic!(
-                "flatten_struct_encode: `Vec<{}>` data-class field (`{}.{}`) is not \
-                 supported by the fromParts flatten (variable arity)",
-                inner_ty.to_token_stream(),
-                s.ident,
-                fname
-            );
-        }
-        if option_inner_type(&effective_ty).is_none() {
-            let child_access = quote! { #access.#fname };
-            let (child_pre, child_slots) = flatten_struct_encode(
-                ext,
-                registry,
-                &child,
-                &child_access,
-                &base,
-                depth + 1,
-                env_expr,
-            )?;
-            preludes.extend(child_pre);
-            slots.extend(child_slots);
-        } else {
-            // `Option<nested>`: a `present` flag + the child's leaves,
-            // encoded in the `Some` arm and defaulted in the `None` arm.
-            let cbind = format_ident!("__c{}", depth);
-            let child_access = quote! { #cbind };
-            let (child_pre, child_slots) = flatten_struct_encode(
-                ext,
-                registry,
-                &child,
-                &child_access,
-                &base,
-                depth + 1,
-                env_expr,
-            )?;
-            let flag_id = format_ident!("__{}_present", base);
-            let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
-                .map(|i| format_ident!("__{}_o{}", base, i))
-                .collect();
-            let outer_tys: Vec<TokenStream> =
-                child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
-            let inner_ids: Vec<proc_macro2::Ident> =
-                child_slots.iter().map(|sl| sl.ident.clone()).collect();
-            let defaults: Vec<TokenStream> =
-                child_slots.iter().map(|sl| sl.default.clone()).collect();
-            preludes.extend(quote! {
-                let #flag_id: jni::sys::jboolean;
-                #( let #outer_ids: #outer_tys; )*
-                match &#access.#fname {
-                    Some(#cbind) => {
-                        #child_pre
-                        #flag_id = 1u8;
-                        #( #outer_ids = #inner_ids; )*
-                    }
-                    None => {
-                        #flag_id = 0u8;
-                        #( #outer_ids = #defaults; )*
-                    }
-                }
-            });
-            slots.push(EncSlot {
-                ident: flag_id,
-                wire_ty: quote!(jni::sys::jboolean),
-                descriptor: "Z".to_string(),
-                is_object: false,
-                default: quote!(0u8),
-            });
-            for (i, sl) in child_slots.iter().enumerate() {
+            // `Option<enum>` leaf → the converter delivers the `box_jint`-boxed
+            // discriminant (JVM null = `None`); the slot is the box class.
+            PlanFieldKind::OptionEnum { conv, .. } => {
+                let value_expr = conv_value(conv);
+                preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
                 slots.push(EncSlot {
-                    ident: outer_ids[i].clone(),
-                    wire_ty: sl.wire_ty.clone(),
-                    descriptor: sl.descriptor.clone(),
-                    is_object: sl.is_object,
-                    default: sl.default.clone(),
+                    ident: id,
+                    wire_ty: quote!(jni::objects::JObject),
+                    descriptor: "Ljava/lang/Integer;".to_string(),
+                    is_object: true,
+                    default: quote!(jni::objects::JObject::null()),
                 });
             }
-        }
-        return Some((preludes, slots));
-    }
-    // Leaf primitive / object (string, byte array, Vec, ...).
-    match jni_field_access(&field_wire) {
-        Some((sig, _, false)) => {
-            preludes.extend(quote! { let #id: #field_wire = #value_expr; });
-            slots.push(EncSlot {
-                ident: id,
-                wire_ty: quote!(#field_wire),
-                descriptor: sig.to_string(),
-                is_object: false,
-                default: primitive_default_for_descriptor(sig),
-            });
-        }
-        Some((sig, _, true)) => {
-            preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr.into(); });
-            slots.push(EncSlot {
-                ident: id,
-                wire_ty: quote!(jni::objects::JObject),
-                descriptor: sig.to_string(),
-                is_object: true,
-                default: quote!(jni::objects::JObject::null()),
-            });
-        }
-        None => {
-            // Object-shaped wire with no primitive descriptor; the JVM slot
-            // must be the field's actual declared type (Option-stripped).
-            let slot_ty = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-            let typed_slot = registry
-                .output_entry(&slot_ty)
-                .and_then(|e| jni_field_access(&e.destination))
-                .and_then(|(sig, _, is_obj)| {
-                    if is_obj {
-                        Some(sig.to_string())
-                    } else {
-                        // The inner type's own wire is a primitive, so this
-                        // field is an `Option<primitive-wire>` whose converter
-                        // delivers the `box_j*`-boxed OBJECT (null for `None`)
-                        // — the JVM slot is the box class, not the primitive.
-                        box_descriptor_for_primitive(sig).map(str::to_string)
-                    }
-                })
-                .or_else(|| {
-                    bare_path_ident(&slot_ty).and_then(|name| {
-                        ext.kotlin_fqn(&name.to_string())
-                            .map(|v| format!("L{};", v.replace('.', "/")))
-                    })
-                })
-                .or_else(|| {
-                    if pat_match_top(&slot_ty, "Vec") {
-                        Some("Ljava/util/List;".to_string())
-                    } else if let syn::Type::Path(tp) = &field_wire {
-                        tp.path.segments.last().and_then(|seg| {
-                            match seg.ident.to_string().as_str() {
-                                "JString" => Some("Ljava/lang/String;".to_string()),
-                                "JByteArray" => Some("[B".to_string()),
-                                _ => None,
+            // Nested data-class: inline the child's leaves; under `Option` add
+            // a `present` flag and default the child slots in the `None` arm.
+            PlanFieldKind::Nested {
+                optional,
+                plan: child,
+                ..
+            } => {
+                if !*optional {
+                    let child_access = quote! { #access.#fname };
+                    let (child_pre, child_slots) =
+                        encode_plan(child, &child_access, &base, depth + 1, env_expr);
+                    preludes.extend(child_pre);
+                    slots.extend(child_slots);
+                } else {
+                    let cbind = format_ident!("__c{}", depth);
+                    let child_access = quote! { #cbind };
+                    let (child_pre, child_slots) =
+                        encode_plan(child, &child_access, &base, depth + 1, env_expr);
+                    let flag_id = format_ident!("__{}_present", base);
+                    let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
+                        .map(|i| format_ident!("__{}_o{}", base, i))
+                        .collect();
+                    let outer_tys: Vec<TokenStream> =
+                        child_slots.iter().map(|sl| sl.wire_ty.clone()).collect();
+                    let inner_ids: Vec<proc_macro2::Ident> =
+                        child_slots.iter().map(|sl| sl.ident.clone()).collect();
+                    let defaults: Vec<TokenStream> =
+                        child_slots.iter().map(|sl| sl.default.clone()).collect();
+                    preludes.extend(quote! {
+                        let #flag_id: jni::sys::jboolean;
+                        #( let #outer_ids: #outer_tys; )*
+                        match &#access.#fname {
+                            Some(#cbind) => {
+                                #child_pre
+                                #flag_id = 1u8;
+                                #( #outer_ids = #inner_ids; )*
                             }
-                        })
-                    } else {
-                        None
+                            None => {
+                                #flag_id = 0u8;
+                                #( #outer_ids = #defaults; )*
+                            }
+                        }
+                    });
+                    slots.push(EncSlot {
+                        ident: flag_id,
+                        wire_ty: quote!(jni::sys::jboolean),
+                        descriptor: "Z".to_string(),
+                        is_object: false,
+                        default: quote!(0u8),
+                    });
+                    for (i, sl) in child_slots.iter().enumerate() {
+                        slots.push(EncSlot {
+                            ident: outer_ids[i].clone(),
+                            wire_ty: sl.wire_ty.clone(),
+                            descriptor: sl.descriptor.clone(),
+                            is_object: sl.is_object,
+                            default: sl.default.clone(),
+                        });
                     }
-                })
-                .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
-            preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
-            slots.push(EncSlot {
-                ident: id,
-                wire_ty: quote!(jni::objects::JObject),
-                descriptor: typed_slot,
-                is_object: true,
-                default: quote!(jni::objects::JObject::null()),
-            });
+                }
+            }
+            // Simple leaf: bind per the plan's wire form.
+            PlanFieldKind::Leaf {
+                conv,
+                wire,
+                form,
+                descriptor,
+                ..
+            } => {
+                let value_expr = conv_value(conv);
+                match form {
+                    LeafForm::Prim => {
+                        preludes.extend(quote! { let #id: #wire = #value_expr; });
+                        slots.push(EncSlot {
+                            ident: id,
+                            wire_ty: quote!(#wire),
+                            descriptor: descriptor.clone(),
+                            is_object: false,
+                            default: primitive_default_for_descriptor(descriptor),
+                        });
+                    }
+                    LeafForm::IntoObject => {
+                        preludes.extend(
+                            quote! { let #id: jni::objects::JObject = #value_expr.into(); },
+                        );
+                        slots.push(EncSlot {
+                            ident: id,
+                            wire_ty: quote!(jni::objects::JObject),
+                            descriptor: descriptor.clone(),
+                            is_object: true,
+                            default: quote!(jni::objects::JObject::null()),
+                        });
+                    }
+                    LeafForm::Object => {
+                        preludes.extend(quote! { let #id: jni::objects::JObject = #value_expr; });
+                        slots.push(EncSlot {
+                            ident: id,
+                            wire_ty: quote!(jni::objects::JObject),
+                            descriptor: descriptor.clone(),
+                            is_object: true,
+                            default: quote!(jni::objects::JObject::null()),
+                        });
+                    }
+                }
+            }
         }
     }
-    Some((preludes, slots))
+    (preludes, slots)
 }
 
 pub(crate) fn struct_output_body(
