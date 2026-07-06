@@ -19,5 +19,5 @@ konst = "0.3.0"
 [build-dependencies]
 prebindgen = { workspace = true }
 syn = { workspace = true }
-cbindgen = "0.29.0"
+cbindgen = "=0.29.4"
 example-flat = { path = "../example-flat" }

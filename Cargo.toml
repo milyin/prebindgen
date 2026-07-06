@@ -14,7 +14,7 @@ members = [
 resolver = "2"
 package.version = "0.5.0"
 package.edition = "2021"
-package.rust-version = "1.75"
+package.rust-version = "1.85"
 package.license = "MIT OR Apache-2.0"
 package.authors = ["Michael Ilyin <milyin@gmail.com>"]
 package.repository = "https://github.com/milyin/prebindgen"
@@ -38,7 +38,7 @@ roxygen = "1.0.4"
 tempfile = "3.0"
 itertools = "0.14.0"
 if_rust_version = "1.0"
-konst = "0.3.0" # old one for for rust 1.75
+konst = "0.3.0" # consumer crates need konst too: the generated file emits a konst::assertc_eq! guard
 toml = "0.9.5"
 rand = "0.9.2"
 
