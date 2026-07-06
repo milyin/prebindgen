@@ -324,6 +324,7 @@ impl Cbindgen {
     /// ordered list of wire components, plus whether `fields[0]` is a pointer
     /// whose NULL bit-pattern is still free for an enclosing `Option`/`Result`
     /// layer to claim. Mirrors the niche-stacking model in `core::niches`.
+    #[allow(clippy::only_used_in_recursion)]
     pub(super) fn lower_shape(&self, ty: &syn::Type, registry: &Registry<()>) -> ValueShape {
         if is_unit(ty) {
             return ValueShape {

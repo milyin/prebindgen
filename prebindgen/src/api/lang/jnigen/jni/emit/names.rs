@@ -47,7 +47,7 @@ pub(crate) struct QualifyEmittedTypes<'a> {
     pub(crate) source_names: &'a std::collections::HashSet<String>,
 }
 
-impl<'a> syn::visit_mut::VisitMut for QualifyEmittedTypes<'a> {
+impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     fn visit_type_path_mut(&mut self, tp: &mut syn::TypePath) {
         if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1 {
             let ident = tp.path.segments[0].ident.to_string();
