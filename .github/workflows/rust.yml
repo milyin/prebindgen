@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [1.75.0, stable]
+        rust: [1.85.0, stable]
 
     steps:
     - uses: actions/checkout@v4
@@ -39,3 +39,22 @@ jobs:
       run: |
         cargo test
         cargo test --all --all-features
+
+  covertest:
+    # JVM-runtime coverage: regenerate every binding that commits its
+    # generated output, fail on drift (the golden-diff invariant), then run
+    # the covertest-kotlin assert harness on a real JVM.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      run: rustup toolchain install stable && rustup default stable
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+    - name: Regen check (golden diff of committed generated bindings)
+      run: ./examples/regen-check.sh
+    - name: Run covertest-kotlin assert harness
+      working-directory: examples/covertest-kotlin
+      run: ./gradlew run --console=plain

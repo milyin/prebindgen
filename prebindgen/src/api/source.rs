@@ -118,7 +118,7 @@ impl Source {
         let mut items = HashMap::new();
         for group in groups {
             let records = Self::read_group(input_dir, &group);
-            let group_items = records.iter().map(|r| (r.parse())).collect::<Vec<_>>();
+            let group_items = records.iter().map(|r| r.parse()).collect::<Vec<_>>();
             items.insert(group, group_items);
         }
 
@@ -173,9 +173,6 @@ impl Source {
     }
 
     /// Returns the name of the source crate that generated the prebindgen data
-    ///
-    /// This is typically used by [`FfiConverter`](crate::batching::FfiConverter) to
-    /// generate proper function calls to the original crate.
     ///
     /// # Example
     ///
@@ -259,8 +256,8 @@ impl Source {
         // Build a cfg filter and apply it lazily with itertools::batching
         let mut filter = self.build_cfg_filter();
         self.items
-            .iter()
-            .flat_map(|(_, records)| records.iter().cloned())
+            .values()
+            .flat_map(|records| records.iter().cloned())
             .batching(move |iter| filter.call(iter))
     }
 
@@ -488,9 +485,6 @@ impl Builder {
     /// typical usage if this function will be with `None` argument to disable
     /// filtering by target triple if it's necessary to see the original
     /// collected code.
-    ///
-    /// Notice also that it's possible to just create standalone `CfgFilter` object
-    /// with necessary configuration and insert into the iterator chain.
     #[roxygen]
     pub fn enable_target_filtering(
         mut self,

@@ -1,4 +1,5 @@
 /target
 /**/target
+/examples/*/build/
 Cargo.lock
 .vscode/

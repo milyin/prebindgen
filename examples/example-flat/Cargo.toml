@@ -1,0 +1,17 @@
+[package]
+name = "example-flat"
+version = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+
+[features]
+unstable = []
+internal = []
+
+[dependencies]
+prebindgen = { workspace = true }
+prebindgen-proc-macro = { workspace = true }
+
+[build-dependencies]
+prebindgen = { workspace = true }
+prebindgen-project-root = { workspace = true }

@@ -25,6 +25,10 @@ rand = { workspace = true }
 
 [features]
 debug = ["prebindgen/debug"]
+# Inject `#[inline]` onto every `#[prebindgen]` function in the wrapper crate so
+# thin FFI shims stay zero-cost for Rust consumers that don't enable LTO. Opt-in
+# (non-default): only appropriate for thin-wrapper libraries. See crate docs.
+inline = []
 
 [dev-dependencies]
 serde_json = { workspace = true }

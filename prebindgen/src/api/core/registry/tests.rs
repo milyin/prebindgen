@@ -1,0 +1,225 @@
+use std::collections::HashSet;
+
+use proc_macro2::TokenStream;
+
+use super::*;
+use crate::api::core::{
+    niches::Niches,
+    prebindgen::{ConverterImpl, Prebindgen},
+};
+
+/// Minimal `Prebindgen` for scan-pipeline tests. Carries the
+/// declared sets the test wants and stubs every emission/converter
+/// hook into something inert.
+#[derive(Default)]
+struct StubExt {
+    functions: HashSet<syn::Ident>,
+    ignored_functions: HashSet<syn::Ident>,
+    types: HashSet<TypeKey>,
+    ignored_types: HashSet<TypeKey>,
+}
+
+impl Prebindgen for StubExt {
+    type Metadata = ();
+
+    fn declared_functions(&self) -> HashSet<syn::Ident> {
+        self.functions.clone()
+    }
+    fn ignored_functions(&self) -> HashSet<syn::Ident> {
+        self.ignored_functions.clone()
+    }
+    fn declared_types(&self) -> HashSet<TypeKey> {
+        self.types.clone()
+    }
+    fn ignored_types(&self) -> HashSet<TypeKey> {
+        self.ignored_types.clone()
+    }
+
+    fn on_function(&self, _f: &syn::ItemFn, _registry: &Registry<()>) -> TokenStream {
+        TokenStream::new()
+    }
+    fn on_struct(&self, _s: &syn::ItemStruct, _registry: &Registry<()>) -> TokenStream {
+        TokenStream::new()
+    }
+    fn on_enum(&self, _e: &syn::ItemEnum, _registry: &Registry<()>) -> TokenStream {
+        TokenStream::new()
+    }
+    fn on_input_type(
+        &self,
+        _ty: &syn::Type,
+        _registry: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
+        None
+    }
+    fn on_output_type(
+        &self,
+        _ty: &syn::Type,
+        _registry: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
+        None
+    }
+}
+
+// suppress unused warning on Niches — kept available for richer tests
+#[allow(dead_code)]
+fn _force_niches_use() -> Niches {
+    Niches::empty()
+}
+
+fn fn_item(src: &str) -> (syn::Item, SourceLocation) {
+    let item: syn::ItemFn = syn::parse_str(src).expect("test fn parse");
+    (syn::Item::Fn(item), SourceLocation::default())
+}
+
+#[test]
+fn from_items_does_not_scan_signatures() {
+    // A `#[prebindgen]`-marked fn whose return is a bare `impl Foo`
+    // would have failed `from_items` under the old code path
+    // (ScanError::DisallowedImplTrait). Now `from_items` is index-
+    // only and accepts it without complaint.
+    let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
+    let reg: Registry<()> = Registry::from_items(items).expect("from_items must succeed");
+    assert!(reg.required_inputs_scan.is_empty());
+    assert!(reg.required_outputs_scan.is_empty());
+    // The fn is indexed but no types are pre-required.
+    assert!(reg
+        .functions
+        .contains_key(&syn::parse_str("bogus").unwrap()));
+}
+
+#[test]
+fn scan_declared_empty_ext_marks_nothing_required() {
+    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let ext = StubExt::default();
+    reg.scan_declared(&ext).expect("empty ext = no scan");
+    assert!(reg.required_inputs_scan.is_empty());
+    assert!(reg.required_outputs_scan.is_empty());
+}
+
+#[test]
+fn scan_declared_marks_types_required_only_for_declared_fns() {
+    let items = vec![
+        fn_item("fn a(x: u64) -> u64 { x }"),
+        fn_item("fn b(x: u32) -> u32 { x }"),
+    ];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("a").unwrap());
+    reg.scan_declared(&ext).unwrap();
+    assert!(reg.required_inputs_scan.contains(&TypeKey::parse("u64")));
+    assert!(reg.required_outputs_scan.contains(&TypeKey::parse("u64")));
+    assert!(!reg.required_inputs_scan.contains(&TypeKey::parse("u32")));
+    assert!(!reg.required_outputs_scan.contains(&TypeKey::parse("u32")));
+}
+
+#[test]
+fn scan_declared_fails_disallowed_impl_trait_only_when_fn_declared() {
+    let items = vec![fn_item("fn bogus(x: u64) -> impl std::fmt::Debug { 0u64 }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+
+    // Empty ext: the bogus fn is not scanned, so no error.
+    let empty = StubExt::default();
+    assert!(reg.scan_declared(&empty).is_ok());
+
+    // Declare the fn: scan now fires the disallowed-impl-Trait error.
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("bogus").unwrap());
+    match reg.scan_declared(&ext) {
+        Err(ScanError::DisallowedImplTrait { .. }) => (),
+        other => panic!("expected DisallowedImplTrait, got {:?}", other),
+    }
+}
+
+#[test]
+fn scan_declared_rejects_function_declared_and_ignored_overlap() {
+    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let ident: syn::Ident = syn::parse_str("good").unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(ident.clone());
+    ext.ignored_functions.insert(ident.clone());
+
+    match reg.scan_declared(&ext) {
+        Err(ScanError::ConflictingFunctionIntent { name }) if name == ident => (),
+        other => panic!("expected ConflictingFunctionIntent, got {:?}", other),
+    }
+}
+
+#[test]
+fn scan_declared_rejects_type_declared_and_ignored_overlap() {
+    let item: syn::ItemStruct = syn::parse_str("struct Thing { value: u64 }").unwrap();
+    let items = vec![(syn::Item::Struct(item), SourceLocation::default())];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let key = TypeKey::parse("Thing");
+    let mut ext = StubExt::default();
+    ext.types.insert(key.clone());
+    ext.ignored_types.insert(key.clone());
+
+    match reg.scan_declared(&ext) {
+        Err(ScanError::ConflictingTypeIntent { key: actual }) if actual == key => (),
+        other => panic!("expected ConflictingTypeIntent, got {:?}", other),
+    }
+}
+
+#[test]
+fn type_entry_helpers_expose_converter_chain_contract() {
+    let entry = TypeEntry {
+        destination: syn::parse_quote!(jni::sys::jlong),
+        function: syn::parse_quote!(
+            fn __wire(v: Owned) -> jni::sys::jlong {
+                0
+            }
+        ),
+        pre_stages: vec![
+            Stage {
+                function: syn::parse_quote!(
+                    fn __stage_rust(v: Rust) -> Result<Mid, Err> {
+                        todo!()
+                    }
+                ),
+                metadata: (),
+            },
+            Stage {
+                function: syn::parse_quote!(
+                    fn __stage_wire(v: Mid) -> Result<Owned, Err> {
+                        todo!()
+                    }
+                ),
+                metadata: (),
+            },
+        ],
+        subs: vec![TypeKey::parse("Rust"), TypeKey::parse("Mid")],
+        required: true,
+        niches: Niches::empty(),
+        metadata: (),
+    };
+
+    assert_eq!(entry.converter_ident(), "__wire");
+    assert_eq!(
+        TypeKey::from_type(entry.wire_type()),
+        TypeKey::parse("jni::sys::jlong")
+    );
+    assert_eq!(
+        entry
+            .output_stage_order()
+            .map(|(_, s)| s.function.sig.ident.to_string())
+            .collect::<Vec<_>>(),
+        vec!["__stage_rust", "__stage_wire"]
+    );
+    assert_eq!(
+        entry
+            .input_stage_order()
+            .map(|(_, s)| s.function.sig.ident.to_string())
+            .collect::<Vec<_>>(),
+        vec!["__stage_wire", "__stage_rust"]
+    );
+    assert_eq!(
+        entry
+            .dependency_keys()
+            .iter()
+            .map(TypeKey::as_str)
+            .collect::<Vec<_>>(),
+        vec!["Rust", "Mid"]
+    );
+}

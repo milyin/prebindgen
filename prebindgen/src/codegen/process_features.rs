@@ -28,7 +28,13 @@ pub(crate) fn process_item_features(
     source_location: &SourceLocation,
 ) -> bool {
     let attrs = match item {
-        syn::Item::Fn(f) => &mut f.attrs,
+        syn::Item::Fn(f) => {
+            // Process function parameters recursively (so `#[cfg(...)]` on an
+            // individual parameter is honored, just like struct fields / enum
+            // variants) — avoids needing two whole-function variants.
+            process_fn_inputs(&mut f.sig.inputs, rules, source_location);
+            &mut f.attrs
+        }
         syn::Item::Struct(s) => {
             // Process struct fields recursively
             process_struct_fields(&mut s.fields, rules, source_location);
@@ -91,6 +97,31 @@ fn process_struct_fields(
             // No fields to process
         }
     }
+}
+
+/// Process function parameters for feature flags
+///
+/// Drops any parameter guarded by a disabled-feature `#[cfg(...)]` and removes
+/// the `#[cfg(...)]` attribute from parameters guarded by enabled features.
+/// Parameters without a cfg attribute are left untouched. Receiver (`self`)
+/// parameters are always kept.
+fn process_fn_inputs(
+    inputs: &mut syn::punctuated::Punctuated<syn::FnArg, syn::Token![,]>,
+    rules: &CfgExprRules,
+    source_location: &SourceLocation,
+) {
+    let mut new_inputs = syn::punctuated::Punctuated::new();
+    for input_pair in inputs.pairs() {
+        let mut input = input_pair.into_value().clone();
+        let keep = match &mut input {
+            syn::FnArg::Typed(pt) => process_attributes(&mut pt.attrs, rules, source_location),
+            syn::FnArg::Receiver(r) => process_attributes(&mut r.attrs, rules, source_location),
+        };
+        if keep {
+            new_inputs.push(input);
+        }
+    }
+    *inputs = new_inputs;
 }
 
 /// Process enum variants for feature flags
@@ -188,3 +219,6 @@ fn process_attributes(
 
     keep_item
 }
+
+#[cfg(test)]
+mod tests;
