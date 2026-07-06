@@ -31,8 +31,8 @@ fn inline_output_gets_own_builder() {
         PackageDecl::new("thing")
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZThing))
-                    .accessor(syn::parse_quote!(z_thing_name), "name")
-                    .accessor(syn::parse_quote!(z_thing_size), "size")
+                    .accessor(crate::ident!(z_thing_name), "name")
+                    .accessor(crate::ident!(z_thing_size), "size")
                     // Default output: name + size (2 leaves ⇒ builder callback).
                     .flatten_output(FlattenOutput::new().field("name").field("size")),
             )
@@ -42,9 +42,9 @@ fn inline_output_gets_own_builder() {
             // distinct (literal) leaf name — duplicate names are a hard error.
             .fun(FunctionDecl::new(syn::parse_quote!(z_make_b)).flatten_output_with(
                 FunctionFlattenOutput::new()
-                    .field(syn::parse_quote!(z_thing_name), "name")
-                    .field(syn::parse_quote!(z_thing_size), "size")
-                    .field(syn::parse_quote!(z_thing_name), "name2"),
+                    .field(crate::ident!(z_thing_name), "name")
+                    .field(crate::ident!(z_thing_size), "size")
+                    .field(crate::ident!(z_thing_name), "name2"),
             )),
     );
 
@@ -124,13 +124,13 @@ fn error_unwrap_universal_records() {
         PackageDecl::new("errors")
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZDetail))
-                    .accessor(syn::parse_quote!(z_detail_code), "code")
+                    .accessor(crate::ident!(z_detail_code), "code")
                     .flatten_output(FlattenOutput::new().field("code")),
             )
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZErr))
-                    .accessor(syn::parse_quote!(z_err_message), "message")
-                    .accessor(syn::parse_quote!(z_err_detail), "detail")
+                    .accessor(crate::ident!(z_err_message), "message")
+                    .accessor(crate::ident!(z_err_detail), "detail")
                     // Canonical error decomposition: the owned error handle itself,
                     // its message, and the Option-nested detail spliced to its code leaf.
                     .flatten_output(
@@ -224,7 +224,7 @@ fn error_unwrap_universal_records() {
 #[should_panic(expected = "no `.accessor")]
 fn flatten_output_field_unknown_accessor_panics() {
     let _ = PtrClassDecl::new(syn::parse_quote!(ZThing))
-        .accessor(syn::parse_quote!(z_thing_name), "name")
+        .accessor(crate::ident!(z_thing_name), "name")
         // References a name that was never declared via `.accessor`.
         .flatten_output(FlattenOutput::new().field("size"));
 }
@@ -262,17 +262,17 @@ fn method_constructor_and_inline_field_self() {
         PackageDecl::new("thing")
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZThing))
-                    .accessor(syn::parse_quote!(z_thing_name), "name")
+                    .accessor(crate::ident!(z_thing_name), "name")
                     // A method: `&ZThing` receiver + a `name: String` param.
-                    .method(syn::parse_quote!(z_thing_rename), "rename")
+                    .method(crate::ident!(z_thing_rename), "rename")
                     // A constructor: factory returning ZThing.
-                    .constructor(syn::parse_quote!(z_thing_make), "make"),
+                    .constructor(crate::ident!(z_thing_make), "make"),
             )
             // A free fn whose per-fn inline output decomposes to (handle, name).
             .fun(FunctionDecl::new(syn::parse_quote!(z_get)).flatten_output_with(
                 FunctionFlattenOutput::new()
                     .field_self()
-                    .field(syn::parse_quote!(z_thing_name), "name"),
+                    .field(crate::ident!(z_thing_name), "name"),
             )),
     );
 

@@ -65,6 +65,7 @@
 
 use prebindgen::{
     core::Registry,
+    ident,
     lang::{
         DataClassDecl, EnumClassDecl, FlattenInput, FlattenOutput, FunctionDecl,
         FunctionFlattenInput, FunctionFlattenOutput, JniGen, JniGenConfig, PackageDecl,
@@ -119,8 +120,8 @@ fn main() {
             // surfaces as `List<ByteArray>`.
             .class(
                 ValueClassDecl::new(pq!(Stamp))
-                    .accessor(pq!(stamp_secs), "secs")
-                    .accessor(pq!(stamp_nanos), "nanos"),
+                    .accessor(ident!(stamp_secs), "secs")
+                    .accessor(ident!(stamp_nanos), "nanos"),
             ),
     )
     // ── Subpackage `errors`: the Result error channel ───────────────────
@@ -132,7 +133,7 @@ fn main() {
             // via the TYPE-LEVEL `.field_self()` — the error handle itself (an
             // owned `StorageError` the handler must `close()`).
             PtrClassDecl::new(pq!(StorageError))
-                .accessor(pq!(storage_error_message), "message")
+                .accessor(ident!(storage_error_message), "message")
                 .flatten_output(FlattenOutput::new().field("message").field_self()),
         ),
     )
@@ -144,10 +145,10 @@ fn main() {
             // rebuilds it (via the `of` constructor) or accepts a handle.
             .class(
                 PtrClassDecl::new(pq!(Summary))
-                    .constructor(pq!(summary_new), "of")
-                    .accessor(pq!(summary_count), "count")
-                    .accessor(pq!(summary_total), "total")
-                    .method(pq!(summary_scaled), "scaled")
+                    .constructor(ident!(summary_new), "of")
+                    .accessor(ident!(summary_count), "count")
+                    .accessor(ident!(summary_total), "total")
+                    .method(ident!(summary_scaled), "scaled")
                     .flatten_input(FlattenInput::new().variant("of").variant_self())
                     .flatten_output(FlattenOutput::new().field("count").field("total")),
             )
@@ -165,9 +166,9 @@ fn main() {
         PackageDecl::new("")
             .class(
                 PtrClassDecl::new(pq!(Storage))
-                    .accessor(pq!(storage_len), "len")
-                    .method(pq!(storage_contains), "contains")
-                    .constructor(pq!(storage_with_payload), "withPayload"),
+                    .accessor(ident!(storage_len), "len")
+                    .method(ident!(storage_contains), "contains")
+                    .constructor(ident!(storage_with_payload), "withPayload"),
             )
             // The callback-handler handles (single payload / whole batch / owned
             // storage handle).
@@ -183,70 +184,70 @@ fn main() {
     //        Option<scalar>.
     .package(
         PackageDecl::new("model")
-            .fun(FunctionDecl::new(pq!(payload_priority)))
-            .fun(FunctionDecl::new(pq!(priority_weight)))
-            .fun(FunctionDecl::new(pq!(priority_or)))
-            .fun(FunctionDecl::new(pq!(stamp_new)))
-            .fun(FunctionDecl::new(pq!(stamp_series)))
-            .fun(FunctionDecl::new(pq!(payload_label_len)))
-            .fun(FunctionDecl::new(pq!(annotated_new)))
-            .fun(FunctionDecl::new(pq!(annotated_ttl)))
-            .fun(FunctionDecl::new(pq!(annotated_priority)))
-            .fun(FunctionDecl::new(pq!(annotated_payload_value))),
+            .fun(ident!(payload_priority))
+            .fun(ident!(priority_weight))
+            .fun(ident!(priority_or))
+            .fun(ident!(stamp_new))
+            .fun(ident!(stamp_series))
+            .fun(ident!(payload_label_len))
+            .fun(ident!(annotated_new))
+            .fun(ident!(annotated_ttl))
+            .fun(ident!(annotated_priority))
+            .fun(ident!(annotated_payload_value)),
     )
     // analytics: the flatten matrix (default / suppress / with, in + out).
     .package(
         PackageDecl::new("analytics")
-            .fun(FunctionDecl::new(pq!(storage_summary)))
-            .fun(FunctionDecl::new(pq!(storage_matches_summary)))
+            .fun(ident!(storage_summary))
+            .fun(ident!(storage_matches_summary))
             .fun(FunctionDecl::new(pq!(storage_summary_handle)).flatten_output_suppress())
             .fun(FunctionDecl::new(pq!(summary_total_raw)).flatten_input_suppress(pq!(s)))
             .fun(FunctionDecl::new(pq!(storage_summary_full)).flatten_output_with(
                 FunctionFlattenOutput::new()
-                    .field(pq!(summary_count), "count")
-                    .field(pq!(summary_total), "total")
+                    .field(ident!(summary_count), "count")
+                    .field(ident!(summary_total), "total")
                     .field_self(),
             ))
             .fun(FunctionDecl::new(pq!(storage_expect_summary)).flatten_input_with(
                 pq!(expected),
                 FunctionFlattenInput::new()
-                    .variant(pq!(summary_new))
+                    .variant(ident!(summary_new))
                     .variant_self(),
             ))
             // The borrowed-accessor trio. `archive_latest` suppresses the default
             // Summary output flatten so the BORROWED handle path (clone into a
             // fresh owned handle, null when absent) is what crosses.
-            .fun(FunctionDecl::new(pq!(archive_new)))
-            .fun(FunctionDecl::new(pq!(archive_store)))
+            .fun(ident!(archive_new))
+            .fun(ident!(archive_store))
             .fun(FunctionDecl::new(pq!(archive_latest)).flatten_output_suppress()),
     )
     // storage: the perf surface (handles, callbacks, Vec, Option) plus the
     // fallible constructor and the Millis wrapper.
     .package(
         PackageDecl::new("storage")
-            .fun(FunctionDecl::new(pq!(storage_new)))
-            .fun(FunctionDecl::new(pq!(storage_get)))
-            .fun(FunctionDecl::new(pq!(storage_put_by_take)))
-            .fun(FunctionDecl::new(pq!(storage_put_by_read)))
-            .fun(FunctionDecl::new(pq!(storage_put_slice)))
-            .fun(FunctionDecl::new(pq!(storage_get_vec)))
-            .fun(FunctionDecl::new(pq!(payload_handler_new)))
-            .fun(FunctionDecl::new(pq!(storage_callback)))
-            .fun(FunctionDecl::new(pq!(payload_vec_handler_new)))
-            .fun(FunctionDecl::new(pq!(storage_callback_vec)))
-            .fun(FunctionDecl::new(pq!(storage_try_with_label)))
+            .fun(ident!(storage_new))
+            .fun(ident!(storage_get))
+            .fun(ident!(storage_put_by_take))
+            .fun(ident!(storage_put_by_read))
+            .fun(ident!(storage_put_slice))
+            .fun(ident!(storage_get_vec))
+            .fun(ident!(payload_handler_new))
+            .fun(ident!(storage_callback))
+            .fun(ident!(payload_vec_handler_new))
+            .fun(ident!(storage_callback_vec))
+            .fun(ident!(storage_try_with_label))
             // Vec<opaque-handle> returns (plain + under the Option niche).
-            .fun(FunctionDecl::new(pq!(storage_shards)))
-            .fun(FunctionDecl::new(pq!(storage_shards_opt)))
+            .fun(ident!(storage_shards))
+            .fun(ident!(storage_shards_opt))
             // Owned-handle-in-callback pair.
-            .fun(FunctionDecl::new(pq!(storage_handler_new)))
-            .fun(FunctionDecl::new(pq!(storage_emit)))
+            .fun(ident!(storage_handler_new))
+            .fun(ident!(storage_emit))
             // A 3-opaque-handle call (sorted N-ary handle locking).
-            .fun(FunctionDecl::new(pq!(storage_total_len)))
+            .fun(ident!(storage_total_len))
             // Vec<String> return (single-leaf string fold).
-            .fun(FunctionDecl::new(pq!(storage_labels)))
+            .fun(ident!(storage_labels))
             // Option<data-class> input.
-            .fun(FunctionDecl::new(pq!(storage_put_opt)))
+            .fun(ident!(storage_put_opt))
             // `.name(...)`: per-function Kotlin rename override. The default name
             // would be `millisAdd`; force it to `addMillis` to exercise the
             // override path (the Rust symbol/extern is unaffected).
@@ -256,7 +257,7 @@ fn main() {
     // base-package classes). (`string_len` stays undeclared like the
     // `storage_get_into_*` group: its `&String` param / `usize` return are
     // C-tier shapes with no JVM mapping.)
-    .package(PackageDecl::new("").fun(FunctionDecl::new(pq!(string_new))));
+    .package(PackageDecl::new("").fun(ident!(string_new)));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

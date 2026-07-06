@@ -90,7 +90,7 @@ fn resolve_member(members: &[ClassMember], name: &str, kind: MemberKind, verb: &
 /// use syn::parse_quote as pq;
 ///
 /// let _ = PtrClassDecl::new(pq!(ZThing))
-///     .accessor(pq!(z_thing_name), "name")
+///     .accessor(prebindgen::ident!(z_thing_name), "name")
 ///     .flatten_output(FlattenOutput::new().field_self().field("name"));
 /// ```
 ///
@@ -103,7 +103,7 @@ fn resolve_member(members: &[ClassMember], name: &str, kind: MemberKind, verb: &
 /// use syn::parse_quote as pq;
 ///
 /// let _ = PtrClassDecl::new(pq!(ZThing))
-///     .accessor(pq!(z_thing_name), "name")
+///     .accessor(prebindgen::ident!(z_thing_name), "name")
 ///     .field("name"); // no such method on `PtrClassDecl`
 /// ```
 pub struct PtrClassDecl {
@@ -135,23 +135,38 @@ impl PtrClassDecl {
 
     /// Declare a `#[prebindgen]` **read accessor** (`f(&Self) -> R`) as an
     /// instance method `name`. Usable as a `.flatten_output()` `.field(name)`.
-    pub fn accessor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Accessor);
+    pub fn accessor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Accessor,
+        );
         self
     }
 
     /// Declare a `#[prebindgen]` **method** (`f(&Self, …) -> R`) as an
     /// instance method `name`. Not usable as a flatten field.
-    pub fn method(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Method);
+    pub fn method(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Method,
+        );
         self
     }
 
     /// Declare a `#[prebindgen]` **constructor** (`f(…) -> Self` /
     /// `Result<Self, E>`) as a companion-object factory `name`. Referenceable
     /// from `.flatten_input().variant(name)`.
-    pub fn constructor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Constructor);
+    pub fn constructor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Constructor,
+        );
         self
     }
 
@@ -308,18 +323,33 @@ impl EnumClassDecl {
         self
     }
 
-    pub fn accessor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Accessor);
+    pub fn accessor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Accessor,
+        );
         self
     }
 
-    pub fn method(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Method);
+    pub fn method(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Method,
+        );
         self
     }
 
-    pub fn constructor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Constructor);
+    pub fn constructor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Constructor,
+        );
         self
     }
 }
@@ -362,18 +392,33 @@ impl DataClassDecl {
         self
     }
 
-    pub fn accessor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Accessor);
+    pub fn accessor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Accessor,
+        );
         self
     }
 
-    pub fn method(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Method);
+    pub fn method(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Method,
+        );
         self
     }
 
-    pub fn constructor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Constructor);
+    pub fn constructor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Constructor,
+        );
         self
     }
 }
@@ -418,18 +463,33 @@ impl ValueClassDecl {
         self
     }
 
-    pub fn accessor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Accessor);
+    pub fn accessor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Accessor,
+        );
         self
     }
 
-    pub fn method(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Method);
+    pub fn method(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Method,
+        );
         self
     }
 
-    pub fn constructor(mut self, rust_fun: syn::Ident, name: impl Into<String>) -> Self {
-        push_member(&mut self.members, rust_fun, name, MemberKind::Constructor);
+    pub fn constructor(mut self, rust_fun: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        push_member(
+            &mut self.members,
+            rust_fun.into().rust_ident,
+            name,
+            MemberKind::Constructor,
+        );
         self
     }
 }
@@ -558,8 +618,8 @@ impl FunctionFlattenInput {
     }
 
     /// Build via this `#[prebindgen]` constructor function directly.
-    pub fn variant(mut self, func: syn::Ident) -> Self {
-        self.variants.push(LocalVariant::Ctor(func));
+    pub fn variant(mut self, func: impl Into<FunctionDecl>) -> Self {
+        self.variants.push(LocalVariant::Ctor(func.into().rust_ident));
         self
     }
 
@@ -589,8 +649,9 @@ impl FunctionFlattenOutput {
 
     /// Include the value of the accessor fn `func` (the rust accessor fn
     /// directly) as field `name`.
-    pub fn field(mut self, func: syn::Ident, name: impl Into<String>) -> Self {
-        self.fields.push(LocalField::Named(func, name.into()));
+    pub fn field(mut self, func: impl Into<FunctionDecl>, name: impl Into<String>) -> Self {
+        self.fields
+            .push(LocalField::Named(func.into().rust_ident, name.into()));
         self
     }
 
@@ -649,15 +710,13 @@ impl PackageDecl {
         self
     }
 
-    /// Add a free-function declaration. Takes a `FunctionDecl` directly
-    /// (not `impl Into<FunctionDecl>` + a bare-`syn::Ident` bridge): with a
-    /// generic bound here, `syn::parse_quote!(ident)` can't infer whether to
-    /// target `syn::Ident` or `FunctionDecl`, so every declaration spells out
-    /// `FunctionDecl::new(pq!(ident))` — trivial for the common case
-    /// (`.fun(FunctionDecl::new(pq!(z_ping)))`), same "always name the
-    /// concrete type" rule `PackageDecl::class` already applies.
-    pub fn fun(mut self, decl: FunctionDecl) -> Self {
-        self.functions.push(decl);
+    /// Add a free-function declaration. Accepts anything convertible into a
+    /// `FunctionDecl` — a bare function ident via [`crate::ident!`] (which,
+    /// unlike `syn::parse_quote!`, resolves to a concrete `syn::Ident` with
+    /// no inference ambiguity against this generic bound) or a fully
+    /// customized `FunctionDecl::new(pq!(ident)).name(...)....`.
+    pub fn fun(mut self, decl: impl Into<FunctionDecl>) -> Self {
+        self.functions.push(decl.into());
         self
     }
 }

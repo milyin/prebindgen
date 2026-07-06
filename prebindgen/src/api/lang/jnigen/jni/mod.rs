@@ -245,7 +245,7 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 ///     .package(
 ///         PackageDecl::new("session")
 ///             .class(PtrClassDecl::new(pq!(ZKeyExpr))
-///                 .accessor(pq!(z_keyexpr_as_str), "getStr")
+///                 .accessor(prebindgen::ident!(z_keyexpr_as_str), "getStr")
 ///                 .flatten_output(FlattenOutput::new().field_self())),
 ///     );
 /// ```

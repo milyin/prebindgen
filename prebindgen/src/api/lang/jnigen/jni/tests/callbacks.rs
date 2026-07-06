@@ -45,7 +45,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
                 PtrClassDecl::new(syn::parse_quote!(ZThing))
                     // Canonical output: handle (identity) + its string form — a
                     // callback arg of ZThing decomposes into these 2 leaves.
-                    .accessor(syn::parse_quote!(z_thing_name), "name")
+                    .accessor(crate::ident!(z_thing_name), "name")
                     .flatten_output(FlattenOutput::new().field_self().field("name")),
             )
             // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
@@ -232,13 +232,13 @@ fn callback_root_identity_moved_after_nested_borrow() {
             // Child handle: canonical output = identity (clone) + its name string.
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZChild))
-                    .accessor(syn::parse_quote!(z_child_name), "name")
+                    .accessor(crate::ident!(z_child_name), "name")
                     .flatten_output(FlattenOutput::new().field_self().field("name")),
             )
             // Parent: a nested child-handle record, then its OWN root identity LAST.
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZParent))
-                    .accessor(syn::parse_quote!(z_parent_child), "child")
+                    .accessor(crate::ident!(z_parent_child), "child")
                     .flatten_output(FlattenOutput::new().field("child").field_self()),
             )
             .fun(FunctionDecl::new(syn::parse_quote!(z_parent_sub))),
@@ -318,31 +318,31 @@ fn callback_double_option_unwrap_pipeline() {
             .class(ValueClassDecl::new(syn::parse_quote!(ZId)))
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZKeyExpr))
-                    .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
+                    .accessor(crate::ident!(z_keyexpr_as_str), "asStr")
                     .flatten_output(FlattenOutput::new().field_self().field("asStr")),
             )
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZTs))
-                    .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
+                    .accessor(crate::ident!(z_ts_ntp64), "ntp64")
                     .flatten_output(FlattenOutput::new().field("ntp64")),
             )
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZSample))
-                    .accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
-                    .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
+                    .accessor(crate::ident!(z_sample_key_expr), "keyExpr")
+                    .accessor(crate::ident!(z_sample_timestamp), "timestamp")
                     .flatten_output(FlattenOutput::new().field("keyExpr").field("timestamp")),
             )
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZErr))
-                    .accessor(syn::parse_quote!(z_err_payload), "payload")
+                    .accessor(crate::ident!(z_err_payload), "payload")
                     .flatten_output(FlattenOutput::new().field("payload")),
             )
             .class(
                 PtrClassDecl::new(syn::parse_quote!(ZReply))
-                    .accessor(syn::parse_quote!(z_reply_zid), "zid")
-                    .accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
-                    .accessor(syn::parse_quote!(z_reply_sample), "sample")
-                    .accessor(syn::parse_quote!(z_reply_err), "err")
+                    .accessor(crate::ident!(z_reply_zid), "zid")
+                    .accessor(crate::ident!(z_reply_is_ok), "isOk")
+                    .accessor(crate::ident!(z_reply_sample), "sample")
+                    .accessor(crate::ident!(z_reply_err), "err")
                     .flatten_output(
                         FlattenOutput::new()
                             .field("zid")

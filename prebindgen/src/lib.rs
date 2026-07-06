@@ -138,6 +138,41 @@ pub use crate::api::{
     utils::{edition::RustEdition, target_triple::TargetTriple},
 };
 
+/// Not part of the public API — referenced by the [`ident!`] macro expansion
+/// so callers don't need their own `proc-macro2` dependency just to build a
+/// `Span`.
+#[doc(hidden)]
+pub mod __macro_support {
+    pub use proc_macro2;
+}
+
+/// Build a `syn::Ident` from a bare identifier token. Unlike
+/// `syn::parse_quote!`, this always yields the concrete type `syn::Ident` —
+/// there's no external context needed to infer it — so it can be passed
+/// directly into a generic `impl Into<T>` parameter (e.g. anywhere this
+/// crate accepts `impl Into<lang::FunctionDecl>`) without hitting rustc's
+/// "type annotations needed" ambiguity. `syn::parse_quote!`'s output type
+/// has to be pinned by a *concrete* parameter type to infer successfully; a
+/// generic `impl Into<T>` bound doesn't give it anything to unify against.
+///
+/// ```
+/// use prebindgen::lang::{FlattenOutput, PtrClassDecl};
+/// use syn::parse_quote as pq;
+///
+/// let _ = PtrClassDecl::new(pq!(ZThing))
+///     .accessor(prebindgen::ident!(z_thing_name), "name")
+///     .flatten_output(FlattenOutput::new().field("name"));
+/// ```
+#[macro_export]
+macro_rules! ident {
+    ($name:ident) => {
+        ::syn::Ident::new(
+            stringify!($name),
+            $crate::__macro_support::proc_macro2::Span::call_site(),
+        )
+    };
+}
+
 /// Registry-based, **language-agnostic** converter pipeline.
 ///
 /// This module is the language-neutral core of prebindgen: it turns a stream of
