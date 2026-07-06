@@ -11,21 +11,8 @@ use crate::{
 /// are processed when generating FFI bindings.
 /// Supports features and target architecture filtering.
 ///
-/// This filter is usually not necessary: the `Source` by default automatically reads
-/// features enabled in the crate and removes any code guarded by disabled features.
-///
-/// But if necessary this filtering on `Source` level can be disabled and CfgFilter
-/// can be applied explicitly.
-///
-/// # Example
-///
-/// ```
-/// let builder = prebindgen::batching::cfg_filter::Builder::new()
-///     .disable_feature("unstable")
-///     .enable_feature("std")
-///     .match_feature("internal", "public")
-///     .build();
-/// ```
+/// Used internally by `Source`, which automatically reads the features enabled
+/// in the source crate and removes any code guarded by disabled features.
 pub struct Builder {
     /// Source crate features constant name and features list in format "crate/f1 crate/f2"
     pub(crate) features_assert: Option<(String, String)>,
@@ -35,12 +22,6 @@ pub struct Builder {
 
 impl Builder {
     /// Create a new Builder for configuring CfgFilter
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let builder = prebindgen::batching::cfg_filter::Builder::new();
-    /// ```
     pub fn new() -> Self {
         Self {
             features_assert: None,
@@ -48,60 +29,9 @@ impl Builder {
         }
     }
 
-    /// Disable a feature in the generated code
-    ///
-    /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
-    /// guarded by disabled features will be completely skipped in the output.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
-    ///     .disable_feature("experimental")
-    ///     .disable_feature("deprecated");
-    /// ```
-    #[roxygen]
-    pub fn disable_feature<S: Into<String>>(
-        mut self,
-        /// The name of the feature to disable
-        feature: S,
-    ) -> Self {
-        self.rules.disabled_features.insert(feature.into());
-        self
-    }
-
-    /// Enable a feature in the generated code
-    ///
-    /// When processing code with `#[cfg(feature="...")]` attributes, code blocks
-    /// guarded by enabled features will be included in the output with the
-    /// `#[cfg(...)]` attribute removed.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
-    ///     .enable_feature("experimental");
-    /// ```
-    #[roxygen]
-    pub fn enable_feature<S: Into<String>>(
-        mut self,
-        /// The name of the feature to enable
-        feature: S,
-    ) -> Self {
-        self.rules.enabled_features.insert(feature.into());
-        self
-    }
-
     /// Enable a specific target architecture. All other architectures are treated as disabled.
     ///
     /// Only one architecture can be enabled. Calling this again overwrites the previous choice.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
-    ///     .enable_target_arch("x86_64");
-    /// ```
     #[roxygen]
     pub fn enable_target_arch<S: Into<String>>(
         mut self,
@@ -150,30 +80,6 @@ impl Builder {
         self.rules.enabled_target_env = Some(env.into());
         self
     }
-    /// Map a feature name to a different name in the generated code
-    ///
-    /// When processing code with `#[cfg(feature="...")]` attributes, features
-    /// that match the mapping will have their names replaced with the target
-    /// feature name in the output.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let builder = prebindgen::batching::cfg_filter::Builder::new()
-    ///     .match_feature("unstable", "unstable")
-    ///     .match_feature("internal", "unstable");
-    /// ```
-    #[roxygen]
-    pub fn match_feature<S1: Into<String>, S2: Into<String>>(
-        mut self,
-        /// The original feature name to match
-        from: S1,
-        /// The new feature name to use in the output
-        to: S2,
-    ) -> Self {
-        self.rules.feature_mappings.insert(from.into(), to.into());
-        self
-    }
 
     /// Automatically filter features according to provided list
     /// In the beginning put assert that list matches the actual features list of imported source crate
@@ -218,26 +124,7 @@ impl Builder {
         self
     }
 
-    /// Set whether unknown features should be treated as disabled (skipped) instead of reported.
-    #[roxygen]
-    pub fn disable_unknown_features(
-        mut self,
-        /// If true, unknown features are skipped instead of reported
-        value: bool,
-    ) -> Self {
-        self.rules.disable_unknown_features = value;
-        self
-    }
-
     /// Build the CfgFilter instance with the configured options
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let filter = prebindgen::batching::cfg_filter::Builder::new()
-    ///     .disable_feature("internal")
-    ///     .build();
-    /// ```
     pub fn build(self) -> CfgFilter {
         // Determine if this filter is active (i.e., not pass-through)
         let active = self.features_assert.is_some() || self.rules.is_active();
@@ -287,34 +174,9 @@ impl Default for Builder {
 ///
 /// The `CfgFilter` processes items with `#[cfg(feature="...")]` attributes,
 /// allowing selective inclusion, exclusion, or renaming of feature-gated code
-/// in the generated FFI bindings.
-///
-/// # Functionality
-///
-/// - **Disable features**: Skip items guarded by disabled features
-/// - **Enable features**: Include items and remove their `#[cfg(...)]` attributes
-/// - **Map features**: Rename feature flags in the output
-///
-/// # Example
-/// ```
-/// # prebindgen::Source::init_doctest_simulate();
-/// let source = prebindgen::Source::new("source_ffi");
-///
-/// let cfg_filter = prebindgen::batching::CfgFilter::builder()
-///     .disable_feature("unstable")
-///     .disable_feature("internal")
-///     .enable_feature("std")
-///     .match_feature("experimental", "beta")
-///     .build();
-///
-/// // Apply filter to items using itertools::batching
-/// # use itertools::Itertools;
-/// let filtered_items: Vec<_> = source
-///     .items_all()
-///     .batching(cfg_filter.into_closure())
-///     .take(0) // Take 0 for doctest
-///     .collect();
-/// ```
+/// in the generated FFI bindings. `Source` builds one internally from the
+/// source crate's recorded feature set and applies it lazily via
+/// `itertools::batching`.
 pub struct CfgFilter {
     builder: Builder,
     prelude_item: Option<(syn::Item, SourceLocation)>,
@@ -324,15 +186,6 @@ pub struct CfgFilter {
 
 impl CfgFilter {
     /// Create a builder for configuring a cfg filter instance
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let filter = prebindgen::batching::CfgFilter::builder()
-    ///     .disable_feature("unstable")
-    ///     .enable_feature("std")
-    ///     .build();
-    /// ```
     pub fn builder() -> Builder {
         Builder::new()
     }
@@ -362,15 +215,5 @@ impl CfgFilter {
             }
         }
         None
-    }
-
-    /// Convert to closure compatible with `itertools::batching`
-    ///
-    /// The returned closure should be passed to `.batching(...)` in the iterator chain.
-    pub fn into_closure<I>(mut self) -> impl FnMut(&mut I) -> Option<(syn::Item, SourceLocation)>
-    where
-        I: Iterator<Item = (syn::Item, SourceLocation)>,
-    {
-        move |iter| self.call(iter)
     }
 }

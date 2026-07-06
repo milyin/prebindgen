@@ -32,6 +32,7 @@
 //!   - **unit** → `bool f(<inputs>, E *e)`;
 //!   - **value wire** (data struct, scalar, enum) → `bool f(T *out, <inputs>, E *e)`
 //!     filling a caller-allocated `*out`.
+//!
 //!   `e` may be `NULL`, in which case the error value is dropped. Infallible
 //!   producers return the value/pointer directly (no out-param).
 //!
@@ -174,6 +175,7 @@ enum CurrentDecl {
 }
 
 /// Where a fallible input-decode failure is routed in a generated wrapper.
+#[allow(clippy::large_enum_variant)]
 enum ErrRoute<'a> {
     /// `Result<T, E>` function: convert the message to `E`, write `*e`, and
     /// return `fail_return` (`false` for a `bool`/out-param wrapper,

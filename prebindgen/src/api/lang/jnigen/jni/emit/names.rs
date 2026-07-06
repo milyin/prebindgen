@@ -95,27 +95,23 @@ pub(crate) fn annotate_jobject_with_lifetime(ty: &syn::Type, life: &str) -> syn:
             if matches!(
                 name.as_str(),
                 "JObject" | "JString" | "JByteArray" | "JClass"
-            ) {
-                if matches!(last.arguments, syn::PathArguments::None) {
-                    let mut new = tp.clone();
-                    if let Some(last) = new.path.segments.last_mut() {
-                        let lt = syn::Lifetime::new(
-                            &format!("'{}", life),
-                            proc_macro2::Span::call_site(),
-                        );
-                        last.arguments = syn::PathArguments::AngleBracketed(
-                            syn::AngleBracketedGenericArguments {
-                                colon2_token: None,
-                                lt_token: syn::token::Lt::default(),
-                                args: syn::punctuated::Punctuated::from_iter(std::iter::once(
-                                    syn::GenericArgument::Lifetime(lt),
-                                )),
-                                gt_token: syn::token::Gt::default(),
-                            },
-                        );
-                    }
-                    return syn::Type::Path(new);
+            ) && matches!(last.arguments, syn::PathArguments::None)
+            {
+                let mut new = tp.clone();
+                if let Some(last) = new.path.segments.last_mut() {
+                    let lt =
+                        syn::Lifetime::new(&format!("'{}", life), proc_macro2::Span::call_site());
+                    last.arguments =
+                        syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
+                            colon2_token: None,
+                            lt_token: syn::token::Lt::default(),
+                            args: syn::punctuated::Punctuated::from_iter(std::iter::once(
+                                syn::GenericArgument::Lifetime(lt),
+                            )),
+                            gt_token: syn::token::Gt::default(),
+                        });
                 }
+                return syn::Type::Path(new);
             }
         }
     }

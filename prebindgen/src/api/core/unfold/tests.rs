@@ -933,10 +933,9 @@ fn callback_arg_borrowed_decomposed() {
     apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
 
     // No plan under the bare `ZSample` key — only under the borrowed arg type.
-    assert!(reg
+    assert!(!reg
         .callback_arg_plans
-        .get(&TypeKey::from_type(&syn::parse_quote!(ZSample)))
-        .is_none());
+        .contains_key(&TypeKey::from_type(&syn::parse_quote!(ZSample))));
     let plan = reg
         .callback_arg_plans
         .get(&TypeKey::from_type(&syn::parse_quote!(&ZSample)))
@@ -1080,7 +1079,7 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
     apply_leaf_vec_folds(&mut reg, vec![syn::parse_quote!(String)], &declared)
         .expect("apply_leaf_vec_folds");
     assert!(
-        reg.unfold_plans.get(&ident("other")).is_none(),
+        !reg.unfold_plans.contains_key(&ident("other")),
         "un-nominated `NotNominated` element ⇒ no fold plan"
     );
     assert_eq!(

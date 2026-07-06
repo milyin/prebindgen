@@ -714,7 +714,7 @@ impl<M> Registry<M> {
                     if !matches!(&*pt.pat, syn::Pat::Ident(_)) {
                         return Err(ScanError::UnsupportedParamPattern { loc: loc.clone() });
                     }
-                    self.register_type_recursive(Direction::Input, &*pt.ty, true, loc)?;
+                    self.register_type_recursive(Direction::Input, &pt.ty, true, loc)?;
                 }
             }
         }

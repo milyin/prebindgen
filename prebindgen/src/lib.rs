@@ -70,12 +70,12 @@
 //! # example-cbindgen/Cargo.toml
 //! [dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.4"
+//! prebindgen = "0.5"
 //! konst = "0.3"      # the generated file emits a konst feature guard
 //!
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.4"
+//! prebindgen = "0.5"
 //! cbindgen = "0.29"
 //! syn = { version = "2", features = ["full"] }
 //! ```
@@ -223,43 +223,6 @@ pub mod lang {
             TypeKeyState, TypeMeta, WrapperNonMeta, WriteKotlinError,
         },
     };
-}
-
-/// Filters for sequences of (syn::Item, SourceLocation) called by `itertools::batching`
-pub mod batching {
-    pub mod ffi_converter {
-        pub use crate::api::batching::ffi_converter::Builder;
-    }
-    pub use crate::api::batching::{cfg_filter::CfgFilter, ffi_converter::FfiConverter};
-    pub mod cfg_filter {
-        pub use crate::api::batching::cfg_filter::Builder;
-    }
-}
-
-/// Filters for sequences of (syn::Item, SourceLocation) called by `filter_map`
-pub mod filter_map {
-    pub use crate::api::filter_map::struct_align::struct_align;
-}
-
-/// Filters for sequences of (syn::Item, SourceLocation) called by `map`
-pub mod map {
-    pub use crate::api::map::strip_derive::StripDerives;
-    pub mod strip_derive {
-        pub use crate::api::map::strip_derive::Builder;
-    }
-    pub use crate::api::map::strip_macro::StripMacros;
-    pub mod strip_macro {
-        pub use crate::api::map::strip_macro::Builder;
-    }
-    pub use crate::api::map::replace_types::ReplaceTypes;
-    pub mod replace_types {
-        pub use crate::api::map::replace_types::Builder;
-    }
-}
-
-/// Collectors for sequences of (syn::Item, SourceLocation) produced by `collect`
-pub mod collect {
-    pub use crate::api::collect::destination::Destination;
 }
 
 pub mod utils {

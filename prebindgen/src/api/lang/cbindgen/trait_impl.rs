@@ -1304,10 +1304,7 @@ impl Cbindgen {
             // `&mut MaybeUninit<X>` (X value-opaque): out-param into uninitialized
             // memory. Rust writes via the `MaybeUninit` (no drop of the garbage slot).
             if let Some(inner) = maybe_uninit_inner(&elem) {
-                let Some(op) = self.value_opaque_ty(&inner) else {
-                    return None;
-                };
-                let op = op.clone();
+                let op = self.value_opaque_ty(&inner)?.clone();
                 let name = Self::in_name(ty);
                 let src = self.src_ty(&inner);
                 let short = type_short(&inner);
@@ -1340,10 +1337,8 @@ impl Cbindgen {
             let wire_ty: syn::Type = if self.opaque.contains_key(&TypeKey::from_type(&elem)) {
                 let c_struct = self.c_type_ident(&elem);
                 syn::parse_quote!(#c_struct)
-            } else if let Some(op) = self.value_opaque_ty(&elem) {
-                op.clone()
             } else {
-                return None;
+                self.value_opaque_ty(&elem)?.clone()
             };
             let name = Self::in_name(ty);
             let src = self.src_ty(&elem);
@@ -1376,10 +1371,8 @@ impl Cbindgen {
         let wire_ty: syn::Type = if self.opaque.contains_key(&key1) {
             let c_struct = self.c_type_ident(&elem);
             syn::parse_quote!(#c_struct)
-        } else if let Some(op) = self.value_opaque_ty(&elem) {
-            op.clone()
         } else {
-            return None;
+            self.value_opaque_ty(&elem)?.clone()
         };
         let name = Self::in_name(ty);
         let src = self.src_ty(&elem);
@@ -1495,10 +1488,8 @@ impl Cbindgen {
                 let wire_ty: syn::Type = if self.opaque.contains_key(&key) {
                     let c_struct = self.c_type_ident(&elem);
                     syn::parse_quote!(#c_struct)
-                } else if let Some(op) = self.value_opaque_ty(&elem) {
-                    op.clone()
                 } else {
-                    return None;
+                    self.value_opaque_ty(&elem)?.clone()
                 };
                 let src = self.src_ty(&elem);
                 let name = format_ident!("__cbg_out_ref_{}", sanitize(&TypeKey::from_type(&elem)));

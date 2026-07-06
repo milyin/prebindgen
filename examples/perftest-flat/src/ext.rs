@@ -137,15 +137,15 @@ pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
             message: "label must not be empty".to_string(),
         });
     }
-    let mut s = Storage::default();
-    s.payloads = vec![Payload {
-        id: 0,
-        seq: 0,
-        value: 0.0,
-        flag: false,
-        label: Some(Box::new(label.to_string())),
-    }];
-    Ok(s)
+    Ok(Storage {
+        payloads: vec![Payload {
+            id: 0,
+            seq: 0,
+            value: 0.0,
+            flag: false,
+            label: Some(Box::new(label.to_string())),
+        }],
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,9 +260,9 @@ pub fn storage_contains(s: &Storage, id: i64) -> bool {
 /// factory on `Storage`).
 #[prebindgen]
 pub fn storage_with_payload(payload: Payload) -> Storage {
-    let mut s = Storage::default();
-    s.payloads = vec![payload];
-    s
+    Storage {
+        payloads: vec![payload],
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -351,17 +351,17 @@ pub fn annotated_payload_value(a: &Annotated) -> f64 {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn synthetic_storage(shard: i64, each: i64) -> Storage {
-    let mut s = Storage::default();
-    s.payloads = (0..each.max(0))
-        .map(|k| Payload {
-            id: shard * 1000 + k,
-            seq: k as i32,
-            value: k as f64,
-            flag: false,
-            label: None,
-        })
-        .collect();
-    s
+    Storage {
+        payloads: (0..each.max(0))
+            .map(|k| Payload {
+                id: shard * 1000 + k,
+                seq: k as i32,
+                value: k as f64,
+                flag: false,
+                label: None,
+            })
+            .collect(),
+    }
 }
 
 /// Build `count` independent storages of `each` payloads (a

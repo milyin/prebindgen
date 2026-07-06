@@ -155,7 +155,7 @@ pub(crate) fn build_data_class(
             .map(|e| e.destination.clone());
         let primitive_wire = wire
             .as_ref()
-            .map(|w| crate::api::lang::jnigen::jni::is_jni_primitive(w))
+            .map(crate::api::lang::jnigen::jni::is_jni_primitive)
             .unwrap_or(false);
         let ty = if is_option_type(&field.ty) && !primitive_wire {
             ty.nullable()
@@ -438,7 +438,7 @@ pub(crate) fn render_extern_decl(
         if let Some(sp) = crate::api::lang::jnigen::jni::build_option_scalar_input_plan(
             ext, registry, &eff_ident, arg_ty,
         ) {
-            let pshort = register_fqn(&"Boolean".to_string(), imports);
+            let pshort = register_fqn("Boolean", imports);
             params.push((sp.present_kt.clone(), pshort));
             let vshort = register_fqn(&sp.value_kt_type, imports);
             params.push((sp.value_kt.clone(), vshort));

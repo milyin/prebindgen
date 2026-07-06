@@ -262,10 +262,7 @@ impl Cbindgen {
         let body = match (&err_bits, field0_is_return) {
             // No `Result`: straight-line. `void` when there are no fields.
             (None, _) => {
-                if field0_wire.is_none() {
-                    quote!( #(#decodes)* #call; )
-                } else {
-                    let field0_wire = field0_wire.as_ref().unwrap();
+                if let Some(field0_wire) = field0_wire.as_ref() {
                     let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
                     quote!(
                         #(#decodes)*
@@ -274,6 +271,8 @@ impl Cbindgen {
                         #enc
                         __ret
                     )
+                } else {
+                    quote!( #(#decodes)* #call; )
                 }
             }
             // `Result` with a free niche: value in-band, NULL marks `Err`.

@@ -107,12 +107,12 @@ Add the source FFI library to both dependencies and build-dependencies, and driv
 # example-cbindgen/Cargo.toml
 [dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.4"
+prebindgen = "0.5"
 konst = "0.3"      # the generated file emits a konst feature guard
 
 [build-dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.4"
+prebindgen = "0.5"
 cbindgen = "0.29"
 syn = { version = "2", features = ["full"] }
 ```

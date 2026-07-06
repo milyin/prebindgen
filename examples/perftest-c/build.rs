@@ -98,7 +98,9 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(storage_get)).panic();
     cbindgen = cbindgen.function(pq!(storage_put_by_take)).panic();
     cbindgen = cbindgen.function(pq!(storage_put_by_read)).panic();
-    cbindgen = cbindgen.function(pq!(storage_put_by_read_and_update)).panic();
+    cbindgen = cbindgen
+        .function(pq!(storage_put_by_read_and_update))
+        .panic();
     cbindgen = cbindgen.function(pq!(storage_get_into_init)).panic();
     cbindgen = cbindgen.function(pq!(storage_get_into_uninit)).panic();
     cbindgen = cbindgen.function(pq!(payload_handler_new));

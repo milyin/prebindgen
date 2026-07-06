@@ -3,8 +3,8 @@
 //! `write_rust` collects every resolved input/output converter (each entry
 //! already carries its full `ItemFn`), every per-item `on_<kind>` output,
 //! and every passthrough item; concatenates them; and hands them to
-//! `crate::collect::Destination::write` (which does prettyplease
-//! formatting and resolves the path against `OUT_DIR`).
+//! `Destination::write` (which does prettyplease formatting and
+//! resolves the path against `OUT_DIR`).
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -13,12 +13,12 @@ use std::{
 
 use proc_macro2::TokenStream;
 
-use crate::{
-    api::core::{
+use crate::api::{
+    collect::destination::Destination,
+    core::{
         prebindgen::Prebindgen,
         registry::{Registry, TypeEntry, TypeKey},
     },
-    collect::Destination,
 };
 
 /// Errors surfaced by the file-emission phase.
@@ -157,7 +157,7 @@ fn walk_resolved<M, F: FnMut(&TypeKey, &TypeEntry<M>)>(
 
 fn sorted_items_by_ident<T>(map: &HashMap<syn::Ident, T>) -> Vec<(&syn::Ident, &T)> {
     let mut items: Vec<(&syn::Ident, &T)> = map.iter().collect();
-    items.sort_by(|(left, _), (right, _)| left.to_string().cmp(&right.to_string()));
+    items.sort_by_key(|(left, _)| left.to_string());
     items
 }
 

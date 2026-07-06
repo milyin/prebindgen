@@ -16,8 +16,7 @@
 //! JniGen maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
 //! `String?` automatically.
 
-use prebindgen::core::Registry;
-use prebindgen::lang::JniGen;
+use prebindgen::{core::Registry, lang::JniGen};
 use syn::parse_quote as pq;
 
 fn main() {

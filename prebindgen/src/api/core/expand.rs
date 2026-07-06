@@ -400,6 +400,7 @@ struct CtorSig {
 /// (no identity) is the plain/unconditional form (no selector); anything else is
 /// selector-dispatched — so a "single" constructor and a 1-variant combined emit
 /// identical code.
+#[allow(clippy::too_many_arguments)]
 fn build_plan<M>(
     exp: &Expansions,
     registry: &Registry<M>,

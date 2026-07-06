@@ -14,8 +14,7 @@
 //! Iteration count: `PERFTEST_N=1000000 cargo run --release …` (default 5_000_000);
 //! batch size: `PERFTEST_VEC_N=16` (default 16).
 
-use std::hint::black_box;
-use std::time::Instant;
+use std::{hint::black_box, time::Instant};
 
 use perftest_flat::{
     payload_handler_new, payload_vec_handler_new, storage_callback, storage_callback_vec,
@@ -156,7 +155,14 @@ fn main() {
     println!("BEGIN_PERFTEST lang=rust n={n}");
     run_category(&mut storage, Some("hello, payload"), "str", n, &mut sink);
     run_category(&mut storage, None, "null", n, &mut sink);
-    run_vec_category(&mut storage, Some("hello, payload"), "str", k, vec_iters, &mut sink);
+    run_vec_category(
+        &mut storage,
+        Some("hello, payload"),
+        "str",
+        k,
+        vec_iters,
+        &mut sink,
+    );
     run_vec_category(&mut storage, None, "null", k, vec_iters, &mut sink);
     println!("END_PERFTEST");
 

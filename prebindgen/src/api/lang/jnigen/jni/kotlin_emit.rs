@@ -450,7 +450,7 @@ impl<S: JniGenState> JniGen<S> {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            if item_struct.ident.to_string() != class_name {
+            if item_struct.ident != class_name {
                 aliases.push((item_struct.ident.to_string(), class_name.clone()));
             }
             let (class, imports) = build_data_class(self, &class_name, item_struct, registry);

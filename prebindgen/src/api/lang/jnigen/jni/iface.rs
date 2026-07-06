@@ -905,7 +905,7 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(|t| subject_short(t))
+                .map(subject_short)
                 .collect::<Vec<_>>()
                 .join("")
         )

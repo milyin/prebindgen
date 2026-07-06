@@ -1,3 +1,7 @@
+// This crate is entirely machine-generated code; clippy findings in it belong
+// to the generator, not to this file.
+#![allow(clippy::all)]
+
 // The generated example-flat FFI bindings, committed under generated/ and
 // (re)produced by build.rs from example-flat's #[prebindgen] surface.
 //

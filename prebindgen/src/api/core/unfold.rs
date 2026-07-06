@@ -957,6 +957,7 @@ fn find_deconstructor_by_type<'a>(
 /// `Optional(Decompose)` for `Option<T>`/`Option<&T>`). The records are
 /// recursively flattened ([`flatten`]) — nested accessors contribute
 /// their leaves with the access path prefixed.
+#[allow(clippy::too_many_arguments)]
 fn build_plan<M>(
     acc: &Deconstructors,
     registry: &Registry<M>,
