@@ -37,8 +37,8 @@ fn option_scalar_param_crosses_as_present_value_pair() {
             .source_module(syn::parse_quote!(myflat))
             .package_prefix("io.test.jni"),
     )
-    .package(PackageDecl::new("").class(crate::enum_class!(Mode)))
-    .package(PackageDecl::new("cfg").fun(crate::fun!(z_set_timeout)));
+    .package(crate::package!().class(crate::enum_class!(Mode)))
+    .package(crate::package!("cfg").fun(crate::fun!(z_set_timeout)));
 
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
@@ -140,7 +140,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("thing")
+        crate::package!("thing")
             .class(crate::ptr_class!(ZThing))
             .fun(crate::fun!(thing_list))
             .fun(crate::fun!(thing_list_opt)),
@@ -225,7 +225,7 @@ fn option_scalar_struct_field_flattens() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("")
+        crate::package!()
             .class(crate::data_class!(Opts))
             .fun(crate::fun!(opts_put)),
     );
@@ -348,13 +348,13 @@ fn fromparts_fallback_boxes_option_fields() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("model")
+        crate::package!("model")
             .class(crate::enum_class!(Level))
             .class(crate::data_class!(Inner))
             .class(crate::data_class!(Job)),
     )
     .package(
-        PackageDecl::new("job")
+        crate::package!("job")
             .fun(crate::fun!(job_make))
             .fun(crate::fun!(job_mode)),
     );
@@ -445,14 +445,10 @@ fn output_only_wrapper_resolves_without_input_twin() {
             .package_prefix("io.test.jni"),
     )
     .scalar_type_wrapper(
-        ScalarTypeWrapperDecl::new(
-            syn::parse_quote!(Len),
-            syn::parse_quote!(jni::sys::jlong),
-            "Long",
-        )
-        .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
+        crate::scalar_type_wrapper!(Len, jni::sys::jlong, "Long")
+            .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
     )
-    .package(PackageDecl::new("len").fun(crate::fun!(len_of)));
+    .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_wrapper");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

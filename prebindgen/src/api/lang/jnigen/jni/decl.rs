@@ -158,6 +158,42 @@ macro_rules! function_flatten_output {
     };
 }
 
+/// Build a [`PackageDecl`] directly: `package!("model")` is
+/// `PackageDecl::new("model")`; `package!()` (no args) is the base package
+/// (`PackageDecl::new("")`).
+#[macro_export]
+macro_rules! package {
+    () => {
+        $crate::lang::PackageDecl::new("")
+    };
+    ($name:expr) => {
+        $crate::lang::PackageDecl::new($name)
+    };
+}
+
+/// Build a [`ScalarTypeWrapperDecl`] directly from bare Rust types:
+/// `scalar_type_wrapper!(Millis, jni::sys::jlong, "Long")` is
+/// `ScalarTypeWrapperDecl::new(<Millis as syn::Type>, <jni::sys::jlong as syn::Type>, "Long")`.
+#[macro_export]
+macro_rules! scalar_type_wrapper {
+    ($pattern:ty, $wire:ty, $kotlin_type:expr) => {
+        $crate::lang::ScalarTypeWrapperDecl::new(
+            $crate::__macro_support::parse_type(stringify!($pattern)),
+            $crate::__macro_support::parse_type(stringify!($wire)),
+            $kotlin_type,
+        )
+    };
+}
+
+/// Build a [`GenericTypeWrapperDecl`] directly from a bare wildcard type
+/// pattern: `generic_type_wrapper!(Result<_, ConcreteErr>)`.
+#[macro_export]
+macro_rules! generic_type_wrapper {
+    ($t:ty) => {
+        $crate::lang::GenericTypeWrapperDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+    };
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Class-kind decls
 // ──────────────────────────────────────────────────────────────────────
@@ -712,7 +748,8 @@ pub struct PackageDecl {
 impl PackageDecl {
     /// `name` is dot-separated, relative to the base package set by
     /// [`JniGenConfig::package_prefix`]; the empty string is the base
-    /// package itself.
+    /// package itself. See [`crate::package!`] for the equivalent macro form
+    /// (`package!("model")` / `package!()`).
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
         let name = name.trim_matches('.').trim_matches('/').to_string();
@@ -794,6 +831,7 @@ impl ScalarTypeWrapperDecl {
     /// `wire` is the one wire type shared by both directions; `kotlin_type`
     /// is the Kotlin-visible type this pattern surfaces as (e.g. `"Long"`) —
     /// required, since a scalar mapping has no sensible auto-derived name.
+    /// See [`crate::scalar_type_wrapper!`] for the equivalent macro form.
     pub fn new(pattern: syn::Type, wire: syn::Type, kotlin_type: impl Into<String>) -> Self {
         reject_builtin_wrapper_pattern(&TypeKey::from_type(&pattern));
         Self {
@@ -920,7 +958,8 @@ pub struct GenericTypeWrapperDecl {
 
 impl GenericTypeWrapperDecl {
     /// `pattern` contains 1–3 `_` wildcard placeholders (e.g.
-    /// `Result<_, ConcreteErr>`).
+    /// `Result<_, ConcreteErr>`). See [`crate::generic_type_wrapper!`] for the
+    /// equivalent macro form.
     pub fn new(pattern: syn::Type) -> Self {
         Self {
             pattern,

@@ -28,7 +28,7 @@ fn inline_output_gets_own_builder() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("thing")
+        crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
                     .accessor(crate::fun!(z_thing_name).name("name"))
@@ -121,7 +121,7 @@ fn error_unwrap_universal_records() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("errors")
+        crate::package!("errors")
             .class(
                 crate::ptr_class!(ZDetail)
                     .accessor(crate::fun!(z_detail_code).name("code"))
@@ -259,7 +259,7 @@ fn method_constructor_and_inline_field_self() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("thing")
+        crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
                     .accessor(crate::fun!(z_thing_name).name("name"))

@@ -40,7 +40,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("thing")
+        crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
                     // Canonical output: handle (identity) + its string form — a
@@ -228,7 +228,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("thing")
+        crate::package!("thing")
             // Child handle: canonical output = identity (clone) + its name string.
             .class(
                 crate::ptr_class!(ZChild)
@@ -314,7 +314,7 @@ fn callback_double_option_unwrap_pipeline() {
             .package_prefix("io.test.jni"),
     )
     .package(
-        PackageDecl::new("query")
+        crate::package!("query")
             .class(crate::value_class!(ZId))
             .class(
                 crate::ptr_class!(ZKeyExpr)

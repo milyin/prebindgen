@@ -28,7 +28,7 @@
 //! | `.flatten_output()` (+`.field()`/self)| `Summary` fields + `StorageError` `message` + `field_self` (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
-//! | base-package functions               | `string_new` (declared in a `PackageDecl::new("")`) |
+//! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `.flatten_input_suppress()`          | `summary_total_raw` |
 //! | `.flatten_output_suppress()`         | `storage_summary_handle` / `archive_latest` |
 //! | `.flatten_input_with()` (+`.variant()`/self)| `storage_expect_summary` |
@@ -67,8 +67,8 @@ use prebindgen::{
     core::Registry,
     data_class, enum_class, flatten_input, flatten_output, fun, function_flatten_input,
     function_flatten_output,
-    lang::{JniGen, JniGenConfig, PackageDecl, ScalarTypeWrapperDecl},
-    ptr_class, value_class,
+    lang::{JniGen, JniGenConfig},
+    package, ptr_class, scalar_type_wrapper, value_class,
 };
 use syn::parse_quote as pq;
 
@@ -96,17 +96,17 @@ fn main() {
     // generated class) — global, not tied to any package (see the `decl`
     // module doc for why a scalar wrapper never needs package placement).
     .scalar_type_wrapper(
-        ScalarTypeWrapperDecl::new(pq!(Millis), pq!(jni::sys::jlong), "Long")
+        scalar_type_wrapper!(Millis, jni::sys::jlong, "Long")
             .input(|v| pq!(perftest_flat::Millis(*#v as u64)))
             .output(|v| pq!(#v.0 as jni::sys::jlong)),
     )
     // ── Base-package types ──────────────────────────────────────────────
     // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
     // reassembled via a generated `fromParts`).
-    .package(PackageDecl::new("").class(data_class!(Payload)))
+    .package(package!().class(data_class!(Payload)))
     // ── Subpackage `model`: enum + value class + nested data class ──────
     .package(
-        PackageDecl::new("model")
+        package!("model")
             // `Priority` as a Kotlin `enum class` (jint wire, `fromInt` companion).
             .class(enum_class!(Priority))
             // `Annotated` exercises a NESTED data-class field (`payload`,
@@ -124,7 +124,7 @@ fn main() {
     )
     // ── Subpackage `errors`: the Result error channel ───────────────────
     .package(
-        PackageDecl::new("errors").class(
+        package!("errors").class(
             // `StorageError` is the `E` of a fallible `Result`. Declaring it a
             // ptr_class with a flatten-output makes the generated `onError`
             // handler receive the flattened fields: the `message` string plus —
@@ -137,7 +137,7 @@ fn main() {
     )
     // ── Subpackage `analytics`: flatten input/output on `Summary` ───────
     .package(
-        PackageDecl::new("analytics")
+        package!("analytics")
             // `Summary` is an opaque handle whose default boundary shape is its
             // `(count, total)` leaves: flatten-output decomposes it, flatten-input
             // rebuilds it (via the `of` constructor) or accepts a handle.
@@ -161,7 +161,7 @@ fn main() {
     // Back in the base package so the typed handle classes live alongside
     // `Payload`.
     .package(
-        PackageDecl::new("")
+        package!()
             .class(
                 ptr_class!(Storage)
                     .accessor(fun!(storage_len).name("len"))
@@ -181,7 +181,7 @@ fn main() {
     // model: enum return/param/option + value-class return + Vec<value> +
     //        Option<scalar>.
     .package(
-        PackageDecl::new("model")
+        package!("model")
             .fun(fun!(payload_priority))
             .fun(fun!(priority_weight))
             .fun(fun!(priority_or))
@@ -195,7 +195,7 @@ fn main() {
     )
     // analytics: the flatten matrix (default / suppress / with, in + out).
     .package(
-        PackageDecl::new("analytics")
+        package!("analytics")
             .fun(fun!(storage_summary))
             .fun(fun!(storage_matches_summary))
             .fun(fun!(storage_summary_handle).flatten_output_suppress())
@@ -222,7 +222,7 @@ fn main() {
     // storage: the perf surface (handles, callbacks, Vec, Option) plus the
     // fallible constructor and the Millis wrapper.
     .package(
-        PackageDecl::new("storage")
+        package!("storage")
             .fun(fun!(storage_new))
             .fun(fun!(storage_get))
             .fun(fun!(storage_put_by_take))
@@ -255,7 +255,7 @@ fn main() {
     // base-package classes). (`string_len` stays undeclared like the
     // `storage_get_into_*` group: its `&String` param / `usize` return are
     // C-tier shapes with no JVM mapping.)
-    .package(PackageDecl::new("").fun(fun!(string_new)));
+    .package(package!().fun(fun!(string_new)));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

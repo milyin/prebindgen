@@ -6,11 +6,7 @@ use super::*;
 #[test]
 #[should_panic(expected = "ScalarTypeWrapperDecl on builtin `usize`")]
 fn builtin_wrapper_pattern_panics() {
-    let _ = ScalarTypeWrapperDecl::new(
-        syn::parse_quote!(usize),
-        syn::parse_quote!(jni::sys::jlong),
-        "Long",
-    );
+    let _ = crate::scalar_type_wrapper!(usize, jni::sys::jlong, "Long");
 }
 
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn
@@ -56,7 +52,7 @@ fn per_class_name_and_base_package_fun() {
             .kotlin_ptr_class_name_mangle(|n| format!("JNI{n}")),
     )
     .package(
-        PackageDecl::new("")
+        crate::package!()
             .class(crate::ptr_class!(ZThing).name("Gadget"))
             .fun(crate::fun!(ping))
             .fun(crate::fun!(thing_new)),
