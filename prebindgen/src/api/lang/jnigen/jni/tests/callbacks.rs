@@ -42,16 +42,16 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     .package(
         PackageDecl::new("thing")
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZThing))
+                crate::ptr_class!(ZThing)
                     // Canonical output: handle (identity) + its string form — a
                     // callback arg of ZThing decomposes into these 2 leaves.
-                    .accessor(crate::ident!(z_thing_name), "name")
-                    .flatten_output(FlattenOutput::new().field_self().field("name")),
+                    .accessor(crate::fun!(z_thing_name).name("name"))
+                    .flatten_output(crate::flatten_output!().field_self().field("name")),
             )
             // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
-            .class(PtrClassDecl::new(syn::parse_quote!(ZOther)))
-            .fun(FunctionDecl::new(syn::parse_quote!(z_thing_sub)))
-            .fun(FunctionDecl::new(syn::parse_quote!(z_other_sub))),
+            .class(crate::ptr_class!(ZOther))
+            .fun(crate::fun!(z_thing_sub))
+            .fun(crate::fun!(z_other_sub)),
     );
 
     let dir = unique_test_dir("jnigen_cb_snap");
@@ -231,17 +231,17 @@ fn callback_root_identity_moved_after_nested_borrow() {
         PackageDecl::new("thing")
             // Child handle: canonical output = identity (clone) + its name string.
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZChild))
-                    .accessor(crate::ident!(z_child_name), "name")
-                    .flatten_output(FlattenOutput::new().field_self().field("name")),
+                crate::ptr_class!(ZChild)
+                    .accessor(crate::fun!(z_child_name).name("name"))
+                    .flatten_output(crate::flatten_output!().field_self().field("name")),
             )
             // Parent: a nested child-handle record, then its OWN root identity LAST.
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZParent))
-                    .accessor(crate::ident!(z_parent_child), "child")
-                    .flatten_output(FlattenOutput::new().field("child").field_self()),
+                crate::ptr_class!(ZParent)
+                    .accessor(crate::fun!(z_parent_child).name("child"))
+                    .flatten_output(crate::flatten_output!().field("child").field_self()),
             )
-            .fun(FunctionDecl::new(syn::parse_quote!(z_parent_sub))),
+            .fun(crate::fun!(z_parent_sub)),
     );
 
     let dir = unique_test_dir("jnigen_root_id_order");
@@ -315,43 +315,43 @@ fn callback_double_option_unwrap_pipeline() {
     )
     .package(
         PackageDecl::new("query")
-            .class(ValueClassDecl::new(syn::parse_quote!(ZId)))
+            .class(crate::value_class!(ZId))
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZKeyExpr))
-                    .accessor(crate::ident!(z_keyexpr_as_str), "asStr")
-                    .flatten_output(FlattenOutput::new().field_self().field("asStr")),
+                crate::ptr_class!(ZKeyExpr)
+                    .accessor(crate::fun!(z_keyexpr_as_str).name("asStr"))
+                    .flatten_output(crate::flatten_output!().field_self().field("asStr")),
             )
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZTs))
-                    .accessor(crate::ident!(z_ts_ntp64), "ntp64")
-                    .flatten_output(FlattenOutput::new().field("ntp64")),
+                crate::ptr_class!(ZTs)
+                    .accessor(crate::fun!(z_ts_ntp64).name("ntp64"))
+                    .flatten_output(crate::flatten_output!().field("ntp64")),
             )
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZSample))
-                    .accessor(crate::ident!(z_sample_key_expr), "keyExpr")
-                    .accessor(crate::ident!(z_sample_timestamp), "timestamp")
-                    .flatten_output(FlattenOutput::new().field("keyExpr").field("timestamp")),
+                crate::ptr_class!(ZSample)
+                    .accessor(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                    .accessor(crate::fun!(z_sample_timestamp).name("timestamp"))
+                    .flatten_output(crate::flatten_output!().field("keyExpr").field("timestamp")),
             )
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZErr))
-                    .accessor(crate::ident!(z_err_payload), "payload")
-                    .flatten_output(FlattenOutput::new().field("payload")),
+                crate::ptr_class!(ZErr)
+                    .accessor(crate::fun!(z_err_payload).name("payload"))
+                    .flatten_output(crate::flatten_output!().field("payload")),
             )
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZReply))
-                    .accessor(crate::ident!(z_reply_zid), "zid")
-                    .accessor(crate::ident!(z_reply_is_ok), "isOk")
-                    .accessor(crate::ident!(z_reply_sample), "sample")
-                    .accessor(crate::ident!(z_reply_err), "err")
+                crate::ptr_class!(ZReply)
+                    .accessor(crate::fun!(z_reply_zid).name("zid"))
+                    .accessor(crate::fun!(z_reply_is_ok).name("isOk"))
+                    .accessor(crate::fun!(z_reply_sample).name("sample"))
+                    .accessor(crate::fun!(z_reply_err).name("err"))
                     .flatten_output(
-                        FlattenOutput::new()
+                        crate::flatten_output!()
                             .field("zid")
                             .field("isOk")
                             .field("sample")
                             .field("err"),
                     ),
             )
-            .fun(FunctionDecl::new(syn::parse_quote!(z_get))),
+            .fun(crate::fun!(z_get)),
     );
 
     let dir = unique_test_dir("jnigen_double_opt");

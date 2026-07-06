@@ -65,12 +65,10 @@
 
 use prebindgen::{
     core::Registry,
-    ident,
-    lang::{
-        DataClassDecl, EnumClassDecl, FlattenInput, FlattenOutput, FunctionDecl,
-        FunctionFlattenInput, FunctionFlattenOutput, JniGen, JniGenConfig, PackageDecl,
-        PtrClassDecl, ScalarTypeWrapperDecl, ValueClassDecl,
-    },
+    data_class, enum_class, flatten_input, flatten_output, fun, function_flatten_input,
+    function_flatten_output,
+    lang::{JniGen, JniGenConfig, PackageDecl, ScalarTypeWrapperDecl},
+    ptr_class, value_class,
 };
 use syn::parse_quote as pq;
 
@@ -105,23 +103,23 @@ fn main() {
     // ── Base-package types ──────────────────────────────────────────────
     // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
     // reassembled via a generated `fromParts`).
-    .package(PackageDecl::new("").class(DataClassDecl::new(pq!(Payload))))
+    .package(PackageDecl::new("").class(data_class!(Payload)))
     // ── Subpackage `model`: enum + value class + nested data class ──────
     .package(
         PackageDecl::new("model")
             // `Priority` as a Kotlin `enum class` (jint wire, `fromInt` companion).
-            .class(EnumClassDecl::new(pq!(Priority)))
+            .class(enum_class!(Priority))
             // `Annotated` exercises a NESTED data-class field (`payload`,
             // recursive fromParts / recursive leaf decode) plus Option<prim> and
             // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
-            .class(DataClassDecl::new(pq!(Annotated)))
+            .class(data_class!(Annotated))
             // `Stamp` as a `@JvmInline value class` over its raw bytes; its readers
             // become instance methods (`secs()` / `nanos()`), and `Vec<Stamp>`
             // surfaces as `List<ByteArray>`.
             .class(
-                ValueClassDecl::new(pq!(Stamp))
-                    .accessor(ident!(stamp_secs), "secs")
-                    .accessor(ident!(stamp_nanos), "nanos"),
+                value_class!(Stamp)
+                    .accessor(fun!(stamp_secs).name("secs"))
+                    .accessor(fun!(stamp_nanos).name("nanos")),
             ),
     )
     // ── Subpackage `errors`: the Result error channel ───────────────────
@@ -132,9 +130,9 @@ fn main() {
             // handler receive the flattened fields: the `message` string plus —
             // via the TYPE-LEVEL `.field_self()` — the error handle itself (an
             // owned `StorageError` the handler must `close()`).
-            PtrClassDecl::new(pq!(StorageError))
-                .accessor(ident!(storage_error_message), "message")
-                .flatten_output(FlattenOutput::new().field("message").field_self()),
+            ptr_class!(StorageError)
+                .accessor(fun!(storage_error_message).name("message"))
+                .flatten_output(flatten_output!().field("message").field_self()),
         ),
     )
     // ── Subpackage `analytics`: flatten input/output on `Summary` ───────
@@ -144,20 +142,20 @@ fn main() {
             // `(count, total)` leaves: flatten-output decomposes it, flatten-input
             // rebuilds it (via the `of` constructor) or accepts a handle.
             .class(
-                PtrClassDecl::new(pq!(Summary))
-                    .constructor(ident!(summary_new), "of")
-                    .accessor(ident!(summary_count), "count")
-                    .accessor(ident!(summary_total), "total")
-                    .method(ident!(summary_scaled), "scaled")
-                    .flatten_input(FlattenInput::new().variant("of").variant_self())
-                    .flatten_output(FlattenOutput::new().field("count").field("total")),
+                ptr_class!(Summary)
+                    .constructor(fun!(summary_new).name("of"))
+                    .accessor(fun!(summary_count).name("count"))
+                    .accessor(fun!(summary_total).name("total"))
+                    .method(fun!(summary_scaled).name("scaled"))
+                    .flatten_input(flatten_input!().variant("of").variant_self())
+                    .flatten_output(flatten_output!().field("count").field("total")),
             )
             // `Archive` holds the latest `Summary` and returns it BORROWED
             // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
             // handle (the zenoh-flat borrowed-accessor shape). Its Kotlin class is
             // RENAMED via the per-declaration `.name()` override (the type-level
             // dual of the per-fn `.name`; literal, bypasses the mangle closures).
-            .class(PtrClassDecl::new(pq!(Archive)).name("SummaryVault")),
+            .class(ptr_class!(Archive).name("SummaryVault")),
     )
     // ── Base-package handle type: `Storage` + scalar members ────────────
     // Back in the base package so the typed handle classes live alongside
@@ -165,99 +163,99 @@ fn main() {
     .package(
         PackageDecl::new("")
             .class(
-                PtrClassDecl::new(pq!(Storage))
-                    .accessor(ident!(storage_len), "len")
-                    .method(ident!(storage_contains), "contains")
-                    .constructor(ident!(storage_with_payload), "withPayload"),
+                ptr_class!(Storage)
+                    .accessor(fun!(storage_len).name("len"))
+                    .method(fun!(storage_contains).name("contains"))
+                    .constructor(fun!(storage_with_payload).name("withPayload")),
             )
             // The callback-handler handles (single payload / whole batch / owned
             // storage handle).
-            .class(PtrClassDecl::new(pq!(PayloadHandler)))
+            .class(ptr_class!(PayloadHandler))
             // `StorageHandler`'s callback receives an OWNED opaque handle
             // (`Fn(Storage)`): the raw pointer crosses and the generated Kotlin
             // proxy wraps it into a typed `Storage` and closes it after `run`.
-            .class(PtrClassDecl::new(pq!(StorageHandler)))
-            .class(PtrClassDecl::new(pq!(PayloadVecHandler))),
+            .class(ptr_class!(StorageHandler))
+            .class(ptr_class!(PayloadVecHandler)),
     )
     // ── Free functions, grouped by subpackage ───────────────────────────
     // model: enum return/param/option + value-class return + Vec<value> +
     //        Option<scalar>.
     .package(
         PackageDecl::new("model")
-            .fun(ident!(payload_priority))
-            .fun(ident!(priority_weight))
-            .fun(ident!(priority_or))
-            .fun(ident!(stamp_new))
-            .fun(ident!(stamp_series))
-            .fun(ident!(payload_label_len))
-            .fun(ident!(annotated_new))
-            .fun(ident!(annotated_ttl))
-            .fun(ident!(annotated_priority))
-            .fun(ident!(annotated_payload_value)),
+            .fun(fun!(payload_priority))
+            .fun(fun!(priority_weight))
+            .fun(fun!(priority_or))
+            .fun(fun!(stamp_new))
+            .fun(fun!(stamp_series))
+            .fun(fun!(payload_label_len))
+            .fun(fun!(annotated_new))
+            .fun(fun!(annotated_ttl))
+            .fun(fun!(annotated_priority))
+            .fun(fun!(annotated_payload_value)),
     )
     // analytics: the flatten matrix (default / suppress / with, in + out).
     .package(
         PackageDecl::new("analytics")
-            .fun(ident!(storage_summary))
-            .fun(ident!(storage_matches_summary))
-            .fun(FunctionDecl::new(pq!(storage_summary_handle)).flatten_output_suppress())
-            .fun(FunctionDecl::new(pq!(summary_total_raw)).flatten_input_suppress(pq!(s)))
-            .fun(FunctionDecl::new(pq!(storage_summary_full)).flatten_output_with(
-                FunctionFlattenOutput::new()
-                    .field(ident!(summary_count), "count")
-                    .field(ident!(summary_total), "total")
+            .fun(fun!(storage_summary))
+            .fun(fun!(storage_matches_summary))
+            .fun(fun!(storage_summary_handle).flatten_output_suppress())
+            .fun(fun!(summary_total_raw).flatten_input_suppress(pq!(s)))
+            .fun(fun!(storage_summary_full).flatten_output_with(
+                function_flatten_output!()
+                    .field(fun!(summary_count).name("count"))
+                    .field(fun!(summary_total).name("total"))
                     .field_self(),
             ))
-            .fun(FunctionDecl::new(pq!(storage_expect_summary)).flatten_input_with(
+            .fun(fun!(storage_expect_summary).flatten_input_with(
                 pq!(expected),
-                FunctionFlattenInput::new()
-                    .variant(ident!(summary_new))
+                function_flatten_input!()
+                    .variant(fun!(summary_new))
                     .variant_self(),
             ))
             // The borrowed-accessor trio. `archive_latest` suppresses the default
             // Summary output flatten so the BORROWED handle path (clone into a
             // fresh owned handle, null when absent) is what crosses.
-            .fun(ident!(archive_new))
-            .fun(ident!(archive_store))
-            .fun(FunctionDecl::new(pq!(archive_latest)).flatten_output_suppress()),
+            .fun(fun!(archive_new))
+            .fun(fun!(archive_store))
+            .fun(fun!(archive_latest).flatten_output_suppress()),
     )
     // storage: the perf surface (handles, callbacks, Vec, Option) plus the
     // fallible constructor and the Millis wrapper.
     .package(
         PackageDecl::new("storage")
-            .fun(ident!(storage_new))
-            .fun(ident!(storage_get))
-            .fun(ident!(storage_put_by_take))
-            .fun(ident!(storage_put_by_read))
-            .fun(ident!(storage_put_slice))
-            .fun(ident!(storage_get_vec))
-            .fun(ident!(payload_handler_new))
-            .fun(ident!(storage_callback))
-            .fun(ident!(payload_vec_handler_new))
-            .fun(ident!(storage_callback_vec))
-            .fun(ident!(storage_try_with_label))
+            .fun(fun!(storage_new))
+            .fun(fun!(storage_get))
+            .fun(fun!(storage_put_by_take))
+            .fun(fun!(storage_put_by_read))
+            .fun(fun!(storage_put_slice))
+            .fun(fun!(storage_get_vec))
+            .fun(fun!(payload_handler_new))
+            .fun(fun!(storage_callback))
+            .fun(fun!(payload_vec_handler_new))
+            .fun(fun!(storage_callback_vec))
+            .fun(fun!(storage_try_with_label))
             // Vec<opaque-handle> returns (plain + under the Option niche).
-            .fun(ident!(storage_shards))
-            .fun(ident!(storage_shards_opt))
+            .fun(fun!(storage_shards))
+            .fun(fun!(storage_shards_opt))
             // Owned-handle-in-callback pair.
-            .fun(ident!(storage_handler_new))
-            .fun(ident!(storage_emit))
+            .fun(fun!(storage_handler_new))
+            .fun(fun!(storage_emit))
             // A 3-opaque-handle call (sorted N-ary handle locking).
-            .fun(ident!(storage_total_len))
+            .fun(fun!(storage_total_len))
             // Vec<String> return (single-leaf string fold).
-            .fun(ident!(storage_labels))
+            .fun(fun!(storage_labels))
             // Option<data-class> input.
-            .fun(ident!(storage_put_opt))
+            .fun(fun!(storage_put_opt))
             // `.name(...)`: per-function Kotlin rename override. The default name
             // would be `millisAdd`; force it to `addMillis` to exercise the
             // override path (the Rust symbol/extern is unaffected).
-            .fun(FunctionDecl::new(pq!(millis_add)).name("addMillis")),
+            .fun(fun!(millis_add).name("addMillis")),
     )
     // Plain String return, declared in the BASE package (mirroring the
     // base-package classes). (`string_len` stays undeclared like the
     // `storage_get_into_*` group: its `&String` param / `usize` return are
     // C-tier shapes with no JVM mapping.)
-    .package(PackageDecl::new("").fun(ident!(string_new)));
+    .package(PackageDecl::new("").fun(fun!(string_new)));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 

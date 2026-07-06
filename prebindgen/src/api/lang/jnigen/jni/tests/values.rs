@@ -37,8 +37,8 @@ fn option_scalar_param_crosses_as_present_value_pair() {
             .source_module(syn::parse_quote!(myflat))
             .package_prefix("io.test.jni"),
     )
-    .package(PackageDecl::new("").class(EnumClassDecl::new(syn::parse_quote!(Mode))))
-    .package(PackageDecl::new("cfg").fun(FunctionDecl::new(syn::parse_quote!(z_set_timeout))));
+    .package(PackageDecl::new("").class(crate::enum_class!(Mode)))
+    .package(PackageDecl::new("cfg").fun(crate::fun!(z_set_timeout)));
 
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
@@ -141,9 +141,9 @@ fn vec_of_handle_output_folds_kotlin_side() {
     )
     .package(
         PackageDecl::new("thing")
-            .class(PtrClassDecl::new(syn::parse_quote!(ZThing)))
-            .fun(FunctionDecl::new(syn::parse_quote!(thing_list)))
-            .fun(FunctionDecl::new(syn::parse_quote!(thing_list_opt))),
+            .class(crate::ptr_class!(ZThing))
+            .fun(crate::fun!(thing_list))
+            .fun(crate::fun!(thing_list_opt)),
     );
 
     let dir = unique_test_dir("jnigen_vec_handle_out");
@@ -226,8 +226,8 @@ fn option_scalar_struct_field_flattens() {
     )
     .package(
         PackageDecl::new("")
-            .class(DataClassDecl::new(syn::parse_quote!(Opts)))
-            .fun(FunctionDecl::new(syn::parse_quote!(opts_put))),
+            .class(crate::data_class!(Opts))
+            .fun(crate::fun!(opts_put)),
     );
 
     let dir = unique_test_dir("jnigen_optfield");
@@ -349,14 +349,14 @@ fn fromparts_fallback_boxes_option_fields() {
     )
     .package(
         PackageDecl::new("model")
-            .class(EnumClassDecl::new(syn::parse_quote!(Level)))
-            .class(DataClassDecl::new(syn::parse_quote!(Inner)))
-            .class(DataClassDecl::new(syn::parse_quote!(Job))),
+            .class(crate::enum_class!(Level))
+            .class(crate::data_class!(Inner))
+            .class(crate::data_class!(Job)),
     )
     .package(
         PackageDecl::new("job")
-            .fun(FunctionDecl::new(syn::parse_quote!(job_make)))
-            .fun(FunctionDecl::new(syn::parse_quote!(job_mode))),
+            .fun(crate::fun!(job_make))
+            .fun(crate::fun!(job_mode)),
     );
 
     let dir = unique_test_dir("jnigen_fromparts_optbox");
@@ -452,7 +452,7 @@ fn output_only_wrapper_resolves_without_input_twin() {
         )
         .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
     )
-    .package(PackageDecl::new("len").fun(FunctionDecl::new(syn::parse_quote!(len_of))));
+    .package(PackageDecl::new("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_wrapper");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

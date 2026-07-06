@@ -238,15 +238,14 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 /// independently of `JniGen` itself; there is no fluent typestate cursor.
 ///
 /// ```
-/// use prebindgen::lang::{FlattenOutput, JniGen, JniGenConfig, PackageDecl, PtrClassDecl};
-/// use syn::parse_quote as pq;
+/// use prebindgen::lang::{JniGen, JniGenConfig, PackageDecl};
 ///
 /// let jni = JniGen::new(JniGenConfig::new().package_prefix("io.test.jni"))
 ///     .package(
 ///         PackageDecl::new("session")
-///             .class(PtrClassDecl::new(pq!(ZKeyExpr))
-///                 .accessor(prebindgen::ident!(z_keyexpr_as_str), "getStr")
-///                 .flatten_output(FlattenOutput::new().field_self())),
+///             .class(prebindgen::ptr_class!(ZKeyExpr)
+///                 .accessor(prebindgen::fun!(z_keyexpr_as_str).name("getStr"))
+///                 .flatten_output(prebindgen::flatten_output!().field_self())),
 ///     );
 /// ```
 #[derive(Clone)]

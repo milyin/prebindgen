@@ -52,14 +52,14 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     )
     .package(
         PackageDecl::new("")
-            .class(DataClassDecl::new(syn::parse_quote!(Error)))
-            .class(PtrClassDecl::new(syn::parse_quote!(ZThing)))
-            .class(EnumClassDecl::new(syn::parse_quote!(Color))),
+            .class(crate::data_class!(Error))
+            .class(crate::ptr_class!(ZThing))
+            .class(crate::enum_class!(Color)),
     )
     .package(
         PackageDecl::new("thing")
-            .fun(FunctionDecl::new(syn::parse_quote!(z_thing_new)))
-            .fun(FunctionDecl::new(syn::parse_quote!(z_thing_name))),
+            .fun(crate::fun!(z_thing_new))
+            .fun(crate::fun!(z_thing_name)),
     );
 
     let dir = unique_test_dir("jnigen_snap");
@@ -233,9 +233,9 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     )
     .package(
         PackageDecl::new("payload")
-            .class(DataClassDecl::new(syn::parse_quote!(Payload)))
-            .fun(FunctionDecl::new(syn::parse_quote!(payload_get)))
-            .fun(FunctionDecl::new(syn::parse_quote!(payload_put))),
+            .class(crate::data_class!(Payload))
+            .fun(crate::fun!(payload_get))
+            .fun(crate::fun!(payload_put)),
     );
 
     let dir = unique_test_dir("jnigen_boxstr");
@@ -316,9 +316,9 @@ fn slice_input_builds_vec_handle() {
     )
     .package(
         PackageDecl::new("foo")
-            .class(DataClassDecl::new(syn::parse_quote!(Foo)))
-            .fun(FunctionDecl::new(syn::parse_quote!(put_slice)))
-            .fun(FunctionDecl::new(syn::parse_quote!(put_vec))),
+            .class(crate::data_class!(Foo))
+            .fun(crate::fun!(put_slice))
+            .fun(crate::fun!(put_vec)),
     );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
@@ -414,7 +414,7 @@ fn jni_native_init_emits_init_block() {
             .package_prefix("io.test.jni")
             .jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()"),
     )
-    .package(PackageDecl::new("thing").fun(FunctionDecl::new(syn::parse_quote!(z_ping))));
+    .package(PackageDecl::new("thing").fun(crate::fun!(z_ping)));
 
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);

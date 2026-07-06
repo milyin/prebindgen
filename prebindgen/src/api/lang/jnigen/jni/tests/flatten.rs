@@ -30,21 +30,21 @@ fn inline_output_gets_own_builder() {
     .package(
         PackageDecl::new("thing")
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZThing))
-                    .accessor(crate::ident!(z_thing_name), "name")
-                    .accessor(crate::ident!(z_thing_size), "size")
+                crate::ptr_class!(ZThing)
+                    .accessor(crate::fun!(z_thing_name).name("name"))
+                    .accessor(crate::fun!(z_thing_size).name("size"))
                     // Default output: name + size (2 leaves ⇒ builder callback).
-                    .flatten_output(FlattenOutput::new().field("name").field("size")),
+                    .flatten_output(crate::flatten_output!().field("name").field("size")),
             )
-            .fun(FunctionDecl::new(syn::parse_quote!(z_make_a)))
+            .fun(crate::fun!(z_make_a))
             // Per-fn inline fields: name + size + name again (different shape). The
             // third field reuses the `z_thing_name` accessor but must carry a
             // distinct (literal) leaf name — duplicate names are a hard error.
-            .fun(FunctionDecl::new(syn::parse_quote!(z_make_b)).flatten_output_with(
-                FunctionFlattenOutput::new()
-                    .field(crate::ident!(z_thing_name), "name")
-                    .field(crate::ident!(z_thing_size), "size")
-                    .field(crate::ident!(z_thing_name), "name2"),
+            .fun(crate::fun!(z_make_b).flatten_output_with(
+                crate::function_flatten_output!()
+                    .field(crate::fun!(z_thing_name).name("name"))
+                    .field(crate::fun!(z_thing_size).name("size"))
+                    .field(crate::fun!(z_thing_name).name("name2")),
             )),
     );
 
@@ -123,24 +123,24 @@ fn error_unwrap_universal_records() {
     .package(
         PackageDecl::new("errors")
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZDetail))
-                    .accessor(crate::ident!(z_detail_code), "code")
-                    .flatten_output(FlattenOutput::new().field("code")),
+                crate::ptr_class!(ZDetail)
+                    .accessor(crate::fun!(z_detail_code).name("code"))
+                    .flatten_output(crate::flatten_output!().field("code")),
             )
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZErr))
-                    .accessor(crate::ident!(z_err_message), "message")
-                    .accessor(crate::ident!(z_err_detail), "detail")
+                crate::ptr_class!(ZErr)
+                    .accessor(crate::fun!(z_err_message).name("message"))
+                    .accessor(crate::fun!(z_err_detail).name("detail"))
                     // Canonical error decomposition: the owned error handle itself,
                     // its message, and the Option-nested detail spliced to its code leaf.
                     .flatten_output(
-                        FlattenOutput::new()
+                        crate::flatten_output!()
                             .field_self()
                             .field("message")
                             .field("detail"),
                     ),
             )
-            .fun(FunctionDecl::new(syn::parse_quote!(z_fallible))),
+            .fun(crate::fun!(z_fallible)),
     );
 
     let dir = unique_test_dir("jnigen_err_universal");
@@ -223,10 +223,10 @@ fn error_unwrap_universal_records() {
 #[test]
 #[should_panic(expected = "no `.accessor")]
 fn flatten_output_field_unknown_accessor_panics() {
-    let _ = PtrClassDecl::new(syn::parse_quote!(ZThing))
-        .accessor(crate::ident!(z_thing_name), "name")
+    let _ = crate::ptr_class!(ZThing)
+        .accessor(crate::fun!(z_thing_name).name("name"))
         // References a name that was never declared via `.accessor`.
-        .flatten_output(FlattenOutput::new().field("size"));
+        .flatten_output(crate::flatten_output!().field("size"));
 }
 
 /// `.method(f, name)` binds the `&Class` receiver to `this` (dropped from the
@@ -261,18 +261,18 @@ fn method_constructor_and_inline_field_self() {
     .package(
         PackageDecl::new("thing")
             .class(
-                PtrClassDecl::new(syn::parse_quote!(ZThing))
-                    .accessor(crate::ident!(z_thing_name), "name")
+                crate::ptr_class!(ZThing)
+                    .accessor(crate::fun!(z_thing_name).name("name"))
                     // A method: `&ZThing` receiver + a `name: String` param.
-                    .method(crate::ident!(z_thing_rename), "rename")
+                    .method(crate::fun!(z_thing_rename).name("rename"))
                     // A constructor: factory returning ZThing.
-                    .constructor(crate::ident!(z_thing_make), "make"),
+                    .constructor(crate::fun!(z_thing_make).name("make")),
             )
             // A free fn whose per-fn inline output decomposes to (handle, name).
-            .fun(FunctionDecl::new(syn::parse_quote!(z_get)).flatten_output_with(
-                FunctionFlattenOutput::new()
+            .fun(crate::fun!(z_get).flatten_output_with(
+                crate::function_flatten_output!()
                     .field_self()
-                    .field(crate::ident!(z_thing_name), "name"),
+                    .field(crate::fun!(z_thing_name).name("name")),
             )),
     );
 

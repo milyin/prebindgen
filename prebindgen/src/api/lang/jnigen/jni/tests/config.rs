@@ -57,9 +57,9 @@ fn per_class_name_and_base_package_fun() {
     )
     .package(
         PackageDecl::new("")
-            .class(PtrClassDecl::new(syn::parse_quote!(ZThing)).name("Gadget"))
-            .fun(FunctionDecl::new(syn::parse_quote!(ping)))
-            .fun(FunctionDecl::new(syn::parse_quote!(thing_new))),
+            .class(crate::ptr_class!(ZThing).name("Gadget"))
+            .fun(crate::fun!(ping))
+            .fun(crate::fun!(thing_new)),
     );
 
     let dir = unique_test_dir("jnigen_class_name_base_fun");
