@@ -315,7 +315,7 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// upstream type a bare `<ident>` resolves to in their include-site
 /// `use` statements. Pairs with output body below.
 pub(crate) fn enum_input_body(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     e: &syn::ItemEnum,
 ) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
@@ -355,7 +355,7 @@ pub(crate) fn enum_input_body(
 /// at all — `v` is already typed via the wrapper signature, so the
 /// `as` cast picks up the right type by inference.
 pub(crate) fn enum_output_body(
-    _ext: &JniGen<impl JniGenState>,
+    _ext: &JniGen,
     e: &syn::ItemEnum,
 ) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);

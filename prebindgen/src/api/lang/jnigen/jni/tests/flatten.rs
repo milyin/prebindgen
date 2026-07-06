@@ -22,26 +22,31 @@ fn inline_output_gets_own_builder() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        .ptr_class(syn::parse_quote!(ZThing))
-        .accessor(syn::parse_quote!(z_thing_name), "name")
-        .accessor(syn::parse_quote!(z_thing_size), "size")
-        // Default output: name + size (2 leaves ⇒ builder callback).
-        .flatten_output()
-        .field("name")
-        .field("size")
-        .fun(syn::parse_quote!(z_make_a))
-        // Per-fn inline fields: name + size + name again (different shape). The
-        // third field reuses the `z_thing_name` accessor but must carry a
-        // distinct (literal) leaf name — duplicate names are a hard error.
-        .fun(syn::parse_quote!(z_make_b))
-        .flatten_output_with()
-        .field(syn::parse_quote!(z_thing_name), "name")
-        .field(syn::parse_quote!(z_thing_size), "size")
-        .field(syn::parse_quote!(z_thing_name), "name2");
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("thing")
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZThing))
+                    .accessor(syn::parse_quote!(z_thing_name), "name")
+                    .accessor(syn::parse_quote!(z_thing_size), "size")
+                    // Default output: name + size (2 leaves ⇒ builder callback).
+                    .flatten_output(FlattenOutput::new().field("name").field("size")),
+            )
+            .fun(FunctionDecl::new(syn::parse_quote!(z_make_a)))
+            // Per-fn inline fields: name + size + name again (different shape). The
+            // third field reuses the `z_thing_name` accessor but must carry a
+            // distinct (literal) leaf name — duplicate names are a hard error.
+            .fun(FunctionDecl::new(syn::parse_quote!(z_make_b)).flatten_output_with(
+                FunctionFlattenOutput::new()
+                    .field(syn::parse_quote!(z_thing_name), "name")
+                    .field(syn::parse_quote!(z_thing_size), "size")
+                    .field(syn::parse_quote!(z_thing_name), "name2"),
+            )),
+    );
 
     let dir = unique_test_dir("jnigen_inline_out");
     let _ = std::fs::remove_dir_all(&dir);
@@ -110,24 +115,33 @@ fn error_unwrap_universal_records() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("errors")
-        .ptr_class(syn::parse_quote!(ZDetail))
-        .accessor(syn::parse_quote!(z_detail_code), "code")
-        .flatten_output()
-        .field("code")
-        .ptr_class(syn::parse_quote!(ZErr))
-        .accessor(syn::parse_quote!(z_err_message), "message")
-        .accessor(syn::parse_quote!(z_err_detail), "detail")
-        // Canonical error decomposition: the owned error handle itself, its
-        // message, and the Option-nested detail spliced to its code leaf.
-        .flatten_output()
-        .field_self()
-        .field("message")
-        .field("detail")
-        .fun(syn::parse_quote!(z_fallible));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("errors")
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZDetail))
+                    .accessor(syn::parse_quote!(z_detail_code), "code")
+                    .flatten_output(FlattenOutput::new().field("code")),
+            )
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZErr))
+                    .accessor(syn::parse_quote!(z_err_message), "message")
+                    .accessor(syn::parse_quote!(z_err_detail), "detail")
+                    // Canonical error decomposition: the owned error handle itself,
+                    // its message, and the Option-nested detail spliced to its code leaf.
+                    .flatten_output(
+                        FlattenOutput::new()
+                            .field_self()
+                            .field("message")
+                            .field("detail"),
+                    ),
+            )
+            .fun(FunctionDecl::new(syn::parse_quote!(z_fallible))),
+    );
 
     let dir = unique_test_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);
@@ -209,15 +223,10 @@ fn error_unwrap_universal_records() {
 #[test]
 #[should_panic(expected = "no `.accessor")]
 fn flatten_output_field_unknown_accessor_panics() {
-    let _ = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        .ptr_class(syn::parse_quote!(ZThing))
+    let _ = PtrClassDecl::new(syn::parse_quote!(ZThing))
         .accessor(syn::parse_quote!(z_thing_name), "name")
         // References a name that was never declared via `.accessor`.
-        .flatten_output()
-        .field("size");
+        .flatten_output(FlattenOutput::new().field("size"));
 }
 
 /// `.method(f, name)` binds the `&Class` receiver to `this` (dropped from the
@@ -244,21 +253,28 @@ fn method_constructor_and_inline_field_self() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        .ptr_class(syn::parse_quote!(ZThing))
-        .accessor(syn::parse_quote!(z_thing_name), "name")
-        // A method: `&ZThing` receiver + a `name: String` param.
-        .method(syn::parse_quote!(z_thing_rename), "rename")
-        // A constructor: factory returning ZThing.
-        .constructor(syn::parse_quote!(z_thing_make), "make")
-        // A free fn whose per-fn inline output decomposes to (handle, name).
-        .fun(syn::parse_quote!(z_get))
-        .flatten_output_with()
-        .field_self()
-        .field(syn::parse_quote!(z_thing_name), "name");
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("thing")
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZThing))
+                    .accessor(syn::parse_quote!(z_thing_name), "name")
+                    // A method: `&ZThing` receiver + a `name: String` param.
+                    .method(syn::parse_quote!(z_thing_rename), "rename")
+                    // A constructor: factory returning ZThing.
+                    .constructor(syn::parse_quote!(z_thing_make), "make"),
+            )
+            // A free fn whose per-fn inline output decomposes to (handle, name).
+            .fun(FunctionDecl::new(syn::parse_quote!(z_get)).flatten_output_with(
+                FunctionFlattenOutput::new()
+                    .field_self()
+                    .field(syn::parse_quote!(z_thing_name), "name"),
+            )),
+    );
 
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);

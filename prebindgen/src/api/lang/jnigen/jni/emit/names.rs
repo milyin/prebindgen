@@ -61,7 +61,7 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     }
 }
 
-pub(crate) fn mangle_jni_name(ext: &JniGen<impl JniGenState>, ident: &syn::Ident) -> syn::Ident {
+pub(crate) fn mangle_jni_name(ext: &JniGen, ident: &syn::Ident) -> syn::Ident {
     let camel = snake_to_camel(&ident.to_string());
     let mangled = ext.mangle_fun(&camel);
     let mut name = ext.jni_class_path.clone();
@@ -165,7 +165,7 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
 /// value class but the projection still resolves the leaf — so the wrapper
 /// knows which inline field to unwrap (`<name>.bytes`).
 pub(crate) fn value_projection_field_for_leaf(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     leaf_key: &str,
 ) -> Option<String> {
     let key = TypeKey::parse(leaf_key);

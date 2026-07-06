@@ -91,7 +91,7 @@ pub(crate) enum PlanFieldKind {
 /// name) — consistently for BOTH sides, where the former parallel walks
 /// could silently diverge on such edge cases.
 pub(crate) fn build_struct_plan(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     depth: usize,

@@ -56,7 +56,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
 /// Rust struct. Returns the class plus the FQN imports its (pre-shortened)
 /// field/factory type strings reference.
 pub(crate) fn build_data_class(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     class_name: &str,
     item_struct: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
@@ -242,7 +242,7 @@ pub(crate) fn build_data_class(
 /// to the matching `Java_<pkg>_<class>_<mangle_fun("freePtr")>`
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     class_name: &str,
     rust_doc_name: &str,
@@ -406,7 +406,7 @@ pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) ->
 }
 
 pub(crate) fn render_extern_decl(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -693,7 +693,7 @@ fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
 /// or `this.bytes` for a `value_class` blob). The JNINative extern/call is
 /// unchanged (keyed on the Rust ident), so only the Kotlin wrapper relocates.
 pub(crate) fn render_wrapper_fn(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -804,7 +804,7 @@ struct ErrorSink {
 /// instance-method receiver (the first param whose peeled type matches
 /// `receiver_key`), which is bound to `this` and dropped from the signature.
 fn classify_params(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1039,7 +1039,7 @@ fn classify_params(
 /// (`ZZenohId(raw)`) before the user callback. Leaves with no value_blob ⇒
 /// the callback is passed directly (M1–M4 unchanged).
 fn classify_output(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1201,7 +1201,7 @@ fn classify_output(
 /// and the trailing `__cap` follow; the result is wrapped per the return
 /// classification (projection / enum / erased-`Any` cast).
 fn build_native_call(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     jni_call: &str,
     params: &[Param],
     out: &OutputPlan,
@@ -1371,7 +1371,7 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 /// call — calls `onError.run(je, ze…)` and returns its `R` if a failure
 /// was recorded (no throw on the Rust upcall).
 fn error_sink_parts(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1489,7 +1489,7 @@ fn render_value_stmt(bind: &str, body_expr: &str, opaques: &[Opaque]) -> kt::Cod
 /// statements are needed) so the caller can bind it to `__ret`, rethrow a
 /// captured sink error, then return.
 fn render_core_stmt(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     opaques: &[Opaque],
     body_expr: &str,
     imports: &mut BTreeSet<String>,
@@ -1578,7 +1578,7 @@ fn render_core_stmt(
 /// `mem::take`s it, leaving an empty `Vec` to drop). The transient handle is
 /// not a `NativeHandle`, so it never joins the lock set.
 fn render_body(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     params: &[Param],
     opaques: &[Opaque],
     sink: &ErrorSink,
@@ -1651,7 +1651,7 @@ fn render_body(
 /// `value_blob`, whose `@JvmInline value class` can't be built Rust-side).
 /// Shared by the unfold builder/fold lambda and the callback lambda params.
 pub(crate) fn unfold_leaf_kt(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     out_ty: &syn::Type,
     nullable: bool,
@@ -1800,7 +1800,7 @@ pub(crate) fn kotlin_for_wire(wire: &syn::Type) -> Option<kt::KtType> {
 ///   the inner wire's Kotlin name for `ValueClass`). `None` for plain
 ///   non-projection returns.
 pub(crate) fn classify_return(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
@@ -1863,7 +1863,7 @@ pub(crate) fn classify_return(
 /// via [`JniGen::enum_class`]. Enum returns cross the JNI wire as `jint` (Kotlin
 /// `Int`); the public wrapper must call `EnumType.fromInt(Int)` to convert back.
 pub(crate) fn return_is_kotlin_enum(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
 ) -> bool {
@@ -1875,7 +1875,7 @@ pub(crate) fn return_is_kotlin_enum(
 /// `box_jint`-boxed (null for `None`), so the extern returns `Int?` and the
 /// public wrapper converts back with `?.let { EnumType.fromInt(it) }`.
 pub(crate) fn return_is_kotlin_option_enum(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
 ) -> bool {

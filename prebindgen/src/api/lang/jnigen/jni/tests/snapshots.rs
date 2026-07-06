@@ -45,15 +45,22 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Error))
-        .ptr_class(syn::parse_quote!(ZThing))
-        .enum_class(syn::parse_quote!(Color))
-        .package("thing")
-        .fun(syn::parse_quote!(z_thing_new))
-        .fun(syn::parse_quote!(z_thing_name));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("")
+            .class(DataClassDecl::new(syn::parse_quote!(Error)))
+            .class(PtrClassDecl::new(syn::parse_quote!(ZThing)))
+            .class(EnumClassDecl::new(syn::parse_quote!(Color))),
+    )
+    .package(
+        PackageDecl::new("thing")
+            .fun(FunctionDecl::new(syn::parse_quote!(z_thing_new)))
+            .fun(FunctionDecl::new(syn::parse_quote!(z_thing_name))),
+    );
 
     let dir = unique_test_dir("jnigen_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -219,13 +226,17 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Payload))
-        .package("payload")
-        .fun(syn::parse_quote!(payload_get))
-        .fun(syn::parse_quote!(payload_put));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("payload")
+            .class(DataClassDecl::new(syn::parse_quote!(Payload)))
+            .fun(FunctionDecl::new(syn::parse_quote!(payload_get)))
+            .fun(FunctionDecl::new(syn::parse_quote!(payload_put))),
+    );
 
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
@@ -298,13 +309,17 @@ fn slice_input_builds_vec_handle() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Foo))
-        .package("foo")
-        .fun(syn::parse_quote!(put_slice))
-        .fun(syn::parse_quote!(put_vec));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("foo")
+            .class(DataClassDecl::new(syn::parse_quote!(Foo)))
+            .fun(FunctionDecl::new(syn::parse_quote!(put_slice)))
+            .fun(FunctionDecl::new(syn::parse_quote!(put_vec))),
+    );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
@@ -393,12 +408,13 @@ fn jni_native_init_emits_init_block() {
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
-        .package("thing")
-        .fun(syn::parse_quote!(z_ping));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni")
+            .jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()"),
+    )
+    .package(PackageDecl::new("thing").fun(FunctionDecl::new(syn::parse_quote!(z_ping))));
 
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);

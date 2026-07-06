@@ -1,46 +1,20 @@
 use super::*;
 
-/// Order-sensitive global config (`package_prefix`, the mangle closures) is
-/// baked into FQNs at declaration time — configuring it after the first
-/// declaration is a hard builder error, not a silent mis-naming.
-#[test]
-#[should_panic(expected = "package_prefix must be configured before")]
-fn late_package_prefix_panics() {
-    let _ = JniGen::new()
-        .ptr_class(syn::parse_quote!(ZThing))
-        .package_prefix("io.test.jni");
-}
-
-/// Same guard for the per-kind name-mangle closures.
-#[test]
-#[should_panic(expected = "kotlin_fun_name_mangle must be configured before")]
-fn late_mangle_closure_panics() {
-    let _ = JniGen::new()
-        .package("thing")
-        .fun(syn::parse_quote!(thing_get))
-        .kotlin_fun_name_mangle(|n| n.to_string());
-}
-
 /// A rank-0 wrapper on a Rust builtin generates a converter qualified with the
 /// `source_module` (`myflat::usize`) — invalid Rust — so the registration is
-/// rejected up front.
+/// rejected up front, at construction time.
 #[test]
-#[should_panic(expected = "wrapper on builtin `usize`")]
+#[should_panic(expected = "ScalarTypeWrapperDecl on builtin `usize`")]
 fn builtin_wrapper_pattern_panics() {
-    let _ = JniGen::new().output_wrapper(
+    let _ = ScalarTypeWrapperDecl::new(
         syn::parse_quote!(usize),
-        |_r: &Registry<KotlinMeta>| -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
-            Some((
-                syn::parse_quote!(jni::sys::jlong),
-                None,
-                syn::parse_quote!(v as jni::sys::jlong),
-            ))
-        },
+        syn::parse_quote!(jni::sys::jlong),
+        "Long",
     );
 }
 
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn
-/// override) and base-package functions (`.fun` with no active subpackage —
+/// override) and base-package functions (`.fun` with the empty subpackage —
 /// mirroring class declarations, which could always live in the base package).
 #[test]
 fn per_class_name_and_base_package_fun() {
@@ -74,16 +48,19 @@ fn per_class_name_and_base_package_fun() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        // Rename the handle class; the mangle closures do NOT apply to it.
-        .kotlin_ptr_class_name_mangle(|n| format!("JNI{n}"))
-        .ptr_class(syn::parse_quote!(ZThing))
-        .name("Gadget")
-        // Base-package functions: no `package(...)` context active.
-        .fun(syn::parse_quote!(ping))
-        .fun(syn::parse_quote!(thing_new));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni")
+            // Rename the handle class; the mangle closures do NOT apply to it.
+            .kotlin_ptr_class_name_mangle(|n| format!("JNI{n}")),
+    )
+    .package(
+        PackageDecl::new("")
+            .class(PtrClassDecl::new(syn::parse_quote!(ZThing)).name("Gadget"))
+            .fun(FunctionDecl::new(syn::parse_quote!(ping)))
+            .fun(FunctionDecl::new(syn::parse_quote!(thing_new))),
+    );
 
     let dir = unique_test_dir("jnigen_class_name_base_fun");
     let _ = std::fs::remove_dir_all(&dir);

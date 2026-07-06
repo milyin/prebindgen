@@ -32,12 +32,13 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .enum_class(syn::parse_quote!(Mode))
-        .package("cfg")
-        .fun(syn::parse_quote!(z_set_timeout));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(PackageDecl::new("").class(EnumClassDecl::new(syn::parse_quote!(Mode))))
+    .package(PackageDecl::new("cfg").fun(FunctionDecl::new(syn::parse_quote!(z_set_timeout))));
 
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
@@ -133,13 +134,17 @@ fn vec_of_handle_output_folds_kotlin_side() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .ptr_class(syn::parse_quote!(ZThing))
-        .package("thing")
-        .fun(syn::parse_quote!(thing_list))
-        .fun(syn::parse_quote!(thing_list_opt));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("thing")
+            .class(PtrClassDecl::new(syn::parse_quote!(ZThing)))
+            .fun(FunctionDecl::new(syn::parse_quote!(thing_list)))
+            .fun(FunctionDecl::new(syn::parse_quote!(thing_list_opt))),
+    );
 
     let dir = unique_test_dir("jnigen_vec_handle_out");
     let _ = std::fs::remove_dir_all(&dir);
@@ -214,12 +219,16 @@ fn option_scalar_struct_field_flattens() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Opts))
-        .package("opts")
-        .fun(syn::parse_quote!(opts_put));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("")
+            .class(DataClassDecl::new(syn::parse_quote!(Opts)))
+            .fun(FunctionDecl::new(syn::parse_quote!(opts_put))),
+    );
 
     let dir = unique_test_dir("jnigen_optfield");
     let _ = std::fs::remove_dir_all(&dir);
@@ -333,16 +342,22 @@ fn fromparts_fallback_boxes_option_fields() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("model")
-        .enum_class(syn::parse_quote!(Level))
-        .data_class(syn::parse_quote!(Inner))
-        .data_class(syn::parse_quote!(Job))
-        .package("job")
-        .fun(syn::parse_quote!(job_make))
-        .fun(syn::parse_quote!(job_mode));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("model")
+            .class(EnumClassDecl::new(syn::parse_quote!(Level)))
+            .class(DataClassDecl::new(syn::parse_quote!(Inner)))
+            .class(DataClassDecl::new(syn::parse_quote!(Job))),
+    )
+    .package(
+        PackageDecl::new("job")
+            .fun(FunctionDecl::new(syn::parse_quote!(job_make)))
+            .fun(FunctionDecl::new(syn::parse_quote!(job_mode))),
+    );
 
     let dir = unique_test_dir("jnigen_fromparts_optbox");
     let _ = std::fs::remove_dir_all(&dir);
@@ -406,7 +421,7 @@ fn fromparts_fallback_boxes_option_fields() {
     assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
 }
 
-/// An output-only wrapper type must resolve with only its `output_wrapper`
+/// An output-only wrapper type must resolve with only its `.output()`
 /// registered: wrapper registrations are required per USAGE direction, unlike
 /// the four class declarators (always both). Regression: registering the
 /// wrapper used to add the type to `declared_types`, and the scan blanket-
@@ -424,22 +439,20 @@ fn output_only_wrapper_resolves_without_input_twin() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .output_wrapper(
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .scalar_type_wrapper(
+        ScalarTypeWrapperDecl::new(
             syn::parse_quote!(Len),
-            |_r: &Registry<KotlinMeta>| -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
-                Some((
-                    syn::parse_quote!(jni::sys::jlong),
-                    None,
-                    syn::parse_quote!(v.0 as jni::sys::jlong),
-                ))
-            },
+            syn::parse_quote!(jni::sys::jlong),
+            "Long",
         )
-        .kotlin_type("Long")
-        .package("len")
-        .fun(syn::parse_quote!(len_of));
+        .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
+    )
+    .package(PackageDecl::new("len").fun(FunctionDecl::new(syn::parse_quote!(len_of))));
     let dir = unique_test_dir("jnigen_outonly_wrapper");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

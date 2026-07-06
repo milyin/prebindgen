@@ -25,7 +25,7 @@ pub(crate) enum LeafDefault {
 
 /// Classify a leaf's binding-error default — see [`LeafDefault`].
 pub(crate) fn leaf_default(
-    _ext: &JniGen<impl JniGenState>,
+    _ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> LeafDefault {
@@ -70,7 +70,7 @@ pub(crate) fn leaf_default(
 /// 0 / `false` at every primitive slot. Construction failures fall back to
 /// null (cold path, OOM-class only).
 pub(crate) fn default_ze_jvalues(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
 ) -> Vec<TokenStream> {
@@ -124,7 +124,7 @@ pub(crate) fn default_ze_jvalues(
 /// [`UnfoldShape::Base`]: crate::api::core::unfold::UnfoldShape::Base
 /// [`UnfoldShape::Optional`]: crate::api::core::unfold::UnfoldShape::Optional
 pub(crate) fn emit_unfold_delivery(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     call_expr: &TokenStream,
@@ -471,7 +471,7 @@ fn reach_leaf(
 /// arm of fallible externs (whose `fail` falls back to a binding-error
 /// `signal_error` with default ze values).
 pub(crate) fn encode_plan_leaves(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
     obj_idents: &[syn::Ident],

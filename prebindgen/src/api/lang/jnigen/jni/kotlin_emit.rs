@@ -51,7 +51,7 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
-impl<S: JniGenState> JniGen<S> {
+impl JniGen {
     /// Unified Kotlin emission — single public entry point. Each per-kind
     /// emitter builds in-memory [`kt::KtFile`] model fragments; they are then
     /// merged into one file per package, rendered, and written under
@@ -366,7 +366,7 @@ pub(crate) struct OwnedTypedHandle {
     pub key: TypeKey,
 }
 
-impl<S: JniGenState> JniGen<S> {
+impl JniGen {
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type.
     /// Variants render in declaration order using SCREAMING_SNAKE_CASE names; the
     /// constructor stores the Rust discriminant value (or the ordinal as

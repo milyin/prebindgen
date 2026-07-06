@@ -4,7 +4,7 @@
 use super::*;
 
 pub(crate) fn struct_input_body(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     s: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
@@ -333,7 +333,7 @@ pub(crate) fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
 /// absent struct yields `present = false` for every field.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn option_scalar_field_leaves(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     kt_param: &str,
@@ -404,7 +404,7 @@ pub(crate) fn option_scalar_field_leaves(
 /// the single source of truth shared by the native wrapper signature, the
 /// `JNINative` extern declaration, and the Kotlin call-site destructure.
 pub(crate) fn build_flat_input_plan(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg_ty: &syn::Type,
@@ -688,7 +688,7 @@ pub(crate) struct OptionScalarInputPlan {
 /// only the cases that *would* box are intercepted — niche cases (already
 /// unboxed / ABI-clean) and opaque/value projections are left untouched.
 pub(crate) fn build_option_scalar_input_plan(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg_ty: &syn::Type,

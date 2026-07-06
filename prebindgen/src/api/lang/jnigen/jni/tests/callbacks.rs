@@ -34,21 +34,25 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        .ptr_class(syn::parse_quote!(ZThing))
-        // Canonical output: handle (identity) + its string form — a callback
-        // arg of ZThing decomposes into these 2 leaves.
-        .accessor(syn::parse_quote!(z_thing_name), "name")
-        .flatten_output()
-        .field_self()
-        .field("name")
-        // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
-        .ptr_class(syn::parse_quote!(ZOther))
-        .fun(syn::parse_quote!(z_thing_sub))
-        .fun(syn::parse_quote!(z_other_sub));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("thing")
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZThing))
+                    // Canonical output: handle (identity) + its string form — a
+                    // callback arg of ZThing decomposes into these 2 leaves.
+                    .accessor(syn::parse_quote!(z_thing_name), "name")
+                    .flatten_output(FlattenOutput::new().field_self().field("name")),
+            )
+            // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
+            .class(PtrClassDecl::new(syn::parse_quote!(ZOther)))
+            .fun(FunctionDecl::new(syn::parse_quote!(z_thing_sub)))
+            .fun(FunctionDecl::new(syn::parse_quote!(z_other_sub))),
+    );
 
     let dir = unique_test_dir("jnigen_cb_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -218,23 +222,27 @@ fn callback_root_identity_moved_after_nested_borrow() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        // Child handle: canonical output = identity (clone) + its name string.
-        .ptr_class(syn::parse_quote!(ZChild))
-        .accessor(syn::parse_quote!(z_child_name), "name")
-        .flatten_output()
-        .field_self()
-        .field("name")
-        // Parent: a nested child-handle record, then its OWN root identity LAST.
-        .ptr_class(syn::parse_quote!(ZParent))
-        .accessor(syn::parse_quote!(z_parent_child), "child")
-        .flatten_output()
-        .field("child")
-        .field_self()
-        .fun(syn::parse_quote!(z_parent_sub));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("thing")
+            // Child handle: canonical output = identity (clone) + its name string.
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZChild))
+                    .accessor(syn::parse_quote!(z_child_name), "name")
+                    .flatten_output(FlattenOutput::new().field_self().field("name")),
+            )
+            // Parent: a nested child-handle record, then its OWN root identity LAST.
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZParent))
+                    .accessor(syn::parse_quote!(z_parent_child), "child")
+                    .flatten_output(FlattenOutput::new().field("child").field_self()),
+            )
+            .fun(FunctionDecl::new(syn::parse_quote!(z_parent_sub))),
+    );
 
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
@@ -300,41 +308,51 @@ fn callback_double_option_unwrap_pipeline() {
     ));
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("query")
-        .value_class(syn::parse_quote!(ZId))
-        .ptr_class(syn::parse_quote!(ZKeyExpr))
-        .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
-        .flatten_output()
-        .field_self()
-        .field("asStr")
-        .ptr_class(syn::parse_quote!(ZTs))
-        .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
-        .flatten_output()
-        .field("ntp64")
-        .ptr_class(syn::parse_quote!(ZSample))
-        .accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
-        .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
-        .flatten_output()
-        .field("keyExpr")
-        .field("timestamp")
-        .ptr_class(syn::parse_quote!(ZErr))
-        .accessor(syn::parse_quote!(z_err_payload), "payload")
-        .flatten_output()
-        .field("payload")
-        .ptr_class(syn::parse_quote!(ZReply))
-        .accessor(syn::parse_quote!(z_reply_zid), "zid")
-        .accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
-        .accessor(syn::parse_quote!(z_reply_sample), "sample")
-        .accessor(syn::parse_quote!(z_reply_err), "err")
-        .flatten_output()
-        .field("zid")
-        .field("isOk")
-        .field("sample")
-        .field("err")
-        .fun(syn::parse_quote!(z_get));
+    let jni = JniGen::new(
+        JniGenConfig::new()
+            .source_module(syn::parse_quote!(myflat))
+            .package_prefix("io.test.jni"),
+    )
+    .package(
+        PackageDecl::new("query")
+            .class(ValueClassDecl::new(syn::parse_quote!(ZId)))
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZKeyExpr))
+                    .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
+                    .flatten_output(FlattenOutput::new().field_self().field("asStr")),
+            )
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZTs))
+                    .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
+                    .flatten_output(FlattenOutput::new().field("ntp64")),
+            )
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZSample))
+                    .accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
+                    .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
+                    .flatten_output(FlattenOutput::new().field("keyExpr").field("timestamp")),
+            )
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZErr))
+                    .accessor(syn::parse_quote!(z_err_payload), "payload")
+                    .flatten_output(FlattenOutput::new().field("payload")),
+            )
+            .class(
+                PtrClassDecl::new(syn::parse_quote!(ZReply))
+                    .accessor(syn::parse_quote!(z_reply_zid), "zid")
+                    .accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
+                    .accessor(syn::parse_quote!(z_reply_sample), "sample")
+                    .accessor(syn::parse_quote!(z_reply_err), "err")
+                    .flatten_output(
+                        FlattenOutput::new()
+                            .field("zid")
+                            .field("isOk")
+                            .field("sample")
+                            .field("err"),
+                    ),
+            )
+            .fun(FunctionDecl::new(syn::parse_quote!(z_get))),
+    );
 
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
