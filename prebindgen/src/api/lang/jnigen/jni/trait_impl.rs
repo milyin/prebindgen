@@ -930,8 +930,8 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Functions ever referenced as a named leaf in a `.flatten_output(fun!(...))`/
-    /// `.flatten_output(...).field(...)` record — see
+    /// Functions ever referenced as a named leaf in a `.default_return_field(fun!(...))`/
+    /// `.return_field(...)` record — see
     /// `accessor_record_fns`'s doc (`jni/mod.rs`). Usage-derived, not tied to
     /// `.fun()` class-member declarations: a function need not also be
     /// exposed as an instance method to be referenced this way.

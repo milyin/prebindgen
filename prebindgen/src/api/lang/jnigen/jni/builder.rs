@@ -249,11 +249,19 @@ impl JniGen {
         self.accept_members(&key, decl.members);
 
         if let Some(variants) = decl.input_variants {
-            self.expansions.ensure_default_constructor(key.to_type());
-            for v in variants {
-                match v {
-                    LocalVariant::Ctor(f) => self.expansions.add_constructor_variant(f),
-                    LocalVariant::SelfIdentity => self.expansions.add_constructor_variant_id(),
+            // Identity-only normalization: `.default_param_variant_self()`
+            // alone declares the plain-handle form — exactly the default
+            // when nothing is declared, so registering it would only add a
+            // degenerate 1-variant selector to every param of this type.
+            if !matches!(variants.as_slice(), [LocalVariant::SelfIdentity]) {
+                self.expansions.ensure_default_constructor(key.to_type());
+                for v in variants {
+                    match v {
+                        LocalVariant::Ctor(f) => self.expansions.add_constructor_variant(f),
+                        LocalVariant::SelfIdentity => {
+                            self.expansions.add_constructor_variant_id()
+                        }
+                    }
                 }
             }
         }
@@ -370,27 +378,30 @@ impl JniGen {
         self.apply_fn_flatten_modifiers(decl);
     }
 
-    /// Replay a [`FunctionDecl`]'s per-fn flatten modifiers
-    /// (`.flatten_input_suppress` / per-param `.flatten_input(...)` /
-    /// `.flatten_output_suppress` / per-fn `.flatten_output(...)`) into the
+    /// Replay a [`FunctionDecl`]'s per-fn overrides (per-param
+    /// `.param_variant*` / `.return_field*`) into the
     /// expansion/deconstruction bookkeeping. Shared by [`Self::accept_function`]
     /// (free package fns) and [`Self::accept_members`] (class members) — the
-    /// modifiers mean the same thing in both positions.
+    /// overrides mean the same thing in both positions.
+    ///
+    /// Identity-only normalization: an override consisting of only the
+    /// `_self` form means "the plain handle, nothing else" and lowers to the
+    /// skip-default opt-out — no selector on the input side, the raw
+    /// whole-handle return (borrowed-`&T`-capable) on the output side.
     fn apply_fn_flatten_modifiers(&mut self, decl: FunctionDecl) {
         let FunctionDecl {
             rust_ident,
             kotlin_name_override: _,
-            input_suppressed,
             input_overrides,
-            output_suppressed,
             output_override,
         } = decl;
 
-        for param in input_suppressed {
-            self.expansions
-                .add_skip_default_construct(rust_ident.clone(), param);
-        }
         for (param, variants) in input_overrides {
+            if matches!(variants.as_slice(), [LocalVariant::SelfIdentity]) {
+                self.expansions
+                    .add_skip_default_construct(rust_ident.clone(), param);
+                continue;
+            }
             self.expansions.begin_subset(rust_ident.clone(), param);
             for v in variants {
                 match v {
@@ -399,11 +410,12 @@ impl JniGen {
                 }
             }
         }
-        if output_suppressed {
-            self.deconstructors
-                .add_skip_default_output(rust_ident.clone());
-        }
         if let Some(fields) = output_override {
+            if matches!(fields.as_slice(), [LocalField::SelfField]) {
+                self.deconstructors
+                    .add_skip_default_output(rust_ident.clone());
+                return;
+            }
             self.deconstructors.begin_inline_output(rust_ident.clone());
             for f in fields {
                 match f {

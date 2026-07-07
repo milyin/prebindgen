@@ -1,7 +1,7 @@
 use super::*;
 
 /// Two fns returning the same type under different output decompositions:
-/// the default one and a per-fn `.flatten_output(...)` inline field list.
+/// the default one and a per-fn `.default_return_field(...)` inline field list.
 /// Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
@@ -34,8 +34,8 @@ fn inline_output_gets_own_builder() {
                     .fun(crate::fun!(z_thing_name).name("name"))
                     .fun(crate::fun!(z_thing_size).name("size"))
                     // Default output: name + size (2 leaves ⇒ builder callback).
-                    .flatten_output(crate::fun!(z_thing_name).name("name"))
-                    .flatten_output(crate::fun!(z_thing_size).name("size")),
+                    .default_return_field(crate::fun!(z_thing_name).name("name"))
+                    .default_return_field(crate::fun!(z_thing_size).name("size")),
             )
             .fun(crate::fun!(z_make_a))
             // Per-fn inline fields: name + size + name again (different shape). The
@@ -43,9 +43,9 @@ fn inline_output_gets_own_builder() {
             // distinct (literal) leaf name — duplicate names are a hard error.
             .fun(
                 crate::fun!(z_make_b)
-                    .flatten_output(crate::fun!(z_thing_name).name("name"))
-                    .flatten_output(crate::fun!(z_thing_size).name("size"))
-                    .flatten_output(crate::fun!(z_thing_name).name("name2")),
+                    .return_field(crate::fun!(z_thing_name).name("name"))
+                    .return_field(crate::fun!(z_thing_size).name("size"))
+                    .return_field(crate::fun!(z_thing_name).name("name2")),
             ),
     );
 
@@ -126,7 +126,7 @@ fn error_unwrap_universal_records() {
             .class(
                 crate::ptr_class!(ZDetail)
                     .fun(crate::fun!(z_detail_code).name("code"))
-                    .flatten_output(crate::fun!(z_detail_code).name("code")),
+                    .default_return_field(crate::fun!(z_detail_code).name("code")),
             )
             .class(
                 crate::ptr_class!(ZErr)
@@ -134,9 +134,9 @@ fn error_unwrap_universal_records() {
                     .fun(crate::fun!(z_err_detail).name("detail"))
                     // Canonical error decomposition: the owned error handle itself,
                     // its message, and the Option-nested detail spliced to its code leaf.
-                    .flatten_output_self()
-                    .flatten_output(crate::fun!(z_err_message).name("message"))
-                    .flatten_output(crate::fun!(z_err_detail).name("detail")),
+                    .default_return_field_self()
+                    .default_return_field(crate::fun!(z_err_message).name("message"))
+                    .default_return_field(crate::fun!(z_err_detail).name("detail")),
             )
             .fun(crate::fun!(z_fallible)),
     );
@@ -220,7 +220,7 @@ fn error_unwrap_universal_records() {
 /// signature, its handle locked) while keeping the non-receiver params; the
 /// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
 /// companion-object factory returning the class. Per-fn
-/// `.flatten_output_self()` emits the handle leaf.
+/// `.default_return_field_self()` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
     use crate::SourceLocation;
@@ -258,8 +258,8 @@ fn method_constructor_and_inline_field_self() {
             // A free fn whose per-fn inline output decomposes to (handle, name).
             .fun(
                 crate::fun!(z_get)
-                    .flatten_output_self()
-                    .flatten_output(crate::fun!(z_thing_name).name("name")),
+                    .return_field_self()
+                    .return_field(crate::fun!(z_thing_name).name("name")),
             ),
     );
 

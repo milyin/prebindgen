@@ -2,8 +2,8 @@
 //! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
-//! A **deconstructor** (a type's `.flatten_output()` + `.field(name)` /
-//! `.field_self()`, or the per-fn `.flatten_output()` override) is a
+//! A **deconstructor** (a type's `.default_return_field*` list /
+//! or the per-fn `.return_field*` override) is a
 //! **deterministic product**: every record always runs and contributes its leaf
 //! — there is no selector (unlike a *constructor*, whose selector picks one
 //! variant). A record's accessor is a `#[prebindgen]` function `f(&T) -> &F` (a
@@ -66,18 +66,18 @@ struct DeconstructorDecl {
     records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
     /// carries the inferred `(target-position, delivery)` to use). Always
-    /// `Some` for `.flatten_output()`-created declarations.
+    /// `Some` for class-default (`.default_return_field*`) declarations.
     default: Option<(DeconTarget, Delivery)>,
 }
 
 /// How an output expansion chooses the deconstructor for a function's return
-/// type: the type's default flatten (`.flatten_output()`) or a per-fn
-/// inline record list (`.flatten_output()`).
+/// type: the type's default (`.default_return_field*`) or a per-fn
+/// inline record list (`.return_field*`).
 #[derive(Clone)]
 enum DeconSel {
     /// Use the return type's unique deconstructor (error if ambiguous).
     TopLevel,
-    /// Per-fn override (`.flatten_output()`): use exactly these
+    /// Per-fn override (`.return_field`): use exactly these
     /// accessor-fn records.
     Inline(Vec<DeconRecord>),
 }
@@ -119,21 +119,20 @@ struct OutputDecl {
 pub struct Deconstructors {
     deconstructors: Vec<DeconstructorDecl>,
     outputs: Vec<OutputDecl>,
-    /// Cursor for the type-level flatten builder (`.flatten_output()` →
+    /// Cursor for the type-level default builder (`.default_return_field` →
     /// `.field`/`.field_self`).
     cur_deconstructor: Option<usize>,
-    /// Cursor for an in-progress per-fn inline output flatten
-    /// (`.flatten_output()` → `.field`/`.field_self`): index into
+    /// Cursor for an in-progress per-fn inline output override    /// (`.return_field`/`.return_field_self`): index into
     /// [`Self::outputs`].
     cur_output: Option<usize>,
-    /// `.flatten_output_suppress()` opt-outs: fns excluded from the
+    /// identity-only `.return_field_self()` opt-outs: fns excluded from the
     /// default auto-apply.
     skip_output: std::collections::HashSet<syn::Ident>,
 }
 
 impl Deconstructors {
     /// Find-or-create the default (always-`default`) deconstructor for `target`
-    /// and set the cursor to it. Idempotent across a `.flatten_output()` chain.
+    /// and set the cursor to it. Idempotent across a `.default_return_field` chain.
     /// Delivery is derived from leaf count at emit time (1 ⇒ return, N ⇒ callback),
     /// so the stored `Delivery` is just a marker.
     pub fn ensure_default_deconstructor(&mut self, target: syn::Type) {
@@ -161,34 +160,34 @@ impl Deconstructors {
         }
     }
 
-    /// `.flatten_output_suppress()` — exclude `func` from output-position
+    /// identity-only `.return_field_self()` — exclude `func` from output-position
     /// default auto-apply.
     pub fn add_skip_default_output(&mut self, func: syn::Ident) {
         self.skip_output.insert(func);
     }
 
-    /// `.field(name)` inside `.flatten_output()` — add an accessor-function
+    /// `.default_return_field(fun)` — add an accessor-function
     /// record with the author-supplied (literal) leaf `name`.
     pub fn add_deconstructor_record(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
             .cur_deconstructor
-            .expect(".field called without a current .flatten_output");
+            .expect(".field called without a current deconstructor");
         self.deconstructors[i].records.push(DeconRecord::Acc {
             func,
             name: name.into(),
         });
     }
 
-    /// `.field_self()` inside `.flatten_output()` — add the identity record
+    /// `.default_return_field_self()` — add the identity record
     /// (the value itself).
     pub fn add_deconstructor_record_id(&mut self) {
         let i = self
             .cur_deconstructor
-            .expect(".field_self called without a current .flatten_output");
+            .expect(".field_self called without a current deconstructor");
         self.deconstructors[i].records.push(DeconRecord::Identity);
     }
 
-    /// Begin a per-fn inline output flatten (`.flatten_output()`):
+    /// Begin a per-fn inline output override (`.return_field`):
     /// decompose `func`'s return via an incrementally-built record list
     /// (accessor fields via [`Self::push_inline_field`] and/or the identity/self
     /// field via [`Self::push_inline_field_self`]). Recorded as an explicit decl
@@ -204,12 +203,12 @@ impl Deconstructors {
         self.cur_output = Some(self.outputs.len() - 1);
     }
 
-    /// `.field(fn, name)` inside `.flatten_output()` — append an
+    /// `.return_field(fun)` — append an
     /// accessor-function field (named `name`) to the current per-fn inline output.
     pub fn push_inline_field(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
             .cur_output
-            .expect(".field called without a current .flatten_output");
+            .expect(".field called without a current deconstructor");
         if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
             records.push(DeconRecord::Acc {
                 func,
@@ -218,12 +217,12 @@ impl Deconstructors {
         }
     }
 
-    /// `.field_self()` inside `.flatten_output()` — append the identity
+    /// `.default_return_field_self()` — append the identity
     /// (the handle itself) field to the current per-fn inline output.
     pub fn push_inline_field_self(&mut self) {
         let i = self
             .cur_output
-            .expect(".field_self called without a current .flatten_output");
+            .expect(".field_self called without a current deconstructor");
         if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
             records.push(DeconRecord::Identity);
         }
@@ -279,7 +278,7 @@ pub fn apply<M>(
         done.insert((ed.func.clone(), ed.target));
     }
 
-    // Default auto-apply: a type's deconstructor (`.flatten_output()`) is
+    // Default auto-apply: a type's deconstructor (`.default_return_field*`) is
     // applied to every declared fn that returns it (Output) or has it as a
     // `Result<_, E>` error (Error), unless the fn is `fun_accessor` or has a
     // per-fn override. `Delivery` is recomputed from leaf count inside

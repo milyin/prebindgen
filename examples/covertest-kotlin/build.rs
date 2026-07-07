@@ -24,15 +24,15 @@
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `ScalarTypeWrapperDecl`              | `Millis` ⇄ `Long` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
-//! | `.flatten_input()` (+`_self`)        | `Summary` default input |
-//! | `.flatten_output()` (+`_self`)        | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
+//! | `.default_param_variant()` (+`_self`)| `Summary` default input |
+//! | `.default_return_field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
-//! | `.flatten_input_suppress()`          | `summary_total_raw` |
-//! | `.flatten_output_suppress()`         | `storage_summary_handle` / `archive_latest` |
-//! | per-fn `.flatten_input(param, …)` (+`_self`)| `storage_expect_summary` |
-//! | per-fn `.flatten_output(…)` (+`_self`)| `storage_summary_full` |
+//! | `.param_variant_self(param)` alone   | `summary_total_raw` (raw handle param, overrides the class default) |
+//! | `.return_field_self()` alone         | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.param_variant(param, …)` (+`_self`)| `storage_expect_summary` |
+//! | per-fn `.return_field(…)` (+`_self`) | `storage_summary_full` |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -129,21 +129,21 @@ fn main() {
     .package(
         package!("errors").class(
             // `StorageError` is the `E` of a fallible `Result`. Declaring it a
-            // ptr_class with a flatten-output makes the generated `onError`
-            // handler receive the flattened fields: the `message` string plus —
-            // via `.flatten_output_self()` — the error handle itself (an
+            // ptr_class with a a default return-field list makes the generated `onError`
+            // handler receive the decomposed fields: the `message` string plus —
+            // via `.default_return_field_self()` — the error handle itself (an
             // owned `StorageError` the handler must `close()`).
             ptr_class!(StorageError)
                 .fun(fun!(storage_error_message).name("message"))
-                .flatten_output(fun!(storage_error_message).name("message"))
-                .flatten_output_self(),
+                .default_return_field(fun!(storage_error_message).name("message"))
+                .default_return_field_self(),
         ),
     )
-    // ── Subpackage `analytics`: flatten input/output on `Summary` ───────
+    // ── Subpackage `analytics`: param-variant / return-field defaults on `Summary`
     .package(
         package!("analytics")
             // `Summary` is an opaque handle whose default boundary shape is its
-            // `(count, total)` leaves: flatten-output decomposes it, flatten-input
+            // `(count, total)` leaves: the return-field default decomposes it, the param-variant default
             // rebuilds it (via the `of` constructor) or accepts a handle.
             .class(
                 ptr_class!(Summary)
@@ -151,10 +151,10 @@ fn main() {
                     .fun(fun!(summary_count).name("count"))
                     .fun(fun!(summary_total).name("total"))
                     .fun(fun!(summary_scaled).name("scaled"))
-                    .flatten_input(fun!(summary_new))
-                    .flatten_input_self()
-                    .flatten_output(fun!(summary_count).name("count"))
-                    .flatten_output(fun!(summary_total).name("total")),
+                    .default_param_variant(fun!(summary_new))
+                    .default_param_variant_self()
+                    .default_return_field(fun!(summary_count).name("count"))
+                    .default_return_field(fun!(summary_total).name("total")),
             )
             // `Archive` holds the latest `Summary` and returns it BORROWED
             // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -199,30 +199,30 @@ fn main() {
             .fun(fun!(annotated_priority))
             .fun(fun!(annotated_payload_value)),
     )
-    // analytics: the flatten matrix (default / suppress / with, in + out).
+    // analytics: the param-variant / return-field matrix (class default / raw-self override / per-fn override, in + out).
     .package(
         package!("analytics")
             .fun(fun!(storage_summary))
             .fun(fun!(storage_matches_summary))
-            .fun(fun!(storage_summary_handle).flatten_output_suppress())
-            .fun(fun!(summary_total_raw).flatten_input_suppress(pq!(s)))
+            .fun(fun!(storage_summary_handle).return_field_self())
+            .fun(fun!(summary_total_raw).param_variant_self(pq!(s)))
             .fun(
                 fun!(storage_summary_full)
-                    .flatten_output(fun!(summary_count).name("count"))
-                    .flatten_output(fun!(summary_total).name("total"))
-                    .flatten_output_self(),
+                    .return_field(fun!(summary_count).name("count"))
+                    .return_field(fun!(summary_total).name("total"))
+                    .return_field_self(),
             )
             .fun(
                 fun!(storage_expect_summary)
-                    .flatten_input(pq!(expected), fun!(summary_new))
-                    .flatten_input_self(pq!(expected)),
+                    .param_variant(pq!(expected), fun!(summary_new))
+                    .param_variant_self(pq!(expected)),
             )
             // The borrowed-accessor trio. `archive_latest` suppresses the default
-            // Summary output flatten so the BORROWED handle path (clone into a
+            // Summary return-field default so the BORROWED handle path (clone into a
             // fresh owned handle, null when absent) is what crosses.
             .fun(fun!(archive_new))
             .fun(fun!(archive_store))
-            .fun(fun!(archive_latest).flatten_output_suppress()),
+            .fun(fun!(archive_latest).return_field_self()),
     )
     // storage: the perf surface (handles, callbacks, Vec, Option) plus the
     // fallible constructor and the Millis wrapper.

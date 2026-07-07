@@ -47,7 +47,7 @@ impl std::fmt::Display for ExpandError {
             }
             ExpandError::ConstructOnAccessor { func } => write!(
                 f,
-                "expand: input flatten on accessor fn `{}` — an accessor is never \
+                "expand: param-variant override on accessor fn `{}` — an accessor is never \
                  parameter-composed (remove the override, or declare it as `.fun`)",
                 func
             ),
