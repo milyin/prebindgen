@@ -556,7 +556,7 @@ fn method_descr(params: &[IfaceParam], ret: &kt::KtType, type_params: &[String])
 /// The interface base name for a decomposition: the subject type's short
 /// name, extended by the deconstructor declaration's identity. The type's
 /// default declaration keeps the bare short; per-fn inline records
-/// (`.flatten_output_with()`) append the function's UpperCamel ident.
+/// (`.flatten_output()`) append the function's UpperCamel ident.
 /// This is what makes interface identity == declaration identity: functions
 /// sharing a declaration share the interface, differently-declared
 /// decompositions of one type get distinct interfaces.

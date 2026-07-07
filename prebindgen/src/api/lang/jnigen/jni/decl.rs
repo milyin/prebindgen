@@ -17,7 +17,7 @@ use super::*;
 // by the accept logic in `builder.rs` once a decl is handed to `JniGen`)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One arm of a `.flatten_input()`/`.flatten_input_with()` build-from list.
+/// One arm of a class-level or per-fn `.flatten_input()` build-from list.
 #[derive(Clone)]
 pub(crate) enum LocalVariant {
     /// Build via this declared constructor member / constructor fn.
@@ -26,7 +26,7 @@ pub(crate) enum LocalVariant {
     SelfIdentity,
 }
 
-/// One arm of a `.flatten_output()`/`.flatten_output_with()` field list.
+/// One arm of a class-level or per-fn `.flatten_output()` field list.
 #[derive(Clone)]
 pub(crate) enum LocalField {
     /// Include the named accessor's value as this leaf/field name.
@@ -99,24 +99,6 @@ macro_rules! value_class {
 macro_rules! fun {
     ($name:ident) => {
         $crate::lang::FunctionDecl::new($crate::ident!($name))
-    };
-}
-
-/// Build an empty [`FunctionFlattenInputDecl`] — shorthand for
-/// `FunctionFlattenInputDecl::new()`.
-#[macro_export]
-macro_rules! function_flatten_input {
-    () => {
-        $crate::lang::FunctionFlattenInputDecl::new()
-    };
-}
-
-/// Build an empty [`FunctionFlattenOutputDecl`] — shorthand for
-/// `FunctionFlattenOutputDecl::new()`.
-#[macro_export]
-macro_rules! function_flatten_output {
-    () => {
-        $crate::lang::FunctionFlattenOutputDecl::new()
     };
 }
 
@@ -485,14 +467,36 @@ impl FunctionDecl {
         self
     }
 
-    /// Replace the default input flatten of `param` with an explicit variant
-    /// list. `decl` is built independently via
-    /// [`FunctionFlattenInputDecl::new`] + `.variant(fn)` (build-from
-    /// constructor fns) / `.variant_self()` (accept the handle directly). May
-    /// be called more than once, for different params.
-    pub fn flatten_input_with(mut self, param: syn::Ident, decl: FunctionFlattenInputDecl) -> Self {
-        self.input_overrides.push((param, decl.variants));
+    /// Add one variant to `param`'s **input flatten** override: build via
+    /// this `#[prebindgen]` constructor fn directly. Call repeatedly to add
+    /// more variants for the same param, or for different params — the only
+    /// difference from [`PtrClassDecl::flatten_input`] is the leading param
+    /// ident, since a function may have several independently-overridden
+    /// handle params.
+    pub fn flatten_input(mut self, param: syn::Ident, ctor: FunctionDecl) -> Self {
+        self.input_override_entry(param)
+            .push(LocalVariant::Ctor(ctor.rust_ident));
         self
+    }
+
+    /// Add the identity variant to `param`'s input flatten override: accept
+    /// an already-built handle directly.
+    pub fn flatten_input_self(mut self, param: syn::Ident) -> Self {
+        self.input_override_entry(param)
+            .push(LocalVariant::SelfIdentity);
+        self
+    }
+
+    /// The variant list of `param`'s input override, creating it on first use.
+    fn input_override_entry(&mut self, param: syn::Ident) -> &mut Vec<LocalVariant> {
+        let idx = match self.input_overrides.iter().position(|(p, _)| *p == param) {
+            Some(i) => i,
+            None => {
+                self.input_overrides.push((param, Vec::new()));
+                self.input_overrides.len() - 1
+            }
+        };
+        &mut self.input_overrides[idx].1
     }
 
     /// The return value skips output-flattening and stays a raw handle.
@@ -501,86 +505,27 @@ impl FunctionDecl {
         self
     }
 
-    /// Replace the default output flatten with an explicit field list.
-    /// `decl` is built independently via [`FunctionFlattenOutputDecl::new`] +
-    /// `.field(fn)` (accessor fns, named via `fn.name(...)`) /
-    /// `.field_self()` (the handle itself).
-    pub fn flatten_output_with(mut self, decl: FunctionFlattenOutputDecl) -> Self {
-        self.output_override = Some(decl.fields);
-        self
-    }
-}
-
-/// Standalone spec for [`FunctionDecl::flatten_input_with`], built
-/// independently and handed in as a value — needed because
-/// `flatten_input_with` is keyed **per parameter** (a function can have
-/// several, each independently overridden), unlike
-/// [`PtrClassDecl::flatten_input`] which is called directly, once per
-/// variant. `.variant(func)` names the `#[prebindgen]` constructor fn
-/// directly.
-pub struct FunctionFlattenInputDecl {
-    variants: Vec<LocalVariant>,
-}
-
-impl FunctionFlattenInputDecl {
-    pub fn new() -> Self {
-        Self {
-            variants: Vec::new(),
-        }
-    }
-
-    /// Build via this `#[prebindgen]` constructor function directly.
-    pub fn variant(mut self, func: FunctionDecl) -> Self {
-        self.variants.push(LocalVariant::Ctor(func.rust_ident));
-        self
-    }
-
-    /// Accept an already-built handle directly (the identity variant).
-    pub fn variant_self(mut self) -> Self {
-        self.variants.push(LocalVariant::SelfIdentity);
-        self
-    }
-}
-
-impl Default for FunctionFlattenInputDecl {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Standalone spec for [`FunctionDecl::flatten_output_with`] — the
-/// per-function output-side dual of [`FunctionFlattenInputDecl`].
-pub struct FunctionFlattenOutputDecl {
-    fields: Vec<LocalField>,
-}
-
-impl FunctionFlattenOutputDecl {
-    pub fn new() -> Self {
-        Self { fields: Vec::new() }
-    }
-
-    /// Include the value of the accessor fn `func` (the rust accessor fn
-    /// directly) as a field named via `func.name(...)` (default:
-    /// `snake_to_camel(rust_ident)`, same as everywhere else a `FunctionDecl`
-    /// supplies its own Kotlin-visible name).
-    pub fn field(mut self, func: FunctionDecl) -> Self {
-        let name = func
+    /// Add one field to this function's **output flatten** override: the
+    /// value of the accessor fn `field` (named via `field.name(...)`,
+    /// defaulting to `snake_to_camel(rust_ident)`). Call repeatedly to add
+    /// more fields — same shape as [`PtrClassDecl::flatten_output`].
+    pub fn flatten_output(mut self, field: FunctionDecl) -> Self {
+        let name = field
             .kotlin_name_override
-            .unwrap_or_else(|| snake_to_camel(&func.rust_ident.to_string()));
-        self.fields.push(LocalField::Named(func.rust_ident, name));
+            .unwrap_or_else(|| snake_to_camel(&field.rust_ident.to_string()));
+        self.output_override
+            .get_or_insert_with(Vec::new)
+            .push(LocalField::Named(field.rust_ident, name));
         self
     }
 
-    /// Include the handle itself as a field.
-    pub fn field_self(mut self) -> Self {
-        self.fields.push(LocalField::SelfField);
+    /// Add the return value itself as a field of this function's output
+    /// flatten override.
+    pub fn flatten_output_self(mut self) -> Self {
+        self.output_override
+            .get_or_insert_with(Vec::new)
+            .push(LocalField::SelfField);
         self
-    }
-}
-
-impl Default for FunctionFlattenOutputDecl {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

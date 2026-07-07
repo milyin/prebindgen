@@ -437,7 +437,7 @@ fn callback_double_option_unwrap_pipeline() {
 // ────────────────────────────────────────────────────────────────────────
 // Declaration-keyed interfaces: a type may have several decompositions —
 // the default (unnamed) deconstructor and per-fn inline records
-// (`.flatten_output_with`). Interface identity follows the DECLARATION, so
+// (`.flatten_output`). Interface identity follows the DECLARATION, so
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────

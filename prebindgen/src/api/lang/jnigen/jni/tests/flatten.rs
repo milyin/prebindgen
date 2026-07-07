@@ -1,7 +1,7 @@
 use super::*;
 
 /// Two fns returning the same type under different output decompositions:
-/// the default one and a per-fn `.flatten_output_with(...)` inline field list.
+/// the default one and a per-fn `.flatten_output(...)` inline field list.
 /// Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
@@ -41,12 +41,12 @@ fn inline_output_gets_own_builder() {
             // Per-fn inline fields: name + size + name again (different shape). The
             // third field reuses the `z_thing_name` accessor but must carry a
             // distinct (literal) leaf name — duplicate names are a hard error.
-            .fun(crate::fun!(z_make_b).flatten_output_with(
-                crate::function_flatten_output!()
-                    .field(crate::fun!(z_thing_name).name("name"))
-                    .field(crate::fun!(z_thing_size).name("size"))
-                    .field(crate::fun!(z_thing_name).name("name2")),
-            )),
+            .fun(
+                crate::fun!(z_make_b)
+                    .flatten_output(crate::fun!(z_thing_name).name("name"))
+                    .flatten_output(crate::fun!(z_thing_size).name("size"))
+                    .flatten_output(crate::fun!(z_thing_name).name("name2")),
+            ),
     );
 
     let dir = unique_test_dir("jnigen_inline_out");
@@ -220,7 +220,7 @@ fn error_unwrap_universal_records() {
 /// signature, its handle locked) while keeping the non-receiver params; the
 /// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
 /// companion-object factory returning the class. Per-fn
-/// `.flatten_output_with().field_self()` emits the handle leaf.
+/// `.flatten_output_self()` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
     use crate::SourceLocation;
@@ -256,11 +256,11 @@ fn method_constructor_and_inline_field_self() {
                     .constructor(crate::fun!(z_thing_make).name("make")),
             )
             // A free fn whose per-fn inline output decomposes to (handle, name).
-            .fun(crate::fun!(z_get).flatten_output_with(
-                crate::function_flatten_output!()
-                    .field_self()
-                    .field(crate::fun!(z_thing_name).name("name")),
-            )),
+            .fun(
+                crate::fun!(z_get)
+                    .flatten_output_self()
+                    .flatten_output(crate::fun!(z_thing_name).name("name")),
+            ),
     );
 
     let dir = unique_test_dir("jnigen_method_ctor");

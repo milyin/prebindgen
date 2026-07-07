@@ -31,8 +31,8 @@
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `.flatten_input_suppress()`          | `summary_total_raw` |
 //! | `.flatten_output_suppress()`         | `storage_summary_handle` / `archive_latest` |
-//! | `.flatten_input_with()` (+`.variant()`/self)| `storage_expect_summary` |
-//! | `.flatten_output_with()` (+`.field()`/self)| `storage_summary_full` |
+//! | per-fn `.flatten_input(param, …)` (+`_self`)| `storage_expect_summary` |
+//! | per-fn `.flatten_output(…)` (+`_self`)| `storage_summary_full` |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -65,7 +65,7 @@
 
 use prebindgen::{
     core::Registry,
-    data_class, enum_class, fun, function_flatten_input, function_flatten_output,
+    data_class, enum_class, fun,
     lang::{JniGen, JniGenConfig},
     package, ptr_class, scalar_type_wrapper, value_class,
 };
@@ -202,18 +202,17 @@ fn main() {
             .fun(fun!(storage_matches_summary))
             .fun(fun!(storage_summary_handle).flatten_output_suppress())
             .fun(fun!(summary_total_raw).flatten_input_suppress(pq!(s)))
-            .fun(fun!(storage_summary_full).flatten_output_with(
-                function_flatten_output!()
-                    .field(fun!(summary_count).name("count"))
-                    .field(fun!(summary_total).name("total"))
-                    .field_self(),
-            ))
-            .fun(fun!(storage_expect_summary).flatten_input_with(
-                pq!(expected),
-                function_flatten_input!()
-                    .variant(fun!(summary_new))
-                    .variant_self(),
-            ))
+            .fun(
+                fun!(storage_summary_full)
+                    .flatten_output(fun!(summary_count).name("count"))
+                    .flatten_output(fun!(summary_total).name("total"))
+                    .flatten_output_self(),
+            )
+            .fun(
+                fun!(storage_expect_summary)
+                    .flatten_input(pq!(expected), fun!(summary_new))
+                    .flatten_input_self(pq!(expected)),
+            )
             // The borrowed-accessor trio. `archive_latest` suppresses the default
             // Summary output flatten so the BORROWED handle path (clone into a
             // fresh owned handle, null when absent) is what crosses.

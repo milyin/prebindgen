@@ -341,13 +341,13 @@ pub struct JniGen {
     pub(crate) jni_native_init: Option<String>,
 
     /// Constructor-expansion declarations (`.flatten_input()` /
-    /// `.flatten_input_with()` on a class/function decl). Resolved into
+    /// `.flatten_input()` on a class/function decl). Resolved into
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
     /// Output-expansion declarations (`.flatten_output()` /
-    /// `.flatten_output_with()` on a class/function decl). Resolved into
+    /// `.flatten_output()` on a class/function decl). Resolved into
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
@@ -361,7 +361,7 @@ pub struct JniGen {
     pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
 
     /// Every function ever referenced as a named leaf in a `.flatten_output(fun!(...))`/
-    /// `.flatten_output_with(...).field(...)` record (class- or
+    /// `.flatten_output(...).field(...)` record (class- or
     /// function-scoped) — populated as `builder.rs` accepts each decl.
     /// Backs [`Prebindgen::accessor_functions`]: `core/unfold.rs`'s
     /// deconstructor gate requires every named record's function to be in
