@@ -79,11 +79,11 @@ impl JniGen {
     /// `"Native"` (the centralized extern holder). Default = prepend
     /// `"JNI"` (yielding `JNINative`). Affects the generated Kotlin class
     /// name and the derived JNI extern symbol path on the Rust side.
-    pub fn set_kotlin_harness_name_mangle<F>(mut self, f: F) -> Self
+    pub fn set_harness_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.kotlin_harness_name_mangle = Some(Arc::new(f));
+        self.harness_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -91,42 +91,42 @@ impl JniGen {
     /// `#[prebindgen]` free function and the synthetic `freePtr` destructor;
     /// receives the camelCased Kotlin-side name and returns the final form
     /// (e.g. `"putPublisher"` → `"putPublisherViaJNI"`). Default = identity.
-    pub fn set_kotlin_fun_name_mangle<F>(mut self, f: F) -> Self
+    pub fn set_fun_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.kotlin_fun_name_mangle = Some(Arc::new(f));
+        self.fun_name_mangle = Some(Arc::new(f));
         self
     }
 
     /// Set the closure that mangles Kotlin ptr-class names declared via a
     /// `PtrClassDecl`. Receives the Rust short name. Default = identity.
-    pub fn set_kotlin_ptr_class_name_mangle<F>(mut self, f: F) -> Self
+    pub fn set_ptr_class_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.kotlin_ptr_class_name_mangle = Some(Arc::new(f));
+        self.ptr_class_name_mangle = Some(Arc::new(f));
         self
     }
 
     /// Set the closure that mangles Kotlin data-class names declared via a
     /// `DataClassDecl` (and value classes, which reuse this hook). Receives
     /// the Rust short name. Default = identity.
-    pub fn set_kotlin_data_class_name_mangle<F>(mut self, f: F) -> Self
+    pub fn set_data_class_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.kotlin_data_class_name_mangle = Some(Arc::new(f));
+        self.data_class_name_mangle = Some(Arc::new(f));
         self
     }
 
     /// Set the closure that mangles enum-class names declared via an
     /// `EnumClassDecl`. Receives the Rust short name. Default = identity.
-    pub fn set_kotlin_enum_name_mangle<F>(mut self, f: F) -> Self
+    pub fn set_enum_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
-        self.kotlin_enum_name_mangle = Some(Arc::new(f));
+        self.enum_name_mangle = Some(Arc::new(f));
         self
     }
 

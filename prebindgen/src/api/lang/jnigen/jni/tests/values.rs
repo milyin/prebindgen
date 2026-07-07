@@ -436,7 +436,7 @@ fn output_only_wrapper_resolves_without_input_twin() {
         .set_package_prefix("io.test.jni")
         .scalar_type_wrapper(
             crate::scalar_type_wrapper!(Len, jni::sys::jlong, "Long")
-                .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
+                .on_return(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
         )
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_wrapper");

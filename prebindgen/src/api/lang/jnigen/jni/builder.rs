@@ -37,11 +37,11 @@ impl JniGen {
         let mut jni = Self {
             source_module: syn::parse_str("crate").unwrap(),
             package: String::new(),
-            kotlin_fun_name_mangle: None,
-            kotlin_ptr_class_name_mangle: None,
-            kotlin_data_class_name_mangle: None,
-            kotlin_enum_name_mangle: None,
-            kotlin_harness_name_mangle: None,
+            fun_name_mangle: None,
+            ptr_class_name_mangle: None,
+            data_class_name_mangle: None,
+            enum_name_mangle: None,
+            harness_name_mangle: None,
             types: HashMap::new(),
             packages: BTreeMap::new(),
             input_wrappers: [
@@ -87,7 +87,7 @@ impl JniGen {
     /// `#[prebindgen]` extern symbols, the synthetic `freePtr` destructor,
     /// and the Kotlin-side `external fun` that pairs with each.
     pub(crate) fn mangle_fun(&self, name: &str) -> String {
-        match &self.kotlin_fun_name_mangle {
+        match &self.fun_name_mangle {
             Some(f) => f(name),
             None => name.to_string(),
         }
@@ -95,7 +95,7 @@ impl JniGen {
     /// Apply the ptr-class mangle closure to `name`, returning the closure
     /// result or `name` verbatim when unset.
     pub(crate) fn mangle_ptr_class(&self, name: &str) -> String {
-        match &self.kotlin_ptr_class_name_mangle {
+        match &self.ptr_class_name_mangle {
             Some(f) => f(name),
             None => name.to_string(),
         }
@@ -103,7 +103,7 @@ impl JniGen {
     /// Apply the data-class mangle closure to `name`, returning the closure
     /// result or `name` verbatim when unset.
     pub(crate) fn mangle_data_class(&self, name: &str) -> String {
-        match &self.kotlin_data_class_name_mangle {
+        match &self.data_class_name_mangle {
             Some(f) => f(name),
             None => name.to_string(),
         }
@@ -111,7 +111,7 @@ impl JniGen {
     /// Apply the enum mangle closure to `name`, returning the closure result
     /// or `name` verbatim when unset.
     pub(crate) fn mangle_enum(&self, name: &str) -> String {
-        match &self.kotlin_enum_name_mangle {
+        match &self.enum_name_mangle {
             Some(f) => f(name),
             None => name.to_string(),
         }
@@ -120,7 +120,7 @@ impl JniGen {
     /// `|n| format!("JNI{n}")` when unset, so `mangle_harness("Native")`
     /// yields `"JNINative"`.
     pub(crate) fn mangle_harness(&self, name: &str) -> String {
-        match &self.kotlin_harness_name_mangle {
+        match &self.harness_name_mangle {
             Some(f) => f(name),
             None => format!("JNI{name}"),
         }

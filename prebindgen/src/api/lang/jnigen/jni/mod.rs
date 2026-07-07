@@ -274,21 +274,21 @@ pub struct JniGen {
     /// zenoh-jni the closure returns `format!("{name}ViaJNI")` so the
     /// generated JNI extern symbols and matching Kotlin `external fun`s
     /// both pick up the `ViaJNI` suffix.
-    pub(crate) kotlin_fun_name_mangle: Option<NameMangle>,
+    pub(crate) fun_name_mangle: Option<NameMangle>,
     /// Mangler for Kotlin ptr-class names declared via a
     /// `PtrClassDecl`. Default = identity.
-    pub(crate) kotlin_ptr_class_name_mangle: Option<NameMangle>,
+    pub(crate) ptr_class_name_mangle: Option<NameMangle>,
     /// Mangler for Kotlin data-class names declared via a
     /// `DataClassDecl`. Default = identity.
-    pub(crate) kotlin_data_class_name_mangle: Option<NameMangle>,
+    pub(crate) data_class_name_mangle: Option<NameMangle>,
     /// Mangler for `EnumClassDecl`-declared C-like enum class
     /// names. Default = identity.
-    pub(crate) kotlin_enum_name_mangle: Option<NameMangle>,
+    pub(crate) enum_name_mangle: Option<NameMangle>,
     /// Mangler for the framework "harness" class name —
     /// `"Native"` (the centralized JNI extern holder). Default when
     /// unset = prepend `"JNI"`, so you get `JNINative`. Override to
     /// plug in a different convention.
-    pub(crate) kotlin_harness_name_mangle: Option<NameMangle>,
+    pub(crate) harness_name_mangle: Option<NameMangle>,
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting

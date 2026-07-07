@@ -88,18 +88,18 @@ fn main() {
             // (the domain names are already the desired Kotlin names) — registering
             // them still exercises the customization API and its `Some(closure)`
             // path.
-            .set_kotlin_harness_name_mangle(|n| format!("Cov{n}"))
-            .set_kotlin_fun_name_mangle(|n| n.to_string())
-            .set_kotlin_ptr_class_name_mangle(|n| n.to_string())
-            .set_kotlin_data_class_name_mangle(|n| n.to_string())
-            .set_kotlin_enum_name_mangle(|n| n.to_string())
+            .set_harness_name_mangle(|n| format!("Cov{n}"))
+            .set_fun_name_mangle(|n| n.to_string())
+            .set_ptr_class_name_mangle(|n| n.to_string())
+            .set_data_class_name_mangle(|n| n.to_string())
+            .set_enum_name_mangle(|n| n.to_string())
     // `Millis` newtype: a custom scalar wire mapping to a bare `Long` (no
     // generated class) — global, not tied to any package (see the `decl`
     // module doc for why a scalar wrapper never needs package placement).
     .scalar_type_wrapper(
         scalar_type_wrapper!(Millis, jni::sys::jlong, "Long")
-            .input(|v| pq!(perftest_flat::Millis(*#v as u64)))
-            .output(|v| pq!(#v.0 as jni::sys::jlong)),
+            .on_param(|v| pq!(perftest_flat::Millis(*#v as u64)))
+            .on_return(|v| pq!(#v.0 as jni::sys::jlong)),
     )
     // ── Base-package types ──────────────────────────────────────────────
     // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,

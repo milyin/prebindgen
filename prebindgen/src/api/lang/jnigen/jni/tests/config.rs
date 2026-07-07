@@ -48,7 +48,7 @@ fn per_class_name_and_base_package_fun() {
         .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         // Rename the handle class; the mangle closures do NOT apply to it.
-        .set_kotlin_ptr_class_name_mangle(|n| format!("JNI{n}"))
+        .set_ptr_class_name_mangle(|n| format!("JNI{n}"))
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZThing).name("Gadget"))
@@ -128,7 +128,7 @@ fn setters_after_declarations_apply() {
         )
         .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.late.jni")
-        .set_kotlin_ptr_class_name_mangle(|n| n.strip_prefix('Z').unwrap_or(n).to_string());
+        .set_ptr_class_name_mangle(|n| n.strip_prefix('Z').unwrap_or(n).to_string());
 
     let dir = unique_test_dir("jnigen_setters_after_decls");
     let _ = std::fs::remove_dir_all(&dir);

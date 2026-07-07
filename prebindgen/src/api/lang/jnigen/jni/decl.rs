@@ -687,7 +687,7 @@ impl ScalarTypeWrapperDecl {
     /// the type is a parameter). `body` gets the wire value's ident and
     /// returns the Rust expression, e.g.
     /// `|v| pq!(perftest_flat::Millis(*#v as u64))`.
-    pub fn input(
+    pub fn on_param(
         mut self,
         body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static,
     ) -> Self {
@@ -698,7 +698,7 @@ impl ScalarTypeWrapperDecl {
     /// How to turn the **Rust value into the wire value** (used when the type
     /// is returned). `body` gets the Rust value's ident and returns the wire
     /// expression, e.g. `|v| pq!(#v.0 as jni::sys::jlong)`.
-    pub fn output(
+    pub fn on_return(
         mut self,
         body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static,
     ) -> Self {
