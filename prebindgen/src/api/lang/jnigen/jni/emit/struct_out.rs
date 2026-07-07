@@ -9,7 +9,7 @@ use super::*;
 /// in `Nullable`) are encodable as a single `L<FQN>;` ctor arg; a
 /// collection layer (`Iterable`, i.e. `Vec<Handle>`) would need array
 /// codegen and is a loud build-time error until implemented.
-pub(crate) fn handle_field_fqn(ext: &JniGen<impl JniGenState>, h: &Projection) -> String {
+pub(crate) fn handle_field_fqn(ext: &JniGen, h: &Projection) -> String {
     fn assert_scalar(s: &FoldStrategy) {
         match s {
             FoldStrategy::Base => {}
@@ -80,7 +80,7 @@ pub(crate) fn primitive_default_for_descriptor(sig: &str) -> TokenStream {
 /// `registry.structs` — both populated before `resolve` — never the output
 /// converter table (not yet built at this stage).
 pub(crate) fn synth_value_struct_leaves(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     path_prefix: &[syn::Ident],
@@ -158,7 +158,7 @@ pub(crate) fn synth_value_struct_leaves(
 /// plan `flatten_struct_factory` walks for the Kotlin side, so the slot
 /// order and JVM descriptors agree by construction.
 pub(crate) fn flatten_struct_encode(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     access: &TokenStream,
@@ -357,7 +357,7 @@ fn encode_plan(
 }
 
 pub(crate) fn struct_output_body(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     s: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
@@ -371,13 +371,15 @@ pub(crate) fn struct_output_body(
     let registered_fqn = ext
         .types
         .get(&TypeKey::from_type(&struct_ty))
-        .and_then(|cfg| cfg.kotlin_name.clone());
+        .and_then(|cfg| cfg.name_spec.as_ref())
+        .map(|s| ext.fqn_of(s));
+    let java_class_prefix = ext.java_class_prefix();
     let java_class_name = if let Some(fqn) = registered_fqn {
         fqn.replace('.', "/")
-    } else if ext.java_class_prefix.is_empty() {
+    } else if java_class_prefix.is_empty() {
         struct_name.clone()
     } else {
-        format!("{}/{}", ext.java_class_prefix, struct_name)
+        format!("{}/{}", java_class_prefix, struct_name)
     };
 
     // Recursively flatten the whole object graph into leaf wires, then build it
@@ -416,7 +418,7 @@ pub(crate) fn struct_output_body(
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
 
-pub(crate) fn struct_module_path(ext: &JniGen<impl JniGenState>, s: &syn::ItemStruct) -> syn::Path {
+pub(crate) fn struct_module_path(ext: &JniGen, s: &syn::ItemStruct) -> syn::Path {
     // Place the struct under <source_module>::<file_stem>::<Name>. Today's
     // pipeline derives the module from the source file stem; here we ride
     // on the same convention by inspecting the SourceLocation. Without a

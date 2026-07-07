@@ -19,7 +19,7 @@ use super::*;
 /// Errors cannot reach a caller-side error sink (the declaring call already
 /// returned), so they are converted to `__JniErr` and logged via `tracing`.
 pub(crate) fn callback_input(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     args: &[syn::Type],
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {

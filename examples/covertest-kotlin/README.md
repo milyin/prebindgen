@@ -121,11 +121,11 @@ identical to the identity closures registered here).
 
 ## Configuration toggles
 
-- **`disable_handle_locks`** — *kept at its default (locks ON).* This is a
+- **`set_emit_handle_locks`** — *kept at its default (locks ON).* This is a
   global, binary toggle: a single binding can only be in one lock mode.
   Keeping the default covers the richer `withSortedHandleLocks` scaffold that
   the generated wrappers emit (and that this example's handle round-trips and
-  the 4-thread smoke exercise); calling `disable_handle_locks()` would simply
+  the 4-thread smoke exercise); calling `set_emit_handle_locks(false)` would simply
   omit it.
 
 [`lang::JniGen`]: https://docs.rs/prebindgen

@@ -91,7 +91,7 @@ pub(crate) enum PlanFieldKind {
 /// name) — consistently for BOTH sides, where the former parallel walks
 /// could silently diverge on such edge cases.
 pub(crate) fn build_struct_plan(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     s: &syn::ItemStruct,
     depth: usize,
@@ -163,7 +163,9 @@ pub(crate) fn build_struct_plan(
                     fname
                 );
             }
-            let child_fqn = cfg.and_then(|c| c.kotlin_name.clone());
+            let child_fqn = cfg
+                .and_then(|c| c.name_spec.as_ref())
+                .map(|s| ext.fqn_of(s));
             let plan = build_struct_plan(ext, registry, &st.clone(), depth + 1)?;
             fields.push(PlanField {
                 fname,

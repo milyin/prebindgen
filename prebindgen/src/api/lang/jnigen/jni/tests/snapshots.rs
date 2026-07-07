@@ -46,14 +46,19 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Error))
-        .ptr_class(syn::parse_quote!(ZThing))
-        .enum_class(syn::parse_quote!(Color))
-        .package("thing")
-        .fun(syn::parse_quote!(z_thing_new))
-        .fun(syn::parse_quote!(z_thing_name));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Error))
+                .class(crate::ptr_class!(ZThing))
+                .class(crate::enum_class!(Color)),
+        )
+        .package(
+            crate::package!("thing")
+                .fun(crate::fun!(z_thing_new))
+                .fun(crate::fun!(z_thing_name)),
+        );
 
     let dir = unique_test_dir("jnigen_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -220,12 +225,14 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Payload))
-        .package("payload")
-        .fun(syn::parse_quote!(payload_get))
-        .fun(syn::parse_quote!(payload_put));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("payload")
+                .class(crate::data_class!(Payload))
+                .fun(crate::fun!(payload_get))
+                .fun(crate::fun!(payload_put)),
+        );
 
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
@@ -299,12 +306,14 @@ fn slice_input_builds_vec_handle() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .data_class(syn::parse_quote!(Foo))
-        .package("foo")
-        .fun(syn::parse_quote!(put_slice))
-        .fun(syn::parse_quote!(put_vec));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(crate::fun!(put_slice))
+                .fun(crate::fun!(put_vec)),
+        );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
@@ -375,7 +384,7 @@ fn slice_input_builds_vec_handle() {
     );
 }
 
-/// `.jni_native_init(code)` injects an `init { code }` block into the generated
+/// `.set_jni_native_init(code)` injects an `init { code }` block into the generated
 /// centralized externs object (`JNINative`) — the single static-init point a
 /// consumer uses to trigger native-library loading. Unset (the `snapshot_*`
 /// tests) emits no init block.
@@ -394,11 +403,10 @@ fn jni_native_init_emits_init_block() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
-        .package("thing")
-        .fun(syn::parse_quote!(z_ping));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .set_jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
+        .package(crate::package!("thing").fun(crate::fun!(z_ping)));
 
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);

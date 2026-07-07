@@ -8,7 +8,7 @@ use super::*;
 /// the structured builders ([`JniGen::ptr_class`],
 /// [`JniGen::data_class`]) to derive a default Kotlin class name from
 /// the Rust type-key. Panics for non-path types (e.g. closures, references) —
-/// the per-kind `kotlin_*_name_mangle` closures see only path-shaped
+/// the per-kind `*_name_mangle` closures see only path-shaped
 /// shorts. For verbatim Kotlin expressions on non-path types, chain
 /// [`JniGen::kotlin_type`] after the structured builder.
 pub(crate) fn rust_short_name(key: &TypeKey) -> String {
@@ -61,10 +61,10 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     }
 }
 
-pub(crate) fn mangle_jni_name(ext: &JniGen<impl JniGenState>, ident: &syn::Ident) -> syn::Ident {
+pub(crate) fn mangle_jni_name(ext: &JniGen, ident: &syn::Ident) -> syn::Ident {
     let camel = snake_to_camel(&ident.to_string());
     let mangled = ext.mangle_fun(&camel);
-    let mut name = ext.jni_class_path.clone();
+    let mut name = ext.jni_class_path();
     name.push('_');
     name.push_str(&mangled);
     syn::Ident::new(&name, Span::call_site())
@@ -164,10 +164,7 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
 /// Used for `Option<value-blob>` params where the written type isn't the bare
 /// value class but the projection still resolves the leaf — so the wrapper
 /// knows which inline field to unwrap (`<name>.bytes`).
-pub(crate) fn value_projection_field_for_leaf(
-    ext: &JniGen<impl JniGenState>,
-    leaf_key: &str,
-) -> Option<String> {
+pub(crate) fn value_projection_field_for_leaf(ext: &JniGen, leaf_key: &str) -> Option<String> {
     let key = TypeKey::parse(leaf_key);
     let cfg = ext.types.get(&key)?;
     if cfg.value_blob {

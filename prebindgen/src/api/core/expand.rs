@@ -4,8 +4,8 @@
 //!
 //! A *constructor* is any `#[prebindgen]` function `f(p0, …) -> T` (or
 //! `-> Result<T, E>`) that builds a target type `T`. A type's input flatten
-//! (`.flatten_input()` + `.variant`/`.variant_self`, or the per-fn
-//! `.flatten_input_with(param)` override) replaces a parameter of that type —
+//! (`.default_param_expand*` on a class decl, or the per-fn
+//! `.param_expand(param, …)` override) replaces a parameter of that type —
 //! in the generated foreign signature only — with the constructor's inputs,
 //! flattened. The generated wrapper decodes those inputs, runs the
 //! constructor Rust-side (the **fold**), and passes the built value to the
@@ -63,7 +63,7 @@ struct ConstructorDecl {
     target: syn::Type,
     variants: Vec<Variant>,
     /// Auto-`construct` every matching param of every declared fn. Always
-    /// `true` for `.flatten_input()`-created declarations.
+    /// `true` for class-default (`.default_param_expand*`) declarations.
     default: bool,
 }
 
@@ -72,7 +72,7 @@ struct ConstructorDecl {
 enum ExpandSel {
     /// Use the target type's default constructor (error if none/ambiguous).
     TopLevel,
-    /// Per-fn override (`.flatten_input_with`): use exactly these build-from
+    /// Per-fn override (`.param_expand`): use exactly these build-from
     /// variants (constructor fns and/or the identity/self arm).
     Subset(Vec<Variant>),
 }
@@ -93,7 +93,7 @@ pub struct Expansions {
     expands: Vec<ExpandDecl>,
     /// Cursor for the constructor builder (`.constructor_variant*` / `.default`).
     cur_constructor: Option<usize>,
-    /// Cursor for an in-progress per-fn input subset (`.flatten_input_with(...)`
+    /// Cursor for an in-progress per-fn input subset (`.param_expand(...)`
     /// → `.variant`/`.variant_self`): index into [`Self::expands`].
     cur_expand: Option<usize>,
     /// `.skip_default_construct(param)` opt-outs: `(fn, param)` excluded from a
@@ -103,7 +103,7 @@ pub struct Expansions {
 
 impl Expansions {
     /// Find-or-create the default (always-`default`) constructor for `target`
-    /// and set the cursor to it. Idempotent across a `.flatten_input()` chain —
+    /// and set the cursor to it. Idempotent across a `.default_param_expand` chain —
     /// the first call creates it, subsequent ones reuse it so variants accumulate.
     pub fn ensure_default_constructor(&mut self, target: syn::Type) {
         let key = TypeKey::from_type(&target);
@@ -123,30 +123,30 @@ impl Expansions {
         }
     }
 
-    /// `.flatten_input_suppress(param)` on the current `.fun` — exclude
+    /// identity-only `.param_expand_self(param)` — exclude
     /// `(func, param)` from constructor default auto-apply.
     pub fn add_skip_default_construct(&mut self, func: syn::Ident, param: syn::Ident) {
         self.skip_construct.insert((func, param));
     }
 
-    /// `.variant(name)` inside `.flatten_input()` — add a constructor-function arm.
+    /// `.default_param_expand(fun)` — add a constructor-function arm.
     pub fn add_constructor_variant(&mut self, func: syn::Ident) {
         let i = self
             .cur_constructor
-            .expect(".variant called without a current .flatten_input");
+            .expect(".variant called without a current constructor");
         self.constructors[i].variants.push(Variant::Ctor(func));
     }
 
-    /// `.variant_self()` inside `.flatten_input()` — add the identity arm
+    /// `.default_param_expand_self()` — add the identity arm
     /// (pass the target value straight through).
     pub fn add_constructor_variant_id(&mut self) {
         let i = self
             .cur_constructor
-            .expect(".variant_self called without a current .flatten_input");
+            .expect(".variant_self called without a current constructor");
         self.constructors[i].variants.push(Variant::Identity);
     }
 
-    /// Begin a per-fn input flatten (`.flatten_input_with(param)`): construct
+    /// Begin a per-fn input override (`.param_expand(param, …)`): construct
     /// `param` from an explicit, incrementally-built variant list (constructor
     /// arms via [`Self::push_subset_variant`] and/or the identity/self arm via
     /// [`Self::push_subset_self`]). Recorded as an explicit decl so the
@@ -161,23 +161,23 @@ impl Expansions {
         self.cur_expand = Some(self.expands.len() - 1);
     }
 
-    /// `.variant(fn)` inside a `.flatten_input_with(...)` — append a build-from
+    /// `.param_expand(param, fn)` — append a build-from
     /// constructor arm to the current per-fn input subset.
     pub fn push_subset_variant(&mut self, func: syn::Ident) {
         let i = self
             .cur_expand
-            .expect(".variant called without a current .flatten_input_with");
+            .expect(".variant called without a current constructor");
         if let ExpandSel::Subset(v) = &mut self.expands[i].sel {
             v.push(Variant::Ctor(func));
         }
     }
 
-    /// `.variant_self()` inside a `.flatten_input_with(...)` — append the
+    /// `.param_expand_self(param)` (with other variants) — append the
     /// identity (pass-the-handle-through) arm to the current per-fn subset.
     pub fn push_subset_self(&mut self) {
         let i = self
             .cur_expand
-            .expect(".variant_self called without a current .flatten_input_with");
+            .expect(".variant_self called without a current constructor");
         if let ExpandSel::Subset(v) = &mut self.expands[i].sel {
             v.push(Variant::Identity);
         }

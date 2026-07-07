@@ -51,7 +51,7 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
-impl<S: JniGenState> JniGen<S> {
+impl JniGen {
     /// Unified Kotlin emission — single public entry point. Each per-kind
     /// emitter builds in-memory [`kt::KtFile`] model fragments; they are then
     /// merged into one file per package, rendered, and written under
@@ -134,8 +134,8 @@ impl<S: JniGenState> JniGen<S> {
         );
 
         // The N-ary locking helper is only referenced when wrappers are
-        // emitted with locking on; skip it under `disable_handle_locks()` so it
-        // doesn't surface as an unused-`internal fun` warning.
+        // emitted with locking on; skip it under `set_emit_handle_locks(false)`
+        // so it doesn't surface as an unused-`internal fun` warning.
         if self.emit_handle_locks {
             file = file.decl(
                 KtFun::new("withSortedHandleLocks")
@@ -248,9 +248,16 @@ impl<S: JniGenState> JniGen<S> {
             if !cfg.value_blob {
                 continue;
             }
-            let fqn = cfg.kotlin_name.clone().ok_or_else(|| {
-                WriteKotlinError::Other(format!("value_blob `{}` has no Kotlin FQN", key.as_str()))
-            })?;
+            let fqn = cfg
+                .name_spec
+                .as_ref()
+                .map(|s| self.fqn_of(s))
+                .ok_or_else(|| {
+                    WriteKotlinError::Other(format!(
+                        "value_blob `{}` has no Kotlin FQN",
+                        key.as_str()
+                    ))
+                })?;
             let (package, class_name) = match fqn.rsplit_once('.') {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), fqn.clone()),
@@ -276,12 +283,9 @@ impl<S: JniGenState> JniGen<S> {
             if !members.is_empty() && !self.package.is_empty() {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
-            // Promoted instance methods (`.accessor`/`.method`): receiver bound to
-            // `this`, passing `this.bytes` to the extern.
-            for m in members
-                .iter()
-                .filter(|m| matches!(m.kind, MemberKind::Accessor | MemberKind::Method))
-            {
+            // Promoted instance methods (`.fun`): receiver bound to `this`,
+            // passing `this.bytes` to the extern.
+            for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
                 if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
@@ -336,7 +340,7 @@ impl<S: JniGenState> JniGen<S> {
             if cfg.opaque.is_none() {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
             // rust_doc — short last-segment of the Rust type key (best
@@ -366,7 +370,7 @@ pub(crate) struct OwnedTypedHandle {
     pub key: TypeKey,
 }
 
-impl<S: JniGenState> JniGen<S> {
+impl JniGen {
     /// Emit one Kotlin `enum class` file per `enum_class`-declared type.
     /// Variants render in declaration order using SCREAMING_SNAKE_CASE names; the
     /// constructor stores the Rust discriminant value (or the ordinal as
@@ -387,7 +391,7 @@ impl<S: JniGenState> JniGen<S> {
             if cfg.enum_cfg.is_none() {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
             // Look up the syn::ItemEnum by the type-key's bare ident.
@@ -430,7 +434,7 @@ impl<S: JniGenState> JniGen<S> {
             if cfg.special_decl() {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
 
@@ -728,7 +732,7 @@ impl<S: JniGenState> JniGen<S> {
                     TypeKey::from_type(source)
                 )
             });
-        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run` (== the typed interface
         // when the builder needs no twin — synthesized data classes are
         // all-simple-leaf today). `fromParts` takes the raw wire types and
@@ -771,7 +775,7 @@ impl<S: JniGenState> JniGen<S> {
                     TypeKey::from_type(source)
                 )
             });
-        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run(acc, leaves…)`; `acc` is the
         // accumulator list and the remaining params are the element leaves.
         let folder = spec.raw_name();
@@ -886,7 +890,7 @@ impl<S: JniGenState> JniGen<S> {
     /// Emit the centralized Native-object Kotlin file under `output_dir`
     /// (class name from [`JniGen::jni_native_class_name`]). Holds one
     /// `external fun` per `#[prebindgen]` function — names mangled via
-    /// `kotlin_fun_name_mangle`, parameter and return types rendered at
+    /// [`JniGen::set_fun_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under
     /// `Java_<package>_<jni_native_class>_<name>`. Every generated native

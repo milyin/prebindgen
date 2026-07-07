@@ -35,20 +35,23 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        .ptr_class(syn::parse_quote!(ZThing))
-        // Canonical output: handle (identity) + its string form — a callback
-        // arg of ZThing decomposes into these 2 leaves.
-        .accessor(syn::parse_quote!(z_thing_name), "name")
-        .flatten_output()
-        .field_self()
-        .field("name")
-        // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
-        .ptr_class(syn::parse_quote!(ZOther))
-        .fun(syn::parse_quote!(z_thing_sub))
-        .fun(syn::parse_quote!(z_other_sub));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        // Canonical output: handle (identity) + its string form — a
+                        // callback arg of ZThing decomposes into these 2 leaves.
+                        .fun(crate::fun!(z_thing_name).name("name"))
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_thing_name).name("name")),
+                )
+                // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
+                .class(crate::ptr_class!(ZOther))
+                .fun(crate::fun!(z_thing_sub))
+                .fun(crate::fun!(z_other_sub)),
+        );
 
     let dir = unique_test_dir("jnigen_cb_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -176,10 +179,10 @@ fn callback_snapshot_kotlin_side() {
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
-/// (`.flatten_output().field_self()`) must emit the root MOVE after every borrow of
+/// (`.default_return_expand().field_self()`) must emit the root MOVE after every borrow of
 /// the owned value — otherwise the nested child clone (which borrows the root)
 /// follows `Box::into_raw(Box::new(value))` and fails to compile with "use of
-/// moved value". Declaring `.flatten_output().field_self()` LAST guarantees the
+/// moved value". Declaring `.default_return_expand().field_self()` LAST guarantees the
 /// correct order (the emitter emits identity leaves in declaration order, after
 /// all non-identity leaves). This mirrors the zenoh-flat `ZQuery` queryable
 /// callback (handle + decomposed fields, nested `ZKeyExpr` identity).
@@ -219,22 +222,26 @@ fn callback_root_identity_moved_after_nested_borrow() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("thing")
-        // Child handle: canonical output = identity (clone) + its name string.
-        .ptr_class(syn::parse_quote!(ZChild))
-        .accessor(syn::parse_quote!(z_child_name), "name")
-        .flatten_output()
-        .field_self()
-        .field("name")
-        // Parent: a nested child-handle record, then its OWN root identity LAST.
-        .ptr_class(syn::parse_quote!(ZParent))
-        .accessor(syn::parse_quote!(z_parent_child), "child")
-        .flatten_output()
-        .field("child")
-        .field_self()
-        .fun(syn::parse_quote!(z_parent_sub));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                // Child handle: canonical output = identity (clone) + its name string.
+                .class(
+                    crate::ptr_class!(ZChild)
+                        .fun(crate::fun!(z_child_name).name("name"))
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_child_name).name("name")),
+                )
+                // Parent: a nested child-handle record, then its OWN root identity LAST.
+                .class(
+                    crate::ptr_class!(ZParent)
+                        .fun(crate::fun!(z_parent_child).name("child"))
+                        .default_return_expand(crate::fun!(z_parent_child).name("child"))
+                        .default_return_expand_self(),
+                )
+                .fun(crate::fun!(z_parent_sub)),
+        );
 
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
@@ -301,40 +308,47 @@ fn callback_double_option_unwrap_pipeline() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .source_module(syn::parse_quote!(myflat))
-        .package_prefix("io.test.jni")
-        .package("query")
-        .value_class(syn::parse_quote!(ZId))
-        .ptr_class(syn::parse_quote!(ZKeyExpr))
-        .accessor(syn::parse_quote!(z_keyexpr_as_str), "asStr")
-        .flatten_output()
-        .field_self()
-        .field("asStr")
-        .ptr_class(syn::parse_quote!(ZTs))
-        .accessor(syn::parse_quote!(z_ts_ntp64), "ntp64")
-        .flatten_output()
-        .field("ntp64")
-        .ptr_class(syn::parse_quote!(ZSample))
-        .accessor(syn::parse_quote!(z_sample_key_expr), "keyExpr")
-        .accessor(syn::parse_quote!(z_sample_timestamp), "timestamp")
-        .flatten_output()
-        .field("keyExpr")
-        .field("timestamp")
-        .ptr_class(syn::parse_quote!(ZErr))
-        .accessor(syn::parse_quote!(z_err_payload), "payload")
-        .flatten_output()
-        .field("payload")
-        .ptr_class(syn::parse_quote!(ZReply))
-        .accessor(syn::parse_quote!(z_reply_zid), "zid")
-        .accessor(syn::parse_quote!(z_reply_is_ok), "isOk")
-        .accessor(syn::parse_quote!(z_reply_sample), "sample")
-        .accessor(syn::parse_quote!(z_reply_err), "err")
-        .flatten_output()
-        .field("zid")
-        .field("isOk")
-        .field("sample")
-        .field("err")
-        .fun(syn::parse_quote!(z_get));
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("query")
+                .class(crate::value_class!(ZId))
+                .class(
+                    crate::ptr_class!(ZKeyExpr)
+                        .fun(crate::fun!(z_keyexpr_as_str).name("asStr"))
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_keyexpr_as_str).name("asStr")),
+                )
+                .class(
+                    crate::ptr_class!(ZTs)
+                        .fun(crate::fun!(z_ts_ntp64).name("ntp64"))
+                        .default_return_expand(crate::fun!(z_ts_ntp64).name("ntp64")),
+                )
+                .class(
+                    crate::ptr_class!(ZSample)
+                        .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                        .fun(crate::fun!(z_sample_timestamp).name("timestamp"))
+                        .default_return_expand(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                        .default_return_expand(crate::fun!(z_sample_timestamp).name("timestamp")),
+                )
+                .class(
+                    crate::ptr_class!(ZErr)
+                        .fun(crate::fun!(z_err_payload).name("payload"))
+                        .default_return_expand(crate::fun!(z_err_payload).name("payload")),
+                )
+                .class(
+                    crate::ptr_class!(ZReply)
+                        .fun(crate::fun!(z_reply_zid).name("zid"))
+                        .fun(crate::fun!(z_reply_is_ok).name("isOk"))
+                        .fun(crate::fun!(z_reply_sample).name("sample"))
+                        .fun(crate::fun!(z_reply_err).name("err"))
+                        .default_return_expand(crate::fun!(z_reply_zid).name("zid"))
+                        .default_return_expand(crate::fun!(z_reply_is_ok).name("isOk"))
+                        .default_return_expand(crate::fun!(z_reply_sample).name("sample"))
+                        .default_return_expand(crate::fun!(z_reply_err).name("err")),
+                )
+                .fun(crate::fun!(z_get)),
+        );
 
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
@@ -417,7 +431,7 @@ fn callback_double_option_unwrap_pipeline() {
 // ────────────────────────────────────────────────────────────────────────
 // Declaration-keyed interfaces: a type may have several decompositions —
 // the default (unnamed) deconstructor and per-fn inline records
-// (`.flatten_output_with`). Interface identity follows the DECLARATION, so
+// (`.return_expand`). Interface identity follows the DECLARATION, so
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────

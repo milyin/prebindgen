@@ -11,7 +11,7 @@ struct OutputLowering<'a> {
 }
 
 pub(crate) fn emit_jni_function_wrapper(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
 ) -> TokenStream {
@@ -340,7 +340,7 @@ fn unfold_builder_param(plan: &crate::api::core::unfold::UnfoldPlan) -> TokenStr
 /// other input — so the per-input handling stays a self-contained unit.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     original_ident: &syn::Ident,
     input: &syn::FnArg,
@@ -586,7 +586,7 @@ fn emit_input_param(
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
 pub(crate) fn emit_expanded_param(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::expand::FoldPlan,
     orig_param: &syn::Ident,

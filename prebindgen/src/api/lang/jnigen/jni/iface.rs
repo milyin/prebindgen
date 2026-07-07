@@ -556,7 +556,7 @@ fn method_descr(params: &[IfaceParam], ret: &kt::KtType, type_params: &[String])
 /// The interface base name for a decomposition: the subject type's short
 /// name, extended by the deconstructor declaration's identity. The type's
 /// default declaration keeps the bare short; per-fn inline records
-/// (`.flatten_output_with()`) append the function's UpperCamel ident.
+/// (`.return_expand()`) append the function's UpperCamel ident.
 /// This is what makes interface identity == declaration identity: functions
 /// sharing a declaration share the interface, differently-declared
 /// decompositions of one type get distinct interfaces.
@@ -601,7 +601,7 @@ fn subject_short(ty: &syn::Type) -> String {
 
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
-fn subject_package(ext: &JniGen<impl JniGenState>, subject: &syn::Type) -> String {
+fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
     let key =
         TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject)).to_string();
     ext.kotlin_fqn(&key)
@@ -612,7 +612,7 @@ fn subject_package(ext: &JniGen<impl JniGenState>, subject: &syn::Type) -> Strin
 /// The interface param list for a decomposition's leaves: names from
 /// [`plan_leaf_names`], typed + raw views per leaf.
 fn plan_leaf_params(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     leaves: &[crate::api::core::unfold::UnfoldLeaf],
 ) -> Option<Vec<IfaceParam>> {
@@ -647,7 +647,7 @@ fn plan_leaf_params(
 ///   the close-unless-taken contract needs the native side to `close()` the
 ///   wrapped object after the invoke.
 fn leaf_iface_param(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     name: String,
     out_ty: &syn::Type,
@@ -715,7 +715,7 @@ fn leaf_iface_param(
     if let kt::KtType::Named { fqn: bk_fqn, .. } = &builder_kt {
         if !bk_fqn.contains('.') {
             if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty).to_string()) {
-                let reg_short = reg_fqn.rsplit('.').next().unwrap_or(reg_fqn);
+                let reg_short = reg_fqn.rsplit('.').next().unwrap_or(&reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
                     let raw = if builder_kt.is_nullable() {
@@ -743,7 +743,7 @@ fn leaf_iface_param(
 /// `run` (close-unless-taken). Replaces the former Rust-side `new_object` +
 /// post-invoke `close()`. `None` if the arg's projection FQN can't be resolved.
 pub(crate) fn owned_handle_iface_param(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     name: String,
     out_ty: &syn::Type,
@@ -770,7 +770,7 @@ pub(crate) fn owned_handle_iface_param(
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
 /// placed in the first arg type's package (root for `Fn()`).
 pub(crate) fn callback_iface_spec(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     cb_args: &[syn::Type],
 ) -> Option<IfaceSpec> {
@@ -816,7 +816,7 @@ pub(crate) fn callback_iface_spec(
                     other => other.clone(),
                 };
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core).to_string())?;
-                let class_short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+                let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
@@ -927,7 +927,7 @@ pub(crate) fn callback_iface_spec(
 /// function's own plan. Named `<decl-base>Builder`, placed in the source
 /// type's package.
 pub(crate) fn builder_iface_spec(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
@@ -953,7 +953,7 @@ pub(crate) fn builder_iface_spec(
 /// the element's deconstructor declaration. Named `<decl-base>Folder`,
 /// placed in the element type's package.
 pub(crate) fn folder_iface_spec(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
@@ -979,7 +979,7 @@ pub(crate) fn folder_iface_spec(
 /// without a deconstructor — no declaration involved):
 /// `run(acc: A, element): A`. One shape per element type by construction.
 pub(crate) fn whole_folder_iface_spec(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     element: &syn::Type,
 ) -> Option<IfaceSpec> {
@@ -1013,7 +1013,7 @@ pub(crate) fn whole_folder_iface_spec(
 /// element decomposes, whole-element otherwise. Thin dispatch — the
 /// derivation itself is keyed.
 pub(crate) fn folder_iface_for_plan(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &UnfoldPlan,
 ) -> Option<IfaceSpec> {
@@ -1045,13 +1045,13 @@ pub(crate) fn folder_iface_for_plan(
 /// emission (`write_iface_files`), keyed by the element's deconstructor so the
 /// two stay in lockstep.
 pub(crate) fn fixed_folder_typed_groups(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans.get(decon)?;
     let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source).to_string())?;
-    let class_short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+    let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),
@@ -1077,7 +1077,7 @@ pub(crate) fn fixed_folder_typed_groups(
 /// the decomposed error. Keyed by the error type's deconstructor declaration.
 /// Named `<decl-base>Handler`, placed in the error type's package.
 pub(crate) fn error_handler_iface_spec(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
@@ -1104,7 +1104,7 @@ pub(crate) fn error_handler_iface_spec(
 /// The shared infallible handler `JniErrorHandler<out R> { run(je: String?): R }`
 /// — every function without an error plan takes one; placed in the root
 /// package.
-pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen<impl JniGenState>) -> IfaceSpec {
+pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
     let params = vec![IfaceParam::same(
         "je".to_string(),
         kt::KtType::string().nullable(),
@@ -1122,7 +1122,7 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen<impl JniGenState>) -> If
 /// declaration-keyed typed handler, or the shared
 /// [`jni_error_handler_iface_spec`].
 pub(crate) fn onerror_iface_spec(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     fn_ident: &syn::Ident,
 ) -> Option<IfaceSpec> {

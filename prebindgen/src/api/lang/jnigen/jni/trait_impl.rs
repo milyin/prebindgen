@@ -11,7 +11,7 @@ use super::*;
 // and consuming-crate wrapper exts like ZenohJniExt).
 // ──────────────────────────────────────────────────────────────────────
 
-impl<S> JniGen<S> {
+impl JniGen {
     /// Build the standard JNI input-converter `fn`. Body assumes in-scope
     /// `env: &mut JNIEnv` and `v: &<wire>` (or `v: <wire>` for raw-pointer
     /// wires); produces a value of `rust`. Returned function has its name
@@ -245,12 +245,12 @@ impl<S> JniGen<S> {
         let key = TypeKey::from_type(outer_ty);
         if let Some(cfg) = self.types.get(&key) {
             // Opaque-handle entries keep their typed FQN in
-            // `kotlin_name` for FQN-consumers, but the value-context
+            // `name_spec` for FQN-consumers, but the value-context
             // name is `"Long"` (set on the rank-0 handler's metadata).
             // Don't let that FQN leak into a wrapper's metadata.
             if cfg.opaque.is_none() {
-                if let Some(name) = &cfg.kotlin_name {
-                    return Some(kt::KtType::cls(name.clone()));
+                if let Some(spec) = &cfg.name_spec {
+                    return Some(kt::KtType::cls(self.fqn_of(spec)));
                 }
             }
         }
@@ -261,7 +261,7 @@ impl<S> JniGen<S> {
     /// for plugin wrapper exts that build `ConverterImpl::function`
     /// manually with a non-standard return type (e.g.
     /// `impl Into<…>` parameters that can't be expressed via
-    /// [`Self::input_wrapper`]'s fixed signature shape).
+    /// `input_wrapper_shape`'s fixed signature shape).
     pub fn input_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
         input_name(rust, wire)
     }
@@ -422,7 +422,7 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
 /// whose declare/undeclare fns are `#[cfg]`'d out of the scan) from
 /// producing destructors that reference types not in scope.
 pub(crate) fn build_handle_destructor_items(
-    ext: &JniGen<impl JniGenState>,
+    ext: &JniGen,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
     let free_ptr = ext.mangle_fun("freePtr");
@@ -437,21 +437,21 @@ pub(crate) fn build_handle_destructor_items(
         if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
             continue;
         }
-        let class_short = cfg
-            .kotlin_name
-            .as_deref()
-            .and_then(|fqn| fqn.rsplit('.').next())
+        let class_fqn = cfg
+            .name_spec
+            .as_ref()
+            .map(|s| ext.fqn_of(s))
             .unwrap_or_else(|| {
                 panic!(
                     "build_handle_destructor_items: opaque handle `{}` has no \
-                     kotlin_name to derive a destructor symbol from",
+                     name spec to derive a destructor symbol from",
                     key.as_str()
                 )
             });
-        let class_pkg = cfg
-            .kotlin_name
-            .as_deref()
-            .and_then(|fqn| fqn.rsplit_once('.').map(|(pkg, _)| pkg))
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
+        let class_pkg = class_fqn
+            .rsplit_once('.')
+            .map(|(pkg, _)| pkg)
             .unwrap_or("")
             .replace('.', "_");
         let symbol = if class_pkg.is_empty() {
@@ -486,7 +486,7 @@ pub(crate) fn build_handle_destructor_items(
 /// the two `Option<_>` sub-cases (direct-handle-by-value vs general), which
 /// share a pattern and so live together in [`JniGen::input_option`] to keep
 /// their original fall-through.
-impl<S: JniGenState> JniGen<S> {
+impl JniGen {
     /// `& _` / `& mut _` borrow: share T's resolved converter — `&T`'s entry
     /// points at the same `ItemFn` (the fn returns owned `T`; the call site in
     /// `emit_jni_function_wrapper` adds `&decoded`). Exists so the
@@ -771,7 +771,7 @@ impl<S: JniGenState> JniGen<S> {
 // Prebindgen impl
 // ──────────────────────────────────────────────────────────────────────
 
-impl<S: JniGenState> Prebindgen for JniGen<S> {
+impl Prebindgen for JniGen {
     /// Cross-language extras every JNI converter carries — currently
     /// the Kotlin value-context type name. Filled by the rank-N
     /// handlers at the same point they build the wire/body; the
@@ -835,7 +835,7 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             // handle, an enum, nor a value blob.
             let is_data_class = matches!(
                 self.type_kind(registry, &source),
-                TypeKind::DataStruct { cfg: Some(c), .. } if c.kotlin_name.is_some()
+                TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
                 continue;
@@ -930,26 +930,23 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
         out
     }
 
-    /// Accessor members (`.accessor`) — emitted as class instance methods,
-    /// excluded from input-flattening, and the only functions a flatten field
-    /// may reference.
+    /// Functions ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
+    /// `.return_expand(...)` record — see
+    /// `accessor_record_fns`'s doc (`jni/mod.rs`). Usage-derived, not tied to
+    /// `.fun()` class-member declarations: a function need not also be
+    /// exposed as an instance method to be referenced this way.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.class_members
-            .values()
-            .flatten()
-            .filter(|m| m.kind == MemberKind::Accessor)
-            .map(|m| m.rust_ident.clone())
-            .collect()
+        self.accessor_record_fns.clone()
     }
 
-    /// Method members (`.method`) — their fn ident mapped to the owning class's
+    /// Fun members (`.fun`) — their fn ident mapped to the owning class's
     /// `TypeKey`, so input-flattening can skip the receiver parameter.
     fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
         self.class_members
             .iter()
             .flat_map(|(key, ms)| {
                 ms.iter()
-                    .filter(|m| m.kind == MemberKind::Method)
+                    .filter(|m| m.kind == MemberKind::Fun)
                     .map(move |m| (m.rust_ident.clone(), key.clone()))
             })
             .collect()
@@ -968,6 +965,17 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             .filter(|(_, c)| c.class_decl)
             .map(|(k, _)| k.clone())
             .collect()
+    }
+
+    /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
+    /// the registry's "skipping undeclared" warning, emits nothing.
+    fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        self.ignored_fns.clone()
+    }
+
+    /// Types acknowledged-but-undeclared via [`JniGen::ignore_class`].
+    fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
+        self.ignored_class_types.clone()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by
@@ -1075,7 +1083,7 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
 /// Structural converter builders — the rank-0 terminal chains and the rank-1
 /// wrapper-shape handlers, now inherent helpers called by the structural
 /// [`Prebindgen::on_input_type`] / [`Prebindgen::on_output_type`].
-impl<S: JniGenState> JniGen<S> {
+impl JniGen {
     // ── Input converters ─────────────────────────────────────────────
 
     /// Whole-type **input** terminal categories (opaque handle, value-blob,
@@ -1148,7 +1156,10 @@ impl<S: JniGenState> JniGen<S> {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_input_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
+                        let kotlin_name = cfg
+                            .name_spec
+                            .as_ref()
+                            .map(|s| kt::KtType::cls(self.fqn_of(s)));
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
@@ -1242,8 +1253,8 @@ impl<S: JniGenState> JniGen<S> {
                 let kotlin_name = self
                     .types
                     .get(&key)
-                    .and_then(|c| c.kotlin_name.clone())
-                    .map(kt::KtType::cls);
+                    .and_then(|c| c.name_spec.as_ref())
+                    .map(|s| kt::KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
@@ -1349,7 +1360,10 @@ impl<S: JniGenState> JniGen<S> {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
+                        let kotlin_name = cfg
+                            .name_spec
+                            .as_ref()
+                            .map(|s| kt::KtType::cls(self.fqn_of(s)));
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
@@ -1440,8 +1454,8 @@ impl<S: JniGenState> JniGen<S> {
                 let kotlin_name = self
                     .types
                     .get(&key)
-                    .and_then(|c| c.kotlin_name.clone())
-                    .map(kt::KtType::cls);
+                    .and_then(|c| c.name_spec.as_ref())
+                    .map(|s| kt::KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
