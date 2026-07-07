@@ -35,20 +35,12 @@ pub(crate) enum LocalField {
     SelfField,
 }
 
-/// Push `rust_fun` onto `members` as a member of the given `kind`, shared by
-/// every class-kind decl's `.fun()`/`.constructor()`. The Kotlin-visible name
-/// comes from `rust_fun.name(...)` if set, else defaults to
-/// `snake_to_camel(rust_ident)` — the same default `PackageDecl::fun` uses.
-fn push_member(members: &mut Vec<ClassMember>, rust_fun: FunctionDecl, kind: MemberKind) {
-    let kotlin_name = rust_fun
-        .kotlin_name_override
-        .unwrap_or_else(|| snake_to_camel(&rust_fun.rust_ident.to_string()));
-    members.push(ClassMember {
-        rust_ident: rust_fun.rust_ident,
-        kotlin_name,
-        kind,
-    });
-}
+// Class members are stored as the full `(FunctionDecl, MemberKind)` pair —
+// not a reduced ident+name record — so the `FunctionDecl`'s per-fn flatten
+// modifiers (`.flatten_output_suppress()`, `.flatten_input_suppress(param)`,
+// per-fn `.flatten_input`/`.flatten_output` overrides) survive to
+// `builder.rs`'s `accept_members`, which applies them exactly like
+// `accept_function` does for free package functions.
 
 // ──────────────────────────────────────────────────────────────────────
 // Decl constructor macros — one per decl type built from bare Rust syntax
@@ -160,7 +152,7 @@ macro_rules! generic_type_wrapper {
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
-    pub(crate) members: Vec<ClassMember>,
+    pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
     pub(crate) input_variants: Option<Vec<LocalVariant>>,
     pub(crate) output_fields: Option<Vec<LocalField>>,
 }
@@ -188,7 +180,7 @@ impl PtrClassDecl {
     /// method. The receiver binds to `this` and is excluded from
     /// input-flattening; any remaining params flatten normally.
     pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Fun);
+        self.members.push((rust_fun, MemberKind::Fun));
         self
     }
 
@@ -196,7 +188,7 @@ impl PtrClassDecl {
     /// `Result<Self, E>`) as a companion-object factory `name`. Referenceable
     /// from `.flatten_input(fun!(...))`.
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Constructor);
+        self.members.push((rust_fun, MemberKind::Constructor));
         self
     }
 
@@ -335,7 +327,7 @@ pub struct ValueClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
     pub(crate) kotlin_type: Option<String>,
-    pub(crate) members: Vec<ClassMember>,
+    pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
 }
 
 impl ValueClassDecl {
@@ -361,12 +353,12 @@ impl ValueClassDecl {
     }
 
     pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Fun);
+        self.members.push((rust_fun, MemberKind::Fun));
         self
     }
 
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Constructor);
+        self.members.push((rust_fun, MemberKind::Constructor));
         self
     }
 }

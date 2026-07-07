@@ -332,39 +332,59 @@ impl JniGen {
     }
 
     /// Shared tail of `accept_ptr_class`/`accept_value_class` (the two class
-    /// kinds whose members are emitted): a constructor member's return is
-    /// never output-flattened (it's a factory), then the members join the
-    /// class's registered set.
-    fn accept_members(&mut self, key: &TypeKey, members: Vec<ClassMember>) {
-        for m in &members {
-            if m.kind == MemberKind::Constructor {
+    /// kinds whose members are emitted): each member's per-fn flatten
+    /// modifiers apply exactly as a free function's would; a constructor
+    /// member's return is additionally never output-flattened (it's a
+    /// factory); then the members join the class's registered set.
+    fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
+        for (decl, kind) in members {
+            let rust_ident = decl.rust_ident.clone();
+            let kotlin_name = decl
+                .kotlin_name_override
+                .clone()
+                .unwrap_or_else(|| snake_to_camel(&rust_ident.to_string()));
+            self.apply_fn_flatten_modifiers(decl);
+            if kind == MemberKind::Constructor {
                 self.deconstructors
-                    .add_skip_default_output(m.rust_ident.clone());
+                    .add_skip_default_output(rust_ident.clone());
             }
+            self.class_members
+                .entry(key.clone())
+                .or_default()
+                .push(ClassMember {
+                    rust_ident,
+                    kotlin_name,
+                    kind,
+                });
         }
-        self.class_members
-            .entry(key.clone())
-            .or_default()
-            .extend(members);
     }
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
-        let FunctionDecl {
-            rust_ident,
-            kotlin_name_override,
-            input_suppressed,
-            input_overrides,
-            output_suppressed,
-            output_override,
-        } = decl;
-
-        let mut entry = MethodEntry::new(rust_ident.clone());
-        entry.kotlin_name_override = kotlin_name_override;
+        let mut entry = MethodEntry::new(decl.rust_ident.clone());
+        entry.kotlin_name_override = decl.kotlin_name_override.clone();
         self.packages
             .entry(subpackage.to_string())
             .or_default()
             .functions
             .push(entry);
+        self.apply_fn_flatten_modifiers(decl);
+    }
+
+    /// Replay a [`FunctionDecl`]'s per-fn flatten modifiers
+    /// (`.flatten_input_suppress` / per-param `.flatten_input(...)` /
+    /// `.flatten_output_suppress` / per-fn `.flatten_output(...)`) into the
+    /// expansion/deconstruction bookkeeping. Shared by [`Self::accept_function`]
+    /// (free package fns) and [`Self::accept_members`] (class members) — the
+    /// modifiers mean the same thing in both positions.
+    fn apply_fn_flatten_modifiers(&mut self, decl: FunctionDecl) {
+        let FunctionDecl {
+            rust_ident,
+            kotlin_name_override: _,
+            input_suppressed,
+            input_overrides,
+            output_suppressed,
+            output_override,
+        } = decl;
 
         for param in input_suppressed {
             self.expansions
