@@ -46,8 +46,8 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
                     // Canonical output: handle (identity) + its string form — a
                     // callback arg of ZThing decomposes into these 2 leaves.
                     .fun(crate::fun!(z_thing_name).name("name"))
-                    .default_return_field_self()
-                    .default_return_field(crate::fun!(z_thing_name).name("name")),
+                    .default_return_expand_self()
+                    .default_return_expand(crate::fun!(z_thing_name).name("name")),
             )
             // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
             .class(crate::ptr_class!(ZOther))
@@ -234,15 +234,15 @@ fn callback_root_identity_moved_after_nested_borrow() {
             .class(
                 crate::ptr_class!(ZChild)
                     .fun(crate::fun!(z_child_name).name("name"))
-                    .default_return_field_self()
-                    .default_return_field(crate::fun!(z_child_name).name("name")),
+                    .default_return_expand_self()
+                    .default_return_expand(crate::fun!(z_child_name).name("name")),
             )
             // Parent: a nested child-handle record, then its OWN root identity LAST.
             .class(
                 crate::ptr_class!(ZParent)
                     .fun(crate::fun!(z_parent_child).name("child"))
-                    .default_return_field(crate::fun!(z_parent_child).name("child"))
-                    .default_return_field_self(),
+                    .default_return_expand(crate::fun!(z_parent_child).name("child"))
+                    .default_return_expand_self(),
             )
             .fun(crate::fun!(z_parent_sub)),
     );
@@ -322,25 +322,25 @@ fn callback_double_option_unwrap_pipeline() {
             .class(
                 crate::ptr_class!(ZKeyExpr)
                     .fun(crate::fun!(z_keyexpr_as_str).name("asStr"))
-                    .default_return_field_self()
-                    .default_return_field(crate::fun!(z_keyexpr_as_str).name("asStr")),
+                    .default_return_expand_self()
+                    .default_return_expand(crate::fun!(z_keyexpr_as_str).name("asStr")),
             )
             .class(
                 crate::ptr_class!(ZTs)
                     .fun(crate::fun!(z_ts_ntp64).name("ntp64"))
-                    .default_return_field(crate::fun!(z_ts_ntp64).name("ntp64")),
+                    .default_return_expand(crate::fun!(z_ts_ntp64).name("ntp64")),
             )
             .class(
                 crate::ptr_class!(ZSample)
                     .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
                     .fun(crate::fun!(z_sample_timestamp).name("timestamp"))
-                    .default_return_field(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                    .default_return_field(crate::fun!(z_sample_timestamp).name("timestamp")),
+                    .default_return_expand(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                    .default_return_expand(crate::fun!(z_sample_timestamp).name("timestamp")),
             )
             .class(
                 crate::ptr_class!(ZErr)
                     .fun(crate::fun!(z_err_payload).name("payload"))
-                    .default_return_field(crate::fun!(z_err_payload).name("payload")),
+                    .default_return_expand(crate::fun!(z_err_payload).name("payload")),
             )
             .class(
                 crate::ptr_class!(ZReply)
@@ -348,10 +348,10 @@ fn callback_double_option_unwrap_pipeline() {
                     .fun(crate::fun!(z_reply_is_ok).name("isOk"))
                     .fun(crate::fun!(z_reply_sample).name("sample"))
                     .fun(crate::fun!(z_reply_err).name("err"))
-                    .default_return_field(crate::fun!(z_reply_zid).name("zid"))
-                    .default_return_field(crate::fun!(z_reply_is_ok).name("isOk"))
-                    .default_return_field(crate::fun!(z_reply_sample).name("sample"))
-                    .default_return_field(crate::fun!(z_reply_err).name("err")),
+                    .default_return_expand(crate::fun!(z_reply_zid).name("zid"))
+                    .default_return_expand(crate::fun!(z_reply_is_ok).name("isOk"))
+                    .default_return_expand(crate::fun!(z_reply_sample).name("sample"))
+                    .default_return_expand(crate::fun!(z_reply_err).name("err")),
             )
             .fun(crate::fun!(z_get)),
     );

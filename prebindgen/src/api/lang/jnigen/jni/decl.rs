@@ -201,7 +201,7 @@ impl PtrClassDecl {
     /// constructor fn takes, built via it at the boundary. Call repeatedly
     /// to add more variants (2+ variants dispatch via a runtime selector).
     /// Overridable per-fn via [`FunctionDecl::param_variant`].
-    pub fn default_param_variant(mut self, rust_fun: FunctionDecl) -> Self {
+    pub fn default_param_expand(mut self, rust_fun: FunctionDecl) -> Self {
         self.input_variants
             .get_or_insert_with(Vec::new)
             .push(LocalVariant::Ctor(rust_fun.rust_ident));
@@ -212,7 +212,7 @@ impl PtrClassDecl {
     /// type accepts an already-built handle directly. As the *only* declared
     /// variant this is the plain-handle form (no selector) — the default
     /// when nothing is declared, so alone it is a no-op made explicit.
-    pub fn default_param_variant_self(mut self) -> Self {
+    pub fn default_param_expand_self(mut self) -> Self {
         self.input_variants
             .get_or_insert_with(Vec::new)
             .push(LocalVariant::SelfIdentity);
@@ -225,7 +225,7 @@ impl PtrClassDecl {
     /// of the accessor fn `rust_fun` (named via `rust_fun.name(...)`,
     /// defaulting to `snake_to_camel(rust_ident)`). Call repeatedly to add
     /// more fields. Overridable per-fn via [`FunctionDecl::return_field`].
-    pub fn default_return_field(mut self, rust_fun: FunctionDecl) -> Self {
+    pub fn default_return_expand(mut self, rust_fun: FunctionDecl) -> Self {
         let name = rust_fun
             .kotlin_name_override
             .unwrap_or_else(|| snake_to_camel(&rust_fun.rust_ident.to_string()));
@@ -236,7 +236,7 @@ impl PtrClassDecl {
     }
 
     /// Add the handle itself as a **default return field** of this class.
-    pub fn default_return_field_self(mut self) -> Self {
+    pub fn default_return_expand_self(mut self) -> Self {
         self.output_fields
             .get_or_insert_with(Vec::new)
             .push(LocalField::SelfField);
@@ -457,7 +457,7 @@ impl FunctionDecl {
     /// difference from [`PtrClassDecl::default_param_variant`] is the
     /// leading param ident, since a function may have several
     /// independently-overridden handle params.
-    pub fn param_variant(mut self, param: syn::Ident, ctor: FunctionDecl) -> Self {
+    pub fn param_expand(mut self, param: syn::Ident, ctor: FunctionDecl) -> Self {
         self.input_override_entry(param)
             .push(LocalVariant::Ctor(ctor.rust_ident));
         self
@@ -467,7 +467,7 @@ impl FunctionDecl {
     /// already-built handle directly. As the *only* declared variant this is
     /// the plain-handle form — i.e. it cancels the class-level default for
     /// this param (no selector, no construction).
-    pub fn param_variant_self(mut self, param: syn::Ident) -> Self {
+    pub fn param_expand_self(mut self, param: syn::Ident) -> Self {
         self.input_override_entry(param)
             .push(LocalVariant::SelfIdentity);
         self
@@ -490,7 +490,7 @@ impl FunctionDecl {
     /// via `field.name(...)`, defaulting to `snake_to_camel(rust_ident)`).
     /// Call repeatedly to add more fields — same shape as
     /// [`PtrClassDecl::default_return_field`].
-    pub fn return_field(mut self, field: FunctionDecl) -> Self {
+    pub fn return_expand(mut self, field: FunctionDecl) -> Self {
         let name = field
             .kotlin_name_override
             .unwrap_or_else(|| snake_to_camel(&field.rust_ident.to_string()));
@@ -505,7 +505,7 @@ impl FunctionDecl {
     /// return — i.e. it cancels the class-level default for this function
     /// (also the right spelling for borrowed `&T` returns, which cross by
     /// cloning into a fresh owned handle).
-    pub fn return_field_self(mut self) -> Self {
+    pub fn return_expand_self(mut self) -> Self {
         self.output_override
             .get_or_insert_with(Vec::new)
             .push(LocalField::SelfField);

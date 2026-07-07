@@ -135,8 +135,8 @@ fn main() {
             // owned `StorageError` the handler must `close()`).
             ptr_class!(StorageError)
                 .fun(fun!(storage_error_message).name("message"))
-                .default_return_field(fun!(storage_error_message).name("message"))
-                .default_return_field_self(),
+                .default_return_expand(fun!(storage_error_message).name("message"))
+                .default_return_expand_self(),
         ),
     )
     // ── Subpackage `analytics`: param-variant / return-field defaults on `Summary`
@@ -151,10 +151,10 @@ fn main() {
                     .fun(fun!(summary_count).name("count"))
                     .fun(fun!(summary_total).name("total"))
                     .fun(fun!(summary_scaled).name("scaled"))
-                    .default_param_variant(fun!(summary_new))
-                    .default_param_variant_self()
-                    .default_return_field(fun!(summary_count).name("count"))
-                    .default_return_field(fun!(summary_total).name("total")),
+                    .default_param_expand(fun!(summary_new))
+                    .default_param_expand_self()
+                    .default_return_expand(fun!(summary_count).name("count"))
+                    .default_return_expand(fun!(summary_total).name("total")),
             )
             // `Archive` holds the latest `Summary` and returns it BORROWED
             // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -204,25 +204,25 @@ fn main() {
         package!("analytics")
             .fun(fun!(storage_summary))
             .fun(fun!(storage_matches_summary))
-            .fun(fun!(storage_summary_handle).return_field_self())
-            .fun(fun!(summary_total_raw).param_variant_self(pq!(s)))
+            .fun(fun!(storage_summary_handle).return_expand_self())
+            .fun(fun!(summary_total_raw).param_expand_self(pq!(s)))
             .fun(
                 fun!(storage_summary_full)
-                    .return_field(fun!(summary_count).name("count"))
-                    .return_field(fun!(summary_total).name("total"))
-                    .return_field_self(),
+                    .return_expand(fun!(summary_count).name("count"))
+                    .return_expand(fun!(summary_total).name("total"))
+                    .return_expand_self(),
             )
             .fun(
                 fun!(storage_expect_summary)
-                    .param_variant(pq!(expected), fun!(summary_new))
-                    .param_variant_self(pq!(expected)),
+                    .param_expand(pq!(expected), fun!(summary_new))
+                    .param_expand_self(pq!(expected)),
             )
             // The borrowed-accessor trio. `archive_latest` suppresses the default
             // Summary return-field default so the BORROWED handle path (clone into a
             // fresh owned handle, null when absent) is what crosses.
             .fun(fun!(archive_new))
             .fun(fun!(archive_store))
-            .fun(fun!(archive_latest).return_field_self()),
+            .fun(fun!(archive_latest).return_expand_self()),
     )
     // storage: the perf surface (handles, callbacks, Vec, Option) plus the
     // fallible constructor and the Millis wrapper.
