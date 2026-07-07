@@ -254,10 +254,13 @@ impl From<syn::Type> for PtrClassDecl {
 /// explicit discriminants — the Kotlin emitter and the generated
 /// `TryFrom<i32>` decode rely on the discriminant values matching the jint
 /// wire.
+///
+/// No `.fun()`/`.constructor()` members: attached members are only emitted
+/// on typed-handle ([`PtrClassDecl`]) and value ([`ValueClassDecl`]) classes
+/// — a generated `enum class` carries no instance methods.
 pub struct EnumClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
-    pub(crate) members: Vec<ClassMember>,
 }
 
 impl EnumClassDecl {
@@ -265,23 +268,12 @@ impl EnumClassDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
-            members: Vec::new(),
         }
     }
 
     /// Override the Kotlin **class name** (relative, no dots).
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name_override = Some(name.into());
-        self
-    }
-
-    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Fun);
-        self
-    }
-
-    pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Constructor);
         self
     }
 }
@@ -294,11 +286,15 @@ impl From<syn::Type> for EnumClassDecl {
 
 /// Declares a Rust struct that should appear in Kotlin as a `data class`.
 /// Only affects Kotlin emission — no Rust-side converter override.
+///
+/// No `.fun()`/`.constructor()` members: attached members are only emitted
+/// on typed-handle ([`PtrClassDecl`]) and value ([`ValueClassDecl`]) classes
+/// — a data class crosses decomposed into its fields and has no handle to
+/// hang an instance method on.
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
     pub(crate) kotlin_type: Option<String>,
-    pub(crate) members: Vec<ClassMember>,
 }
 
 impl DataClassDecl {
@@ -307,7 +303,6 @@ impl DataClassDecl {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
             kotlin_type: None,
-            members: Vec::new(),
         }
     }
 
@@ -321,16 +316,6 @@ impl DataClassDecl {
     /// instead of a class FQN — for generics/primitives/container types.
     pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
         self.kotlin_type = Some(expr.into());
-        self
-    }
-
-    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Fun);
-        self
-    }
-
-    pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Constructor);
         self
     }
 }
@@ -645,6 +630,11 @@ impl ScalarTypeWrapperDecl {
     /// Build the wire → rust conversion body. `body` receives the ident of
     /// the wire-typed value in scope (`&wire`) and returns the Rust-typed
     /// expression to splice via `quote!`'s `#value` interpolation.
+    ///
+    /// The rank-0 (concrete pattern) counterpart of
+    /// [`GenericTypeWrapperDecl::input`] — same method name, simpler
+    /// contract: a plain expression closure, no wildcard args, no
+    /// [`WireBody`] fallibility choice.
     pub fn input(mut self, body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static) -> Self {
         self.input = Some(Arc::new(body));
         self
@@ -652,6 +642,8 @@ impl ScalarTypeWrapperDecl {
 
     /// Build the rust → wire conversion body. `body` receives the ident of
     /// the rust-typed value in scope and returns the wire-typed expression.
+    /// See [`Self::input`] for how this relates to
+    /// [`GenericTypeWrapperDecl::output`].
     pub fn output(mut self, body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static) -> Self {
         self.output = Some(Arc::new(body));
         self
@@ -769,7 +761,13 @@ impl GenericTypeWrapperDecl {
 
     /// Register the input-direction (wire → rust) peel. The closure's arity
     /// (1–3 leading `&syn::Type` params, one per `_` in `pattern`, plus a
-    /// trailing `&syn::Ident` for the value in scope) selects the rank.
+    /// trailing `&syn::Ident` for the value in scope) selects the rank; it
+    /// returns a [`WireBody`] choosing infallible vs domain-fallible.
+    ///
+    /// The wildcard-pattern counterpart of [`ScalarTypeWrapperDecl::input`] —
+    /// same method name, richer contract (wildcard substitutions +
+    /// fallibility), because a structural peel must adapt to what the `_`s
+    /// matched.
     pub fn input<A, B: WrapperBuilder<A>>(mut self, builder: B) -> Self {
         self.input = Some((B::rank(), builder.into_wrapper_fn()));
         self

@@ -70,6 +70,8 @@ impl JniGen {
             expansions: crate::api::core::expand::Expansions::default(),
             deconstructors: crate::api::core::unfold::Deconstructors::default(),
             class_members: HashMap::new(),
+            ignored_fns: std::collections::HashSet::new(),
+            ignored_class_types: std::collections::HashSet::new(),
             accessor_record_fns: std::collections::HashSet::new(),
         };
         jni.recompute_derived();
@@ -203,6 +205,23 @@ impl JniGen {
         self
     }
 
+    /// Acknowledge a `#[prebindgen]` function this binding deliberately does
+    /// NOT wrap: nothing is emitted for it and the registry's per-item
+    /// "skipping undeclared" warning is suppressed. Global — an ignored fn
+    /// belongs to no package. E.g. `.ignore_fun(fun!(string_len))`.
+    pub fn ignore_fun(mut self, decl: FunctionDecl) -> Self {
+        self.ignored_fns.insert(decl.rust_ident);
+        self
+    }
+
+    /// Acknowledge a `#[prebindgen]` type this binding deliberately does NOT
+    /// declare as a class — the type-level dual of [`Self::ignore_fun`].
+    pub fn ignore_class(mut self, rust_type: syn::Type) -> Self {
+        self.ignored_class_types
+            .insert(TypeKey::from_type(&rust_type));
+        self
+    }
+
     fn accept_class(&mut self, subpackage: &str, decl: ClassDecl) {
         match decl {
             ClassDecl::Ptr(d) => self.accept_ptr_class(subpackage, d),
@@ -274,7 +293,6 @@ impl JniGen {
         entry.enum_cfg = Some(EnumConfig::default());
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.accept_members(&key, decl.members);
     }
 
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
@@ -292,7 +310,6 @@ impl JniGen {
         entry.class_decl = true;
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
-        self.accept_members(&key, decl.members);
     }
 
     fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
@@ -314,9 +331,10 @@ impl JniGen {
         self.accept_members(&key, decl.members);
     }
 
-    /// Shared tail of the four `accept_*_class` methods: a constructor
-    /// member's return is never output-flattened (it's a factory), then the
-    /// members join the class's registered set.
+    /// Shared tail of `accept_ptr_class`/`accept_value_class` (the two class
+    /// kinds whose members are emitted): a constructor member's return is
+    /// never output-flattened (it's a factory), then the members join the
+    /// class's registered set.
     fn accept_members(&mut self, key: &TypeKey, members: Vec<ClassMember>) {
         for m in &members {
             if m.kind == MemberKind::Constructor {

@@ -967,6 +967,17 @@ impl Prebindgen for JniGen {
             .collect()
     }
 
+    /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
+    /// the registry's "skipping undeclared" warning, emits nothing.
+    fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        self.ignored_fns.clone()
+    }
+
+    /// Types acknowledged-but-undeclared via [`JniGen::ignore_class`].
+    fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
+        self.ignored_class_types.clone()
+    }
+
     /// Emit the `OwnedObject<T>` borrow wrapper used by
     /// [`Self::opaque_handle_input`] into the destination file.
     /// The struct is referenced by an unqualified `OwnedObject` from

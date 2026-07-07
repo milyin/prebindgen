@@ -360,6 +360,16 @@ pub struct JniGen {
     /// iterates `types` by sorted key, so map order is irrelevant.
     pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
 
+    /// `#[prebindgen]` fns the binding deliberately does NOT wrap, declared
+    /// via [`JniGen::ignore_fun`]. Backs [`Prebindgen::ignored_functions`]:
+    /// suppresses the registry's per-item "skipping undeclared" warning
+    /// without emitting anything.
+    pub(crate) ignored_fns: std::collections::HashSet<syn::Ident>,
+
+    /// `#[prebindgen]` types the binding deliberately does NOT declare,
+    /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
+    pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
+
     /// Every function ever referenced as a named leaf in a `.flatten_output(fun!(...))`/
     /// `.flatten_output(...).field(...)` record (class- or
     /// function-scoped) — populated as `builder.rs` accepts each decl.

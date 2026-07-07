@@ -44,6 +44,7 @@
 //! | `String` return                      | `string_new` |
 //! | binding-error channel (`je != null`) | malformed `Stamp` bytes (value-blob length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
+//! | `JniGen::ignore_fun`                 | `string_len` / `storage_get_into_*` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
 //!
 //! One feature is deliberately left at its default and documented rather than
 //! toggled, because it is mutually exclusive with a richer path this example
@@ -59,9 +60,12 @@
 //! per-kind name hooks (≡ the identity closures registered here) — which are
 //! binding-exclusive like the lock toggle above and add no code-path coverage.
 //!
-//! One perf-surface function stays undeclared like the `storage_get_into_*`
-//! group: `string_len` (`&String` param / `usize` return are C-tier shapes with
-//! no JVM mapping).
+//! Four functions are deliberately NOT wrapped — their shapes are C-tier
+//! with no JVM mapping (`string_len`'s `&String` param / `usize` return, the
+//! `storage_get_into_*` out-param group, `storage_put_by_read_and_update`'s
+//! read-write borrow) — and are acknowledged via `JniGen::ignore_fun`, which
+//! suppresses the per-item "skipping undeclared" build warning while
+//! emitting nothing.
 
 use prebindgen::{
     core::Registry,
@@ -253,10 +257,15 @@ fn main() {
             .fun(fun!(millis_add).name("addMillis")),
     )
     // Plain String return, declared in the BASE package (mirroring the
-    // base-package classes). (`string_len` stays undeclared like the
-    // `storage_get_into_*` group: its `&String` param / `usize` return are
-    // C-tier shapes with no JVM mapping.)
-    .package(package!().fun(fun!(string_new)));
+    // base-package classes).
+    .package(package!().fun(fun!(string_new)))
+    // The deliberately-unbound group (C-tier shapes with no JVM mapping):
+    // acknowledged so the build log stays free of "skipping undeclared"
+    // warnings without emitting anything.
+    .ignore_fun(fun!(string_len))
+    .ignore_fun(fun!(storage_get_into_init))
+    .ignore_fun(fun!(storage_get_into_uninit))
+    .ignore_fun(fun!(storage_put_by_read_and_update));
 
     let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 
