@@ -228,20 +228,23 @@ pub(crate) type WrapperFn = Arc<
         + Sync,
 >;
 
-/// Closure that transforms a Kotlin short name. Installed via
-/// [`JniGenConfig`]'s per-kind setters; the framework calls the matching
+/// Closure that transforms a Kotlin short name. Installed via [`JniGen`]'s
+/// per-kind `set_*_name_mangle` setters; the framework calls the matching
 /// closure wherever it needs to derive a Kotlin/JNI short name for a
 /// generated element. Closure-unset = identity.
 pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
-/// JNI back-end. Accepts pre-built declaration objects (`PackageDecl`,
-/// `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see `decl.rs`) built
-/// independently of `JniGen` itself; there is no fluent typestate cursor.
+/// JNI back-end. Global settings are applied with the order-insensitive
+/// `set_*` methods; declarations are accepted as pre-built objects
+/// (`PackageDecl`, `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see
+/// `decl.rs`) built independently of `JniGen` itself; there is no fluent
+/// typestate cursor.
 ///
 /// ```
-/// use prebindgen::lang::{JniGen, JniGenConfig};
+/// use prebindgen::lang::JniGen;
 ///
-/// let jni = JniGen::new(JniGenConfig::new().package_prefix("io.test.jni"))
+/// let jni = JniGen::new()
+///     .set_package_prefix("io.test.jni")
 ///     .package(
 ///         prebindgen::package!("session")
 ///             .class(prebindgen::ptr_class!(ZKeyExpr)
@@ -296,6 +299,13 @@ pub struct JniGen {
     /// source of truth.
     pub(crate) kotlin_type_fqns: Vec<(String, String)>,
 
+    /// Raw naming inputs of every accepted class declaration, in accept
+    /// order. Setting-derived names ([`Self::types`]' `kotlin_name`,
+    /// [`Self::kotlin_type_fqns`]) are re-derived from these whenever a
+    /// naming-relevant `set_*` method runs — this is what makes the setters
+    /// order-insensitive relative to declarations.
+    pub(crate) declared_class_names: Vec<DeclaredClassName>,
+
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting
     /// a `ClassDecl` or a `ScalarTypeWrapperDecl`. Holds opaque-handle
@@ -328,12 +338,12 @@ pub struct JniGen {
     /// scaffold (deadlock-safe N-ary monitor acquisition + atomic
     /// consume). When `false`, the scaffold is omitted — wrappers emit
     /// only the raw `ptr` read + closed-handle null-check + native call.
-    /// Toggled via [`JniGenConfig::disable_handle_locks`].
+    /// Toggled via [`JniGen::set_emit_handle_locks`].
     pub(crate) emit_handle_locks: bool,
 
     /// Optional Kotlin statement(s) to place inside an `init { … }` block of
     /// the generated centralized externs object (`JNINative`). Set via
-    /// [`JniGenConfig::jni_native_init`]. Every generated native call routes
+    /// [`JniGen::set_jni_native_init`]. Every generated native call routes
     /// through that object, so its `<clinit>` is the single point at which a
     /// consumer can trigger native-library loading (e.g.
     /// `"io.zenoh.jni.NativeLibrary.ensureLoaded()"`). `None` (default) emits no
@@ -401,7 +411,7 @@ mod struct_plan;
 
 pub(crate) use builder::*;
 pub(crate) use classify::*;
-pub use config::*;
+pub(crate) use config::*;
 pub use decl::*;
 pub(crate) use emit::*;
 pub(crate) use fold::*;

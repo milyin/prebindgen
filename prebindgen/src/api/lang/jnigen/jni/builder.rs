@@ -1,11 +1,11 @@
 //! Builder API for [`JniGen`].
 //!
-//! [`JniGen::new`] takes a finished [`JniGenConfig`]; from then on `JniGen`
-//! only *accepts* pre-built declaration objects (`decl.rs`) via
-//! [`JniGen::package`], [`JniGen::scalar_type_wrapper`], and
-//! [`JniGen::generic_type_wrapper`] — there is no fluent typestate cursor.
-//! Carved from the former monolithic JNI module; shares the `jni` namespace
-//! via `use super::*`.
+//! [`JniGen::new`] starts from defaults; global settings are applied with
+//! the `set_*` methods (`config.rs`) and declarations are *accepted* as
+//! pre-built objects (`decl.rs`) via [`JniGen::package`],
+//! [`JniGen::scalar_type_wrapper`], and [`JniGen::generic_type_wrapper`] —
+//! there is no fluent typestate cursor. Carved from the former monolithic
+//! JNI module; shares the `jni` namespace via `use super::*`.
 
 use super::*;
 
@@ -34,24 +34,27 @@ impl JniGen {
 }
 
 impl JniGen {
-    /// Start a binding generator from a finished [`JniGenConfig`] (the
-    /// package prefix, native-init hook and name-mangle rules). From here you
-    /// add declarations with [`package`](Self::package),
+    /// Start a binding generator with default settings: `source_module =
+    /// crate`, empty base package, no `JNINative` init block, identity
+    /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
+    /// methods, add declarations with [`package`](Self::package),
     /// [`scalar_type_wrapper`](Self::scalar_type_wrapper), etc., then run the
-    /// result through `Registry::write_rust` / `write_kotlin`. Taking the
-    /// whole config up front means it can't change once declarations exist.
-    pub fn new(config: JniGenConfig) -> Self {
+    /// result through `Registry::write_rust` / `write_kotlin`. Settings and
+    /// declarations may be interleaved in any order — setting-derived names
+    /// are re-derived when a setter runs.
+    pub fn new() -> Self {
         let mut jni = Self {
-            source_module: config.source_module,
-            package: config.package_prefix,
+            source_module: syn::parse_str("crate").unwrap(),
+            package: String::new(),
             java_class_prefix: String::new(),
             jni_class_path: String::new(),
-            kotlin_fun_name_mangle: config.kotlin_fun_name_mangle,
-            kotlin_ptr_class_name_mangle: config.kotlin_ptr_class_name_mangle,
-            kotlin_data_class_name_mangle: config.kotlin_data_class_name_mangle,
-            kotlin_enum_name_mangle: config.kotlin_enum_name_mangle,
-            kotlin_harness_name_mangle: config.kotlin_harness_name_mangle,
+            kotlin_fun_name_mangle: None,
+            kotlin_ptr_class_name_mangle: None,
+            kotlin_data_class_name_mangle: None,
+            kotlin_enum_name_mangle: None,
+            kotlin_harness_name_mangle: None,
             kotlin_type_fqns: Vec::new(),
+            declared_class_names: Vec::new(),
             types: HashMap::new(),
             packages: BTreeMap::new(),
             input_wrappers: [
@@ -66,8 +69,8 @@ impl JniGen {
                 HashMap::new(),
                 HashMap::new(),
             ],
-            emit_handle_locks: config.emit_handle_locks,
-            jni_native_init: config.jni_native_init,
+            emit_handle_locks: true,
+            jni_native_init: None,
             expansions: crate::api::core::expand::Expansions::default(),
             deconstructors: crate::api::core::unfold::Deconstructors::default(),
             class_members: HashMap::new(),
@@ -96,7 +99,7 @@ impl JniGen {
     /// from (`package`, `kotlin_harness_name_mangle`). The JNI extern symbol
     /// path resolves to the centralized Native object, whose mangled name
     /// comes from the harness mangle (default `"JNI" + n` → `JNINative`).
-    fn recompute_derived(&mut self) {
+    pub(crate) fn recompute_derived(&mut self) {
         self.java_class_prefix = self.package.replace(".", "/");
         let native_class = self.mangle_harness("Native");
         self.jni_class_path = if self.package.is_empty() {
@@ -182,6 +185,12 @@ impl JniGen {
     }
 }
 
+impl Default for JniGen {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ── Accepting a `PackageDecl` ────────────────────────────────────────────
 
 impl JniGen {
@@ -231,21 +240,35 @@ impl JniGen {
         }
     }
 
-    fn accept_ptr_class(&mut self, subpackage: &str, decl: PtrClassDecl) {
-        let short = rust_short_name(&decl.key);
-        let fqn = match decl.name_override {
-            Some(n) => self.resolve_class_fqn(subpackage, &n),
-            None => {
-                let mangled = self.mangle_ptr_class(&short);
-                self.resolve_class_fqn(subpackage, &mangled)
-            }
-        };
-        let key = decl.key;
+    /// Retain one class declaration's raw naming inputs (so a later `set_*`
+    /// call can re-derive the FQN), derive the FQN from the current
+    /// settings, and register it in [`Self::types`] +
+    /// [`Self::kotlin_type_fqns`].
+    fn register_class_name(&mut self, declared: DeclaredClassName) {
+        let fqn = self.derive_class_fqn(&declared);
+        let key = declared.key.clone();
+        self.declared_class_names.push(declared);
         let entry = self.types.entry(key.clone()).or_default();
         entry.class_decl = true;
-        entry.opaque = Some(OpaqueConfig::default());
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
+    }
+
+    fn accept_ptr_class(&mut self, subpackage: &str, decl: PtrClassDecl) {
+        let short = rust_short_name(&decl.key);
+        let key = decl.key;
+        self.register_class_name(DeclaredClassName {
+            key: key.clone(),
+            subpackage: subpackage.to_string(),
+            short,
+            name_override: decl.name_override,
+            explicit_fqn: None,
+            kind: NameKind::Ptr,
+        });
+        self.types
+            .get_mut(&key)
+            .expect("register_class_name created the entry")
+            .opaque = Some(OpaqueConfig::default());
         self.accept_members(&key, decl.members);
 
         if let Some(variants) = decl.input_variants {
@@ -258,9 +281,7 @@ impl JniGen {
                 for v in variants {
                     match v {
                         LocalVariant::Ctor(f) => self.expansions.add_constructor_variant(f),
-                        LocalVariant::SelfIdentity => {
-                            self.expansions.add_constructor_variant_id()
-                        }
+                        LocalVariant::SelfIdentity => self.expansions.add_constructor_variant_id(),
                     }
                 }
             }
@@ -282,60 +303,57 @@ impl JniGen {
 
     fn accept_enum_class(&mut self, subpackage: &str, decl: EnumClassDecl) {
         let short = rust_short_name(&decl.key);
-        let fqn = match decl.name_override {
-            Some(n) => self.resolve_class_fqn(subpackage, &n),
-            None => {
-                let mangled = self.mangle_enum(&short);
-                self.resolve_class_fqn(subpackage, &mangled)
-            }
-        };
         let key = decl.key;
-        let entry = self.types.entry(key.clone()).or_default();
         assert!(
-            entry.opaque.is_none(),
+            self.types
+                .get(&key)
+                .is_none_or(|entry| entry.opaque.is_none()),
             "EnumClassDecl: `{}` is already registered as an opaque handle via a PtrClassDecl — \
              a type can be one or the other, not both",
             short
         );
-        entry.class_decl = true;
-        entry.enum_cfg = Some(EnumConfig::default());
-        entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
+        self.register_class_name(DeclaredClassName {
+            key: key.clone(),
+            subpackage: subpackage.to_string(),
+            short,
+            name_override: decl.name_override,
+            explicit_fqn: None,
+            kind: NameKind::Enum,
+        });
+        self.types
+            .get_mut(&key)
+            .expect("register_class_name created the entry")
+            .enum_cfg = Some(EnumConfig::default());
     }
 
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
         let short = rust_short_name(&decl.key);
-        let fqn = match (decl.kotlin_type, decl.name_override) {
-            (Some(expr), _) => expr,
-            (None, Some(n)) => self.resolve_class_fqn(subpackage, &n),
-            (None, None) => {
-                let mangled = self.mangle_data_class(&short);
-                self.resolve_class_fqn(subpackage, &mangled)
-            }
-        };
         let key = decl.key;
-        let entry = self.types.entry(key.clone()).or_default();
-        entry.class_decl = true;
-        entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
+        self.register_class_name(DeclaredClassName {
+            key,
+            subpackage: subpackage.to_string(),
+            short,
+            name_override: decl.name_override,
+            explicit_fqn: decl.kotlin_type,
+            kind: NameKind::DataOrValue,
+        });
     }
 
     fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
         let short = rust_short_name(&decl.key);
-        let fqn = match (decl.kotlin_type, decl.name_override) {
-            (Some(expr), _) => expr,
-            (None, Some(n)) => self.resolve_class_fqn(subpackage, &n),
-            (None, None) => {
-                let mangled = self.mangle_data_class(&short);
-                self.resolve_class_fqn(subpackage, &mangled)
-            }
-        };
         let key = decl.key;
-        let entry = self.types.entry(key.clone()).or_default();
-        entry.class_decl = true;
-        entry.value_blob = true;
-        entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
+        self.register_class_name(DeclaredClassName {
+            key: key.clone(),
+            subpackage: subpackage.to_string(),
+            short,
+            name_override: decl.name_override,
+            explicit_fqn: decl.kotlin_type,
+            kind: NameKind::DataOrValue,
+        });
+        self.types
+            .get_mut(&key)
+            .expect("register_class_name created the entry")
+            .value_blob = true;
         self.accept_members(&key, decl.members);
     }
 
@@ -444,22 +462,26 @@ impl JniGen {
             let wire_src = decl.wire.clone();
             self.input_wrappers[0].insert(
                 key.clone(),
-                Arc::new(move |_args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                    let wire: syn::Type =
-                        syn::parse_str(&wire_src).expect("stored wire type re-parses");
-                    Some((wire, None, input(&wrapper_value_ident())))
-                }),
+                Arc::new(
+                    move |_args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
+                        let wire: syn::Type =
+                            syn::parse_str(&wire_src).expect("stored wire type re-parses");
+                        Some((wire, None, input(&wrapper_value_ident())))
+                    },
+                ),
             );
         }
         if let Some(output) = decl.output {
             let wire_src = decl.wire.clone();
             self.output_wrappers[0].insert(
                 key.clone(),
-                Arc::new(move |_args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                    let wire: syn::Type =
-                        syn::parse_str(&wire_src).expect("stored wire type re-parses");
-                    Some((wire, None, output(&wrapper_value_ident())))
-                }),
+                Arc::new(
+                    move |_args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
+                        let wire: syn::Type =
+                            syn::parse_str(&wire_src).expect("stored wire type re-parses");
+                        Some((wire, None, output(&wrapper_value_ident())))
+                    },
+                ),
             );
         }
         let entry = self.types.entry(key.clone()).or_default();

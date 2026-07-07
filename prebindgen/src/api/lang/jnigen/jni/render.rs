@@ -1197,12 +1197,7 @@ fn classify_output(
 /// arg (or several, for a flattened data_class); the output plan's extra args
 /// and the trailing `__cap` follow; the result is wrapped per the return
 /// classification (projection / enum / erased-`Any` cast).
-fn build_native_call(
-    ext: &JniGen,
-    jni_call: &str,
-    params: &[Param],
-    out: &OutputPlan,
-) -> String {
+fn build_native_call(ext: &JniGen, jni_call: &str, params: &[Param], out: &OutputPlan) -> String {
     let mut args: Vec<String> = Vec::with_capacity(params.len());
     for p in params.iter() {
         // Flattened data_class param expands into multiple call args

@@ -314,10 +314,7 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// `v: <ident>` signature — so binding crates can pick whichever
 /// upstream type a bare `<ident>` resolves to in their include-site
 /// `use` statements. Pairs with output body below.
-pub(crate) fn enum_input_body(
-    ext: &JniGen,
-    e: &syn::ItemEnum,
-) -> (syn::Type, syn::Expr) {
+pub(crate) fn enum_input_body(ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let ident = &e.ident;
     let ident_name = ident.to_string();
@@ -354,10 +351,7 @@ pub(crate) fn enum_input_body(
 /// upstream of the cast. The body works without naming the enum type
 /// at all — `v` is already typed via the wrapper signature, so the
 /// `as` cast picks up the right type by inference.
-pub(crate) fn enum_output_body(
-    _ext: &JniGen,
-    e: &syn::ItemEnum,
-) -> (syn::Type, syn::Expr) {
+pub(crate) fn enum_output_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let body: syn::Expr = syn::parse_quote!({ v as jni::sys::jint });
     (syn::parse_quote!(jni::sys::jint), body)

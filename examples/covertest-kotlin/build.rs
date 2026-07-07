@@ -13,10 +13,10 @@
 //!
 //! | JniGen feature                       | Exercised by |
 //! |--------------------------------------|--------------|
-//! | `JniGenConfig::source_module`        | `perftest_flat` |
-//! | `JniGenConfig::package_prefix`       | `io.prebindgen.covertest` |
+//! | `JniGen::set_source_module`        | `perftest_flat` |
+//! | `JniGen::set_package_prefix`       | `io.prebindgen.covertest` |
 //! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
-//! | `JniGenConfig::jni_native_init`      | `NativeLibrary.ensureLoaded()` |
+//! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | 5 name-mangle closures               | harness (`Cov*`) + the four per-kind hooks |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (NESTED field + `Option<prim>`/`Option<enum>` fields) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
@@ -49,7 +49,7 @@
 //! One feature is deliberately left at its default and documented rather than
 //! toggled, because it is mutually exclusive with a richer path this example
 //! prefers to keep covered:
-//!   * `JniGenConfig::disable_handle_locks` — kept ENABLED (default). Toggling
+//!   * `JniGen::set_emit_handle_locks` — kept ENABLED (default). Toggling
 //!     it OFF would remove the `withSortedHandleLocks` codegen this example
 //!     asserts against; a single binding can only be in one lock mode, so we
 //!     keep the locked one.
@@ -70,7 +70,7 @@
 use prebindgen::{
     core::Registry,
     data_class, enum_class, fun,
-    lang::{JniGen, JniGenConfig},
+    lang::JniGen,
     package, ptr_class, scalar_type_wrapper, value_class,
 };
 use syn::parse_quote as pq;
@@ -78,23 +78,21 @@ use syn::parse_quote as pq;
 fn main() {
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(pq!(perftest_flat))
-            .package_prefix("io.prebindgen.covertest")
-            .jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
+    let jni = JniGen::new()
+            .set_source_module(pq!(perftest_flat))
+            .set_package_prefix("io.prebindgen.covertest")
+            .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
             // All five per-kind name-mangle hooks are registered. The harness hook
             // is a real transform (`Native` → `CovNative`, an internal symbol so it
             // needs no Kotlin-side coordination); the other four are the identity
             // (the domain names are already the desired Kotlin names) — registering
             // them still exercises the customization API and its `Some(closure)`
             // path.
-            .kotlin_harness_name_mangle(|n| format!("Cov{n}"))
-            .kotlin_fun_name_mangle(|n| n.to_string())
-            .kotlin_ptr_class_name_mangle(|n| n.to_string())
-            .kotlin_data_class_name_mangle(|n| n.to_string())
-            .kotlin_enum_name_mangle(|n| n.to_string()),
-    )
+            .set_kotlin_harness_name_mangle(|n| format!("Cov{n}"))
+            .set_kotlin_fun_name_mangle(|n| n.to_string())
+            .set_kotlin_ptr_class_name_mangle(|n| n.to_string())
+            .set_kotlin_data_class_name_mangle(|n| n.to_string())
+            .set_kotlin_enum_name_mangle(|n| n.to_string())
     // `Millis` newtype: a custom scalar wire mapping to a bare `Long` (no
     // generated class) — global, not tied to any package (see the `decl`
     // module doc for why a scalar wrapper never needs package placement).

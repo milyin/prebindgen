@@ -44,19 +44,17 @@ fn per_class_name_and_base_package_fun() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni")
-            // Rename the handle class; the mangle closures do NOT apply to it.
-            .kotlin_ptr_class_name_mangle(|n| format!("JNI{n}")),
-    )
-    .package(
-        crate::package!()
-            .class(crate::ptr_class!(ZThing).name("Gadget"))
-            .fun(crate::fun!(ping))
-            .fun(crate::fun!(thing_new)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        // Rename the handle class; the mangle closures do NOT apply to it.
+        .set_kotlin_ptr_class_name_mangle(|n| format!("JNI{n}"))
+        .package(
+            crate::package!()
+                .class(crate::ptr_class!(ZThing).name("Gadget"))
+                .fun(crate::fun!(ping))
+                .fun(crate::fun!(thing_new)),
+        );
 
     let dir = unique_test_dir("jnigen_class_name_base_fun");
     let _ = std::fs::remove_dir_all(&dir);
@@ -91,4 +89,68 @@ fn per_class_name_and_base_package_fun() {
         .expect("base package file");
     assert!(base.contains("fun ping("), "{base}");
     assert!(base.contains("fun thingNew("), "{base}");
+}
+
+/// Setters are order-insensitive: declaring the package FIRST and applying
+/// `set_package_prefix` + a class mangle AFTER must produce the same output
+/// as the conventional settings-first order — the setter re-derives every
+/// declared class's FQN from the retained raw declaration inputs.
+#[test]
+fn setters_after_declarations_apply() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThing {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn thing_new() -> ZThing {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    // Declarations first, settings last.
+    let jni = JniGen::new()
+        .package(
+            crate::package!("things")
+                .class(crate::ptr_class!(ZThing))
+                .fun(crate::fun!(thing_new)),
+        )
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.late.jni")
+        .set_kotlin_ptr_class_name_mangle(|n| n.strip_prefix('Z').unwrap_or(n).to_string());
+
+    let dir = unique_test_dir("jnigen_setters_after_decls");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+
+    // The late-set package prefix drives the file layout...
+    let things = paths
+        .iter()
+        .find(|p| p.ends_with("io/late/jni/things.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("subpackage file under the late-set prefix");
+    // ...and the late-set mangle drives the class name (`ZThing` → `Thing`).
+    let tc: String = things.split_whitespace().collect();
+    assert!(tc.contains("classThing("), "{things}");
+    assert!(!tc.contains("classZThing("), "{things}");
+    assert!(
+        tc.contains("funthingNew(onError:JniErrorHandler<Thing>):Thing"),
+        "{things}"
+    );
 }

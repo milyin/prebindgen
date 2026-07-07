@@ -32,13 +32,11 @@ fn option_scalar_param_crosses_as_present_value_pair() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(crate::package!().class(crate::enum_class!(Mode)))
-    .package(crate::package!("cfg").fun(crate::fun!(z_set_timeout)));
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!().class(crate::enum_class!(Mode)))
+        .package(crate::package!("cfg").fun(crate::fun!(z_set_timeout)));
 
     let dir = unique_test_dir("jnigen_optscalar");
     let _ = std::fs::remove_dir_all(&dir);
@@ -134,17 +132,15 @@ fn vec_of_handle_output_folds_kotlin_side() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("thing")
-            .class(crate::ptr_class!(ZThing))
-            .fun(crate::fun!(thing_list))
-            .fun(crate::fun!(thing_list_opt)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing))
+                .fun(crate::fun!(thing_list))
+                .fun(crate::fun!(thing_list_opt)),
+        );
 
     let dir = unique_test_dir("jnigen_vec_handle_out");
     let _ = std::fs::remove_dir_all(&dir);
@@ -219,16 +215,14 @@ fn option_scalar_struct_field_flattens() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!()
-            .class(crate::data_class!(Opts))
-            .fun(crate::fun!(opts_put)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Opts))
+                .fun(crate::fun!(opts_put)),
+        );
 
     let dir = unique_test_dir("jnigen_optfield");
     let _ = std::fs::remove_dir_all(&dir);
@@ -342,22 +336,20 @@ fn fromparts_fallback_boxes_option_fields() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("model")
-            .class(crate::enum_class!(Level))
-            .class(crate::data_class!(Inner))
-            .class(crate::data_class!(Job)),
-    )
-    .package(
-        crate::package!("job")
-            .fun(crate::fun!(job_make))
-            .fun(crate::fun!(job_mode)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("model")
+                .class(crate::enum_class!(Level))
+                .class(crate::data_class!(Inner))
+                .class(crate::data_class!(Job)),
+        )
+        .package(
+            crate::package!("job")
+                .fun(crate::fun!(job_make))
+                .fun(crate::fun!(job_mode)),
+        );
 
     let dir = unique_test_dir("jnigen_fromparts_optbox");
     let _ = std::fs::remove_dir_all(&dir);
@@ -439,16 +431,14 @@ fn output_only_wrapper_resolves_without_input_twin() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .scalar_type_wrapper(
-        crate::scalar_type_wrapper!(Len, jni::sys::jlong, "Long")
-            .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
-    )
-    .package(crate::package!("len").fun(crate::fun!(len_of)));
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .scalar_type_wrapper(
+            crate::scalar_type_wrapper!(Len, jni::sys::jlong, "Long")
+                .output(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
+        )
+        .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_wrapper");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

@@ -34,26 +34,24 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("thing")
-            .class(
-                crate::ptr_class!(ZThing)
-                    // Canonical output: handle (identity) + its string form — a
-                    // callback arg of ZThing decomposes into these 2 leaves.
-                    .fun(crate::fun!(z_thing_name).name("name"))
-                    .default_return_expand_self()
-                    .default_return_expand(crate::fun!(z_thing_name).name("name")),
-            )
-            // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
-            .class(crate::ptr_class!(ZOther))
-            .fun(crate::fun!(z_thing_sub))
-            .fun(crate::fun!(z_other_sub)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        // Canonical output: handle (identity) + its string form — a
+                        // callback arg of ZThing decomposes into these 2 leaves.
+                        .fun(crate::fun!(z_thing_name).name("name"))
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_thing_name).name("name")),
+                )
+                // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
+                .class(crate::ptr_class!(ZOther))
+                .fun(crate::fun!(z_thing_sub))
+                .fun(crate::fun!(z_other_sub)),
+        );
 
     let dir = unique_test_dir("jnigen_cb_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -223,29 +221,27 @@ fn callback_root_identity_moved_after_nested_borrow() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("thing")
-            // Child handle: canonical output = identity (clone) + its name string.
-            .class(
-                crate::ptr_class!(ZChild)
-                    .fun(crate::fun!(z_child_name).name("name"))
-                    .default_return_expand_self()
-                    .default_return_expand(crate::fun!(z_child_name).name("name")),
-            )
-            // Parent: a nested child-handle record, then its OWN root identity LAST.
-            .class(
-                crate::ptr_class!(ZParent)
-                    .fun(crate::fun!(z_parent_child).name("child"))
-                    .default_return_expand(crate::fun!(z_parent_child).name("child"))
-                    .default_return_expand_self(),
-            )
-            .fun(crate::fun!(z_parent_sub)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                // Child handle: canonical output = identity (clone) + its name string.
+                .class(
+                    crate::ptr_class!(ZChild)
+                        .fun(crate::fun!(z_child_name).name("name"))
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_child_name).name("name")),
+                )
+                // Parent: a nested child-handle record, then its OWN root identity LAST.
+                .class(
+                    crate::ptr_class!(ZParent)
+                        .fun(crate::fun!(z_parent_child).name("child"))
+                        .default_return_expand(crate::fun!(z_parent_child).name("child"))
+                        .default_return_expand_self(),
+                )
+                .fun(crate::fun!(z_parent_sub)),
+        );
 
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
@@ -311,50 +307,48 @@ fn callback_double_option_unwrap_pipeline() {
     ));
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("query")
-            .class(crate::value_class!(ZId))
-            .class(
-                crate::ptr_class!(ZKeyExpr)
-                    .fun(crate::fun!(z_keyexpr_as_str).name("asStr"))
-                    .default_return_expand_self()
-                    .default_return_expand(crate::fun!(z_keyexpr_as_str).name("asStr")),
-            )
-            .class(
-                crate::ptr_class!(ZTs)
-                    .fun(crate::fun!(z_ts_ntp64).name("ntp64"))
-                    .default_return_expand(crate::fun!(z_ts_ntp64).name("ntp64")),
-            )
-            .class(
-                crate::ptr_class!(ZSample)
-                    .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                    .fun(crate::fun!(z_sample_timestamp).name("timestamp"))
-                    .default_return_expand(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                    .default_return_expand(crate::fun!(z_sample_timestamp).name("timestamp")),
-            )
-            .class(
-                crate::ptr_class!(ZErr)
-                    .fun(crate::fun!(z_err_payload).name("payload"))
-                    .default_return_expand(crate::fun!(z_err_payload).name("payload")),
-            )
-            .class(
-                crate::ptr_class!(ZReply)
-                    .fun(crate::fun!(z_reply_zid).name("zid"))
-                    .fun(crate::fun!(z_reply_is_ok).name("isOk"))
-                    .fun(crate::fun!(z_reply_sample).name("sample"))
-                    .fun(crate::fun!(z_reply_err).name("err"))
-                    .default_return_expand(crate::fun!(z_reply_zid).name("zid"))
-                    .default_return_expand(crate::fun!(z_reply_is_ok).name("isOk"))
-                    .default_return_expand(crate::fun!(z_reply_sample).name("sample"))
-                    .default_return_expand(crate::fun!(z_reply_err).name("err")),
-            )
-            .fun(crate::fun!(z_get)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("query")
+                .class(crate::value_class!(ZId))
+                .class(
+                    crate::ptr_class!(ZKeyExpr)
+                        .fun(crate::fun!(z_keyexpr_as_str).name("asStr"))
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_keyexpr_as_str).name("asStr")),
+                )
+                .class(
+                    crate::ptr_class!(ZTs)
+                        .fun(crate::fun!(z_ts_ntp64).name("ntp64"))
+                        .default_return_expand(crate::fun!(z_ts_ntp64).name("ntp64")),
+                )
+                .class(
+                    crate::ptr_class!(ZSample)
+                        .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                        .fun(crate::fun!(z_sample_timestamp).name("timestamp"))
+                        .default_return_expand(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                        .default_return_expand(crate::fun!(z_sample_timestamp).name("timestamp")),
+                )
+                .class(
+                    crate::ptr_class!(ZErr)
+                        .fun(crate::fun!(z_err_payload).name("payload"))
+                        .default_return_expand(crate::fun!(z_err_payload).name("payload")),
+                )
+                .class(
+                    crate::ptr_class!(ZReply)
+                        .fun(crate::fun!(z_reply_zid).name("zid"))
+                        .fun(crate::fun!(z_reply_is_ok).name("isOk"))
+                        .fun(crate::fun!(z_reply_sample).name("sample"))
+                        .fun(crate::fun!(z_reply_err).name("err"))
+                        .default_return_expand(crate::fun!(z_reply_zid).name("zid"))
+                        .default_return_expand(crate::fun!(z_reply_is_ok).name("isOk"))
+                        .default_return_expand(crate::fun!(z_reply_sample).name("sample"))
+                        .default_return_expand(crate::fun!(z_reply_err).name("err")),
+                )
+                .fun(crate::fun!(z_get)),
+        );
 
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);

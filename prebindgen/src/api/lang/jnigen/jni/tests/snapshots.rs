@@ -45,22 +45,20 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!()
-            .class(crate::data_class!(Error))
-            .class(crate::ptr_class!(ZThing))
-            .class(crate::enum_class!(Color)),
-    )
-    .package(
-        crate::package!("thing")
-            .fun(crate::fun!(z_thing_new))
-            .fun(crate::fun!(z_thing_name)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Error))
+                .class(crate::ptr_class!(ZThing))
+                .class(crate::enum_class!(Color)),
+        )
+        .package(
+            crate::package!("thing")
+                .fun(crate::fun!(z_thing_new))
+                .fun(crate::fun!(z_thing_name)),
+        );
 
     let dir = unique_test_dir("jnigen_snap");
     let _ = std::fs::remove_dir_all(&dir);
@@ -226,17 +224,15 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("payload")
-            .class(crate::data_class!(Payload))
-            .fun(crate::fun!(payload_get))
-            .fun(crate::fun!(payload_put)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("payload")
+                .class(crate::data_class!(Payload))
+                .fun(crate::fun!(payload_get))
+                .fun(crate::fun!(payload_put)),
+        );
 
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
@@ -309,17 +305,15 @@ fn slice_input_builds_vec_handle() {
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("foo")
-            .class(crate::data_class!(Foo))
-            .fun(crate::fun!(put_slice))
-            .fun(crate::fun!(put_vec)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("foo")
+                .class(crate::data_class!(Foo))
+                .fun(crate::fun!(put_slice))
+                .fun(crate::fun!(put_vec)),
+        );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
@@ -390,7 +384,7 @@ fn slice_input_builds_vec_handle() {
     );
 }
 
-/// `.jni_native_init(code)` injects an `init { code }` block into the generated
+/// `.set_jni_native_init(code)` injects an `init { code }` block into the generated
 /// centralized externs object (`JNINative`) — the single static-init point a
 /// consumer uses to trigger native-library loading. Unset (the `snapshot_*`
 /// tests) emits no init block.
@@ -408,13 +402,11 @@ fn jni_native_init_emits_init_block() {
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni")
-            .jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()"),
-    )
-    .package(crate::package!("thing").fun(crate::fun!(z_ping)));
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .set_jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
+        .package(crate::package!("thing").fun(crate::fun!(z_ping)));
 
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);

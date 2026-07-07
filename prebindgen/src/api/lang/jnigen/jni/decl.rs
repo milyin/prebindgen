@@ -125,7 +125,9 @@ macro_rules! scalar_type_wrapper {
 #[macro_export]
 macro_rules! generic_type_wrapper {
     ($t:ty) => {
-        $crate::lang::GenericTypeWrapperDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+        $crate::lang::GenericTypeWrapperDecl::new($crate::__macro_support::parse_type(stringify!(
+            $t
+        )))
     };
 }
 
@@ -578,7 +580,7 @@ pub struct PackageDecl {
 
 impl PackageDecl {
     /// `name` is dot-separated, relative to the base package set by
-    /// [`JniGenConfig::package_prefix`]; the empty string is the base
+    /// [`JniGen::set_package_prefix`]; the empty string is the base
     /// package itself. See [`crate::package!`] for the equivalent macro form
     /// (`package!("model")` / `package!()`).
     pub fn new(name: impl Into<String>) -> Self {
@@ -685,7 +687,10 @@ impl ScalarTypeWrapperDecl {
     /// the type is a parameter). `body` gets the wire value's ident and
     /// returns the Rust expression, e.g.
     /// `|v| pq!(perftest_flat::Millis(*#v as u64))`.
-    pub fn input(mut self, body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static) -> Self {
+    pub fn input(
+        mut self,
+        body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static,
+    ) -> Self {
         self.input = Some(Arc::new(body));
         self
     }
@@ -693,7 +698,10 @@ impl ScalarTypeWrapperDecl {
     /// How to turn the **Rust value into the wire value** (used when the type
     /// is returned). `body` gets the Rust value's ident and returns the wire
     /// expression, e.g. `|v| pq!(#v.0 as jni::sys::jlong)`.
-    pub fn output(mut self, body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static) -> Self {
+    pub fn output(
+        mut self,
+        body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static,
+    ) -> Self {
         self.output = Some(Arc::new(body));
         self
     }
@@ -751,9 +759,11 @@ where
     F: Fn(&syn::Type, &syn::Ident) -> WireBody + Send + Sync + 'static,
 {
     fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-            Some(self(&args[0], &wrapper_value_ident()).into_tuple())
-        })
+        Arc::new(
+            move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
+                Some(self(&args[0], &wrapper_value_ident()).into_tuple())
+            },
+        )
     }
     fn rank() -> usize {
         1
@@ -765,9 +775,11 @@ where
     F: Fn(&syn::Type, &syn::Type, &syn::Ident) -> WireBody + Send + Sync + 'static,
 {
     fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-            Some(self(&args[0], &args[1], &wrapper_value_ident()).into_tuple())
-        })
+        Arc::new(
+            move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
+                Some(self(&args[0], &args[1], &wrapper_value_ident()).into_tuple())
+            },
+        )
     }
     fn rank() -> usize {
         2
@@ -779,9 +791,11 @@ where
     F: Fn(&syn::Type, &syn::Type, &syn::Type, &syn::Ident) -> WireBody + Send + Sync + 'static,
 {
     fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-            Some(self(&args[0], &args[1], &args[2], &wrapper_value_ident()).into_tuple())
-        })
+        Arc::new(
+            move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
+                Some(self(&args[0], &args[1], &args[2], &wrapper_value_ident()).into_tuple())
+            },
+        )
     }
     fn rank() -> usize {
         3

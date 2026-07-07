@@ -19,7 +19,7 @@
 use prebindgen::{
     core::Registry,
     data_class, fun,
-    lang::{JniGen, JniGenConfig},
+    lang::JniGen,
     package, ptr_class,
 };
 use syn::parse_quote as pq;
@@ -27,14 +27,12 @@ use syn::parse_quote as pq;
 fn main() {
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(pq!(perftest_flat))
-            .package_prefix("io.prebindgen.perftest")
+    let jni = JniGen::new()
+            .set_source_module(pq!(perftest_flat))
+            .set_package_prefix("io.prebindgen.perftest")
             // Trigger native-library loading from the generated `JNINative` static
             // init (the single choke point through which every JNI call routes).
-            .jni_native_init("io.prebindgen.perftest.NativeLibrary.ensureLoaded()"),
-    )
+            .set_jni_native_init("io.prebindgen.perftest.NativeLibrary.ensureLoaded()")
     // Base-package types.
     .package(
         package!()

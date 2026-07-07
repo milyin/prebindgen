@@ -259,8 +259,8 @@ pub mod lang {
             box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
             null_byte_array, null_string, CachedIfaceMethod, ClassDecl, DataClassDecl,
             EnumClassDecl, FunctionDecl, GenericTypeWrapperDecl, JniBindingError, JniGen,
-            JniGenConfig, KotlinFile, PackageDecl, PtrClassDecl, ScalarTypeWrapperDecl,
-            ValueClassDecl, WireBody, WriteKotlinError,
+            KotlinFile, PackageDecl, PtrClassDecl, ScalarTypeWrapperDecl, ValueClassDecl, WireBody,
+            WriteKotlinError,
         },
     };
 }

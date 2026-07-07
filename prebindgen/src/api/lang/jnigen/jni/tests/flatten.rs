@@ -22,32 +22,30 @@ fn inline_output_gets_own_builder() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("thing")
-            .class(
-                crate::ptr_class!(ZThing)
-                    .fun(crate::fun!(z_thing_name).name("name"))
-                    .fun(crate::fun!(z_thing_size).name("size"))
-                    // Default output: name + size (2 leaves ⇒ builder callback).
-                    .default_return_expand(crate::fun!(z_thing_name).name("name"))
-                    .default_return_expand(crate::fun!(z_thing_size).name("size")),
-            )
-            .fun(crate::fun!(z_make_a))
-            // Per-fn inline fields: name + size + name again (different shape). The
-            // third field reuses the `z_thing_name` accessor but must carry a
-            // distinct (literal) leaf name — duplicate names are a hard error.
-            .fun(
-                crate::fun!(z_make_b)
-                    .return_expand(crate::fun!(z_thing_name).name("name"))
-                    .return_expand(crate::fun!(z_thing_size).name("size"))
-                    .return_expand(crate::fun!(z_thing_name).name("name2")),
-            ),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .fun(crate::fun!(z_thing_name).name("name"))
+                        .fun(crate::fun!(z_thing_size).name("size"))
+                        // Default output: name + size (2 leaves ⇒ builder callback).
+                        .default_return_expand(crate::fun!(z_thing_name).name("name"))
+                        .default_return_expand(crate::fun!(z_thing_size).name("size")),
+                )
+                .fun(crate::fun!(z_make_a))
+                // Per-fn inline fields: name + size + name again (different shape). The
+                // third field reuses the `z_thing_name` accessor but must carry a
+                // distinct (literal) leaf name — duplicate names are a hard error.
+                .fun(
+                    crate::fun!(z_make_b)
+                        .return_expand(crate::fun!(z_thing_name).name("name"))
+                        .return_expand(crate::fun!(z_thing_size).name("size"))
+                        .return_expand(crate::fun!(z_thing_name).name("name2")),
+                ),
+        );
 
     let dir = unique_test_dir("jnigen_inline_out");
     let _ = std::fs::remove_dir_all(&dir);
@@ -116,30 +114,28 @@ fn error_unwrap_universal_records() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("errors")
-            .class(
-                crate::ptr_class!(ZDetail)
-                    .fun(crate::fun!(z_detail_code).name("code"))
-                    .default_return_expand(crate::fun!(z_detail_code).name("code")),
-            )
-            .class(
-                crate::ptr_class!(ZErr)
-                    .fun(crate::fun!(z_err_message).name("message"))
-                    .fun(crate::fun!(z_err_detail).name("detail"))
-                    // Canonical error decomposition: the owned error handle itself,
-                    // its message, and the Option-nested detail spliced to its code leaf.
-                    .default_return_expand_self()
-                    .default_return_expand(crate::fun!(z_err_message).name("message"))
-                    .default_return_expand(crate::fun!(z_err_detail).name("detail")),
-            )
-            .fun(crate::fun!(z_fallible)),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("errors")
+                .class(
+                    crate::ptr_class!(ZDetail)
+                        .fun(crate::fun!(z_detail_code).name("code"))
+                        .default_return_expand(crate::fun!(z_detail_code).name("code")),
+                )
+                .class(
+                    crate::ptr_class!(ZErr)
+                        .fun(crate::fun!(z_err_message).name("message"))
+                        .fun(crate::fun!(z_err_detail).name("detail"))
+                        // Canonical error decomposition: the owned error handle itself,
+                        // its message, and the Option-nested detail spliced to its code leaf.
+                        .default_return_expand_self()
+                        .default_return_expand(crate::fun!(z_err_message).name("message"))
+                        .default_return_expand(crate::fun!(z_err_detail).name("detail")),
+                )
+                .fun(crate::fun!(z_fallible)),
+        );
 
     let dir = unique_test_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);
@@ -240,28 +236,26 @@ fn method_constructor_and_inline_field_self() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new(
-        JniGenConfig::new()
-            .source_module(syn::parse_quote!(myflat))
-            .package_prefix("io.test.jni"),
-    )
-    .package(
-        crate::package!("thing")
-            .class(
-                crate::ptr_class!(ZThing)
-                    .fun(crate::fun!(z_thing_name).name("name"))
-                    // A fun with extra params: `&ZThing` receiver + a `name: String` param.
-                    .fun(crate::fun!(z_thing_rename).name("rename"))
-                    // A constructor: factory returning ZThing.
-                    .constructor(crate::fun!(z_thing_make).name("make")),
-            )
-            // A free fn whose per-fn inline output decomposes to (handle, name).
-            .fun(
-                crate::fun!(z_get)
-                    .return_expand_self()
-                    .return_expand(crate::fun!(z_thing_name).name("name")),
-            ),
-    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .fun(crate::fun!(z_thing_name).name("name"))
+                        // A fun with extra params: `&ZThing` receiver + a `name: String` param.
+                        .fun(crate::fun!(z_thing_rename).name("rename"))
+                        // A constructor: factory returning ZThing.
+                        .constructor(crate::fun!(z_thing_make).name("make")),
+                )
+                // A free fn whose per-fn inline output decomposes to (handle, name).
+                .fun(
+                    crate::fun!(z_get)
+                        .return_expand_self()
+                        .return_expand(crate::fun!(z_thing_name).name("name")),
+                ),
+        );
 
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);

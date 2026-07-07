@@ -134,8 +134,8 @@ impl JniGen {
         );
 
         // The N-ary locking helper is only referenced when wrappers are
-        // emitted with locking on; skip it under `disable_handle_locks()` so it
-        // doesn't surface as an unused-`internal fun` warning.
+        // emitted with locking on; skip it under `set_emit_handle_locks(false)`
+        // so it doesn't surface as an unused-`internal fun` warning.
         if self.emit_handle_locks {
             file = file.decl(
                 KtFun::new("withSortedHandleLocks")
