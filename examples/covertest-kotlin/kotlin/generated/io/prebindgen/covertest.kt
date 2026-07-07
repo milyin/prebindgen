@@ -343,6 +343,26 @@ public fun stringNew(s: String, onError: JniErrorHandler<String>): String {
     return __ret
 }
 
+private fun constGetCoverMagic(onError: JniErrorHandler<Long>): Long {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constGetCoverMagic(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Mirrors the Rust `#[prebindgen]` const `COVER_MAGIC` (read once through the generated JNI getter). */
+public val COVER_MAGIC: Long = constGetCoverMagic(JniErrorHandler { je -> error(je ?: "const COVER_MAGIC: JNI getter failed") })
+
+private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constGetCoverTag(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read once through the generated JNI getter). */
+public val COVER_TAG: String = constGetCoverTag(JniErrorHandler { je -> error(je ?: "const COVER_TAG: JNI getter failed") })
+
 internal object CovNative {
     init {
         io.prebindgen.covertest.NativeLibrary.ensureLoaded()
@@ -487,6 +507,8 @@ internal object CovNative {
     external fun summaryScaled(s: Long, factor: Double, errorSink: Any): Double
     external fun summaryTotal(s: Long, errorSink: Any): Double
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+    external fun constGetCoverMagic(errorSink: Any): Long
+    external fun constGetCoverTag(errorSink: Any): String
     external fun payloadVecNew(cap: Int): Long
     external fun payloadVecPush(handle: Long, eId: Long, eSeq: Int, eValue: Double, eFlag: Boolean, eLabel: String?)
     external fun payloadVecFree(handle: Long)

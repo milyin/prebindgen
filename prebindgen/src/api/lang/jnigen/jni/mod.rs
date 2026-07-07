@@ -164,6 +164,11 @@ pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
     /// subpackage via [`JniGen::fun`].
     pub functions: Vec<MethodEntry>,
+    /// `#[prebindgen]` consts declared under this subpackage via
+    /// [`PackageDecl::constant`] — each surfaces as a top-level Kotlin `val`
+    /// initialized through a generated nullary JNI getter. `MethodEntry`
+    /// is reused as-is (rust ident + Kotlin-name override).
+    pub constants: Vec<MethodEntry>,
 }
 
 /// What kind of class member a [`ClassMember`] is.
@@ -363,6 +368,10 @@ pub struct JniGen {
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
     /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
+
+    /// `#[prebindgen]` consts the binding deliberately does NOT declare,
+    /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
+    pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
 
     /// Every function ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
     /// `.return_expand(...)` record (class- or

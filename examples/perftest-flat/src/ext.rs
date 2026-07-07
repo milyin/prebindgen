@@ -474,6 +474,19 @@ pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
+// getters + eagerly-initialized Kotlin top-level `val`s.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The storage capacity limit advertised to bindings (a primitive const).
+#[prebindgen]
+pub const COVER_MAGIC: i64 = 0xC0FFEE;
+
+/// The coverage surface's tag string (a string const).
+#[prebindgen]
+pub const COVER_TAG: &str = "covertest";
+
 #[cfg(test)]
 mod tests {
     use super::*;

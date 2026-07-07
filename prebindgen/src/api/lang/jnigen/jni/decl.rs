@@ -93,6 +93,15 @@ macro_rules! fun {
     };
 }
 
+/// Build a [`ConstDecl`] directly from a bare const ident:
+/// `constant!(MAX_LEN)` is `ConstDecl::new(prebindgen::ident!(MAX_LEN))`.
+#[macro_export]
+macro_rules! constant {
+    ($name:ident) => {
+        $crate::lang::ConstDecl::new($crate::ident!($name))
+    };
+}
+
 /// Build a [`PackageDecl`] directly: `package!("model")` is
 /// `PackageDecl::new("model")`; `package!()` (no args) is the base package
 /// (`PackageDecl::new("")`).
@@ -562,20 +571,54 @@ impl FunctionDecl {
     }
 }
 
+/// Declares one `#[prebindgen]` **const** for emission: on the Rust side a
+/// nullary JNI getter extern is generated (the const's type goes through the
+/// ordinary output-converter machinery, exactly like a function return); on
+/// the Kotlin side the const surfaces as an eagerly-initialized top-level
+/// `val` in its package's `.kt` file.
+///
+/// Build one with [`constant!`](crate::constant) and add it to a
+/// [`PackageDecl`] via [`PackageDecl::constant`]. Opaque-handle-typed consts
+/// are rejected (a shared closeable `val` is semantically wrong) — expose a
+/// factory function instead.
+pub struct ConstDecl {
+    pub(crate) rust_ident: syn::Ident,
+    pub(crate) kotlin_name_override: Option<String>,
+}
+
+impl ConstDecl {
+    pub fn new(rust_ident: syn::Ident) -> Self {
+        Self {
+            rust_ident,
+            kotlin_name_override: None,
+        }
+    }
+
+    /// Set the Kotlin-side name. Default: the Rust const ident verbatim
+    /// (`MAX_LEN` → `val MAX_LEN` — SCREAMING_SNAKE is the Kotlin constant
+    /// convention too).
+    pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
+        self.kotlin_name_override = Some(kotlin_name.into());
+        self
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // PackageDecl — aggregates the package-scoped decls
 // ──────────────────────────────────────────────────────────────────────
 
-/// A batch of class and function declarations that land under one Kotlin
-/// subpackage. Build it with [`package!`](crate::package)
+/// A batch of class, function and const declarations that land under one
+/// Kotlin subpackage. Build it with [`package!`](crate::package)
 /// (`package!("session")`, or `package!()` for the base package), fill it
-/// with [`class`](Self::class) and [`fun`](Self::fun), and hand it to
+/// with [`class`](Self::class) / [`fun`](Self::fun) /
+/// [`constant`](Self::constant), and hand it to
 /// [`JniGen::package`]. Reopening the same subpackage across several
 /// `PackageDecl`s is fine — they merge.
 pub struct PackageDecl {
     pub(crate) name: String,
     pub(crate) classes: Vec<ClassDecl>,
     pub(crate) functions: Vec<FunctionDecl>,
+    pub(crate) constants: Vec<ConstDecl>,
 }
 
 impl PackageDecl {
@@ -590,6 +633,7 @@ impl PackageDecl {
             name,
             classes: Vec::new(),
             functions: Vec::new(),
+            constants: Vec::new(),
         }
     }
 
@@ -606,6 +650,15 @@ impl PackageDecl {
     /// `.name(...)` or per-function overrides.
     pub fn fun(mut self, decl: FunctionDecl) -> Self {
         self.functions.push(decl);
+        self
+    }
+
+    /// Add a `#[prebindgen]` const to this package: a top-level Kotlin `val`
+    /// in the package file, initialized through a generated nullary JNI
+    /// getter. Take a bare name via [`constant!`](crate::constant), or a
+    /// customized [`ConstDecl`] when you need `.name(...)`.
+    pub fn constant(mut self, decl: ConstDecl) -> Self {
+        self.constants.push(decl);
         self
     }
 }

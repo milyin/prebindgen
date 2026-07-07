@@ -967,6 +967,26 @@ impl Prebindgen for JniGen {
             .collect()
     }
 
+    /// Union of every `.constant(...)` list across all
+    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGen
+    /// HAS a const declaration mechanism, so const emission is declared-only
+    /// and undeclared consts get the skip warning (see
+    /// [`Prebindgen::declared_consts`]).
+    fn declared_consts(&self) -> Option<std::collections::HashSet<syn::Ident>> {
+        let mut out = std::collections::HashSet::new();
+        for pkg in self.packages.values() {
+            for c in &pkg.constants {
+                out.insert(c.rust_ident.clone());
+            }
+        }
+        Some(out)
+    }
+
+    /// Consts acknowledged-but-unexposed via [`JniGen::ignore_const`].
+    fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
+        self.ignored_const_idents.clone()
+    }
+
     /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
     /// the registry's "skipping undeclared" warning, emits nothing.
     fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
@@ -1053,8 +1073,30 @@ impl Prebindgen for JniGen {
         TokenStream::new()
     }
 
-    fn on_const(&self, c: &syn::ItemConst, _registry: &Registry<KotlinMeta>) -> TokenStream {
-        c.to_token_stream()
+    /// Declared consts only reach here (write gating via
+    /// [`Prebindgen::declared_consts`]): re-emit the const verbatim AND emit
+    /// its nullary JNI getter extern. The getter reuses the whole function-
+    /// wrapper pipeline (so the const's type flows through the ordinary
+    /// output-converter machinery); only the callee expression differs — a
+    /// path to the const, not a call.
+    fn on_const(&self, c: &syn::ItemConst, registry: &Registry<KotlinMeta>) -> TokenStream {
+        // Unnamed infrastructure consts (`const _`, e.g. the injected
+        // `konst::assertc_eq!` feature guard) pass through verbatim — no
+        // getter, no Kotlin surface.
+        if c.ident == "_" {
+            return c.to_token_stream();
+        }
+        reject_handle_const(self, c);
+        let getter = const_getter_fn(c);
+        let const_ident = &c.ident;
+        let source_module = &self.source_module;
+        let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
+        let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+        let verbatim = c.to_token_stream();
+        quote! {
+            #verbatim
+            #wrapper
+        }
     }
 
     fn dispatch_fn_input(

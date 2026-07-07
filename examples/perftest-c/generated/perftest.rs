@@ -750,6 +750,10 @@ pub unsafe extern "C" fn string_new(s: *const ::core::ffi::c_char) -> *mut strin
     __ret = __cbg_out_String(__v);
     __ret
 }
+/// The storage capacity limit advertised to bindings (a primitive const).
+pub const COVER_MAGIC: i64 = 0xC0FFEE;
+/// The coverage surface's tag string (a string const).
+pub const COVER_TAG: &str = "covertest";
 const _: () = {
     konst::assertc_eq!(
         perftest_flat::FEATURES, "",

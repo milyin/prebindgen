@@ -95,12 +95,24 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
             .filter(|(ident, _)| declared_types.contains(&TypeKey::parse(&ident.to_string())))
             .map(|(_, (item, _))| ext.on_enum(item, registry)),
     )?);
-    // Consts: always emit verbatim — declaration mechanism for consts
-    // is future work (see plan).
+    // Consts: an adapter WITH a const declaration mechanism
+    // (`declared_consts() == Some(set)`) emits declared consts only,
+    // symmetric with functions; an adapter without one (`None`) gets every
+    // const passed through verbatim via the default `on_const`. Unnamed
+    // consts (`const _`, e.g. the injected `konst::assertc_eq!` feature
+    // guard) are infrastructure, not declarable API — they bypass the gate
+    // and always emit.
+    let declared_consts = ext.declared_consts();
     items.extend(parse_items_from_tokens(
         "on_const",
         sorted_items_by_ident(&registry.consts)
             .into_iter()
+            .filter(|(ident, _)| {
+                *ident == "_"
+                    || declared_consts
+                        .as_ref()
+                        .is_none_or(|set| set.contains(*ident))
+            })
             .map(|(_, (item, _))| ext.on_const(item, registry)),
     )?);
 

@@ -15,6 +15,74 @@ pub(crate) fn emit_jni_function_wrapper(
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
 ) -> TokenStream {
+    emit_jni_function_wrapper_with_callee(ext, f, registry, None)
+}
+
+/// The synthetic nullary getter signature a declared const is emitted
+/// through: `pub fn const_get_<ident_lower>() -> <const ty>`. Both sides —
+/// the Rust extern ([`JniGen::on_const`] via
+/// [`emit_jni_function_wrapper_with_callee`]) and the Kotlin `val`
+/// initializer (`render_const_val`) — derive the extern symbol from this one
+/// ident, so they stay in sync by construction. The body is never used.
+pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
+    let ident = format_ident!("const_get_{}", c.ident.to_string().to_lowercase());
+    let ty = &c.ty;
+    syn::parse_quote! {
+        pub fn #ident() -> #ty {
+            unimplemented!()
+        }
+    }
+}
+
+/// A const whose (peeled) type is a declared opaque handle is rejected: an
+/// eagerly-initialized shared closeable `val` is semantically wrong (whose
+/// `close()` is it?). Expose a factory function instead — the established
+/// idiom (e.g. zenoh's `encoding_const_*` companion factories).
+pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
+    let mut ty = (*c.ty).clone();
+    loop {
+        if let syn::Type::Reference(r) = &ty {
+            ty = (*r.elem).clone();
+            continue;
+        }
+        if let Some(inner) = option_inner_type(&ty) {
+            ty = inner;
+            continue;
+        }
+        if let Some(inner) = vec_inner_type(&ty) {
+            ty = inner;
+            continue;
+        }
+        break;
+    }
+    let key = TypeKey::from_type(&ty);
+    let is_handle = ext
+        .types
+        .get(&key)
+        .and_then(|cfg| cfg.opaque.as_ref())
+        .is_some();
+    assert!(
+        !is_handle,
+        "const `{}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
+         not supported. Expose a `#[prebindgen]` factory function returning the constant and \
+         declare it as a companion constructor instead.",
+        c.ident,
+        key.as_str()
+    );
+}
+
+/// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
+/// `None` = the ordinary `<source_module>::<fn ident>(args)` call; `Some(e)`
+/// splices `e` verbatim as the value the output phase converts. Used by the
+/// const getter emission (`JniGen::on_const`), whose synthetic nullary `f`
+/// carries the signature while the value comes from
+/// `<source_module>::<CONST_IDENT>` — a path, not a call.
+pub(crate) fn emit_jni_function_wrapper_with_callee(
+    ext: &JniGen,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    callee: Option<syn::Expr>,
+) -> TokenStream {
     let original_ident = &f.sig.ident;
     let wrapper_ident = mangle_jni_name(ext, original_ident);
     let source_module = &ext.source_module;
@@ -77,7 +145,10 @@ pub(crate) fn emit_jni_function_wrapper(
         call_args.push(call_arg);
     }
 
-    let raw_call = quote!(#source_module::#original_ident(#(#call_args),*));
+    let raw_call = match &callee {
+        Some(e) => quote!(#e),
+        None => quote!(#source_module::#original_ident(#(#call_args),*)),
+    };
     // For `convert_output` (Return), the value the output converter sees is the
     // **deconstructed** single value (the converter's accessor applied to the
     // raw return, lifted through the shape) — not the raw return. Build that

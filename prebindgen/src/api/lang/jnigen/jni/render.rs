@@ -758,6 +758,47 @@ pub(crate) fn render_wrapper_fn(
     Some(fun.body(body))
 }
 
+/// Render one declared const (see `ConstDecl`): a **private** nullary helper
+/// — the standard wrapper fn over the synthetic getter signature
+/// ([`const_getter_fn`]), reused verbatim so the const's type crosses through
+/// the ordinary output machinery — plus the public eagerly-initialized `val`
+/// that calls it once with a throwing `JniErrorHandler` (dead code for
+/// infallible converts; a binding-layer failure surfaces as
+/// `IllegalStateException` via `error(...)`).
+pub(crate) fn render_const_val(
+    ext: &JniGen,
+    c: &syn::ItemConst,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    kotlin_name_override: Option<&str>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    let getter = const_getter_fn(c);
+    let mut helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
+    helper.vis = kt::Vis::Private;
+    let helper_name = helper.name.clone();
+    // A const always carries a value type; a helper with no return would
+    // mean the type never resolved — skip like an unresolvable fn.
+    let val_ty = helper.ret.clone()?;
+    let val_name = kotlin_name_override
+        .map(str::to_string)
+        .unwrap_or_else(|| c.ident.to_string());
+    let spec = jni_error_handler_iface_spec(ext);
+    imports.insert(spec.fqn());
+    let init = format!(
+        "{helper_name}(JniErrorHandler {{ je -> error(je ?: \"const {val_name}: JNI getter failed\") }})"
+    );
+    let prop = kt::KtProperty::val(&val_name)
+        .ty(val_ty)
+        .vis(kt::Vis::Public)
+        .initializer(init)
+        .kdoc(format!(
+            "Mirrors the Rust `#[prebindgen]` const `{}` (read once through the \
+             generated JNI getter).",
+            c.ident
+        ));
+    Some((helper, prop))
+}
+
 /// The classified output side of a wrapper: return type, projection wrap,
 /// output-expansion (builder/fold) params, and the extra call-site args —
 /// everything the call-expression builder and the signature assembly must

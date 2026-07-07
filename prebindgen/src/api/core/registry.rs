@@ -373,6 +373,11 @@ struct DeclaredItems {
     method_receivers: HashMap<syn::Ident, TypeKey>,
     types: HashSet<TypeKey>,
     ignored_types: HashSet<TypeKey>,
+    /// `None` = the adapter has no const declaration mechanism (all consts
+    /// re-emitted verbatim, no scan, no warnings) — see
+    /// [`Prebindgen::declared_consts`].
+    consts: Option<HashSet<syn::Ident>>,
+    ignored_consts: HashSet<syn::Ident>,
 }
 
 impl DeclaredItems {
@@ -387,6 +392,8 @@ impl DeclaredItems {
             method_receivers: adapter.method_receivers(),
             types: adapter.declared_types(),
             ignored_types: adapter.ignored_types(),
+            consts: adapter.declared_consts(),
+            ignored_consts: adapter.ignored_consts(),
         };
 
         if let Some(name) = declared
@@ -484,6 +491,30 @@ impl<M> Registry<M> {
             }
         }
 
+        // Scan declared consts (only when the adapter has a const
+        // declaration mechanism): a const is a nullary source of its type,
+        // so the type is required in the output direction only.
+        if let Some(decl_consts) = &declared.consts {
+            for ident in decl_consts {
+                if let Some((item_const, loc)) = self.consts.get(ident).cloned() {
+                    self.ensure_entry(Direction::Output, &item_const.ty, true, &loc);
+                } else {
+                    println!(
+                        "cargo:warning=prebindgen: declared const `{}` not found among #[prebindgen] items",
+                        ident
+                    );
+                }
+            }
+            for ident in &declared.ignored_consts {
+                if !self.consts.contains_key(ident) {
+                    println!(
+                        "cargo:warning=prebindgen: ignored const `{}` not found among #[prebindgen] items",
+                        ident
+                    );
+                }
+            }
+        }
+
         // Scan declared types.
         for key in &declared.types {
             let ty = key.to_type();
@@ -561,6 +592,27 @@ impl<M> Registry<M> {
                 "cargo:warning=prebindgen: skipping undeclared #[prebindgen] struct/enum `{}`",
                 name
             );
+        }
+
+        if let Some(decl_consts) = &declared.consts {
+            let mut skipped_consts: Vec<String> = self
+                .consts
+                .keys()
+                // Unnamed consts (`const _`, e.g. the injected feature
+                // guard) are infrastructure: not declarable, always emitted
+                // verbatim — never a skip.
+                .filter(|k| {
+                    *k != "_" && !decl_consts.contains(*k) && !declared.ignored_consts.contains(*k)
+                })
+                .map(|k| k.to_string())
+                .collect();
+            skipped_consts.sort();
+            for name in &skipped_consts {
+                println!(
+                    "cargo:warning=prebindgen: skipping undeclared #[prebindgen] const `{}`",
+                    name
+                );
+            }
         }
 
         Ok(())

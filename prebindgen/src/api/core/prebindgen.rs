@@ -254,6 +254,31 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Idents of `#[prebindgen]` consts the adapter claims for emission.
+    ///
+    /// * `None` (default) — the adapter has **no const declaration
+    ///   mechanism**: every indexed const is re-emitted verbatim into the
+    ///   generated Rust, none drives type resolution, and no skip warnings
+    ///   are printed.
+    /// * `Some(set)` — declared-only, symmetric with functions: a declared
+    ///   const's type is scanned as a required **output** type, only
+    ///   declared consts reach [`Self::on_const`], and undeclared ones get
+    ///   a `cargo:warning=` skip line (suppressed via
+    ///   [`Self::ignored_consts`]).
+    fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
+        None
+    }
+
+    /// Idents of `#[prebindgen]` consts the adapter explicitly knows about
+    /// but intentionally does not emit — suppresses the "skipping
+    /// undeclared" warning. Only meaningful when [`Self::declared_consts`]
+    /// returns `Some`.
+    ///
+    /// Default: empty.
+    fn ignored_consts(&self) -> HashSet<syn::Ident> {
+        HashSet::new()
+    }
+
     /// Canonical keys of types (structs / enums) the adapter claims for
     /// emission. Matched against `Registry::structs` and `Registry::enums`
     /// by bare-ident lookup. Anything not in this set is left in the

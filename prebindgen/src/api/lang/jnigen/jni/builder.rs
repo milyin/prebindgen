@@ -63,6 +63,7 @@ impl JniGen {
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
             ignored_class_types: std::collections::HashSet::new(),
+            ignored_const_idents: std::collections::HashSet::new(),
             accessor_record_fns: std::collections::HashSet::new(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
@@ -166,7 +167,7 @@ impl Default for JniGen {
 // ── Accepting a `PackageDecl` ────────────────────────────────────────────
 
 impl JniGen {
-    /// Register a package's worth of classes and functions (a
+    /// Register a package's worth of classes, functions and consts (a
     /// [`PackageDecl`], built with [`package!`](crate::package)). Call it once
     /// per package, or several times for the same package name — the
     /// declarations merge, so you can split a large package across calls.
@@ -175,6 +176,7 @@ impl JniGen {
             name,
             classes,
             functions,
+            constants,
         } = decl;
         self.packages.entry(name.clone()).or_default();
         for class in classes {
@@ -182,6 +184,15 @@ impl JniGen {
         }
         for func in functions {
             self.accept_function(&name, func);
+        }
+        for c in constants {
+            let mut entry = MethodEntry::new(c.rust_ident);
+            entry.kotlin_name_override = c.kotlin_name_override;
+            self.packages
+                .entry(name.clone())
+                .or_default()
+                .constants
+                .push(entry);
         }
         self
     }
@@ -200,6 +211,14 @@ impl JniGen {
     pub fn ignore_class(mut self, rust_type: syn::Type) -> Self {
         self.ignored_class_types
             .insert(TypeKey::from_type(&rust_type));
+        self
+    }
+
+    /// Acknowledge a `#[prebindgen]` const this binding deliberately does
+    /// NOT expose — the const-level dual of [`Self::ignore_fun`]. E.g.
+    /// `.ignore_const(constant!(INTERNAL_MAGIC))`.
+    pub fn ignore_const(mut self, decl: ConstDecl) -> Self {
+        self.ignored_const_idents.insert(decl.rust_ident);
         self
     }
 

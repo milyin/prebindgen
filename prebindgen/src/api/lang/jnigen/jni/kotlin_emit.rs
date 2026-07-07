@@ -83,7 +83,7 @@ impl JniGen {
         fragments.extend(self.write_typed_handles(registry, &typed_handles));
         fragments.extend(self.write_callback_ifaces(registry));
         for (subpackage, pkg_cfg) in &self.packages {
-            if pkg_cfg.functions.is_empty() {
+            if pkg_cfg.functions.is_empty() && pkg_cfg.constants.is_empty() {
                 continue;
             }
             fragments.push(self.write_jni_package(registry, subpackage, pkg_cfg));
@@ -880,6 +880,28 @@ impl JniGen {
                 file = file.decl(f);
             }
         }
+        // Declared consts: a private nullary helper + the public
+        // eagerly-initialized `val` (see `render_const_val`).
+        for entry in &pkg_cfg.constants {
+            let (item_const, _loc) = registry.consts.get(&entry.rust_ident).unwrap_or_else(|| {
+                panic!(
+                    "write_jni_package: const `{}` registered via .constant(...) is \
+                     not in the prebindgen registry — check the spelling against the \
+                     matching `#[prebindgen]` Rust const name.",
+                    entry.rust_ident,
+                )
+            });
+            reject_handle_const(self, item_const);
+            if let Some((helper, prop)) = render_const_val(
+                self,
+                item_const,
+                registry,
+                &mut imports,
+                entry.kotlin_name_override.as_deref(),
+            ) {
+                file = file.decl(helper).decl(prop);
+            }
+        }
         // The wrapper bodies call the centralized Native object.
         if !self.package.is_empty() {
             imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
@@ -914,6 +936,26 @@ impl JniGen {
             }
             let (item_fn, _loc) = &registry.functions[ident];
             if let Some(code) = render_extern_decl(self, item_fn, registry, &mut imports) {
+                externs = externs.push(code);
+            }
+        }
+
+        // Declared consts: one `external fun` per generated nullary getter,
+        // derived from the same synthetic signature (`const_getter_fn`) the
+        // Rust extern is emitted from — both sides stay in sync by
+        // construction.
+        let mut const_idents: Vec<&syn::Ident> = self
+            .packages
+            .values()
+            .flat_map(|p| p.constants.iter().map(|e| &e.rust_ident))
+            .collect();
+        const_idents.sort_by_key(|i| i.to_string());
+        for ident in const_idents {
+            let Some((item_const, _loc)) = registry.consts.get(ident) else {
+                continue; // missing decl already warned by the scan
+            };
+            let getter = crate::api::lang::jnigen::jni::const_getter_fn(item_const);
+            if let Some(code) = render_extern_decl(self, &getter, registry, &mut imports) {
                 externs = externs.push(code);
             }
         }
