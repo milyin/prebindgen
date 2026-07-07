@@ -413,7 +413,7 @@ fn fromparts_fallback_boxes_option_fields() {
     assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
 }
 
-/// An output-only wrapper type must resolve with only its `.output()`
+/// An output-only wrapper type must resolve with only its `.on_return()`
 /// registered: wrapper registrations are required per USAGE direction, unlike
 /// the four class declarators (always both). Regression: registering the
 /// wrapper used to add the type to `declared_types`, and the scan blanket-

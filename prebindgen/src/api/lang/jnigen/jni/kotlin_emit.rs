@@ -890,7 +890,7 @@ impl JniGen {
     /// Emit the centralized Native-object Kotlin file under `output_dir`
     /// (class name from [`JniGen::jni_native_class_name`]). Holds one
     /// `external fun` per `#[prebindgen]` function — names mangled via
-    /// `kotlin_fun_name_mangle`, parameter and return types rendered at
+    /// [`JniGen::set_fun_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under
     /// `Java_<package>_<jni_native_class>_<name>`. Every generated native

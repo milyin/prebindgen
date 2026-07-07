@@ -8,7 +8,7 @@ use super::*;
 /// the structured builders ([`JniGen::ptr_class`],
 /// [`JniGen::data_class`]) to derive a default Kotlin class name from
 /// the Rust type-key. Panics for non-path types (e.g. closures, references) —
-/// the per-kind `kotlin_*_name_mangle` closures see only path-shaped
+/// the per-kind `*_name_mangle` closures see only path-shaped
 /// shorts. For verbatim Kotlin expressions on non-path types, chain
 /// [`JniGen::kotlin_type`] after the structured builder.
 pub(crate) fn rust_short_name(key: &TypeKey) -> String {

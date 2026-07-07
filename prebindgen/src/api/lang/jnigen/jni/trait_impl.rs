@@ -261,7 +261,7 @@ impl JniGen {
     /// for plugin wrapper exts that build `ConverterImpl::function`
     /// manually with a non-standard return type (e.g.
     /// `impl Into<…>` parameters that can't be expressed via
-    /// [`Self::input_wrapper`]'s fixed signature shape).
+    /// `input_wrapper_shape`'s fixed signature shape).
     pub fn input_converter_name(&self, rust: &syn::Type, wire: &syn::Type) -> syn::Ident {
         input_name(rust, wire)
     }

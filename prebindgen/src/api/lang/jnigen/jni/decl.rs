@@ -185,7 +185,7 @@ impl PtrClassDecl {
     }
 
     /// Rename the generated Kotlin class. By default it is named after the
-    /// Rust type (via the `kotlin_ptr_class_name_mangle` hook); `.name("Foo")`
+    /// Rust type (via the [`JniGen::set_ptr_class_name_mangle`] hook); `.name("Foo")`
     /// sets it literally instead. Relative name, no dots — the package comes
     /// from the enclosing [`PackageDecl`].
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -650,7 +650,8 @@ pub(crate) fn wrapper_value_ident() -> syn::Ident {
 /// any package.
 ///
 /// Build one with [`scalar_type_wrapper!`](crate::scalar_type_wrapper), then
-/// give it [`input`](Self::input) / [`output`](Self::output) conversions.
+/// give it [`on_param`](Self::on_param) / [`on_return`](Self::on_return)
+/// conversions.
 pub struct ScalarTypeWrapperDecl {
     pub(crate) pattern: syn::Type,
     // Stored as tokenized source text, not `syn::Type`: this workspace's

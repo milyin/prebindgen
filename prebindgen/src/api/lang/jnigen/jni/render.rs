@@ -222,7 +222,7 @@ pub(crate) fn build_data_class(
 
 /// Render one typed-handle Kotlin source file. Pure-shell form (with
 /// the closure `|n| format!("{n}ViaJNI")` installed via
-/// [`JniGen::kotlin_fun_name_mangle`]):
+/// [`JniGen::set_fun_name_mangle`]):
 ///
 /// ```kotlin
 /// public class JNIFoo(initialPtr: Long) : NativeHandle(initialPtr) {
