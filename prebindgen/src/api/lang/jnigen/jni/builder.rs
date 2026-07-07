@@ -10,16 +10,6 @@
 use super::*;
 
 impl JniGen {
-    /// Look up the registered Kotlin FQN for a canonical Rust type key
-    /// (the inverse of the `(key, fqn)` rows pushed into
-    /// [`Self::kotlin_type_fqns`] by the class-decl accept logic).
-    pub(crate) fn kotlin_fqn(&self, rust_canon: &str) -> Option<&str> {
-        self.kotlin_type_fqns
-            .iter()
-            .find(|(k, _)| k == rust_canon)
-            .map(|(_, v)| v.as_str())
-    }
-
     /// Whether `ty` was registered via an `EnumClassDecl` — used by the
     /// Kotlin wrapper generator to decide if a parameter needs a `.value`
     /// projection between the typed enum (Kotlin signature) and the `Int`
@@ -40,21 +30,18 @@ impl JniGen {
     /// methods, add declarations with [`package`](Self::package),
     /// [`scalar_type_wrapper`](Self::scalar_type_wrapper), etc., then run the
     /// result through `Registry::write_rust` / `write_kotlin`. Settings and
-    /// declarations may be interleaved in any order — setting-derived names
-    /// are re-derived when a setter runs.
+    /// declarations may be interleaved in any order — the builder stores
+    /// only raw inputs, and every setting-derived name is computed at the
+    /// point of use.
     pub fn new() -> Self {
         let mut jni = Self {
             source_module: syn::parse_str("crate").unwrap(),
             package: String::new(),
-            java_class_prefix: String::new(),
-            jni_class_path: String::new(),
             kotlin_fun_name_mangle: None,
             kotlin_ptr_class_name_mangle: None,
             kotlin_data_class_name_mangle: None,
             kotlin_enum_name_mangle: None,
             kotlin_harness_name_mangle: None,
-            kotlin_type_fqns: Vec::new(),
-            declared_class_names: Vec::new(),
             types: HashMap::new(),
             packages: BTreeMap::new(),
             input_wrappers: [
@@ -78,7 +65,6 @@ impl JniGen {
             ignored_class_types: std::collections::HashSet::new(),
             accessor_record_fns: std::collections::HashSet::new(),
         };
-        jni.recompute_derived();
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. Consumers may override
         // per-binding by registering a more specific rank-1
@@ -93,20 +79,6 @@ impl JniGen {
             }),
         );
         jni
-    }
-
-    /// Recompute the derived caches (`java_class_prefix`, `jni_class_path`)
-    /// from (`package`, `kotlin_harness_name_mangle`). The JNI extern symbol
-    /// path resolves to the centralized Native object, whose mangled name
-    /// comes from the harness mangle (default `"JNI" + n` → `JNINative`).
-    pub(crate) fn recompute_derived(&mut self) {
-        self.java_class_prefix = self.package.replace(".", "/");
-        let native_class = self.mangle_harness("Native");
-        self.jni_class_path = if self.package.is_empty() {
-            format!("Java_{}", native_class)
-        } else {
-            format!("Java_{}_{}", self.package.replace(".", "_"), native_class)
-        };
     }
 
     /// Apply the fun-name mangle closure to `name`, returning the closure
@@ -240,31 +212,43 @@ impl JniGen {
         }
     }
 
-    /// Retain one class declaration's raw naming inputs (so a later `set_*`
-    /// call can re-derive the FQN), derive the FQN from the current
-    /// settings, and register it in [`Self::types`] +
-    /// [`Self::kotlin_type_fqns`].
-    fn register_class_name(&mut self, declared: DeclaredClassName) {
-        let fqn = self.derive_class_fqn(&declared);
-        let key = declared.key.clone();
-        self.declared_class_names.push(declared);
+    /// Store one class declaration's raw [`NameSpec`] in the type table.
+    /// No FQN is derived here — names materialize at read time via
+    /// [`JniGen::fqn_of`], against whatever the settings are then.
+    fn register_class_name(&mut self, key: &TypeKey, spec: NameSpec) {
+        // Early failure for a bad per-decl `.name()`: the FQN itself is only
+        // derived at write time, but a dotted relative name is a declaration
+        // mistake and should surface in the declaring call (the same check
+        // `resolve_class_fqn` repeats at derivation time).
+        if let NameSpec::Class {
+            name_override: Some(n),
+            ..
+        } = &spec
+        {
+            assert!(
+                !n.contains('.'),
+                "Kotlin class name `{}` must be relative (no dots) — FQNs are derived from the \
+                 base package + subpackage",
+                n
+            );
+        }
         let entry = self.types.entry(key.clone()).or_default();
         entry.class_decl = true;
-        entry.kotlin_name = Some(fqn.clone());
-        self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
+        entry.name_spec = Some(spec);
     }
 
     fn accept_ptr_class(&mut self, subpackage: &str, decl: PtrClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.register_class_name(DeclaredClassName {
-            key: key.clone(),
-            subpackage: subpackage.to_string(),
-            short,
-            name_override: decl.name_override,
-            explicit_fqn: None,
-            kind: NameKind::Ptr,
-        });
+        self.register_class_name(
+            &key,
+            NameSpec::Class {
+                subpackage: subpackage.to_string(),
+                short,
+                name_override: decl.name_override,
+                kind: NameKind::Ptr,
+            },
+        );
         self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
@@ -312,44 +296,55 @@ impl JniGen {
              a type can be one or the other, not both",
             short
         );
-        self.register_class_name(DeclaredClassName {
-            key: key.clone(),
-            subpackage: subpackage.to_string(),
-            short,
-            name_override: decl.name_override,
-            explicit_fqn: None,
-            kind: NameKind::Enum,
-        });
+        self.register_class_name(
+            &key,
+            NameSpec::Class {
+                subpackage: subpackage.to_string(),
+                short,
+                name_override: decl.name_override,
+                kind: NameKind::Enum,
+            },
+        );
         self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
             .enum_cfg = Some(EnumConfig::default());
     }
 
+    /// A data/value class's explicit `kotlin_type` expression is a verbatim
+    /// Kotlin type and wins over everything; otherwise the name derives from
+    /// settings at read time like any other declared class.
+    fn data_value_name_spec(
+        subpackage: &str,
+        short: String,
+        name_override: Option<String>,
+        kotlin_type: Option<String>,
+    ) -> NameSpec {
+        match kotlin_type {
+            Some(expr) => NameSpec::Verbatim(expr),
+            None => NameSpec::Class {
+                subpackage: subpackage.to_string(),
+                short,
+                name_override,
+                kind: NameKind::DataOrValue,
+            },
+        }
+    }
+
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.register_class_name(DeclaredClassName {
-            key,
-            subpackage: subpackage.to_string(),
-            short,
-            name_override: decl.name_override,
-            explicit_fqn: decl.kotlin_type,
-            kind: NameKind::DataOrValue,
-        });
+        let spec =
+            Self::data_value_name_spec(subpackage, short, decl.name_override, decl.kotlin_type);
+        self.register_class_name(&key, spec);
     }
 
     fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        self.register_class_name(DeclaredClassName {
-            key: key.clone(),
-            subpackage: subpackage.to_string(),
-            short,
-            name_override: decl.name_override,
-            explicit_fqn: decl.kotlin_type,
-            kind: NameKind::DataOrValue,
-        });
+        let spec =
+            Self::data_value_name_spec(subpackage, short, decl.name_override, decl.kotlin_type);
+        self.register_class_name(&key, spec);
         self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
@@ -485,9 +480,7 @@ impl JniGen {
             );
         }
         let entry = self.types.entry(key.clone()).or_default();
-        entry.kotlin_name = Some(decl.kotlin_type.clone());
-        self.kotlin_type_fqns
-            .push((key.as_str().to_string(), decl.kotlin_type));
+        entry.name_spec = Some(NameSpec::Verbatim(decl.kotlin_type));
         self
     }
 
@@ -620,8 +613,8 @@ impl JniGen {
                     let kn = self
                         .types
                         .get(&key)
-                        .and_then(|c| c.kotlin_name.clone())
-                        .map(kt::KtType::cls)
+                        .and_then(|c| c.name_spec.as_ref())
+                        .map(|s| kt::KtType::cls(self.fqn_of(s)))
                         .or_else(|| kotlin_for_wire(&ty));
                     (Niches::empty(), kn)
                 } else {
@@ -741,8 +734,8 @@ impl JniGen {
                     let kn = self
                         .types
                         .get(&key)
-                        .and_then(|c| c.kotlin_name.clone())
-                        .map(kt::KtType::cls)
+                        .and_then(|c| c.name_spec.as_ref())
+                        .map(|s| kt::KtType::cls(self.fqn_of(s)))
                         .or_else(|| kotlin_for_wire(&ty));
                     (kn, None)
                 };

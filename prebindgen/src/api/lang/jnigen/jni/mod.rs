@@ -126,10 +126,13 @@ impl MethodEntry {
 /// builder methods populate the ones they care about.
 #[derive(Clone, Default)]
 pub(crate) struct TypeConfig {
-    /// Short Kotlin name or FQN. Required for any type emitted in
-    /// Kotlin (`Sample` → `"io.zenoh.jni.Sample"`,
-    /// `Vec<u8>` → `"ByteArray"`).
-    pub kotlin_name: Option<String>,
+    /// Raw naming spec of the type as declared — verbatim Kotlin type or
+    /// settings-derived class name. Required for any type emitted in
+    /// Kotlin; the concrete FQN (`Sample` → `"io.zenoh.jni.Sample"`,
+    /// `Vec<u8>` → `"ByteArray"`) is materialized only at read time via
+    /// [`JniGen::fqn_of`], which is what makes the `set_*` settings
+    /// order-independent w.r.t. declarations.
+    pub name_spec: Option<NameSpec>,
     /// If `Some`, this is an opaque-handle type — gets jlong wire,
     /// `Box::into_raw`/`Box::from_raw` conventions, instanceof
     /// dispatch, and Kotlin typed-handle class emission.
@@ -260,17 +263,11 @@ pub struct JniGen {
     pub source_module: syn::Path,
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
-    /// Drives every derived form: slash-separated for `FindClass`,
-    /// `_`-mangled for JNI extern idents, and dot-separated for Kotlin
-    /// `package` declarations.
+    /// Every derived form — slash-separated for `FindClass`
+    /// (`JniGen::java_class_prefix()`), `_`-mangled for JNI extern idents
+    /// (`JniGen::jni_class_path()`), dot-separated for Kotlin `package`
+    /// declarations — is computed from this at the point of use.
     pub package: String,
-    /// Derived: `package.replace('.', '/')`. Read by
-    /// [`struct_output_body`] when building `FindClass` strings.
-    pub(crate) java_class_prefix: String,
-    /// Derived: `"Java_" + package.replace('.', '_') + "_" +
-    /// mangle_harness("Native")`. Read by [`mangle_jni_name`] when
-    /// building the JNI extern symbol path for every emitted wrapper.
-    pub(crate) jni_class_path: String,
 
     /// Mangler for function names (scanned `#[prebindgen]` free fns and
     /// the synthetic `freePtr` destructor). Default = identity; in
@@ -292,27 +289,15 @@ pub struct JniGen {
     /// unset = prepend `"JNI"`, so you get `JNINative`. Override to
     /// plug in a different convention.
     pub(crate) kotlin_harness_name_mangle: Option<NameMangle>,
-    /// Derived `<rust-type-canonical-string> → <kotlin FQN>` view —
-    /// populated alongside [`Self::types`] when accepting a `ClassDecl`
-    /// (ptr/enum/data/value). Internal readers (`emit_into_dispatcher`)
-    /// consume this flat list directly; the structured `types` map is the
-    /// source of truth.
-    pub(crate) kotlin_type_fqns: Vec<(String, String)>,
-
-    /// Raw naming inputs of every accepted class declaration, in accept
-    /// order. Setting-derived names ([`Self::types`]' `kotlin_name`,
-    /// [`Self::kotlin_type_fqns`]) are re-derived from these whenever a
-    /// naming-relevant `set_*` method runs — this is what makes the setters
-    /// order-insensitive relative to declarations.
-    pub(crate) declared_class_names: Vec<DeclaredClassName>,
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting
     /// a `ClassDecl` or a `ScalarTypeWrapperDecl`. Holds opaque-handle
-    /// config, enum config, and Kotlin names; the converter bodies
-    /// themselves live in [`Self::input_wrappers`] /
-    /// [`Self::output_wrappers`]. The rank-0 dispatch order is opaque →
-    /// enum → wrapper-table → primitive → struct.
+    /// config, enum config, and the raw [`NameSpec`] (Kotlin FQNs are
+    /// derived from it on read via [`JniGen::kotlin_fqn`] /
+    /// [`JniGen::fqn_of`]); the converter bodies themselves live in
+    /// [`Self::input_wrappers`] / [`Self::output_wrappers`]. The rank-0
+    /// dispatch order is opaque → enum → wrapper-table → primitive → struct.
     pub(crate) types: HashMap<TypeKey, TypeConfig>,
 
     /// Free-standing package-level wrappers, keyed by subpackage path

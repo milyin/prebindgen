@@ -245,12 +245,12 @@ impl JniGen {
         let key = TypeKey::from_type(outer_ty);
         if let Some(cfg) = self.types.get(&key) {
             // Opaque-handle entries keep their typed FQN in
-            // `kotlin_name` for FQN-consumers, but the value-context
+            // `name_spec` for FQN-consumers, but the value-context
             // name is `"Long"` (set on the rank-0 handler's metadata).
             // Don't let that FQN leak into a wrapper's metadata.
             if cfg.opaque.is_none() {
-                if let Some(name) = &cfg.kotlin_name {
-                    return Some(kt::KtType::cls(name.clone()));
+                if let Some(spec) = &cfg.name_spec {
+                    return Some(kt::KtType::cls(self.fqn_of(spec)));
                 }
             }
         }
@@ -437,21 +437,21 @@ pub(crate) fn build_handle_destructor_items(
         if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
             continue;
         }
-        let class_short = cfg
-            .kotlin_name
-            .as_deref()
-            .and_then(|fqn| fqn.rsplit('.').next())
+        let class_fqn = cfg
+            .name_spec
+            .as_ref()
+            .map(|s| ext.fqn_of(s))
             .unwrap_or_else(|| {
                 panic!(
                     "build_handle_destructor_items: opaque handle `{}` has no \
-                     kotlin_name to derive a destructor symbol from",
+                     name spec to derive a destructor symbol from",
                     key.as_str()
                 )
             });
-        let class_pkg = cfg
-            .kotlin_name
-            .as_deref()
-            .and_then(|fqn| fqn.rsplit_once('.').map(|(pkg, _)| pkg))
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
+        let class_pkg = class_fqn
+            .rsplit_once('.')
+            .map(|(pkg, _)| pkg)
             .unwrap_or("")
             .replace('.', "_");
         let symbol = if class_pkg.is_empty() {
@@ -835,7 +835,7 @@ impl Prebindgen for JniGen {
             // handle, an enum, nor a value blob.
             let is_data_class = matches!(
                 self.type_kind(registry, &source),
-                TypeKind::DataStruct { cfg: Some(c), .. } if c.kotlin_name.is_some()
+                TypeKind::DataStruct { cfg: Some(c), .. } if c.name_spec.is_some()
             );
             if !is_data_class {
                 continue;
@@ -1156,7 +1156,10 @@ impl JniGen {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_input_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
+                        let kotlin_name = cfg
+                            .name_spec
+                            .as_ref()
+                            .map(|s| kt::KtType::cls(self.fqn_of(s)));
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
@@ -1250,8 +1253,8 @@ impl JniGen {
                 let kotlin_name = self
                     .types
                     .get(&key)
-                    .and_then(|c| c.kotlin_name.clone())
-                    .map(kt::KtType::cls);
+                    .and_then(|c| c.name_spec.as_ref())
+                    .map(|s| kt::KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],
@@ -1357,7 +1360,10 @@ impl JniGen {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_output_body(self, e);
                         let niches = default_niches_for_wire(&wire);
-                        let kotlin_name = cfg.kotlin_name.clone().map(kt::KtType::cls);
+                        let kotlin_name = cfg
+                            .name_spec
+                            .as_ref()
+                            .map(|s| kt::KtType::cls(self.fqn_of(s)));
                         return Some(ConverterImpl {
                             subs: vec![],
                             pre_stages: vec![],
@@ -1448,8 +1454,8 @@ impl JniGen {
                 let kotlin_name = self
                     .types
                     .get(&key)
-                    .and_then(|c| c.kotlin_name.clone())
-                    .map(kt::KtType::cls);
+                    .and_then(|c| c.name_spec.as_ref())
+                    .map(|s| kt::KtType::cls(self.fqn_of(s)));
                 return Some(ConverterImpl {
                     subs: vec![],
                     pre_stages: vec![],

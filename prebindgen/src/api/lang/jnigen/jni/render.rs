@@ -1285,8 +1285,10 @@ fn build_native_call(ext: &JniGen, jni_call: &str, params: &[Param], out: &Outpu
         // class or value-class wrapper). The sentinel is the Kotlin
         // null-representation literal for the leaf wire — used only by
         // the `Niche+primitive` arm of `fold_projection_wrap`.
-        let leaf_fqn = ext.kotlin_fqn(&p.leaf_key).unwrap_or(&p.leaf_key);
-        let short = leaf_fqn.rsplit('.').next().unwrap_or(leaf_fqn).to_string();
+        let leaf_fqn = ext
+            .kotlin_fqn(&p.leaf_key)
+            .unwrap_or_else(|| p.leaf_key.clone());
+        let short = leaf_fqn.rsplit('.').next().unwrap_or(&leaf_fqn).to_string();
         let sentinel = projection_leaf_sentinel(p);
         call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
     } else if out.is_enum_return {
@@ -1670,8 +1672,10 @@ pub(crate) fn unfold_leaf_kt(
         // Wrap class = the projection leaf's typed short name — NOT
         // `builder_kt` (which is `Short?` for an `Option<…>` leaf and would
         // leak the `?` into the constructor call).
-        let leaf_fqn = ext.kotlin_fqn(&p.leaf_key).unwrap_or(&p.leaf_key);
-        let short = leaf_fqn.rsplit('.').next().unwrap_or(leaf_fqn).to_string();
+        let leaf_fqn = ext
+            .kotlin_fqn(&p.leaf_key)
+            .unwrap_or_else(|| p.leaf_key.clone());
+        let short = leaf_fqn.rsplit('.').next().unwrap_or(&leaf_fqn).to_string();
         let sentinel = projection_leaf_sentinel(p);
         let mut wrap = fold_projection_wrap(&p.strategy, pk, &short, sentinel.as_deref());
         // A `nullable` leaf (an `Option` nesting step on its path) makes the

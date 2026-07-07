@@ -715,7 +715,7 @@ fn leaf_iface_param(
     if let kt::KtType::Named { fqn: bk_fqn, .. } = &builder_kt {
         if !bk_fqn.contains('.') {
             if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty).to_string()) {
-                let reg_short = reg_fqn.rsplit('.').next().unwrap_or(reg_fqn);
+                let reg_short = reg_fqn.rsplit('.').next().unwrap_or(&reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
                     let raw = if builder_kt.is_nullable() {
@@ -816,7 +816,7 @@ pub(crate) fn callback_iface_spec(
                     other => other.clone(),
                 };
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core).to_string())?;
-                let class_short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+                let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
@@ -1051,7 +1051,7 @@ pub(crate) fn fixed_folder_typed_groups(
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans.get(decon)?;
     let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source).to_string())?;
-    let class_short = fqn.rsplit('.').next().unwrap_or(fqn).to_string();
+    let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),

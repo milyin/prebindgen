@@ -4,11 +4,12 @@
 //! Every setter carries the `set_` prefix: unlike the declaration methods
 //! ([`JniGen::package`], [`JniGen::scalar_type_wrapper`], …) which each add
 //! one item to the binding surface, a `set_` method changes how *all* other
-//! declarations are interpreted. Setters are **order-insensitive**: a
-//! setting-derived name (class FQN, extern symbol path) is re-derived from
-//! the retained raw declaration inputs whenever a relevant setter runs, so
-//! `set_package_prefix` after `.package(...)` yields the same output as
-//! before it.
+//! declarations are interpreted. Setters are **order-independent by
+//! construction**: the builder stores only raw inputs — settings here,
+//! declaration name specs ([`NameSpec`]) in the type table — and every
+//! setting-derived value (class FQN, `FindClass` path, JNI extern symbol
+//! path) is computed at the point of use, so there is no stored derived
+//! state that could go stale.
 
 use super::*;
 
@@ -21,22 +22,24 @@ pub(crate) enum NameKind {
     DataOrValue,
 }
 
-/// Raw naming inputs of one accepted class declaration, retained so the
-/// derived Kotlin FQN can be recomputed when a naming-relevant setter
-/// (`set_package_prefix`, a class mangle) runs after the declaration.
+/// Raw naming spec of one type, stored in [`TypeConfig`] as declared and
+/// turned into a concrete Kotlin FQN only when read ([`JniGen::fqn_of`]),
+/// against whatever the settings are at that moment.
 #[derive(Clone)]
-pub(crate) struct DeclaredClassName {
-    pub(crate) key: TypeKey,
-    pub(crate) subpackage: String,
-    pub(crate) short: String,
-    /// Per-decl `.name()` — resolved against package + subpackage, bypasses
-    /// the mangle hook.
-    pub(crate) name_override: Option<String>,
-    /// Data/value `kotlin_type` expression — a verbatim Kotlin type,
-    /// bypassing package, subpackage and mangle entirely. Wins over
-    /// `name_override`.
-    pub(crate) explicit_fqn: Option<String>,
-    pub(crate) kind: NameKind,
+pub(crate) enum NameSpec {
+    /// Verbatim Kotlin type/FQN — a scalar wrapper's `kotlin_type`, or a
+    /// data/value class's `kotlin_type` expression. Settings-independent.
+    Verbatim(String),
+    /// A declared class whose FQN derives from the current settings.
+    Class {
+        subpackage: String,
+        /// `rust_short_name(&key)` — the mangle hook's input.
+        short: String,
+        /// Per-decl `.name()` — resolved against package + subpackage,
+        /// bypasses the mangle hook.
+        name_override: Option<String>,
+        kind: NameKind,
+    },
 }
 
 impl JniGen {
@@ -54,8 +57,6 @@ impl JniGen {
     /// are computed from this. Empty = no prefix.
     pub fn set_package_prefix(mut self, p: impl Into<String>) -> Self {
         self.package = p.into().trim_matches('.').trim_matches('/').to_string();
-        self.refresh_class_names();
-        self.recompute_derived();
         self
     }
 
@@ -83,7 +84,6 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.kotlin_harness_name_mangle = Some(Arc::new(f));
-        self.recompute_derived();
         self
     }
 
@@ -106,7 +106,6 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.kotlin_ptr_class_name_mangle = Some(Arc::new(f));
-        self.refresh_class_names();
         self
     }
 
@@ -118,7 +117,6 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.kotlin_data_class_name_mangle = Some(Arc::new(f));
-        self.refresh_class_names();
         self
     }
 
@@ -129,7 +127,6 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.kotlin_enum_name_mangle = Some(Arc::new(f));
-        self.refresh_class_names();
         self
     }
 
@@ -145,48 +142,57 @@ impl JniGen {
 }
 
 impl JniGen {
-    /// Derive the Kotlin FQN of one declared class from its retained raw
-    /// inputs and the *current* settings. Precedence: verbatim
-    /// `explicit_fqn` (data/value `kotlin_type`), then per-decl
-    /// `name_override` (package-resolved, mangle-bypassed), then the
-    /// mangle hook for the class kind.
-    pub(crate) fn derive_class_fqn(&self, d: &DeclaredClassName) -> String {
-        if let Some(fqn) = &d.explicit_fqn {
-            return fqn.clone();
+    /// Materialize a [`NameSpec`] into a concrete Kotlin FQN under the
+    /// current settings. Precedence for a declared class: per-decl
+    /// `name_override` (package-resolved, mangle-bypassed), then the mangle
+    /// hook for the class kind + package resolution.
+    pub(crate) fn fqn_of(&self, spec: &NameSpec) -> String {
+        match spec {
+            NameSpec::Verbatim(fqn) => fqn.clone(),
+            NameSpec::Class {
+                subpackage,
+                short,
+                name_override,
+                kind,
+            } => {
+                if let Some(n) = name_override {
+                    return self.resolve_class_fqn(subpackage, n);
+                }
+                let mangled = match kind {
+                    NameKind::Ptr => self.mangle_ptr_class(short),
+                    NameKind::Enum => self.mangle_enum(short),
+                    NameKind::DataOrValue => self.mangle_data_class(short),
+                };
+                self.resolve_class_fqn(subpackage, &mangled)
+            }
         }
-        if let Some(n) = &d.name_override {
-            return self.resolve_class_fqn(&d.subpackage, n);
-        }
-        let mangled = match d.kind {
-            NameKind::Ptr => self.mangle_ptr_class(&d.short),
-            NameKind::Enum => self.mangle_enum(&d.short),
-            NameKind::DataOrValue => self.mangle_data_class(&d.short),
-        };
-        self.resolve_class_fqn(&d.subpackage, &mangled)
     }
 
-    /// Re-derive every declared class's FQN from the current settings,
-    /// updating both the structured [`Self::types`] entry and the flat
-    /// [`Self::kotlin_type_fqns`] view. Rows registered by
-    /// [`JniGen::scalar_type_wrapper`] carry a verbatim FQN independent of
-    /// any setting and are left untouched (they have no
-    /// [`DeclaredClassName`]).
-    pub(crate) fn refresh_class_names(&mut self) {
-        let declared = std::mem::take(&mut self.declared_class_names);
-        for d in &declared {
-            let fqn = self.derive_class_fqn(d);
-            if let Some(entry) = self.types.get_mut(&d.key) {
-                entry.kotlin_name = Some(fqn.clone());
-            }
-            let key_str = d.key.as_str();
-            for row in self
-                .kotlin_type_fqns
-                .iter_mut()
-                .filter(|(k, _)| k.as_str() == key_str)
-            {
-                row.1 = fqn.clone();
-            }
+    /// The registered Kotlin FQN for a canonical Rust type key, derived on
+    /// demand from the type's stored [`NameSpec`].
+    pub(crate) fn kotlin_fqn(&self, rust_canon: &str) -> Option<String> {
+        self.types
+            .iter()
+            .find(|(k, _)| k.as_str() == rust_canon)
+            .and_then(|(_, cfg)| cfg.name_spec.as_ref())
+            .map(|spec| self.fqn_of(spec))
+    }
+
+    /// Derived on demand: `package.replace('.', "/")` — the slash-separated
+    /// prefix `FindClass` strings are built from.
+    pub(crate) fn java_class_prefix(&self) -> String {
+        self.package.replace('.', "/")
+    }
+
+    /// Derived on demand: `"Java_" + package.replace('.', "_") + "_" +
+    /// mangle_harness("Native")` — the JNI extern symbol path of the
+    /// centralized Native object every emitted wrapper hangs off.
+    pub(crate) fn jni_class_path(&self) -> String {
+        let native_class = self.mangle_harness("Native");
+        if self.package.is_empty() {
+            format!("Java_{}", native_class)
+        } else {
+            format!("Java_{}_{}", self.package.replace('.', "_"), native_class)
         }
-        self.declared_class_names = declared;
     }
 }

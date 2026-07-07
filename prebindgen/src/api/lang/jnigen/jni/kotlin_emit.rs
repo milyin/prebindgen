@@ -248,9 +248,16 @@ impl JniGen {
             if !cfg.value_blob {
                 continue;
             }
-            let fqn = cfg.kotlin_name.clone().ok_or_else(|| {
-                WriteKotlinError::Other(format!("value_blob `{}` has no Kotlin FQN", key.as_str()))
-            })?;
+            let fqn = cfg
+                .name_spec
+                .as_ref()
+                .map(|s| self.fqn_of(s))
+                .ok_or_else(|| {
+                    WriteKotlinError::Other(format!(
+                        "value_blob `{}` has no Kotlin FQN",
+                        key.as_str()
+                    ))
+                })?;
             let (package, class_name) = match fqn.rsplit_once('.') {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), fqn.clone()),
@@ -333,7 +340,7 @@ impl JniGen {
             if cfg.opaque.is_none() {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
             // rust_doc — short last-segment of the Rust type key (best
@@ -384,7 +391,7 @@ impl JniGen {
             if cfg.enum_cfg.is_none() {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
             // Look up the syn::ItemEnum by the type-key's bare ident.
@@ -427,7 +434,7 @@ impl JniGen {
             if cfg.special_decl() {
                 continue;
             }
-            let Some(kotlin_fqn) = &cfg.kotlin_name else {
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
 
@@ -725,7 +732,7 @@ impl JniGen {
                     TypeKey::from_type(source)
                 )
             });
-        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run` (== the typed interface
         // when the builder needs no twin — synthesized data classes are
         // all-simple-leaf today). `fromParts` takes the raw wire types and
@@ -768,7 +775,7 @@ impl JniGen {
                     TypeKey::from_type(source)
                 )
             });
-        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         // The native side calls the raw twin's `run(acc, leaves…)`; `acc` is the
         // accumulator list and the remaining params are the element leaves.
         let folder = spec.raw_name();

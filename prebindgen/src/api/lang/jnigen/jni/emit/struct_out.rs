@@ -371,13 +371,15 @@ pub(crate) fn struct_output_body(
     let registered_fqn = ext
         .types
         .get(&TypeKey::from_type(&struct_ty))
-        .and_then(|cfg| cfg.kotlin_name.clone());
+        .and_then(|cfg| cfg.name_spec.as_ref())
+        .map(|s| ext.fqn_of(s));
+    let java_class_prefix = ext.java_class_prefix();
     let java_class_name = if let Some(fqn) = registered_fqn {
         fqn.replace('.', "/")
-    } else if ext.java_class_prefix.is_empty() {
+    } else if java_class_prefix.is_empty() {
         struct_name.clone()
     } else {
-        format!("{}/{}", ext.java_class_prefix, struct_name)
+        format!("{}/{}", java_class_prefix, struct_name)
     };
 
     // Recursively flatten the whole object graph into leaf wires, then build it

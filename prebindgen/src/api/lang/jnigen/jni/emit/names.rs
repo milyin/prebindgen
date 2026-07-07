@@ -64,7 +64,7 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
 pub(crate) fn mangle_jni_name(ext: &JniGen, ident: &syn::Ident) -> syn::Ident {
     let camel = snake_to_camel(&ident.to_string());
     let mangled = ext.mangle_fun(&camel);
-    let mut name = ext.jni_class_path.clone();
+    let mut name = ext.jni_class_path();
     name.push('_');
     name.push_str(&mangled);
     syn::Ident::new(&name, Span::call_site())

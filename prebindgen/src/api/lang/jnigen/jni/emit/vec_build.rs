@@ -87,7 +87,11 @@ pub(crate) fn vec_build_helpers(
 ) -> Option<VecBuildHelpers> {
     let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem, "__e")?;
     let key = TypeKey::from_type(elem);
-    let kt_fqn = ext.types.get(&key).and_then(|c| c.kotlin_name.clone())?;
+    let kt_fqn = ext
+        .types
+        .get(&key)
+        .and_then(|c| c.name_spec.as_ref())
+        .map(|s| ext.fqn_of(s))?;
     let short = kt_fqn.rsplit('.').next().unwrap_or(&kt_fqn);
     let mut chars = short.chars();
     let base_lc = match chars.next() {
@@ -115,7 +119,7 @@ pub(crate) fn vec_helper_method_name(ext: &JniGen, base: &str, suffix: &str) -> 
 fn vec_helper_symbol(ext: &JniGen, base: &str, suffix: &str) -> String {
     format!(
         "{}_{}",
-        ext.jni_class_path,
+        ext.jni_class_path(),
         vec_helper_method_name(ext, base, suffix)
     )
 }

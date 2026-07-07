@@ -443,7 +443,8 @@ pub(crate) fn build_flat_input_plan(
         return None;
     }
     let dc_short = cfg
-        .and_then(|c| c.kotlin_name.clone())
+        .and_then(|c| c.name_spec.as_ref())
+        .map(|s| ext.fqn_of(s))
         .map(|fqn| fqn.rsplit('.').next().unwrap_or(&fqn).to_string())
         .unwrap_or_else(|| name.to_string());
     let entry_short = entry
