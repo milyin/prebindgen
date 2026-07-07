@@ -34,11 +34,12 @@ impl JniGen {
 }
 
 impl JniGen {
-    /// Build a `JniGen` from a finished [`JniGenConfig`]. Because the whole
-    /// config is supplied atomically here, there is no way to change
-    /// `package_prefix`/the mangle closures after any declaration exists —
-    /// the ordering hazard the old fluent builder guarded with a runtime
-    /// panic is structurally impossible now.
+    /// Start a binding generator from a finished [`JniGenConfig`] (the
+    /// package prefix, native-init hook and name-mangle rules). From here you
+    /// add declarations with [`package`](Self::package),
+    /// [`scalar_type_wrapper`](Self::scalar_type_wrapper), etc., then run the
+    /// result through `Registry::write_rust` / `write_kotlin`. Taking the
+    /// whole config up front means it can't change once declarations exist.
     pub fn new(config: JniGenConfig) -> Self {
         let mut jni = Self {
             source_module: config.source_module,
@@ -184,11 +185,10 @@ impl JniGen {
 // ── Accepting a `PackageDecl` ────────────────────────────────────────────
 
 impl JniGen {
-    /// Accept a batch of package-scoped declarations (classes + functions).
-    /// **Merges** into whatever `decl.name`'s subpackage bucket already
-    /// holds — the same subpackage name may be reopened across several
-    /// `PackageDecl` values / `package` calls (e.g. one for its classes,
-    /// another later for its functions).
+    /// Register a package's worth of classes and functions (a
+    /// [`PackageDecl`], built with [`package!`](crate::package)). Call it once
+    /// per package, or several times for the same package name — the
+    /// declarations merge, so you can split a large package across calls.
     pub fn package(mut self, decl: PackageDecl) -> Self {
         let PackageDecl {
             name,
@@ -249,7 +249,7 @@ impl JniGen {
         self.accept_members(&key, decl.members);
 
         if let Some(variants) = decl.input_variants {
-            // Identity-only normalization: `.default_param_variant_self()`
+            // Identity-only normalization: `.default_param_expand_self()`
             // alone declares the plain-handle form — exactly the default
             // when nothing is declared, so registering it would only add a
             // degenerate 1-variant selector to every param of this type.
@@ -379,7 +379,7 @@ impl JniGen {
     }
 
     /// Replay a [`FunctionDecl`]'s per-fn overrides (per-param
-    /// `.param_variant*` / `.return_field*`) into the
+    /// `.param_expand*` / `.return_expand*`) into the
     /// expansion/deconstruction bookkeeping. Shared by [`Self::accept_function`]
     /// (free package fns) and [`Self::accept_members`] (class members) — the
     /// overrides mean the same thing in both positions.
@@ -433,9 +433,11 @@ impl JniGen {
 // ── Accepting wrapper decls ──────────────────────────────────────────────
 
 impl JniGen {
-    /// Register a rank-0 custom scalar wire mapping (e.g. a newtype wrapping
-    /// a primitive). Global — not tied to any package (see `decl.rs`'s
-    /// module doc for why).
+    /// Teach the generator how a **custom scalar type** crosses the boundary
+    /// — e.g. a newtype like `Millis(u64)` that should travel as a plain
+    /// `Long` rather than as a class. You supply the wire type and the
+    /// convert-in / convert-out expressions (see [`ScalarTypeWrapperDecl`]).
+    /// Applies wherever that type appears; not tied to any package.
     pub fn scalar_type_wrapper(mut self, decl: ScalarTypeWrapperDecl) -> Self {
         let key = TypeKey::from_type(&decl.pattern);
         if let Some(input) = decl.input {
@@ -467,8 +469,11 @@ impl JniGen {
         self
     }
 
-    /// Register a rank 1-3 structural-dispatch override (e.g. a per-error
-    /// `Result<_, ConcreteErr>` peel). Global — not tied to any package.
+    /// Override how a **generic wrapper type** is unwrapped for a specific
+    /// inner type — e.g. peel `Result<_, MyError>` your own way rather than
+    /// through the built-in `Result` handling. You give a pattern with
+    /// wildcards and the convert bodies (see [`GenericTypeWrapperDecl`]).
+    /// Not tied to any package.
     pub fn generic_type_wrapper(mut self, decl: GenericTypeWrapperDecl) -> Self {
         let key = TypeKey::from_type(&decl.pattern);
         if let Some((rank, f)) = decl.input {

@@ -15,7 +15,7 @@ fn single_constructor_plan_and_fold() {
     ]);
     let mut exp = Expansions::default();
     // Single build-from variant = one Ctor arm (no selector), declared
-    // per-fn (`.param_variant`).
+    // per-fn (`.param_expand`).
     exp.begin_subset(ident("z_keyexpr_intersects"), ident("a"));
     exp.push_subset_variant(ident("z_keyexpr_try_from"));
 

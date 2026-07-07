@@ -1,13 +1,6 @@
-//! Global, order-insensitive [`JniGen`] configuration, supplied once at
-//! [`JniGen::new`] time.
-//!
-//! Everything here used to be a set of `JniGen` setter methods guarded by a
-//! runtime `assert_before_declarations` check ("must be called before the
-//! first type/function/wrapper declaration", because each one is baked into
-//! declarations' FQNs as they're made). Moving them onto a separate value
-//! built *before* `JniGen` exists makes that ordering hazard structurally
-//! impossible instead of a panic: there is no `JniGen` to declare anything on
-//! until the whole config is already final.
+//! Global settings for a whole binding — the source module, target package,
+//! name-mangling rules and native-init hook — collected into one value and
+//! handed to [`JniGen::new`] before any declaration is made.
 
 use super::*;
 
@@ -130,8 +123,10 @@ impl JniGenConfig {
         self
     }
 
-    /// Disable the per-call handle-lock scaffold (`withSortedHandleLocks`).
-    /// Enabled by default.
+    /// Turn off the per-call locking the generator normally wraps around
+    /// every handle a wrapper touches (which guards against a handle being
+    /// `close()`d on another thread mid-call). Leave it on unless you know
+    /// your handles are never used concurrently and want the overhead gone.
     pub fn disable_handle_locks(mut self) -> Self {
         self.emit_handle_locks = false;
         self

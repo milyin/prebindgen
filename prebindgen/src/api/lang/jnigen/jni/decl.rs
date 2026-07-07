@@ -17,7 +17,7 @@ use super::*;
 // by the accept logic in `builder.rs` once a decl is handed to `JniGen`)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One arm of a `.default_param_variant*`/`.param_variant*` build-from list.
+/// One arm of a `.default_param_expand*`/`.param_expand*` build-from list.
 #[derive(Clone)]
 pub(crate) enum LocalVariant {
     /// Build via this declared constructor member / constructor fn.
@@ -26,7 +26,7 @@ pub(crate) enum LocalVariant {
     SelfIdentity,
 }
 
-/// One arm of a `.default_return_field*`/`.return_field*` field list.
+/// One arm of a `.default_return_expand*`/`.return_expand*` field list.
 #[derive(Clone)]
 pub(crate) enum LocalField {
     /// Include the named accessor's value as this leaf/field name.
@@ -37,7 +37,7 @@ pub(crate) enum LocalField {
 
 // Class members are stored as the full `(FunctionDecl, MemberKind)` pair —
 // not a reduced ident+name record — so the `FunctionDecl`'s per-fn
-// `.param_variant*`/`.return_field*` overrides survive to `builder.rs`'s
+// `.param_expand*`/`.return_expand*` overrides survive to `builder.rs`'s
 // `accept_members`, which applies them exactly like `accept_function` does
 // for free package functions.
 
@@ -133,25 +133,35 @@ macro_rules! generic_type_wrapper {
 // Class-kind decls
 // ──────────────────────────────────────────────────────────────────────
 
-/// Declares a typed Kotlin handle class backed by an opaque Rust type.
-/// Configures: jlong wire for both input and output, `Box::into_raw`/
-/// `Box::from_raw` lifecycle, the `instanceof` dispatch class, and the Kotlin
-/// typed-handle class FQN. Feed it to a [`PackageDecl`] (via [`ClassDecl`])
-/// which in turn is handed to [`JniGen::package`].
+/// Declares a Rust type as an **opaque handle**. In Kotlin it becomes a
+/// closeable class holding a pointer to the real object, which keeps living
+/// in Rust; the object crosses the boundary as that pointer, never copied.
+/// Use this for types with identity and a lifecycle — sessions, subscribers,
+/// configs, key expressions — that you pass around and eventually `close()`,
+/// as opposed to plain data you copy across ([`data_class!`](crate::data_class))
+/// or small `Copy` values ([`value_class!`](crate::value_class)).
 ///
-/// A `PtrClassDecl` plays **two roles**: it defines the Kotlin class itself
-/// (`.name`/`.fun`/`.constructor`), and it sets the type's **default
-/// boundary behavior** — `.default_param_variant*` / `.default_return_field*`
-/// apply to *every* function where the type appears as a param, return,
-/// callback argument, or the `E` of a `Result` (overridable per-fn via
-/// [`FunctionDecl::param_variant`] / [`FunctionDecl::return_field`]). Each
-/// call adds one variant/field (call repeatedly to add more):
+/// Build one with [`ptr_class!`](crate::ptr_class), add it to a
+/// [`PackageDecl`], and hand that to [`JniGen::package`].
+///
+/// A `PtrClassDecl` does two jobs:
+///
+/// 1. **Defines the Kotlin class** — its name ([`name`](Self::name)), its
+///    instance methods ([`fun`](Self::fun)), and its companion-object
+///    factories ([`constructor`](Self::constructor)).
+/// 2. **Sets the type's default behavior at every FFI boundary** — how a
+///    *parameter* of this type is accepted ([`default_param_expand`](Self::default_param_expand))
+///    and how a *returned* or callback-delivered value of it is handed to
+///    Kotlin ([`default_return_expand`](Self::default_return_expand)), for
+///    *every* function that mentions the type. Any single function can
+///    override its own copy of these defaults (see [`FunctionDecl`]).
 ///
 /// ```
-/// let _ = prebindgen::ptr_class!(ZThing)
-///     .fun(prebindgen::fun!(z_thing_name).name("name"))
-///     .default_return_field_self()
-///     .default_return_field(prebindgen::fun!(z_thing_name).name("name"));
+/// // A KeyExpr handle exposing `str()` as an instance method; by default a
+/// // KeyExpr returned to Kotlin is delivered as just the handle.
+/// let _ = prebindgen::ptr_class!(KeyExpr)
+///     .fun(prebindgen::fun!(keyexpr_get_str).name("str"))
+///     .default_return_expand_self();
 /// ```
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
@@ -172,35 +182,50 @@ impl PtrClassDecl {
         }
     }
 
-    /// Override the Kotlin **class name** (relative, no dots — the FQN is
-    /// derived from the [`PackageDecl`] this class is declared in). Used
-    /// literally; the `kotlin_ptr_class_name_mangle` hook does not apply.
+    /// Rename the generated Kotlin class. By default it is named after the
+    /// Rust type (via the `kotlin_ptr_class_name_mangle` hook); `.name("Foo")`
+    /// sets it literally instead. Relative name, no dots — the package comes
+    /// from the enclosing [`PackageDecl`].
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name_override = Some(name.into());
         self
     }
 
-    /// Declare a `#[prebindgen]` function (`f(&Self, …) -> R`) as an instance
-    /// method. The receiver binds to `this` and is excluded from
-    /// input-flattening; any remaining params flatten normally.
+    /// Expose a `#[prebindgen]` method as a Kotlin **instance method** of this
+    /// class. `rust_fun` must take `&Self` first — that receiver becomes
+    /// Kotlin's `this` and drops out of the signature; any further parameters
+    /// become the method's arguments. Name it with
+    /// `fun!(rust_name).name("kotlinName")` (default: the Rust name
+    /// camel-cased).
     pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Fun));
         self
     }
 
-    /// Declare a `#[prebindgen]` **constructor** (`f(…) -> Self` /
-    /// `Result<Self, E>`) as a companion-object factory `name`. Referenceable
-    /// from `.default_param_variant(fun!(...))`.
+    /// Expose a `#[prebindgen]` factory as a Kotlin **companion-object
+    /// factory** — callers write `Class.name(...)`. `rust_fun` returns `Self`
+    /// (or `Result<Self, E>`) and its parameters become the factory's
+    /// arguments. A constructor can also serve as a build option in
+    /// [`default_param_expand`](Self::default_param_expand).
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Constructor));
         self
     }
 
-    /// Add one **default param variant**: a parameter of this class type
-    /// (in *any* declared function) also accepts what this `#[prebindgen]`
-    /// constructor fn takes, built via it at the boundary. Call repeatedly
-    /// to add more variants (2+ variants dispatch via a runtime selector).
-    /// Overridable per-fn via [`FunctionDecl::param_variant`].
+    /// Let callers pass the **ingredients** of this type wherever a parameter
+    /// of it is expected, instead of having to build the handle first. Point
+    /// this at a `#[prebindgen]` constructor: at every such parameter, the
+    /// Kotlin signature gains that constructor's inputs and Rust builds the
+    /// value in the same call.
+    ///
+    /// For example, giving `KeyExpr` a `keyexpr_from_str(&str)` build option
+    /// lets every function taking a `KeyExpr` also accept a plain `String`.
+    ///
+    /// Call repeatedly to offer several ways to build the value (and add
+    /// [`default_param_expand_self`](Self::default_param_expand_self) to also
+    /// accept a ready-made handle); with more than one option the generated
+    /// Kotlin picks at runtime. Overridable per function via
+    /// [`FunctionDecl::param_expand`].
     pub fn default_param_expand(mut self, rust_fun: FunctionDecl) -> Self {
         self.input_variants
             .get_or_insert_with(Vec::new)
@@ -208,10 +233,11 @@ impl PtrClassDecl {
         self
     }
 
-    /// Add the identity **default param variant**: a parameter of this class
-    /// type accepts an already-built handle directly. As the *only* declared
-    /// variant this is the plain-handle form (no selector) — the default
-    /// when nothing is declared, so alone it is a no-op made explicit.
+    /// Also accept an **already-built handle** at parameters of this type —
+    /// the "…or just pass one you already have" option alongside the
+    /// [`default_param_expand`](Self::default_param_expand) build variants.
+    /// On its own this is simply the default (a bare handle), so declaring it
+    /// alone changes nothing; it earns its place only next to build variants.
     pub fn default_param_expand_self(mut self) -> Self {
         self.input_variants
             .get_or_insert_with(Vec::new)
@@ -219,12 +245,22 @@ impl PtrClassDecl {
         self
     }
 
-    /// Add one **default return field**: a returned/delivered value of this
-    /// class type (in *any* declared function, incl. callback args and the
-    /// `E` of a `Result`) decomposes into fields, this one being the value
-    /// of the accessor fn `rust_fun` (named via `rust_fun.name(...)`,
-    /// defaulting to `snake_to_camel(rust_ident)`). Call repeatedly to add
-    /// more fields. Overridable per-fn via [`FunctionDecl::return_field`].
+    /// Decompose this type into **named fields delivered in one FFI crossing**
+    /// wherever it is returned or handed to a callback — instead of returning
+    /// an opaque handle the caller must then query field by field with more
+    /// JNI calls.
+    ///
+    /// Point each call at a `#[prebindgen]` reader (`f(&Self) -> Field`); its
+    /// value becomes one field, named via `fun!(reader).name("field")`
+    /// (default: the reader's camel-cased name). For example, decomposing a
+    /// `Sample` into `keyExpr`, `payload`, `timestamp`, … hands a subscriber
+    /// callback the whole sample in a single call with no follow-up accessor
+    /// round-trips.
+    ///
+    /// Call repeatedly to add fields, and add
+    /// [`default_return_expand_self`](Self::default_return_expand_self) to
+    /// also include the live handle. Overridable per function via
+    /// [`FunctionDecl::return_expand`].
     pub fn default_return_expand(mut self, rust_fun: FunctionDecl) -> Self {
         let name = rust_fun
             .kotlin_name_override
@@ -235,7 +271,12 @@ impl PtrClassDecl {
         self
     }
 
-    /// Add the handle itself as a **default return field** of this class.
+    /// Include the **handle itself** among the decomposed fields, so the
+    /// consumer gets a live, closeable object in addition to the read-out
+    /// values (e.g. a `Query` delivered with its fields *and* the handle it
+    /// needs to reply). Declare it **last**, after any field that decomposes
+    /// a nested handle, so the generated Rust moves the value only after
+    /// those borrows.
     pub fn default_return_expand_self(mut self) -> Self {
         self.output_fields
             .get_or_insert_with(Vec::new)
@@ -250,15 +291,14 @@ impl From<syn::Type> for PtrClassDecl {
     }
 }
 
-/// Declares a `#[prebindgen]`-marked `enum` as a Kotlin `enum class`. The
-/// enum must be C-like (unit variants only) and `#[repr(i32)]`-alike with
-/// explicit discriminants — the Kotlin emitter and the generated
-/// `TryFrom<i32>` decode rely on the discriminant values matching the jint
-/// wire.
+/// Declares a Rust C-like `enum` as a Kotlin `enum class`. The variants
+/// cross the boundary as their `i32` discriminants and Kotlin gets a real
+/// `enum class` with a `fromInt(...)` companion. The enum must be
+/// unit-variant only and `#[repr(i32)]`-style with explicit discriminants,
+/// so both sides agree on the numbers.
 ///
-/// No `.fun()`/`.constructor()` members: attached members are only emitted
-/// on typed-handle ([`PtrClassDecl`]) and value ([`ValueClassDecl`]) classes
-/// — a generated `enum class` carries no instance methods.
+/// Has no `.fun`/`.constructor` — instance members are only meaningful on
+/// handle ([`PtrClassDecl`]) and value ([`ValueClassDecl`]) classes.
 pub struct EnumClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
@@ -285,13 +325,15 @@ impl From<syn::Type> for EnumClassDecl {
     }
 }
 
-/// Declares a Rust struct that should appear in Kotlin as a `data class`.
-/// Only affects Kotlin emission — no Rust-side converter override.
+/// Declares a Rust struct as a Kotlin `data class`. Its fields cross the
+/// boundary individually and Kotlin reassembles the object with a generated
+/// `fromParts(...)` — no Rust-side heap object, no handle to close. Use this
+/// for plain immutable data you copy across, as opposed to
+/// [`ptr_class!`](crate::ptr_class) handles or
+/// [`value_class!`](crate::value_class) blobs.
 ///
-/// No `.fun()`/`.constructor()` members: attached members are only emitted
-/// on typed-handle ([`PtrClassDecl`]) and value ([`ValueClassDecl`]) classes
-/// — a data class crosses decomposed into its fields and has no handle to
-/// hang an instance method on.
+/// Has no `.fun`/`.constructor` — a data class has no handle to hang an
+/// instance method on.
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
@@ -313,8 +355,9 @@ impl DataClassDecl {
         self
     }
 
-    /// Stamp a verbatim Kotlin type expression (e.g. `"List<ByteArray>"`)
-    /// instead of a class FQN — for generics/primitives/container types.
+    /// Surface this type as a verbatim Kotlin type instead of a generated
+    /// class — for when it should map onto an existing or container type,
+    /// e.g. `"List<ByteArray>"`.
     pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
         self.kotlin_type = Some(expr.into());
         self
@@ -327,11 +370,12 @@ impl From<syn::Type> for DataClassDecl {
     }
 }
 
-/// Declares a **`Copy` value class** type: a Rust type passed across the JNI
-/// boundary **by value as its raw memory bytes** in a `ByteArray`, rather
-/// than as a closeable `jlong` heap handle — the value-level peer of
-/// [`PtrClassDecl`]. The type **must be `Copy`** — the generator emits a
-/// compile-time assertion to that effect.
+/// Declares a small **`Copy`** Rust type that crosses **by value** — as its
+/// raw bytes in a `ByteArray` — rather than as a heap handle. The
+/// lightweight peer of [`PtrClassDecl`] for things like ids and timestamps
+/// that have no lifecycle to manage. The type must be `Copy` (the generator
+/// asserts it at compile time). Readers added with [`fun`](Self::fun) become
+/// instance methods on the Kotlin value class.
 pub struct ValueClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
@@ -355,17 +399,22 @@ impl ValueClassDecl {
         self
     }
 
-    /// Stamp a verbatim Kotlin type expression instead of a class FQN.
+    /// Surface this type as a verbatim Kotlin type instead of a generated
+    /// value class (see [`DataClassDecl::kotlin_type`]).
     pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
         self.kotlin_type = Some(expr.into());
         self
     }
 
+    /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
+    /// method on the Kotlin value class (see [`PtrClassDecl::fun`]).
     pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Fun));
         self
     }
 
+    /// Expose a `#[prebindgen]` factory as a companion-object factory
+    /// (see [`PtrClassDecl::constructor`]).
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Constructor));
         self
@@ -417,15 +466,16 @@ impl From<ValueClassDecl> for ClassDecl {
 // Function decl
 // ──────────────────────────────────────────────────────────────────────
 
-/// Declares a `#[prebindgen]` function as a free-standing package wrapper.
-/// Feed it to a [`PackageDecl`] via [`PackageDecl::fun`].
+/// Declares one `#[prebindgen]` function to export. Add it to a package with
+/// [`PackageDecl::fun`], or attach it to a class as a method/factory with
+/// [`PtrClassDecl::fun`] / [`PtrClassDecl::constructor`].
 ///
-/// The `.param_variant*` / `.return_field*` methods **override, for this
-/// function only**, the class-level defaults declared via
-/// [`PtrClassDecl::default_param_variant`] /
-/// [`PtrClassDecl::default_return_field`]. An override consisting of only
-/// the `_self` form means "the plain handle, nothing else" — the raw wire
-/// shape, replacing what the class default would otherwise apply here.
+/// Build it from a bare Rust name with [`fun!`](crate::fun) and chain
+/// [`name`](Self::name) to set its Kotlin name. The `param_expand*` /
+/// `return_expand*` methods **override, for this one function**, the
+/// boundary defaults that its parameter/return types set on their
+/// `ptr_class!` — most often to opt back out (a lone `_self`) so this
+/// function sees the raw handle rather than the class's default expansion.
 pub struct FunctionDecl {
     pub(crate) rust_ident: syn::Ident,
     pub(crate) kotlin_name_override: Option<String>,
@@ -443,30 +493,30 @@ impl FunctionDecl {
         }
     }
 
-    /// Override the Kotlin-side function name. Default (without `.name(...)`)
-    /// is `snake_to_camel(rust_ident)`.
+    /// Set the Kotlin-side name. Default: the Rust name camel-cased
+    /// (`session_declare_publisher` → `sessionDeclarePublisher`).
     pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
         self.kotlin_name_override = Some(kotlin_name.into());
         self
     }
 
-    /// Add one variant to `param`'s **param-variant override**, replacing
-    /// the class-level default for this function: build via this
-    /// `#[prebindgen]` constructor fn directly. Call repeatedly to add more
-    /// variants for the same param, or for different params — the only
-    /// difference from [`PtrClassDecl::default_param_variant`] is the
-    /// leading param ident, since a function may have several
-    /// independently-overridden handle params.
+    /// Override, for `param` of this function only, how that parameter is
+    /// built — the same idea as [`PtrClassDecl::default_param_expand`], but
+    /// scoped here and keyed by which parameter (a function may have several
+    /// handle parameters, each overridden independently). Point at a
+    /// constructor to offer it as a build option; call again (same or a
+    /// different `param`) to add more.
     pub fn param_expand(mut self, param: syn::Ident, ctor: FunctionDecl) -> Self {
         self.input_override_entry(param)
             .push(LocalVariant::Ctor(ctor.rust_ident));
         self
     }
 
-    /// Add the identity variant to `param`'s override: accept an
-    /// already-built handle directly. As the *only* declared variant this is
-    /// the plain-handle form — i.e. it cancels the class-level default for
-    /// this param (no selector, no construction).
+    /// Make `param` of this function accept **only a ready-made handle**,
+    /// ignoring the build variants its type would otherwise apply here. Use
+    /// it when one function needs the real object rather than something built
+    /// from ingredients — e.g. *un*-declaring a key expression needs the
+    /// handle, not a string.
     pub fn param_expand_self(mut self, param: syn::Ident) -> Self {
         self.input_override_entry(param)
             .push(LocalVariant::SelfIdentity);
@@ -485,11 +535,9 @@ impl FunctionDecl {
         &mut self.input_overrides[idx].1
     }
 
-    /// Add one field to this function's **return-field override**, replacing
-    /// the class-level default: the value of the accessor fn `field` (named
-    /// via `field.name(...)`, defaulting to `snake_to_camel(rust_ident)`).
-    /// Call repeatedly to add more fields — same shape as
-    /// [`PtrClassDecl::default_return_field`].
+    /// Override this function's return decomposition — the same idea as
+    /// [`PtrClassDecl::default_return_expand`], but for this function alone.
+    /// Add one field per call.
     pub fn return_expand(mut self, field: FunctionDecl) -> Self {
         let name = field
             .kotlin_name_override
@@ -500,11 +548,10 @@ impl FunctionDecl {
         self
     }
 
-    /// Add the return value itself as a field of this function's return
-    /// override. As the *only* declared field this is the raw whole-handle
-    /// return — i.e. it cancels the class-level default for this function
-    /// (also the right spelling for borrowed `&T` returns, which cross by
-    /// cloning into a fresh owned handle).
+    /// Return this function's result as the **raw handle**, overriding the
+    /// decomposition its return type would otherwise apply. Also the right
+    /// choice for a borrowed return (`&T` / `Option<&T>`), which crosses by
+    /// cloning into a fresh owned handle.
     pub fn return_expand_self(mut self) -> Self {
         self.output_override
             .get_or_insert_with(Vec::new)
@@ -517,11 +564,12 @@ impl FunctionDecl {
 // PackageDecl — aggregates the package-scoped decls
 // ──────────────────────────────────────────────────────────────────────
 
-/// A batch of class and function declarations under one Kotlin subpackage
-/// (or the base package, for `PackageDecl::new("")`). Built independently of
-/// `JniGen`, then handed to [`JniGen::package`], which **merges** it into
-/// whatever that package already holds — so the same subpackage name may be
-/// reopened across several `PackageDecl` values / `JniGen::package` calls.
+/// A batch of class and function declarations that land under one Kotlin
+/// subpackage. Build it with [`package!`](crate::package)
+/// (`package!("session")`, or `package!()` for the base package), fill it
+/// with [`class`](Self::class) and [`fun`](Self::fun), and hand it to
+/// [`JniGen::package`]. Reopening the same subpackage across several
+/// `PackageDecl`s is fine — they merge.
 pub struct PackageDecl {
     pub(crate) name: String,
     pub(crate) classes: Vec<ClassDecl>,
@@ -543,16 +591,17 @@ impl PackageDecl {
         }
     }
 
-    /// Add a class declaration (any of [`PtrClassDecl`]/[`EnumClassDecl`]/
-    /// [`DataClassDecl`]/[`ValueClassDecl`], via [`ClassDecl`]'s `From` impls).
+    /// Add a class to this package — any of [`ptr_class!`](crate::ptr_class) /
+    /// [`enum_class!`](crate::enum_class) / [`data_class!`](crate::data_class) /
+    /// [`value_class!`](crate::value_class).
     pub fn class(mut self, decl: impl Into<ClassDecl>) -> Self {
         self.classes.push(decl.into());
         self
     }
 
-    /// Add a free-function declaration — a bare function ident via
-    /// [`crate::fun!`] or a fully customized
-    /// `FunctionDecl::new(prebindgen::ident!(ident)).name(...)....`.
+    /// Add a free function to this package. Take a bare name via
+    /// [`fun!`](crate::fun), or a customized [`FunctionDecl`] when you need
+    /// `.name(...)` or per-function overrides.
     pub fn fun(mut self, decl: FunctionDecl) -> Self {
         self.functions.push(decl);
         self
@@ -590,11 +639,16 @@ pub(crate) fn wrapper_value_ident() -> syn::Ident {
     syn::Ident::new("v", Span::call_site())
 }
 
-/// Declares how one concrete Rust type (`pattern`) crosses the JNI boundary
-/// **as a custom scalar wire value** — the primitive-wire peer of
-/// [`ValueClassDecl`] (which does the same job for `ByteArray`-backed
-/// types). Global — not part of any [`PackageDecl`] (see the module doc for
-/// why `kotlin_type` needs no package placement).
+/// Teaches the generator to carry one Rust type across the boundary as a
+/// **plain scalar** — e.g. a `Millis(u64)` newtype that should surface in
+/// Kotlin as a `Long`, converted with your own expressions each way, with no
+/// generated class. The scalar peer of [`ValueClassDecl`] (which carries
+/// `Copy` types as `ByteArray`). Register it with
+/// [`JniGen::scalar_type_wrapper`]; it applies wherever the type appears, in
+/// any package.
+///
+/// Build one with [`scalar_type_wrapper!`](crate::scalar_type_wrapper), then
+/// give it [`input`](Self::input) / [`output`](Self::output) conversions.
 pub struct ScalarTypeWrapperDecl {
     pub(crate) pattern: syn::Type,
     // Stored as tokenized source text, not `syn::Type`: this workspace's
@@ -611,10 +665,11 @@ pub struct ScalarTypeWrapperDecl {
 }
 
 impl ScalarTypeWrapperDecl {
-    /// `wire` is the one wire type shared by both directions; `kotlin_type`
-    /// is the Kotlin-visible type this pattern surfaces as (e.g. `"Long"`) —
-    /// required, since a scalar mapping has no sensible auto-derived name.
-    /// See [`crate::scalar_type_wrapper!`] for the equivalent macro form.
+    /// `pattern` is the Rust type being mapped, `wire` is the primitive it
+    /// travels as (e.g. `jni::sys::jlong`), and `kotlin_type` is how it shows
+    /// up in Kotlin (e.g. `"Long"`). See
+    /// [`scalar_type_wrapper!`](crate::scalar_type_wrapper) for the macro
+    /// shorthand.
     pub fn new(pattern: syn::Type, wire: syn::Type, kotlin_type: impl Into<String>) -> Self {
         reject_builtin_wrapper_pattern(&TypeKey::from_type(&pattern));
         Self {
@@ -626,44 +681,43 @@ impl ScalarTypeWrapperDecl {
         }
     }
 
-    /// Build the wire → rust conversion body. `body` receives the ident of
-    /// the wire-typed value in scope (`&wire`) and returns the Rust-typed
-    /// expression to splice via `quote!`'s `#value` interpolation.
-    ///
-    /// The rank-0 (concrete pattern) counterpart of
-    /// [`GenericTypeWrapperDecl::input`] — same method name, simpler
-    /// contract: a plain expression closure, no wildcard args, no
-    /// [`WireBody`] fallibility choice.
+    /// How to turn the incoming **wire value into the Rust value** (used when
+    /// the type is a parameter). `body` gets the wire value's ident and
+    /// returns the Rust expression, e.g.
+    /// `|v| pq!(perftest_flat::Millis(*#v as u64))`.
     pub fn input(mut self, body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static) -> Self {
         self.input = Some(Arc::new(body));
         self
     }
 
-    /// Build the rust → wire conversion body. `body` receives the ident of
-    /// the rust-typed value in scope and returns the wire-typed expression.
-    /// See [`Self::input`] for how this relates to
-    /// [`GenericTypeWrapperDecl::output`].
+    /// How to turn the **Rust value into the wire value** (used when the type
+    /// is returned). `body` gets the Rust value's ident and returns the wire
+    /// expression, e.g. `|v| pq!(#v.0 as jni::sys::jlong)`.
     pub fn output(mut self, body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static) -> Self {
         self.output = Some(Arc::new(body));
         self
     }
 }
 
-/// The result of one [`GenericTypeWrapperDecl`] `.input()`/`.output()`
-/// builder: either a binding-fallible bare value (the framework wraps it
-/// `Ok(...)` and any `?` inside routes to the framework's own error type), or
-/// a domain-fallible `Result` whose `Err` routes to the per-call error sink
-/// verbatim (the `Result<_, _>` peel is the one real user of this arm).
+/// What a [`GenericTypeWrapperDecl`] conversion produces: the wire type plus
+/// the expression, and whether the conversion can fail with a **domain
+/// error** the caller should see. Use [`infallible`](Self::infallible) when
+/// it always succeeds, or [`fallible`](Self::fallible) to route an `Err` to
+/// the caller's error handler (as the built-in `Result` unwrap does).
 pub enum WireBody {
     Infallible(syn::Type, syn::Expr),
     Fallible(syn::Type, syn::Type, syn::Expr),
 }
 
 impl WireBody {
+    /// The conversion always succeeds. `wire` is the wire type, `expr` the
+    /// conversion expression.
     pub fn infallible(wire: syn::Type, expr: syn::Expr) -> Self {
         Self::Infallible(wire, expr)
     }
 
+    /// The conversion may fail: `expr` evaluates to `Result<wire, error>`,
+    /// and an `Err` is delivered to the caller's error handler.
     pub fn fallible(wire: syn::Type, error: syn::Type, expr: syn::Expr) -> Self {
         Self::Fallible(wire, error, expr)
     }
@@ -734,12 +788,15 @@ where
     }
 }
 
-/// Declares how an existing structural wrapper (`Option`/`Result`/`Vec`/…) is
-/// peeled for one specific wildcard substitution — e.g. a per-error
-/// `Result<_, ConcreteErr>` override of the framework's built-in
-/// `Result<_, _>` peel. Declares nothing Kotlin-visible on its own (no
-/// `.kotlin_type()` — a structural override never names a type). Global —
-/// not part of any [`PackageDecl`].
+/// An **advanced** override for how a generic wrapper (`Option`/`Result`/
+/// `Vec`/…) is unwrapped for one specific inner type — e.g. handle
+/// `Result<_, MyError>` your own way instead of through the built-in
+/// `Result` support. The `pattern` carries `_` wildcards for the parts that
+/// stay generic. Register it with [`JniGen::generic_type_wrapper`]; it names
+/// no Kotlin type of its own and belongs to no package.
+///
+/// Build one with [`generic_type_wrapper!`](crate::generic_type_wrapper),
+/// then supply [`input`](Self::input) / [`output`](Self::output).
 pub struct GenericTypeWrapperDecl {
     pub(crate) pattern: syn::Type,
     pub(crate) input: Option<(usize, WrapperFn)>,
@@ -758,21 +815,17 @@ impl GenericTypeWrapperDecl {
         }
     }
 
-    /// Register the input-direction (wire → rust) peel. The closure's arity
-    /// (1–3 leading `&syn::Type` params, one per `_` in `pattern`, plus a
-    /// trailing `&syn::Ident` for the value in scope) selects the rank; it
-    /// returns a [`WireBody`] choosing infallible vs domain-fallible.
-    ///
-    /// The wildcard-pattern counterpart of [`ScalarTypeWrapperDecl::input`] —
-    /// same method name, richer contract (wildcard substitutions +
-    /// fallibility), because a structural peel must adapt to what the `_`s
-    /// matched.
+    /// How to convert **into Rust** (used when the type is a parameter). The
+    /// closure receives one `&syn::Type` per `_` in `pattern` (so its arity
+    /// tells the generator how many wildcards there are), plus the value's
+    /// ident, and returns a [`WireBody`].
     pub fn input<A, B: WrapperBuilder<A>>(mut self, builder: B) -> Self {
         self.input = Some((B::rank(), builder.into_wrapper_fn()));
         self
     }
 
-    /// Output-direction (rust → wire) counterpart of [`Self::input`].
+    /// How to convert **out of Rust** (used when the type is returned) — the
+    /// counterpart of [`input`](Self::input).
     pub fn output<A, B: WrapperBuilder<A>>(mut self, builder: B) -> Self {
         self.output = Some((B::rank(), builder.into_wrapper_fn()));
         self

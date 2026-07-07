@@ -174,7 +174,7 @@ pub(crate) enum MemberKind {
     Fun,
     /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
     /// member returning the class; never output-flattened; referenceable by a
-    /// `.default_param_variant(fun!(...))`.
+    /// `.default_param_expand(fun!(...))`.
     Constructor,
 }
 
@@ -190,8 +190,8 @@ pub(crate) struct ClassMember {
     pub rust_ident: syn::Ident,
     /// Kotlin-visible name of this instance method / companion factory
     /// (derived from `FunctionDecl.name()`, defaulting to
-    /// `snake_to_camel(rust_ident)`). Independent of any `.default_param_variant`/
-    /// `.default_return_field` reference to the same underlying function — those
+    /// `snake_to_camel(rust_ident)`). Independent of any `.default_param_expand`/
+    /// `.default_return_expand` reference to the same underlying function — those
     /// take a fresh `FunctionDecl` directly and don't consult this list.
     pub kotlin_name: String,
     /// Member kind (fun / constructor).
@@ -246,7 +246,7 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 ///         prebindgen::package!("session")
 ///             .class(prebindgen::ptr_class!(ZKeyExpr)
 ///                 .fun(prebindgen::fun!(z_keyexpr_as_str).name("getStr"))
-///                 .default_return_field_self()),
+///                 .default_return_expand_self()),
 ///     );
 /// ```
 #[derive(Clone)]
@@ -340,13 +340,13 @@ pub struct JniGen {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
-    /// Constructor-expansion declarations (`.default_param_variant()` /    /// `.param_variant()` on a class/function decl). Resolved into
+    /// Constructor-expansion declarations (`.default_param_expand()` /    /// `.param_expand()` on a class/function decl). Resolved into
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
-    /// Output-expansion declarations (`.default_return_field()` /
-    /// `.return_field()` on a class/function decl). Resolved into
+    /// Output-expansion declarations (`.default_return_expand()` /
+    /// `.return_expand()` on a class/function decl). Resolved into
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
@@ -369,8 +369,8 @@ pub struct JniGen {
     /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
 
-    /// Every function ever referenced as a named leaf in a `.default_return_field(fun!(...))`/
-    /// `.return_field(...)` record (class- or
+    /// Every function ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
+    /// `.return_expand(...)` record (class- or
     /// function-scoped) — populated as `builder.rs` accepts each decl.
     /// Backs [`Prebindgen::accessor_functions`]: `core/unfold.rs`'s
     /// deconstructor gate requires every named record's function to be in

@@ -24,15 +24,15 @@
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `ScalarTypeWrapperDecl`              | `Millis` ⇄ `Long` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
-//! | `.default_param_variant()` (+`_self`)| `Summary` default input |
-//! | `.default_return_field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
+//! | `.default_param_expand()` (+`_self`)| `Summary` default input |
+//! | `.default_return_expand()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
-//! | `.param_variant_self(param)` alone   | `summary_total_raw` (raw handle param, overrides the class default) |
-//! | `.return_field_self()` alone         | `storage_summary_handle` / `archive_latest` (raw handle return) |
-//! | per-fn `.param_variant(param, …)` (+`_self`)| `storage_expect_summary` |
-//! | per-fn `.return_field(…)` (+`_self`) | `storage_summary_full` |
+//! | `.param_expand_self(param)` alone   | `summary_total_raw` (raw handle param, overrides the class default) |
+//! | `.return_expand_self()` alone         | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.param_expand(param, …)` (+`_self`)| `storage_expect_summary` |
+//! | per-fn `.return_expand(…)` (+`_self`) | `storage_summary_full` |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -131,7 +131,7 @@ fn main() {
             // `StorageError` is the `E` of a fallible `Result`. Declaring it a
             // ptr_class with a a default return-field list makes the generated `onError`
             // handler receive the decomposed fields: the `message` string plus —
-            // via `.default_return_field_self()` — the error handle itself (an
+            // via `.default_return_expand_self()` — the error handle itself (an
             // owned `StorageError` the handler must `close()`).
             ptr_class!(StorageError)
                 .fun(fun!(storage_error_message).name("message"))

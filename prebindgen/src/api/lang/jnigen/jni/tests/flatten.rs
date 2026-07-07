@@ -1,7 +1,7 @@
 use super::*;
 
 /// Two fns returning the same type under different output decompositions:
-/// the default one and a per-fn `.default_return_field(...)` inline field list.
+/// the default one and a per-fn `.default_return_expand(...)` inline field list.
 /// Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
@@ -220,7 +220,7 @@ fn error_unwrap_universal_records() {
 /// signature, its handle locked) while keeping the non-receiver params; the
 /// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
 /// companion-object factory returning the class. Per-fn
-/// `.default_return_field_self()` emits the handle leaf.
+/// `.default_return_expand_self()` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
     use crate::SourceLocation;

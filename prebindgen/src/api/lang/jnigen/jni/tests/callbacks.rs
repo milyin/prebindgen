@@ -181,10 +181,10 @@ fn callback_snapshot_kotlin_side() {
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
-/// (`.default_return_field().field_self()`) must emit the root MOVE after every borrow of
+/// (`.default_return_expand().field_self()`) must emit the root MOVE after every borrow of
 /// the owned value — otherwise the nested child clone (which borrows the root)
 /// follows `Box::into_raw(Box::new(value))` and fails to compile with "use of
-/// moved value". Declaring `.default_return_field().field_self()` LAST guarantees the
+/// moved value". Declaring `.default_return_expand().field_self()` LAST guarantees the
 /// correct order (the emitter emits identity leaves in declaration order, after
 /// all non-identity leaves). This mirrors the zenoh-flat `ZQuery` queryable
 /// callback (handle + decomposed fields, nested `ZKeyExpr` identity).
@@ -437,7 +437,7 @@ fn callback_double_option_unwrap_pipeline() {
 // ────────────────────────────────────────────────────────────────────────
 // Declaration-keyed interfaces: a type may have several decompositions —
 // the default (unnamed) deconstructor and per-fn inline records
-// (`.return_field`). Interface identity follows the DECLARATION, so
+// (`.return_expand`). Interface identity follows the DECLARATION, so
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────
