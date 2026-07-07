@@ -23,9 +23,9 @@
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `ScalarTypeWrapperDecl`              | `Millis` ⇄ `Long` |
-//! | `.accessor()` / `.method()` / `.constructor()`| `Storage` + `Summary` + `Stamp` members |
-//! | `.flatten_input()` (+`.variant()`/self)| `Summary` default input |
-//! | `.flatten_output()` (+`.field()`/self)| `Summary` fields + `StorageError` `message` + `field_self` (error handle → `onError`) |
+//! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
+//! | `.flatten_input()` (+`_self`)        | `Summary` default input |
+//! | `.flatten_output()` (+`_self`)        | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
@@ -65,8 +65,7 @@
 
 use prebindgen::{
     core::Registry,
-    data_class, enum_class, flatten_input, flatten_output, fun, function_flatten_input,
-    function_flatten_output,
+    data_class, enum_class, fun, function_flatten_input, function_flatten_output,
     lang::{JniGen, JniGenConfig},
     package, ptr_class, scalar_type_wrapper, value_class,
 };
@@ -118,8 +117,8 @@ fn main() {
             // surfaces as `List<ByteArray>`.
             .class(
                 value_class!(Stamp)
-                    .accessor(fun!(stamp_secs).name("secs"))
-                    .accessor(fun!(stamp_nanos).name("nanos")),
+                    .fun(fun!(stamp_secs).name("secs"))
+                    .fun(fun!(stamp_nanos).name("nanos")),
             ),
     )
     // ── Subpackage `errors`: the Result error channel ───────────────────
@@ -128,11 +127,12 @@ fn main() {
             // `StorageError` is the `E` of a fallible `Result`. Declaring it a
             // ptr_class with a flatten-output makes the generated `onError`
             // handler receive the flattened fields: the `message` string plus —
-            // via the TYPE-LEVEL `.field_self()` — the error handle itself (an
+            // via `.flatten_output_self()` — the error handle itself (an
             // owned `StorageError` the handler must `close()`).
             ptr_class!(StorageError)
-                .accessor(fun!(storage_error_message).name("message"))
-                .flatten_output(flatten_output!().field("message").field_self()),
+                .fun(fun!(storage_error_message).name("message"))
+                .flatten_output(fun!(storage_error_message).name("message"))
+                .flatten_output_self(),
         ),
     )
     // ── Subpackage `analytics`: flatten input/output on `Summary` ───────
@@ -144,11 +144,13 @@ fn main() {
             .class(
                 ptr_class!(Summary)
                     .constructor(fun!(summary_new).name("of"))
-                    .accessor(fun!(summary_count).name("count"))
-                    .accessor(fun!(summary_total).name("total"))
-                    .method(fun!(summary_scaled).name("scaled"))
-                    .flatten_input(flatten_input!().variant("of").variant_self())
-                    .flatten_output(flatten_output!().field("count").field("total")),
+                    .fun(fun!(summary_count).name("count"))
+                    .fun(fun!(summary_total).name("total"))
+                    .fun(fun!(summary_scaled).name("scaled"))
+                    .flatten_input(fun!(summary_new))
+                    .flatten_input_self()
+                    .flatten_output(fun!(summary_count).name("count"))
+                    .flatten_output(fun!(summary_total).name("total")),
             )
             // `Archive` holds the latest `Summary` and returns it BORROWED
             // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -164,8 +166,8 @@ fn main() {
         package!()
             .class(
                 ptr_class!(Storage)
-                    .accessor(fun!(storage_len).name("len"))
-                    .method(fun!(storage_contains).name("contains"))
+                    .fun(fun!(storage_len).name("len"))
+                    .fun(fun!(storage_contains).name("contains"))
                     .constructor(fun!(storage_with_payload).name("withPayload")),
             )
             // The callback-handler handles (single payload / whole batch / owned

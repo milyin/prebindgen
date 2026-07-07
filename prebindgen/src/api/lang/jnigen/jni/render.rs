@@ -330,13 +330,10 @@ pub(crate) fn build_typed_handle(
         )
         .companion(companion);
 
-    // Promoted instance methods: each `.accessor(f, name)` / `.method(f, name)`
-    // becomes an instance method (receiver bound to `this`), delegating to the
-    // same centralized `JNINative` extern as a free wrapper would.
-    for m in members
-        .iter()
-        .filter(|m| matches!(m.kind, MemberKind::Accessor | MemberKind::Method))
-    {
+    // Promoted instance methods: each `.fun(f)` becomes an instance method
+    // (receiver bound to `this`), delegating to the same centralized
+    // `JNINative` extern as a free wrapper would.
+    for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
         if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,

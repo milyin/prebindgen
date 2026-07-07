@@ -276,12 +276,9 @@ impl JniGen {
             if !members.is_empty() && !self.package.is_empty() {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
-            // Promoted instance methods (`.accessor`/`.method`): receiver bound to
-            // `this`, passing `this.bytes` to the extern.
-            for m in members
-                .iter()
-                .filter(|m| matches!(m.kind, MemberKind::Accessor | MemberKind::Method))
-            {
+            // Promoted instance methods (`.fun`): receiver bound to `this`,
+            // passing `this.bytes` to the extern.
+            for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
                 if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,

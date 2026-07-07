@@ -930,26 +930,23 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Accessor members (`.accessor`) — emitted as class instance methods,
-    /// excluded from input-flattening, and the only functions a flatten field
-    /// may reference.
+    /// Functions ever referenced as a named leaf in a `.flatten_output(fun!(...))`/
+    /// `.flatten_output_with(...).field(...)` record — see
+    /// `accessor_record_fns`'s doc (`jni/mod.rs`). Usage-derived, not tied to
+    /// `.fun()` class-member declarations: a function need not also be
+    /// exposed as an instance method to be referenced this way.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.class_members
-            .values()
-            .flatten()
-            .filter(|m| m.kind == MemberKind::Accessor)
-            .map(|m| m.rust_ident.clone())
-            .collect()
+        self.accessor_record_fns.clone()
     }
 
-    /// Method members (`.method`) — their fn ident mapped to the owning class's
+    /// Fun members (`.fun`) — their fn ident mapped to the owning class's
     /// `TypeKey`, so input-flattening can skip the receiver parameter.
     fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
         self.class_members
             .iter()
             .flat_map(|(key, ms)| {
                 ms.iter()
-                    .filter(|m| m.kind == MemberKind::Method)
+                    .filter(|m| m.kind == MemberKind::Fun)
                     .map(move |m| (m.rust_ident.clone(), key.clone()))
             })
             .collect()

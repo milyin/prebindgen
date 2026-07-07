@@ -36,9 +36,9 @@ pub(crate) enum LocalField {
 }
 
 /// Push `rust_fun` onto `members` as a member of the given `kind`, shared by
-/// every class-kind decl's `.accessor()`/`.method()`/`.constructor()`. The
-/// Kotlin-visible name comes from `rust_fun.name(...)` if set, else defaults
-/// to `snake_to_camel(rust_ident)` — the same default `PackageDecl::fun` uses.
+/// every class-kind decl's `.fun()`/`.constructor()`. The Kotlin-visible name
+/// comes from `rust_fun.name(...)` if set, else defaults to
+/// `snake_to_camel(rust_ident)` — the same default `PackageDecl::fun` uses.
 fn push_member(members: &mut Vec<ClassMember>, rust_fun: FunctionDecl, kind: MemberKind) {
     let kotlin_name = rust_fun
         .kotlin_name_override
@@ -48,28 +48,6 @@ fn push_member(members: &mut Vec<ClassMember>, rust_fun: FunctionDecl, kind: Mem
         kotlin_name,
         kind,
     });
-}
-
-/// Resolve a member `name` of the given kind to its Rust ident, or panic with
-/// a clear build-script message. Shared by every class-kind decl's
-/// `.variant(name)`/`.field(name)` lookups.
-fn resolve_member(members: &[ClassMember], name: &str, kind: MemberKind, verb: &str) -> syn::Ident {
-    members
-        .iter()
-        .find(|m| m.kind == kind && m.kotlin_name == name)
-        .unwrap_or_else(|| {
-            let what = match kind {
-                MemberKind::Accessor => ".accessor",
-                MemberKind::Constructor => ".constructor",
-                MemberKind::Method => ".method",
-            };
-            panic!(
-                "{verb}(\"{name}\"): no `{what}(.., \"{name}\")` declared on this class before \
-                 referencing it here"
-            )
-        })
-        .rust_ident
-        .clone()
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -121,22 +99,6 @@ macro_rules! value_class {
 macro_rules! fun {
     ($name:ident) => {
         $crate::lang::FunctionDecl::new($crate::ident!($name))
-    };
-}
-
-/// Build an empty [`FlattenInputDecl`] — shorthand for `FlattenInputDecl::new()`.
-#[macro_export]
-macro_rules! flatten_input {
-    () => {
-        $crate::lang::FlattenInputDecl::new()
-    };
-}
-
-/// Build an empty [`FlattenOutputDecl`] — shorthand for `FlattenOutputDecl::new()`.
-#[macro_export]
-macro_rules! flatten_output {
-    () => {
-        $crate::lang::FlattenOutputDecl::new()
     };
 }
 
@@ -204,23 +166,14 @@ macro_rules! generic_type_wrapper {
 /// typed-handle class FQN. Feed it to a [`PackageDecl`] (via [`ClassDecl`])
 /// which in turn is handed to [`JniGen::package`].
 ///
-/// `.flatten_output`/`.flatten_input` take a
-/// [`FlattenOutputDecl`]/[`FlattenInputDecl`] spec built independently:
+/// `.flatten_output`/`.flatten_input` each take a [`FunctionDecl`] directly,
+/// one call per field/variant (call repeatedly to add more):
 ///
 /// ```
 /// let _ = prebindgen::ptr_class!(ZThing)
-///     .accessor(prebindgen::fun!(z_thing_name).name("name"))
-///     .flatten_output(prebindgen::flatten_output!().field_self().field("name"));
-/// ```
-///
-/// `.field()`/`.field_self()` only exist on [`FlattenOutputDecl`], not on
-/// `PtrClassDecl` itself, so there's no way to call them before a
-/// `.flatten_output(...)` exists to resolve them against:
-///
-/// ```compile_fail
-/// let _ = prebindgen::ptr_class!(ZThing)
-///     .accessor(prebindgen::fun!(z_thing_name).name("name"))
-///     .field("name"); // no such method on `PtrClassDecl`
+///     .fun(prebindgen::fun!(z_thing_name).name("name"))
+///     .flatten_output_self()
+///     .flatten_output(prebindgen::fun!(z_thing_name).name("name"));
 /// ```
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
@@ -249,147 +202,62 @@ impl PtrClassDecl {
         self
     }
 
-    /// Declare a `#[prebindgen]` **read accessor** (`f(&Self) -> R`) as an
-    /// instance method `name`. Usable as a `.flatten_output()` `.field(name)`.
-    pub fn accessor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Accessor);
-        self
-    }
-
-    /// Declare a `#[prebindgen]` **method** (`f(&Self, …) -> R`) as an
-    /// instance method `name`. Not usable as a flatten field.
-    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Method);
+    /// Declare a `#[prebindgen]` function (`f(&Self, …) -> R`) as an instance
+    /// method. The receiver binds to `this` and is excluded from
+    /// input-flattening; any remaining params flatten normally.
+    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
+        push_member(&mut self.members, rust_fun, MemberKind::Fun);
         self
     }
 
     /// Declare a `#[prebindgen]` **constructor** (`f(…) -> Self` /
     /// `Result<Self, E>`) as a companion-object factory `name`. Referenceable
-    /// from `.flatten_input().variant(name)`.
+    /// from `.flatten_input(fun!(...))`.
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
         push_member(&mut self.members, rust_fun, MemberKind::Constructor);
         self
     }
 
-    /// Set this class's default **input flatten**: how a parameter of this
-    /// class type is assembled at the boundary. `decl` is built independently
-    /// via [`FlattenInputDecl::new`] + `.variant(name)` (build via a declared
-    /// `.constructor`) / `.variant_self()` (accept the handle directly), then
-    /// resolved against this class's declared members here.
-    pub fn flatten_input(mut self, decl: FlattenInputDecl) -> Self {
-        self.input_variants = Some(
-            decl.variants
-                .into_iter()
-                .map(|v| match v {
-                    NamedVariant::Ctor(name) => {
-                        let func =
-                            resolve_member(&self.members, &name, MemberKind::Constructor, "variant");
-                        LocalVariant::Ctor(func)
-                    }
-                    NamedVariant::SelfIdentity => LocalVariant::SelfIdentity,
-                })
-                .collect(),
-        );
+    /// Add one variant to this class's default **input flatten**: build via
+    /// this declared `#[prebindgen]` constructor fn directly. Call repeatedly
+    /// to add more variants.
+    pub fn flatten_input(mut self, rust_fun: FunctionDecl) -> Self {
+        self.input_variants
+            .get_or_insert_with(Vec::new)
+            .push(LocalVariant::Ctor(rust_fun.rust_ident));
         self
     }
 
-    /// Set this class's default **output flatten**: how a returned/callback
-    /// value of this class is decomposed into fields. `decl` is built
-    /// independently via [`FlattenOutputDecl::new`] + `.field(name)` (a
-    /// declared `.accessor`'s value) / `.field_self()` (the handle itself),
-    /// then resolved against this class's declared members here.
-    pub fn flatten_output(mut self, decl: FlattenOutputDecl) -> Self {
-        self.output_fields = Some(
-            decl.fields
-                .into_iter()
-                .map(|f| match f {
-                    NamedField::Acc(name) => {
-                        let func = resolve_member(&self.members, &name, MemberKind::Accessor, "field");
-                        LocalField::Named(func, name)
-                    }
-                    NamedField::SelfField => LocalField::SelfField,
-                })
-                .collect(),
-        );
-        self
-    }
-}
-
-/// Standalone spec for [`PtrClassDecl::flatten_input`], built independently
-/// (`FlattenInputDecl::new().variant("of").variant_self()`, or
-/// `prebindgen::flatten_input!().variant("of").variant_self()`) and handed in
-/// as a value — `.variant()`/`.variant_self()` only exist on this type, so
-/// there is no way to call them before a `.flatten_input()` exists to resolve
-/// them against.
-pub struct FlattenInputDecl {
-    variants: Vec<NamedVariant>,
-}
-
-pub(crate) enum NamedVariant {
-    Ctor(String),
-    SelfIdentity,
-}
-
-impl FlattenInputDecl {
-    pub fn new() -> Self {
-        Self {
-            variants: Vec::new(),
-        }
-    }
-
-    /// Build via the constructor declared as `name` (see
-    /// [`PtrClassDecl::constructor`]).
-    pub fn variant(mut self, name: impl Into<String>) -> Self {
-        self.variants.push(NamedVariant::Ctor(name.into()));
+    /// Add the identity variant to this class's default input flatten:
+    /// accept an already-built handle directly.
+    pub fn flatten_input_self(mut self) -> Self {
+        self.input_variants
+            .get_or_insert_with(Vec::new)
+            .push(LocalVariant::SelfIdentity);
         self
     }
 
-    /// Accept an already-built handle directly (the identity variant).
-    pub fn variant_self(mut self) -> Self {
-        self.variants.push(NamedVariant::SelfIdentity);
-        self
-    }
-}
-
-impl Default for FlattenInputDecl {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Standalone spec for [`PtrClassDecl::flatten_output`] — the output-side
-/// dual of [`FlattenInputDecl`].
-pub struct FlattenOutputDecl {
-    fields: Vec<NamedField>,
-}
-
-pub(crate) enum NamedField {
-    Acc(String),
-    SelfField,
-}
-
-impl FlattenOutputDecl {
-    pub fn new() -> Self {
-        Self { fields: Vec::new() }
-    }
-
-    /// Include the value of the accessor declared as `name` (see
-    /// [`PtrClassDecl::accessor`]).
-    pub fn field(mut self, name: impl Into<String>) -> Self {
-        self.fields.push(NamedField::Acc(name.into()));
+    /// Add one field to this class's default **output flatten**: the value
+    /// of the accessor fn `rust_fun` (named via `rust_fun.name(...)`,
+    /// defaulting to `snake_to_camel(rust_ident)`). Call repeatedly to add
+    /// more fields.
+    pub fn flatten_output(mut self, rust_fun: FunctionDecl) -> Self {
+        let name = rust_fun
+            .kotlin_name_override
+            .unwrap_or_else(|| snake_to_camel(&rust_fun.rust_ident.to_string()));
+        self.output_fields
+            .get_or_insert_with(Vec::new)
+            .push(LocalField::Named(rust_fun.rust_ident, name));
         self
     }
 
-    /// Include the handle itself as a field.
-    pub fn field_self(mut self) -> Self {
-        self.fields.push(NamedField::SelfField);
+    /// Add the handle itself as a field to this class's default output
+    /// flatten.
+    pub fn flatten_output_self(mut self) -> Self {
+        self.output_fields
+            .get_or_insert_with(Vec::new)
+            .push(LocalField::SelfField);
         self
-    }
-}
-
-impl Default for FlattenOutputDecl {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -425,13 +293,8 @@ impl EnumClassDecl {
         self
     }
 
-    pub fn accessor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Accessor);
-        self
-    }
-
-    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Method);
+    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
+        push_member(&mut self.members, rust_fun, MemberKind::Fun);
         self
     }
 
@@ -479,13 +342,8 @@ impl DataClassDecl {
         self
     }
 
-    pub fn accessor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Accessor);
-        self
-    }
-
-    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Method);
+    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
+        push_member(&mut self.members, rust_fun, MemberKind::Fun);
         self
     }
 
@@ -535,13 +393,8 @@ impl ValueClassDecl {
         self
     }
 
-    pub fn accessor(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Accessor);
-        self
-    }
-
-    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
-        push_member(&mut self.members, rust_fun, MemberKind::Method);
+    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
+        push_member(&mut self.members, rust_fun, MemberKind::Fun);
         self
     }
 
@@ -659,10 +512,12 @@ impl FunctionDecl {
 }
 
 /// Standalone spec for [`FunctionDecl::flatten_input_with`], built
-/// independently and handed in as a value — the per-param dual of
-/// [`FlattenInputDecl`], except `.variant(func)` names the `#[prebindgen]`
-/// constructor's Rust ident **directly** (a free function has no declared
-/// member list to resolve a name against, unlike a class).
+/// independently and handed in as a value — needed because
+/// `flatten_input_with` is keyed **per parameter** (a function can have
+/// several, each independently overridden), unlike
+/// [`PtrClassDecl::flatten_input`] which is called directly, once per
+/// variant. `.variant(func)` names the `#[prebindgen]` constructor fn
+/// directly.
 pub struct FunctionFlattenInputDecl {
     variants: Vec<LocalVariant>,
 }
@@ -694,8 +549,7 @@ impl Default for FunctionFlattenInputDecl {
 }
 
 /// Standalone spec for [`FunctionDecl::flatten_output_with`] — the
-/// per-function output-side dual of
-/// [`FunctionFlattenInputDecl`]/[`FlattenOutputDecl`].
+/// per-function output-side dual of [`FunctionFlattenInputDecl`].
 pub struct FunctionFlattenOutputDecl {
     fields: Vec<LocalField>,
 }

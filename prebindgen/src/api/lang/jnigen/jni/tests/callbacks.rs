@@ -45,8 +45,9 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
                 crate::ptr_class!(ZThing)
                     // Canonical output: handle (identity) + its string form — a
                     // callback arg of ZThing decomposes into these 2 leaves.
-                    .accessor(crate::fun!(z_thing_name).name("name"))
-                    .flatten_output(crate::flatten_output!().field_self().field("name")),
+                    .fun(crate::fun!(z_thing_name).name("name"))
+                    .flatten_output_self()
+                    .flatten_output(crate::fun!(z_thing_name).name("name")),
             )
             // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
             .class(crate::ptr_class!(ZOther))
@@ -232,14 +233,16 @@ fn callback_root_identity_moved_after_nested_borrow() {
             // Child handle: canonical output = identity (clone) + its name string.
             .class(
                 crate::ptr_class!(ZChild)
-                    .accessor(crate::fun!(z_child_name).name("name"))
-                    .flatten_output(crate::flatten_output!().field_self().field("name")),
+                    .fun(crate::fun!(z_child_name).name("name"))
+                    .flatten_output_self()
+                    .flatten_output(crate::fun!(z_child_name).name("name")),
             )
             // Parent: a nested child-handle record, then its OWN root identity LAST.
             .class(
                 crate::ptr_class!(ZParent)
-                    .accessor(crate::fun!(z_parent_child).name("child"))
-                    .flatten_output(crate::flatten_output!().field("child").field_self()),
+                    .fun(crate::fun!(z_parent_child).name("child"))
+                    .flatten_output(crate::fun!(z_parent_child).name("child"))
+                    .flatten_output_self(),
             )
             .fun(crate::fun!(z_parent_sub)),
     );
@@ -318,38 +321,37 @@ fn callback_double_option_unwrap_pipeline() {
             .class(crate::value_class!(ZId))
             .class(
                 crate::ptr_class!(ZKeyExpr)
-                    .accessor(crate::fun!(z_keyexpr_as_str).name("asStr"))
-                    .flatten_output(crate::flatten_output!().field_self().field("asStr")),
+                    .fun(crate::fun!(z_keyexpr_as_str).name("asStr"))
+                    .flatten_output_self()
+                    .flatten_output(crate::fun!(z_keyexpr_as_str).name("asStr")),
             )
             .class(
                 crate::ptr_class!(ZTs)
-                    .accessor(crate::fun!(z_ts_ntp64).name("ntp64"))
-                    .flatten_output(crate::flatten_output!().field("ntp64")),
+                    .fun(crate::fun!(z_ts_ntp64).name("ntp64"))
+                    .flatten_output(crate::fun!(z_ts_ntp64).name("ntp64")),
             )
             .class(
                 crate::ptr_class!(ZSample)
-                    .accessor(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                    .accessor(crate::fun!(z_sample_timestamp).name("timestamp"))
-                    .flatten_output(crate::flatten_output!().field("keyExpr").field("timestamp")),
+                    .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                    .fun(crate::fun!(z_sample_timestamp).name("timestamp"))
+                    .flatten_output(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                    .flatten_output(crate::fun!(z_sample_timestamp).name("timestamp")),
             )
             .class(
                 crate::ptr_class!(ZErr)
-                    .accessor(crate::fun!(z_err_payload).name("payload"))
-                    .flatten_output(crate::flatten_output!().field("payload")),
+                    .fun(crate::fun!(z_err_payload).name("payload"))
+                    .flatten_output(crate::fun!(z_err_payload).name("payload")),
             )
             .class(
                 crate::ptr_class!(ZReply)
-                    .accessor(crate::fun!(z_reply_zid).name("zid"))
-                    .accessor(crate::fun!(z_reply_is_ok).name("isOk"))
-                    .accessor(crate::fun!(z_reply_sample).name("sample"))
-                    .accessor(crate::fun!(z_reply_err).name("err"))
-                    .flatten_output(
-                        crate::flatten_output!()
-                            .field("zid")
-                            .field("isOk")
-                            .field("sample")
-                            .field("err"),
-                    ),
+                    .fun(crate::fun!(z_reply_zid).name("zid"))
+                    .fun(crate::fun!(z_reply_is_ok).name("isOk"))
+                    .fun(crate::fun!(z_reply_sample).name("sample"))
+                    .fun(crate::fun!(z_reply_err).name("err"))
+                    .flatten_output(crate::fun!(z_reply_zid).name("zid"))
+                    .flatten_output(crate::fun!(z_reply_is_ok).name("isOk"))
+                    .flatten_output(crate::fun!(z_reply_sample).name("sample"))
+                    .flatten_output(crate::fun!(z_reply_err).name("err")),
             )
             .fun(crate::fun!(z_get)),
     );

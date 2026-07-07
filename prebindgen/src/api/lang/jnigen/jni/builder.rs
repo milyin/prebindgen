@@ -70,6 +70,7 @@ impl JniGen {
             expansions: crate::api::core::expand::Expansions::default(),
             deconstructors: crate::api::core::unfold::Deconstructors::default(),
             class_members: HashMap::new(),
+            accessor_record_fns: std::collections::HashSet::new(),
         };
         jni.recompute_derived();
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
@@ -243,6 +244,7 @@ impl JniGen {
             for f in fields {
                 match f {
                     LocalField::Named(func, name) => {
+                        self.accessor_record_fns.insert(func.clone());
                         self.deconstructors.add_deconstructor_record(func, name)
                     }
                     LocalField::SelfField => self.deconstructors.add_deconstructor_record_id(),
@@ -368,6 +370,7 @@ impl JniGen {
             for f in fields {
                 match f {
                     LocalField::Named(func, name) => {
+                        self.accessor_record_fns.insert(func.clone());
                         self.deconstructors.push_inline_field(func, name)
                     }
                     LocalField::SelfField => self.deconstructors.push_inline_field_self(),

@@ -31,10 +31,11 @@ fn inline_output_gets_own_builder() {
         crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
-                    .accessor(crate::fun!(z_thing_name).name("name"))
-                    .accessor(crate::fun!(z_thing_size).name("size"))
+                    .fun(crate::fun!(z_thing_name).name("name"))
+                    .fun(crate::fun!(z_thing_size).name("size"))
                     // Default output: name + size (2 leaves ⇒ builder callback).
-                    .flatten_output(crate::flatten_output!().field("name").field("size")),
+                    .flatten_output(crate::fun!(z_thing_name).name("name"))
+                    .flatten_output(crate::fun!(z_thing_size).name("size")),
             )
             .fun(crate::fun!(z_make_a))
             // Per-fn inline fields: name + size + name again (different shape). The
@@ -124,21 +125,18 @@ fn error_unwrap_universal_records() {
         crate::package!("errors")
             .class(
                 crate::ptr_class!(ZDetail)
-                    .accessor(crate::fun!(z_detail_code).name("code"))
-                    .flatten_output(crate::flatten_output!().field("code")),
+                    .fun(crate::fun!(z_detail_code).name("code"))
+                    .flatten_output(crate::fun!(z_detail_code).name("code")),
             )
             .class(
                 crate::ptr_class!(ZErr)
-                    .accessor(crate::fun!(z_err_message).name("message"))
-                    .accessor(crate::fun!(z_err_detail).name("detail"))
+                    .fun(crate::fun!(z_err_message).name("message"))
+                    .fun(crate::fun!(z_err_detail).name("detail"))
                     // Canonical error decomposition: the owned error handle itself,
                     // its message, and the Option-nested detail spliced to its code leaf.
-                    .flatten_output(
-                        crate::flatten_output!()
-                            .field_self()
-                            .field("message")
-                            .field("detail"),
-                    ),
+                    .flatten_output_self()
+                    .flatten_output(crate::fun!(z_err_message).name("message"))
+                    .flatten_output(crate::fun!(z_err_detail).name("detail")),
             )
             .fun(crate::fun!(z_fallible)),
     );
@@ -218,21 +216,10 @@ fn error_unwrap_universal_records() {
     assert!(!all.contains("?:\"\""), "{all}");
 }
 
-/// `.flatten_output().field(name)` must reference an `.accessor` declared on the
-/// same class; an unknown name is a loud build-script panic.
-#[test]
-#[should_panic(expected = "no `.accessor")]
-fn flatten_output_field_unknown_accessor_panics() {
-    let _ = crate::ptr_class!(ZThing)
-        .accessor(crate::fun!(z_thing_name).name("name"))
-        // References a name that was never declared via `.accessor`.
-        .flatten_output(crate::flatten_output!().field("size"));
-}
-
-/// `.method(f, name)` binds the `&Class` receiver to `this` (dropped from the
+/// `.fun(f)` binds the `&Class` receiver to `this` (dropped from the
 /// signature, its handle locked) while keeping the non-receiver params; the
-/// method delegates to the same `JNINative` extern. `.constructor(f, name)`
-/// emits a companion-object factory returning the class. Per-fn
+/// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
+/// companion-object factory returning the class. Per-fn
 /// `.flatten_output_with().field_self()` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
@@ -262,9 +249,9 @@ fn method_constructor_and_inline_field_self() {
         crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
-                    .accessor(crate::fun!(z_thing_name).name("name"))
-                    // A method: `&ZThing` receiver + a `name: String` param.
-                    .method(crate::fun!(z_thing_rename).name("rename"))
+                    .fun(crate::fun!(z_thing_name).name("name"))
+                    // A fun with extra params: `&ZThing` receiver + a `name: String` param.
+                    .fun(crate::fun!(z_thing_rename).name("rename"))
                     // A constructor: factory returning ZThing.
                     .constructor(crate::fun!(z_thing_make).name("make")),
             )

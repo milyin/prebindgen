@@ -166,34 +166,35 @@ pub(crate) struct PackageConfig {
 /// What kind of class member a [`ClassMember`] is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MemberKind {
-    /// `f(&T) -> R` (single param): the only kind usable as an output flatten
-    /// field. Promoted to an instance method; never input/output-flattened.
-    Accessor,
-    /// `f(&T, …) -> R` (receiver + extra params): promoted to an instance method
-    /// (receiver→`this`); receiver excluded from input-flatten, other params
-    /// flatten like a function; not usable as a flatten field.
-    Method,
+    /// `f(&T, …) -> R`: promoted to an instance method, receiver bound to
+    /// `this` and excluded from input-flatten; any remaining params flatten
+    /// normally (a zero-extra-param fn is just the receiver-only case — no
+    /// separate arity tracking needed, since there's nothing left to
+    /// compose once the receiver is skipped).
+    Fun,
     /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
     /// member returning the class; never output-flattened; referenceable by a
-    /// `.flatten_input().variant(name)`.
+    /// `.flatten_input(fun!(...))`.
     Constructor,
 }
 
 /// One `#[prebindgen]` function attached to a declared class (`ptr_class` /
-/// `enum_class` / `value_class` / `data_class`) via [`JniGen::accessor`] /
-/// [`JniGen::method`] / [`JniGen::constructor`]. Accessors/methods become
-/// **instance methods** (receiver dropped→`this`); constructors become
-/// **companion factory** members. Each is also a real `#[prebindgen]` wrapper
-/// (Rust extern + `JNINative` extern + JSONL).
+/// `enum_class` / `value_class` / `data_class`) via [`JniGen::fun`] /
+/// [`JniGen::constructor`]. Funs become **instance methods** (receiver
+/// dropped→`this`); constructors become **companion factory** members. Each
+/// is also a real `#[prebindgen]` wrapper (Rust extern + `JNINative` extern +
+/// JSONL).
 #[derive(Clone, Debug)]
 pub(crate) struct ClassMember {
     /// Rust function ident (`registry.functions[ident]`).
     pub rust_ident: syn::Ident,
-    /// Kotlin member name on the owning class — for an accessor it is also the
-    /// leaf/parameter name when referenced by a flatten `.field(name)`; for a
-    /// constructor it is the name referenced by a flatten `.variant(name)`.
+    /// Kotlin-visible name of this instance method / companion factory
+    /// (derived from `FunctionDecl.name()`, defaulting to
+    /// `snake_to_camel(rust_ident)`). Independent of any `.flatten_input`/
+    /// `.flatten_output` reference to the same underlying function — those
+    /// take a fresh `FunctionDecl` directly and don't consult this list.
     pub kotlin_name: String,
-    /// Member kind (accessor / method / constructor).
+    /// Member kind (fun / constructor).
     pub kind: MemberKind,
 }
 
@@ -244,8 +245,8 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 ///     .package(
 ///         prebindgen::package!("session")
 ///             .class(prebindgen::ptr_class!(ZKeyExpr)
-///                 .accessor(prebindgen::fun!(z_keyexpr_as_str).name("getStr"))
-///                 .flatten_output(prebindgen::flatten_output!().field_self())),
+///                 .fun(prebindgen::fun!(z_keyexpr_as_str).name("getStr"))
+///                 .flatten_output_self()),
 ///     );
 /// ```
 #[derive(Clone)]
@@ -351,14 +352,24 @@ pub struct JniGen {
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
 
-    /// Class members (accessors / methods / constructors) attached to a
-    /// declared class via its decl's `.accessor()`/`.method()`/`.constructor()`,
-    /// keyed by the class's canonical Rust type. Supplies the instance-method /
-    /// companion-factory emission and the accessor/method/constructor membership
-    /// sets for the flatten machinery (see [`ClassMember`]). Insertion order
-    /// within a class is preserved (the Vec); class emission iterates `types` by
-    /// sorted key, so map order is irrelevant.
+    /// Class members (funs / constructors) attached to a declared class via
+    /// its decl's `.fun()`/`.constructor()`, keyed by the class's canonical
+    /// Rust type. Supplies the instance-method / companion-factory emission
+    /// and the receiver-skip set for input-flattening (see [`ClassMember`]).
+    /// Insertion order within a class is preserved (the Vec); class emission
+    /// iterates `types` by sorted key, so map order is irrelevant.
     pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
+
+    /// Every function ever referenced as a named leaf in a `.flatten_output(fun!(...))`/
+    /// `.flatten_output_with(...).field(...)` record (class- or
+    /// function-scoped) — populated as `builder.rs` accepts each decl.
+    /// Backs [`Prebindgen::accessor_functions`]: `core/unfold.rs`'s
+    /// deconstructor gate requires every named record's function to be in
+    /// this set (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes
+    /// them from parameter composition. Derived from *usage*, not from any
+    /// separate declaration — a function need not also be a `.fun()` class
+    /// member to be referenced this way.
+    pub(crate) accessor_record_fns: std::collections::HashSet<syn::Ident>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────
