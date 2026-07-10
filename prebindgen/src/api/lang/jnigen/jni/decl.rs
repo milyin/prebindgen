@@ -783,6 +783,10 @@ pub(crate) fn wrapper_value_ident() -> syn::Ident {
     syn::Ident::new("v", Span::call_site())
 }
 
+/// A [`ScalarTypeWrapperDecl`] conversion body: given the in-scope value
+/// ident, produce the conversion expression.
+pub(crate) type ScalarConvFn = Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>;
+
 /// Teaches the generator to carry one Rust type across the boundary as a
 /// **plain scalar** — e.g. a `Millis(u64)` newtype that should surface in
 /// Kotlin as a `Long`, converted with your own expressions each way, with no
@@ -805,8 +809,8 @@ pub struct ScalarTypeWrapperDecl {
     // re-parsed fresh at lookup time instead.
     pub(crate) wire: String,
     pub(crate) kotlin_type: String,
-    pub(crate) input: Option<Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>>,
-    pub(crate) output: Option<Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>>,
+    pub(crate) input: Option<ScalarConvFn>,
+    pub(crate) output: Option<ScalarConvFn>,
 }
 
 impl ScalarTypeWrapperDecl {
@@ -855,6 +859,10 @@ impl ScalarTypeWrapperDecl {
 /// error** the caller should see. Use [`infallible`](Self::infallible) when
 /// it always succeeds, or [`fallible`](Self::fallible) to route an `Err` to
 /// the caller's error handler (as the built-in `Result` unwrap does).
+// large_enum_variant: a transient codegen-time value immediately destructured
+// by `into_tuple`; boxing the `syn` payloads would only complicate the public
+// variant shape.
+#[allow(clippy::large_enum_variant)]
 pub enum WireBody {
     Infallible(syn::Type, syn::Expr),
     Fallible(syn::Type, syn::Type, syn::Expr),
