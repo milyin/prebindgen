@@ -111,6 +111,23 @@ pub struct ConverterImpl<M = ()> {
     pub subs: Vec<syn::Type>,
 }
 
+/// Re-emit a captured `#[prebindgen]` const as a **path-alias** to its
+/// source-of-truth: same attributes (doc comments), visibility, name and
+/// type, with the initializer replaced by `<source_module>::<ident>`. Used
+/// by [`Prebindgen::on_const`] implementations so consts whose initializers
+/// reference source-crate internals (private helpers, upstream constants)
+/// still compile in the generated file.
+pub fn const_path_alias(c: &syn::ItemConst, source_module: &syn::Path) -> TokenStream {
+    let attrs = &c.attrs;
+    let vis = &c.vis;
+    let ident = &c.ident;
+    let ty = &c.ty;
+    quote::quote! {
+        #(#attrs)*
+        #vis const #ident: #ty = #source_module::#ident;
+    }
+}
+
 /// The single extension point of the pipeline: implement this trait once per
 /// **destination language** (C/cbindgen, JNI/Kotlin, Swift, Python, …) to teach
 /// the language-agnostic [`Registry`] how that language represents Rust types
@@ -257,9 +274,10 @@ pub trait Prebindgen {
     /// Idents of `#[prebindgen]` consts the adapter claims for emission.
     ///
     /// * `None` (default) — the adapter has **no const declaration
-    ///   mechanism**: every indexed const is re-emitted verbatim into the
-    ///   generated Rust, none drives type resolution, and no skip warnings
-    ///   are printed.
+    ///   mechanism**: every indexed const is re-emitted into the generated
+    ///   Rust via [`Self::on_const`] (a path-alias when
+    ///   [`Self::source_module`] is available, verbatim otherwise), none
+    ///   drives type resolution, and no skip warnings are printed.
     /// * `Some(set)` — declared-only, symmetric with functions: a declared
     ///   const's type is scanned as a required **output** type, only
     ///   declared consts reach [`Self::on_const`], and undeclared ones get
@@ -311,6 +329,16 @@ pub trait Prebindgen {
     /// inside function bodies are covered.
     fn post_process_item(&self, _item: &mut syn::Item) {}
 
+    /// Absolute path under which the source crate's items are reachable
+    /// from the generated file (e.g. `zenoh_flat`), for adapters that
+    /// qualify emitted references against one. Drives the default
+    /// [`Self::on_const`]: with a source module available, a named const
+    /// re-emits as a path-alias to the source item instead of copying its
+    /// initializer tokens. Default: `None`.
+    fn source_module(&self) -> Option<&syn::Path> {
+        None
+    }
+
     // ── Item methods ───────────────────────────────────────────────
 
     /// Wrap a `#[prebindgen]` fn into the destination-language wrapper
@@ -324,10 +352,19 @@ pub trait Prebindgen {
     /// Per-enum emission.
     fn on_enum(&self, e: &syn::ItemEnum, registry: &Registry<Self::Metadata>) -> TokenStream;
 
-    /// Per-const emission. Default: pass-through.
+    /// Per-const emission. Default: a named const re-emits as a path-alias
+    /// (see [`const_path_alias`]) when [`Self::source_module`] is available —
+    /// initializer tokens are never copied, so a const whose initializer
+    /// references source-crate internals stays valid in the generated file.
+    /// Unnamed `const _` items (self-contained infrastructure guards, e.g.
+    /// the injected `konst::assertc_eq!` feature check) and adapters without
+    /// a source module pass through verbatim.
     fn on_const(&self, c: &syn::ItemConst, _registry: &Registry<Self::Metadata>) -> TokenStream {
         use quote::ToTokens;
-        c.to_token_stream()
+        match self.source_module() {
+            Some(m) if c.ident != "_" => const_path_alias(c, m),
+            _ => c.to_token_stream(),
+        }
     }
 
     // ── Structural type resolution (the converter-resolution surface) ──

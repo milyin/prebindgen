@@ -619,6 +619,7 @@ pub struct PackageDecl {
     pub(crate) classes: Vec<ClassDecl>,
     pub(crate) functions: Vec<FunctionDecl>,
     pub(crate) constants: Vec<ConstDecl>,
+    pub(crate) constant_functions: Vec<FunctionDecl>,
 }
 
 impl PackageDecl {
@@ -634,6 +635,7 @@ impl PackageDecl {
             classes: Vec::new(),
             functions: Vec::new(),
             constants: Vec::new(),
+            constant_functions: Vec::new(),
         }
     }
 
@@ -659,6 +661,29 @@ impl PackageDecl {
     /// customized [`ConstDecl`] when you need `.name(...)`.
     pub fn constant(mut self, decl: ConstDecl) -> Self {
         self.constants.push(decl);
+        self
+    }
+
+    /// Add a **function-backed constant** to this package: a **nullary**
+    /// `#[prebindgen]` fn whose result surfaces as an eagerly-initialized
+    /// top-level Kotlin `val` (computed once, at package-file class-load,
+    /// through the ordinary generated wrapper) instead of a callable `fun`.
+    /// Use it for constant values a Rust `const` cannot express — e.g. a
+    /// string only obtainable through a runtime `Display`.
+    ///
+    /// `.name(...)` sets the val name; the default is the fn ident verbatim
+    /// (you almost always want an explicit SCREAMING_SNAKE name). The same
+    /// restrictions as [`Self::constant`] apply to the return type
+    /// (opaque-handle results are rejected), the fn must take no parameters,
+    /// and flatten overrides are meaningless here — both are hard errors.
+    pub fn constant_fun(mut self, decl: FunctionDecl) -> Self {
+        assert!(
+            decl.input_overrides.is_empty() && decl.output_override.is_none(),
+            "constant_fun `{}`: flatten overrides don't apply to a constant — \
+             declare a plain `FunctionDecl` (optionally with `.name(...)`)",
+            decl.rust_ident
+        );
+        self.constant_functions.push(decl);
         self
     }
 }

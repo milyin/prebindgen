@@ -363,6 +363,16 @@ private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
 /** Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read once through the generated JNI getter). */
 public val COVER_TAG: String = constGetCoverTag(JniErrorHandler { je -> error(je ?: "const COVER_TAG: JNI getter failed") })
 
+private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.coverTagRuntime(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated once through the generated JNI wrapper). */
+public val COVER_TAG_RUNTIME: String = coverTagRuntime(JniErrorHandler { je -> error(je ?: "const COVER_TAG_RUNTIME: JNI getter failed") })
+
 internal object CovNative {
     init {
         io.prebindgen.covertest.NativeLibrary.ensureLoaded()
@@ -395,6 +405,7 @@ internal object CovNative {
         s1: Long,
         errorSink: Any,
     )
+    external fun coverTagRuntime(errorSink: Any): String
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
     external fun payloadLabelLen(

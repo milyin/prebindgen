@@ -169,6 +169,12 @@ pub(crate) struct PackageConfig {
     /// initialized through a generated nullary JNI getter. `MethodEntry`
     /// is reused as-is (rust ident + Kotlin-name override).
     pub constants: Vec<MethodEntry>,
+    /// Function-backed constants declared via [`PackageDecl::constant_fun`]:
+    /// nullary `#[prebindgen]` fns whose result surfaces as a top-level
+    /// Kotlin `val` (eagerly initialized through the fn's ordinary generated
+    /// wrapper) instead of a callable `fun`. Rust-side emission and the
+    /// `JNINative` extern are the plain declared-function ones.
+    pub constant_functions: Vec<MethodEntry>,
 }
 
 /// What kind of class member a [`ClassMember`] is.

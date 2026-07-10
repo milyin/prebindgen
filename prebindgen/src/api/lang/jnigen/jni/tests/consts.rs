@@ -46,8 +46,22 @@ fn declared_consts_emit_getter_and_val() {
         .write_rust(&jni, dir.join("gen.rs"))
         .expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
-    // Verbatim const re-emission + one extern getter each.
-    assert!(rust.contains("pub const MAX_LEN"), "{rust}");
+    // Path-alias const re-emission (the initializer tokens are never
+    // copied — they may reference source-crate internals) + one extern
+    // getter each.
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("pubconstMAX_LEN:i64=myflat::MAX_LEN;"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("pubconstGREETING:&str=myflat::GREETING;"),
+        "{rust}"
+    );
+    assert!(
+        !rc.contains("=42"),
+        "initializer must not be copied: {rust}"
+    );
     assert!(
         rust.contains("Java_io_test_jni_JNINative_constGetMaxLen"),
         "{rust}"
@@ -115,6 +129,131 @@ fn undeclared_const_not_emitted() {
         .map(|p| std::fs::read_to_string(p).unwrap())
         .collect();
     assert!(!all.contains("GREETING"), "{all}");
+}
+
+/// End-to-end for function-backed constants (`PackageDecl::constant_fun`):
+/// a declared nullary fn surfaces as a private helper + public
+/// eagerly-initialized `val` in the package file; the extern and the Rust
+/// wrapper are the ordinary declared-function ones (`myflat::tag()` call).
+#[test]
+fn constant_fun_emits_val_over_ordinary_wrapper() {
+    let loc = crate::SourceLocation::default();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn tag() -> String {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("cfg").constant_fun(crate::fun!(tag).name("THE_TAG")));
+
+    let dir = unique_test_dir("jnigen_constant_fun_basic");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    // Ordinary declared-function wrapper: an extern calling `myflat::tag()`.
+    assert!(rust.contains("Java_io_test_jni_JNINative_tag"), "{rust}");
+    assert!(rust.contains("myflat::tag()"), "{rust}");
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let pkg = paths
+        .iter()
+        .find(|p| p.ends_with("io/test/jni/cfg.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("cfg package file");
+    let pc: String = pkg.split_whitespace().collect();
+    // Public eagerly-initialized val named by `.name()`, over a PRIVATE
+    // helper — no public callable fun.
+    assert!(pc.contains("valTHE_TAG:String=tag("), "{pkg}");
+    assert!(pc.contains("privatefuntag("), "{pkg}");
+    assert!(!pc.contains("publicfuntag("), "{pkg}");
+    // JNINative declares the ordinary extern.
+    let native = paths
+        .iter()
+        .find(|p| p.ends_with("io/test/jni.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("base package file");
+    let nc: String = native.split_whitespace().collect();
+    assert!(nc.contains("externalfuntag("), "{native}");
+}
+
+/// A non-nullary fn cannot be a constant.
+#[test]
+#[should_panic(expected = "must be nullary")]
+fn constant_fun_non_nullary_rejected() {
+    let loc = crate::SourceLocation::default();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn scaled(factor: i64) -> i64 {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("cfg").constant_fun(crate::fun!(scaled)));
+    let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let _ = jni.write_kotlin(&registry, &dir.join("kotlin"));
+}
+
+/// A fn returning a declared opaque handle cannot be a constant — same
+/// rejection (and guidance) as a handle-typed const.
+#[test]
+#[should_panic(expected = "declared opaque handle")]
+fn constant_fun_handle_return_rejected() {
+    let loc = crate::SourceLocation::default();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThing {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn default_thing() -> ZThing {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("things")
+                .class(crate::ptr_class!(ZThing))
+                .constant_fun(crate::fun!(default_thing)),
+        );
+    let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let _ = jni.write_kotlin(&registry, &dir.join("kotlin"));
 }
 
 /// A const whose type is a declared opaque handle is rejected with guidance

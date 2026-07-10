@@ -487,6 +487,15 @@ pub const COVER_MAGIC: i64 = 0xC0FFEE;
 #[prebindgen]
 pub const COVER_TAG: &str = "covertest";
 
+/// The tag with a runtime-computed suffix — a constant value no Rust `const`
+/// can express (built through `format!`). Exercises
+/// `PackageDecl::constant_fun`: a nullary fn surfaced as an
+/// eagerly-initialized Kotlin top-level `val`.
+#[prebindgen]
+pub fn cover_tag_runtime() -> String {
+    format!("{COVER_TAG}-runtime")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -773,15 +773,60 @@ pub(crate) fn render_const_val(
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
     let getter = const_getter_fn(c);
-    let mut helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
-    helper.vis = kt::Vis::Private;
-    let helper_name = helper.name.clone();
-    // A const always carries a value type; a helper with no return would
-    // mean the type never resolved — skip like an unresolvable fn.
-    let val_ty = helper.ret.clone()?;
+    let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| c.ident.to_string());
+    let kdoc = format!(
+        "Mirrors the Rust `#[prebindgen]` const `{}` (read once through the \
+         generated JNI getter).",
+        c.ident
+    );
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
+}
+
+/// Render one function-backed constant (see `PackageDecl::constant_fun`):
+/// the declared nullary fn's ordinary wrapper demoted to a **private**
+/// helper, plus the public eagerly-initialized `val` holding its result —
+/// computed once, at package-file class-load, through the ordinary generated
+/// wrapper (one JNI call, exactly like a const getter).
+pub(crate) fn render_constant_fn_val(
+    ext: &JniGen,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    kotlin_name_override: Option<&str>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    let helper = render_wrapper_fn(ext, f, registry, imports, None, None)?;
+    let val_name = kotlin_name_override
+        .map(str::to_string)
+        .unwrap_or_else(|| f.sig.ident.to_string());
+    let kdoc = format!(
+        "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated once through the \
+         generated JNI wrapper).",
+        f.sig.ident
+    );
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
+}
+
+/// Shared val-rendering core for both constant kinds (`ConstDecl` /
+/// `PackageDecl::constant_fun`): demote the rendered wrapper to a private
+/// helper and emit the public eagerly-initialized `val` that calls it once
+/// with a throwing `JniErrorHandler` (dead code for infallible converts; a
+/// binding-layer failure surfaces as `IllegalStateException` via
+/// `error(...)`).
+fn render_val_over_helper(
+    ext: &JniGen,
+    mut helper: kt::KtFun,
+    val_name: String,
+    kdoc: String,
+    imports: &mut BTreeSet<String>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    helper.vis = kt::Vis::Private;
+    let helper_name = helper.name.clone();
+    // A constant always carries a value type; a helper with no return would
+    // mean the type never resolved — skip like an unresolvable fn.
+    let val_ty = helper.ret.clone()?;
     let spec = jni_error_handler_iface_spec(ext);
     imports.insert(spec.fqn());
     let init = format!(
@@ -791,11 +836,7 @@ pub(crate) fn render_const_val(
         .ty(val_ty)
         .vis(kt::Vis::Public)
         .initializer(init)
-        .kdoc(format!(
-            "Mirrors the Rust `#[prebindgen]` const `{}` (read once through the \
-             generated JNI getter).",
-            c.ident
-        ));
+        .kdoc(kdoc);
     Some((helper, prop))
 }
 

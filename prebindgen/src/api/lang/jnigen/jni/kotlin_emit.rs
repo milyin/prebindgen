@@ -83,7 +83,10 @@ impl JniGen {
         fragments.extend(self.write_typed_handles(registry, &typed_handles));
         fragments.extend(self.write_callback_ifaces(registry));
         for (subpackage, pkg_cfg) in &self.packages {
-            if pkg_cfg.functions.is_empty() && pkg_cfg.constants.is_empty() {
+            if pkg_cfg.functions.is_empty()
+                && pkg_cfg.constants.is_empty()
+                && pkg_cfg.constant_functions.is_empty()
+            {
                 continue;
             }
             fragments.push(self.write_jni_package(registry, subpackage, pkg_cfg));
@@ -895,6 +898,33 @@ impl JniGen {
             if let Some((helper, prop)) = render_const_val(
                 self,
                 item_const,
+                registry,
+                &mut imports,
+                entry.kotlin_name_override.as_deref(),
+            ) {
+                file = file.decl(helper).decl(prop);
+            }
+        }
+        // Function-backed constants: the declared nullary fn's ordinary
+        // wrapper demoted to a private helper + the public eagerly-initialized
+        // `val` (see `render_constant_fn_val`). The JNINative extern and the
+        // Rust wrapper are the plain declared-function ones.
+        for entry in &pkg_cfg.constant_functions {
+            let (item_fn, _loc) = registry
+                .functions
+                .get(&entry.rust_ident)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "write_jni_package: constant fn `{}` registered via .constant_fun(...) \
+                         is not in the prebindgen registry — check the spelling against the \
+                         matching `#[prebindgen]` Rust fn name.",
+                        entry.rust_ident,
+                    )
+                });
+            validate_constant_fn(self, item_fn);
+            if let Some((helper, prop)) = render_constant_fn_val(
+                self,
+                item_fn,
                 registry,
                 &mut imports,
                 entry.kotlin_name_override.as_deref(),

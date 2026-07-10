@@ -30,6 +30,7 @@
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `PackageDecl::constant` (`constant!`) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
+//! | `PackageDecl::constant_fun` | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
 //! | `.param_expand_self(param)` alone   | `summary_total_raw` (raw handle param, overrides the class default) |
 //! | `.return_expand_self()` alone         | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.param_expand(param, …)` (+`_self`)| `storage_expect_summary` |
@@ -170,6 +171,11 @@ fn main() {
                 // (`COVER_MAGIC: Long`, `COVER_TAG: String`) in the base package.
                 .constant(constant!(COVER_MAGIC))
                 .constant(constant!(COVER_TAG))
+                // Function-backed constant: a nullary `#[prebindgen]` fn
+                // surfaced as an eagerly-initialized top-level `val`
+                // (`COVER_TAG_RUNTIME: String`) — the value comes from the
+                // fn at class-load, not from a Rust `const`.
+                .constant_fun(fun!(cover_tag_runtime).name("COVER_TAG_RUNTIME"))
                 .class(
                     ptr_class!(Storage)
                         .fun(fun!(storage_len).name("len"))

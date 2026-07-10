@@ -177,6 +177,7 @@ impl JniGen {
             classes,
             functions,
             constants,
+            constant_functions,
         } = decl;
         self.packages.entry(name.clone()).or_default();
         for class in classes {
@@ -192,6 +193,15 @@ impl JniGen {
                 .entry(name.clone())
                 .or_default()
                 .constants
+                .push(entry);
+        }
+        for f in constant_functions {
+            let mut entry = MethodEntry::new(f.rust_ident);
+            entry.kotlin_name_override = f.kotlin_name_override;
+            self.packages
+                .entry(name.clone())
+                .or_default()
+                .constant_functions
                 .push(entry);
         }
         self

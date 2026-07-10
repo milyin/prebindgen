@@ -39,7 +39,20 @@ pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
 /// `close()` is it?). Expose a factory function instead — the established
 /// idiom (e.g. zenoh's `encoding_const_*` companion factories).
 pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
-    let mut ty = (*c.ty).clone();
+    reject_handle_constant_type(ext, &c.ty, "const", &c.ident);
+}
+
+/// The constant-value handle check shared by both constant kinds: peel
+/// `&`/`Option`/`Vec` layers off `ty` and reject if what remains is a
+/// declared opaque handle. `what`/`ident` shape the error message
+/// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
+pub(crate) fn reject_handle_constant_type(
+    ext: &JniGen,
+    ty: &syn::Type,
+    what: &str,
+    ident: &syn::Ident,
+) {
+    let mut ty = ty.clone();
     loop {
         if let syn::Type::Reference(r) = &ty {
             ty = (*r.elem).clone();
@@ -63,12 +76,37 @@ pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
         .is_some();
     assert!(
         !is_handle,
-        "const `{}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
+        "{what} `{}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
          not supported. Expose a `#[prebindgen]` factory function returning the constant and \
          declare it as a companion constructor instead.",
-        c.ident,
+        ident,
         key.as_str()
     );
+}
+
+/// Validates a [`PackageDecl::constant_fun`] declaration against the real
+/// signature: the fn must be **nullary** (a constant has no inputs), must
+/// not return a `Result` (a domain-fallible value is not a constant — and
+/// the `val` initializer's throwing `JniErrorHandler` only fits the
+/// infallible wrapper shape), and its return type must not peel to a
+/// declared opaque handle (same rationale as [`reject_handle_const`]).
+pub(crate) fn validate_constant_fn(ext: &JniGen, f: &syn::ItemFn) {
+    assert!(
+        f.sig.inputs.is_empty(),
+        "constant fn `{}`: takes {} parameter(s) — a function-backed constant must be nullary \
+         (declare it with `.fun(...)` instead if it is a real function)",
+        f.sig.ident,
+        f.sig.inputs.len()
+    );
+    if let syn::ReturnType::Type(_, ty) = &f.sig.output {
+        assert!(
+            result_ok_type(ty).is_none(),
+            "constant fn `{}`: returns a `Result` — a function-backed constant must be \
+             infallible (declare it with `.fun(...)` instead if it can fail)",
+            f.sig.ident
+        );
+        reject_handle_constant_type(ext, ty, "constant fn", &f.sig.ident);
+    }
 }
 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:

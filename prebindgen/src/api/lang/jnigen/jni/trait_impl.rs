@@ -915,6 +915,12 @@ impl Prebindgen for JniGen {
             for m in &pkg.functions {
                 out.insert(m.rust_ident.clone());
             }
+            // Function-backed constants (`constant_fun`) are ordinary
+            // declared functions on the Rust/extern side; only their Kotlin
+            // surface differs (an eagerly-initialized top-level `val`).
+            for m in &pkg.constant_functions {
+                out.insert(m.rust_ident.clone());
+            }
         }
         // Class members (accessor/method/constructor) are declared via
         // `.accessor`/`.method`/`.constructor` (not `.fun`) but are still real
@@ -1073,12 +1079,17 @@ impl Prebindgen for JniGen {
         TokenStream::new()
     }
 
+    fn source_module(&self) -> Option<&syn::Path> {
+        Some(&self.source_module)
+    }
+
     /// Declared consts only reach here (write gating via
-    /// [`Prebindgen::declared_consts`]): re-emit the const verbatim AND emit
-    /// its nullary JNI getter extern. The getter reuses the whole function-
-    /// wrapper pipeline (so the const's type flows through the ordinary
-    /// output-converter machinery); only the callee expression differs — a
-    /// path to the const, not a call.
+    /// [`Prebindgen::declared_consts`]): re-emit the const as a path-alias
+    /// to its source-of-truth (initializer tokens are never copied — they
+    /// may reference source-crate internals) AND emit its nullary JNI getter
+    /// extern. The getter reuses the whole function-wrapper pipeline (so the
+    /// const's type flows through the ordinary output-converter machinery);
+    /// only the callee expression differs — a path to the const, not a call.
     fn on_const(&self, c: &syn::ItemConst, registry: &Registry<KotlinMeta>) -> TokenStream {
         // Unnamed infrastructure consts (`const _`, e.g. the injected
         // `konst::assertc_eq!` feature guard) pass through verbatim — no
@@ -1092,9 +1103,9 @@ impl Prebindgen for JniGen {
         let source_module = &self.source_module;
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
         let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let verbatim = c.to_token_stream();
+        let alias = crate::api::core::const_path_alias(c, source_module);
         quote! {
-            #verbatim
+            #alias
             #wrapper
         }
     }

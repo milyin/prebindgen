@@ -12,10 +12,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/**
- * The storage capacity limit advertised to bindings (a primitive const).
- */
-#define COVER_MAGIC 12648430
+
 
 typedef struct payload_handler_t {
   uint8_t _private[0];
@@ -52,6 +49,8 @@ typedef struct closure_payload_vec_t {
   void (*call)(const struct payload_t*, uintptr_t, void*);
   void (*drop)(void*);
 } closure_payload_vec_t;
+
+
 
 void perftest_free(void *p);
 
