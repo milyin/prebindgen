@@ -116,7 +116,9 @@ pub(crate) fn is_kotlin_primitive_ty(t: &kt::KtType) -> bool {
 }
 
 /// Recursively build the Kotlin `fromParts` factory for a data class — the
-/// mirror of the native `flatten_struct_encode` (in the [`jni`](super) module).
+/// mirror of the native `flatten_struct_encode` (in the [`jni`](super)
+/// module). Both walk the same [`build_struct_plan`], so the leaf order and
+/// slot types agree by construction.
 /// Returns `(params, reconstruct)`:
 /// * `params` — the flattened `(name, kotlin_type)` list (one per transitive
 ///   leaf wire; nested data-class fields are inlined, `Option<nested>` prepends
@@ -136,128 +138,108 @@ pub(crate) fn flatten_struct_factory(
     imports: &mut BTreeSet<String>,
     depth: usize,
 ) -> Option<(Vec<(String, kt::KtType)>, String)> {
-    use crate::api::lang::jnigen::jni::{bare_path_ident, is_jni_primitive, option_inner_type};
-    assert!(
-        depth <= 16,
-        "flatten_struct_factory: recursion too deep at struct `{}` (cyclic data_class?)",
-        s.ident
-    );
-    let fields = match &s.fields {
-        syn::Fields::Named(n) => &n.named,
-        _ => return None,
-    };
+    let plan = build_struct_plan(ext, registry, s, depth)?;
+    factory_from_plan(&plan, prefix, class_name, imports)
+}
+
+/// Walk a [`StructPlan`] emitting the Kotlin `fromParts` side: the flattened
+/// factory params and the reconstruct expression.
+fn factory_from_plan(
+    plan: &StructPlan,
+    prefix: &str,
+    class_name: &str,
+    imports: &mut BTreeSet<String>,
+) -> Option<(Vec<(String, kt::KtType)>, String)> {
     let mut params: Vec<(String, kt::KtType)> = Vec::new();
     let mut parts: Vec<String> = Vec::new();
 
-    for field in fields {
-        let fname = field.ident.as_ref()?.to_string();
-        let camel = kt_snake_to_camel(&fname);
+    for f in &plan.fields {
+        let camel = kt_snake_to_camel(&f.fname.to_string());
         let base = if prefix.is_empty() {
             camel.clone()
         } else {
             format!("{prefix}_{camel}")
         };
-        let effective_ty = &field.ty;
-        let field_entry = registry.output_entry(effective_ty)?;
-
-        // Projection leaf (handle / value class / blob).
-        if let Some(h) = field_entry.metadata.projection.clone() {
-            let fqn = ext.kotlin_fqn(&h.leaf_key).map(|v| v.to_string())?;
-            let short = register_fqn(&fqn, imports);
-            let (wire_ty, wrap) = factory_projection_wire_wrap(&h.kind, &h.strategy, &short, &base);
-            params.push((base.clone(), wire_ty));
-            parts.push(wrap);
-            continue;
-        }
-        // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)`.
-        if ext.is_kotlin_enum(effective_ty) {
-            let kt = field_entry.metadata.kotlin_name.clone()?;
-            let short = register_kt_type(&kt, imports).to_string();
-            params.push((base.clone(), kt::KtType::int()));
-            parts.push(format!("{short}.fromInt({base})"));
-            continue;
-        }
-        // Nested data-class field — inline its leaves and reconstruct via the
-        // child's own `fromParts` (in bytecode, no JNI crossing).
-        let inner_ty = option_inner_type(effective_ty).unwrap_or_else(|| effective_ty.clone());
-        let nested = bare_path_ident(&inner_ty).and_then(|name| {
-            let is_struct = registry.structs.contains_key(&name);
-            let is_vc = ext
-                .types
-                .get(&TypeKey::from_type(&inner_ty))
-                .map(|c| c.value_blob)
-                .unwrap_or(false);
-            if is_struct && !is_vc && !ext.is_kotlin_enum(&inner_ty) {
-                registry.structs.get(&name).map(|(st, _)| st.clone())
-            } else {
-                None
+        match &f.kind {
+            // Projection leaf (handle / value class / blob).
+            PlanFieldKind::Projection { proj, fqn, .. } => {
+                let short = register_fqn(fqn, imports);
+                let (wire_ty, wrap) =
+                    factory_projection_wire_wrap(&proj.kind, &proj.strategy, &short, &base);
+                params.push((base.clone(), wire_ty));
+                parts.push(wrap);
             }
-        });
-        if let Some(child) = nested {
-            let child_name = bare_path_ident(&inner_ty)?;
-            let child_fqn = ext
-                .types
-                .get(&TypeKey::from_type(&inner_ty))
-                .and_then(|c| c.kotlin_name.clone())?;
-            let child_short = register_fqn(&child_fqn, imports);
-            let (child_params, _child_reconstruct) = flatten_struct_factory(
-                ext,
-                registry,
-                &child,
-                &base,
-                &child_short,
-                imports,
-                depth + 1,
-            )?;
-            let child_names = child_params
-                .iter()
-                .map(|(n, _)| n.clone())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let _ = child_name;
-            if option_inner_type(effective_ty).is_none() {
-                params.extend(child_params);
-                parts.push(format!("{child_short}.fromParts({child_names})"));
-            } else {
-                // `Option<nested>`: the parent receives default-null object wires
-                // for the child's leaves when absent (the native `None` arm), so
-                // every object-typed child param must be NULLABLE in the parent
-                // signature. Inside the `if (present)` guard the values are
-                // non-null again, so forward them to the child's (non-null)
-                // `fromParts` with `!!`. Primitive params (Long/Int/Boolean)
-                // can't be null and are forwarded as-is; already-nullable params
-                // stay nullable.
-                let flag = format!("{base}__present");
-                let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
-                params.push((flag.clone(), kt::KtType::boolean()));
-                for (n, t) in &child_params {
-                    if is_kotlin_primitive_ty(t) || t.is_nullable() {
-                        params.push((n.clone(), t.clone()));
-                        fwd_names.push(n.clone());
-                    } else {
-                        params.push((n.clone(), t.clone().nullable()));
-                        fwd_names.push(format!("{n}!!"));
+            // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)`.
+            PlanFieldKind::Enum { kotlin, .. } => {
+                let short = register_kt_type(kotlin, imports).to_string();
+                params.push((base.clone(), kt::KtType::int()));
+                parts.push(format!("{short}.fromInt({base})"));
+            }
+            // `Option<enum>` leaf: the native encoder delivers the discriminant
+            // `box_jint`-boxed (JVM `Ljava/lang/Integer;`, null for `None`), so
+            // the factory takes `Int?` and rebuilds the nullable enum.
+            PlanFieldKind::OptionEnum { kotlin, .. } => {
+                let short = register_kt_type(kotlin, imports).to_string();
+                params.push((base.clone(), kt::KtType::int().nullable()));
+                parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
+            }
+            // Nested data-class field — inline its leaves and reconstruct via
+            // the child's own `fromParts` (in bytecode, no JNI crossing).
+            PlanFieldKind::Nested {
+                optional,
+                child_fqn,
+                plan: child,
+            } => {
+                let child_fqn = child_fqn.as_ref()?;
+                let child_short = register_fqn(child_fqn, imports);
+                let (child_params, _child_reconstruct) =
+                    factory_from_plan(child, &base, &child_short, imports)?;
+                let child_names = child_params
+                    .iter()
+                    .map(|(n, _)| n.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if !*optional {
+                    params.extend(child_params);
+                    parts.push(format!("{child_short}.fromParts({child_names})"));
+                } else {
+                    // `Option<nested>`: the parent receives default-null object wires
+                    // for the child's leaves when absent (the native `None` arm), so
+                    // every object-typed child param must be NULLABLE in the parent
+                    // signature. Inside the `if (present)` guard the values are
+                    // non-null again, so forward them to the child's (non-null)
+                    // `fromParts` with `!!`. Primitive params (Long/Int/Boolean)
+                    // can't be null and are forwarded as-is; already-nullable params
+                    // stay nullable.
+                    let flag = format!("{base}__present");
+                    let mut fwd_names: Vec<String> = Vec::with_capacity(child_params.len());
+                    params.push((flag.clone(), kt::KtType::boolean()));
+                    for (n, t) in &child_params {
+                        if is_kotlin_primitive_ty(t) || t.is_nullable() {
+                            params.push((n.clone(), t.clone()));
+                            fwd_names.push(n.clone());
+                        } else {
+                            params.push((n.clone(), t.clone().nullable()));
+                            fwd_names.push(format!("{n}!!"));
+                        }
                     }
+                    parts.push(format!(
+                        "if ({flag}) {child_short}.fromParts({}) else null",
+                        fwd_names.join(", ")
+                    ));
                 }
-                parts.push(format!(
-                    "if ({flag}) {child_short}.fromParts({}) else null",
-                    fwd_names.join(", ")
-                ));
             }
-            continue;
+            // Leaf primitive / object (string, byte array, Vec, …) — forwarded
+            // unchanged to the constructor.
+            PlanFieldKind::Leaf {
+                kotlin, nullable, ..
+            } => {
+                let ty = register_kt_type(kotlin, imports);
+                let ty = if *nullable { ty.nullable() } else { ty };
+                params.push((base.clone(), ty));
+                parts.push(base);
+            }
         }
-        // Leaf primitive / object (string, byte array, Vec, …) — forwarded
-        // unchanged to the constructor.
-        let kt = field_entry.metadata.kotlin_name.clone()?;
-        let ty = register_kt_type(&kt, imports);
-        let primitive_wire = is_jni_primitive(&field_entry.destination);
-        let ty = if is_option_type(effective_ty) && !primitive_wire {
-            ty.nullable()
-        } else {
-            ty
-        };
-        params.push((base.clone(), ty));
-        parts.push(base);
     }
 
     let reconstruct = format!("{class_name}({})", parts.join(", "));

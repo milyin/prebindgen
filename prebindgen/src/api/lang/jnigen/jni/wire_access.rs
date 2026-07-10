@@ -1,8 +1,11 @@
 //! Map a JNI wire type to its `(jvm_signature_chunk, JValue accessor,
 //! is_object)` triple — shared between the struct-strategy decoder/encoder
-//! and the callback strategy.
+//! and the callback strategy. The primitive rows are per-aspect views over
+//! [`JniPrim`](super::JniPrim); only the object wires are local.
 
 use quote::format_ident;
+
+use super::JniPrim;
 
 /// Map a JNI wire type to `(jvm_field_descriptor, JValue_accessor_ident, is_object)`.
 ///
@@ -13,24 +16,26 @@ use quote::format_ident;
 /// caller uses `.l()` to get a `JObject` and then `.into()` to cast to the
 /// wire type.
 pub(crate) fn jni_field_access(jni_type: &syn::Type) -> Option<(&'static str, syn::Ident, bool)> {
+    if let Some(p) = JniPrim::from_wire(jni_type) {
+        return Some((p.descriptor(), format_ident!("{}", p.unbox_getter()), false));
+    }
     let syn::Type::Path(tp) = jni_type else {
         return None;
     };
-    let last = tp.path.segments.last()?;
-    let (sig, accessor, is_obj) = match last.ident.to_string().as_str() {
-        "jboolean" => ("Z", "z", false),
-        "jbyte" => ("B", "b", false),
-        "jchar" => ("C", "c", false),
-        "jshort" => ("S", "s", false),
-        "jint" => ("I", "i", false),
-        "jlong" => ("J", "j", false),
-        "jfloat" => ("F", "f", false),
-        "jdouble" => ("D", "d", false),
-        "JString" => ("Ljava/lang/String;", "l", true),
-        "JByteArray" => ("[B", "l", true),
+    let sig = match tp.path.segments.last()?.ident.to_string().as_str() {
+        "JString" => "Ljava/lang/String;",
+        "JByteArray" => "[B",
         _ => return None,
     };
-    Some((sig, format_ident!("{}", accessor), is_obj))
+    Some((sig, format_ident!("l"), true))
+}
+
+/// Map a JNI **primitive** field descriptor to the descriptor of its
+/// `java.lang.*` box class — the JVM slot an `Option`-boxed primitive leaf
+/// occupies ([`box_helper_for_wire`] produces the boxed value; this names its
+/// type in a method signature).
+pub(crate) fn box_descriptor_for_primitive(sig: &str) -> Option<&'static str> {
+    JniPrim::from_descriptor(sig).map(JniPrim::box_descriptor)
 }
 
 /// Map a JNI **primitive** wire type to the `prebindgen::lang` cached-boxing
@@ -43,14 +48,5 @@ pub(crate) fn jni_field_access(jni_type: &syn::Type) -> Option<(&'static str, sy
 /// Returns `None` for object wires (`JString`/`JByteArray`/`JObject` are
 /// already objects).
 pub(crate) fn box_helper_for_wire(wire: &syn::Type) -> Option<syn::Ident> {
-    let syn::Type::Path(tp) = wire else {
-        return None;
-    };
-    let last = tp.path.segments.last()?;
-    match last.ident.to_string().as_str() {
-        "jboolean" | "jbyte" | "jchar" | "jshort" | "jint" | "jlong" | "jfloat" | "jdouble" => {
-            Some(format_ident!("box_{}", last.ident))
-        }
-        _ => None,
-    }
+    JniPrim::from_wire(wire).map(|p| format_ident!("box_{}", p.wire_name()))
 }

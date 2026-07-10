@@ -164,10 +164,7 @@ fn generate_c_headers(bindings_file: &Path) {
                 .join("include")
                 .join(format!("example_flat_{}.h", target_arch()));
             write_if_changed(&stable, &std::fs::read_to_string(&header_path).unwrap());
-            println!(
-                "cargo:warning=Generated C header at: {}",
-                stable.display()
-            );
+            println!("cargo:warning=Generated C header at: {}", stable.display());
         }
         Err(e) => {
             println!("cargo:warning=Failed to generate C header: {e:?}");

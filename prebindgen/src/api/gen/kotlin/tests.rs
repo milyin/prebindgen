@@ -5,10 +5,7 @@ use super::{types::ImportSet, *};
 fn body_of(src: &str) -> &str {
     // Strip banner + package + imports + the separating blank line.
     let mut rest = src;
-    loop {
-        let Some((line, tail)) = rest.split_once('\n') else {
-            break;
-        };
+    while let Some((line, tail)) = rest.split_once('\n') {
         if line.starts_with("//")
             || line.starts_with("package ")
             || line.starts_with("import ")

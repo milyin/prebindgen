@@ -152,6 +152,29 @@ pub(crate) struct IfaceSpec {
 }
 
 impl IfaceSpec {
+    /// Assemble a spec, deriving the JVM `run` descriptor — the only
+    /// computed field — from the `params` / `ret` / `type_params` triple.
+    /// `typed_groups` starts empty (callback specs override it via struct
+    /// update).
+    fn assemble(
+        package: String,
+        name: String,
+        type_params: Vec<String>,
+        params: Vec<IfaceParam>,
+        ret: kt::KtType,
+    ) -> Self {
+        let descr = method_descr(&params, &ret, &type_params);
+        IfaceSpec {
+            package,
+            name,
+            type_params,
+            params,
+            ret,
+            descr,
+            typed_groups: Vec::new(),
+        }
+    }
+
     pub fn fqn(&self) -> String {
         if self.package.is_empty() {
             self.name.clone()
@@ -253,12 +276,13 @@ impl IfaceSpec {
         let raw = self.raw_name();
         let n_ze = self.params.len() - 1;
 
-        let mut fields = String::from("@JvmField var failed: Boolean = false\n");
-        fields.push_str("@JvmField var je: String? = null\n");
+        let mut fields = kt::Code::new()
+            .line("@JvmField var failed: Boolean = false")
+            .line("@JvmField var je: String? = null");
         for (i, p) in self.params[1..].iter().enumerate() {
             // The slot is nullable (null until the capture fires).
             let ty = p.raw.clone().nullable();
-            fields.push_str(&format!("@JvmField var ze{i}: {ty} = null\n"));
+            fields = fields.line(format!("@JvmField var ze{i}: {ty} = null"));
         }
 
         let run_params = self
@@ -277,24 +301,19 @@ impl IfaceSpec {
             reset.push_str(&format!("; c.ze{i} = null"));
         }
 
-        let code = format!(
-            "internal class {cap} : {raw}<Unit> {{\n\
-             {fields}\
-             override fun run({run_params}) {{ {run_body} }}\n\
-             companion object {{\n\
-             private val TL: ThreadLocal<{cap}> = ThreadLocal.withInitial {{ {cap}() }}\n\
-             @JvmStatic fun acquire(): {cap} {{\n\
-             val c = TL.get()\n\
-             {reset}\n\
-             return c\n\
-             }}\n\
-             }}\n\
-             }}"
-        );
-        kt::KtDecl::Raw {
-            name: cap,
-            code: kt::Code::raw_reindent(&code),
-        }
+        let code = kt::Code::new().blk(format!("internal class {cap} : {raw}<Unit> {{"), |c| {
+            c.push(fields)
+                .wline(format!("override fun run({run_params}) {{ {run_body} }}"))
+                .blk("companion object {", |comp| {
+                    comp.line(format!(
+                        "private val TL: ThreadLocal<{cap}> = ThreadLocal.withInitial {{ {cap}() }}"
+                    ))
+                    .blk(format!("@JvmStatic fun acquire(): {cap} {{"), |acq| {
+                        acq.line("val c = TL.get()").wline(reset).line("return c")
+                    })
+                })
+        });
+        kt::KtDecl::Raw { name: cap, code }
     }
 
     /// The typed (user-facing) Kotlin declaration. With [`Self::typed_groups`]
@@ -372,8 +391,10 @@ impl IfaceSpec {
             let mut args = Vec::with_capacity(self.typed_groups.len());
             let mut at = 0usize;
             for g in &self.typed_groups {
-                let names: Vec<&str> =
-                    self.params[at..at + g.leaf_count].iter().map(|p| p.name.as_str()).collect();
+                let names: Vec<&str> = self.params[at..at + g.leaf_count]
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect();
                 match &g.reassemble {
                     Some(cls) => args.push(RunArg {
                         expr: format!("{cls}.fromParts({})", names.join(", ")),
@@ -402,7 +423,11 @@ impl IfaceSpec {
             let wrapped: Vec<&str> = run_args.iter().map(|a| a.expr.as_str()).collect();
             kt::Code::new().blk(lambda_open, |mut c| {
                 for (idx, name) in self.params.iter().map(|p| p.name.as_str()).enumerate() {
-                    let suffix = if idx + 1 == self.params.len() { " ->" } else { "," };
+                    let suffix = if idx + 1 == self.params.len() {
+                        " ->"
+                    } else {
+                        ","
+                    };
                     c = c.line(format!("{name}{suffix}"));
                 }
                 c.blk_with("run(", ")", |mut call| {
@@ -440,17 +465,21 @@ impl IfaceSpec {
                     call_args.push(a.expr.clone());
                 }
             }
-            let mut src = format!("{lambda_open}\n    {lambda_params} ->\n");
-            for l in &lines {
-                src.push_str(&format!("    {l}\n"));
-            }
-            src.push_str(&format!("    try {{\n        run({})\n", call_args.join(", ")));
-            src.push_str("    } finally {\n");
-            for cl in &closes {
-                src.push_str(&format!("        {cl}\n"));
-            }
-            src.push_str("    }\n}");
-            kt::Code::raw_reindent(&src)
+            kt::Code::new().blk(lambda_open, |mut c| {
+                c = c.line(format!("{lambda_params} ->"));
+                for l in &lines {
+                    c = c.wline(l.clone());
+                }
+                let mut fin = kt::Code::new();
+                for cl in &closes {
+                    fin = fin.line(cl.clone());
+                }
+                c.try_finally(
+                    "",
+                    kt::Code::new().wline(format!("run({})", call_args.join(", "))),
+                    fin,
+                )
+            })
         };
         let mut f = kt::KtFun::new(recv).vis(kt::Vis::Public);
         for g in &bare_generics {
@@ -462,99 +491,7 @@ impl IfaceSpec {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn render_as_raw(spec: IfaceSpec) -> String {
-        kt::KtFile::new(&spec.package)
-            .decl(spec.to_as_raw_fun())
-            .render()
-    }
-
-    #[test]
-    fn as_raw_adapter_is_multiline_even_when_short() {
-        let spec = IfaceSpec {
-            package: "io.test".to_string(),
-            name: "ThingCallback".to_string(),
-            type_params: vec![],
-            params: vec![IfaceParam {
-                name: "handle".to_string(),
-                typed: kt::KtType::cls("io.test.Thing"),
-                raw: kt::KtType::long(),
-                wrap: WrapKind::Handle("io.test.Thing".to_string()),
-            }],
-            ret: kt::KtType::unit(),
-            descr: "(J)V".to_string(),
-            typed_groups: Vec::new(),
-        };
-
-        let src = render_as_raw(spec);
-        assert!(
-            src.contains(
-                "public fun ThingCallback.asRaw(): ThingCallbackRaw =\n    \
-                 ThingCallbackRaw {\n        \
-                 handle ->\n        \
-                 run(\n            \
-                 Thing(handle)\n        \
-                 )\n    \
-                 }"
-            ),
-            "{src}"
-        );
-    }
-
-    #[test]
-    fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
-        let spec = IfaceSpec {
-            package: "io.test".to_string(),
-            name: "ReplyCallback".to_string(),
-            type_params: vec![],
-            params: vec![
-                IfaceParam {
-                    name: "replierZid".to_string(),
-                    typed: kt::KtType::cls("io.test.ZenohId").nullable(),
-                    raw: kt::KtType::byte_array().nullable(),
-                    wrap: WrapKind::Blob("io.test.ZenohId".to_string()),
-                },
-                IfaceParam::same("replierEid".to_string(), kt::KtType::int()),
-                IfaceParam::same("isOk".to_string(), kt::KtType::boolean()),
-                IfaceParam {
-                    name: "sample__keyExpr".to_string(),
-                    typed: kt::KtType::cls("io.test.KeyExpr").nullable(),
-                    raw: kt::KtType::long().nullable(),
-                    wrap: WrapKind::Handle("io.test.KeyExpr".to_string()),
-                },
-                IfaceParam {
-                    name: "sample__payload".to_string(),
-                    typed: kt::KtType::cls("io.test.ZBytes").nullable(),
-                    raw: kt::KtType::long().nullable(),
-                    wrap: WrapKind::Handle("io.test.ZBytes".to_string()),
-                },
-            ],
-            ret: kt::KtType::unit(),
-            descr: "([BIZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
-            typed_groups: Vec::new(),
-        };
-
-        let src = render_as_raw(spec);
-        assert!(
-            src.contains("public fun ReplyCallback.asRaw(): ReplyCallbackRaw =\n"),
-            "{src}"
-        );
-        assert!(src.contains("    ReplyCallbackRaw {\n"), "{src}");
-        assert!(src.contains("        replierZid,\n"), "{src}");
-        assert!(src.contains("        sample__payload ->\n"), "{src}");
-        assert!(src.contains("        run(\n"), "{src}");
-        assert!(
-            src.contains("            replierZid?.let { ZenohId(it) },\n"),
-            "{src}"
-        );
-        assert!(
-            src.contains("            sample__payload?.let { ZBytes(it) }\n"),
-            "{src}"
-        );
-    }
-}
+mod tests;
 
 /// The JVM descriptor chunk for a parameter/return Kotlin type.
 /// `type_params` are the interface's bare type-variable names (variance
@@ -563,7 +500,7 @@ mod tests {
 ///
 /// Loud panic on anything unrecognized: a silently-wrong descriptor would
 /// surface as a runtime `GetMethodID` failure (or worse, a mistyped jvalue).
-pub(crate) fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> String {
+fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> String {
     let kt::KtType::Named {
         fqn,
         args,
@@ -583,22 +520,11 @@ pub(crate) fn kt_jvm_descriptor(ty: &kt::KtType, type_params: &[String]) -> Stri
     }
     if !fqn.contains('.') {
         // Kotlin builtins (the only dot-free names a leaf type may use).
-        let prim = match simple {
-            "Int" => Some(("I", "Ljava/lang/Integer;")),
-            "Long" => Some(("J", "Ljava/lang/Long;")),
-            "Boolean" => Some(("Z", "Ljava/lang/Boolean;")),
-            "Byte" => Some(("B", "Ljava/lang/Byte;")),
-            "Short" => Some(("S", "Ljava/lang/Short;")),
-            "Char" => Some(("C", "Ljava/lang/Character;")),
-            "Float" => Some(("F", "Ljava/lang/Float;")),
-            "Double" => Some(("D", "Ljava/lang/Double;")),
-            _ => None,
-        };
-        if let Some((p, boxed)) = prim {
+        if let Some(p) = JniPrim::from_kotlin_name(simple) {
             return if *nullable {
-                boxed.to_string()
+                p.box_descriptor().to_string()
             } else {
-                p.to_string()
+                p.descriptor().to_string()
             };
         }
         return match simple {
@@ -629,9 +555,8 @@ fn method_descr(params: &[IfaceParam], ret: &kt::KtType, type_params: &[String])
 
 /// The interface base name for a decomposition: the subject type's short
 /// name, extended by the deconstructor declaration's identity. The type's
-/// canonical (unnamed) declaration keeps the bare short; a named alternative
-/// appends its UpperCamel name (`ZError` + `"full"` → `ZErrorFull`); per-fn
-/// inline records (`.output`) append the function's UpperCamel ident.
+/// default declaration keeps the bare short; per-fn inline records
+/// (`.flatten_output_with()`) append the function's UpperCamel ident.
 /// This is what makes interface identity == declaration identity: functions
 /// sharing a declaration share the interface, differently-declared
 /// decompositions of one type get distinct interfaces.
@@ -646,7 +571,6 @@ fn decon_base_name(short: &str, decon: Option<&DeconId>) -> String {
     };
     match decon {
         None | Some(DeconId::Default(_)) => short.to_string(),
-        Some(DeconId::Named(_, n)) => format!("{short}{}", upper_camel(n)),
         Some(DeconId::PerFn(_, f)) => format!("{short}{}", upper_camel(f)),
     }
 }
@@ -722,7 +646,7 @@ fn plan_leaf_params(
 ///   (plan-less callback) arg keeps the typed handle class in BOTH views —
 ///   the close-unless-taken contract needs the native side to `close()` the
 ///   wrapped object after the invoke.
-pub(crate) fn leaf_iface_param(
+fn leaf_iface_param(
     ext: &JniGen<impl JniGenState>,
     registry: &Registry<KotlinMeta>,
     name: String,
@@ -794,7 +718,11 @@ pub(crate) fn leaf_iface_param(
                 let reg_short = reg_fqn.rsplit('.').next().unwrap_or(reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
-                    let raw = if builder_kt.is_nullable() { raw.nullable() } else { raw };
+                    let raw = if builder_kt.is_nullable() {
+                        raw.nullable()
+                    } else {
+                        raw
+                    };
                     return Some(IfaceParam {
                         name,
                         typed: builder_kt.clone(),
@@ -937,7 +865,14 @@ pub(crate) fn callback_iface_spec(
         let param = if *owned_handle {
             owned_handle_iface_param(ext, registry, names[k].clone(), out_ty, *nullable)?
         } else {
-            leaf_iface_param(ext, registry, names[k].clone(), out_ty, *nullable, *from_plan)?
+            leaf_iface_param(
+                ext,
+                registry,
+                names[k].clone(),
+                out_ty,
+                *nullable,
+                *from_plan,
+            )?
         };
         params.push(param);
     }
@@ -970,7 +905,7 @@ pub(crate) fn callback_iface_spec(
             "{}Callback",
             cb_args
                 .iter()
-                .map(|t| subject_short(t))
+                .map(subject_short)
                 .collect::<Vec<_>>()
                 .join("")
         )
@@ -979,16 +914,9 @@ pub(crate) fn callback_iface_spec(
         .first()
         .map(|t| subject_package(ext, t))
         .unwrap_or_else(|| ext.package.clone());
-    let ret = kt::KtType::unit();
-    let descr = method_descr(&params, &ret, &[]);
     Some(IfaceSpec {
-        package,
-        name,
-        type_params: vec![],
-        params,
-        ret,
-        descr,
         typed_groups,
+        ..IfaceSpec::assemble(package, name, vec![], params, kt::KtType::unit())
     })
 }
 
@@ -1010,18 +938,13 @@ pub(crate) fn builder_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    let type_params = vec!["out R".to_string()];
-    let ret = kt::KtType::var_r();
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["out R".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_r(),
+    ))
 }
 
 /// Interface for a **decomposed-element fold** (`Iterable` delivery over a
@@ -1043,18 +966,13 @@ pub(crate) fn folder_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    let type_params = vec!["A".to_string()];
-    let ret = kt::KtType::var_("A");
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["A".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_("A"),
+    ))
 }
 
 /// Interface for a **whole-element fold** (`Iterable` delivery of a type
@@ -1082,18 +1000,13 @@ pub(crate) fn whole_folder_iface_spec(
     )?);
     let name = format!("{}Folder", subject_short(element));
     let package = subject_package(ext, element);
-    let type_params = vec!["A".to_string()];
-    let ret = kt::KtType::var_("A");
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["A".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_("A"),
+    ))
 }
 
 /// The folder spec for an `Iterable` plan: declaration-keyed when the
@@ -1179,18 +1092,13 @@ pub(crate) fn error_handler_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    let type_params = vec!["out R".to_string()];
-    let ret = kt::KtType::var_r();
-    let descr = method_descr(&params, &ret, &type_params);
-    Some(IfaceSpec {
+    Some(IfaceSpec::assemble(
         package,
         name,
-        type_params,
+        vec!["out R".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    })
+        kt::KtType::var_r(),
+    ))
 }
 
 /// The shared infallible handler `JniErrorHandler<out R> { run(je: String?): R }`
@@ -1201,18 +1109,13 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen<impl JniGenState>) -> If
         "je".to_string(),
         kt::KtType::string().nullable(),
     )];
-    let type_params = vec!["out R".to_string()];
-    let ret = kt::KtType::var_r();
-    let descr = method_descr(&params, &ret, &type_params);
-    IfaceSpec {
-        package: ext.package.clone(),
-        name: "JniErrorHandler".to_string(),
-        type_params,
+    IfaceSpec::assemble(
+        ext.package.clone(),
+        "JniErrorHandler".to_string(),
+        vec!["out R".to_string()],
         params,
-        ret,
-        descr,
-        typed_groups: Vec::new(),
-    }
+        kt::KtType::var_r(),
+    )
 }
 
 /// The onError handler spec for a declared function: its error plan's

@@ -58,7 +58,7 @@ pub(crate) use crate::api::{
     },
     gen::kotlin::WriteKotlinError,
     lang::jnigen::{
-        jni::wire_access::{box_helper_for_wire, jni_field_access},
+        jni::wire_access::{box_descriptor_for_primitive, box_helper_for_wire, jni_field_access},
         util::snake_to_camel,
     },
 };
@@ -76,15 +76,11 @@ pub(crate) use crate::api::{
 /// value-context Kotlin name for the same type (`"Long"`) is produced
 /// independently by the rank-0 opaque handler in [`KotlinMeta`], so
 /// the two roles don't collide despite sharing the `TypeConfig`.
+/// Presence marker: a type registered via `JniGen::ptr_class`. The unified
+/// Kotlin emitter writes a typed-handle `.kt` file (and the Rust side its
+/// `freePtr` destructor) for every opaque type.
 #[derive(Clone, Default)]
-pub(crate) struct OpaqueConfig {
-    /// When `false` (default), the unified Kotlin emitter writes a
-    /// typed-handle `.kt` file for this opaque type. Set to `true` by
-    /// [`JniGen::suppress_kotlin_code`] to indicate the Kotlin file is
-    /// hand-maintained — only the Rust-side converter and `instanceof`
-    /// dispatch wire up.
-    pub suppress_kotlin_code: bool,
-}
+pub(crate) struct OpaqueConfig {}
 
 /// Per-enum configuration (driven by `JniGen::enum_class`).
 ///
@@ -95,14 +91,10 @@ pub(crate) struct OpaqueConfig {
 /// discriminant-keyed `fromInt(...)` companion. The Kotlin FQN lives in
 /// the surrounding [`TypeConfig::kotlin_name`] slot, same as
 /// [`OpaqueConfig`].
+/// Presence marker: a type registered via `JniGen::enum_class`. The unified
+/// Kotlin emitter writes an `enum class` `.kt` file for every declared enum.
 #[derive(Clone, Default)]
-pub(crate) struct EnumConfig {
-    /// When `false` (default), the unified Kotlin emitter writes an
-    /// `enum class` `.kt` file for this enum. Set to `true` by
-    /// [`JniGen::suppress_kotlin_code`] when the Kotlin source is
-    /// hand-maintained — only the Rust-side converter wires up.
-    pub suppress_kotlin_code: bool,
-}
+pub(crate) struct EnumConfig {}
 
 /// One registered `.fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
@@ -153,6 +145,12 @@ pub(crate) struct TypeConfig {
     /// projection — it surfaces as `ByteArray`. Mutually exclusive with
     /// `opaque` / `enum_cfg`.
     pub value_blob: bool,
+    /// Set by the four class declarators (`ptr_class` / `enum_class` /
+    /// `data_class` / `value_class`), NOT by wrapper registration. Declared
+    /// classes are required in **both** directions at scan (their converters
+    /// always resolve both ways); a wrapper-only entry is required per
+    /// **usage** direction, so an output-only wrapper needs no input twin.
+    pub class_decl: bool,
 }
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
@@ -468,11 +466,14 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// let _ = JniGen::new().fun(pq!(z_open));
 /// ```
 ///
-/// ```compile_fail
+/// `.name(...)` applies to the current declaration — a function OR a type:
+///
+/// ```
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // `.name(...)` only applies immediately after `.fun(...)`.
+/// // Per-class rename: the Kotlin class becomes `Session` (literal; the
+/// // mangle closures do not apply).
 /// let _ = JniGen::new().ptr_class(pq!(ZSession)).name("Session");
 /// ```
 ///
@@ -488,21 +489,15 @@ impl<P: Clone> TypeKeyState for TypeMeta<P> {
 /// use prebindgen::lang::JniGen;
 /// use syn::parse_quote as pq;
 ///
-/// // Suppression is valid for generated pointer/enum classes, not data classes.
-/// let _ = JniGen::new().data_class(pq!(Config)).suppress_kotlin_code();
+/// // `kotlin_type` is only for data/value classes and rank-0 wrappers — on a
+/// // ptr_class it would corrupt the FQN that typed-handle emission and
+/// // instanceof dispatch consume.
+/// let _ = JniGen::new().ptr_class(pq!(ZSession)).kotlin_type("Long");
 /// ```
 ///
-/// Type declarations are allowed before a subpackage is selected, but declaring
-/// functions still requires calling [`JniGen::package`].
-/// Until the root/type states are split further, a root-level type declaration
-/// followed directly by `.fun(...)` is rejected at runtime:
-///
-/// ```should_panic
-/// use prebindgen::lang::JniGen;
-/// use syn::parse_quote as pq;
-///
-/// let _ = JniGen::new().ptr_class(pq!(ZSession)).fun(pq!(z_open));
-/// ```
+/// Classes AND functions may be declared before any subpackage is selected
+/// (or after `.package("")`): both land in the **base** package set by
+/// [`JniGen::package_prefix`].
 ///
 /// State types are public so large build scripts can be factored into helpers
 /// without losing type safety:
@@ -604,9 +599,17 @@ pub struct JniGenInner {
     /// enum → wrapper-table → primitive → struct.
     pub(crate) types: HashMap<TypeKey, TypeConfig>,
 
+    /// Set by the first type / function / wrapper declaration. Guards the
+    /// order-sensitive global config ([`JniGen::package_prefix`] and the
+    /// `kotlin_*_name_mangle` closures): those are baked into each
+    /// declaration's FQN at declaration time, so setting them afterwards
+    /// would silently mis-name everything already declared — a hard panic
+    /// instead.
+    pub(crate) declarations_started: bool,
+
     /// Free-standing package-level wrappers, keyed by subpackage path
-    /// (relative to [`Self::package`], dot-separated; never empty for an
-    /// entry to be emitted). Populated by [`Self::fun`] under the
+    /// (relative to [`Self::package`], dot-separated; the empty key is the
+    /// base package itself). Populated by [`Self::fun`] under the
     /// currently-active [`Self::active_subpackage`].
     pub(crate) packages: BTreeMap<String, PackageConfig>,
 
@@ -672,6 +675,7 @@ pub struct JniGenInner {
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────
 mod builder;
+mod classify;
 mod emit;
 mod iface;
 mod prim;
@@ -683,10 +687,13 @@ mod trait_impl;
 mod fold;
 mod kotlin_emit;
 mod render;
+mod struct_plan;
 
 pub(crate) use builder::*;
+pub(crate) use classify::*;
 pub(crate) use emit::*;
 pub(crate) use fold::*;
 pub(crate) use iface::*;
 pub(crate) use prim::*;
 pub(crate) use render::*;
+pub(crate) use struct_plan::*;

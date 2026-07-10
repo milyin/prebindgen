@@ -398,17 +398,13 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
     )
 }
 
-/// One `#[no_mangle] extern "C"` destructor per non-suppressed opaque
-/// handle — the Rust counterpart to the `public fun free() = free {
+/// One `#[no_mangle] extern "C"` destructor per opaque handle — the Rust
+/// counterpart to the `public fun free() = free {
 /// freePtr<suffix>(it) }` / `private external fun freePtr<suffix>` pair
-/// emitted by [`render_typed_handle_source`]. Each body is the uniform
-/// `drop(Box::from_raw(ptr as *mut T))`; the inner `T`'s own `Drop` runs
-/// (e.g. `Publisher` network-undeclare) with no special casing.
-///
-/// Emitted under the same `opaque && !suppress_kotlin_code` condition as
-/// the Kotlin shell, so the framework owns *both* halves of the
-/// destructor exactly when it owns the typed-handle class. Suppressed
-/// handles (hand-written Kotlin) keep their hand-written Rust destructor.
+/// emitted by [`render_typed_handle_source`] — so the framework owns *both*
+/// halves of the destructor for every typed-handle class. Each body is the
+/// uniform `drop(Box::from_raw(ptr as *mut T))`; the inner `T`'s own `Drop`
+/// runs (e.g. `Publisher` network-undeclare) with no special casing.
 ///
 /// The symbol follows the documented scheme
 /// `Java_<package_underscores>_<class_short>_<mangle_fun("freePtr")>`,
@@ -432,8 +428,7 @@ pub(crate) fn build_handle_destructor_items(
     let free_ptr = ext.mangle_fun("freePtr");
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
-        let Some(opaque) = &cfg.opaque else { continue };
-        if opaque.suppress_kotlin_code {
+        if cfg.opaque.is_none() {
             continue;
         }
         // Skip handles the (feature-aware) scan never references — their
@@ -838,24 +833,21 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             let key = TypeKey::from_type(&source);
             // A `data_class` is a registered type that is neither an opaque
             // handle, an enum, nor a value blob.
-            let is_data_class = self
-                .types
-                .get(&key)
-                .map(|c| {
-                    c.kotlin_name.is_some()
-                        && c.opaque.is_none()
-                        && c.enum_cfg.is_none()
-                        && !c.value_blob
-                })
-                .unwrap_or(false);
+            let is_data_class = matches!(
+                self.type_kind(registry, &source),
+                TypeKind::DataStruct { cfg: Some(c), .. } if c.kotlin_name.is_some()
+            );
             if !is_data_class {
                 continue;
             }
-            if let Some(leaves) =
-                crate::api::lang::jnigen::jni::synth_value_struct_leaves(
-                    self, registry, item_struct, &[], "", 0,
-                )
-            {
+            if let Some(leaves) = crate::api::lang::jnigen::jni::synth_value_struct_leaves(
+                self,
+                registry,
+                item_struct,
+                &[],
+                "",
+                0,
+            ) {
                 if !leaves.is_empty() {
                     out.push(crate::api::core::unfold::ValueDecon {
                         key,
@@ -877,10 +869,7 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
     /// builtin with a JObject-shaped output wire (e.g. String). Multi-field
     /// `data_class` elements are excluded — they go through
     /// [`Self::value_struct_decons`].
-    fn leaf_vec_fold_elements(
-        &self,
-        registry: &Registry<KotlinMeta>,
-    ) -> Vec<syn::Type> {
+    fn leaf_vec_fold_elements(&self, registry: &Registry<KotlinMeta>) -> Vec<syn::Type> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
         let mut consider = |bare: syn::Type| {
@@ -899,7 +888,9 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             }
             // `impl Fn(&[T])` / `impl Fn([T])` callback arg.
             for input in &item_fn.sig.inputs {
-                let syn::FnArg::Typed(pt) = input else { continue };
+                let syn::FnArg::Typed(pt) = input else {
+                    continue;
+                };
                 let Some(args) = crate::api::core::registry::extract_fn_trait_args(&pt.ty) else {
                     continue;
                 };
@@ -964,13 +955,19 @@ impl<S: JniGenState> Prebindgen for JniGen<S> {
             .collect()
     }
 
-    /// Every type registered via `.ptr_class`,
-    /// `.data_class`, or `.enum_class` — anything in
-    /// the adapter's type map. These are the only structs/enums the
-    /// per-item emitter walks; bodies of undeclared types are
-    /// skipped.
+    /// Every type registered via one of the four **class declarators**
+    /// (`.ptr_class` / `.enum_class` / `.data_class` / `.value_class`).
+    /// These are the only structs/enums the per-item emitter walks, and the
+    /// scan requires them in BOTH directions (their converters always resolve
+    /// both ways). Wrapper-only registrations are deliberately excluded: a
+    /// wrapper type is required per **usage** direction, so an output-only
+    /// wrapper needs no input twin.
     fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.types.keys().cloned().collect()
+        self.types
+            .iter()
+            .filter(|(_, c)| c.class_decl)
+            .map(|(k, _)| k.clone())
+            .collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by

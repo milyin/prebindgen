@@ -107,12 +107,12 @@ Add the source FFI library to both dependencies and build-dependencies, and driv
 # example-cbindgen/Cargo.toml
 [dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.4"
+prebindgen = "0.5"
 konst = "0.3"      # the generated file emits a konst feature guard
 
 [build-dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.4"
+prebindgen = "0.5"
 cbindgen = "0.29"
 syn = { version = "2", features = ["full"] }
 ```
@@ -161,6 +161,8 @@ See example projects in the [examples directory](https://github.com/milyin/prebi
 
 - **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
 - **example-cbindgen**: Language-specific binding using `lang::Cbindgen` + cbindgen for C headers
+- **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
+- **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `lang::JniGen` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
 
 ## Documentation
 

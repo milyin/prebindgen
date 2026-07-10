@@ -24,8 +24,23 @@
 //! `examples/perftest-bench.sh` builds, runs, and tabulates them into one comparison
 //! (run `examples/perftest-bench.sh --quick` for a fast smoke).
 
-use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
+// The FFI surface is deliberately shaped for the generator, not for idiomatic
+// Rust: `&String` is an opaque-handle borrow (not a slice) and the boxed
+// callback types mirror the C closure structs. Item-level allows would be
+// captured into the `#[prebindgen]` records and drift the committed golden
+// bindings, so silence these lints crate-wide instead.
+#![allow(clippy::ptr_arg, clippy::type_complexity)]
+
 use std::mem::MaybeUninit;
+
+use prebindgen_proc_macro::{features, prebindgen, prebindgen_out_dir};
+
+/// Extra `#[prebindgen]` items used **only** to exercise language-binding
+/// generator features (see [`ext`]); not used by the `perftest-*` benchmarks.
+/// Re-exported at the crate root so one `source_module = perftest_flat` reaches
+/// both the perf surface and the coverage surface.
+pub mod ext;
+pub use ext::*;
 
 /// Path to the directory where the `#[prebindgen]` macro records this crate's FFI
 /// surface; read by consumers via `prebindgen::Source::new`.
@@ -260,9 +275,12 @@ pub fn string_len(s: &String) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
 
     fn payload(id: i64, label: Option<&str>) -> Payload {
         Payload {
@@ -341,7 +359,10 @@ mod tests {
         assert_eq!(count.load(Ordering::Relaxed), 1);
 
         // Slice of 3 → fires three more times.
-        storage_put_slice(&mut s, &[payload(1, None), payload(2, None), payload(3, None)]);
+        storage_put_slice(
+            &mut s,
+            &[payload(1, None), payload(2, None), payload(3, None)],
+        );
         storage_callback(&s, &handler);
         assert_eq!(count.load(Ordering::Relaxed), 4);
     }
@@ -355,11 +376,17 @@ mod tests {
         let (c, sm) = (calls.clone(), sum.clone());
         let handler = payload_vec_handler_new(move |payloads| {
             c.fetch_add(1, Ordering::Relaxed);
-            sm.fetch_add(payloads.iter().map(|p| p.id as usize).sum::<usize>(), Ordering::Relaxed);
+            sm.fetch_add(
+                payloads.iter().map(|p| p.id as usize).sum::<usize>(),
+                Ordering::Relaxed,
+            );
         });
 
         let mut s = storage_new();
-        storage_put_slice(&mut s, &[payload(10, None), payload(20, Some("x")), payload(30, None)]);
+        storage_put_slice(
+            &mut s,
+            &[payload(10, None), payload(20, Some("x")), payload(30, None)],
+        );
         storage_callback_vec(&s, &handler);
         assert_eq!(calls.load(Ordering::Relaxed), 1); // one call, whole batch
         assert_eq!(sum.load(Ordering::Relaxed), 60); // 10 + 20 + 30

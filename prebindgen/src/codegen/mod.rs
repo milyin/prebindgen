@@ -39,6 +39,5 @@ impl CfgExprRules {
 
 pub(crate) mod cfg_expr;
 pub(crate) mod process_features;
-pub(crate) mod replace_types;
 #[cfg(test)]
 pub(crate) mod tests;

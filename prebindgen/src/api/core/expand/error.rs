@@ -12,12 +12,6 @@ pub enum ExpandError {
         param: syn::Ident,
         target: String,
     },
-    AmbiguousConstructor {
-        func: syn::Ident,
-        param: syn::Ident,
-        target: String,
-        candidates: Vec<String>,
-    },
     TargetMismatch {
         ctor: String,
         produces: String,
@@ -28,8 +22,8 @@ pub enum ExpandError {
         param: syn::Ident,
         reason: &'static str,
     },
-    /// `.construct(param)` (explicit) targeted a `.fun_accessor` — read
-    /// accessors are never parameter-composed.
+    /// An explicit per-fn input flatten targeted a read accessor — accessors
+    /// are never parameter-composed.
     ConstructOnAccessor {
         func: syn::Ident,
     },
@@ -48,15 +42,13 @@ pub enum ExpandError {
 impl std::fmt::Display for ExpandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExpandError::UnknownFunction(name) => write!(
-                f,
-                "expand: function `{}` is not a #[prebindgen] item",
-                name
-            ),
+            ExpandError::UnknownFunction(name) => {
+                write!(f, "expand: function `{}` is not a #[prebindgen] item", name)
+            }
             ExpandError::ConstructOnAccessor { func } => write!(
                 f,
-                "expand: `.construct` on accessor fn `{}` — a `.fun_accessor` is never \
-                 parameter-composed (remove the `.construct`, or declare it as `.fun`)",
+                "expand: input flatten on accessor fn `{}` — an accessor is never \
+                 parameter-composed (remove the override, or declare it as `.fun`)",
                 func
             ),
             ExpandError::InputCycle { ty } => write!(
@@ -88,19 +80,6 @@ impl std::fmt::Display for ExpandError {
                 f,
                 "expand: no constructor registered for `{}` (parameter `{}` of `{}`)",
                 target, param, func
-            ),
-            ExpandError::AmbiguousConstructor {
-                func,
-                param,
-                target,
-                candidates,
-            } => write!(
-                f,
-                "expand: multiple independent constructors for `{}` (parameter `{}` of `{}`): {} — disambiguate with `.expand_with`",
-                target,
-                param,
-                func,
-                candidates.join(", ")
             ),
             ExpandError::TargetMismatch {
                 ctor,

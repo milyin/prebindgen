@@ -496,7 +496,10 @@ impl Cbindgen {
     /// identical counterpart, e.g. `payload_t`). Drives the two-component
     /// `(*const c_elem_wire, size_t)` lowering of the closure `call` param in
     /// `prereq_callback_structs` / `dispatch_fn_input`. `None` for non-slice args.
-    pub(super) fn callback_slice_elem_wire(&self, ty: &syn::Type) -> Option<(syn::Type, syn::Type)> {
+    pub(super) fn callback_slice_elem_wire(
+        &self,
+        ty: &syn::Type,
+    ) -> Option<(syn::Type, syn::Type)> {
         if let Some(elem) = self.value_opaque_slice_elem(ty) {
             let wire = self
                 .value_opaque_ty(&elem)

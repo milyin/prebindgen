@@ -22,7 +22,7 @@ toml = { workspace = true }
 # can redirect it to the consumer's own in-workspace copy — which is how this
 # crate learns the *destination* project's root. Within this workspace the
 # top-level `[patch.crates-io]` supplies the local copy.
-prebindgen-project-root = "0.4"
+prebindgen-project-root = "0.5"
 anyhow = "1"
 
 [dev-dependencies]

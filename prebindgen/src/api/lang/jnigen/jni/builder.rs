@@ -63,6 +63,7 @@ impl JniGen<Root> {
                 deconstructors: crate::api::core::unfold::Deconstructors::default(),
                 class_members: HashMap::new(),
                 jni_native_init: None,
+                declarations_started: false,
             },
             state: Root,
         };
@@ -99,10 +100,27 @@ impl<S> JniGen<S> {
     /// `"io.zenoh.jni"`). All derived forms are recomputed.
     ///
     /// Use [`Self::package`] for generated subpackages below this base.
+    /// Must be set BEFORE the first type / function / wrapper declaration —
+    /// FQNs are derived at declaration time (see
+    /// [`Self::assert_before_declarations`]).
     pub fn package_prefix(mut self, p: impl Into<String>) -> Self {
+        self.assert_before_declarations("package_prefix");
         self.package = p.into().trim_matches('.').trim_matches('/').to_string();
         self.recompute_derived();
         self
+    }
+
+    /// Panic when an order-sensitive global setting (`package_prefix`, the
+    /// `kotlin_*_name_mangle` closures) is configured after a declaration:
+    /// FQNs / mangled names are baked into each declaration as it is made,
+    /// so a late change would silently mis-name everything already declared.
+    fn assert_before_declarations(&self, what: &str) {
+        assert!(
+            !self.declarations_started,
+            "JniGen::{what} must be configured before the first type / function / \
+             wrapper declaration — names are derived at declaration time, so \
+             setting it later would silently mis-name earlier declarations"
+        );
     }
 
     /// Disable the per-call handle-lock scaffold.
@@ -132,6 +150,7 @@ impl<S> JniGen<S> {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
+        self.assert_before_declarations("kotlin_harness_name_mangle");
         self.kotlin_harness_name_mangle = Some(Arc::new(f));
         self.recompute_derived();
         self
@@ -145,6 +164,7 @@ impl<S> JniGen<S> {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
+        self.assert_before_declarations("kotlin_fun_name_mangle");
         self.kotlin_fun_name_mangle = Some(Arc::new(f));
         self
     }
@@ -155,6 +175,7 @@ impl<S> JniGen<S> {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
+        self.assert_before_declarations("kotlin_ptr_class_name_mangle");
         self.kotlin_ptr_class_name_mangle = Some(Arc::new(f));
         self
     }
@@ -165,6 +186,7 @@ impl<S> JniGen<S> {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
+        self.assert_before_declarations("kotlin_data_class_name_mangle");
         self.kotlin_data_class_name_mangle = Some(Arc::new(f));
         self
     }
@@ -175,6 +197,7 @@ impl<S> JniGen<S> {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
+        self.assert_before_declarations("kotlin_enum_name_mangle");
         self.kotlin_enum_name_mangle = Some(Arc::new(f));
         self
     }
@@ -189,6 +212,7 @@ impl<S> JniGen<S> {
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
+        self.assert_before_declarations("kotlin_wrapper_name_mangle");
         self.kotlin_wrapper_name_mangle = Some(Arc::new(f));
         self
     }
@@ -208,8 +232,8 @@ impl<S> JniGen<S> {
     /// `"a.b"`; each call overwrites the previous active subpackage.
     /// To nest, pass a dotted path: `.package("a.b")`.
     ///
-    /// Passing an empty string clears the active subpackage (classes /
-    /// functions revert to the base `<package>`).
+    /// Passing an empty string clears the active subpackage: subsequent class
+    /// AND function declarations land in the base `<package>`.
     pub fn package(mut self, subpackage: impl Into<String>) -> JniGen<Package> {
         let sub = subpackage
             .into()
@@ -338,16 +362,16 @@ impl<S: TypeDeclState> JniGen<S> {
     /// Declare a typed Kotlin handle class backed by an opaque Rust
     /// type. Configures: jlong wire for both input and output,
     /// `Box::into_raw`/`Box::from_raw` lifecycle, the `instanceof`
-    /// dispatch class, and the Kotlin typed-handle class FQN. By
-    /// default a `.kt` shell is auto-emitted — chain
-    /// [`Self::suppress_kotlin_code`] to keep the file hand-maintained,
-    /// or chain `.flatten_input()` / `.flatten_output()` to define its
-    /// default flatten shape.
+    /// dispatch class, and the Kotlin typed-handle class FQN. A `.kt`
+    /// shell is auto-emitted; chain `.flatten_input()` /
+    /// `.flatten_output()` to define its default flatten shape.
     pub fn ptr_class(mut self, rust_type: syn::Type) -> JniGen<PtrClass> {
+        self.declarations_started = true;
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
         let fqn = self.resolve_class_fqn(&self.mangle_ptr_class(&short));
         let entry = self.types.entry(key.clone()).or_default();
+        entry.class_decl = true;
         entry.opaque = Some(OpaqueConfig::default());
         // `kotlin_name` holds the typed-handle FQN for FQN-consumers
         // (typed-handle class emission, `instanceof` dispatch, return-
@@ -366,20 +390,21 @@ impl<S: TypeDeclState> JniGen<S> {
 
 impl<S: PackageState> JniGen<S> {
     /// Declare a `#[prebindgen]` function as a free-standing package wrapper
-    /// under the currently-active [`Self::package`] subpackage context. If a
-    /// class context is also live, calling `fun` clears it — the idea
-    /// being that "leak class context to package level" makes the chain
-    /// unambiguous after one fn-level declaration.
+    /// under the currently-active [`Self::package`] subpackage context — or in
+    /// the **base** package when no subpackage is active (after
+    /// `.package("")`, or before any `.package(...)` call), mirroring class
+    /// declarations. If a class context is live, calling `fun` clears it —
+    /// the idea being that "leak class context to package level" makes the
+    /// chain unambiguous after one fn-level declaration.
     pub fn fun(self, ident: syn::Ident) -> JniGen<Function> {
         self.push_fun(MethodEntry::new(ident))
     }
 
-    /// Shared body of [`Self::fun`].
+    /// Shared body of [`Self::fun`]. An empty subpackage key = the base
+    /// package.
     fn push_fun(mut self, entry: MethodEntry) -> JniGen<Function> {
-        let sub = self
-            .active_subpackage
-            .clone()
-            .expect("JniGen::fun must be chained inside a `package(...)` context");
+        self.declarations_started = true;
+        let sub = self.active_subpackage.clone().unwrap_or_default();
         let pkg = self.packages.entry(sub.clone()).or_default();
         let idx = pkg.functions.len();
         pkg.functions.push(entry);
@@ -574,37 +599,6 @@ impl JniGen<Function> {
     }
 }
 
-impl JniGen<PtrClass> {
-    /// Opt out of Kotlin typed-handle class emission for this
-    /// [`Self::ptr_class`] declaration — the `.kt` file is assumed to be
-    /// hand-written.
-    pub fn suppress_kotlin_code(mut self) -> Self {
-        let key = self.state.key.clone();
-        let entry = self.types.get_mut(&key).expect("type entry vanished");
-        let opaque = entry
-            .opaque
-            .as_mut()
-            .expect("ptr_class state has no opaque config");
-        opaque.suppress_kotlin_code = true;
-        self
-    }
-}
-
-impl JniGen<EnumClass> {
-    /// Opt out of Kotlin enum class emission for the most recent
-    /// [`Self::enum_class`] declaration.
-    pub fn suppress_kotlin_code(mut self) -> Self {
-        let key = self.state.key.clone();
-        let entry = self.types.get_mut(&key).expect("type entry vanished");
-        let enum_cfg = entry
-            .enum_cfg
-            .as_mut()
-            .expect("enum_class state has no enum config");
-        enum_cfg.suppress_kotlin_code = true;
-        self
-    }
-}
-
 impl<S> JniGen<S> {
     /// Whether `ty` was registered via [`Self::enum_class`] — used by
     /// the Kotlin wrapper generator to decide if a parameter needs a
@@ -629,11 +623,11 @@ impl<S: TypeDeclState> JniGen<S> {
     /// `TryFrom<i32>` decode rely on the discriminant values matching the
     /// jint wire.
     ///
-    /// By default a `.kt` file is auto-emitted under [`Self::package`]; chain
-    /// [`Self::suppress_kotlin_code`] to keep the file hand-maintained.
-    /// The class name passes through
-    /// [`Self::kotlin_enum_name_mangle`] (default = Rust short name).
+    /// A `.kt` file is auto-emitted under [`Self::package`]; the class name
+    /// passes through [`Self::kotlin_enum_name_mangle`] (default = Rust
+    /// short name).
     pub fn enum_class(mut self, rust_type: syn::Type) -> JniGen<EnumClass> {
+        self.declarations_started = true;
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
         let fqn = self.resolve_class_fqn(&self.mangle_enum(&short));
@@ -645,6 +639,7 @@ impl<S: TypeDeclState> JniGen<S> {
              not both",
             short
         );
+        entry.class_decl = true;
         entry.enum_cfg = Some(EnumConfig::default());
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
@@ -660,10 +655,12 @@ impl<S: TypeDeclState> JniGen<S> {
     /// name, generics / lifetimes stripped). Only affects Kotlin
     /// emission — no Rust-side converter override.
     pub fn data_class(mut self, rust_type: syn::Type) -> JniGen<TypeMeta> {
+        self.declarations_started = true;
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
         let fqn = self.resolve_class_fqn(&self.mangle_data_class(&short));
         let entry = self.types.entry(key.clone()).or_default();
+        entry.class_decl = true;
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
         self.into_state(TypeMeta {
@@ -687,6 +684,7 @@ impl<S: TypeDeclState> JniGen<S> {
     /// in-process, exactly like an opaque handle pointer. Mutually exclusive
     /// with `ptr_class` / `enum_class`.
     pub fn value_class(mut self, rust_type: syn::Type) -> JniGen<TypeMeta> {
+        self.declarations_started = true;
         let key = TypeKey::from_type(&rust_type);
         let short = rust_short_name(&key);
         // Typed Kotlin FQN for the emitted `@JvmInline value class` — the same
@@ -697,6 +695,7 @@ impl<S: TypeDeclState> JniGen<S> {
         // positions render the value class.
         let fqn = self.resolve_class_fqn(&self.mangle_data_class(&short));
         let entry = self.types.entry(key.clone()).or_default();
+        entry.class_decl = true;
         entry.value_blob = true;
         entry.kotlin_name = Some(fqn.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), fqn));
@@ -707,20 +706,51 @@ impl<S: TypeDeclState> JniGen<S> {
     }
 }
 
-impl<S: TypeKeyState> JniGen<S> {
+impl JniGen<TypeMeta> {
     /// Stamp a verbatim Kotlin type expression (e.g. `"List<ByteArray>"`)
-    /// onto the entry registered by the most recent type-config builder.
-    /// Use this when the Kotlin type is not a class FQN (generics,
-    /// primitives, container types). For class names, the per-kind
-    /// `kotlin_*_name_mangle` closures (configured on [`JniGen`]) own
-    /// derivation — `kotlin_type` is the escape hatch for verbatim
-    /// expressions that don't map onto any one element kind.
+    /// onto the entry registered by the most recent `data_class` /
+    /// `value_class` / rank-0 wrapper declaration. Use this when the Kotlin
+    /// type is not a class FQN (generics, primitives, container types). For
+    /// class names, the per-kind `kotlin_*_name_mangle` closures (configured
+    /// on [`JniGen`]) own derivation — `kotlin_type` is the escape hatch for
+    /// verbatim expressions that don't map onto any one element kind.
+    /// Deliberately NOT available on `ptr_class` / `enum_class` states: their
+    /// registered FQN feeds typed-handle emission and `instanceof` dispatch,
+    /// which a verbatim expression would corrupt.
     pub fn kotlin_type(mut self, kotlin_expr: impl Into<String>) -> Self {
         let key = self.state.type_key().clone();
         let expr = kotlin_expr.into();
         let entry = self.types.get_mut(&key).expect("meta entry vanished");
         entry.kotlin_name = Some(expr.clone());
         self.kotlin_type_fqns.push((key.as_str().to_string(), expr));
+        self
+    }
+}
+
+impl<S: TypeKeyState> JniGen<S> {
+    /// Override the Kotlin **class name** for the most recent type declaration
+    /// (`ptr_class` / `enum_class` / `data_class` / `value_class` / rank-0
+    /// wrapper) — the per-declaration dual of [`JniGen::name`] on functions.
+    /// `kotlin_name` is a **relative** class name (no dots; the FQN is derived
+    /// from the active [`JniGen::package`] context, exactly like the default
+    /// name) and is used **literally** — the per-kind `kotlin_*_name_mangle`
+    /// closures do not apply to it.
+    pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
+        let key = self.state.type_key().clone();
+        let fqn = self.resolve_class_fqn(&kotlin_name.into());
+        let entry = self.types.get_mut(&key).expect("type entry vanished");
+        entry.kotlin_name = Some(fqn.clone());
+        // Replace the pair the declaration pushed, so FQN consumers reading
+        // the flat view see exactly one (renamed) row for this type.
+        match self
+            .kotlin_type_fqns
+            .iter_mut()
+            .rev()
+            .find(|(k, _)| k == key.as_str())
+        {
+            Some(pair) => pair.1 = fqn,
+            None => self.kotlin_type_fqns.push((key.as_str().to_string(), fqn)),
+        }
         self
     }
 
@@ -803,7 +833,9 @@ impl<S> JniGen<S> {
     {
         let key = TypeKey::from_type(&pattern);
         let rank = B::rank();
+        Self::reject_builtin_wrapper_pattern(&key, rank);
         let mut s = self;
+        s.declarations_started = true;
         s.input_wrappers[rank].insert(key.clone(), builder.into_wrapper_fn());
         let next = B::NextState::from_wrapper(key.clone());
         s.note_wrapper_registration(key, rank);
@@ -823,11 +855,33 @@ impl<S> JniGen<S> {
     {
         let key = TypeKey::from_type(&pattern);
         let rank = B::rank();
+        Self::reject_builtin_wrapper_pattern(&key, rank);
         let mut s = self;
+        s.declarations_started = true;
         s.output_wrappers[rank].insert(key.clone(), builder.into_wrapper_fn());
         let next = B::NextState::from_wrapper(key.clone());
         s.note_wrapper_registration(key, rank);
         s.into_state(next)
+    }
+
+    /// Reject a rank-0 wrapper on a Rust **builtin** type: the generated
+    /// converter qualifies the pattern with the `source_module`
+    /// (`perftest_flat::usize`), which does not compile. Wrap the builtin in
+    /// a source-crate newtype (like `Millis(u64)`) instead. Known limitation
+    /// found via `examples/covertest-kotlin` (2026-07-03).
+    fn reject_builtin_wrapper_pattern(key: &TypeKey, rank: usize) {
+        const BUILTINS: &[&str] = &[
+            "usize", "isize", "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
+            "f32", "f64", "bool", "char", "str",
+        ];
+        assert!(
+            !(rank == 0 && BUILTINS.contains(&key.as_str())),
+            "JniGen wrapper on builtin `{}`: rank-0 wrappers must target a \
+             source-crate type (the generated converter qualifies the pattern \
+             with the source module, which is invalid for builtins) — wrap the \
+             builtin in a newtype instead",
+            key.as_str()
+        );
     }
 
     /// Shared post-registration bookkeeping for wrapper inserts. Rank-0
@@ -885,6 +939,7 @@ impl<S> JniGen<S> {
     ///   value-inspecting stage `ty → outer` (built by-value via
     ///   [`Self::build_output_fn`]) prepended to the inner chain. Defer
     ///   (`None`) if the inner converter isn't resolved yet.
+    ///
     /// Structurally match `ty` against every registered **input** wrapper
     /// pattern, most-specific-first (fewest wildcards win, e.g.
     /// `Result<_, ConcreteErr>` over `Result<_, _>`), and build the first hit.
