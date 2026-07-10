@@ -747,6 +747,16 @@ impl Cbindgen {
 impl Prebindgen for Cbindgen {
     type Metadata = ();
 
+    // Consts have no declaration mechanism here (`declared_consts` stays
+    // `None`), so every indexed const re-emits through the default
+    // `on_const` — a path-alias against this source module, keeping consts
+    // with non-portable initializers valid in the generated file. (cbindgen
+    // cannot evaluate a path initializer, so aliased consts don't surface
+    // as `#define`s in the C header.)
+    fn source_module(&self) -> Option<&syn::Path> {
+        self.source_module.as_ref()
+    }
+
     // ── Structural type resolution ──────────────────────────────────────
     // The adapter peels `ty` itself: a rank-0 terminal category, else a
     // wrapper shape (`Option<_>`, `&`/`&mut`/`&[_]`/`&str`). See `in_wrappers`

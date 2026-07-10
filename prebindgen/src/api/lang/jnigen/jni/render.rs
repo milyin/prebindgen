@@ -758,6 +758,109 @@ pub(crate) fn render_wrapper_fn(
     Some(fun.body(body))
 }
 
+/// Render one declared const (see `ConstDecl`): a **private** nullary helper
+/// — the standard wrapper fn over the synthetic getter signature
+/// ([`const_getter_fn`]), reused verbatim so the const's type crosses through
+/// the ordinary output machinery — plus the public eagerly-initialized `val`
+/// that calls it once with a throwing `JniErrorHandler` (dead code for
+/// infallible converts; a binding-layer failure surfaces as
+/// `IllegalStateException` via `error(...)`).
+pub(crate) fn render_const_val(
+    ext: &JniGen,
+    c: &syn::ItemConst,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    kotlin_name_override: Option<&str>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    let getter = const_getter_fn(c);
+    let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
+    let val_name = kotlin_name_override
+        .map(str::to_string)
+        .unwrap_or_else(|| c.ident.to_string());
+    let kdoc = format!(
+        "Mirrors the Rust `#[prebindgen]` const `{}` (read once through the \
+         generated JNI getter).",
+        c.ident
+    );
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
+}
+
+/// Render one function-backed constant (see `PackageDecl::constant_fun`):
+/// the declared nullary fn's ordinary wrapper demoted to a **private**
+/// helper, plus the public eagerly-initialized `val` holding its result —
+/// computed once, at package-file class-load, through the ordinary generated
+/// wrapper (one JNI call, exactly like a const getter).
+pub(crate) fn render_constant_fn_val(
+    ext: &JniGen,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    kotlin_name_override: Option<&str>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    let helper = render_wrapper_fn(ext, f, registry, imports, None, None)?;
+    let val_name = kotlin_name_override
+        .map(str::to_string)
+        .unwrap_or_else(|| f.sig.ident.to_string());
+    let kdoc = format!(
+        "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated once through the \
+         generated JNI wrapper).",
+        f.sig.ident
+    );
+    render_val_over_helper(ext, helper, val_name, kdoc, imports)
+}
+
+/// Render one expression-backed constant (see `PackageDecl::constant_expr`):
+/// a private nullary helper over the synthetic `const_get_*` getter (seeded
+/// from the val name), plus the public eagerly-initialized `val` — the value
+/// is the binding-defined expression, evaluated once at package-file
+/// class-load through the generated getter.
+pub(crate) fn render_const_expr_val(
+    ext: &JniGen,
+    decl: &crate::api::lang::jnigen::jni::decl::ConstExprDecl,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+    let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
+    let expr = decl.expr.to_token_stream();
+    let kdoc = format!(
+        "Binding-defined constant: `{expr}` (evaluated once through the \
+         generated JNI getter)."
+    );
+    render_val_over_helper(ext, helper, decl.kotlin_name.clone(), kdoc, imports)
+}
+
+/// Shared val-rendering core for both constant kinds (`ConstDecl` /
+/// `PackageDecl::constant_fun`): demote the rendered wrapper to a private
+/// helper and emit the public eagerly-initialized `val` that calls it once
+/// with a throwing `JniErrorHandler` (dead code for infallible converts; a
+/// binding-layer failure surfaces as `IllegalStateException` via
+/// `error(...)`).
+fn render_val_over_helper(
+    ext: &JniGen,
+    mut helper: kt::KtFun,
+    val_name: String,
+    kdoc: String,
+    imports: &mut BTreeSet<String>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    helper.vis = kt::Vis::Private;
+    let helper_name = helper.name.clone();
+    // A constant always carries a value type; a helper with no return would
+    // mean the type never resolved — skip like an unresolvable fn.
+    let val_ty = helper.ret.clone()?;
+    let spec = jni_error_handler_iface_spec(ext);
+    imports.insert(spec.fqn());
+    let init = format!(
+        "{helper_name}(JniErrorHandler {{ je -> error(je ?: \"const {val_name}: JNI getter failed\") }})"
+    );
+    let prop = kt::KtProperty::val(&val_name)
+        .ty(val_ty)
+        .vis(kt::Vis::Public)
+        .initializer(init)
+        .kdoc(kdoc);
+    Some((helper, prop))
+}
+
 /// The classified output side of a wrapper: return type, projection wrap,
 /// output-expansion (builder/fold) params, and the extra call-site args —
 /// everything the call-expression builder and the signature assembly must

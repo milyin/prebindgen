@@ -33,6 +33,6 @@ pub(crate) mod write;
 pub use self::{
     gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
-    prebindgen::{ConverterImpl, Prebindgen, Stage},
+    prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},
     registry::{Direction, Registry, ScanError, TypeEntry, TypeKey, WriteRustError},
 };

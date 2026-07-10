@@ -915,6 +915,12 @@ impl Prebindgen for JniGen {
             for m in &pkg.functions {
                 out.insert(m.rust_ident.clone());
             }
+            // Function-backed constants (`constant_fun`) are ordinary
+            // declared functions on the Rust/extern side; only their Kotlin
+            // surface differs (an eagerly-initialized top-level `val`).
+            for m in &pkg.constant_functions {
+                out.insert(m.rust_ident.clone());
+            }
         }
         // Class members (accessor/method/constructor) are declared via
         // `.accessor`/`.method`/`.constructor` (not `.fun`) but are still real
@@ -965,6 +971,37 @@ impl Prebindgen for JniGen {
             .filter(|(_, c)| c.class_decl)
             .map(|(k, _)| k.clone())
             .collect()
+    }
+
+    /// Union of every `.constant(...)` list across all
+    /// [`Self::package`] subpackage contexts. `Some` even when empty — JniGen
+    /// HAS a const declaration mechanism, so const emission is declared-only
+    /// and undeclared consts get the skip warning (see
+    /// [`Prebindgen::declared_consts`]).
+    /// The declared value types of every expression constant
+    /// (`PackageDecl::constant_expr`) — they have no `#[prebindgen]` item to
+    /// scan, so the resolver is told directly to produce their output
+    /// converters.
+    fn required_output_types(&self) -> Vec<syn::Type> {
+        self.packages
+            .values()
+            .flat_map(|p| p.constant_exprs.iter().map(|e| e.ty.clone()))
+            .collect()
+    }
+
+    fn declared_consts(&self) -> Option<std::collections::HashSet<syn::Ident>> {
+        let mut out = std::collections::HashSet::new();
+        for pkg in self.packages.values() {
+            for c in &pkg.constants {
+                out.insert(c.rust_ident.clone());
+            }
+        }
+        Some(out)
+    }
+
+    /// Consts acknowledged-but-unexposed via [`JniGen::ignore_const`].
+    fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
+        self.ignored_const_idents.clone()
     }
 
     /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
@@ -1029,6 +1066,28 @@ impl Prebindgen for JniGen {
                 ));
             }
         }
+        // Expression constants — one nullary JNI getter extern per
+        // `PackageDecl::constant_expr`, its value the binding-defined
+        // expression evaluated with `use <source_module>::*;` in scope (so
+        // it composes the source crate's items without qualification). The
+        // getter reuses the whole function-wrapper pipeline via the
+        // synthetic signature, exactly like a const-backed getter.
+        let source_module = &self.source_module;
+        for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
+            validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+            let expr = &decl.expr;
+            let callee: syn::Expr = syn::parse_quote!({
+                #[allow(unused_imports)]
+                use #source_module::*;
+                #expr
+            });
+            let wrapper =
+                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+            items.push(syn::parse2::<syn::Item>(wrapper).expect(
+                "constant_expr: generated getter wrapper is a single item by construction",
+            ));
+        }
         items
     }
 
@@ -1053,8 +1112,35 @@ impl Prebindgen for JniGen {
         TokenStream::new()
     }
 
-    fn on_const(&self, c: &syn::ItemConst, _registry: &Registry<KotlinMeta>) -> TokenStream {
-        c.to_token_stream()
+    fn source_module(&self) -> Option<&syn::Path> {
+        Some(&self.source_module)
+    }
+
+    /// Declared consts only reach here (write gating via
+    /// [`Prebindgen::declared_consts`]): re-emit the const as a path-alias
+    /// to its source-of-truth (initializer tokens are never copied — they
+    /// may reference source-crate internals) AND emit its nullary JNI getter
+    /// extern. The getter reuses the whole function-wrapper pipeline (so the
+    /// const's type flows through the ordinary output-converter machinery);
+    /// only the callee expression differs — a path to the const, not a call.
+    fn on_const(&self, c: &syn::ItemConst, registry: &Registry<KotlinMeta>) -> TokenStream {
+        // Unnamed infrastructure consts (`const _`, e.g. the injected
+        // `konst::assertc_eq!` feature guard) pass through verbatim — no
+        // getter, no Kotlin surface.
+        if c.ident == "_" {
+            return c.to_token_stream();
+        }
+        reject_handle_const(self, c);
+        let getter = const_getter_fn(c);
+        let const_ident = &c.ident;
+        let source_module = &self.source_module;
+        let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
+        let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+        let alias = crate::api::core::const_path_alias(c, source_module);
+        quote! {
+            #alias
+            #wrapper
+        }
     }
 
     fn dispatch_fn_input(

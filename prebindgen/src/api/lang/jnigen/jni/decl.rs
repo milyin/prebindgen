@@ -93,6 +93,31 @@ macro_rules! fun {
     };
 }
 
+/// Build a [`ConstDecl`] directly from a bare const ident:
+/// `constant!(MAX_LEN)` is `ConstDecl::new(prebindgen::ident!(MAX_LEN))`.
+#[macro_export]
+macro_rules! constant {
+    ($name:ident) => {
+        $crate::lang::ConstDecl::new($crate::ident!($name))
+    };
+}
+
+/// Build a [`ConstExprDecl`] in val-declaration syntax:
+/// `constant_expr!(BANNER: String = format!("{COVER_TAG}:{COVER_MAGIC}"))` is
+/// `ConstExprDecl::new("BANNER", <String>, <the expression>)`. The expression
+/// is evaluated inside the generated getter with `use <source_module>::*;`
+/// in scope.
+#[macro_export]
+macro_rules! constant_expr {
+    ($name:ident : $ty:ty = $expr:expr) => {
+        $crate::lang::ConstExprDecl::new(
+            stringify!($name),
+            ::syn::parse_quote!($ty),
+            ::syn::parse_quote!($expr),
+        )
+    };
+}
+
 /// Build a [`PackageDecl`] directly: `package!("model")` is
 /// `PackageDecl::new("model")`; `package!()` (no args) is the base package
 /// (`PackageDecl::new("")`).
@@ -562,20 +587,91 @@ impl FunctionDecl {
     }
 }
 
+/// Declares one `#[prebindgen]` **const** for emission: on the Rust side a
+/// nullary JNI getter extern is generated (the const's type goes through the
+/// ordinary output-converter machinery, exactly like a function return); on
+/// the Kotlin side the const surfaces as an eagerly-initialized top-level
+/// `val` in its package's `.kt` file.
+///
+/// Build one with [`constant!`](crate::constant) and add it to a
+/// [`PackageDecl`] via [`PackageDecl::constant`]. Opaque-handle-typed consts
+/// are rejected (a shared closeable `val` is semantically wrong) — expose a
+/// factory function instead.
+pub struct ConstDecl {
+    pub(crate) rust_ident: syn::Ident,
+    pub(crate) kotlin_name_override: Option<String>,
+}
+
+impl ConstDecl {
+    pub fn new(rust_ident: syn::Ident) -> Self {
+        Self {
+            rust_ident,
+            kotlin_name_override: None,
+        }
+    }
+
+    /// Set the Kotlin-side name. Default: the Rust const ident verbatim
+    /// (`MAX_LEN` → `val MAX_LEN` — SCREAMING_SNAKE is the Kotlin constant
+    /// convention too).
+    pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
+        self.kotlin_name_override = Some(kotlin_name.into());
+        self
+    }
+}
+
+/// Declares one **expression-backed constant**: an arbitrary binding-defined
+/// Rust expression, evaluated once inside a generated nullary JNI getter and
+/// surfaced as an eagerly-initialized top-level Kotlin `val`. The expression
+/// runs with `use <source_module>::*;` in scope, so it composes the source
+/// crate's `#[prebindgen]` items freely without the source crate having to
+/// export a dedicated accessor per constant — e.g.
+/// `encoding_to_string(encoding_const_text_plain())`.
+///
+/// Build one with [`constant_expr!`](crate::constant_expr) (literal form) or
+/// [`ConstExprDecl::new`] (runtime form, for declaration loops) and add it to
+/// a [`PackageDecl`] via [`PackageDecl::constant_expr`]. The value type is
+/// declared explicitly and flows through the ordinary output-converter
+/// machinery; opaque-handle and `Result` types are rejected like every other
+/// constant kind.
+#[derive(Clone)]
+pub struct ConstExprDecl {
+    pub(crate) kotlin_name: String,
+    pub(crate) ty: syn::Type,
+    pub(crate) expr: syn::Expr,
+}
+
+impl ConstExprDecl {
+    /// `kotlin_name` is the top-level `val` name (also the seed of the
+    /// extern symbol, so it must be unique among the binding's constants);
+    /// `ty` is the Rust value type the expression yields; `expr` is the
+    /// initializer expression, resolved against the source module.
+    pub fn new(kotlin_name: impl Into<String>, ty: syn::Type, expr: syn::Expr) -> Self {
+        Self {
+            kotlin_name: kotlin_name.into(),
+            ty,
+            expr,
+        }
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // PackageDecl — aggregates the package-scoped decls
 // ──────────────────────────────────────────────────────────────────────
 
-/// A batch of class and function declarations that land under one Kotlin
-/// subpackage. Build it with [`package!`](crate::package)
+/// A batch of class, function and const declarations that land under one
+/// Kotlin subpackage. Build it with [`package!`](crate::package)
 /// (`package!("session")`, or `package!()` for the base package), fill it
-/// with [`class`](Self::class) and [`fun`](Self::fun), and hand it to
+/// with [`class`](Self::class) / [`fun`](Self::fun) /
+/// [`constant`](Self::constant), and hand it to
 /// [`JniGen::package`]. Reopening the same subpackage across several
 /// `PackageDecl`s is fine — they merge.
 pub struct PackageDecl {
     pub(crate) name: String,
     pub(crate) classes: Vec<ClassDecl>,
     pub(crate) functions: Vec<FunctionDecl>,
+    pub(crate) constants: Vec<ConstDecl>,
+    pub(crate) constant_functions: Vec<FunctionDecl>,
+    pub(crate) constant_exprs: Vec<ConstExprDecl>,
 }
 
 impl PackageDecl {
@@ -590,6 +686,9 @@ impl PackageDecl {
             name,
             classes: Vec::new(),
             functions: Vec::new(),
+            constants: Vec::new(),
+            constant_functions: Vec::new(),
+            constant_exprs: Vec::new(),
         }
     }
 
@@ -606,6 +705,49 @@ impl PackageDecl {
     /// `.name(...)` or per-function overrides.
     pub fn fun(mut self, decl: FunctionDecl) -> Self {
         self.functions.push(decl);
+        self
+    }
+
+    /// Add a `#[prebindgen]` const to this package: a top-level Kotlin `val`
+    /// in the package file, initialized through a generated nullary JNI
+    /// getter. Take a bare name via [`constant!`](crate::constant), or a
+    /// customized [`ConstDecl`] when you need `.name(...)`.
+    pub fn constant(mut self, decl: ConstDecl) -> Self {
+        self.constants.push(decl);
+        self
+    }
+
+    /// Add a **function-backed constant** to this package: a **nullary**
+    /// `#[prebindgen]` fn whose result surfaces as an eagerly-initialized
+    /// top-level Kotlin `val` (computed once, at package-file class-load,
+    /// through the ordinary generated wrapper) instead of a callable `fun`.
+    /// Use it for constant values a Rust `const` cannot express — e.g. a
+    /// string only obtainable through a runtime `Display`.
+    ///
+    /// `.name(...)` sets the val name; the default is the fn ident verbatim
+    /// (you almost always want an explicit SCREAMING_SNAKE name). The same
+    /// restrictions as [`Self::constant`] apply to the return type
+    /// (opaque-handle results are rejected), the fn must take no parameters,
+    /// and flatten overrides are meaningless here — both are hard errors.
+    pub fn constant_fun(mut self, decl: FunctionDecl) -> Self {
+        assert!(
+            decl.input_overrides.is_empty() && decl.output_override.is_none(),
+            "constant_fun `{}`: flatten overrides don't apply to a constant — \
+             declare a plain `FunctionDecl` (optionally with `.name(...)`)",
+            decl.rust_ident
+        );
+        self.constant_functions.push(decl);
+        self
+    }
+
+    /// Add an **expression-backed constant** to this package: an arbitrary
+    /// binding-defined Rust expression evaluated once (at package-file
+    /// class-load) inside a generated nullary JNI getter, surfacing as an
+    /// eagerly-initialized top-level Kotlin `val`. See [`ConstExprDecl`];
+    /// build one with [`constant_expr!`](crate::constant_expr) or
+    /// [`ConstExprDecl::new`].
+    pub fn constant_expr(mut self, decl: ConstExprDecl) -> Self {
+        self.constant_exprs.push(decl);
         self
     }
 }
@@ -641,6 +783,10 @@ pub(crate) fn wrapper_value_ident() -> syn::Ident {
     syn::Ident::new("v", Span::call_site())
 }
 
+/// A [`ScalarTypeWrapperDecl`] conversion body: given the in-scope value
+/// ident, produce the conversion expression.
+pub(crate) type ScalarConvFn = Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>;
+
 /// Teaches the generator to carry one Rust type across the boundary as a
 /// **plain scalar** — e.g. a `Millis(u64)` newtype that should surface in
 /// Kotlin as a `Long`, converted with your own expressions each way, with no
@@ -663,8 +809,8 @@ pub struct ScalarTypeWrapperDecl {
     // re-parsed fresh at lookup time instead.
     pub(crate) wire: String,
     pub(crate) kotlin_type: String,
-    pub(crate) input: Option<Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>>,
-    pub(crate) output: Option<Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>>,
+    pub(crate) input: Option<ScalarConvFn>,
+    pub(crate) output: Option<ScalarConvFn>,
 }
 
 impl ScalarTypeWrapperDecl {
@@ -713,6 +859,10 @@ impl ScalarTypeWrapperDecl {
 /// error** the caller should see. Use [`infallible`](Self::infallible) when
 /// it always succeeds, or [`fallible`](Self::fallible) to route an `Err` to
 /// the caller's error handler (as the built-in `Result` unwrap does).
+// large_enum_variant: a transient codegen-time value immediately destructured
+// by `into_tuple`; boxing the `syn` payloads would only complicate the public
+// variant shape.
+#[allow(clippy::large_enum_variant)]
 pub enum WireBody {
     Infallible(syn::Type, syn::Expr),
     Fallible(syn::Type, syn::Type, syn::Expr),

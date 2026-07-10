@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+
+
 typedef struct payload_handler_t {
   uint8_t _private[0];
 } payload_handler_t;
@@ -47,6 +49,8 @@ typedef struct closure_payload_vec_t {
   void (*call)(const struct payload_t*, uintptr_t, void*);
   void (*drop)(void*);
 } closure_payload_vec_t;
+
+
 
 void perftest_free(void *p);
 

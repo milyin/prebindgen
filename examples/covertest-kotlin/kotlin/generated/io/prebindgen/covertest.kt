@@ -343,6 +343,46 @@ public fun stringNew(s: String, onError: JniErrorHandler<String>): String {
     return __ret
 }
 
+private fun constGetCoverMagic(onError: JniErrorHandler<Long>): Long {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constGetCoverMagic(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Mirrors the Rust `#[prebindgen]` const `COVER_MAGIC` (read once through the generated JNI getter). */
+public val COVER_MAGIC: Long = constGetCoverMagic(JniErrorHandler { je -> error(je ?: "const COVER_MAGIC: JNI getter failed") })
+
+private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constGetCoverTag(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read once through the generated JNI getter). */
+public val COVER_TAG: String = constGetCoverTag(JniErrorHandler { je -> error(je ?: "const COVER_TAG: JNI getter failed") })
+
+private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.coverTagRuntime(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated once through the generated JNI wrapper). */
+public val COVER_TAG_RUNTIME: String = coverTagRuntime(JniErrorHandler { je -> error(je ?: "const COVER_TAG_RUNTIME: JNI getter failed") })
+
+private fun constGetCoverBanner(onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constGetCoverBanner(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Binding-defined constant: `format ! ("{COVER_TAG}:{COVER_MAGIC:#x}")` (evaluated once through the generated JNI getter). */
+public val COVER_BANNER: String = constGetCoverBanner(JniErrorHandler { je -> error(je ?: "const COVER_BANNER: JNI getter failed") })
+
 internal object CovNative {
     init {
         io.prebindgen.covertest.NativeLibrary.ensureLoaded()
@@ -375,6 +415,7 @@ internal object CovNative {
         s1: Long,
         errorSink: Any,
     )
+    external fun coverTagRuntime(errorSink: Any): String
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
     external fun payloadLabelLen(
@@ -487,6 +528,9 @@ internal object CovNative {
     external fun summaryScaled(s: Long, factor: Double, errorSink: Any): Double
     external fun summaryTotal(s: Long, errorSink: Any): Double
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+    external fun constGetCoverMagic(errorSink: Any): Long
+    external fun constGetCoverTag(errorSink: Any): String
+    external fun constGetCoverBanner(errorSink: Any): String
     external fun payloadVecNew(cap: Int): Long
     external fun payloadVecPush(handle: Long, eId: Long, eSeq: Int, eValue: Double, eFlag: Boolean, eLabel: String?)
     external fun payloadVecFree(handle: Long)

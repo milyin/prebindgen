@@ -164,6 +164,24 @@ pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
     /// subpackage via [`JniGen::fun`].
     pub functions: Vec<MethodEntry>,
+    /// `#[prebindgen]` consts declared under this subpackage via
+    /// [`PackageDecl::constant`] — each surfaces as a top-level Kotlin `val`
+    /// initialized through a generated nullary JNI getter. `MethodEntry`
+    /// is reused as-is (rust ident + Kotlin-name override).
+    pub constants: Vec<MethodEntry>,
+    /// Function-backed constants declared via [`PackageDecl::constant_fun`]:
+    /// nullary `#[prebindgen]` fns whose result surfaces as a top-level
+    /// Kotlin `val` (eagerly initialized through the fn's ordinary generated
+    /// wrapper) instead of a callable `fun`. Rust-side emission and the
+    /// `JNINative` extern are the plain declared-function ones.
+    pub constant_functions: Vec<MethodEntry>,
+    /// Expression-backed constants declared via
+    /// [`PackageDecl::constant_expr`](super::jni::decl::PackageDecl::constant_expr):
+    /// binding-defined expressions evaluated once inside a generated nullary
+    /// getter (extern symbol seeded from the val name), surfacing as
+    /// top-level Kotlin `val`s. Stored as the full decl — there is no Rust
+    /// item behind them.
+    pub constant_exprs: Vec<super::jni::decl::ConstExprDecl>,
 }
 
 /// What kind of class member a [`ClassMember`] is.
@@ -363,6 +381,10 @@ pub struct JniGen {
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
     /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
+
+    /// `#[prebindgen]` consts the binding deliberately does NOT declare,
+    /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
+    pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
 
     /// Every function ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
     /// `.return_expand(...)` record (class- or

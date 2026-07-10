@@ -84,6 +84,16 @@ private fun payload(id: Long, seq: Int, value: Double, flag: Boolean, label: Str
 fun main() {
     println("covertest-kotlin: exercising every JniGen feature")
 
+    // ── consts: eagerly-initialized top-level vals — const-backed (generated
+    // nullary getters over Rust consts) and function-backed (constant_fun:
+    // the value comes from a nullary #[prebindgen] fn at class-load) ─────────
+    section("top-level const vals (const- and function-backed)") {
+        check(COVER_MAGIC == 0xC0FFEE.toLong())
+        check(COVER_TAG == "covertest")
+        check(COVER_TAG_RUNTIME == "covertest-runtime")
+        check(COVER_BANNER == "covertest:0xc0ffee")
+    }
+
     // ── data_class: fields cross as leaves, reassembled via fromParts ─────────
     section("data_class Payload") {
         val p = Payload(1L, 2, 3.5, true, "hello")
