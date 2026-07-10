@@ -91,6 +91,7 @@ fun main() {
         check(COVER_MAGIC == 0xC0FFEE.toLong())
         check(COVER_TAG == "covertest")
         check(COVER_TAG_RUNTIME == "covertest-runtime")
+        check(COVER_BANNER == "covertest:0xc0ffee")
     }
 
     // ── data_class: fields cross as leaves, reassembled via fromParts ─────────

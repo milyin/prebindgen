@@ -809,6 +809,27 @@ pub(crate) fn render_constant_fn_val(
     render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
+/// Render one expression-backed constant (see `PackageDecl::constant_expr`):
+/// a private nullary helper over the synthetic `const_get_*` getter (seeded
+/// from the val name), plus the public eagerly-initialized `val` — the value
+/// is the binding-defined expression, evaluated once at package-file
+/// class-load through the generated getter.
+pub(crate) fn render_const_expr_val(
+    ext: &JniGen,
+    decl: &crate::api::lang::jnigen::jni::decl::ConstExprDecl,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+) -> Option<(kt::KtFun, kt::KtProperty)> {
+    let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+    let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
+    let expr = decl.expr.to_token_stream();
+    let kdoc = format!(
+        "Binding-defined constant: `{expr}` (evaluated once through the \
+         generated JNI getter)."
+    );
+    render_val_over_helper(ext, helper, decl.kotlin_name.clone(), kdoc, imports)
+}
+
 /// Shared val-rendering core for both constant kinds (`ConstDecl` /
 /// `PackageDecl::constant_fun`): demote the rendered wrapper to a private
 /// helper and emit the public eagerly-initialized `val` that calls it once

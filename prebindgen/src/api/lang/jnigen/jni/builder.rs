@@ -178,6 +178,7 @@ impl JniGen {
             functions,
             constants,
             constant_functions,
+            constant_exprs,
         } = decl;
         self.packages.entry(name.clone()).or_default();
         for class in classes {
@@ -203,6 +204,13 @@ impl JniGen {
                 .or_default()
                 .constant_functions
                 .push(entry);
+        }
+        for e in constant_exprs {
+            self.packages
+                .entry(name.clone())
+                .or_default()
+                .constant_exprs
+                .push(e);
         }
         self
     }

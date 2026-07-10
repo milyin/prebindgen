@@ -39,19 +39,14 @@ pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
 /// `close()` is it?). Expose a factory function instead — the established
 /// idiom (e.g. zenoh's `encoding_const_*` companion factories).
 pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
-    reject_handle_constant_type(ext, &c.ty, "const", &c.ident);
+    reject_handle_constant_type(ext, &c.ty, "const", &c.ident.to_string());
 }
 
 /// The constant-value handle check shared by both constant kinds: peel
 /// `&`/`Option`/`Vec` layers off `ty` and reject if what remains is a
 /// declared opaque handle. `what`/`ident` shape the error message
 /// (`const MAX_LEN` / `constant fn encoding_const_x_str`).
-pub(crate) fn reject_handle_constant_type(
-    ext: &JniGen,
-    ty: &syn::Type,
-    what: &str,
-    ident: &syn::Ident,
-) {
+pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &str, name: &str) {
     let mut ty = ty.clone();
     loop {
         if let syn::Type::Reference(r) = &ty {
@@ -76,10 +71,9 @@ pub(crate) fn reject_handle_constant_type(
         .is_some();
     assert!(
         !is_handle,
-        "{what} `{}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
+        "{what} `{name}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \
          not supported. Expose a `#[prebindgen]` factory function returning the constant and \
          declare it as a companion constructor instead.",
-        ident,
         key.as_str()
     );
 }
@@ -105,8 +99,34 @@ pub(crate) fn validate_constant_fn(ext: &JniGen, f: &syn::ItemFn) {
              infallible (declare it with `.fun(...)` instead if it can fail)",
             f.sig.ident
         );
-        reject_handle_constant_type(ext, ty, "constant fn", &f.sig.ident);
+        reject_handle_constant_type(ext, ty, "constant fn", &f.sig.ident.to_string());
     }
+}
+
+/// The synthetic nullary getter signature an **expression constant**
+/// ([`ConstExprDecl`](crate::lang::ConstExprDecl)) is emitted through:
+/// `pub fn const_get_<val_name_lower>() -> <ty>` — the same convention as
+/// const-backed getters, so both sides derive the extern symbol from the one
+/// val name. The body is never used.
+pub(crate) fn const_expr_getter_fn(kotlin_name: &str, ty: &syn::Type) -> syn::ItemFn {
+    let ident = format_ident!("const_get_{}", kotlin_name.to_lowercase());
+    syn::parse_quote! {
+        pub fn #ident() -> #ty {
+            unimplemented!()
+        }
+    }
+}
+
+/// Validates an expression constant's declared value type (checked on both
+/// write paths): not a `Result` (a domain-fallible value is not a constant),
+/// not (peeled to) a declared opaque handle.
+pub(crate) fn validate_constant_expr(ext: &JniGen, kotlin_name: &str, ty: &syn::Type) {
+    assert!(
+        result_ok_type(ty).is_none(),
+        "constant expr `{kotlin_name}`: type is a `Result` — an expression constant must be \
+         infallible (declare a real function with `.fun(...)` instead if it can fail)"
+    );
+    reject_handle_constant_type(ext, ty, "constant expr", kotlin_name);
 }
 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:

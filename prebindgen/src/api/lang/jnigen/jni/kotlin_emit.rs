@@ -86,6 +86,7 @@ impl JniGen {
             if pkg_cfg.functions.is_empty()
                 && pkg_cfg.constants.is_empty()
                 && pkg_cfg.constant_functions.is_empty()
+                && pkg_cfg.constant_exprs.is_empty()
             {
                 continue;
             }
@@ -932,6 +933,17 @@ impl JniGen {
                 file = file.decl(helper).decl(prop);
             }
         }
+        // Expression constants: a private nullary helper over the synthetic
+        // getter + the public eagerly-initialized `val` (see
+        // `render_const_expr_val`). The value is a binding-defined expression
+        // evaluated Rust-side (`prerequisites`).
+        for decl in &pkg_cfg.constant_exprs {
+            validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
+            if let Some((helper, prop)) = render_const_expr_val(self, decl, registry, &mut imports)
+            {
+                file = file.decl(helper).decl(prop);
+            }
+        }
         // The wrapper bodies call the centralized Native object.
         if !self.package.is_empty() {
             imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
@@ -985,6 +997,21 @@ impl JniGen {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::api::lang::jnigen::jni::const_getter_fn(item_const);
+            if let Some(code) = render_extern_decl(self, &getter, registry, &mut imports) {
+                externs = externs.push(code);
+            }
+        }
+
+        // Expression constants: same synthetic const_get_* getter shape,
+        // seeded from the val name (no Rust item behind them).
+        let mut expr_decls: Vec<_> = self
+            .packages
+            .values()
+            .flat_map(|p| &p.constant_exprs)
+            .collect();
+        expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
+        for decl in expr_decls {
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
             if let Some(code) = render_extern_decl(self, &getter, registry, &mut imports) {
                 externs = externs.push(code);
             }

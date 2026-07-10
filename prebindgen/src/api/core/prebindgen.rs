@@ -297,6 +297,16 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Extra types the adapter requires in the **output** direction beyond
+    /// what scanning the declared items discovers — for adapter-synthesized
+    /// values that have no `#[prebindgen]` item to scan (e.g. the declared
+    /// value type of a binding-defined expression constant).
+    ///
+    /// Default: none.
+    fn required_output_types(&self) -> Vec<syn::Type> {
+        Vec::new()
+    }
+
     /// Canonical keys of types (structs / enums) the adapter claims for
     /// emission. Matched against `Registry::structs` and `Registry::enums`
     /// by bare-ident lookup. Anything not in this set is left in the

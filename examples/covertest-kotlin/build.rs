@@ -31,6 +31,7 @@
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `PackageDecl::constant` (`constant!`) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
 //! | `PackageDecl::constant_fun` | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
+//! | `PackageDecl::constant_expr` (`constant_expr!`) | `COVER_BANNER` = binding-defined `format!` expression |
 //! | `.param_expand_self(param)` alone   | `summary_total_raw` (raw handle param, overrides the class default) |
 //! | `.return_expand_self()` alone         | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.param_expand(param, …)` (+`_self`)| `storage_expect_summary` |
@@ -70,8 +71,8 @@
 //! emitting nothing.
 
 use prebindgen::{
-    constant, core::Registry, data_class, enum_class, fun, lang::JniGen, package, ptr_class,
-    scalar_type_wrapper, value_class,
+    constant, constant_expr, core::Registry, data_class, enum_class, fun, lang::JniGen, package,
+    ptr_class, scalar_type_wrapper, value_class,
 };
 use syn::parse_quote as pq;
 
@@ -176,6 +177,13 @@ fn main() {
                 // (`COVER_TAG_RUNTIME: String`) — the value comes from the
                 // fn at class-load, not from a Rust `const`.
                 .constant_fun(fun!(cover_tag_runtime).name("COVER_TAG_RUNTIME"))
+                // Expression-backed constant: an arbitrary binding-defined
+                // expression (composing source-crate items via
+                // `use perftest_flat::*;`) evaluated once at class-load —
+                // no dedicated accessor fn in the source crate.
+                .constant_expr(
+                    constant_expr!(COVER_BANNER: String = format!("{COVER_TAG}:{COVER_MAGIC:#x}")),
+                )
                 .class(
                     ptr_class!(Storage)
                         .fun(fun!(storage_len).name("len"))

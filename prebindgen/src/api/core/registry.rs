@@ -378,6 +378,10 @@ struct DeclaredItems {
     /// [`Prebindgen::declared_consts`].
     consts: Option<HashSet<syn::Ident>>,
     ignored_consts: HashSet<syn::Ident>,
+    /// Adapter-required extra output types (no `#[prebindgen]` item to
+    /// scan — e.g. expression-constant value types); see
+    /// [`Prebindgen::required_output_types`].
+    required_output_types: Vec<syn::Type>,
 }
 
 impl DeclaredItems {
@@ -394,6 +398,7 @@ impl DeclaredItems {
             ignored_types: adapter.ignored_types(),
             consts: adapter.declared_consts(),
             ignored_consts: adapter.ignored_consts(),
+            required_output_types: adapter.required_output_types(),
         };
 
         if let Some(name) = declared
@@ -513,6 +518,12 @@ impl<M> Registry<M> {
                     );
                 }
             }
+        }
+
+        // Adapter-required extra output types — synthesized values with no
+        // `#[prebindgen]` item behind them (e.g. expression constants).
+        for ty in &declared.required_output_types {
+            self.ensure_entry(Direction::Output, ty, true, &SourceLocation::default());
         }
 
         // Scan declared types.

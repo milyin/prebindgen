@@ -978,6 +978,17 @@ impl Prebindgen for JniGen {
     /// HAS a const declaration mechanism, so const emission is declared-only
     /// and undeclared consts get the skip warning (see
     /// [`Prebindgen::declared_consts`]).
+    /// The declared value types of every expression constant
+    /// (`PackageDecl::constant_expr`) — they have no `#[prebindgen]` item to
+    /// scan, so the resolver is told directly to produce their output
+    /// converters.
+    fn required_output_types(&self) -> Vec<syn::Type> {
+        self.packages
+            .values()
+            .flat_map(|p| p.constant_exprs.iter().map(|e| e.ty.clone()))
+            .collect()
+    }
+
     fn declared_consts(&self) -> Option<std::collections::HashSet<syn::Ident>> {
         let mut out = std::collections::HashSet::new();
         for pkg in self.packages.values() {
@@ -1054,6 +1065,28 @@ impl Prebindgen for JniGen {
                     };
                 ));
             }
+        }
+        // Expression constants — one nullary JNI getter extern per
+        // `PackageDecl::constant_expr`, its value the binding-defined
+        // expression evaluated with `use <source_module>::*;` in scope (so
+        // it composes the source crate's items without qualification). The
+        // getter reuses the whole function-wrapper pipeline via the
+        // synthetic signature, exactly like a const-backed getter.
+        let source_module = &self.source_module;
+        for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
+            validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
+            let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+            let expr = &decl.expr;
+            let callee: syn::Expr = syn::parse_quote!({
+                #[allow(unused_imports)]
+                use #source_module::*;
+                #expr
+            });
+            let wrapper =
+                emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
+            items.push(syn::parse2::<syn::Item>(wrapper).expect(
+                "constant_expr: generated getter wrapper is a single item by construction",
+            ));
         }
         items
     }

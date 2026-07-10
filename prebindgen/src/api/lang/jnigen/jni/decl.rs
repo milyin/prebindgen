@@ -102,6 +102,22 @@ macro_rules! constant {
     };
 }
 
+/// Build a [`ConstExprDecl`] in val-declaration syntax:
+/// `constant_expr!(BANNER: String = format!("{COVER_TAG}:{COVER_MAGIC}"))` is
+/// `ConstExprDecl::new("BANNER", <String>, <the expression>)`. The expression
+/// is evaluated inside the generated getter with `use <source_module>::*;`
+/// in scope.
+#[macro_export]
+macro_rules! constant_expr {
+    ($name:ident : $ty:ty = $expr:expr) => {
+        $crate::lang::ConstExprDecl::new(
+            stringify!($name),
+            ::syn::parse_quote!($ty),
+            ::syn::parse_quote!($expr),
+        )
+    };
+}
+
 /// Build a [`PackageDecl`] directly: `package!("model")` is
 /// `PackageDecl::new("model")`; `package!()` (no args) is the base package
 /// (`PackageDecl::new("")`).
@@ -603,6 +619,41 @@ impl ConstDecl {
     }
 }
 
+/// Declares one **expression-backed constant**: an arbitrary binding-defined
+/// Rust expression, evaluated once inside a generated nullary JNI getter and
+/// surfaced as an eagerly-initialized top-level Kotlin `val`. The expression
+/// runs with `use <source_module>::*;` in scope, so it composes the source
+/// crate's `#[prebindgen]` items freely without the source crate having to
+/// export a dedicated accessor per constant — e.g.
+/// `encoding_to_string(encoding_const_text_plain())`.
+///
+/// Build one with [`constant_expr!`](crate::constant_expr) (literal form) or
+/// [`ConstExprDecl::new`] (runtime form, for declaration loops) and add it to
+/// a [`PackageDecl`] via [`PackageDecl::constant_expr`]. The value type is
+/// declared explicitly and flows through the ordinary output-converter
+/// machinery; opaque-handle and `Result` types are rejected like every other
+/// constant kind.
+#[derive(Clone)]
+pub struct ConstExprDecl {
+    pub(crate) kotlin_name: String,
+    pub(crate) ty: syn::Type,
+    pub(crate) expr: syn::Expr,
+}
+
+impl ConstExprDecl {
+    /// `kotlin_name` is the top-level `val` name (also the seed of the
+    /// extern symbol, so it must be unique among the binding's constants);
+    /// `ty` is the Rust value type the expression yields; `expr` is the
+    /// initializer expression, resolved against the source module.
+    pub fn new(kotlin_name: impl Into<String>, ty: syn::Type, expr: syn::Expr) -> Self {
+        Self {
+            kotlin_name: kotlin_name.into(),
+            ty,
+            expr,
+        }
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // PackageDecl — aggregates the package-scoped decls
 // ──────────────────────────────────────────────────────────────────────
@@ -620,6 +671,7 @@ pub struct PackageDecl {
     pub(crate) functions: Vec<FunctionDecl>,
     pub(crate) constants: Vec<ConstDecl>,
     pub(crate) constant_functions: Vec<FunctionDecl>,
+    pub(crate) constant_exprs: Vec<ConstExprDecl>,
 }
 
 impl PackageDecl {
@@ -636,6 +688,7 @@ impl PackageDecl {
             functions: Vec::new(),
             constants: Vec::new(),
             constant_functions: Vec::new(),
+            constant_exprs: Vec::new(),
         }
     }
 
@@ -684,6 +737,17 @@ impl PackageDecl {
             decl.rust_ident
         );
         self.constant_functions.push(decl);
+        self
+    }
+
+    /// Add an **expression-backed constant** to this package: an arbitrary
+    /// binding-defined Rust expression evaluated once (at package-file
+    /// class-load) inside a generated nullary JNI getter, surfacing as an
+    /// eagerly-initialized top-level Kotlin `val`. See [`ConstExprDecl`];
+    /// build one with [`constant_expr!`](crate::constant_expr) or
+    /// [`ConstExprDecl::new`].
+    pub fn constant_expr(mut self, decl: ConstExprDecl) -> Self {
+        self.constant_exprs.push(decl);
         self
     }
 }

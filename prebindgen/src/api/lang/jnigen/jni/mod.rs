@@ -175,6 +175,13 @@ pub(crate) struct PackageConfig {
     /// wrapper) instead of a callable `fun`. Rust-side emission and the
     /// `JNINative` extern are the plain declared-function ones.
     pub constant_functions: Vec<MethodEntry>,
+    /// Expression-backed constants declared via
+    /// [`PackageDecl::constant_expr`](super::jni::decl::PackageDecl::constant_expr):
+    /// binding-defined expressions evaluated once inside a generated nullary
+    /// getter (extern symbol seeded from the val name), surfacing as
+    /// top-level Kotlin `val`s. Stored as the full decl — there is no Rust
+    /// item behind them.
+    pub constant_exprs: Vec<super::jni::decl::ConstExprDecl>,
 }
 
 /// What kind of class member a [`ClassMember`] is.

@@ -239,6 +239,43 @@ const _: () = {
     const fn __assert_copy<T: ::core::marker::Copy>() {}
     __assert_copy::<perftest_flat::Stamp>();
 };
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBanner<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __out = {
+        #[allow(unused_imports)]
+        use perftest_flat::*;
+        format!("{COVER_TAG}:{COVER_MAGIC:#x}")
+    };
+    match String_to_JString_c7f3ca43(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
     env: &mut jni::JNIEnv<'a>,
