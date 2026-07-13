@@ -133,8 +133,12 @@ a consumer comment.
 **Correction (2026-07-13):** overstated — the generator already owns this
 invariant with a decl-time hard error (`UnfoldError::RootIdentityBeforeNested`,
 message includes the fix), so the wrong order never reaches non-compiling
-Rust. The consumer comment predates that check. Remaining question for this
-item: keep the hard error, or silently sort identity leaves last.
+Rust. The consumer comment predates that check.
+
+**Resolution (2026-07-13): keep the hard error, no code change.** Declaration
+order defines leaf order everywhere else, so silently re-sorting the `_self`
+leaf would make declaration order and emitted order diverge; the error message
+already names the fix.
 
 ### I3. Flipped receivers, hidden temporal coupling
 
