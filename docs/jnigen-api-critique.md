@@ -40,6 +40,23 @@ distinguish them.
   (`&T`) it actually means **clone into a fresh owned handle**: a hidden
   allocation behind a name that says "identity".
 
+**Resolution (2026-07-13):** the per-fn override mechanism was rebuilt to be
+symmetric with the type level: `FunctionDecl::expand_param("param", decl)` /
+`expand_return(decl)` take the **same expand-decl objects** as
+`JniGen::expand` (macro family renamed `expand_param!` / `expand_return!`).
+One rule now holds at both scopes and directions — *the decl states the
+complete variant/field set*; an identity-only set (`.variant_self()` /
+`.field_self()` alone) **is** the plain form and normalizes to it. This
+dissolves the modal flips: `_self` is always just an element of a stated set,
+and "opt-out" is simply "the set is {self}". The decl's type is cross-checked
+against the actual parameter/return type (hard errors `ParamTypeMismatch` /
+`ReturnTypeMismatch`), unknown parameter names error, duplicate per-fn decls
+panic at decl time, and per-fn `.field(fun!(x))` inherits member Kotlin names
+like the type level. The borrowed-return clone semantics of `field_self` is
+now documented in one place (`ExpandReturnDecl::field_self` /
+`FunctionDecl::expand_return`); a rename for the clone case was considered
+out of scope.
+
 ### M3. `default_param_expand` docs oversell ergonomics
 
 Doc: "lets every function taking a KeyExpr also accept a plain String."
