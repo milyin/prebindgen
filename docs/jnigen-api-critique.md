@@ -68,6 +68,22 @@ NativeHandle` with `close()`, `take()`, `freePtr()` — a dead class with a
 public raw-pointer constructor no user can legitimately call. Errors deserve a
 first-class declaration.
 
+**Resolution (2026-07-13): generalized rather than special-cased.** A
+dedicated error declaration (and an `.internal()` marker on `ptr_class!`) were
+both rejected — the former makes errors special for no reason, the latter
+keeps pretending there is Kotlin wrapping where none happens. Instead,
+boundary decls now work for **rust-side-only types**: `param_expand!` /
+`return_expand!` accept types not declared in any package. Such a type is
+always built from its ingredients on input and decomposed into its fields on
+output (including the `Result<_, E>` error channel); it never materializes in
+Kotlin — no class, no handle, no `freePtr`. The one structural restriction:
+`variant_self()` / `field_self()` hard-error (there is no Kotlin object to
+pass or deliver). Derived interfaces (`<T>Handler`, `<T>Builder`) land in the
+base package. zenoh-flat-jni's `Error` is now exactly this: one
+`return_expand!(Error).field(fun!(error_get_message).name("message"))` line;
+the dead Kotlin class, its uncallable `message()` method, and its `freePtr`
+extern are gone.
+
 ### M5. "wrapper" is overloaded
 
 `ScalarTypeWrapperDecl` = a conversion rule for a *concrete* type;
