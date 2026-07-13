@@ -149,9 +149,10 @@ trait impl or as a plain fn in the binding crate. Each direction now picks
 one of: a `#[prebindgen]` fn (`.input`/`.output`), an `Into`/`From` impl
 (`.input_from(ty!(i32))`/`.output_into(...)`), a fallible `TryInto`/`TryFrom`
 impl (`.input_try_from(...)` — the associated `Error` routes to `onError`),
-or a binding-local callable (`.input_with(ty!(String), path!(crate::f))` —
-works because the generated file compiles inside the binding crate; closes
-the "helpers need a separate crate" gap for infallible by-value cases). All
+or a binding-local callable (`.input_with(ty!(String), path!(crate::f))`,
+fallible via `.input_try_with(repr, error, path)` with the error type stated
+in the decl — works because the generated file compiles inside the binding
+crate; closes the "helpers need a separate crate" gap entirely). All
 three new kinds are demonstrated in covertest (`Celsius`/`Percent`/`Label`)
 with JVM assertions including the TryFrom error path.
 
