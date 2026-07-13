@@ -108,6 +108,41 @@ extern are gone.
 Their direction pairs are also named inconsistently: `on_param`/`on_return` vs
 `input`/`output` vs `param_expand`/`return_expand`.
 
+**Resolution (2026-07-13): the wrapper tier is gone; conversions are named
+functions.** Investigation deepened the finding: the scalar decl's position
+words (`on_param`/`on_return`) were actively misleading (converters are
+direction-things — the "return" body also runs for callback *arguments*), the
+generic tier had zero users and zero tests anywhere, and the injected
+`syn`/`quote` expression bodies were unchecked splices (most of C3). The
+replacement is `convert!`:
+
+```rust
+.convert(convert!(Millis)
+    .input(fun!(millis_from_long))    // fn(i64) -> Millis (or Result<Millis, E>)
+    .output(fun!(millis_value)))      // fn(&Millis) -> i64
+```
+
+— ordinary `#[prebindgen]` functions, type-checked by rustc; the wire and
+Kotlin surface derive from the signature's other-side type through its own
+converter chain (no verbatim strings). `convert!` is the type's **canonical
+single-value aspect**, orthogonal to the `expand_*!` boundary decls: a type
+may declare both — expansion wins at the fn boundaries where declared, the
+conversion serves everything else (`Result`-Ok, struct fields, `Option`/`Vec`
+nesting). Direction words (`input`/`output`) are kept deliberately, against
+the expand family's position words, and documented.
+
+Conversion fns the flat crate doesn't provide live in a **helper crate**
+(same-crate `#[prebindgen]` markers cannot feed the same crate's build.rs —
+macro expansion runs after it): `Registry::from_sources` ingests several
+sources, records per-fn origin crates, and generated calls qualify each fn
+with its defining crate. Proven in covertest via `examples/covertest-helpers`.
+
+Scope cut, recorded: deleting `GenericTypeWrapperDecl` removes user-defined
+*wildcard* wrapper patterns (`MyWrapper<_>`). The rank tables and the built-in
+`Result<_,_>` peel remain internal, so a function-based wildcard door can be
+reopened when a real consumer needs one; concrete instantiations are already
+coverable by `convert!`.
+
 ### M6. Two "package" concepts
 
 `.package(package!("bytes"))` adds a declaration batch under a *sub*package;
