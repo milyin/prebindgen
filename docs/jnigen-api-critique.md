@@ -143,6 +143,18 @@ Scope cut, recorded: deleting `GenericTypeWrapperDecl` removes user-defined
 reopened when a real consumer needs one; concrete instantiations are already
 coverable by `convert!`.
 
+**Follow-up (2026-07-14): four conversion sources.** Requiring a
+`#[prebindgen]` fn was too narrow — the conversion may already exist as a
+trait impl or as a plain fn in the binding crate. Each direction now picks
+one of: a `#[prebindgen]` fn (`.input`/`.output`), an `Into`/`From` impl
+(`.input_from(ty!(i32))`/`.output_into(...)`), a fallible `TryInto`/`TryFrom`
+impl (`.input_try_from(...)` — the associated `Error` routes to `onError`),
+or a binding-local callable (`.input_with(ty!(String), path!(crate::f))` —
+works because the generated file compiles inside the binding crate; closes
+the "helpers need a separate crate" gap for infallible by-value cases). All
+three new kinds are demonstrated in covertest (`Celsius`/`Percent`/`Label`)
+with JVM assertions including the TryFrom error path.
+
 **Follow-up (2026-07-14): `set_source_module` removed entirely.** With
 per-item origins recorded for every named item at `from_sources` ingestion,
 the setter had no information the registry didn't already own. The first
