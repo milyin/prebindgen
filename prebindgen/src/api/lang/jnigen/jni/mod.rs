@@ -258,7 +258,7 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 /// JNI back-end. Global settings are applied with the order-insensitive
 /// `set_*` methods; declarations are accepted as pre-built objects
 /// (`PackageDecl`, `ExpandParamDecl`, `ExpandReturnDecl`,
-/// `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see `decl.rs`) built
+/// `ConvertDecl` — see `decl.rs`) built
 /// independently of `JniGen` itself; there is no fluent typestate cursor.
 ///
 /// ```
@@ -318,7 +318,7 @@ pub struct JniGen {
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting
-    /// a `ClassDecl` or a `ScalarTypeWrapperDecl`. Holds opaque-handle
+    /// a `ClassDecl`. Holds opaque-handle
     /// config, enum config, and the raw [`NameSpec`] (Kotlin FQNs are
     /// derived from it on read via [`JniGen::kotlin_fqn`] /
     /// [`JniGen::fqn_of`]); the converter bodies themselves live in
@@ -343,6 +343,13 @@ pub struct JniGen {
 
     /// Per-rank output converters. Same shape as [`Self::input_wrappers`].
     pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
+
+    /// Canonical single-value conversions ([`ConvertDecl`], accepted by
+    /// [`JniGen::convert`]), stored raw — the rank-0 converter bodies derive
+    /// from the conversion fns' registry signatures at lookup time
+    /// ([`JniGen::convert_input_body`] / [`JniGen::convert_output_body`]),
+    /// keeping declarations order-independent and origin-qualified.
+    pub(crate) convert_decls: Vec<ConvertDecl>,
 
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`

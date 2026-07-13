@@ -286,6 +286,13 @@ impl JniGen {
                 names.insert(short);
             }
         }
+        // `convert!`-declared types likewise have no type-table entry but
+        // appear in emitted converter signatures.
+        for decl in &self.convert_decls {
+            if let Some(short) = rust_short_name_opt(&decl.key) {
+                names.insert(short);
+            }
+        }
         names
     }
 
@@ -1032,6 +1039,41 @@ impl Prebindgen for JniGen {
             self.boundary_referenced_fns()
                 .filter(|f| !declared.contains(f)),
         );
+        out
+    }
+
+    /// `convert!` conversion functions: no extern is emitted for them —
+    /// generated converter bodies call them directly; the registry stops
+    /// warning about them. Their type requirements come through
+    /// [`Self::extra_required_types`], not a signature scan.
+    fn helper_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        let declared = self.declared_functions();
+        self.convert_fns()
+            .filter(|f| !declared.contains(f))
+            .collect()
+    }
+
+    /// The other-side type of every `convert!` conversion, in the
+    /// conversion's direction: an input fn's parameter type (peeled of `&`)
+    /// must have its own **input** converter for the composed rank-0 body to
+    /// chain through; an output fn's return type needs the **output** twin.
+    /// Signatures are read from the registry (missing fns are reported by
+    /// the scan's helper-function warning; the body derivation later
+    /// hard-errors with the precise decl).
+    fn extra_required_types(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<(crate::api::core::registry::Direction, syn::Type)> {
+        use crate::api::core::registry::Direction;
+        let mut out = Vec::new();
+        for decl in &self.convert_decls {
+            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
+                out.push((Direction::Input, ty));
+            }
+            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
+                out.push((Direction::Output, ty));
+            }
+        }
         out
     }
 

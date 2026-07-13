@@ -174,6 +174,15 @@ pub struct Registry<M = ()> {
     /// Anything else (use, mod, type alias, macro_rules) — passed through.
     pub passthrough: Vec<(syn::Item, SourceLocation)>,
 
+    /// Origin crate name of each function, recorded when items are ingested
+    /// via [`Self::from_sources`] / [`Self::add_source`] (absent for
+    /// [`Self::from_items`], whose items all belong to the adapter's default
+    /// `source_module`). Adapters consult [`Self::fn_origin`] so generated
+    /// calls qualify each function with the module of the crate that
+    /// actually defines it — the multi-source model, where a binding layers
+    /// helper `#[prebindgen]` crates on top of the flat crate.
+    pub(crate) fn_origins: HashMap<syn::Ident, String>,
+
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
     /// resolver fills it.
@@ -236,6 +245,7 @@ impl<M> Default for Registry<M> {
             enums: HashMap::new(),
             consts: HashMap::new(),
             passthrough: Vec::new(),
+            fn_origins: HashMap::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_locations: HashMap::new(),
@@ -369,6 +379,8 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
 struct DeclaredItems {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
+    /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
+    helper_functions: HashSet<syn::Ident>,
     accessors: HashSet<syn::Ident>,
     method_receivers: HashMap<syn::Ident, TypeKey>,
     types: HashSet<TypeKey>,
@@ -397,6 +409,7 @@ impl DeclaredItems {
         let declared = Self {
             functions: adapter.declared_functions(),
             ignored_functions: adapter.ignored_functions(),
+            helper_functions: adapter.helper_functions(),
             accessors: adapter.accessor_functions(),
             method_receivers: adapter.method_receivers(),
             types: adapter.declared_types(),
@@ -453,6 +466,52 @@ impl<M> Registry<M> {
         Ok(registry)
     }
 
+    /// Construct a `Registry` from one or more prebindgen [`Source`]s,
+    /// recording each function's **origin crate**. This is the multi-source
+    /// form of [`Self::from_items`]: a binding may layer helper
+    /// `#[prebindgen]` crates on top of the flat crate (conversion helpers
+    /// the flat crate doesn't provide), and the generated Rust must qualify
+    /// each call with the module of the crate that defines it
+    /// (`flat_crate::…` vs `helper_crate::…` — see [`Self::fn_origin`]).
+    ///
+    /// [`Source`]: crate::Source
+    pub fn from_sources<'a, I>(sources: I) -> Result<Self, ScanError>
+    where
+        I: IntoIterator<Item = &'a crate::api::source::Source>,
+    {
+        let mut registry = Registry::default();
+        for source in sources {
+            registry.add_source(source)?;
+        }
+        Ok(registry)
+    }
+
+    /// Ingest one [`Source`]'s items, recording the source's crate name as
+    /// each function's origin. See [`Self::from_sources`].
+    ///
+    /// [`Source`]: crate::Source
+    pub fn add_source(&mut self, source: &crate::api::source::Source) -> Result<(), ScanError> {
+        let crate_name = source.crate_name().to_string();
+        for (item, loc) in source.items_all() {
+            if let syn::Item::Fn(f) = &item {
+                self.fn_origins
+                    .insert(f.sig.ident.clone(), crate_name.clone());
+            }
+            self.index_item(item, loc)?;
+        }
+        Ok(())
+    }
+
+    /// The origin crate's **module path** for a function ingested via
+    /// [`Self::from_sources`] (crate name with dashes replaced by
+    /// underscores), or `None` when unknown — the adapter then falls back to
+    /// its configured default source module.
+    pub fn fn_origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
+        let crate_name = self.fn_origins.get(ident)?;
+        let module = crate_name.replace('-', "_");
+        syn::parse_str(&module).ok()
+    }
+
     /// Scan the signature/body of every item declared by the adapter.
     ///
     /// * For each ident in `adapter.declared_functions()` ∩ indexed functions,
@@ -497,6 +556,18 @@ impl<M> Registry<M> {
             if !self.functions.contains_key(ident) {
                 println!(
                     "cargo:warning=prebindgen: ignored function `{}` not found among #[prebindgen] items",
+                    ident
+                );
+            }
+        }
+
+        // Helper functions: never emitted, no blanket signature scan (the
+        // adapter registers the specific requirements via
+        // `extra_required_types`) — but a typo'd name still warns.
+        for ident in &declared.helper_functions {
+            if !self.functions.contains_key(ident) {
+                println!(
+                    "cargo:warning=prebindgen: helper function `{}` not found among #[prebindgen] items",
                     ident
                 );
             }
@@ -578,7 +649,9 @@ impl<M> Registry<M> {
             .functions
             .keys()
             .filter(|k| {
-                !declared.functions.contains(*k) && !declared.ignored_functions.contains(*k)
+                !declared.functions.contains(*k)
+                    && !declared.ignored_functions.contains(*k)
+                    && !declared.helper_functions.contains(*k)
             })
             .map(|k| k.to_string())
             .collect();
@@ -740,6 +813,13 @@ impl<M> Registry<M> {
                 Ok(())
             }
             syn::Item::Const(c) => {
+                // Unnamed `const _` items (each source's injected `konst`
+                // feature guard) live outside the flat namespace: several
+                // sources may each carry one, all passed through verbatim.
+                if c.ident == "_" {
+                    self.passthrough.push((syn::Item::Const(c), loc));
+                    return Ok(());
+                }
                 self.check_no_duplicate(&c.ident, &loc)?;
                 self.consts.insert(c.ident.clone(), (c, loc));
                 Ok(())
@@ -1008,6 +1088,15 @@ impl<M> Registry<M> {
                 leaf_elements,
                 &declared.functions,
             )?;
+        }
+        // Adapter-derived extra requirements (registry-aware — e.g. the
+        // other-side types of `convert!` conversion fns, per direction).
+        for (dir, ty) in ext.extra_required_types(self) {
+            let loc = SourceLocation::default();
+            match dir {
+                Direction::Input => self.require_input(&ty, &loc),
+                Direction::Output => self.require_output(&ty, &loc),
+            }
         }
         // Boundary-only types: every crossing is now covered by a plan (fold
         // in, unfold out / error channel), so the scan-time direct converter

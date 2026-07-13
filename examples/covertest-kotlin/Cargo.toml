@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 prebindgen = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
+covertest-helpers = { path = "../covertest-helpers" }
 jni = "0.21.1"
 konst = "0.3.0"
 # The generated JNI error path logs via `tracing::error!`.
@@ -20,6 +21,7 @@ tracing = "0.1"
 prebindgen = { workspace = true }
 syn = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
+covertest-helpers = { path = "../covertest-helpers" }
 
 # NOTE: a production JNI crate should set `[profile.release] panic = "abort"`
 # (a Rust panic unwinding into the JVM is UB). That profile key is only honored

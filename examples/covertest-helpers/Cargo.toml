@@ -1,0 +1,13 @@
+[package]
+name = "covertest-helpers"
+version = { workspace = true }
+edition = { workspace = true }
+build = "build.rs"
+
+[dependencies]
+perftest-flat = { path = "../perftest-flat" }
+prebindgen = { workspace = true }
+prebindgen-proc-macro = { workspace = true }
+
+[build-dependencies]
+prebindgen = { workspace = true }

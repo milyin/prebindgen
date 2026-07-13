@@ -143,7 +143,6 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
 ) -> TokenStream {
     let original_ident = &f.sig.ident;
     let wrapper_ident = mangle_jni_name(ext, original_ident);
-    let source_module = &ext.source_module;
 
     let mut wire_params: Vec<TokenStream> = Vec::new();
     // Each entry is a per-input decode statement. Fallible decodes are
@@ -205,7 +204,10 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
 
     let raw_call = match &callee {
         Some(e) => quote!(#e),
-        None => quote!(#source_module::#original_ident(#(#call_args),*)),
+        None => {
+            let call_module = ext.fn_module(registry, original_ident);
+            quote!(#call_module::#original_ident(#(#call_args),*))
+        }
     };
     // For `convert_output` (Return), the value the output converter sees is the
     // **deconstructed** single value (the converter's accessor applied to the
@@ -220,7 +222,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
             let mut e = if base_is_ref { base } else { quote!(&#base) };
             for a in &leaf.path {
-                e = quote!(#source_module::#a(#e));
+                let m = ext.fn_module(registry, a);
+                e = quote!(#m::#a(#e));
             }
             e
         };
@@ -721,7 +724,6 @@ pub(crate) fn emit_expanded_param(
     orig_param: &syn::Ident,
     on_err: &TokenStream,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
-    let source_module = &ext.source_module;
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut leaf_locals: Vec<syn::Ident> = Vec::new();
@@ -849,7 +851,10 @@ pub(crate) fn emit_expanded_param(
 
     // The fold itself (language-agnostic). Its `Err(String)` is lifted into
     // `__JniErr` and routed through the same sink as fallible inputs.
-    let qualify = |id: &syn::Ident| -> syn::Path { syn::parse_quote!(#source_module::#id) };
+    let qualify = |id: &syn::Ident| -> syn::Path {
+        let m = ext.fn_module(registry, id);
+        syn::parse_quote!(#m::#id)
+    };
     let fold_expr = crate::api::core::expand::emit_fold(plan, &leaf_locals, &qualify);
     let folded = format_ident!("__folded_{}", orig_param);
     prelude.push(quote!(

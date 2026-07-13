@@ -1111,11 +1111,11 @@ pub(crate) unsafe fn JString_to_std_boxed_Box_std_string_String_cfbab680<'env, '
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn Millis_to_jlong_a7037db5<'a>(
+pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Millis,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(v.0 as jni::sys::jlong)
+) -> ::core::result::Result<i64, __JniErr> {
+    Ok(covertest_helpers::millis_value(&v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
@@ -1471,6 +1471,13 @@ pub(crate) unsafe fn i32_to_jint_a3e3b6ef<'a>(
     Ok(v as jni::sys::jint)
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn i64_to_Millis_bb88777a<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i64,
+) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
+    Ok(covertest_helpers::millis_from_long(v))
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn i64_to_jlong_fbf9a9bc<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i64,
@@ -1524,13 +1531,6 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Archive>, __JniErr> {
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Archive) })
-}
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn jlong_to_Millis_a7037db5<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jlong,
-) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
-    Ok(perftest_flat::Millis(*v as u64))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
@@ -2274,7 +2274,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let a = match jlong_to_Millis_a7037db5(&mut env, &a) {
+    let __a_s0 = match jlong_to_i64_fbf9a9bc(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -2290,7 +2290,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
             return 0 as jni::sys::jlong;
         }
     };
-    let b = match jlong_to_Millis_a7037db5(&mut env, &b) {
+    let a = match i64_to_Millis_bb88777a(&mut env, __a_s0) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __b_s0 = match jlong_to_i64_fbf9a9bc(&mut env, &b) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let b = match i64_to_Millis_bb88777a(&mut env, __b_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -2307,7 +2339,23 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
         }
     };
     let __out = perftest_flat::millis_add(a, b);
-    match Millis_to_jlong_a7037db5(&mut env, __out) {
+    let __out_s0 = match Millis_to_i64_61ecf054(&mut env, __out) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    match i64_to_jlong_fbf9a9bc(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -6073,6 +6121,15 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverTag
 const _: () = {
     konst::assertc_eq!(
         perftest_flat::FEATURES, "",
+        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
+                        This usually happens if source crate is compiled with different feature set\n\
+                        for build dependencies and for library usage. You may need to explicitly set\n\
+                        the necessary features."
+    );
+};
+const _: () = {
+    konst::assertc_eq!(
+        covertest_helpers::FEATURES, "",
         "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
                         This usually happens if source crate is compiled with different feature set\n\
                         for build dependencies and for library usage. You may need to explicitly set\n\

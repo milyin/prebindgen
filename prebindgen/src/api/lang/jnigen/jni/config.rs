@@ -2,7 +2,7 @@
 //! package, name-mangling rules, native-init hook and handle-lock toggle.
 //!
 //! Every setter carries the `set_` prefix: unlike the declaration methods
-//! ([`JniGen::package`], [`JniGen::scalar_type_wrapper`], …) which each add
+//! ([`JniGen::package`], [`JniGen::convert`], …) which each add
 //! one item to the binding surface, a `set_` method changes how *all* other
 //! declarations are interpreted. Setters are **order-independent by
 //! construction**: the builder stores only raw inputs — settings here,

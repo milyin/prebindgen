@@ -6,8 +6,8 @@
 //! `Builder`/`Decl` split, no terminal `.build()` call.
 //!
 //! `JniGen` itself only ever *accepts* fully-built values of these types
-//! (`JniGen::package`, `JniGen::scalar_type_wrapper`,
-//! `JniGen::generic_type_wrapper`, in `builder.rs`); none of them reach back
+//! (`JniGen::package`, `JniGen::expand`, `JniGen::convert`, in
+//! `builder.rs`); none of them reach back
 //! into any `JniGen` state while being built.
 
 use super::*;
@@ -135,28 +135,13 @@ macro_rules! package {
     };
 }
 
-/// Build a [`ScalarTypeWrapperDecl`] directly from bare Rust types:
-/// `scalar_type_wrapper!(Millis, jni::sys::jlong, "Long")` is
-/// `ScalarTypeWrapperDecl::new(<Millis as syn::Type>, <jni::sys::jlong as syn::Type>, "Long")`.
+/// Build a [`ConvertDecl`] directly from a bare Rust type:
+/// `convert!(Millis)` is `ConvertDecl::new(<Millis as syn::Type>)`.
+/// See [`ptr_class!`] for the parsing mechanics.
 #[macro_export]
-macro_rules! scalar_type_wrapper {
-    ($pattern:ty, $wire:ty, $kotlin_type:expr) => {
-        $crate::lang::ScalarTypeWrapperDecl::new(
-            $crate::__macro_support::parse_type(stringify!($pattern)),
-            $crate::__macro_support::parse_type(stringify!($wire)),
-            $kotlin_type,
-        )
-    };
-}
-
-/// Build a [`GenericTypeWrapperDecl`] directly from a bare wildcard type
-/// pattern: `generic_type_wrapper!(Result<_, ConcreteErr>)`.
-#[macro_export]
-macro_rules! generic_type_wrapper {
+macro_rules! convert {
     ($t:ty) => {
-        $crate::lang::GenericTypeWrapperDecl::new($crate::__macro_support::parse_type(stringify!(
-            $t
-        )))
+        $crate::lang::ConvertDecl::new($crate::__macro_support::parse_type(stringify!($t)))
     };
 }
 
@@ -837,246 +822,102 @@ impl PackageDecl {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Wrapper decls — split by rank (see the module doc for why)
+// Convert decl — the canonical single-value conversion for a type
 // ──────────────────────────────────────────────────────────────────────
 
-/// Rejects a wrapper registration on a Rust **builtin** type: the generated
-/// converter qualifies the pattern with the `source_module`
-/// (`myflat::usize`), which does not compile. Wrap the builtin in a
-/// source-crate newtype (like `Millis(u64)`) instead. Only ever relevant for
-/// rank-0 (a builtin type has no wildcards), so this is called from
-/// [`ScalarTypeWrapperDecl::new`] alone.
-fn reject_builtin_wrapper_pattern(key: &TypeKey) {
+/// Declares a type's **canonical single-value conversion**: how one value of
+/// the type crosses the boundary wherever a single value is needed — as a
+/// parameter or return, inside `Option<_>` / `Vec<_>` / the `Result<T, E>`
+/// success position, as a `data_class` field. The conversion is a pair of
+/// ordinary `#[prebindgen]` functions (no injected Rust expressions):
+///
+/// ```rust,ignore
+/// .convert(convert!(Millis)
+///     .input(fun!(millis_from_long))   // fn(u64) -> Millis    (wire → rust)
+///     .output(fun!(millis_value)))     // fn(&Millis) -> u64   (rust → wire)
+/// ```
+///
+/// The Kotlin surface derives from the conversion functions' other-side type
+/// (`u64` ⇒ `Long`) — nothing is stated verbatim. An input function may be
+/// fallible (`fn(U) -> Result<T, E>`): an `Err` routes to the caller's error
+/// handler. The functions may live in the flat crate or in a **helper
+/// crate** ingested as an extra source ([`crate::core::Registry::from_sources`]);
+/// generated calls qualify each function with its origin crate.
+///
+/// Distinct from the [`expand_param!`](crate::expand_param) /
+/// [`expand_return!`](crate::expand_return) boundary decls: those reshape a
+/// **function boundary** into multiple leaves (variants in / fields out),
+/// while `convert!` defines the type's one-value form used everywhere else.
+/// A type may declare both — expansion wins at the fn boundaries where it is
+/// declared; the conversion serves every other position. The method names
+/// differ deliberately: converters are direction-things ([`input`](Self::input)
+/// also serves callback returns, [`output`](Self::output) also serves
+/// callback arguments), while expansion decls are position-things.
+#[derive(Clone)]
+pub struct ConvertDecl {
+    pub(crate) key: TypeKey,
+    pub(crate) input: Option<syn::Ident>,
+    pub(crate) output: Option<syn::Ident>,
+}
+
+impl ConvertDecl {
+    pub fn new(rust_type: syn::Type) -> Self {
+        reject_builtin_convert_type(&TypeKey::from_type(&rust_type));
+        Self {
+            key: TypeKey::from_type(&rust_type),
+            input: None,
+            output: None,
+        }
+    }
+
+    /// The **into-Rust** conversion (parameters, callback returns): a
+    /// `#[prebindgen]` `fn(U) -> T` or `fn(U) -> Result<T, E>` where `T` is
+    /// this decl's type. `U` (taken by value or `&U`) determines the wire and
+    /// the Kotlin surface through its own converter chain.
+    pub fn input(mut self, rust_fun: FunctionDecl) -> Self {
+        assert!(
+            rust_fun.kotlin_name_override.is_none()
+                && rust_fun.param_expands.is_empty()
+                && rust_fun.return_expand.is_none(),
+            "convert!({}).input({}): a conversion function is never surfaced in Kotlin — \
+             .name()/expand overrides don't apply",
+            self.key.as_str(),
+            rust_fun.rust_ident
+        );
+        self.input = Some(rust_fun.rust_ident);
+        self
+    }
+
+    /// The **out-of-Rust** conversion (returns, callback arguments): a
+    /// `#[prebindgen]` `fn(&T) -> U` (or `fn(T) -> U`) where `T` is this
+    /// decl's type — the counterpart of [`input`](Self::input).
+    pub fn output(mut self, rust_fun: FunctionDecl) -> Self {
+        assert!(
+            rust_fun.kotlin_name_override.is_none()
+                && rust_fun.param_expands.is_empty()
+                && rust_fun.return_expand.is_none(),
+            "convert!({}).output({}): a conversion function is never surfaced in Kotlin — \
+             .name()/expand overrides don't apply",
+            self.key.as_str(),
+            rust_fun.rust_ident
+        );
+        self.output = Some(rust_fun.rust_ident);
+        self
+    }
+}
+
+/// Rejects a `convert!` declaration on a Rust **builtin** type: builtins
+/// already have their own converters, and the generated calls would try to
+/// qualify the builtin with a crate path. Wrap the builtin in a source-crate
+/// newtype (like `Millis(u64)`) instead.
+fn reject_builtin_convert_type(key: &TypeKey) {
     const BUILTINS: &[&str] = &[
         "usize", "isize", "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
-        "f32", "f64", "bool", "char", "str",
+        "f32", "f64", "bool", "char", "str", "String",
     ];
     assert!(
         !BUILTINS.contains(&key.as_str()),
-        "ScalarTypeWrapperDecl on builtin `{}`: the generated converter qualifies the pattern \
-         with the source module, which is invalid for builtins — wrap the builtin in a newtype \
-         instead",
+        "convert!({}): builtins already have converters — wrap the builtin in a newtype instead",
         key.as_str()
     );
-}
-
-/// The fixed identifier every wrapper body sees in scope for "the value being
-/// converted" (`env: &mut JNIEnv` is NOT provided — confirmed zero real
-/// wrapper bodies, built-in or user, ever need it; see the module doc).
-pub(crate) fn wrapper_value_ident() -> syn::Ident {
-    syn::Ident::new("v", Span::call_site())
-}
-
-/// A [`ScalarTypeWrapperDecl`] conversion body: given the in-scope value
-/// ident, produce the conversion expression.
-pub(crate) type ScalarConvFn = Arc<dyn Fn(&syn::Ident) -> syn::Expr + Send + Sync>;
-
-/// Teaches the generator to carry one Rust type across the boundary as a
-/// **plain scalar** — e.g. a `Millis(u64)` newtype that should surface in
-/// Kotlin as a `Long`, converted with your own expressions each way, with no
-/// generated class. The scalar peer of [`ValueClassDecl`] (which carries
-/// `Copy` types as `ByteArray`). Register it with
-/// [`JniGen::scalar_type_wrapper`]; it applies wherever the type appears, in
-/// any package.
-///
-/// Build one with [`scalar_type_wrapper!`](crate::scalar_type_wrapper), then
-/// give it [`on_param`](Self::on_param) / [`on_return`](Self::on_return)
-/// conversions.
-pub struct ScalarTypeWrapperDecl {
-    pub(crate) pattern: syn::Type,
-    // Stored as tokenized source text, not `syn::Type`: this workspace's
-    // proc-macro2 feature resolution makes `syn::Type`/`syn::Expr` `!Send`/
-    // `!Sync` (it unconditionally wraps the compiler's non-Send
-    // `proc_macro::TokenStream` variant even outside a real proc-macro
-    // expansion), so an owned one can't be captured into the `Send + Sync`
-    // `WrapperFn` closure `JniGen::scalar_type_wrapper` builds from this —
-    // re-parsed fresh at lookup time instead.
-    pub(crate) wire: String,
-    pub(crate) kotlin_type: String,
-    pub(crate) input: Option<ScalarConvFn>,
-    pub(crate) output: Option<ScalarConvFn>,
-}
-
-impl ScalarTypeWrapperDecl {
-    /// `pattern` is the Rust type being mapped, `wire` is the primitive it
-    /// travels as (e.g. `jni::sys::jlong`), and `kotlin_type` is how it shows
-    /// up in Kotlin (e.g. `"Long"`). See
-    /// [`scalar_type_wrapper!`](crate::scalar_type_wrapper) for the macro
-    /// shorthand.
-    pub fn new(pattern: syn::Type, wire: syn::Type, kotlin_type: impl Into<String>) -> Self {
-        reject_builtin_wrapper_pattern(&TypeKey::from_type(&pattern));
-        Self {
-            pattern,
-            wire: quote!(#wire).to_string(),
-            kotlin_type: kotlin_type.into(),
-            input: None,
-            output: None,
-        }
-    }
-
-    /// How to turn the incoming **wire value into the Rust value** (used when
-    /// the type is a parameter). `body` gets the wire value's ident and
-    /// returns the Rust expression, e.g.
-    /// `|v| pq!(perftest_flat::Millis(*#v as u64))`.
-    pub fn on_param(
-        mut self,
-        body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static,
-    ) -> Self {
-        self.input = Some(Arc::new(body));
-        self
-    }
-
-    /// How to turn the **Rust value into the wire value** (used when the type
-    /// is returned). `body` gets the Rust value's ident and returns the wire
-    /// expression, e.g. `|v| pq!(#v.0 as jni::sys::jlong)`.
-    pub fn on_return(
-        mut self,
-        body: impl Fn(&syn::Ident) -> syn::Expr + Send + Sync + 'static,
-    ) -> Self {
-        self.output = Some(Arc::new(body));
-        self
-    }
-}
-
-/// What a [`GenericTypeWrapperDecl`] conversion produces: the wire type plus
-/// the expression, and whether the conversion can fail with a **domain
-/// error** the caller should see. Use [`infallible`](Self::infallible) when
-/// it always succeeds, or [`fallible`](Self::fallible) to route an `Err` to
-/// the caller's error handler (as the built-in `Result` unwrap does).
-// large_enum_variant: a transient codegen-time value immediately destructured
-// by `into_tuple`; boxing the `syn` payloads would only complicate the public
-// variant shape.
-#[allow(clippy::large_enum_variant)]
-pub enum WireBody {
-    Infallible(syn::Type, syn::Expr),
-    Fallible(syn::Type, syn::Type, syn::Expr),
-}
-
-impl WireBody {
-    /// The conversion always succeeds. `wire` is the wire type, `expr` the
-    /// conversion expression.
-    pub fn infallible(wire: syn::Type, expr: syn::Expr) -> Self {
-        Self::Infallible(wire, expr)
-    }
-
-    /// The conversion may fail: `expr` evaluates to `Result<wire, error>`,
-    /// and an `Err` is delivered to the caller's error handler.
-    pub fn fallible(wire: syn::Type, error: syn::Type, expr: syn::Expr) -> Self {
-        Self::Fallible(wire, error, expr)
-    }
-
-    pub(crate) fn into_tuple(self) -> (syn::Type, Option<syn::Type>, syn::Expr) {
-        match self {
-            Self::Infallible(wire, expr) => (wire, None, expr),
-            Self::Fallible(wire, err, expr) => (wire, Some(err), expr),
-        }
-    }
-}
-
-/// Trait selecting the arity-appropriate impl of
-/// [`GenericTypeWrapperDecl::input`] / [`GenericTypeWrapperDecl::output`].
-/// The phantom type parameter discriminates closures of arity 1..3 so a
-/// single public method name accepts any of them. Closures take the wildcard
-/// substitutions plus the in-scope value ident, and return a [`WireBody`].
-pub trait WrapperBuilder<Arity>: Send + Sync + 'static {
-    fn into_wrapper_fn(self) -> WrapperFn;
-    fn rank() -> usize;
-}
-
-/// Arity-discriminating marker types. `Arity1`/`2`/`3` carry that many `_`
-/// slots in the registered pattern (e.g. `Result<_, _>` is `Arity2`).
-pub(crate) struct Arity1;
-pub(crate) struct Arity2;
-pub(crate) struct Arity3;
-
-impl<F> WrapperBuilder<Arity1> for F
-where
-    F: Fn(&syn::Type, &syn::Ident) -> WireBody + Send + Sync + 'static,
-{
-    fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(
-            move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                Some(self(&args[0], &wrapper_value_ident()).into_tuple())
-            },
-        )
-    }
-    fn rank() -> usize {
-        1
-    }
-}
-
-impl<F> WrapperBuilder<Arity2> for F
-where
-    F: Fn(&syn::Type, &syn::Type, &syn::Ident) -> WireBody + Send + Sync + 'static,
-{
-    fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(
-            move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                Some(self(&args[0], &args[1], &wrapper_value_ident()).into_tuple())
-            },
-        )
-    }
-    fn rank() -> usize {
-        2
-    }
-}
-
-impl<F> WrapperBuilder<Arity3> for F
-where
-    F: Fn(&syn::Type, &syn::Type, &syn::Type, &syn::Ident) -> WireBody + Send + Sync + 'static,
-{
-    fn into_wrapper_fn(self) -> WrapperFn {
-        Arc::new(
-            move |args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                Some(self(&args[0], &args[1], &args[2], &wrapper_value_ident()).into_tuple())
-            },
-        )
-    }
-    fn rank() -> usize {
-        3
-    }
-}
-
-/// An **advanced** override for how a generic wrapper (`Option`/`Result`/
-/// `Vec`/…) is unwrapped for one specific inner type — e.g. handle
-/// `Result<_, MyError>` your own way instead of through the built-in
-/// `Result` support. The `pattern` carries `_` wildcards for the parts that
-/// stay generic. Register it with [`JniGen::generic_type_wrapper`]; it names
-/// no Kotlin type of its own and belongs to no package.
-///
-/// Build one with [`generic_type_wrapper!`](crate::generic_type_wrapper),
-/// then supply [`input`](Self::input) / [`output`](Self::output).
-pub struct GenericTypeWrapperDecl {
-    pub(crate) pattern: syn::Type,
-    pub(crate) input: Option<(usize, WrapperFn)>,
-    pub(crate) output: Option<(usize, WrapperFn)>,
-}
-
-impl GenericTypeWrapperDecl {
-    /// `pattern` contains 1–3 `_` wildcard placeholders (e.g.
-    /// `Result<_, ConcreteErr>`). See [`crate::generic_type_wrapper!`] for the
-    /// equivalent macro form.
-    pub fn new(pattern: syn::Type) -> Self {
-        Self {
-            pattern,
-            input: None,
-            output: None,
-        }
-    }
-
-    /// How to convert **into Rust** (used when the type is a parameter). The
-    /// closure receives one `&syn::Type` per `_` in `pattern` (so its arity
-    /// tells the generator how many wildcards there are), plus the value's
-    /// ident, and returns a [`WireBody`].
-    pub fn input<A, B: WrapperBuilder<A>>(mut self, builder: B) -> Self {
-        self.input = Some((B::rank(), builder.into_wrapper_fn()));
-        self
-    }
-
-    /// How to convert **out of Rust** (used when the type is returned) — the
-    /// counterpart of [`input`](Self::input).
-    pub fn output<A, B: WrapperBuilder<A>>(mut self, builder: B) -> Self {
-        self.output = Some((B::rank(), builder.into_wrapper_fn()));
-        self
-    }
 }

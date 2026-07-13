@@ -1,12 +1,12 @@
 use super::*;
 
-/// A rank-0 wrapper on a Rust builtin generates a converter qualified with the
-/// `source_module` (`myflat::usize`) — invalid Rust — so the registration is
-/// rejected up front, at construction time.
+/// A `convert!` on a Rust builtin is rejected up front, at construction
+/// time — builtins already have converters, and generated calls would try
+/// to crate-qualify the builtin.
 #[test]
-#[should_panic(expected = "ScalarTypeWrapperDecl on builtin `usize`")]
-fn builtin_wrapper_pattern_panics() {
-    let _ = crate::scalar_type_wrapper!(usize, jni::sys::jlong, "Long");
+#[should_panic(expected = "convert!(usize): builtins already have converters")]
+fn builtin_convert_type_panics() {
+    let _ = crate::convert!(usize);
 }
 
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn

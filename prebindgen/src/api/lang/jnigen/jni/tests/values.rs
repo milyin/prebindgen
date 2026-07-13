@@ -413,41 +413,115 @@ fn fromparts_fallback_boxes_option_fields() {
     assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
 }
 
-/// An output-only wrapper type must resolve with only its `.on_return()`
-/// registered: wrapper registrations are required per USAGE direction, unlike
-/// the four class declarators (always both). Regression: registering the
-/// wrapper used to add the type to `declared_types`, and the scan blanket-
-/// required both directions.
+/// An output-only `convert!` type must resolve with only its `.output()`
+/// conversion declared: conversions are required per USAGE direction, unlike
+/// the four class declarators (always both). The conversion is an ordinary
+/// `#[prebindgen]` fn — its signature supplies the continue type (`i64` ⇒
+/// jlong wire, Kotlin `Long`), no verbatim strings, no injected expressions.
 #[test]
-fn output_only_wrapper_resolves_without_input_twin() {
+fn output_only_convert_resolves_without_input_twin() {
     use crate::SourceLocation;
     let loc = SourceLocation::default();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![(
-        syn::Item::Fn(syn::parse_quote!(
-            pub fn len_of(s: &String) -> Len {
-                unimplemented!()
-            }
-        )),
-        loc.clone(),
-    )];
+    let fns: &[&str] = &[
+        "pub fn len_of(s: &String) -> Len { unimplemented!() }",
+        "pub fn len_value(l: &Len) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
         .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
-        .scalar_type_wrapper(
-            crate::scalar_type_wrapper!(Len, jni::sys::jlong, "Long")
-                .on_return(|v| syn::parse_quote!(#v.0 as jni::sys::jlong)),
-        )
+        .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
-    let dir = unique_test_dir("jnigen_outonly_wrapper");
+    let dir = unique_test_dir("jnigen_outonly_convert");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let rust_path = registry
         .write_rust(&jni, dir.join("gen.rs"))
-        .expect("an output-only wrapper type must not require an input twin");
+        .expect("an output-only convert type must not require an input twin");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
-    // The return crosses through the registered output wrapper (jlong wire).
-    assert!(rc.contains("Len_to_jlong"), "{rust}");
+    // The return crosses through the conversion fn, composed with i64's own
+    // converter chain (jlong wire).
+    assert!(rc.contains("myflat::len_value(&v)"), "{rust}");
     assert!(rc.contains("myflat::len_of(&s)"), "{rust}");
+}
+
+/// Multi-source qualification: a fn with a recorded origin crate is called
+/// with that crate's module prefix, while origin-less fns keep the
+/// configured `source_module` — the helper-crate model behind `convert!`.
+#[test]
+fn convert_fn_qualifies_with_origin_crate() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn len_of(s: &String) -> Len { unimplemented!() }",
+        "pub fn len_value(l: &Len) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    // Simulate `from_sources` ingestion: the conversion fn comes from a
+    // separate helper crate.
+    registry.fn_origins.insert(
+        syn::Ident::new("len_value", proc_macro2::Span::call_site()),
+        "my-helpers".to_string(),
+    );
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .convert(crate::convert!(Len).output(crate::fun!(len_value)))
+        .package(crate::package!("len").fun(crate::fun!(len_of)));
+    let dir = unique_test_dir("jnigen_convert_origin");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // The conversion fn call carries the origin-crate module (dashes →
+    // underscores); the exported fn keeps the default source module.
+    assert!(rc.contains("my_helpers::len_value(&v)"), "{rust}");
+    assert!(rc.contains("myflat::len_of(&s)"), "{rust}");
+}
+
+/// `convert!` input fn must produce the declared type — a mismatch is a
+/// hard error naming both.
+#[test]
+#[should_panic(expected = "produces `Other`, not `Len`")]
+fn convert_input_target_mismatch_rejected() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn from_long(v: i64) -> Other { unimplemented!() }",
+        "pub fn use_len(l: Len) { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .convert(crate::convert!(Len).input(crate::fun!(from_long)))
+        .package(crate::package!("len").fun(crate::fun!(use_len)));
+    let dir = unique_test_dir("jnigen_convert_mismatch");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
 }

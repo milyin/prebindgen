@@ -3,13 +3,27 @@
 //! [`JniGen::new`] starts from defaults; global settings are applied with
 //! the `set_*` methods (`config.rs`) and declarations are *accepted* as
 //! pre-built objects (`decl.rs`) via [`JniGen::package`], [`JniGen::expand`],
-//! [`JniGen::scalar_type_wrapper`], and [`JniGen::generic_type_wrapper`] —
-//! there is no fluent typestate cursor. Carved from the former monolithic
+//! and [`JniGen::convert`] — there is no fluent typestate cursor. Carved from the former monolithic
 //! JNI module; shares the `jni` namespace via `use super::*`.
 
 use super::*;
 
 impl JniGen {
+    /// The module path a generated call to `#[prebindgen]` fn `ident` must be
+    /// qualified with: the fn's **origin crate** when the registry was built
+    /// from [`crate::core::Registry::from_sources`] (multi-source bindings —
+    /// helper crates layered on the flat crate), else the configured
+    /// [`Self::set_source_module`] default.
+    pub(crate) fn fn_module(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        ident: &syn::Ident,
+    ) -> syn::Path {
+        registry
+            .fn_origin_module(ident)
+            .unwrap_or_else(|| self.source_module.clone())
+    }
+
     /// Whether `ty` was registered via an `EnumClassDecl` — used by the
     /// Kotlin wrapper generator to decide if a parameter needs a `.value`
     /// projection between the typed enum (Kotlin signature) and the `Int`
@@ -28,7 +42,7 @@ impl JniGen {
     /// crate`, empty base package, no `JNINative` init block, identity
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
     /// methods, add declarations with [`package`](Self::package),
-    /// [`scalar_type_wrapper`](Self::scalar_type_wrapper), etc., then run the
+    /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
     /// result through `Registry::write_rust` / `write_kotlin`. Settings and
     /// declarations may be interleaved in any order — the builder stores
     /// only raw inputs, and every setting-derived name is computed at the
@@ -60,6 +74,7 @@ impl JniGen {
             jni_native_init: None,
             expansions: crate::api::core::expand::Expansions::default(),
             deconstructors: crate::api::core::unfold::Deconstructors::default(),
+            convert_decls: Vec::new(),
             param_expand_decls: Vec::new(),
             return_expand_decls: Vec::new(),
             fn_param_expands: Vec::new(),
@@ -70,10 +85,9 @@ impl JniGen {
             ignored_const_idents: std::collections::HashSet::new(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
-        // as T and routes E to the error-sink on Err. Consumers may override
-        // per-binding by registering a more specific rank-1
-        // `GenericTypeWrapperDecl::new(pq!(Result<_, ConcreteErr>))` (rank-1
-        // fires before rank-2 in resolve and short-circuits this).
+        // as T and routes E to the error-sink on Err. The rank tables are
+        // internal — this is their only entry; `convert!` covers concrete
+        // types at rank 0.
         let pattern: syn::Type = syn::parse_quote!(Result<_, _>);
         let key = TypeKey::from_type(&pattern);
         jni.output_wrappers[2].insert(
@@ -684,61 +698,169 @@ impl JniGen {
     }
 }
 
-// ── Accepting wrapper decls ──────────────────────────────────────────────
+// ── Accepting the convert decl ───────────────────────────────────────────
 
 impl JniGen {
-    /// Teach the generator how a **custom scalar type** crosses the boundary
-    /// — e.g. a newtype like `Millis(u64)` that should travel as a plain
-    /// `Long` rather than as a class. You supply the wire type and the
-    /// convert-in / convert-out expressions (see [`ScalarTypeWrapperDecl`]).
-    /// Applies wherever that type appears; not tied to any package.
-    pub fn scalar_type_wrapper(mut self, decl: ScalarTypeWrapperDecl) -> Self {
-        let key = TypeKey::from_type(&decl.pattern);
-        if let Some(input) = decl.input {
-            let wire_src = decl.wire.clone();
-            self.input_wrappers[0].insert(
-                key.clone(),
-                Arc::new(
-                    move |_args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                        let wire: syn::Type =
-                            syn::parse_str(&wire_src).expect("stored wire type re-parses");
-                        Some((wire, None, input(&wrapper_value_ident())))
-                    },
-                ),
-            );
-        }
-        if let Some(output) = decl.output {
-            let wire_src = decl.wire.clone();
-            self.output_wrappers[0].insert(
-                key.clone(),
-                Arc::new(
-                    move |_args: &[syn::Type], _registry: &Registry<KotlinMeta>| {
-                        let wire: syn::Type =
-                            syn::parse_str(&wire_src).expect("stored wire type re-parses");
-                        Some((wire, None, output(&wrapper_value_ident())))
-                    },
-                ),
-            );
-        }
-        let entry = self.types.entry(key.clone()).or_default();
-        entry.name_spec = Some(NameSpec::Verbatim(decl.kotlin_type));
+    /// Declare a type's **canonical single-value conversion** (a
+    /// [`ConvertDecl`], built with [`convert!`](crate::convert)): a pair of
+    /// `#[prebindgen]` functions carrying one value of the type across the
+    /// boundary wherever a single value is needed (params, returns,
+    /// `Option`/`Vec` elements, the `Result<T, E>` success position,
+    /// `data_class` fields). Applies wherever the type appears; not tied to
+    /// any package. See [`ConvertDecl`] for the relation to the
+    /// [`expand`](Self::expand) boundary decls.
+    pub fn convert(mut self, decl: ConvertDecl) -> Self {
+        assert!(
+            decl.input.is_some() || decl.output.is_some(),
+            "convert!({}) declares no conversions — add .input(fun!(...)) and/or \
+             .output(fun!(...))",
+            decl.key.as_str()
+        );
+        self.convert_decls.push(decl);
         self
     }
 
-    /// Override how a **generic wrapper type** is unwrapped for a specific
-    /// inner type — e.g. peel `Result<_, MyError>` your own way rather than
-    /// through the built-in `Result` handling. You give a pattern with
-    /// wildcards and the convert bodies (see [`GenericTypeWrapperDecl`]).
-    /// Not tied to any package.
-    pub fn generic_type_wrapper(mut self, decl: GenericTypeWrapperDecl) -> Self {
-        let key = TypeKey::from_type(&decl.pattern);
-        if let Some((rank, f)) = decl.input {
-            self.input_wrappers[rank].insert(key.clone(), f);
-        }
-        if let Some((rank, f)) = decl.output {
-            self.output_wrappers[rank].insert(key, f);
-        }
-        self
+    /// Derive the rank-0 **input** converter body for a `convert!`-declared
+    /// type: `(continue_ty, exc, body)` where `continue_ty` is the conversion
+    /// fn's parameter type (by value) — the composed-converter machinery
+    /// chains it through that type's own converter, so the wire and the
+    /// Kotlin surface derive from it. Consulted by [`Self::lookup_input`]
+    /// before the wrapper tables; signatures are read from the registry at
+    /// lookup time (order-independent, and multi-source qualification via
+    /// [`Self::fn_module`]).
+    pub(crate) fn convert_input_body(
+        &self,
+        key: &TypeKey,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
+        let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
+        let f = decl.input.as_ref()?;
+        let (item_fn, _) = registry.functions.get(f).unwrap_or_else(|| {
+            panic!(
+                "convert!({}).input({f}): function not found among #[prebindgen] items",
+                key.as_str()
+            )
+        });
+        let (param_ty, by_ref) = convert_single_param(key, f, item_fn, "input");
+        // Return: `T` (infallible) or `Result<T, E>` (fallible — E routes to
+        // the caller's error handler through the standard exc slot).
+        let ret = fn_return_type(item_fn);
+        let (ok_ty, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
+            Some(ok) => (
+                ok,
+                Some(
+                    crate::api::core::types_util::result_err_type(&ret)
+                        .expect("result_ok_type implies result_err_type"),
+                ),
+            ),
+            None => (ret, None),
+        };
+        assert!(
+            TypeKey::from_type(&ok_ty) == *key,
+            "convert!({k}).input({f}): the function produces `{got}`, not `{k}`",
+            k = key.as_str(),
+            got = TypeKey::from_type(&ok_ty).as_str()
+        );
+        let module = self.fn_module(registry, f);
+        let body: syn::Expr = if by_ref {
+            syn::parse_quote!(#module::#f(&v))
+        } else {
+            syn::parse_quote!(#module::#f(v))
+        };
+        Some((param_ty, exc, body))
+    }
+
+    /// Output-direction peer of [`Self::convert_input_body`]: the conversion
+    /// fn takes `&T` (or `T`) and returns the continue type.
+    pub(crate) fn convert_output_body(
+        &self,
+        key: &TypeKey,
+        registry: &Registry<KotlinMeta>,
+    ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
+        let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
+        let g = decl.output.as_ref()?;
+        let (item_fn, _) = registry.functions.get(g).unwrap_or_else(|| {
+            panic!(
+                "convert!({}).output({g}): function not found among #[prebindgen] items",
+                key.as_str()
+            )
+        });
+        let (param_ty, by_ref) = convert_single_param_any(g, item_fn);
+        assert!(
+            TypeKey::from_type(&param_ty) == *key,
+            "convert!({k}).output({g}): the function takes `{got}`, not `{k}`",
+            k = key.as_str(),
+            got = TypeKey::from_type(&param_ty).as_str()
+        );
+        let ret = fn_return_type(item_fn);
+        assert!(
+            TypeKey::from_type(&ret) != *key,
+            "convert!({k}).output({g}): the function must return the converted form, not `{k}`",
+            k = key.as_str()
+        );
+        let module = self.fn_module(registry, g);
+        let body: syn::Expr = if by_ref {
+            syn::parse_quote!(#module::#g(&v))
+        } else {
+            syn::parse_quote!(#module::#g(v))
+        };
+        Some((ret, None, body))
+    }
+
+    /// Idents of every `convert!` conversion function — scanned as helper
+    /// functions ([`Prebindgen::helper_functions`]) so their signature types
+    /// resolve without emitting externs for them.
+    pub(crate) fn convert_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
+        self.convert_decls
+            .iter()
+            .flat_map(|d| d.input.iter().chain(d.output.iter()).cloned())
+    }
+}
+
+/// The single typed parameter of a conversion fn, peeled of a leading `&`;
+/// asserts arity 1. Returns `(peeled_type, was_by_ref)`.
+fn convert_single_param_any(f: &syn::Ident, item_fn: &syn::ItemFn) -> (syn::Type, bool) {
+    let params: Vec<&syn::PatType> = item_fn
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|i| match i {
+            syn::FnArg::Typed(pt) => Some(pt),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        params.len() == 1,
+        "convert fn `{f}` must take exactly one parameter, it takes {}",
+        params.len()
+    );
+    match &*params[0].ty {
+        syn::Type::Reference(r) => ((*r.elem).clone(), true),
+        other => (other.clone(), false),
+    }
+}
+
+/// [`convert_single_param_any`] + the direction-specific error context.
+fn convert_single_param(
+    key: &TypeKey,
+    f: &syn::Ident,
+    item_fn: &syn::ItemFn,
+    dir: &str,
+) -> (syn::Type, bool) {
+    let (ty, by_ref) = convert_single_param_any(f, item_fn);
+    assert!(
+        TypeKey::from_type(&ty) != *key,
+        "convert!({k}).{dir}({f}): the function must take the converted form, not `{k}` itself",
+        k = key.as_str()
+    );
+    (ty, by_ref)
+}
+
+/// A fn's return type (`()` for none).
+fn fn_return_type(item_fn: &syn::ItemFn) -> syn::Type {
+    match &item_fn.sig.output {
+        syn::ReturnType::Default => syn::parse_quote!(()),
+        syn::ReturnType::Type(_, t) => (**t).clone(),
     }
 }
 
@@ -828,8 +950,20 @@ impl JniGen {
             return None;
         }
         let key = TypeKey::from_type(pat);
-        let f = self.input_wrappers[rank].get(&key)?;
-        let (ty, exc_ty, body) = f(args, registry)?;
+        // A `convert!`-declared conversion takes precedence at rank 0 (its
+        // signature-derived body is equivalent to a rank-0 registration,
+        // just computed at the point of use).
+        let (ty, exc_ty, body) = match if rank == 0 {
+            self.convert_input_body(&key, registry)
+        } else {
+            None
+        } {
+            Some(t) => t,
+            None => {
+                let f = self.input_wrappers[rank].get(&key)?;
+                f(args, registry)?
+            }
+        };
         // The closure's middle slot carries the `Result`'s raw Rust error
         // type (or `None` for the framework `__JniErr`); it feeds the
         // converter signature `Result<_, E>` directly — no registration.
@@ -945,8 +1079,19 @@ impl JniGen {
             return None;
         }
         let key = TypeKey::from_type(pat);
-        let f = self.output_wrappers[rank].get(&key)?;
-        let (ty, exc_ty, body) = f(args, registry)?;
+        // A `convert!`-declared conversion takes precedence at rank 0 — see
+        // [`Self::lookup_input`].
+        let (ty, exc_ty, body) = match if rank == 0 {
+            self.convert_output_body(&key, registry)
+        } else {
+            None
+        } {
+            Some(t) => t,
+            None => {
+                let f = self.output_wrappers[rank].get(&key)?;
+                f(args, registry)?
+            }
+        };
         // The closure's middle slot carries the `Result`'s raw Rust error
         // type (or `None` for the framework `__JniErr`) — see lookup_input.
         let exc = exc_ty.as_ref();

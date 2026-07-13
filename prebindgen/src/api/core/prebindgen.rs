@@ -23,7 +23,7 @@ use proc_macro2::TokenStream;
 
 use crate::api::core::{
     niches::Niches,
-    registry::{Registry, TypeKey},
+    registry::{Direction, Registry, TypeKey},
 };
 
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
@@ -275,6 +275,33 @@ pub trait Prebindgen {
     /// Default: empty.
     fn ignored_functions(&self) -> HashSet<syn::Ident> {
         HashSet::new()
+    }
+
+    /// Idents of `#[prebindgen]` **helper** functions: called from the
+    /// adapter's generated converter bodies rather than exported. No
+    /// extern/wrapper is emitted for them and the "skipping undeclared"
+    /// warning is suppressed; the specific types a helper makes the adapter
+    /// depend on are registered via [`Self::extra_required_types`] (a full
+    /// signature scan would over-require — e.g. an output conversion fn's
+    /// `&T` parameter has no input-direction meaning).
+    ///
+    /// Default: empty.
+    fn helper_functions(&self) -> HashSet<syn::Ident> {
+        HashSet::new()
+    }
+
+    /// Extra converter requirements the adapter derives from its own decls
+    /// **with registry access** (e.g. a `convert!` conversion fn's
+    /// other-side type, in the conversion's direction, read from the fn's
+    /// registry signature). Consulted by `write_rust` after the adapter's
+    /// plans are applied and before resolution.
+    ///
+    /// Default: none.
+    fn extra_required_types(
+        &self,
+        _registry: &Registry<Self::Metadata>,
+    ) -> Vec<(Direction, syn::Type)> {
+        Vec::new()
     }
 
     /// Idents of `#[prebindgen]` consts the adapter claims for emission.

@@ -7,9 +7,8 @@
 //! including the coverage-only items in `perftest_flat::ext` — through the full
 //! adapter surface. `JniGen` accepts pre-built declaration objects (see
 //! `prebindgen::lang::jnigen::jni::decl`) rather than a fluent typestate
-//! chain — each row below is a `PackageDecl`/`ScalarTypeWrapperDecl`/etc. built
-//! independently and then handed to `jni.package(...)` /
-//! `jni.scalar_type_wrapper(...)`:
+//! chain — each row below is a `PackageDecl`/`ConvertDecl`/etc. built
+//! independently and then handed to `jni.package(...)` / `jni.convert(...)`:
 //!
 //! | JniGen feature                       | Exercised by |
 //! |--------------------------------------|--------------|
@@ -22,7 +21,7 @@
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
-//! | `ScalarTypeWrapperDecl`              | `Millis` ⇄ `Long` |
+//! | `convert!` + multi-source (`from_sources`) | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
@@ -71,13 +70,18 @@
 //! emitting nothing.
 
 use prebindgen::{
-    constant, constant_expr, core::Registry, data_class, enum_class, expand_param, expand_return,
-    fun, lang::JniGen, package, ptr_class, scalar_type_wrapper, value_class,
+    constant, constant_expr, convert, core::Registry, data_class, enum_class, expand_param,
+    expand_return, fun, lang::JniGen, package, ptr_class, value_class,
 };
 use syn::parse_quote as pq;
 
 fn main() {
+    // Two prebindgen sources: the flat crate plus the binding-side helper
+    // crate (conversion fns for `convert!`). The registry records each fn's
+    // origin so generated calls qualify with the defining crate
+    // (`perftest_flat::…` vs `covertest_helpers::…`).
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
+    let helpers = prebindgen::Source::new(covertest_helpers::PREBINDGEN_OUT_DIR);
 
     let jni = JniGen::new()
         .set_source_module(pq!(perftest_flat))
@@ -94,13 +98,16 @@ fn main() {
         .set_ptr_class_name_mangle(|n| n.to_string())
         .set_data_class_name_mangle(|n| n.to_string())
         .set_enum_name_mangle(|n| n.to_string())
-        // `Millis` newtype: a custom scalar wire mapping to a bare `Long` (no
-        // generated class) — global, not tied to any package (see the `decl`
-        // module doc for why a scalar wrapper never needs package placement).
-        .scalar_type_wrapper(
-            scalar_type_wrapper!(Millis, jni::sys::jlong, "Long")
-                .on_param(|v| pq!(perftest_flat::Millis(*#v as u64)))
-                .on_return(|v| pq!(#v.0 as jni::sys::jlong)),
+        // `Millis` newtype: a canonical single-value conversion to a bare
+        // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
+        // defined in the SEPARATE `covertest-helpers` source crate, proving
+        // the multi-source model (generated calls carry the
+        // `covertest_helpers::` prefix). The Kotlin surface (`Long`) derives
+        // from the fns' `i64` side; nothing is stated verbatim.
+        .convert(
+            convert!(Millis)
+                .input(fun!(millis_from_long))
+                .output(fun!(millis_value)),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
@@ -244,26 +251,28 @@ fn main() {
                     fun!(summary_total_raw)
                         .expand_param("s", expand_param!(Summary).variant_self()),
                 )
-                .fun(fun!(storage_summary_full).expand_return(
-                    expand_return!(Summary)
-                        .field(fun!(summary_count).name("count"))
-                        .field(fun!(summary_total).name("total"))
-                        .field_self(),
-                ))
-                .fun(fun!(storage_expect_summary).expand_param(
-                    "expected",
-                    expand_param!(Summary)
-                        .variant(fun!(summary_new))
-                        .variant_self(),
-                ))
+                .fun(
+                    fun!(storage_summary_full).expand_return(
+                        expand_return!(Summary)
+                            .field(fun!(summary_count).name("count"))
+                            .field(fun!(summary_total).name("total"))
+                            .field_self(),
+                    ),
+                )
+                .fun(
+                    fun!(storage_expect_summary).expand_param(
+                        "expected",
+                        expand_param!(Summary)
+                            .variant(fun!(summary_new))
+                            .variant_self(),
+                    ),
+                )
                 // The borrowed-accessor trio. `archive_latest` suppresses the default
                 // Summary return-field default so the BORROWED handle path (clone into a
                 // fresh owned handle, null when absent) is what crosses.
                 .fun(fun!(archive_new))
                 .fun(fun!(archive_store))
-                .fun(
-                    fun!(archive_latest).expand_return(expand_return!(Summary).field_self()),
-                ),
+                .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self())),
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
         // fallible constructor and the Millis wrapper.
@@ -308,7 +317,7 @@ fn main() {
         .ignore_fun(fun!(storage_get_into_uninit))
         .ignore_fun(fun!(storage_put_by_read_and_update));
 
-    let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    let mut registry = Registry::from_sources([&source, &helpers]).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

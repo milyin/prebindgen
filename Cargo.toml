@@ -9,6 +9,7 @@ members = [
     "examples/perftest-flat",
     "examples/perftest-c",
     "examples/perftest-kotlin",
+    "examples/covertest-helpers",
     "examples/covertest-kotlin",
 ]
 resolver = "2"
