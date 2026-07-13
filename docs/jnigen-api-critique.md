@@ -143,6 +143,16 @@ Scope cut, recorded: deleting `GenericTypeWrapperDecl` removes user-defined
 reopened when a real consumer needs one; concrete instantiations are already
 coverable by `convert!`.
 
+**Follow-up (2026-07-14): `set_source_module` removed entirely.** With
+per-item origins recorded for every named item at `from_sources` ingestion,
+the setter had no information the registry didn't already own. The first
+source doubles as the default module (declared-but-unindexed types,
+deliberately unmarked types); item-level registries (`from_items`, tests)
+use `Registry::set_default_module`. `constant_expr` getters now glob-import
+every source module, so binding-defined expressions compose items from all
+sources. One less setting, one less way for the declaration to disagree
+with the data.
+
 ### M6. Two "package" concepts
 
 `.package(package!("bytes"))` adds a declaration batch under a *sub*package;
