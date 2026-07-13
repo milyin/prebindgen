@@ -172,6 +172,19 @@ with the data.
 `set_package_prefix` sets the actual package. `package!()` (no args) means
 "no subpackage", not "no package".
 
+> **Resolution (2026-07-14): intended design, no change.** The
+> absolute-base + relative-subpackage structure is deliberate: one knob
+> (`set_package_prefix`) relocates the whole binding tree, and a declaration
+> cannot accidentally land outside it. The naming friction this item flags is
+> real but already mitigated: the `set_` convention marks the prefix as a
+> generator-wide setting vs. `.package(...)` as a surface declaration
+> (`config.rs` module doc), and the `package!` / `PackageDecl` docs state
+> explicitly that the argument is relative to `set_package_prefix` and that
+> `package!()` is the base package — not the JVM default package. The one
+> rename that would dissolve the `package!()` misreading (`subpackage!`) was
+> rejected: it trades this asymmetry for a method/macro mismatch
+> (`.package(subpackage!("model"))`) and a breaking rename across consumers.
+
 ### M7. Stale docs inside the API
 
 `kotlin_emit.rs` module doc says functions get a home "via `.method(...)`" —
