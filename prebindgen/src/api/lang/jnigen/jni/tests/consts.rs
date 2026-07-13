@@ -29,15 +29,13 @@ fn const_items() -> Vec<(syn::Item, crate::SourceLocation)> {
 #[test]
 fn declared_consts_emit_getter_and_val() {
     let mut registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("cfg")
-                .constant(crate::constant!(MAX_LEN))
-                .constant(crate::constant!(GREETING).name("HELLO")),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("cfg")
+            .constant(crate::constant!(MAX_LEN))
+            .constant(crate::constant!(GREETING).name("HELLO")),
+    );
 
     let dir = unique_test_dir("jnigen_consts_basic");
     let _ = std::fs::remove_dir_all(&dir);
@@ -104,9 +102,9 @@ fn declared_consts_emit_getter_and_val() {
 #[test]
 fn undeclared_const_not_emitted() {
     let mut registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant(crate::constant!(MAX_LEN)))
         .ignore_const(crate::constant!(GREETING));
@@ -147,9 +145,9 @@ fn constant_fun_emits_val_over_ordinary_wrapper() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant_fun(crate::fun!(tag).name("THE_TAG")));
 
@@ -201,8 +199,8 @@ fn constant_fun_non_nullary_rejected() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant_fun(crate::fun!(scaled)));
     let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
@@ -239,14 +237,12 @@ fn constant_fun_handle_return_rejected() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("things")
-                .class(crate::ptr_class!(ZThing))
-                .constant_fun(crate::fun!(default_thing)),
-        );
+    registry.set_default_module("myflat");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("things")
+            .class(crate::ptr_class!(ZThing))
+            .constant_fun(crate::fun!(default_thing)),
+    );
     let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -258,7 +254,7 @@ fn constant_fun_handle_return_rejected() {
 
 /// End-to-end for expression-backed constants (`PackageDecl::constant_expr`):
 /// the binding-defined expression is evaluated inside a generated nullary
-/// getter (with `use <source_module>::*;` in scope, composing source items
+/// getter (with every source module glob-imported, composing source items
 /// without the source crate exporting a dedicated accessor), and surfaces as
 /// a private helper + public eagerly-initialized `val`.
 #[test]
@@ -274,15 +270,13 @@ fn constant_expr_emits_getter_and_val() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("cfg")
-                .fun(crate::fun!(tag_of))
-                .constant_expr(crate::constant_expr!(DEFAULT_TAG: String = tag_of(7))),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("cfg")
+            .fun(crate::fun!(tag_of))
+            .constant_expr(crate::constant_expr!(DEFAULT_TAG: String = tag_of(7))),
+    );
 
     let dir = unique_test_dir("jnigen_constant_expr_basic");
     let _ = std::fs::remove_dir_all(&dir);
@@ -349,15 +343,13 @@ fn constant_expr_handle_type_rejected() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("things")
-                .class(crate::ptr_class!(ZThing))
-                .fun(crate::fun!(thing_new))
-                .constant_expr(crate::constant_expr!(DEFAULT_THING: ZThing = thing_new())),
-        );
+    registry.set_default_module("myflat");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("things")
+            .class(crate::ptr_class!(ZThing))
+            .fun(crate::fun!(thing_new))
+            .constant_expr(crate::constant_expr!(DEFAULT_THING: ZThing = thing_new())),
+    );
     let dir = unique_test_dir("jnigen_constant_expr_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -395,16 +387,14 @@ fn handle_const_rejected() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("things")
-                .class(crate::ptr_class!(ZThing))
-                .fun(crate::fun!(thing_new))
-                .constant(crate::constant!(DEFAULT_THING)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("things")
+            .class(crate::ptr_class!(ZThing))
+            .fun(crate::fun!(thing_new))
+            .constant(crate::constant!(DEFAULT_THING)),
+    );
 
     let dir = unique_test_dir("jnigen_consts_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);

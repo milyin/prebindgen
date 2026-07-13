@@ -12,16 +12,26 @@ impl JniGen {
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
     /// qualified with: the fn's **origin crate** when the registry was built
     /// from [`crate::core::Registry::from_sources`] (multi-source bindings —
-    /// helper crates layered on the flat crate), else the configured
-    /// [`Self::set_source_module`] default.
+    /// helper crates layered on the flat crate), else the registry's default
+    /// module ([`crate::core::Registry::set_default_module`]).
     pub(crate) fn fn_module(
         &self,
         registry: &Registry<KotlinMeta>,
         ident: &syn::Ident,
     ) -> syn::Path {
         registry
-            .fn_origin_module(ident)
-            .unwrap_or_else(|| self.source_module.clone())
+            .origin_module(ident)
+            .or_else(|| registry.default_module())
+            .unwrap_or_else(|| syn::parse_quote!(crate))
+    }
+
+    /// The module for source references with no per-item origin (declared
+    /// types with no `#[prebindgen]` item, glob imports): the registry's
+    /// default module (first source), `crate` for an origin-less registry.
+    pub(crate) fn default_module(&self, registry: &Registry<KotlinMeta>) -> syn::Path {
+        registry
+            .default_module()
+            .unwrap_or_else(|| syn::parse_quote!(crate))
     }
 
     /// Whether `ty` was registered via an `EnumClassDecl` — used by the
@@ -38,8 +48,8 @@ impl JniGen {
 }
 
 impl JniGen {
-    /// Start a binding generator with default settings: `source_module =
-    /// crate`, empty base package, no `JNINative` init block, identity
+    /// Start a binding generator with default settings: empty base
+    /// package, no `JNINative` init block, identity
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
     /// methods, add declarations with [`package`](Self::package),
     /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
@@ -49,7 +59,6 @@ impl JniGen {
     /// point of use.
     pub fn new() -> Self {
         let mut jni = Self {
-            source_module: syn::parse_str("crate").unwrap(),
             package: String::new(),
             fun_name_mangle: None,
             ptr_class_name_mangle: None,

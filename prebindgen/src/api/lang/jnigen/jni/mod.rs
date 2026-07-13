@@ -283,10 +283,6 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 /// ```
 #[derive(Clone)]
 pub struct JniGen {
-    /// Module path the original `#[prebindgen]` fns live under (e.g.
-    /// the host crate of `#[prebindgen]` items). The wrapper body calls
-    /// `<source_module>::<fn>(args)`.
-    pub source_module: syn::Path,
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
     /// Every derived form — slash-separated for `FindClass`

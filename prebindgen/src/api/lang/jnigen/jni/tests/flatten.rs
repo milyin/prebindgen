@@ -21,9 +21,9 @@ fn inline_output_gets_own_builder() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -120,9 +120,9 @@ fn error_unwrap_universal_records() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("errors")
@@ -243,29 +243,27 @@ fn method_constructor_and_inline_field_self() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("thing")
-                .class(
-                    crate::ptr_class!(ZThing)
-                        .fun(crate::fun!(z_thing_name).name("name"))
-                        // A fun with extra params: `&ZThing` receiver + a `name: String` param.
-                        .fun(crate::fun!(z_thing_rename).name("rename"))
-                        // A constructor: factory returning ZThing.
-                        .constructor(crate::fun!(z_thing_make).name("make")),
-                )
-                // A free fn whose per-fn inline output decomposes to (handle, name).
-                .fun(
-                    crate::fun!(z_get).expand_return(
-                        crate::expand_return!(ZThing)
-                            .field_self()
-                            .field(crate::fun!(z_thing_name).name("name")),
-                    ),
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .class(
+                crate::ptr_class!(ZThing)
+                    .fun(crate::fun!(z_thing_name).name("name"))
+                    // A fun with extra params: `&ZThing` receiver + a `name: String` param.
+                    .fun(crate::fun!(z_thing_rename).name("rename"))
+                    // A constructor: factory returning ZThing.
+                    .constructor(crate::fun!(z_thing_make).name("make")),
+            )
+            // A free fn whose per-fn inline output decomposes to (handle, name).
+            .fun(
+                crate::fun!(z_get).expand_return(
+                    crate::expand_return!(ZThing)
+                        .field_self()
+                        .field(crate::fun!(z_thing_name).name("name")),
                 ),
-        );
+            ),
+    );
 
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);
@@ -318,9 +316,9 @@ fn rust_side_only_error_type() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
         // No class declaration for ZErr anywhere — rust-side-only. The field
@@ -389,9 +387,9 @@ fn rust_side_only_input_type() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
         .expand(crate::expand_param!(ZOpts).variant(crate::fun!(z_opts_new)));
@@ -436,8 +434,8 @@ fn rust_side_only_variant_self_rejected() {
         syn::parse_str("pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
         .expand(crate::expand_param!(ZOpts).variant_self());
     let dir = unique_test_dir("jnigen_rso_self_in");
@@ -456,8 +454,8 @@ fn rust_side_only_field_self_rejected() {
     let f: syn::ItemFn = syn::parse_str("pub fn z_make() -> ZThing { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
         .expand(crate::expand_return!(ZThing).field_self());
     let dir = unique_test_dir("jnigen_rso_self_out");
@@ -485,18 +483,17 @@ fn fn_expand_param_type_mismatch_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .package(
-            crate::package!("ops")
-                .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
-                .class(crate::ptr_class!(ZOther))
-                // Wrong type: the param `t` is a ZThing, not a ZOther.
-                .fun(crate::fun!(z_use).expand_param(
-                    "t",
-                    crate::expand_param!(ZOther).variant(crate::fun!(z_thing_make)),
-                )),
-        );
+    registry.set_default_module("myflat");
+    let jni = JniGen::new().package(
+        crate::package!("ops")
+            .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
+            .class(crate::ptr_class!(ZOther))
+            // Wrong type: the param `t` is a ZThing, not a ZOther.
+            .fun(crate::fun!(z_use).expand_param(
+                "t",
+                crate::expand_param!(ZOther).variant(crate::fun!(z_thing_make)),
+            )),
+    );
     let dir = unique_test_dir("jnigen_fn_param_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -525,15 +522,14 @@ fn fn_expand_return_type_mismatch_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .package(
-            crate::package!("ops")
-                .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
-                .class(crate::ptr_class!(ZOther))
-                // Wrong type: z_make returns ZThing, not ZOther.
-                .fun(crate::fun!(z_make).expand_return(crate::expand_return!(ZOther).field_self())),
-        );
+    registry.set_default_module("myflat");
+    let jni = JniGen::new().package(
+        crate::package!("ops")
+            .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
+            .class(crate::ptr_class!(ZOther))
+            // Wrong type: z_make returns ZThing, not ZOther.
+            .fun(crate::fun!(z_make).expand_return(crate::expand_return!(ZOther).field_self())),
+    );
     let dir = unique_test_dir("jnigen_fn_return_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -562,16 +558,15 @@ fn fn_expand_param_unknown_param_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .package(
-            crate::package!("ops")
-                .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
-                .fun(crate::fun!(z_use).expand_param(
-                    "typo",
-                    crate::expand_param!(ZThing).variant(crate::fun!(z_thing_make)),
-                )),
-        );
+    registry.set_default_module("myflat");
+    let jni = JniGen::new().package(
+        crate::package!("ops")
+            .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
+            .fun(crate::fun!(z_use).expand_param(
+                "typo",
+                crate::expand_param!(ZThing).variant(crate::fun!(z_thing_make)),
+            )),
+    );
     let dir = unique_test_dir("jnigen_fn_param_unknown");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

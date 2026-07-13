@@ -43,9 +43,9 @@ fn per_class_name_and_base_package_fun() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         // Rename the handle class; the mangle closures do NOT apply to it.
         .set_ptr_class_name_mangle(|n| format!("JNI{n}"))
@@ -118,6 +118,7 @@ fn setters_after_declarations_apply() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     // Declarations first, settings last.
     let jni = JniGen::new()
@@ -126,7 +127,6 @@ fn setters_after_declarations_apply() {
                 .class(crate::ptr_class!(ZThing))
                 .fun(crate::fun!(thing_new)),
         )
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.late.jni")
         .set_ptr_class_name_mangle(|n| n.strip_prefix('Z').unwrap_or(n).to_string());
 

@@ -418,15 +418,14 @@ pub(crate) fn struct_output_body(
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
 
-pub(crate) fn struct_module_path(ext: &JniGen, s: &syn::ItemStruct) -> syn::Path {
-    // Place the struct under <source_module>::<file_stem>::<Name>. Today's
-    // pipeline derives the module from the source file stem; here we ride
-    // on the same convention by inspecting the SourceLocation. Without a
-    // location handy at this stage we fall back to <source_module>::<Name>.
-    // In practice the actual file stem is added in the compose step at the
-    // call site by the consuming crate when needed.
-    let _ = s;
-    ext.source_module.clone()
+pub(crate) fn struct_module_path(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    s: &syn::ItemStruct,
+) -> syn::Path {
+    // The module the struct is reachable under from the generated file: its
+    // origin crate (multi-source registries) or the default module.
+    ext.fn_module(registry, &s.ident)
 }
 
 // ──────────────────────────────────────────────────────────────────────

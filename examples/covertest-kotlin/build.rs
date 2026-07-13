@@ -12,7 +12,7 @@
 //!
 //! | JniGen feature                       | Exercised by |
 //! |--------------------------------------|--------------|
-//! | `JniGen::set_source_module`        | `perftest_flat` |
+//! | default module (first `from_sources` src) | `perftest_flat` |
 //! | `JniGen::set_package_prefix`       | `io.prebindgen.covertest` |
 //! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
 //! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
@@ -73,7 +73,6 @@ use prebindgen::{
     constant, constant_expr, convert, core::Registry, data_class, enum_class, expand_param,
     expand_return, fun, lang::JniGen, package, ptr_class, value_class,
 };
-use syn::parse_quote as pq;
 
 fn main() {
     // Two prebindgen sources: the flat crate plus the binding-side helper
@@ -84,7 +83,6 @@ fn main() {
     let helpers = prebindgen::Source::new(covertest_helpers::PREBINDGEN_OUT_DIR);
 
     let jni = JniGen::new()
-        .set_source_module(pq!(perftest_flat))
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
         // All five per-kind name-mangle hooks are registered. The harness hook

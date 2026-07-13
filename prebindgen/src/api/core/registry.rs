@@ -174,14 +174,22 @@ pub struct Registry<M = ()> {
     /// Anything else (use, mod, type alias, macro_rules) — passed through.
     pub passthrough: Vec<(syn::Item, SourceLocation)>,
 
-    /// Origin crate name of each function, recorded when items are ingested
-    /// via [`Self::from_sources`] / [`Self::add_source`] (absent for
-    /// [`Self::from_items`], whose items all belong to the adapter's default
-    /// `source_module`). Adapters consult [`Self::fn_origin`] so generated
-    /// calls qualify each function with the module of the crate that
-    /// actually defines it — the multi-source model, where a binding layers
-    /// helper `#[prebindgen]` crates on top of the flat crate.
-    pub(crate) fn_origins: HashMap<syn::Ident, String>,
+    /// Origin crate name of each named item (fn/struct/enum/const),
+    /// recorded when items are ingested via [`Self::from_sources`] /
+    /// [`Self::add_source`] (absent for [`Self::from_items`]). Adapters
+    /// consult [`Self::origin_module`] so generated references qualify each
+    /// item with the module of the crate that actually defines it — the
+    /// multi-source model, where a binding layers helper `#[prebindgen]`
+    /// crates on top of the flat crate.
+    pub(crate) item_origins: HashMap<syn::Ident, String>,
+
+    /// Module name of every ingested source, in ingestion order (crate
+    /// names, dashes normalized to underscores). The FIRST entry doubles as
+    /// the **default module** for references with no recorded origin (e.g.
+    /// a declared type with no `#[prebindgen]` item). Settable directly via
+    /// [`Self::set_default_module`] for item-level construction
+    /// ([`Self::from_items`]).
+    pub(crate) source_modules: Vec<String>,
 
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
@@ -245,7 +253,8 @@ impl<M> Default for Registry<M> {
             enums: HashMap::new(),
             consts: HashMap::new(),
             passthrough: Vec::new(),
-            fn_origins: HashMap::new(),
+            item_origins: HashMap::new(),
+            source_modules: Vec::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_locations: HashMap::new(),
@@ -487,29 +496,67 @@ impl<M> Registry<M> {
     }
 
     /// Ingest one [`Source`]'s items, recording the source's crate name as
-    /// each function's origin. See [`Self::from_sources`].
+    /// each named item's origin (and the first ingested source as the
+    /// default module). See [`Self::from_sources`].
     ///
     /// [`Source`]: crate::Source
     pub fn add_source(&mut self, source: &crate::api::source::Source) -> Result<(), ScanError> {
         let crate_name = source.crate_name().to_string();
+        self.source_modules.push(crate_name.replace('-', "_"));
         for (item, loc) in source.items_all() {
-            if let syn::Item::Fn(f) = &item {
-                self.fn_origins
-                    .insert(f.sig.ident.clone(), crate_name.clone());
+            let named: Option<&syn::Ident> = match &item {
+                syn::Item::Fn(f) => Some(&f.sig.ident),
+                syn::Item::Struct(s) => Some(&s.ident),
+                syn::Item::Enum(e) => Some(&e.ident),
+                syn::Item::Const(c) if c.ident != "_" => Some(&c.ident),
+                _ => None,
+            };
+            if let Some(ident) = named {
+                self.item_origins.insert(ident.clone(), crate_name.clone());
             }
             self.index_item(item, loc)?;
         }
         Ok(())
     }
 
-    /// The origin crate's **module path** for a function ingested via
-    /// [`Self::from_sources`] (crate name with dashes replaced by
-    /// underscores), or `None` when unknown — the adapter then falls back to
-    /// its configured default source module.
-    pub fn fn_origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
-        let crate_name = self.fn_origins.get(ident)?;
+    /// Set the default module for generated references when the registry is
+    /// built item-by-item ([`Self::from_items`]) — the module the items'
+    /// crate is reachable under from the generated file. With
+    /// [`Self::from_sources`] this is derived automatically (the first
+    /// source), so calling it is only needed to override.
+    pub fn set_default_module(&mut self, module: &str) {
+        let module = module.replace('-', "_");
+        if self.source_modules.first().map(String::as_str) == Some(module.as_str()) {
+            return;
+        }
+        self.source_modules.insert(0, module);
+    }
+
+    /// The origin crate's **module path** for an item ingested via
+    /// [`Self::from_sources`], or `None` when unknown — callers then fall
+    /// back to [`Self::default_module`].
+    pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
+        let crate_name = self.item_origins.get(ident)?;
         let module = crate_name.replace('-', "_");
         syn::parse_str(&module).ok()
+    }
+
+    /// The default module for references with no recorded origin: the first
+    /// ingested source's module (or the [`Self::set_default_module`]
+    /// override). `None` for an origin-less item-level registry.
+    pub fn default_module(&self) -> Option<syn::Path> {
+        self.source_modules
+            .first()
+            .and_then(|m| syn::parse_str(m).ok())
+    }
+
+    /// Module paths of every ingested source, ingestion order — e.g. for a
+    /// glob import that must see all sources' items.
+    pub fn all_source_modules(&self) -> Vec<syn::Path> {
+        self.source_modules
+            .iter()
+            .filter_map(|m| syn::parse_str(m).ok())
+            .collect()
     }
 
     /// Scan the signature/body of every item declared by the adapter.

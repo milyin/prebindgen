@@ -38,21 +38,22 @@ pub(crate) fn rust_short_name_opt(key: &TypeKey) -> Option<String> {
 }
 
 /// `VisitMut` that prefixes every bare single-segment `Type::Path` whose
-/// ident lives in `source_names` with `source_module`. Walks the full
-/// AST — function signatures, generic args, type ascriptions, casts,
-/// turbofish — so any emitted item passes through one universal pass
+/// ident is a key of `source_names` with that name's origin module. Walks
+/// the full AST — function signatures, generic args, type ascriptions,
+/// casts, turbofish — so any emitted item passes through one universal pass
 /// instead of each emit site having to remember to qualify.
 pub(crate) struct QualifyEmittedTypes<'a> {
-    pub(crate) source_module: &'a syn::Path,
-    pub(crate) source_names: &'a std::collections::HashSet<String>,
+    /// Bare type name → the module it is reachable under (the item's origin
+    /// crate, or the registry's default module).
+    pub(crate) source_names: &'a std::collections::HashMap<String, syn::Path>,
 }
 
 impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     fn visit_type_path_mut(&mut self, tp: &mut syn::TypePath) {
         if tp.qself.is_none() && tp.path.leading_colon.is_none() && tp.path.segments.len() == 1 {
             let ident = tp.path.segments[0].ident.to_string();
-            if self.source_names.contains(&ident) {
-                let mut qualified = self.source_module.clone();
+            if let Some(module) = self.source_names.get(&ident) {
+                let mut qualified = module.clone();
                 qualified.segments.push(tp.path.segments[0].clone());
                 tp.path = qualified;
             }

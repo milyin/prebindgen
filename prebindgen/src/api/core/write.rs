@@ -124,7 +124,7 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     // 4. Cross-cutting post-process pass. Adapters use this to qualify
     //    bare type references etc. — see Prebindgen::post_process_item.
     for item in &mut items {
-        ext.post_process_item(item);
+        ext.post_process_item(item, registry);
     }
 
     let dest: Destination = items.into_iter().collect();

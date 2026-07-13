@@ -23,7 +23,6 @@ fn main() {
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
 
     let jni = JniGen::new()
-        .set_source_module(pq!(perftest_flat))
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).
@@ -85,7 +84,7 @@ fn main() {
                 .fun(fun!(storage_callback_vec)),
         );
 
-    let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    let mut registry = Registry::from_sources([&source]).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

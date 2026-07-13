@@ -257,6 +257,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
     let __out = {
         #[allow(unused_imports)]
         use perftest_flat::*;
+        #[allow(unused_imports)]
+        use covertest_helpers::*;
         format!("{COVER_TAG}:{COVER_MAGIC:#x}")
     };
     match String_to_JString_c7f3ca43(&mut env, __out) {

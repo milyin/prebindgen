@@ -44,9 +44,9 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!()
@@ -223,16 +223,14 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("payload")
-                .class(crate::data_class!(Payload))
-                .fun(crate::fun!(payload_get))
-                .fun(crate::fun!(payload_put)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("payload")
+            .class(crate::data_class!(Payload))
+            .fun(crate::fun!(payload_get))
+            .fun(crate::fun!(payload_put)),
+    );
 
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
@@ -304,16 +302,14 @@ fn slice_input_builds_vec_handle() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("foo")
-                .class(crate::data_class!(Foo))
-                .fun(crate::fun!(put_slice))
-                .fun(crate::fun!(put_vec)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("foo")
+            .class(crate::data_class!(Foo))
+            .fun(crate::fun!(put_slice))
+            .fun(crate::fun!(put_vec)),
+    );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
@@ -401,9 +397,9 @@ fn jni_native_init_emits_init_block() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .set_jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
         .package(crate::package!("thing").fun(crate::fun!(z_ping)));

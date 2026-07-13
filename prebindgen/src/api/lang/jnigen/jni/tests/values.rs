@@ -31,9 +31,9 @@ fn option_scalar_param_crosses_as_present_value_pair() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!().class(crate::enum_class!(Mode)))
         .package(crate::package!("cfg").fun(crate::fun!(z_set_timeout)));
@@ -131,16 +131,14 @@ fn vec_of_handle_output_folds_kotlin_side() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("thing")
-                .class(crate::ptr_class!(ZThing))
-                .fun(crate::fun!(thing_list))
-                .fun(crate::fun!(thing_list_opt)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .class(crate::ptr_class!(ZThing))
+            .fun(crate::fun!(thing_list))
+            .fun(crate::fun!(thing_list_opt)),
+    );
 
     let dir = unique_test_dir("jnigen_vec_handle_out");
     let _ = std::fs::remove_dir_all(&dir);
@@ -214,15 +212,13 @@ fn option_scalar_struct_field_flattens() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!()
-                .class(crate::data_class!(Opts))
-                .fun(crate::fun!(opts_put)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::data_class!(Opts))
+            .fun(crate::fun!(opts_put)),
+    );
 
     let dir = unique_test_dir("jnigen_optfield");
     let _ = std::fs::remove_dir_all(&dir);
@@ -335,9 +331,9 @@ fn fromparts_fallback_boxes_option_fields() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("model")
@@ -434,8 +430,8 @@ fn output_only_convert_resolves_without_input_twin() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
@@ -455,7 +451,7 @@ fn output_only_convert_resolves_without_input_twin() {
 
 /// Multi-source qualification: a fn with a recorded origin crate is called
 /// with that crate's module prefix, while origin-less fns keep the
-/// configured `source_module` — the helper-crate model behind `convert!`.
+/// registry's default module — the helper-crate model behind `convert!`.
 #[test]
 fn convert_fn_qualifies_with_origin_crate() {
     use crate::SourceLocation;
@@ -472,14 +468,14 @@ fn convert_fn_qualifies_with_origin_crate() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
     // Simulate `from_sources` ingestion: the conversion fn comes from a
     // separate helper crate.
-    registry.fn_origins.insert(
+    registry.item_origins.insert(
         syn::Ident::new("len_value", proc_macro2::Span::call_site()),
         "my-helpers".to_string(),
     );
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
@@ -516,8 +512,8 @@ fn convert_input_target_mismatch_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .convert(crate::convert!(Len).input(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
     let dir = unique_test_dir("jnigen_convert_mismatch");

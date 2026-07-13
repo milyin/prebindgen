@@ -314,15 +314,19 @@ pub(crate) fn default_niches_for_wire(wire: &syn::Type) -> Niches {
 /// `v: <ident>` signature — so binding crates can pick whichever
 /// upstream type a bare `<ident>` resolves to in their include-site
 /// `use` statements. Pairs with output body below.
-pub(crate) fn enum_input_body(ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, syn::Expr) {
+pub(crate) fn enum_input_body(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    e: &syn::ItemEnum,
+) -> (syn::Type, syn::Expr) {
     assert_only_unit_variants(e);
     let ident = &e.ident;
     let ident_name = ident.to_string();
-    // Qualify the variant constructors with `source_module`, exactly as the
-    // type-position pass qualifies the enum's return type — otherwise a bare
-    // `Enum::Variant` fails to resolve when the enum lives in the source crate
-    // (the usual flat-library case).
-    let source_module = &ext.source_module;
+    // Qualify the variant constructors with the enum's origin module,
+    // exactly as the type-position pass qualifies the enum's return type —
+    // otherwise a bare `Enum::Variant` fails to resolve when the enum lives
+    // in a source crate (the usual flat-library case).
+    let source_module = ext.fn_module(registry, ident);
     let arms = crate::api::lang::jnigen::util::enum_discriminant_values(e)
         .into_iter()
         .map(|(variant, value)| {

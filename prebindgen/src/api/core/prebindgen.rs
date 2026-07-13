@@ -388,7 +388,7 @@ pub trait Prebindgen {
     /// converter bodies compile in the binding crate's scope. Walks the
     /// entire AST, not just signatures, so type ascriptions and casts
     /// inside function bodies are covered.
-    fn post_process_item(&self, _item: &mut syn::Item) {}
+    fn post_process_item(&self, _item: &mut syn::Item, _registry: &Registry<Self::Metadata>) {}
 
     /// Absolute path under which the source crate's items are reachable
     /// from the generated file (e.g. `zenoh_flat`), for adapters that

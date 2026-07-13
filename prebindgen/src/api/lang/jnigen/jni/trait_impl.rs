@@ -271,44 +271,53 @@ impl JniGen {
         output_name(rust, wire)
     }
 
-    fn emitted_source_type_names(&self) -> std::collections::HashSet<String> {
-        let mut names = std::collections::HashSet::new();
-        for key in self.types.keys() {
+    fn emitted_source_type_names(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> std::collections::HashMap<String, syn::Path> {
+        let mut names = std::collections::HashMap::new();
+        let mut add = |key: &TypeKey| {
             if let Some(short) = rust_short_name_opt(key) {
-                names.insert(short);
+                // Per-item origin when the type has an indexed
+                // `#[prebindgen]` item; else the default module (a declared
+                // type re-exported by the primary source, or a deliberately
+                // unmarked type like a convert!-only newtype).
+                let ident = syn::Ident::new(&short, Span::call_site());
+                let module = registry
+                    .origin_module(&ident)
+                    .unwrap_or_else(|| self.default_module(registry));
+                names.insert(short, module);
             }
+        };
+        for key in self.types.keys() {
+            add(key);
         }
         // Rust-side-only boundary types are absent from the type table but
         // still appear in emitted signatures (e.g. the `E` of a peeled
-        // `Result<T, E>`), so they need the same source-module qualification.
-        for key in self.rust_side_only_types() {
-            if let Some(short) = rust_short_name_opt(&key) {
-                names.insert(short);
-            }
+        // `Result<T, E>`), so they need the same qualification.
+        for key in self.rust_side_only_types().collect::<Vec<_>>() {
+            add(&key);
         }
         // `convert!`-declared types likewise have no type-table entry but
         // appear in emitted converter signatures.
         for decl in &self.convert_decls {
-            if let Some(short) = rust_short_name_opt(&decl.key) {
-                names.insert(short);
-            }
+            add(&decl.key);
         }
         names
     }
 
     /// Walk `item` and prefix every bare single-segment type reference
-    /// matching a [`Self::emitted_source_type_names`] name with
-    /// [`Self::source_module`]. Applied once per emitted item at write
+    /// matching a [`Self::emitted_source_type_names`] name with that name's
+    /// origin module. Applied once per emitted item at write
     /// time via [`Prebindgen::post_process_item`] so converter bodies,
     /// type ascriptions, and casts all stay in sync without each emit
     /// site having to remember to qualify.
-    fn qualify_item(&self, item: &mut syn::Item) {
-        let source_names = self.emitted_source_type_names();
+    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+        let source_names = self.emitted_source_type_names(registry);
         if source_names.is_empty() {
             return;
         }
         let mut visitor = QualifyEmittedTypes {
-            source_module: &self.source_module,
             source_names: &source_names,
         };
         syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
@@ -1131,7 +1140,7 @@ impl Prebindgen for JniGen {
         // `Copy` types. A mis-declared non-`Copy` type fails to compile here
         // (at the include site) with a clear bound error rather than at a
         // converter use. The bare type name is qualified against
-        // `source_module` by `post_process_item` like every other body.
+        // its origin module by `post_process_item` like every other body.
         for (key, cfg) in &self.types {
             if cfg.value_blob {
                 let ty = key.to_type();
@@ -1145,18 +1154,23 @@ impl Prebindgen for JniGen {
         }
         // Expression constants — one nullary JNI getter extern per
         // `PackageDecl::constant_expr`, its value the binding-defined
-        // expression evaluated with `use <source_module>::*;` in scope (so
+        // expression evaluated with a glob import of every source module (so
         // it composes the source crate's items without qualification). The
         // getter reuses the whole function-wrapper pipeline via the
         // synthetic signature, exactly like a const-backed getter.
-        let source_module = &self.source_module;
+        let mut glob_modules = registry.all_source_modules();
+        if glob_modules.is_empty() {
+            glob_modules.push(self.default_module(registry));
+        }
         for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
             validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
             let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
             let expr = &decl.expr;
             let callee: syn::Expr = syn::parse_quote!({
-                #[allow(unused_imports)]
-                use #source_module::*;
+                #(
+                    #[allow(unused_imports)]
+                    use #glob_modules::*;
+                )*
                 #expr
             });
             let wrapper =
@@ -1168,8 +1182,8 @@ impl Prebindgen for JniGen {
         items
     }
 
-    fn post_process_item(&self, item: &mut syn::Item) {
-        self.qualify_item(item);
+    fn post_process_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+        self.qualify_item(item, registry);
     }
 
     // ── Item methods ─────────────────────────────────────────────────
@@ -1189,10 +1203,6 @@ impl Prebindgen for JniGen {
         TokenStream::new()
     }
 
-    fn source_module(&self) -> Option<&syn::Path> {
-        Some(&self.source_module)
-    }
-
     /// Declared consts only reach here (write gating via
     /// [`Prebindgen::declared_consts`]): re-emit the const as a path-alias
     /// to its source-of-truth (initializer tokens are never copied — they
@@ -1210,10 +1220,10 @@ impl Prebindgen for JniGen {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
         let const_ident = &c.ident;
-        let source_module = &self.source_module;
+        let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
         let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let alias = crate::api::core::const_path_alias(c, source_module);
+        let alias = crate::api::core::const_path_alias(c, &source_module);
         quote! {
             #alias
             #wrapper
@@ -1317,7 +1327,7 @@ impl JniGen {
             if cfg.enum_cfg.is_some() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some((e, _)) = registry.enums.get(&name) {
-                        let (wire, body) = enum_input_body(self, e);
+                        let (wire, body) = enum_input_body(self, registry, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
                             .name_spec

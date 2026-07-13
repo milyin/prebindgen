@@ -1,4 +1,4 @@
-//! Global settings of a [`JniGen`] instance — the source module, target
+//! Global settings of a [`JniGen`] instance — the target
 //! package, name-mangling rules, native-init hook and handle-lock toggle.
 //!
 //! Every setter carries the `set_` prefix: unlike the declaration methods
@@ -43,14 +43,6 @@ pub(crate) enum NameSpec {
 }
 
 impl JniGen {
-    /// Set the Rust module path that contains the original `#[prebindgen]`
-    /// items. Generated Rust wrappers call functions as
-    /// `<source_module>::<function>(...)`; defaults to `crate`.
-    pub fn set_source_module(mut self, p: syn::Path) -> Self {
-        self.source_module = p;
-        self
-    }
-
     /// Set the JVM/Kotlin **base** package (dot-separated, e.g.
     /// `"io.zenoh.jni"`). All derived forms (slash-separated `FindClass`
     /// paths, `_`-mangled JNI extern idents, Kotlin `package` declarations)

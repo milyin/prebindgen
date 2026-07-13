@@ -130,11 +130,11 @@ pub(crate) fn validate_constant_expr(ext: &JniGen, kotlin_name: &str, ty: &syn::
 }
 
 /// [`emit_jni_function_wrapper`] with the raw callee expression overridable:
-/// `None` = the ordinary `<source_module>::<fn ident>(args)` call; `Some(e)`
+/// `None` = the ordinary `<origin module>::<fn ident>(args)` call; `Some(e)`
 /// splices `e` verbatim as the value the output phase converts. Used by the
 /// const getter emission (`JniGen::on_const`), whose synthetic nullary `f`
 /// carries the signature while the value comes from
-/// `<source_module>::<CONST_IDENT>` — a path, not a call.
+/// `<origin module>::<CONST_IDENT>` — a path, not a call.
 pub(crate) fn emit_jni_function_wrapper_with_callee(
     ext: &JniGen,
     f: &syn::ItemFn,

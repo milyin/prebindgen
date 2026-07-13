@@ -33,9 +33,9 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -220,9 +220,9 @@ fn callback_root_identity_moved_after_nested_borrow() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
@@ -306,9 +306,9 @@ fn callback_double_option_unwrap_pipeline() {
         loc.clone(),
     ));
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("query")

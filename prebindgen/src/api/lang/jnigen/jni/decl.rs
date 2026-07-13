@@ -109,8 +109,8 @@ macro_rules! constant {
 /// Build a [`ConstExprDecl`] in val-declaration syntax:
 /// `constant_expr!(BANNER: String = format!("{COVER_TAG}:{COVER_MAGIC}"))` is
 /// `ConstExprDecl::new("BANNER", <String>, <the expression>)`. The expression
-/// is evaluated inside the generated getter with `use <source_module>::*;`
-/// in scope.
+/// is evaluated inside the generated getter with a glob import of every
+/// source module in scope.
 #[macro_export]
 macro_rules! constant_expr {
     ($name:ident : $ty:ty = $expr:expr) => {
@@ -691,7 +691,7 @@ impl ConstDecl {
 /// Declares one **expression-backed constant**: an arbitrary binding-defined
 /// Rust expression, evaluated once inside a generated nullary JNI getter and
 /// surfaced as an eagerly-initialized top-level Kotlin `val`. The expression
-/// runs with `use <source_module>::*;` in scope, so it composes the source
+/// runs with a glob import of every source module in scope, so it composes the source
 /// crate's `#[prebindgen]` items freely without the source crate having to
 /// export a dedicated accessor per constant — e.g.
 /// `encoding_to_string(encoding_const_text_plain())`.
