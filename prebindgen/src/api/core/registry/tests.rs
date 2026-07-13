@@ -223,3 +223,44 @@ fn type_entry_helpers_expose_converter_chain_contract() {
         vec!["Rust", "Mid"]
     );
 }
+
+/// A name collision across two sources fails registry construction with an
+/// error that names BOTH origin crates — the `SourceLocation` file paths are
+/// crate-relative (both may read `src/lib.rs`), so the crates are the only
+/// unambiguous coordinates.
+#[test]
+fn duplicate_name_across_sources_names_both_crates() {
+    use crate::api::record::{Record, RecordKind};
+    use crate::SourceLocation;
+
+    let make_source = |crate_name: &str| -> crate::Source {
+        let dir = crate::api::test_util::unique_test_dir(&format!("dup_src_{crate_name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("crate_name.txt"), crate_name).unwrap();
+        let record = Record::new(
+            RecordKind::Function,
+            "same_name".to_string(),
+            "pub fn same_name() -> i32 { 1 }".to_string(),
+            SourceLocation {
+                file: "src/lib.rs".to_string(),
+                line: 1,
+                column: 1,
+            },
+            None,
+        );
+        crate::api::utils::jsonl::write_to_jsonl_file(&dir.join("default_1.jsonl"), &[&record])
+            .unwrap();
+        crate::Source::new(&dir)
+    };
+
+    let a = make_source("first-crate");
+    let b = make_source("second-crate");
+    let msg = match Registry::<()>::from_sources([&a, &b]) {
+        Ok(_) => panic!("collision must fail"),
+        Err(e) => e.to_string(),
+    };
+    assert!(msg.contains("same_name"), "{msg}");
+    assert!(msg.contains("first-crate"), "{msg}");
+    assert!(msg.contains("second-crate"), "{msg}");
+}

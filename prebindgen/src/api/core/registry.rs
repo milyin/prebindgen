@@ -276,6 +276,12 @@ pub enum ScanError {
         name: syn::Ident,
         first: SourceLocation,
         second: SourceLocation,
+        /// Origin crates of the colliding items, when known (multi-source
+        /// ingestion via [`Registry::from_sources`]) — the `SourceLocation`
+        /// file paths are crate-relative, so with several sources they alone
+        /// may not identify the colliding crates.
+        first_crate: Option<String>,
+        second_crate: Option<String>,
     },
     ConflictingFunctionIntent {
         name: syn::Ident,
@@ -298,11 +304,28 @@ pub enum ScanError {
 impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScanError::DuplicateName { name, first, second } => write!(
-                f,
-                "duplicate prebindgen name `{}`: first at {}, second at {}",
-                name, first, second
-            ),
+            ScanError::DuplicateName {
+                name,
+                first,
+                second,
+                first_crate,
+                second_crate,
+            } => {
+                let in_crate = |c: &Option<String>| match c {
+                    Some(c) => format!(" in crate `{c}`"),
+                    None => String::new(),
+                };
+                write!(
+                    f,
+                    "duplicate prebindgen name `{}`: first{} at {}, second{} at {} — prebindgen \
+                     items live in one flat namespace across all sources; rename one of them",
+                    name,
+                    in_crate(first_crate),
+                    first,
+                    in_crate(second_crate),
+                    second
+                )
+            }
             ScanError::ConflictingFunctionIntent { name } => write!(
                 f,
                 "function `{}` cannot be both declared and ignored",
@@ -504,17 +527,38 @@ impl<M> Registry<M> {
         let crate_name = source.crate_name().to_string();
         self.source_modules.push(crate_name.replace('-', "_"));
         for (item, loc) in source.items_all() {
-            let named: Option<&syn::Ident> = match &item {
-                syn::Item::Fn(f) => Some(&f.sig.ident),
-                syn::Item::Struct(s) => Some(&s.ident),
-                syn::Item::Enum(e) => Some(&e.ident),
-                syn::Item::Const(c) if c.ident != "_" => Some(&c.ident),
+            let named: Option<syn::Ident> = match &item {
+                syn::Item::Fn(f) => Some(f.sig.ident.clone()),
+                syn::Item::Struct(s) => Some(s.ident.clone()),
+                syn::Item::Enum(e) => Some(e.ident.clone()),
+                syn::Item::Const(c) if c.ident != "_" => Some(c.ident.clone()),
                 _ => None,
             };
-            if let Some(ident) = named {
-                self.item_origins.insert(ident.clone(), crate_name.clone());
+            match self.index_item(item, loc) {
+                Ok(()) => {
+                    // Only after successful indexing — a collision must keep
+                    // the FIRST item's origin for the error below.
+                    if let Some(ident) = named {
+                        self.item_origins.insert(ident, crate_name.clone());
+                    }
+                }
+                Err(ScanError::DuplicateName {
+                    name,
+                    first,
+                    second,
+                    ..
+                }) => {
+                    let first_crate = self.item_origins.get(&name).cloned();
+                    return Err(ScanError::DuplicateName {
+                        name,
+                        first,
+                        second,
+                        first_crate,
+                        second_crate: Some(crate_name),
+                    });
+                }
+                Err(e) => return Err(e),
             }
-            self.index_item(item, loc)?;
         }
         Ok(())
     }
@@ -880,10 +924,14 @@ impl<M> Registry<M> {
 
     fn check_no_duplicate(&self, name: &syn::Ident, loc: &SourceLocation) -> Result<(), ScanError> {
         if let Some(first) = self.first_seen_loc(name) {
+            // Origin crates are unknown at this level; `add_source` enriches
+            // the error with them (the locations alone are crate-relative).
             return Err(ScanError::DuplicateName {
                 name: name.clone(),
                 first,
                 second: loc.clone(),
+                first_crate: None,
+                second_crate: None,
             });
         }
         Ok(())
