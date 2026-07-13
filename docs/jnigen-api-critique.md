@@ -22,6 +22,13 @@ runtime-dispatched variants), while repeated `.default_return_expand(accessor)`
 calls accumulate *fields* (AND — all delivered in one crossing). Identical call
 shape, sum-vs-product semantics; nothing in the names distinguishes them.
 
+**Resolution (2026-07-13, with I1):** the type-level declarations are now
+dedicated builders whose arm names carry the semantics — `param_expand!(T)`
+accumulates `.variant()` arms (OR), `return_expand!(T)` accumulates `.field()`
+entries (AND). The per-fn overrides keep the `param_expand(param, …)` /
+`return_expand(…)` names; their differing shapes (param-keyed vs not) already
+distinguish them.
+
 ### M2. `_self` means three different things
 
 - Class-level `.default_param_expand_self()` alone: a documented **no-op**
@@ -102,6 +109,18 @@ Constructors doubling as param variants also repeat
 `.default_param_expand(fun!(zbytes_new_from_vec))`). Roughly a third of the
 consumer's decl text is restatement.
 
+**Resolution (2026-07-13):** rather than a member-modifier shortcut (rejected:
+a second way to say the same thing), the two jobs were separated. A class decl
+now declares only the Kotlin surface; the boundary shape is declared once,
+per direction, at the generator level:
+`.param_expand(param_expand!(T).variant(fun!(ctor)).variant_self())` and
+`.return_expand(return_expand!(T).field(fun!(get)).field_self())`. A
+`.field(fun!(x))` inherits its Kotlin name from the class member declaration
+of the same fn (explicit `.name()` wins), so the name is written once. The
+declarations remain order-independent: `JniGen` stores boundary decls raw and
+assembles the expansion sets at the point of use (the `Prebindgen` trait's
+`expansions()`/`deconstructors()` hooks now return by value).
+
 ### I2. Order-independence advertised where it's cheap, absent where it's load-bearing
 
 Settings are "order-independent by construction" (`config.rs` doc) — but
@@ -110,6 +129,12 @@ fields, or the generated Rust fails with "use of moved value". The consumer's
 build.rs carries a shouting ORDER MATTERS comment. The generator could sort
 identity leaves last, or hard-error with a hint; instead the invariant lives in
 a consumer comment.
+
+**Correction (2026-07-13):** overstated — the generator already owns this
+invariant with a decl-time hard error (`UnfoldError::RootIdentityBeforeNested`,
+message includes the fix), so the wrong order never reaches non-compiling
+Rust. The consumer comment predates that check. Remaining question for this
+item: keep the hard error, or silently sort identity leaves last.
 
 ### I3. Flipped receivers, hidden temporal coupling
 
