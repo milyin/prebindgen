@@ -230,8 +230,10 @@ fn type_entry_helpers_expose_converter_chain_contract() {
 /// unambiguous coordinates.
 #[test]
 fn duplicate_name_across_sources_names_both_crates() {
-    use crate::api::record::{Record, RecordKind};
-    use crate::SourceLocation;
+    use crate::{
+        api::record::{Record, RecordKind},
+        SourceLocation,
+    };
 
     let make_source = |crate_name: &str| -> crate::Source {
         let dir = crate::api::test_util::unique_test_dir(&format!("dup_src_{crate_name}"));
