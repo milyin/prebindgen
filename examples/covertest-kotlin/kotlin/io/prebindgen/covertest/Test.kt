@@ -305,9 +305,17 @@ fun main() {
             "percentScale(150) must report the range error, got: $msg"
         }
     }
-    section("convert! via binding-local fns (Label -> String)") {
+    section("convert! via binding-local fns (Label -> String, fallible input)") {
         check(labelReverse("abc", boom) == "cba")
-        check(labelReverse("", boom) == "")
+        // Empty label: the local fn's Err(String) routes to onError.
+        var msg: String? = null
+        labelReverse("") { je ->
+            msg = je
+            ""
+        }
+        check(msg?.contains("label must not be empty") == true) {
+            "labelReverse(\"\") must report the empty-label error, got: $msg"
+        }
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

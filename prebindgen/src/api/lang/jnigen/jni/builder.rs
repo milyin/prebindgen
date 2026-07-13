@@ -800,10 +800,12 @@ impl JniGen {
                 }
             }
             // Binding-local callable: emitted verbatim (multi-segment paths
-            // pass the qualification visitor untouched).
-            ConvertSpec::LocalFn { repr, path } => {
+            // pass the qualification visitor untouched). With a declared
+            // error type the fn returns `Result<T, E>` — emitted as-is, `E`
+            // riding the standard exc slot.
+            ConvertSpec::LocalFn { repr, path, error } => {
                 let body: syn::Expr = syn::parse_quote!(#path(v));
-                Some((repr.clone(), None, body))
+                Some((repr.clone(), error.clone(), body))
             }
         }
     }
@@ -863,9 +865,9 @@ impl JniGen {
                     Some((repr.clone(), None, body))
                 }
             }
-            ConvertSpec::LocalFn { repr, path } => {
+            ConvertSpec::LocalFn { repr, path, error } => {
                 let body: syn::Expr = syn::parse_quote!(#path(v));
-                Some((repr.clone(), None, body))
+                Some((repr.clone(), error.clone(), body))
             }
         }
     }

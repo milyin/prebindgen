@@ -24,7 +24,7 @@
 //! | `convert!` + multi-source (`from_sources`) | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `convert!` `.input_from`/`.output_into` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input_try_from` (fallible)  | `Percent` ⇄ `Int`; out-of-range → `onError` |
-//! | `convert!` `.input_with`/`.output_with` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`) |
+//! | `convert!` `.input_try_with`/`.output_with` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
@@ -121,10 +121,13 @@ fn main() {
                 .output_into(ty!(i32)),
         )
         // `Label`: conversions are plain fns in THIS binding crate (see
-        // src/lib.rs) — no #[prebindgen], no helper crate.
+        // src/lib.rs) — no #[prebindgen], no helper crate. The input is
+        // FALLIBLE (`fn(String) -> Result<Label, String>`; the error type is
+        // stated — a bare path carries no signature to read); empty labels
+        // route the Err to onError.
         .convert(
             convert!(Label)
-                .input_with(ty!(String), path!(crate::label_in))
+                .input_try_with(ty!(String), ty!(String), path!(crate::label_in))
                 .output_with(ty!(String), path!(crate::label_out)),
         )
         // ── Base-package types ──────────────────────────────────────────────

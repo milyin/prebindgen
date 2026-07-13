@@ -634,3 +634,41 @@ fn convert_duplicate_input_rejected() {
         .input_from(crate::ty!(i32))
         .input_with(crate::ty!(String), crate::path!(crate::widget_in));
 }
+
+/// `.input_try_with`: the fallible binding-local form — the converter's
+/// error type is the decl-stated one and the fn's `Result` is emitted
+/// verbatim (no `Ok(...)` wrap).
+#[test]
+fn convert_via_local_try_fn_is_fallible() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(Label)
+                .input_try_with(
+                    crate::ty!(String),
+                    crate::ty!(String),
+                    crate::path!(crate::conv::label_in),
+                )
+                .output_with(crate::ty!(String), crate::path!(crate::conv::label_out)),
+        )
+        .package(crate::package!("m").fun(crate::fun!(label_id)));
+    let dir = unique_test_dir("jnigen_convert_local_try");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // Verbatim body (no Ok-wrap) with the stated error in the signature.
+    assert!(rc.contains("crate::conv::label_in(v)"), "{rust}");
+    assert!(!rc.contains("Ok(crate::conv::label_in(v))"), "{rust}");
+    assert!(rc.contains("Result<myflat::Label,String>"), "{rust}");
+}

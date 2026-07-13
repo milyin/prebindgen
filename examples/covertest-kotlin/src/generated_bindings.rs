@@ -1381,8 +1381,8 @@ pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
 pub(crate) unsafe fn String_to_Label_c1a79668<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: String,
-) -> ::core::result::Result<perftest_flat::Label, __JniErr> {
-    Ok(crate::label_in(v))
+) -> ::core::result::Result<perftest_flat::Label, String> {
+    crate::label_in(v)
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Summary_to_jlong_3cb103b9<'a>(

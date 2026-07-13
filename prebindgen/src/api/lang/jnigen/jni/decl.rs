@@ -876,6 +876,9 @@ impl PackageDecl {
 /// callback arguments), while expansion decls are position-things.
 /// One direction's conversion **source** — where the conversion code comes
 /// from. Four kinds, one per [`ConvertDecl`] method family.
+// large_enum_variant: a handful of these exist per binding, held once in the
+// builder — boxing the syn payloads would only complicate the decl arms.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub(crate) enum ConvertSpec {
     /// A `#[prebindgen]` fn (flat or helper crate): the representable type
@@ -889,8 +892,14 @@ pub(crate) enum ConvertSpec {
     /// An arbitrary callable path — typically a plain fn in the **binding
     /// crate itself** (the generated file compiles inside it, so
     /// `crate::…` paths resolve). Representable type stated explicitly;
-    /// by-value both ways (`fn(Repr) -> T` / `fn(T) -> Repr`), infallible.
-    LocalFn { repr: syn::Type, path: syn::Path },
+    /// by-value both ways. `error: None` = infallible (`fn(Repr) -> T` /
+    /// `fn(T) -> Repr`); `Some(E)` = the fn returns `Result<…, E>` and an
+    /// `Err` routes to the caller's error handler (`E: Display`).
+    LocalFn {
+        repr: syn::Type,
+        path: syn::Path,
+        error: Option<syn::Type>,
+    },
 }
 
 #[derive(Clone)]
@@ -990,11 +999,29 @@ impl ConvertDecl {
     /// fn declared **in the binding crate itself** (no `#[prebindgen]`
     /// needed; the generated file compiles inside the binding crate, so
     /// `path!(crate::…)` resolves). Shape: `fn(Repr) -> T`, by value,
-    /// infallible — for fallibility use a `TryFrom` impl or a
-    /// `#[prebindgen]` fn returning `Result`.
+    /// infallible — see [`input_try_with`](Self::input_try_with) for the
+    /// fallible form.
     pub fn input_with(self, repr: syn::Type, path: syn::Path) -> Self {
         self.check_repr("input_with", &repr);
-        self.set_input(ConvertSpec::LocalFn { repr, path })
+        self.set_input(ConvertSpec::LocalFn {
+            repr,
+            path,
+            error: None,
+        })
+    }
+
+    /// The fallible into-Rust conversion as an arbitrary callable: shape
+    /// `fn(Repr) -> Result<T, Error>`, by value. `error` is stated
+    /// explicitly (a callable path carries no signature to read); it must
+    /// implement `Display`, and an `Err` routes to the caller's error
+    /// handler like any domain error.
+    pub fn input_try_with(self, repr: syn::Type, error: syn::Type, path: syn::Path) -> Self {
+        self.check_repr("input_try_with", &repr);
+        self.set_input(ConvertSpec::LocalFn {
+            repr,
+            path,
+            error: Some(error),
+        })
     }
 
     /// The **out-of-Rust** conversion (returns, callback arguments) as a
@@ -1031,7 +1058,23 @@ impl ConvertDecl {
     /// infallible.
     pub fn output_with(self, repr: syn::Type, path: syn::Path) -> Self {
         self.check_repr("output_with", &repr);
-        self.set_output(ConvertSpec::LocalFn { repr, path })
+        self.set_output(ConvertSpec::LocalFn {
+            repr,
+            path,
+            error: None,
+        })
+    }
+
+    /// The fallible out-of-Rust conversion as an arbitrary callable: shape
+    /// `fn(T) -> Result<Repr, Error>`, by value (see
+    /// [`input_try_with`](Self::input_try_with) for the error conventions).
+    pub fn output_try_with(self, repr: syn::Type, error: syn::Type, path: syn::Path) -> Self {
+        self.check_repr("output_try_with", &repr);
+        self.set_output(ConvertSpec::LocalFn {
+            repr,
+            path,
+            error: Some(error),
+        })
     }
 }
 
