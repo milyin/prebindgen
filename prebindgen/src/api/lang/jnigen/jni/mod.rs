@@ -195,7 +195,7 @@ pub(crate) enum MemberKind {
     Fun,
     /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
     /// member returning the class; never output-flattened; referenceable by a
-    /// a `param_expand!` `.variant(fun!(...))` arm.
+    /// a `expand_param!` `.variant(fun!(...))` arm.
     Constructor,
 }
 
@@ -211,9 +211,9 @@ pub(crate) struct ClassMember {
     pub rust_ident: syn::Ident,
     /// Kotlin-visible name of this instance method / companion factory
     /// (derived from `FunctionDecl.name()`, defaulting to
-    /// `snake_to_camel(rust_ident)`). A `return_expand!` `.field` referencing
+    /// `snake_to_camel(rust_ident)`). A `expand_return!` `.field` referencing
     /// the same underlying function inherits this name unless it sets its own
-    /// `.name()`; `param_expand!` variants reference the fn by ident only.
+    /// `.name()`; `expand_param!` variants reference the fn by ident only.
     pub kotlin_name: String,
     /// Member kind (fun / constructor).
     pub kind: MemberKind,
@@ -257,7 +257,7 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
 /// JNI back-end. Global settings are applied with the order-insensitive
 /// `set_*` methods; declarations are accepted as pre-built objects
-/// (`PackageDecl`, `ParamExpandDecl`, `ReturnExpandDecl`,
+/// (`PackageDecl`, `ExpandParamDecl`, `ExpandReturnDecl`,
 /// `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see `decl.rs`) built
 /// independently of `JniGen` itself; there is no fluent typestate cursor.
 ///
@@ -274,12 +274,12 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 ///     )
 ///     // A KeyExpr param accepts EITHER a String (built via tryFrom) OR an
 ///     // existing handle; a returned KeyExpr decomposes into its string form.
-///     .param_expand(
-///         prebindgen::param_expand!(KeyExpr)
+///     .expand(
+///         prebindgen::expand_param!(KeyExpr)
 ///             .variant(prebindgen::fun!(keyexpr_new_try_from))
 ///             .variant_self(),
 ///     )
-///     .expand(prebindgen::return_expand!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
+///     .expand(prebindgen::expand_return!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
 /// ```
 #[derive(Clone)]
 pub struct JniGen {
@@ -361,7 +361,7 @@ pub struct JniGen {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
-    /// Per-fn constructor-expansion overrides (`.param_expand*` on a
+    /// Per-fn constructor-expansion overrides (`.expand_param` on a
     /// [`FunctionDecl`]), replayed eagerly at accept time. The type-level
     /// defaults live raw in [`Self::param_expand_decls`]; the two merge on
     /// demand in [`JniGen::build_expansions`], resolved into
@@ -369,7 +369,7 @@ pub struct JniGen {
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
-    /// Per-fn output-expansion overrides (`.return_expand*` on a
+    /// Per-fn output-expansion overrides (`.expand_return` on a
     /// [`FunctionDecl`]) plus constructor-member skip-defaults, replayed
     /// eagerly at accept time. The type-level defaults live raw in
     /// [`Self::return_expand_decls`]; the two merge on demand in
@@ -378,16 +378,26 @@ pub struct JniGen {
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
 
-    /// Type-level default input boundaries ([`ParamExpandDecl`], accepted by
+    /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
     /// [`JniGen::expand`]), stored raw — merged into the expansion set
     /// at the point of use so declarations stay order-independent.
-    pub(crate) param_expand_decls: Vec<ParamExpandDecl>,
+    pub(crate) param_expand_decls: Vec<ExpandParamDecl>,
 
-    /// Type-level default output boundaries ([`ReturnExpandDecl`], accepted
+    /// Type-level default output boundaries ([`ExpandReturnDecl`], accepted
     /// by [`JniGen::expand`]), stored raw — field names (member
     /// inheritance) resolve at the point of use so declarations stay
     /// order-independent.
-    pub(crate) return_expand_decls: Vec<ReturnExpandDecl>,
+    pub(crate) return_expand_decls: Vec<ExpandReturnDecl>,
+
+    /// Per-fn input overrides ([`FunctionDecl::expand_param`]): the fn ident,
+    /// the parameter name, and the decl — stored raw like the type-level
+    /// decls; cross-checked and lowered in `core/expand.rs`'s `apply`.
+    pub(crate) fn_param_expands: Vec<(syn::Ident, String, ExpandParamDecl)>,
+
+    /// Per-fn output overrides ([`FunctionDecl::expand_return`]): the fn
+    /// ident and the decl — stored raw; cross-checked and lowered in
+    /// `core/unfold.rs`'s `apply`.
+    pub(crate) fn_return_expands: Vec<(syn::Ident, ExpandReturnDecl)>,
 
     /// Class members (funs / constructors) attached to a declared class via
     /// its decl's `.fun()`/`.constructor()`, keyed by the class's canonical
@@ -410,17 +420,6 @@ pub struct JniGen {
     /// `#[prebindgen]` consts the binding deliberately does NOT declare,
     /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
     pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
-
-    /// Every function referenced as a named leaf in a per-fn
-    /// `.return_expand(fun!(...))` override — populated as `builder.rs`
-    /// accepts each decl. [`Prebindgen::accessor_functions`] unions this
-    /// with the field fns of [`Self::return_expand_decls`]: `core/unfold.rs`'s
-    /// deconstructor gate requires every named record's function to be in
-    /// that set (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes
-    /// them from parameter composition. Derived from *usage*, not from any
-    /// separate declaration — a function need not also be a `.fun()` class
-    /// member to be referenced this way.
-    pub(crate) accessor_record_fns: std::collections::HashSet<syn::Ident>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

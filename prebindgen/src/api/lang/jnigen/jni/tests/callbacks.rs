@@ -48,7 +48,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
         .expand(
-            crate::return_expand!(ZThing)
+            crate::expand_return!(ZThing)
                 .field_self()
                 .field(crate::fun!(z_thing_name)),
         );
@@ -179,7 +179,7 @@ fn callback_snapshot_kotlin_side() {
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
-/// (`return_expand!` `.field_self()`) must emit the root MOVE after every borrow of
+/// (`expand_return!` `.field_self()`) must emit the root MOVE after every borrow of
 /// the owned value — otherwise the nested child clone (which borrows the root)
 /// follows `Box::into_raw(Box::new(value))` and fails to compile with "use of
 /// moved value". Declaring `.field_self()` LAST guarantees the
@@ -232,13 +232,13 @@ fn callback_root_identity_moved_after_nested_borrow() {
         )
         // Child handle: canonical output = identity (clone) + its name string.
         .expand(
-            crate::return_expand!(ZChild)
+            crate::expand_return!(ZChild)
                 .field_self()
                 .field(crate::fun!(z_child_name)),
         )
         // Parent: a nested child-handle record, then its OWN root identity LAST.
         .expand(
-            crate::return_expand!(ZParent)
+            crate::expand_return!(ZParent)
                 .field(crate::fun!(z_parent_child))
                 .field_self(),
         );
@@ -331,19 +331,19 @@ fn callback_double_option_unwrap_pipeline() {
                 .fun(crate::fun!(z_get)),
         )
         .expand(
-            crate::return_expand!(ZKeyExpr)
+            crate::expand_return!(ZKeyExpr)
                 .field_self()
                 .field(crate::fun!(z_keyexpr_as_str)),
         )
-        .expand(crate::return_expand!(ZTs).field(crate::fun!(z_ts_ntp64)))
+        .expand(crate::expand_return!(ZTs).field(crate::fun!(z_ts_ntp64)))
         .expand(
-            crate::return_expand!(ZSample)
+            crate::expand_return!(ZSample)
                 .field(crate::fun!(z_sample_key_expr))
                 .field(crate::fun!(z_sample_timestamp)),
         )
-        .expand(crate::return_expand!(ZErr).field(crate::fun!(z_err_payload)))
+        .expand(crate::expand_return!(ZErr).field(crate::fun!(z_err_payload)))
         .expand(
-            crate::return_expand!(ZReply)
+            crate::expand_return!(ZReply)
                 .field(crate::fun!(z_reply_zid))
                 .field(crate::fun!(z_reply_is_ok))
                 .field(crate::fun!(z_reply_sample))
@@ -431,7 +431,7 @@ fn callback_double_option_unwrap_pipeline() {
 // ────────────────────────────────────────────────────────────────────────
 // Declaration-keyed interfaces: a type may have several decompositions —
 // the default (unnamed) deconstructor and per-fn inline records
-// (`.return_expand`). Interface identity follows the DECLARATION, so
+// (`.expand_return`). Interface identity follows the DECLARATION, so
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────

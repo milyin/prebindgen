@@ -813,7 +813,7 @@ impl Prebindgen for JniGen {
     /// Hand the registry this back-end's constructor-expansion declarations so
     /// `write_rust` can resolve `.expand`s into fold plans before resolution.
     /// Assembled on demand from the per-fn overrides plus the raw type-level
-    /// [`ParamExpandDecl`]s (see [`JniGen::build_expansions`]).
+    /// [`ExpandParamDecl`]s (see [`JniGen::build_expansions`]).
     fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
         Some(self.build_expansions())
     }
@@ -949,21 +949,13 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Functions ever referenced as a named leaf in a `return_expand!` `.field(fun!(...))`/
-    /// `.return_expand(...)` record — see
-    /// `accessor_record_fns`'s doc (`jni/mod.rs`). Usage-derived, not tied to
-    /// `.fun()` class-member declarations: a function need not also be
-    /// exposed as an instance method to be referenced this way.
+    /// Functions ever referenced as a named `.field(fun!(...))` in any
+    /// `expand_return!` decl, type-level or per-fn — see
+    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.fun()`
+    /// class-member declarations: a function need not also be exposed as an
+    /// instance method to be referenced this way.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        let mut set = self.accessor_record_fns.clone();
-        for decl in &self.return_expand_decls {
-            for f in &decl.fields {
-                if let LocalField::Named(func, _) = f {
-                    set.insert(func.clone());
-                }
-            }
-        }
-        set
+        self.field_accessor_fns()
     }
 
     /// Fun members (`.fun`) — their fn ident mapped to the owning class's
@@ -1028,7 +1020,7 @@ impl Prebindgen for JniGen {
     /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
     /// the registry's "skipping undeclared" warning, emits nothing. Also
     /// includes functions referenced only inside boundary decls
-    /// (`return_expand!` accessors / `param_expand!` ctors that are not
+    /// (`expand_return!` accessors / `expand_param!` ctors that are not
     /// otherwise declared): they are called by the generated fold/unfold code
     /// and need no extern of their own. Declared functions are subtracted —
     /// a fn that is also a real member/package fn keeps its extern, and the
@@ -1048,8 +1040,8 @@ impl Prebindgen for JniGen {
         self.ignored_class_types.clone()
     }
 
-    /// **Rust-side-only** types: boundary decls (`param_expand!` /
-    /// `return_expand!`) whose type has no class declaration. They never
+    /// **Rust-side-only** types: boundary decls (`expand_param!` /
+    /// `expand_return!`) whose type has no class declaration. They never
     /// materialize in Kotlin — only their ingredients (fold) and fields
     /// (unfold / error channel) cross the boundary — so the registry
     /// acknowledges them and drops their direct converter requirements once

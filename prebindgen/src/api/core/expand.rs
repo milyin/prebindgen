@@ -4,8 +4,8 @@
 //!
 //! A *constructor* is any `#[prebindgen]` function `f(p0, …) -> T` (or
 //! `-> Result<T, E>`) that builds a target type `T`. A type's input flatten
-//! (a type-level `param_expand!` `.variant*` list, or the per-fn
-//! `.param_expand(param, …)` override) replaces a parameter of that type —
+//! (a type-level `expand_param!` `.variant*` list, or the per-fn
+//! `.expand_param(param, …)` override) replaces a parameter of that type —
 //! in the generated foreign signature only — with the constructor's inputs,
 //! flattened. The generated wrapper decodes those inputs, runs the
 //! constructor Rust-side (the **fold**), and passes the built value to the
@@ -63,7 +63,7 @@ struct ConstructorDecl {
     target: syn::Type,
     variants: Vec<Variant>,
     /// Auto-`construct` every matching param of every declared fn. Always
-    /// `true` for type-level default (`param_expand!` `.variant*`) declarations.
+    /// `true` for type-level default (`expand_param!` `.variant*`) declarations.
     default: bool,
 }
 
@@ -72,7 +72,7 @@ struct ConstructorDecl {
 enum ExpandSel {
     /// Use the target type's default constructor (error if none/ambiguous).
     TopLevel,
-    /// Per-fn override (`.param_expand`): use exactly these build-from
+    /// Per-fn override (`.expand_param`): use exactly these build-from
     /// variants (constructor fns and/or the identity/self arm).
     Subset(Vec<Variant>),
 }
@@ -81,6 +81,11 @@ enum ExpandSel {
 struct ExpandDecl {
     func: syn::Ident,
     param: syn::Ident,
+    /// The type the per-fn decl was declared for (`expand_param!(T)`) —
+    /// cross-checked against the named param's peeled type in [`apply`].
+    /// `None` for the internal `TopLevel` form (the type comes from the
+    /// param itself).
+    declared_target: Option<syn::Type>,
     sel: ExpandSel,
 }
 
@@ -93,7 +98,7 @@ pub struct Expansions {
     expands: Vec<ExpandDecl>,
     /// Cursor for the constructor builder (`.constructor_variant*` / `.default`).
     cur_constructor: Option<usize>,
-    /// Cursor for an in-progress per-fn input subset (`.param_expand(...)`
+    /// Cursor for an in-progress per-fn input subset (`.expand_param(...)`
     /// → `.variant`/`.variant_self`): index into [`Self::expands`].
     cur_expand: Option<usize>,
     /// `.skip_default_construct(param)` opt-outs: `(fn, param)` excluded from a
@@ -123,13 +128,14 @@ impl Expansions {
         }
     }
 
-    /// identity-only `.param_expand_self(param)` — exclude
-    /// `(func, param)` from constructor default auto-apply.
+    /// Exclude `(func, param)` from constructor default auto-apply — the
+    /// lowered form of an identity-only per-fn variant set (the plain
+    /// handle, no selector).
     pub fn add_skip_default_construct(&mut self, func: syn::Ident, param: syn::Ident) {
         self.skip_construct.insert((func, param));
     }
 
-    /// `param_expand!` `.variant(fun)` — add a constructor-function arm.
+    /// `expand_param!` `.variant(fun)` — add a constructor-function arm.
     pub fn add_constructor_variant(&mut self, func: syn::Ident) {
         let i = self
             .cur_constructor
@@ -137,7 +143,7 @@ impl Expansions {
         self.constructors[i].variants.push(Variant::Ctor(func));
     }
 
-    /// `param_expand!` `.variant_self()` — add the identity arm
+    /// `expand_param!` `.variant_self()` — add the identity arm
     /// (pass the target value straight through).
     pub fn add_constructor_variant_id(&mut self) {
         let i = self
@@ -146,22 +152,31 @@ impl Expansions {
         self.constructors[i].variants.push(Variant::Identity);
     }
 
-    /// Begin a per-fn input override (`.param_expand(param, …)`): construct
-    /// `param` from an explicit, incrementally-built variant list (constructor
-    /// arms via [`Self::push_subset_variant`] and/or the identity/self arm via
-    /// [`Self::push_subset_self`]). Recorded as an explicit decl so the
-    /// auto-`default` skips it, and leaves the expand cursor on it.
-    pub fn begin_subset(&mut self, func: syn::Ident, param: syn::Ident) {
+    /// Begin a per-fn input override (`.expand_param(param, expand_param!(T)…)`):
+    /// construct `param` from an explicit, incrementally-built variant list
+    /// (constructor arms via [`Self::push_subset_variant`] and/or the
+    /// identity/self arm via [`Self::push_subset_self`]). `declared_target`
+    /// is the decl's `T`, cross-checked against the param's peeled type in
+    /// [`apply`]. Recorded as an explicit decl so the auto-`default` skips
+    /// it, and leaves the expand cursor on it. An identity-only list lowers
+    /// to the skip-default plain form in [`apply`].
+    pub fn begin_subset(
+        &mut self,
+        func: syn::Ident,
+        param: syn::Ident,
+        declared_target: syn::Type,
+    ) {
         self.expands.push(ExpandDecl {
             func,
             param,
+            declared_target: Some(declared_target),
             sel: ExpandSel::Subset(Vec::new()),
         });
         self.cur_constructor = None;
         self.cur_expand = Some(self.expands.len() - 1);
     }
 
-    /// `.param_expand(param, fn)` — append a build-from
+    /// `.expand_param` `.variant(fun)` — append a build-from
     /// constructor arm to the current per-fn input subset.
     pub fn push_subset_variant(&mut self, func: syn::Ident) {
         let i = self
@@ -172,8 +187,8 @@ impl Expansions {
         }
     }
 
-    /// `.param_expand_self(param)` (with other variants) — append the
-    /// identity (pass-the-handle-through) arm to the current per-fn subset.
+    /// `.expand_param` `.variant_self()` — append the identity
+    /// (pass-the-handle-through) arm to the current per-fn subset.
     pub fn push_subset_self(&mut self) {
         let i = self
             .cur_expand
@@ -204,6 +219,7 @@ pub fn apply<M>(
     method_receivers: &std::collections::HashMap<syn::Ident, TypeKey>,
 ) -> Result<(), ExpandError> {
     let mut done: HashSet<(String, String)> = HashSet::new();
+    let mut skip_construct = exp.skip_construct.clone();
     for ed in &exp.expands {
         // A `.fun_accessor` is never parameter-composed — an explicit
         // `.construct(param)` on one is a build error.
@@ -211,6 +227,41 @@ pub fn apply<M>(
             return Err(ExpandError::ConstructOnAccessor {
                 func: ed.func.clone(),
             });
+        }
+        // Per-fn decl cross-check: the named param must exist and its peeled
+        // (`Option`/`&`) type must equal the decl's declared type — the
+        // typo guard for both coordinates of `.expand_param(name, decl)`.
+        if let Some(declared) = &ed.declared_target {
+            let (item_fn, _) = registry
+                .functions
+                .get(&ed.func)
+                .cloned()
+                .ok_or_else(|| ExpandError::UnknownFunction(ed.func.clone()))?;
+            let param_ty = find_param_type(&item_fn, &ed.param)
+                .ok_or_else(|| ExpandError::UnknownParam(ed.func.clone(), ed.param.clone()))?;
+            let inner = option_inner_type(&param_ty).unwrap_or(param_ty);
+            let bare = match &inner {
+                syn::Type::Reference(r) => (*r.elem).clone(),
+                other => other.clone(),
+            };
+            if TypeKey::from_type(&bare) != TypeKey::from_type(declared) {
+                return Err(ExpandError::ParamTypeMismatch {
+                    func: ed.func.clone(),
+                    param: ed.param.clone(),
+                    declared: TypeKey::from_type(declared).as_str().to_string(),
+                    actual: TypeKey::from_type(&bare).as_str().to_string(),
+                });
+            }
+        }
+        // Identity-only variant set = the plain form: no selector, the param
+        // crosses as the bare value — lowered to the skip-default opt-out
+        // (the complete-set rule: "the set is {self}").
+        if let ExpandSel::Subset(v) = &ed.sel {
+            if matches!(v.as_slice(), [Variant::Identity]) {
+                skip_construct.insert((ed.func.clone(), ed.param.clone()));
+                done.insert((ed.func.to_string(), ed.param.to_string()));
+                continue;
+            }
         }
         process_expand(registry, exp, ed)?;
         done.insert((ed.func.to_string(), ed.param.to_string()));
@@ -249,7 +300,7 @@ pub fn apply<M>(
                 if bare_key != ckey {
                     continue;
                 }
-                if exp.skip_construct.contains(&(func.clone(), pname.clone())) {
+                if skip_construct.contains(&(func.clone(), pname.clone())) {
                     continue;
                 }
                 if !done.insert((func.to_string(), pname.to_string())) {
@@ -258,6 +309,7 @@ pub fn apply<M>(
                 let ed = ExpandDecl {
                     func: func.clone(),
                     param: pname,
+                    declared_target: None,
                     sel: ExpandSel::TopLevel,
                 };
                 process_expand(registry, exp, &ed)?;

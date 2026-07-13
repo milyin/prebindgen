@@ -2,8 +2,8 @@
 //! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
-//! A **deconstructor** (a type-level `return_expand!` `.field*` list,
-//! or the per-fn `.return_expand*` override) is a
+//! A **deconstructor** (a type-level `expand_return!` `.field*` list,
+//! or the per-fn `.expand_return` override) is a
 //! **deterministic product**: every record always runs and contributes its leaf
 //! — there is no selector (unlike a *constructor*, whose selector picks one
 //! variant). A record's accessor is a `#[prebindgen]` function `f(&T) -> &F` (a
@@ -66,18 +66,18 @@ struct DeconstructorDecl {
     records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
     /// carries the inferred `(target-position, delivery)` to use). Always
-    /// `Some` for type-level default (`return_expand!`) declarations.
+    /// `Some` for type-level default (`expand_return!`) declarations.
     default: Option<(DeconTarget, Delivery)>,
 }
 
 /// How an output expansion chooses the deconstructor for a function's return
-/// type: the type's default (`return_expand!`-declared) or a per-fn
-/// inline record list (`.return_expand*`).
+/// type: the type's default (`expand_return!`-declared) or a per-fn
+/// inline record list (`.expand_return`).
 #[derive(Clone)]
 enum DeconSel {
     /// Use the return type's unique deconstructor (error if ambiguous).
     TopLevel,
-    /// Per-fn override (`.return_expand`): use exactly these
+    /// Per-fn override (`.expand_return`): use exactly these
     /// accessor-fn records.
     Inline(Vec<DeconRecord>),
 }
@@ -109,6 +109,11 @@ struct OutputDecl {
     sel: DeconSel,
     target: DeconTarget,
     delivery: Delivery,
+    /// The type the per-fn decl was declared for (`expand_return!(T)`) —
+    /// cross-checked against the fn's peeled return type in [`apply`].
+    /// `None` for internally-synthesized decls (the type comes from the
+    /// return itself).
+    declared_source: Option<syn::Type>,
 }
 
 /// Deconstructor / converter / output-expansion declarations gathered from a
@@ -119,13 +124,14 @@ struct OutputDecl {
 pub struct Deconstructors {
     deconstructors: Vec<DeconstructorDecl>,
     outputs: Vec<OutputDecl>,
-    /// Cursor for the type-level default builder (`return_expand!` →
+    /// Cursor for the type-level default builder (`expand_return!` →
     /// `.field`/`.field_self`).
     cur_deconstructor: Option<usize>,
-    /// Cursor for an in-progress per-fn inline output override    /// (`.return_expand`/`.return_expand_self`): index into
+    /// Cursor for an in-progress per-fn inline output override
+    /// (`.expand_return`): index into
     /// [`Self::outputs`].
     cur_output: Option<usize>,
-    /// identity-only `.return_expand_self()` opt-outs: fns excluded from the
+    /// Identity-only per-fn field-set opt-outs: fns excluded from the
     /// default auto-apply.
     skip_output: std::collections::HashSet<syn::Ident>,
 }
@@ -160,13 +166,13 @@ impl Deconstructors {
         }
     }
 
-    /// identity-only `.return_expand_self()` — exclude `func` from output-position
-    /// default auto-apply.
+    /// Exclude `func` from output-position default auto-apply — the lowered
+    /// form of an identity-only per-fn field set (the raw whole-value return).
     pub fn add_skip_default_output(&mut self, func: syn::Ident) {
         self.skip_output.insert(func);
     }
 
-    /// `return_expand!` `.field(fun)` — add an accessor-function
+    /// `expand_return!` `.field(fun)` — add an accessor-function
     /// record with the resolved (literal) leaf `name`.
     pub fn add_deconstructor_record(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
@@ -178,7 +184,7 @@ impl Deconstructors {
         });
     }
 
-    /// `return_expand!` `.field_self()` — add the identity record
+    /// `expand_return!` `.field_self()` — add the identity record
     /// (the value itself).
     pub fn add_deconstructor_record_id(&mut self) {
         let i = self
@@ -187,23 +193,27 @@ impl Deconstructors {
         self.deconstructors[i].records.push(DeconRecord::Identity);
     }
 
-    /// Begin a per-fn inline output override (`.return_expand`):
+    /// Begin a per-fn inline output override (`.expand_return(expand_return!(T)…)`):
     /// decompose `func`'s return via an incrementally-built record list
     /// (accessor fields via [`Self::push_inline_field`] and/or the identity/self
-    /// field via [`Self::push_inline_field_self`]). Recorded as an explicit decl
-    /// so the auto-`default` skips it, and leaves the output cursor on it.
-    pub fn begin_inline_output(&mut self, func: syn::Ident) {
+    /// field via [`Self::push_inline_field_self`]). `declared_source` is the
+    /// decl's `T`, cross-checked against the fn's peeled return type in
+    /// [`apply`]. Recorded as an explicit decl so the auto-`default` skips it,
+    /// and leaves the output cursor on it. An identity-only field list lowers
+    /// to the raw whole-value return in [`apply`].
+    pub fn begin_inline_output(&mut self, func: syn::Ident, declared_source: syn::Type) {
         self.outputs.push(OutputDecl {
             func,
             sel: DeconSel::Inline(Vec::new()),
             target: DeconTarget::Output,
             delivery: Delivery::Callback,
+            declared_source: Some(declared_source),
         });
         self.cur_deconstructor = None;
         self.cur_output = Some(self.outputs.len() - 1);
     }
 
-    /// `.return_expand(fun)` — append an
+    /// `.expand_return` `.field(fun)` — append an
     /// accessor-function field (named `name`) to the current per-fn inline output.
     pub fn push_inline_field(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
@@ -217,7 +227,7 @@ impl Deconstructors {
         }
     }
 
-    /// `.return_expand_self()` — append the identity
+    /// `.expand_return` `.field_self()` — append the identity
     /// (the handle itself) field to the current per-fn inline output.
     pub fn push_inline_field_self(&mut self) {
         let i = self
@@ -274,11 +284,39 @@ pub fn apply<M>(
     // for the same `(fn, target)`.
     let mut done: std::collections::HashSet<(syn::Ident, DeconTarget)> = Default::default();
     for ed in &acc.outputs {
+        // Per-fn decl cross-check: the decl's declared type must match the
+        // fn's peeled (`Option`/`Vec`/`&`) return type — the typo guard for
+        // `.expand_return(expand_return!(T)…)`.
+        if let Some(declared) = &ed.declared_source {
+            let (item_fn, _) = registry
+                .functions
+                .get(&ed.func)
+                .cloned()
+                .ok_or_else(|| UnfoldError::UnknownFunction(ed.func.clone()))?;
+            let ret = fn_return(&item_fn);
+            if !returns_type(&ret, &TypeKey::from_type(declared)) {
+                return Err(UnfoldError::ReturnTypeMismatch {
+                    func: ed.func.clone(),
+                    declared: TypeKey::from_type(declared).as_str().to_string(),
+                    actual: quote::quote!(#ret).to_string(),
+                });
+            }
+        }
+        // Identity-only field set = the raw whole-value return (the
+        // complete-set rule: "the set is {self}"): no plan — mark done so the
+        // type default doesn't re-apply, and let the return cross through the
+        // type's ordinary output converter (borrowed-`&T`-capable).
+        if let DeconSel::Inline(records) = &ed.sel {
+            if matches!(records.as_slice(), [DeconRecord::Identity]) {
+                done.insert((ed.func.clone(), ed.target));
+                continue;
+            }
+        }
         process_decl(registry, acc, ed)?;
         done.insert((ed.func.clone(), ed.target));
     }
 
-    // Default auto-apply: a type's deconstructor (`return_expand!`) is
+    // Default auto-apply: a type's deconstructor (`expand_return!`) is
     // applied to every declared fn that returns it (Output) or has it as a
     // `Result<_, E>` error (Error), unless the fn is `fun_accessor` or has a
     // per-fn override. `Delivery` is recomputed from leaf count inside
@@ -311,6 +349,7 @@ pub fn apply<M>(
                             sel: sel.clone(),
                             target: DeconTarget::Error,
                             delivery: Delivery::Callback,
+                            declared_source: None,
                         },
                     )?;
                 }
@@ -329,6 +368,7 @@ pub fn apply<M>(
                         sel: sel.clone(),
                         target: DeconTarget::Output,
                         delivery: Delivery::Callback,
+                        declared_source: None,
                     },
                 )?;
             }
@@ -388,6 +428,7 @@ pub fn apply<M>(
                     sel: DeconSel::TopLevel,
                     target: DeconTarget::Output,
                     delivery: Delivery::Callback,
+                    declared_source: None,
                 };
                 let decon = decl_id(&core_key, d);
                 let records = d.records.clone();

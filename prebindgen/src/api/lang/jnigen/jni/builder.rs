@@ -62,11 +62,12 @@ impl JniGen {
             deconstructors: crate::api::core::unfold::Deconstructors::default(),
             param_expand_decls: Vec::new(),
             return_expand_decls: Vec::new(),
+            fn_param_expands: Vec::new(),
+            fn_return_expands: Vec::new(),
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
             ignored_class_types: std::collections::HashSet::new(),
             ignored_const_idents: std::collections::HashSet::new(),
-            accessor_record_fns: std::collections::HashSet::new(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. Consumers may override
@@ -363,8 +364,8 @@ impl JniGen {
     }
 
     /// Shared tail of `accept_ptr_class`/`accept_value_class` (the two class
-    /// kinds whose members are emitted): each member's per-fn flatten
-    /// modifiers apply exactly as a free function's would; a constructor
+    /// kinds whose members are emitted): each member's per-fn expand
+    /// overrides apply exactly as a free function's would; a constructor
     /// member's return is additionally never output-flattened (it's a
     /// factory); then the members join the class's registered set.
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
@@ -374,7 +375,7 @@ impl JniGen {
                 .kotlin_name_override
                 .clone()
                 .unwrap_or_else(|| snake_to_camel(&rust_ident.to_string()));
-            self.apply_fn_flatten_modifiers(decl);
+            self.accept_fn_expands(decl);
             if kind == MemberKind::Constructor {
                 self.deconstructors
                     .add_skip_default_output(rust_ident.clone());
@@ -398,58 +399,30 @@ impl JniGen {
             .or_default()
             .functions
             .push(entry);
-        self.apply_fn_flatten_modifiers(decl);
+        self.accept_fn_expands(decl);
     }
 
-    /// Replay a [`FunctionDecl`]'s per-fn overrides (per-param
-    /// `.param_expand*` / `.return_expand*`) into the
-    /// expansion/deconstruction bookkeeping. Shared by [`Self::accept_function`]
-    /// (free package fns) and [`Self::accept_members`] (class members) — the
-    /// overrides mean the same thing in both positions.
-    ///
-    /// Identity-only normalization: an override consisting of only the
-    /// `_self` form means "the plain handle, nothing else" and lowers to the
-    /// skip-default opt-out — no selector on the input side, the raw
-    /// whole-handle return (borrowed-`&T`-capable) on the output side.
-    fn apply_fn_flatten_modifiers(&mut self, decl: FunctionDecl) {
+    /// Move a [`FunctionDecl`]'s per-fn expand overrides
+    /// (`.expand_param(name, …)` / `.expand_return(…)`) into raw storage.
+    /// Shared by [`Self::accept_function`] (free package fns) and
+    /// [`Self::accept_members`] (class members) — the overrides mean the same
+    /// thing in both positions. Nothing is lowered here: variant/field lists
+    /// are interpreted at the point of use ([`Self::build_expansions`] /
+    /// [`Self::build_deconstructors`]) so field-name inheritance and the
+    /// rust-side-only checks see the complete declaration set.
+    fn accept_fn_expands(&mut self, decl: FunctionDecl) {
         let FunctionDecl {
             rust_ident,
             kotlin_name_override: _,
-            input_overrides,
-            output_override,
+            param_expands,
+            return_expand,
         } = decl;
-
-        for (param, variants) in input_overrides {
-            if matches!(variants.as_slice(), [LocalVariant::SelfIdentity]) {
-                self.expansions
-                    .add_skip_default_construct(rust_ident.clone(), param);
-                continue;
-            }
-            self.expansions.begin_subset(rust_ident.clone(), param);
-            for v in variants {
-                match v {
-                    LocalVariant::Ctor(f) => self.expansions.push_subset_variant(f),
-                    LocalVariant::SelfIdentity => self.expansions.push_subset_self(),
-                }
-            }
+        for (param, pdecl) in param_expands {
+            self.fn_param_expands
+                .push((rust_ident.clone(), param, pdecl));
         }
-        if let Some(fields) = output_override {
-            if matches!(fields.as_slice(), [LocalField::SelfField]) {
-                self.deconstructors
-                    .add_skip_default_output(rust_ident.clone());
-                return;
-            }
-            self.deconstructors.begin_inline_output(rust_ident.clone());
-            for f in fields {
-                match f {
-                    LocalField::Named(func, name) => {
-                        self.accessor_record_fns.insert(func.clone());
-                        let name = name.unwrap_or_else(|| snake_to_camel(&func.to_string()));
-                        self.deconstructors.push_inline_field(func, name)
-                    }
-                    LocalField::SelfField => self.deconstructors.push_inline_field_self(),
-                }
-            }
+        if let Some(rdecl) = return_expand {
+            self.fn_return_expands.push((rust_ident.clone(), rdecl));
         }
     }
 }
@@ -461,10 +434,10 @@ impl JniGen {
     /// [`ExpandDecl`] directions, the direction carried by the decl object
     /// (the boundary-decl peer of [`PackageDecl::class`]):
     ///
-    /// * [`param_expand!`](crate::param_expand) — the input side: how a
+    /// * [`expand_param!`](crate::expand_param) — the input side: how a
     ///   parameter of the type may be supplied, as an OR-list of build
     ///   variants.
-    /// * [`return_expand!`](crate::return_expand) — the output side: the
+    /// * [`expand_return!`](crate::expand_return) — the output side: the
     ///   AND-set of fields a returned / callback-delivered / `Result`-error
     ///   value of the type decomposes into.
     ///
@@ -476,7 +449,7 @@ impl JniGen {
             ExpandDecl::Param(decl) => {
                 assert!(
                     !decl.variants.is_empty(),
-                    "param_expand!({}) declares no variants — add .variant(fun!(...)) and/or \
+                    "expand_param!({}) declares no variants — add .variant(fun!(...)) and/or \
                      .variant_self()",
                     decl.key.as_str()
                 );
@@ -485,7 +458,7 @@ impl JniGen {
             ExpandDecl::Return(decl) => {
                 assert!(
                     !decl.fields.is_empty(),
-                    "return_expand!({}) declares no fields — add .field(fun!(...)) and/or \
+                    "expand_return!({}) declares no fields — add .field(fun!(...)) and/or \
                      .field_self()",
                     decl.key.as_str()
                 );
@@ -497,7 +470,7 @@ impl JniGen {
 
     /// The Kotlin name of `func` as a declared member (`.fun`/`.constructor`)
     /// of the class keyed by `key`, if it is one — the name-inheritance
-    /// source for [`ReturnExpandDecl::field`].
+    /// source for [`ExpandReturnDecl::field`].
     fn member_kotlin_name(&self, key: &TypeKey, func: &syn::Ident) -> Option<String> {
         self.class_members
             .get(key)?
@@ -518,7 +491,7 @@ impl JniGen {
 
     /// Assemble the full [`Expansions`] set at the point of use: the eagerly
     /// accumulated per-fn overrides plus the raw type-level
-    /// [`ParamExpandDecl`]s. Building on demand keeps declarations
+    /// [`ExpandParamDecl`]s. Building on demand keeps declarations
     /// order-independent — a `param_expand` may precede or follow the
     /// `package` that declares its constructors (which is also why the
     /// rust-side-only `_self` check lives here and not at accept time).
@@ -531,7 +504,7 @@ impl JniGen {
                         .variants
                         .iter()
                         .any(|v| matches!(v, LocalVariant::SelfIdentity)),
-                "param_expand!({k}).variant_self(): `{k}` has no class declaration, so there is \
+                "expand_param!({k}).variant_self(): `{k}` has no class declaration, so there is \
                  no Kotlin object to pass — drop .variant_self() (the type is rust-side-only) \
                  or declare the type in a package",
                 k = decl.key.as_str()
@@ -548,6 +521,30 @@ impl JniGen {
                 match v {
                     LocalVariant::Ctor(f) => exp.add_constructor_variant(f.clone()),
                     LocalVariant::SelfIdentity => exp.add_constructor_variant_id(),
+                }
+            }
+        }
+        // Per-fn overrides: same decl shape, complete-set semantics; the
+        // param-name/type cross-check and the identity-only lowering happen
+        // in `core/expand.rs`'s `apply` (which sees the fn signatures).
+        for (func, param, decl) in &self.fn_param_expands {
+            assert!(
+                self.is_class_declared(&decl.key)
+                    || !decl
+                        .variants
+                        .iter()
+                        .any(|v| matches!(v, LocalVariant::SelfIdentity)),
+                "fun!({func}).expand_param(\"{param}\", expand_param!({k}).variant_self()): `{k}` \
+                 has no class declaration, so there is no Kotlin object to pass — drop \
+                 .variant_self() (the type is rust-side-only) or declare the type in a package",
+                k = decl.key.as_str()
+            );
+            let param_ident = syn::Ident::new(param, Span::call_site());
+            exp.begin_subset(func.clone(), param_ident, decl.key.to_type());
+            for v in &decl.variants {
+                match v {
+                    LocalVariant::Ctor(f) => exp.push_subset_variant(f.clone()),
+                    LocalVariant::SelfIdentity => exp.push_subset_self(),
                 }
             }
         }
@@ -569,7 +566,7 @@ impl JniGen {
                         .fields
                         .iter()
                         .any(|f| matches!(f, LocalField::SelfField)),
-                "return_expand!({k}).field_self(): `{k}` has no class declaration, so there is \
+                "expand_return!({k}).field_self(): `{k}` has no class declaration, so there is \
                  no Kotlin object to deliver — drop .field_self() (the type is rust-side-only) \
                  or declare the type in a package",
                 k = decl.key.as_str()
@@ -588,43 +585,102 @@ impl JniGen {
                 }
             }
         }
+        // Per-fn overrides: same decl shape and name inheritance; the
+        // return-type cross-check and the identity-only lowering happen in
+        // `core/unfold.rs`'s `apply` (which sees the fn signatures).
+        for (func, decl) in &self.fn_return_expands {
+            assert!(
+                self.is_class_declared(&decl.key)
+                    || !decl
+                        .fields
+                        .iter()
+                        .any(|f| matches!(f, LocalField::SelfField)),
+                "fun!({func}).expand_return(expand_return!({k}).field_self()): `{k}` has no \
+                 class declaration, so there is no Kotlin object to deliver — drop \
+                 .field_self() (the type is rust-side-only) or declare the type in a package",
+                k = decl.key.as_str()
+            );
+            dec.begin_inline_output(func.clone(), decl.key.to_type());
+            for f in &decl.fields {
+                match f {
+                    LocalField::Named(afunc, name_override) => {
+                        let name = name_override
+                            .clone()
+                            .or_else(|| self.member_kotlin_name(&decl.key, afunc))
+                            .unwrap_or_else(|| snake_to_camel(&afunc.to_string()));
+                        dec.push_inline_field(afunc.clone(), name);
+                    }
+                    LocalField::SelfField => dec.push_inline_field_self(),
+                }
+            }
+        }
         dec
     }
 
-    /// Type keys of boundary decls (`param_expand!` / `return_expand!`) whose
-    /// type has no class declaration — the **rust-side-only** types. Unioned
-    /// into [`Prebindgen::ignored_types`] so the registry treats them as
-    /// acknowledged (no "skipping undeclared" warning, no direct converter
-    /// requirement, no Kotlin emission).
+    /// Type keys of boundary decls (`expand_param!` / `expand_return!`,
+    /// type-level and per-fn) whose type has no class declaration — the
+    /// **rust-side-only** types. Unioned into [`Prebindgen::ignored_types`]
+    /// so the registry treats them as acknowledged (no "skipping undeclared"
+    /// warning, no direct converter requirement, no Kotlin emission).
     pub(crate) fn rust_side_only_types(&self) -> impl Iterator<Item = TypeKey> + '_ {
         self.param_expand_decls
             .iter()
             .map(|d| &d.key)
             .chain(self.return_expand_decls.iter().map(|d| &d.key))
+            .chain(self.fn_param_expands.iter().map(|(_, _, d)| &d.key))
+            .chain(self.fn_return_expands.iter().map(|(_, d)| &d.key))
             .filter(|k| !self.is_class_declared(k))
             .cloned()
     }
 
-    /// Function idents referenced only inside boundary decls — `return_expand!`
-    /// field accessors and `param_expand!` variant ctors. They are called
-    /// Rust-side by the generated fold/unfold code and need no extern of
-    /// their own; when not otherwise declared they are unioned into
-    /// [`Prebindgen::ignored_functions`] so the registry's "skipping
-    /// undeclared fn" warning stays quiet.
+    /// Function idents referenced only inside boundary decls (type-level and
+    /// per-fn) — `expand_return!` field accessors and `expand_param!` variant
+    /// ctors. They are called Rust-side by the generated fold/unfold code and
+    /// need no extern of their own; when not otherwise declared they are
+    /// unioned into [`Prebindgen::ignored_functions`] so the registry's
+    /// "skipping undeclared fn" warning stays quiet.
     pub(crate) fn boundary_referenced_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
-        let ctors = self.param_expand_decls.iter().flat_map(|d| {
-            d.variants.iter().filter_map(|v| match v {
+        let ctors = self
+            .param_expand_decls
+            .iter()
+            .map(|d| &d.variants)
+            .chain(self.fn_param_expands.iter().map(|(_, _, d)| &d.variants))
+            .flatten()
+            .filter_map(|v| match v {
                 LocalVariant::Ctor(f) => Some(f.clone()),
                 LocalVariant::SelfIdentity => None,
-            })
-        });
-        let accessors = self.return_expand_decls.iter().flat_map(|d| {
-            d.fields.iter().filter_map(|f| match f {
+            });
+        let accessors = self
+            .return_expand_decls
+            .iter()
+            .map(|d| &d.fields)
+            .chain(self.fn_return_expands.iter().map(|(_, d)| &d.fields))
+            .flatten()
+            .filter_map(|f| match f {
+                LocalField::Named(func, _) => Some(func.clone()),
+                LocalField::SelfField => None,
+            });
+        ctors.chain(accessors)
+    }
+
+    /// Every function referenced as a named field in any `expand_return!`
+    /// decl (type-level or per-fn) — the accessor set. Backs
+    /// [`Prebindgen::accessor_functions`]: `core/unfold.rs`'s deconstructor
+    /// gate requires every named record's function to be in this set
+    /// (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes them
+    /// from parameter composition. Derived from *usage* — a function need not
+    /// also be a `.fun()` class member to be referenced this way.
+    pub(crate) fn field_accessor_fns(&self) -> std::collections::HashSet<syn::Ident> {
+        self.return_expand_decls
+            .iter()
+            .map(|d| &d.fields)
+            .chain(self.fn_return_expands.iter().map(|(_, d)| &d.fields))
+            .flatten()
+            .filter_map(|f| match f {
                 LocalField::Named(func, _) => Some(func.clone()),
                 LocalField::SelfField => None,
             })
-        });
-        ctors.chain(accessors)
+            .collect()
     }
 }
 

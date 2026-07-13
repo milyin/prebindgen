@@ -1,7 +1,7 @@
 use super::*;
 
 /// Two fns returning the same type under different output decompositions:
-/// the type-level `return_expand!` default and a per-fn `.return_expand(...)`
+/// the type-level `expand_return!` default and a per-fn `.return_expand(...)`
 /// inline field list. Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
@@ -37,17 +37,19 @@ fn inline_output_gets_own_builder() {
                 // third field reuses the `z_thing_name` accessor but must carry a
                 // distinct (literal) leaf name — duplicate names are a hard error.
                 .fun(
-                    crate::fun!(z_make_b)
-                        .return_expand(crate::fun!(z_thing_name).name("name"))
-                        .return_expand(crate::fun!(z_thing_size).name("size"))
-                        .return_expand(crate::fun!(z_thing_name).name("name2")),
+                    crate::fun!(z_make_b).expand_return(
+                        crate::expand_return!(ZThing)
+                            .field(crate::fun!(z_thing_name).name("name"))
+                            .field(crate::fun!(z_thing_size).name("size"))
+                            .field(crate::fun!(z_thing_name).name("name2")),
+                    ),
                 ),
         )
         // Default output: name + size (2 leaves ⇒ builder callback). The
         // `name` field inherits its Kotlin name from the class member; `size`
         // sets it explicitly — both paths resolve to the member-equal names.
         .expand(
-            crate::return_expand!(ZThing)
+            crate::expand_return!(ZThing)
                 .field(crate::fun!(z_thing_name))
                 .field(crate::fun!(z_thing_size).name("size")),
         );
@@ -132,12 +134,12 @@ fn error_unwrap_universal_records() {
                 )
                 .fun(crate::fun!(z_fallible)),
         )
-        .expand(crate::return_expand!(ZDetail).field(crate::fun!(z_detail_code)))
+        .expand(crate::expand_return!(ZDetail).field(crate::fun!(z_detail_code)))
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
         // Field names inherit from the class members.
         .expand(
-            crate::return_expand!(ZErr)
+            crate::expand_return!(ZErr)
                 .field_self()
                 .field(crate::fun!(z_err_message))
                 .field(crate::fun!(z_err_detail)),
@@ -222,7 +224,7 @@ fn error_unwrap_universal_records() {
 /// signature, its handle locked) while keeping the non-receiver params; the
 /// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
 /// companion-object factory returning the class. Per-fn
-/// `.return_expand_self()` emits the handle leaf.
+/// `.expand_return(...field_self()...)` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
     use crate::SourceLocation;
@@ -257,9 +259,11 @@ fn method_constructor_and_inline_field_self() {
                 )
                 // A free fn whose per-fn inline output decomposes to (handle, name).
                 .fun(
-                    crate::fun!(z_get)
-                        .return_expand_self()
-                        .return_expand(crate::fun!(z_thing_name).name("name")),
+                    crate::fun!(z_get).expand_return(
+                        crate::expand_return!(ZThing)
+                            .field_self()
+                            .field(crate::fun!(z_thing_name).name("name")),
+                    ),
                 ),
         );
 
@@ -293,7 +297,7 @@ fn method_constructor_and_inline_field_self() {
     );
 }
 
-/// A **rust-side-only** error type: `return_expand!` with NO class
+/// A **rust-side-only** error type: `expand_return!` with NO class
 /// declaration. The `Result<_, ZErr>` error channel decomposes the error into
 /// its fields (here just the message), the `ZErrHandler` interface lands in
 /// the BASE package (no type package exists), and no Kotlin class / `freePtr`
@@ -321,7 +325,7 @@ fn rust_side_only_error_type() {
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
         // No class declaration for ZErr anywhere — rust-side-only. The field
         // name is explicit (no class member to inherit from).
-        .expand(crate::return_expand!(ZErr).field(crate::fun!(z_err_message).name("message")));
+        .expand(crate::expand_return!(ZErr).field(crate::fun!(z_err_message).name("message")));
 
     let dir = unique_test_dir("jnigen_rust_side_only_err");
     let _ = std::fs::remove_dir_all(&dir);
@@ -366,7 +370,7 @@ fn rust_side_only_error_type() {
     assert!(base_file.contains("funinterfaceZErrHandler"), "{all}");
 }
 
-/// A **rust-side-only** input type: `param_expand!` with NO class
+/// A **rust-side-only** input type: `expand_param!` with NO class
 /// declaration. Every param of the type is built from the ctor's ingredients
 /// (no selector — single variant); the type never surfaces in Kotlin.
 #[test]
@@ -390,7 +394,7 @@ fn rust_side_only_input_type() {
         .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
-        .expand(crate::param_expand!(ZOpts).variant(crate::fun!(z_opts_new)));
+        .expand(crate::expand_param!(ZOpts).variant(crate::fun!(z_opts_new)));
 
     let dir = unique_test_dir("jnigen_rust_side_only_in");
     let _ = std::fs::remove_dir_all(&dir);
@@ -435,7 +439,7 @@ fn rust_side_only_variant_self_rejected() {
     let jni = JniGen::new()
         .set_source_module(syn::parse_quote!(myflat))
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
-        .expand(crate::param_expand!(ZOpts).variant_self());
+        .expand(crate::expand_param!(ZOpts).variant_self());
     let dir = unique_test_dir("jnigen_rso_self_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -455,9 +459,134 @@ fn rust_side_only_field_self_rejected() {
     let jni = JniGen::new()
         .set_source_module(syn::parse_quote!(myflat))
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
-        .expand(crate::return_expand!(ZThing).field_self());
+        .expand(crate::expand_return!(ZThing).field_self());
     let dir = unique_test_dir("jnigen_rso_self_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+}
+
+/// Per-fn `.expand_param(name, expand_param!(T))`: the decl's `T` must match
+/// the named parameter's peeled type — a typo'd type is a hard error naming
+/// both types.
+#[test]
+fn fn_expand_param_type_mismatch_rejected() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_thing_make(name: String) -> ZThing { unimplemented!() }",
+        "pub fn z_use(t: ZThing) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
+                .class(crate::ptr_class!(ZOther))
+                // Wrong type: the param `t` is a ZThing, not a ZOther.
+                .fun(crate::fun!(z_use).expand_param(
+                    "t",
+                    crate::expand_param!(ZOther).variant(crate::fun!(z_thing_make)),
+                )),
+        );
+    let dir = unique_test_dir("jnigen_fn_param_mismatch");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect_err("type mismatch must fail");
+    let msg = format!("{err}");
+    assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
+}
+
+/// Per-fn `.expand_return(expand_return!(T))`: the decl's `T` must match the
+/// function's peeled return type — a mismatch is a hard error.
+#[test]
+fn fn_expand_return_type_mismatch_rejected() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
+        "pub fn z_make() -> ZThing { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
+                .class(crate::ptr_class!(ZOther))
+                // Wrong type: z_make returns ZThing, not ZOther.
+                .fun(crate::fun!(z_make).expand_return(crate::expand_return!(ZOther).field_self())),
+        );
+    let dir = unique_test_dir("jnigen_fn_return_mismatch");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect_err("type mismatch must fail");
+    let msg = format!("{err}");
+    assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
+}
+
+/// `.expand_param` on a parameter name the function doesn't have is a hard
+/// error (`UnknownParam`) — the second typo guard.
+#[test]
+fn fn_expand_param_unknown_param_rejected() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_thing_make(name: String) -> ZThing { unimplemented!() }",
+        "pub fn z_use(t: ZThing) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
+                .fun(crate::fun!(z_use).expand_param(
+                    "typo",
+                    crate::expand_param!(ZThing).variant(crate::fun!(z_thing_make)),
+                )),
+        );
+    let dir = unique_test_dir("jnigen_fn_param_unknown");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect_err("unknown param must fail");
+    assert!(format!("{err}").contains("typo"), "{err}");
+}
+
+/// Duplicate `.expand_return` on one function is a decl-time hard error —
+/// the complete field set belongs in ONE decl.
+#[test]
+#[should_panic(expected = "already has a return expand override")]
+fn fn_expand_return_duplicate_rejected() {
+    let _ = crate::fun!(z_make)
+        .expand_return(crate::expand_return!(ZThing).field_self())
+        .expand_return(crate::expand_return!(ZThing).field_self());
 }

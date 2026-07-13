@@ -497,7 +497,7 @@ fn iterable_whole_element_plan() {
     // deconstructor of its own.
     let mut reg = reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
     let mut acc = Deconstructors::default();
-    acc.begin_inline_output(ident("z_session_peers_zid"));
+    acc.begin_inline_output(ident("z_session_peers_zid"), syn::parse_quote!(ZZenohId));
 
     apply(
         &mut reg,

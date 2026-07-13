@@ -24,18 +24,18 @@
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `ScalarTypeWrapperDecl`              | `Millis` ⇄ `Long` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
-//! | `param_expand!` `.variant()` (+`_self`)| `Summary` default input |
-//! | `return_expand!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
+//! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
+//! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `PackageDecl::constant` (`constant!`) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
 //! | `PackageDecl::constant_fun` | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
 //! | `PackageDecl::constant_expr` (`constant_expr!`) | `COVER_BANNER` = binding-defined `format!` expression |
-//! | `.param_expand_self(param)` alone   | `summary_total_raw` (raw handle param, overrides the class default) |
-//! | `.return_expand_self()` alone         | `storage_summary_handle` / `archive_latest` (raw handle return) |
-//! | per-fn `.param_expand(param, …)` (+`_self`)| `storage_expect_summary` |
-//! | per-fn `.return_expand(…)` (+`_self`) | `storage_summary_full` |
+//! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
+//! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
+//! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
+//! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -71,8 +71,8 @@
 //! emitting nothing.
 
 use prebindgen::{
-    constant, constant_expr, core::Registry, data_class, enum_class, fun, lang::JniGen, package,
-    param_expand, ptr_class, return_expand, scalar_type_wrapper, value_class,
+    constant, constant_expr, core::Registry, data_class, enum_class, expand_param, expand_return,
+    fun, lang::JniGen, package, ptr_class, scalar_type_wrapper, value_class,
 };
 use syn::parse_quote as pq;
 
@@ -127,7 +127,7 @@ fn main() {
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(package!("errors").class(
             // `StorageError` is the `E` of a fallible `Result`; its
-            // boundary shape is declared with `return_expand!` below.
+            // boundary shape is declared with `expand_return!` below.
             ptr_class!(StorageError).fun(fun!(storage_error_message).name("message")),
         ))
         // `StorageError`'s default return fields make the generated `onError`
@@ -136,7 +136,7 @@ fn main() {
         // error handle itself (an owned `StorageError` the handler must
         // `close()`).
         .expand(
-            return_expand!(StorageError)
+            expand_return!(StorageError)
                 .field(fun!(storage_error_message))
                 .field_self(),
         )
@@ -146,7 +146,7 @@ fn main() {
                 // `Summary` is an opaque handle; its default boundary shape —
                 // decomposed `(count, total)` leaves out, rebuilt via the `of`
                 // constructor (or an existing handle) in — is declared with
-                // `param_expand!` / `return_expand!` below.
+                // `expand_param!` / `expand_return!` below.
                 .class(
                     ptr_class!(Summary)
                         .constructor(fun!(summary_new).name("of"))
@@ -164,14 +164,14 @@ fn main() {
         // `Summary` default input: rebuilt from the `of` constructor's
         // ingredients OR passed as an existing handle (runtime-selected).
         .expand(
-            param_expand!(Summary)
+            expand_param!(Summary)
                 .variant(fun!(summary_new))
                 .variant_self(),
         )
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
         .expand(
-            return_expand!(Summary)
+            expand_return!(Summary)
                 .field(fun!(summary_count))
                 .field(fun!(summary_total)),
         )
@@ -228,30 +228,42 @@ fn main() {
                 .fun(fun!(annotated_priority))
                 .fun(fun!(annotated_payload_value)),
         )
-        // analytics: the param-variant / return-field matrix (class default / raw-self override / per-fn override, in + out).
+        // analytics: the param-variant / return-field matrix (type default /
+        // per-fn override, in + out). Per-fn overrides reuse the SAME
+        // expand-decl objects as the type defaults (complete-set rule): an
+        // identity-only set is the plain form.
         .package(
             package!("analytics")
                 .fun(fun!(storage_summary))
                 .fun(fun!(storage_matches_summary))
-                .fun(fun!(storage_summary_handle).return_expand_self())
-                .fun(fun!(summary_total_raw).param_expand_self(pq!(s)))
                 .fun(
-                    fun!(storage_summary_full)
-                        .return_expand(fun!(summary_count).name("count"))
-                        .return_expand(fun!(summary_total).name("total"))
-                        .return_expand_self(),
+                    fun!(storage_summary_handle)
+                        .expand_return(expand_return!(Summary).field_self()),
                 )
                 .fun(
-                    fun!(storage_expect_summary)
-                        .param_expand(pq!(expected), fun!(summary_new))
-                        .param_expand_self(pq!(expected)),
+                    fun!(summary_total_raw)
+                        .expand_param("s", expand_param!(Summary).variant_self()),
                 )
+                .fun(fun!(storage_summary_full).expand_return(
+                    expand_return!(Summary)
+                        .field(fun!(summary_count).name("count"))
+                        .field(fun!(summary_total).name("total"))
+                        .field_self(),
+                ))
+                .fun(fun!(storage_expect_summary).expand_param(
+                    "expected",
+                    expand_param!(Summary)
+                        .variant(fun!(summary_new))
+                        .variant_self(),
+                ))
                 // The borrowed-accessor trio. `archive_latest` suppresses the default
                 // Summary return-field default so the BORROWED handle path (clone into a
                 // fresh owned handle, null when absent) is what crosses.
                 .fun(fun!(archive_new))
                 .fun(fun!(archive_store))
-                .fun(fun!(archive_latest).return_expand_self()),
+                .fun(
+                    fun!(archive_latest).expand_return(expand_return!(Summary).field_self()),
+                ),
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
         // fallible constructor and the Millis wrapper.

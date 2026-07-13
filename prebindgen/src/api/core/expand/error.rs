@@ -27,6 +27,14 @@ pub enum ExpandError {
     ConstructOnAccessor {
         func: syn::Ident,
     },
+    /// A per-fn `.expand_param(name, expand_param!(T))` decl whose `T` does
+    /// not match the named parameter's peeled type.
+    ParamTypeMismatch {
+        func: syn::Ident,
+        param: syn::Ident,
+        declared: String,
+        actual: String,
+    },
     /// Recursive input reached a type already on the build chain (`A → … → A`).
     InputCycle {
         ty: String,
@@ -65,6 +73,18 @@ impl std::fmt::Display for ExpandError {
             ExpandError::UnknownParam(func, param) => write!(
                 f,
                 "expand: function `{}` has no parameter named `{}`",
+                func, param
+            ),
+            ExpandError::ParamTypeMismatch {
+                func,
+                param,
+                declared,
+                actual,
+            } => write!(
+                f,
+                "expand: `{}`.expand_param(\"{}\", expand_param!({declared})): the parameter's \
+                 type is `{actual}`, not `{declared}` — declare the decl for the parameter's \
+                 actual type",
                 func, param
             ),
             ExpandError::UnknownConstructor(name) => write!(

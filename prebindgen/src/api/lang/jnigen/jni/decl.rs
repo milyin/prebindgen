@@ -17,8 +17,7 @@ use super::*;
 // by the accept logic in `builder.rs` once a decl is handed to `JniGen`)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One arm of a `param_expand!` `.variant*` / per-fn `.param_expand*`
-/// build-from list.
+/// One arm of an `expand_param!` `.variant*` list (type-level or per-fn).
 #[derive(Clone)]
 pub(crate) enum LocalVariant {
     /// Build via this declared constructor member / constructor fn.
@@ -27,8 +26,7 @@ pub(crate) enum LocalVariant {
     SelfIdentity,
 }
 
-/// One arm of a `return_expand!` `.field*` / per-fn `.return_expand*` field
-/// list. The name is stored raw (`None` = derive at replay time: for a
+/// One arm of an `expand_return!` `.field*` list (type-level or per-fn). The name is stored raw (`None` = derive at replay time: for a
 /// class-level field, the class member's Kotlin name if the accessor is a
 /// declared member, else `snake_to_camel`; for a per-fn field,
 /// `snake_to_camel`).
@@ -43,7 +41,7 @@ pub(crate) enum LocalField {
 
 // Class members are stored as the full `(FunctionDecl, MemberKind)` pair —
 // not a reduced ident+name record — so the `FunctionDecl`'s per-fn
-// `.param_expand*`/`.return_expand*` overrides survive to `builder.rs`'s
+// `.expand_param`/`.expand_return` overrides survive to `builder.rs`'s
 // `accept_members`, which applies them exactly like `accept_function` does
 // for free package functions.
 
@@ -162,23 +160,23 @@ macro_rules! generic_type_wrapper {
     };
 }
 
-/// Build a [`ParamExpandDecl`] directly from a bare Rust type:
-/// `param_expand!(KeyExpr)` is `ParamExpandDecl::new(<KeyExpr as syn::Type>)`.
+/// Build a [`ExpandParamDecl`] directly from a bare Rust type:
+/// `expand_param!(KeyExpr)` is `ExpandParamDecl::new(<KeyExpr as syn::Type>)`.
 /// See [`ptr_class!`] for the parsing mechanics.
 #[macro_export]
-macro_rules! param_expand {
+macro_rules! expand_param {
     ($t:ty) => {
-        $crate::lang::ParamExpandDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+        $crate::lang::ExpandParamDecl::new($crate::__macro_support::parse_type(stringify!($t)))
     };
 }
 
-/// Build a [`ReturnExpandDecl`] directly from a bare Rust type:
-/// `return_expand!(Sample)` is `ReturnExpandDecl::new(<Sample as syn::Type>)`.
+/// Build a [`ExpandReturnDecl`] directly from a bare Rust type:
+/// `expand_return!(Sample)` is `ExpandReturnDecl::new(<Sample as syn::Type>)`.
 /// See [`ptr_class!`] for the parsing mechanics.
 #[macro_export]
-macro_rules! return_expand {
+macro_rules! expand_return {
     ($t:ty) => {
-        $crate::lang::ReturnExpandDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+        $crate::lang::ExpandReturnDecl::new($crate::__macro_support::parse_type(stringify!($t)))
     };
 }
 
@@ -195,8 +193,8 @@ macro_rules! return_expand {
 /// or small `Copy` values ([`value_class!`](crate::value_class)).
 ///
 /// A type that never materializes in Kotlin needs **no class declaration at
-/// all**: give it boundary decls only ([`param_expand!`](crate::param_expand)
-/// / [`return_expand!`](crate::return_expand)) and it stays rust-side-only —
+/// all**: give it boundary decls only ([`expand_param!`](crate::expand_param)
+/// / [`expand_return!`](crate::expand_return)) and it stays rust-side-only —
 /// built from ingredients on the way in, decomposed into fields on the way
 /// out.
 ///
@@ -208,7 +206,7 @@ macro_rules! return_expand {
 /// companion-object factories ([`constructor`](Self::constructor)). How the
 /// type crosses the FFI boundary by default — accepted as which parameter
 /// variants, returned as which field set — is declared separately with
-/// [`param_expand!`](crate::param_expand) / [`return_expand!`](crate::return_expand)
+/// [`expand_param!`](crate::expand_param) / [`expand_return!`](crate::expand_return)
 /// handed to [`JniGen::expand`]; any single
 /// function can override those defaults locally (see [`FunctionDecl`]).
 ///
@@ -256,7 +254,7 @@ impl PtrClassDecl {
     /// factory** — callers write `Class.name(...)`. `rust_fun` returns `Self`
     /// (or `Result<Self, E>`) and its parameters become the factory's
     /// arguments. A constructor can also serve as a build option in a
-    /// [`param_expand!`](crate::param_expand) variant list.
+    /// [`expand_param!`](crate::expand_param) variant list.
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Constructor));
         self
@@ -277,9 +275,9 @@ impl From<syn::Type> for PtrClassDecl {
 /// may be supplied, as a list of *variants* — "built from this constructor's
 /// ingredients, OR that one's, OR passed as an existing handle". Applies to
 /// every function with a parameter of the type; a single function opts out or
-/// narrows via [`FunctionDecl::param_expand`] / [`FunctionDecl::param_expand_self`].
+/// narrows via [`FunctionDecl::expand_param`].
 ///
-/// Build one with [`param_expand!`](crate::param_expand), add arms with
+/// Build one with [`expand_param!`](crate::expand_param), add arms with
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
 /// it to [`JniGen::expand`]. With more than one arm the generated Kotlin
 /// selects the variant at runtime.
@@ -294,17 +292,17 @@ impl From<syn::Type> for PtrClassDecl {
 /// ```
 /// // A KeyExpr param accepts EITHER a String (built via keyexpr_new_try_from)
 /// // OR an existing KeyExpr handle:
-/// let _ = prebindgen::param_expand!(KeyExpr)
+/// let _ = prebindgen::expand_param!(KeyExpr)
 ///     .variant(prebindgen::fun!(keyexpr_new_try_from))
 ///     .variant_self();
 /// ```
 #[derive(Clone)]
-pub struct ParamExpandDecl {
+pub struct ExpandParamDecl {
     pub(crate) key: TypeKey,
     pub(crate) variants: Vec<LocalVariant>,
 }
 
-impl ParamExpandDecl {
+impl ExpandParamDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
@@ -335,9 +333,9 @@ impl ParamExpandDecl {
 /// *fields*, all delivered in one FFI crossing — instead of an opaque handle
 /// the caller must then query field by field with more JNI calls. Applies to
 /// every function returning the type; a single function opts out or replaces
-/// the set via [`FunctionDecl::return_expand`] / [`FunctionDecl::return_expand_self`].
+/// the set via [`FunctionDecl::expand_return`].
 ///
-/// Build one with [`return_expand!`](crate::return_expand), add fields with
+/// Build one with [`expand_return!`](crate::expand_return), add fields with
 /// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
 /// [`JniGen::expand`].
 ///
@@ -353,17 +351,17 @@ impl ParamExpandDecl {
 ///
 /// ```
 /// // A returned Sample crosses as { payload, kind } in one call:
-/// let _ = prebindgen::return_expand!(Sample)
+/// let _ = prebindgen::expand_return!(Sample)
 ///     .field(prebindgen::fun!(sample_get_payload))
 ///     .field(prebindgen::fun!(sample_get_kind));
 /// ```
 #[derive(Clone)]
-pub struct ReturnExpandDecl {
+pub struct ExpandReturnDecl {
     pub(crate) key: TypeKey,
     pub(crate) fields: Vec<LocalField>,
 }
 
-impl ReturnExpandDecl {
+impl ExpandReturnDecl {
     pub fn new(rust_type: syn::Type) -> Self {
         Self {
             key: TypeKey::from_type(&rust_type),
@@ -401,20 +399,20 @@ impl ReturnExpandDecl {
 /// Deliberately **no** `impl From<syn::Type> for ExpandDecl` — a bare
 /// `syn::Type` alone doesn't say which direction it describes, so every
 /// declaration names its direction via the matching constructor macro:
-/// `.expand(prebindgen::param_expand!(Summary)...)`,
-/// `.expand(prebindgen::return_expand!(Sample)...)`.
+/// `.expand(prebindgen::expand_param!(Summary)...)`,
+/// `.expand(prebindgen::expand_return!(Sample)...)`.
 pub enum ExpandDecl {
-    Param(ParamExpandDecl),
-    Return(ReturnExpandDecl),
+    Param(ExpandParamDecl),
+    Return(ExpandReturnDecl),
 }
 
-impl From<ParamExpandDecl> for ExpandDecl {
-    fn from(d: ParamExpandDecl) -> Self {
+impl From<ExpandParamDecl> for ExpandDecl {
+    fn from(d: ExpandParamDecl) -> Self {
         Self::Param(d)
     }
 }
-impl From<ReturnExpandDecl> for ExpandDecl {
-    fn from(d: ReturnExpandDecl) -> Self {
+impl From<ExpandReturnDecl> for ExpandDecl {
+    fn from(d: ExpandReturnDecl) -> Self {
         Self::Return(d)
     }
 }
@@ -599,17 +597,17 @@ impl From<ValueClassDecl> for ClassDecl {
 /// [`PtrClassDecl::fun`] / [`PtrClassDecl::constructor`].
 ///
 /// Build it from a bare Rust name with [`fun!`](crate::fun) and chain
-/// [`name`](Self::name) to set its Kotlin name. The `param_expand*` /
-/// `return_expand*` methods **override, for this one function**, the
-/// boundary defaults its parameter/return types declare via
-/// [`param_expand!`](crate::param_expand) / [`return_expand!`](crate::return_expand)
-/// — most often to opt back out (a lone `_self`) so this function sees the
-/// raw handle rather than the type's default expansion.
+/// [`name`](Self::name) to set its Kotlin name.
+/// [`expand_param`](Self::expand_param) / [`expand_return`](Self::expand_return)
+/// **override, for this one function**, the boundary defaults its
+/// parameter/return types declare at the generator level ([`JniGen::expand`])
+/// — using the very same decl objects, so the complete-set rule is identical
+/// at both scopes.
 pub struct FunctionDecl {
     pub(crate) rust_ident: syn::Ident,
     pub(crate) kotlin_name_override: Option<String>,
-    pub(crate) input_overrides: Vec<(syn::Ident, Vec<LocalVariant>)>,
-    pub(crate) output_override: Option<Vec<LocalField>>,
+    pub(crate) param_expands: Vec<(String, ExpandParamDecl)>,
+    pub(crate) return_expand: Option<ExpandReturnDecl>,
 }
 
 impl FunctionDecl {
@@ -617,8 +615,8 @@ impl FunctionDecl {
         Self {
             rust_ident,
             kotlin_name_override: None,
-            input_overrides: Vec::new(),
-            output_override: None,
+            param_expands: Vec::new(),
+            return_expand: None,
         }
     }
 
@@ -629,63 +627,46 @@ impl FunctionDecl {
         self
     }
 
-    /// Override, for `param` of this function only, how that parameter is
-    /// built — the same idea as a [`ParamExpandDecl`] variant list, but
-    /// scoped here and keyed by which parameter (a function may have several
-    /// handle parameters, each overridden independently). Point at a
-    /// constructor to offer it as a build option; call again (same or a
-    /// different `param`) to add more.
-    pub fn param_expand(mut self, param: syn::Ident, ctor: FunctionDecl) -> Self {
-        self.input_override_entry(param)
-            .push(LocalVariant::Ctor(ctor.rust_ident));
+    /// Override, for the named parameter of this function only, how that
+    /// parameter is supplied — with the same [`ExpandParamDecl`] a type-level
+    /// default uses, so the **complete-set rule** applies here too: the decl
+    /// states the entire variant set for this param (a lone `.variant_self()`
+    /// = "only a ready-made handle", replacing the type's build variants —
+    /// e.g. *un*-declaring a key expression needs the handle, not a string).
+    ///
+    /// `param` is the Rust parameter name; the decl's type is cross-checked
+    /// against that parameter's (peeled) type at generation time — an unknown
+    /// parameter or a type mismatch is a hard error. Call again with a
+    /// different `param` to override several parameters independently;
+    /// declaring the same parameter twice is a hard error.
+    pub fn expand_param(mut self, param: impl AsRef<str>, decl: ExpandParamDecl) -> Self {
+        let param = param.as_ref().to_string();
+        assert!(
+            !self.param_expands.iter().any(|(p, _)| *p == param),
+            "fun!({}).expand_param(\"{}\", ...): parameter already has an expand override — \
+             declare each parameter's complete variant set in ONE decl",
+            self.rust_ident,
+            param
+        );
+        self.param_expands.push((param, decl));
         self
     }
 
-    /// Make `param` of this function accept **only a ready-made handle**,
-    /// ignoring the build variants its type would otherwise apply here. Use
-    /// it when one function needs the real object rather than something built
-    /// from ingredients — e.g. *un*-declaring a key expression needs the
-    /// handle, not a string.
-    pub fn param_expand_self(mut self, param: syn::Ident) -> Self {
-        self.input_override_entry(param)
-            .push(LocalVariant::SelfIdentity);
-        self
-    }
-
-    /// The variant list of `param`'s override, creating it on first use.
-    fn input_override_entry(&mut self, param: syn::Ident) -> &mut Vec<LocalVariant> {
-        let idx = match self.input_overrides.iter().position(|(p, _)| *p == param) {
-            Some(i) => i,
-            None => {
-                self.input_overrides.push((param, Vec::new()));
-                self.input_overrides.len() - 1
-            }
-        };
-        &mut self.input_overrides[idx].1
-    }
-
-    /// Override this function's return decomposition — the same idea as a
-    /// [`ReturnExpandDecl`] field list, but for this function alone. Add one
-    /// field per call; the field name is `field`'s `.name(...)` or the
-    /// camel-cased Rust name.
-    pub fn return_expand(mut self, field: FunctionDecl) -> Self {
-        self.output_override
-            .get_or_insert_with(Vec::new)
-            .push(LocalField::Named(
-                field.rust_ident,
-                field.kotlin_name_override,
-            ));
-        self
-    }
-
-    /// Return this function's result as the **raw handle**, overriding the
-    /// decomposition its return type would otherwise apply. Also the right
-    /// choice for a borrowed return (`&T` / `Option<&T>`), which crosses by
-    /// cloning into a fresh owned handle.
-    pub fn return_expand_self(mut self) -> Self {
-        self.output_override
-            .get_or_insert_with(Vec::new)
-            .push(LocalField::SelfField);
+    /// Override this function's return decomposition — with the same
+    /// [`ExpandReturnDecl`] a type-level default uses, stating the complete
+    /// field set (a lone `.field_self()` = the raw whole value, which for a
+    /// borrowed `&T` / `Option<&T>` return crosses by cloning into a fresh
+    /// owned handle). The decl's type is cross-checked against the function's
+    /// (peeled) return type at generation time — a mismatch is a hard error.
+    /// At most one per function.
+    pub fn expand_return(mut self, decl: ExpandReturnDecl) -> Self {
+        assert!(
+            self.return_expand.is_none(),
+            "fun!({}).expand_return(...): the function already has a return expand override — \
+             declare the complete field set in ONE decl",
+            self.rust_ident
+        );
+        self.return_expand = Some(decl);
         self
     }
 }
@@ -831,11 +812,11 @@ impl PackageDecl {
     /// (you almost always want an explicit SCREAMING_SNAKE name). The same
     /// restrictions as [`Self::constant`] apply to the return type
     /// (opaque-handle results are rejected), the fn must take no parameters,
-    /// and flatten overrides are meaningless here — both are hard errors.
+    /// and expand overrides are meaningless here — both are hard errors.
     pub fn constant_fun(mut self, decl: FunctionDecl) -> Self {
         assert!(
-            decl.input_overrides.is_empty() && decl.output_override.is_none(),
-            "constant_fun `{}`: flatten overrides don't apply to a constant — \
+            decl.param_expands.is_empty() && decl.return_expand.is_none(),
+            "constant_fun `{}`: expand overrides don't apply to a constant — \
              declare a plain `FunctionDecl` (optionally with `.name(...)`)",
             decl.rust_ident
         );

@@ -15,8 +15,12 @@ fn single_constructor_plan_and_fold() {
     ]);
     let mut exp = Expansions::default();
     // Single build-from variant = one Ctor arm (no selector), declared
-    // per-fn (`.param_expand`).
-    exp.begin_subset(ident("z_keyexpr_intersects"), ident("a"));
+    // per-fn (`.expand_param`).
+    exp.begin_subset(
+        ident("z_keyexpr_intersects"),
+        ident("a"),
+        syn::parse_quote!(ZKeyExpr),
+    );
     exp.push_subset_variant(ident("z_keyexpr_try_from"));
 
     apply(
@@ -52,7 +56,11 @@ fn constructor_plan_and_fold() {
         "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
     ]);
     let mut exp = Expansions::default();
-    exp.begin_subset(ident("z_keyexpr_intersects"), ident("a"));
+    exp.begin_subset(
+        ident("z_keyexpr_intersects"),
+        ident("a"),
+        syn::parse_quote!(ZKeyExpr),
+    );
     exp.push_subset_variant(ident("z_keyexpr_try_from"));
     exp.push_subset_self();
 
@@ -109,7 +117,11 @@ fn optional_byvalue_single_ctor() {
         "fn z_session_delete(s: &ZSession, attachment: Option<ZZBytes>) -> bool { todo!() }",
     ]);
     let mut exp = Expansions::default();
-    exp.begin_subset(ident("z_session_delete"), ident("attachment"));
+    exp.begin_subset(
+        ident("z_session_delete"),
+        ident("attachment"),
+        syn::parse_quote!(ZZBytes),
+    );
     exp.push_subset_variant(ident("z_zbytes_from_vec"));
 
     apply(
@@ -155,7 +167,11 @@ fn optional_byref_single_ctor() {
         "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
     ]);
     let mut exp = Expansions::default();
-    exp.begin_subset(ident("z_session_put"), ident("encoding"));
+    exp.begin_subset(
+        ident("z_session_put"),
+        ident("encoding"),
+        syn::parse_quote!(ZEncoding),
+    );
     exp.push_subset_variant(ident("z_encoding_from_string"));
 
     apply(
@@ -194,7 +210,11 @@ fn optional_byref_multi_arg_ctor() {
         "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
     ]);
     let mut exp = Expansions::default();
-    exp.begin_subset(ident("z_session_put"), ident("encoding"));
+    exp.begin_subset(
+        ident("z_session_put"),
+        ident("encoding"),
+        syn::parse_quote!(ZEncoding),
+    );
     exp.push_subset_variant(ident("z_encoding_from_id"));
 
     apply(
@@ -249,7 +269,11 @@ fn optional_combined_rejected() {
         "fn z_session_get(s: &ZSession, ke: Option<ZKeyExpr>) -> bool { todo!() }",
     ]);
     let mut exp = Expansions::default();
-    exp.begin_subset(ident("z_session_get"), ident("ke"));
+    exp.begin_subset(
+        ident("z_session_get"),
+        ident("ke"),
+        syn::parse_quote!(ZKeyExpr),
+    );
     exp.push_subset_variant(ident("z_keyexpr_try_from"));
     exp.push_subset_self();
 
@@ -376,7 +400,11 @@ fn default_constructor_skips_accessor_and_explicit_construct_errors() {
         "fn z_keyexpr_clone(ke: &ZKeyExpr) -> ZKeyExpr { todo!() }",
     ]);
     let mut exp2 = Expansions::default();
-    exp2.begin_subset(ident("z_keyexpr_clone"), ident("ke"));
+    exp2.begin_subset(
+        ident("z_keyexpr_clone"),
+        ident("ke"),
+        syn::parse_quote!(ZKeyExpr),
+    );
     exp2.push_subset_variant(ident("z_keyexpr_try_from"));
     let err = apply(&mut reg2, &exp2, &declared, &accessor, &Default::default()).unwrap_err();
     assert!(matches!(err, ExpandError::ConstructOnAccessor { .. }));

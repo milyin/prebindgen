@@ -57,6 +57,13 @@ pub enum UnfoldError {
     RootIdentityBeforeNested {
         target: String,
     },
+    /// A per-fn `.expand_return(expand_return!(T)…)` decl whose `T` does not
+    /// match the function's peeled return type.
+    ReturnTypeMismatch {
+        func: syn::Ident,
+        declared: String,
+        actual: String,
+    },
 }
 
 impl std::fmt::Display for UnfoldError {
@@ -71,6 +78,17 @@ impl std::fmt::Display for UnfoldError {
                 f,
                 "output expansion: accessor `{}` is not a #[prebindgen] item",
                 name
+            ),
+            UnfoldError::ReturnTypeMismatch {
+                func,
+                declared,
+                actual,
+            } => write!(
+                f,
+                "output expansion: `{}`.expand_return(expand_return!({declared})): the \
+                 function's return type is `{actual}`, not `{declared}` — declare the decl \
+                 for the actual return type",
+                func
             ),
             UnfoldError::NoDeconstructor { func, target } => write!(
                 f,
