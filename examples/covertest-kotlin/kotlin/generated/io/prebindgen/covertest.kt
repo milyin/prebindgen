@@ -415,7 +415,9 @@ internal object CovNative {
         s1: Long,
         errorSink: Any,
     )
+    external fun celsiusDouble(c: Int, errorSink: Any): Int
     external fun coverTagRuntime(errorSink: Any): String
+    external fun labelReverse(l: String, errorSink: Any): String
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
     external fun payloadLabelLen(
@@ -435,6 +437,7 @@ internal object CovNative {
         errorSink: Any,
     ): Int
     external fun payloadVecHandlerNew(f: Any, errorSink: Any): Long
+    external fun percentScale(p: Int, factor: Int, errorSink: Any): Int
     external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
     external fun priorityWeight(p: Int, errorSink: Any): Int
     external fun stampNanos(s: ByteArray, errorSink: Any): Long

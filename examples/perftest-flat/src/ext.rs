@@ -286,6 +286,77 @@ pub fn millis_add(a: Millis, b: Millis) -> Millis {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// convert! source-kind fixtures — one type per conversion source. Like
+// `Millis`, none of these types is `#[prebindgen]`-marked: each crosses the
+// boundary only through its declared canonical conversion.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A temperature. Crosses via its `From`/`Into` impls
+/// (`convert!(Celsius).input_from(ty!(i32)).output_into(ty!(i32))`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Celsius(pub i32);
+
+impl From<i32> for Celsius {
+    fn from(v: i32) -> Self {
+        Celsius(v)
+    }
+}
+impl From<Celsius> for i32 {
+    fn from(c: Celsius) -> Self {
+        c.0
+    }
+}
+
+/// Double a temperature (exercises the `Into`-based conversion on a
+/// parameter and the return).
+#[prebindgen]
+pub fn celsius_double(c: Celsius) -> Celsius {
+    Celsius(c.0 * 2)
+}
+
+/// A percentage, range-invariant 0..=100. Crosses via a fallible
+/// `TryFrom<i32>` on input (out-of-range i32 from the JVM → the caller's
+/// error handler) and an infallible `Into<i32>` on output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Percent(pub u8);
+
+impl TryFrom<i32> for Percent {
+    type Error = String;
+    fn try_from(v: i32) -> Result<Self, Self::Error> {
+        if (0..=100).contains(&v) {
+            Ok(Percent(v as u8))
+        } else {
+            Err(format!("percent out of range: {v} (expected 0..=100)"))
+        }
+    }
+}
+impl From<Percent> for i32 {
+    fn from(p: Percent) -> Self {
+        p.0 as i32
+    }
+}
+
+/// Scale a percentage, saturating at 100 (exercises the `TryInto`-based
+/// input conversion — including its error path — and the `Into` output).
+#[prebindgen]
+pub fn percent_scale(p: Percent, factor: i32) -> Percent {
+    Percent(((p.0 as i32) * factor).clamp(0, 100) as u8)
+}
+
+/// A text label. Crosses via plain conversion fns declared **in the binding
+/// crate** (`convert!(Label).input_with(ty!(String), path!(crate::label_in))…`)
+/// — no `#[prebindgen]` marking anywhere in the conversion.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Label(pub String);
+
+/// Reverse a label's characters (exercises the binding-local conversion on
+/// a parameter and the return).
+#[prebindgen]
+pub fn label_reverse(l: Label) -> Label {
+    Label(l.0.chars().rev().collect())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Option<scalar> — a nullable primitive return.
 // ─────────────────────────────────────────────────────────────────────────────
 

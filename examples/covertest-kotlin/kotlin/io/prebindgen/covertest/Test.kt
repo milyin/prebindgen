@@ -16,6 +16,9 @@ import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.annotatedNew
+import io.prebindgen.covertest.model.celsiusDouble
+import io.prebindgen.covertest.model.labelReverse
+import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
@@ -280,6 +283,31 @@ fun main() {
     section("input/output wrapper Millis -> Long (+ .name rename)") {
         check(addMillis(100L, 50L, boom) == 150L)
         check(addMillis(0L, 0L, boom) == 0L)
+    }
+
+    // ── convert! source kinds: trait impls and binding-local fns ────────────
+    section("convert! via From/Into impls (Celsius -> Int)") {
+        check(celsiusDouble(21, boom) == 42)
+        check(celsiusDouble(-5, boom) == -10)
+    }
+    section("convert! via TryFrom (Percent -> Int, fallible input)") {
+        check(percentScale(50, 2, boom) == 100)
+        check(percentScale(30, 2, boom) == 60)
+        // Out-of-range input: the TryFrom impl's Err(String) routes to
+        // onError through the converter's error slot (je carries the
+        // Display'd message).
+        var msg: String? = null
+        percentScale(150, 1) { je ->
+            msg = je
+            0
+        }
+        check(msg?.contains("percent out of range: 150") == true) {
+            "percentScale(150) must report the range error, got: $msg"
+        }
+    }
+    section("convert! via binding-local fns (Label -> String)") {
+        check(labelReverse("abc", boom) == "cba")
+        check(labelReverse("", boom) == "")
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

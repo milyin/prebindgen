@@ -743,40 +743,69 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
-        let f = decl.input.as_ref()?;
-        let (item_fn, _) = registry.functions.get(f).unwrap_or_else(|| {
-            panic!(
-                "convert!({}).input({f}): function not found among #[prebindgen] items",
-                key.as_str()
-            )
-        });
-        let (param_ty, by_ref) = convert_single_param(key, f, item_fn, "input");
-        // Return: `T` (infallible) or `Result<T, E>` (fallible — E routes to
-        // the caller's error handler through the standard exc slot).
-        let ret = fn_return_type(item_fn);
-        let (ok_ty, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
-            Some(ok) => (
-                ok,
-                Some(
-                    crate::api::core::types_util::result_err_type(&ret)
-                        .expect("result_ok_type implies result_err_type"),
-                ),
-            ),
-            None => (ret, None),
-        };
-        assert!(
-            TypeKey::from_type(&ok_ty) == *key,
-            "convert!({k}).input({f}): the function produces `{got}`, not `{k}`",
-            k = key.as_str(),
-            got = TypeKey::from_type(&ok_ty).as_str()
-        );
-        let module = self.fn_module(registry, f);
-        let body: syn::Expr = if by_ref {
-            syn::parse_quote!(#module::#f(&v))
-        } else {
-            syn::parse_quote!(#module::#f(v))
-        };
-        Some((param_ty, exc, body))
+        let target = key.to_type();
+        match decl.input.as_ref()? {
+            ConvertSpec::PrebindgenFn(f) => {
+                let (item_fn, _) = registry.functions.get(f).unwrap_or_else(|| {
+                    panic!(
+                        "convert!({}).input({f}): function not found among #[prebindgen] items",
+                        key.as_str()
+                    )
+                });
+                let (param_ty, by_ref) = convert_single_param(key, f, item_fn, "input");
+                // Return: `T` (infallible) or `Result<T, E>` (fallible — E
+                // routes to the caller's error handler via the exc slot).
+                let ret = fn_return_type(item_fn);
+                let (ok_ty, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
+                    Some(ok) => (
+                        ok,
+                        Some(
+                            crate::api::core::types_util::result_err_type(&ret)
+                                .expect("result_ok_type implies result_err_type"),
+                        ),
+                    ),
+                    None => (ret, None),
+                };
+                assert!(
+                    TypeKey::from_type(&ok_ty) == *key,
+                    "convert!({k}).input({f}): the function produces `{got}`, not `{k}`",
+                    k = key.as_str(),
+                    got = TypeKey::from_type(&ok_ty).as_str()
+                );
+                let module = self.fn_module(registry, f);
+                let body: syn::Expr = if by_ref {
+                    syn::parse_quote!(#module::#f(&v))
+                } else {
+                    syn::parse_quote!(#module::#f(v))
+                };
+                Some((param_ty, exc, body))
+            }
+            // `Into`/`TryInto` impls: the repr is stated in the decl; the
+            // fully-qualified call form pins both type parameters so the
+            // right impl is selected regardless of what else is in scope.
+            ConvertSpec::Trait { repr, fallible } => {
+                if *fallible {
+                    let exc: syn::Type = syn::parse_quote!(
+                        <#repr as ::core::convert::TryInto<#target>>::Error
+                    );
+                    let body: syn::Expr = syn::parse_quote!(
+                        <#repr as ::core::convert::TryInto<#target>>::try_into(v)
+                    );
+                    Some((repr.clone(), Some(exc), body))
+                } else {
+                    let body: syn::Expr = syn::parse_quote!(
+                        <#repr as ::core::convert::Into<#target>>::into(v)
+                    );
+                    Some((repr.clone(), None, body))
+                }
+            }
+            // Binding-local callable: emitted verbatim (multi-segment paths
+            // pass the qualification visitor untouched).
+            ConvertSpec::LocalFn { repr, path } => {
+                let body: syn::Expr = syn::parse_quote!(#path(v));
+                Some((repr.clone(), None, body))
+            }
+        }
     }
 
     /// Output-direction peer of [`Self::convert_input_body`]: the conversion
@@ -787,42 +816,71 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
-        let g = decl.output.as_ref()?;
-        let (item_fn, _) = registry.functions.get(g).unwrap_or_else(|| {
-            panic!(
-                "convert!({}).output({g}): function not found among #[prebindgen] items",
-                key.as_str()
-            )
-        });
-        let (param_ty, by_ref) = convert_single_param_any(g, item_fn);
-        assert!(
-            TypeKey::from_type(&param_ty) == *key,
-            "convert!({k}).output({g}): the function takes `{got}`, not `{k}`",
-            k = key.as_str(),
-            got = TypeKey::from_type(&param_ty).as_str()
-        );
-        let ret = fn_return_type(item_fn);
-        assert!(
-            TypeKey::from_type(&ret) != *key,
-            "convert!({k}).output({g}): the function must return the converted form, not `{k}`",
-            k = key.as_str()
-        );
-        let module = self.fn_module(registry, g);
-        let body: syn::Expr = if by_ref {
-            syn::parse_quote!(#module::#g(&v))
-        } else {
-            syn::parse_quote!(#module::#g(v))
-        };
-        Some((ret, None, body))
+        let target = key.to_type();
+        match decl.output.as_ref()? {
+            ConvertSpec::PrebindgenFn(g) => {
+                let (item_fn, _) = registry.functions.get(g).unwrap_or_else(|| {
+                    panic!(
+                        "convert!({}).output({g}): function not found among #[prebindgen] items",
+                        key.as_str()
+                    )
+                });
+                let (param_ty, by_ref) = convert_single_param_any(g, item_fn);
+                assert!(
+                    TypeKey::from_type(&param_ty) == *key,
+                    "convert!({k}).output({g}): the function takes `{got}`, not `{k}`",
+                    k = key.as_str(),
+                    got = TypeKey::from_type(&param_ty).as_str()
+                );
+                let ret = fn_return_type(item_fn);
+                assert!(
+                    TypeKey::from_type(&ret) != *key,
+                    "convert!({k}).output({g}): the function must return the converted form, \
+                     not `{k}`",
+                    k = key.as_str()
+                );
+                let module = self.fn_module(registry, g);
+                let body: syn::Expr = if by_ref {
+                    syn::parse_quote!(#module::#g(&v))
+                } else {
+                    syn::parse_quote!(#module::#g(v))
+                };
+                Some((ret, None, body))
+            }
+            ConvertSpec::Trait { repr, fallible } => {
+                if *fallible {
+                    let exc: syn::Type = syn::parse_quote!(
+                        <#target as ::core::convert::TryInto<#repr>>::Error
+                    );
+                    let body: syn::Expr = syn::parse_quote!(
+                        <#target as ::core::convert::TryInto<#repr>>::try_into(v)
+                    );
+                    Some((repr.clone(), Some(exc), body))
+                } else {
+                    let body: syn::Expr = syn::parse_quote!(
+                        <#target as ::core::convert::Into<#repr>>::into(v)
+                    );
+                    Some((repr.clone(), None, body))
+                }
+            }
+            ConvertSpec::LocalFn { repr, path } => {
+                let body: syn::Expr = syn::parse_quote!(#path(v));
+                Some((repr.clone(), None, body))
+            }
+        }
     }
 
-    /// Idents of every `convert!` conversion function — scanned as helper
-    /// functions ([`Prebindgen::helper_functions`]) so their signature types
-    /// resolve without emitting externs for them.
+    /// Idents of every `#[prebindgen]`-fn conversion source — scanned as
+    /// helper functions ([`Prebindgen::helper_functions`]) so their extern
+    /// emission is suppressed. Trait/local-fn sources have no registry item.
     pub(crate) fn convert_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
         self.convert_decls
             .iter()
-            .flat_map(|d| d.input.iter().chain(d.output.iter()).cloned())
+            .flat_map(|d| d.input.iter().chain(d.output.iter()))
+            .filter_map(|spec| match spec {
+                ConvertSpec::PrebindgenFn(f) => Some(f.clone()),
+                _ => None,
+            })
     }
 }
 

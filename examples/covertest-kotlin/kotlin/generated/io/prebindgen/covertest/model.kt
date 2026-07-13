@@ -128,6 +128,27 @@ public fun payloadLabelLen(p: Payload, onError: JniErrorHandler<Long?>): Long? {
     return __ret
 }
 
+public fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.celsiusDouble(c, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.percentScale(p, factor, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.labelReverse(l, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
 public fun annotatedNew(
     payload: Payload,
     ttl: Long?,

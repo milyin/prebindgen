@@ -22,6 +22,9 @@
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `convert!` + multi-source (`from_sources`) | `Millis` ⇄ `Long` via `covertest-helpers` fns |
+//! | `convert!` `.input_from`/`.output_into` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
+//! | `convert!` `.input_try_from` (fallible)  | `Percent` ⇄ `Int`; out-of-range → `onError` |
+//! | `convert!` `.input_with`/`.output_with` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`) |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
@@ -71,7 +74,7 @@
 
 use prebindgen::{
     constant, constant_expr, convert, core::Registry, data_class, enum_class, expand_param,
-    expand_return, fun, lang::JniGen, package, ptr_class, value_class,
+    expand_return, fun, lang::JniGen, package, path, ptr_class, ty, value_class,
 };
 
 fn main() {
@@ -106,6 +109,23 @@ fn main() {
             convert!(Millis)
                 .input(fun!(millis_from_long))
                 .output(fun!(millis_value)),
+        )
+        // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
+        // crate — the repr (`i32`) is stated, the impls do the work.
+        .convert(convert!(Celsius).input_from(ty!(i32)).output_into(ty!(i32)))
+        // `Percent`: fallible input via `TryFrom<i32>` (out-of-range values
+        // from the JVM route the impl's Error to onError); infallible output.
+        .convert(
+            convert!(Percent)
+                .input_try_from(ty!(i32))
+                .output_into(ty!(i32)),
+        )
+        // `Label`: conversions are plain fns in THIS binding crate (see
+        // src/lib.rs) — no #[prebindgen], no helper crate.
+        .convert(
+            convert!(Label)
+                .input_with(ty!(String), path!(crate::label_in))
+                .output_with(ty!(String), path!(crate::label_out)),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
@@ -228,6 +248,11 @@ fn main() {
                 .fun(fun!(stamp_new))
                 .fun(fun!(stamp_series))
                 .fun(fun!(payload_label_len))
+                // The three convert!-source-kind fns (conversions declared
+                // below): Into/From traits, TryFrom trait, binding-local fns.
+                .fun(fun!(celsius_double))
+                .fun(fun!(percent_scale))
+                .fun(fun!(label_reverse))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_ttl))
                 .fun(fun!(annotated_priority))

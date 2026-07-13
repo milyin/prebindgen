@@ -149,6 +149,10 @@ pub mod __macro_support {
     pub fn parse_type(s: &str) -> ::syn::Type {
         ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid type `{s}`: {e}"))
     }
+
+    pub fn parse_path(s: &str) -> ::syn::Path {
+        ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid path `{s}`: {e}"))
+    }
 }
 
 /// Build a `syn::Ident` from a bare identifier token. Unlike

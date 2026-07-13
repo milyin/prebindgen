@@ -135,6 +135,27 @@ macro_rules! package {
     };
 }
 
+/// Build a `syn::Type` from a bare Rust type token: `ty!(i32)`. The type
+/// argument of decl methods like [`ConvertDecl::input_from`] — always yields
+/// the concrete `syn::Type`, so no inference context is needed (see
+/// [`ident!`](crate::ident) for the E0283 background).
+#[macro_export]
+macro_rules! ty {
+    ($t:ty) => {
+        $crate::__macro_support::parse_type(stringify!($t))
+    };
+}
+
+/// Build a `syn::Path` from a bare path token: `path!(crate::conv::f)`. The
+/// callable argument of [`ConvertDecl::input_with`] /
+/// [`ConvertDecl::output_with`].
+#[macro_export]
+macro_rules! path {
+    ($p:path) => {
+        $crate::__macro_support::parse_path(stringify!($p))
+    };
+}
+
 /// Build a [`ConvertDecl`] directly from a bare Rust type:
 /// `convert!(Millis)` is `ConvertDecl::new(<Millis as syn::Type>)`.
 /// See [`ptr_class!`] for the parsing mechanics.
@@ -853,11 +874,30 @@ impl PackageDecl {
 /// differ deliberately: converters are direction-things ([`input`](Self::input)
 /// also serves callback returns, [`output`](Self::output) also serves
 /// callback arguments), while expansion decls are position-things.
+/// One direction's conversion **source** — where the conversion code comes
+/// from. Four kinds, one per [`ConvertDecl`] method family.
+#[derive(Clone)]
+pub(crate) enum ConvertSpec {
+    /// A `#[prebindgen]` fn (flat or helper crate): the representable type
+    /// and fallibility are read from its registry signature at lookup time.
+    PrebindgenFn(syn::Ident),
+    /// A `core::convert` trait impl; the representable type is stated
+    /// explicitly (there is no signature to read). `fallible` selects
+    /// `TryInto` (the associated `Error` routes to the caller's error
+    /// handler) vs `Into`.
+    Trait { repr: syn::Type, fallible: bool },
+    /// An arbitrary callable path — typically a plain fn in the **binding
+    /// crate itself** (the generated file compiles inside it, so
+    /// `crate::…` paths resolve). Representable type stated explicitly;
+    /// by-value both ways (`fn(Repr) -> T` / `fn(T) -> Repr`), infallible.
+    LocalFn { repr: syn::Type, path: syn::Path },
+}
+
 #[derive(Clone)]
 pub struct ConvertDecl {
     pub(crate) key: TypeKey,
-    pub(crate) input: Option<syn::Ident>,
-    pub(crate) output: Option<syn::Ident>,
+    pub(crate) input: Option<ConvertSpec>,
+    pub(crate) output: Option<ConvertSpec>,
 }
 
 impl ConvertDecl {
@@ -870,39 +910,128 @@ impl ConvertDecl {
         }
     }
 
-    /// The **into-Rust** conversion (parameters, callback returns): a
-    /// `#[prebindgen]` `fn(U) -> T` or `fn(U) -> Result<T, E>` where `T` is
-    /// this decl's type. `U` (taken by value or `&U`) determines the wire and
-    /// the Kotlin surface through its own converter chain.
-    pub fn input(mut self, rust_fun: FunctionDecl) -> Self {
+    fn set_input(mut self, spec: ConvertSpec) -> Self {
         assert!(
-            rust_fun.kotlin_name_override.is_none()
-                && rust_fun.param_expands.is_empty()
-                && rust_fun.return_expand.is_none(),
-            "convert!({}).input({}): a conversion function is never surfaced in Kotlin — \
-             .name()/expand overrides don't apply",
-            self.key.as_str(),
-            rust_fun.rust_ident
+            self.input.is_none(),
+            "convert!({}): the input conversion is already declared — pick ONE of \
+             .input()/.input_from()/.input_try_from()/.input_with()",
+            self.key.as_str()
         );
-        self.input = Some(rust_fun.rust_ident);
+        self.input = Some(spec);
         self
     }
 
-    /// The **out-of-Rust** conversion (returns, callback arguments): a
-    /// `#[prebindgen]` `fn(&T) -> U` (or `fn(T) -> U`) where `T` is this
-    /// decl's type — the counterpart of [`input`](Self::input).
-    pub fn output(mut self, rust_fun: FunctionDecl) -> Self {
+    fn set_output(mut self, spec: ConvertSpec) -> Self {
+        assert!(
+            self.output.is_none(),
+            "convert!({}): the output conversion is already declared — pick ONE of \
+             .output()/.output_into()/.output_try_into()/.output_with()",
+            self.key.as_str()
+        );
+        self.output = Some(spec);
+        self
+    }
+
+    fn plain_fn_ident(&self, dir: &str, rust_fun: FunctionDecl) -> syn::Ident {
         assert!(
             rust_fun.kotlin_name_override.is_none()
                 && rust_fun.param_expands.is_empty()
                 && rust_fun.return_expand.is_none(),
-            "convert!({}).output({}): a conversion function is never surfaced in Kotlin — \
+            "convert!({}).{dir}({}): a conversion function is never surfaced in Kotlin — \
              .name()/expand overrides don't apply",
             self.key.as_str(),
             rust_fun.rust_ident
         );
-        self.output = Some(rust_fun.rust_ident);
-        self
+        rust_fun.rust_ident
+    }
+
+    fn check_repr(&self, method: &str, repr: &syn::Type) {
+        assert!(
+            TypeKey::from_type(repr) != self.key,
+            "convert!({k}).{method}: the representable type must differ from `{k}` itself",
+            k = self.key.as_str()
+        );
+    }
+
+    /// The **into-Rust** conversion (parameters, callback returns) as a
+    /// `#[prebindgen]` `fn(U) -> T` or `fn(U) -> Result<T, E>` where `T` is
+    /// this decl's type. `U` (taken by value or `&U`) determines the wire and
+    /// the Kotlin surface through its own converter chain.
+    pub fn input(self, rust_fun: FunctionDecl) -> Self {
+        let ident = self.plain_fn_ident("input", rust_fun);
+        self.set_input(ConvertSpec::PrebindgenFn(ident))
+    }
+
+    /// The into-Rust conversion via `core::convert`: requires
+    /// `Repr: Into<T>` (satisfied by an `impl From<Repr> for T` through the
+    /// blanket). `repr` — stated explicitly, e.g. `ty!(i32)` — determines
+    /// the wire and Kotlin surface through its own converter chain.
+    pub fn input_from(self, repr: syn::Type) -> Self {
+        self.check_repr("input_from", &repr);
+        self.set_input(ConvertSpec::Trait {
+            repr,
+            fallible: false,
+        })
+    }
+
+    /// The fallible into-Rust conversion via `core::convert`: requires
+    /// `Repr: TryInto<T>` (satisfied by an `impl TryFrom<Repr> for T`). The
+    /// associated `Error` must implement `Display`; an `Err` routes to the
+    /// caller's error handler like any domain error.
+    pub fn input_try_from(self, repr: syn::Type) -> Self {
+        self.check_repr("input_try_from", &repr);
+        self.set_input(ConvertSpec::Trait {
+            repr,
+            fallible: true,
+        })
+    }
+
+    /// The into-Rust conversion as an arbitrary callable — typically a plain
+    /// fn declared **in the binding crate itself** (no `#[prebindgen]`
+    /// needed; the generated file compiles inside the binding crate, so
+    /// `path!(crate::…)` resolves). Shape: `fn(Repr) -> T`, by value,
+    /// infallible — for fallibility use a `TryFrom` impl or a
+    /// `#[prebindgen]` fn returning `Result`.
+    pub fn input_with(self, repr: syn::Type, path: syn::Path) -> Self {
+        self.check_repr("input_with", &repr);
+        self.set_input(ConvertSpec::LocalFn { repr, path })
+    }
+
+    /// The **out-of-Rust** conversion (returns, callback arguments) as a
+    /// `#[prebindgen]` `fn(&T) -> U` (or `fn(T) -> U`) where `T` is this
+    /// decl's type — the counterpart of [`input`](Self::input).
+    pub fn output(self, rust_fun: FunctionDecl) -> Self {
+        let ident = self.plain_fn_ident("output", rust_fun);
+        self.set_output(ConvertSpec::PrebindgenFn(ident))
+    }
+
+    /// The out-of-Rust conversion via `core::convert`: requires
+    /// `T: Into<Repr>` (satisfied by an `impl From<T> for Repr`).
+    pub fn output_into(self, repr: syn::Type) -> Self {
+        self.check_repr("output_into", &repr);
+        self.set_output(ConvertSpec::Trait {
+            repr,
+            fallible: false,
+        })
+    }
+
+    /// The fallible out-of-Rust conversion via `core::convert`: requires
+    /// `T: TryInto<Repr>`; the associated `Error` (must be `Display`) routes
+    /// to the caller's error handler.
+    pub fn output_try_into(self, repr: syn::Type) -> Self {
+        self.check_repr("output_try_into", &repr);
+        self.set_output(ConvertSpec::Trait {
+            repr,
+            fallible: true,
+        })
+    }
+
+    /// The out-of-Rust conversion as an arbitrary callable (see
+    /// [`input_with`](Self::input_with)). Shape: `fn(T) -> Repr`, by value,
+    /// infallible.
+    pub fn output_with(self, repr: syn::Type, path: syn::Path) -> Self {
+        self.check_repr("output_with", &repr);
+        self.set_output(ConvertSpec::LocalFn { repr, path })
     }
 }
 

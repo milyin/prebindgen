@@ -521,3 +521,116 @@ fn convert_input_target_mismatch_rejected() {
     std::fs::create_dir_all(&dir).unwrap();
     let _ = registry.write_rust(&jni, dir.join("gen.rs"));
 }
+
+/// `convert!` via `core::convert` trait impls: `.input_from(ty!(i32))` /
+/// `.output_into(ty!(i32))` generate fully-qualified `Into` calls; the wire
+/// and Kotlin surface derive from the stated repr's converter chain.
+#[test]
+fn convert_via_trait_impls() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn temp_double(c: Celsius) -> Celsius { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(Celsius)
+                .input_from(crate::ty!(i32))
+                .output_into(crate::ty!(i32)),
+        )
+        .package(crate::package!("m").fun(crate::fun!(temp_double)));
+    let dir = unique_test_dir("jnigen_convert_trait");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("<i32as::core::convert::Into<myflat::Celsius>>::into(v)"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("<myflat::Celsiusas::core::convert::Into<i32>>::into(v)"),
+        "{rust}"
+    );
+}
+
+/// `.input_try_from(ty!(i32))`: the generated converter is fallible with the
+/// impl's associated `Error` as its error type; the body is the qualified
+/// `try_into` call.
+#[test]
+fn convert_via_try_from_is_fallible() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn pct_use(p: Percent) -> i32 { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(crate::convert!(Percent).input_try_from(crate::ty!(i32)))
+        .package(crate::package!("m").fun(crate::fun!(pct_use)));
+    let dir = unique_test_dir("jnigen_convert_tryfrom");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("<i32as::core::convert::TryInto<myflat::Percent>>::try_into(v)"),
+        "{rust}"
+    );
+    // The converter's Result error type is the impl's associated Error.
+    assert!(
+        rc.contains("<i32as::core::convert::TryInto<myflat::Percent>>::Error"),
+        "{rust}"
+    );
+}
+
+/// `.input_with`/`.output_with`: the callable path is emitted verbatim —
+/// binding-local `crate::…` fns need no `#[prebindgen]` marking.
+#[test]
+fn convert_via_local_fns() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(Label)
+                .input_with(crate::ty!(String), crate::path!(crate::conv::label_in))
+                .output_with(crate::ty!(String), crate::path!(crate::conv::label_out)),
+        )
+        .package(crate::package!("m").fun(crate::fun!(label_id)));
+    let dir = unique_test_dir("jnigen_convert_local");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(rc.contains("crate::conv::label_in(v)"), "{rust}");
+    assert!(rc.contains("crate::conv::label_out(v)"), "{rust}");
+}
+
+/// Two input conversions on one decl are contradictory — decl-time panic.
+#[test]
+#[should_panic(expected = "input conversion is already declared")]
+fn convert_duplicate_input_rejected() {
+    let _ = crate::convert!(Widget)
+        .input_from(crate::ty!(i32))
+        .input_with(crate::ty!(String), crate::path!(crate::widget_in));
+}
