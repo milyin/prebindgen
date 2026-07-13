@@ -503,14 +503,36 @@ impl JniGen {
             .map(|m| m.kotlin_name.clone())
     }
 
+    /// Whether `key` was declared as a class in some package (any of the four
+    /// class kinds). A boundary decl on a type without a class declaration
+    /// makes it **rust-side-only**: the value is always built from
+    /// ingredients / decomposed into fields at the boundary and never
+    /// materializes in Kotlin — so the `_self` arms are structurally
+    /// impossible for it.
+    fn is_class_declared(&self, key: &TypeKey) -> bool {
+        self.types.get(key).is_some_and(|c| c.class_decl)
+    }
+
     /// Assemble the full [`Expansions`] set at the point of use: the eagerly
     /// accumulated per-fn overrides plus the raw type-level
     /// [`ParamExpandDecl`]s. Building on demand keeps declarations
     /// order-independent — a `param_expand` may precede or follow the
-    /// `package` that declares its constructors.
+    /// `package` that declares its constructors (which is also why the
+    /// rust-side-only `_self` check lives here and not at accept time).
     pub(crate) fn build_expansions(&self) -> crate::api::core::expand::Expansions {
         let mut exp = self.expansions.clone();
         for decl in &self.param_expand_decls {
+            assert!(
+                self.is_class_declared(&decl.key)
+                    || !decl
+                        .variants
+                        .iter()
+                        .any(|v| matches!(v, LocalVariant::SelfIdentity)),
+                "param_expand!({k}).variant_self(): `{k}` has no class declaration, so there is \
+                 no Kotlin object to pass — drop .variant_self() (the type is rust-side-only) \
+                 or declare the type in a package",
+                k = decl.key.as_str()
+            );
             // Identity-only normalization: `.variant_self()` alone declares
             // the plain-handle form — exactly the default when nothing is
             // declared, so registering it would only add a degenerate
@@ -538,6 +560,17 @@ impl JniGen {
     pub(crate) fn build_deconstructors(&self) -> crate::api::core::unfold::Deconstructors {
         let mut dec = self.deconstructors.clone();
         for decl in &self.return_expand_decls {
+            assert!(
+                self.is_class_declared(&decl.key)
+                    || !decl
+                        .fields
+                        .iter()
+                        .any(|f| matches!(f, LocalField::SelfField)),
+                "return_expand!({k}).field_self(): `{k}` has no class declaration, so there is \
+                 no Kotlin object to deliver — drop .field_self() (the type is rust-side-only) \
+                 or declare the type in a package",
+                k = decl.key.as_str()
+            );
             dec.ensure_default_deconstructor(decl.key.to_type());
             for f in &decl.fields {
                 match f {
@@ -553,6 +586,42 @@ impl JniGen {
             }
         }
         dec
+    }
+
+    /// Type keys of boundary decls (`param_expand!` / `return_expand!`) whose
+    /// type has no class declaration — the **rust-side-only** types. Unioned
+    /// into [`Prebindgen::ignored_types`] so the registry treats them as
+    /// acknowledged (no "skipping undeclared" warning, no direct converter
+    /// requirement, no Kotlin emission).
+    pub(crate) fn rust_side_only_types(&self) -> impl Iterator<Item = TypeKey> + '_ {
+        self.param_expand_decls
+            .iter()
+            .map(|d| &d.key)
+            .chain(self.return_expand_decls.iter().map(|d| &d.key))
+            .filter(|k| !self.is_class_declared(k))
+            .cloned()
+    }
+
+    /// Function idents referenced only inside boundary decls — `return_expand!`
+    /// field accessors and `param_expand!` variant ctors. They are called
+    /// Rust-side by the generated fold/unfold code and need no extern of
+    /// their own; when not otherwise declared they are unioned into
+    /// [`Prebindgen::ignored_functions`] so the registry's "skipping
+    /// undeclared fn" warning stays quiet.
+    pub(crate) fn boundary_referenced_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
+        let ctors = self.param_expand_decls.iter().flat_map(|d| {
+            d.variants.iter().filter_map(|v| match v {
+                LocalVariant::Ctor(f) => Some(f.clone()),
+                LocalVariant::SelfIdentity => None,
+            })
+        });
+        let accessors = self.return_expand_decls.iter().flat_map(|d| {
+            d.fields.iter().filter_map(|f| match f {
+                LocalField::Named(func, _) => Some(func.clone()),
+                LocalField::SelfField => None,
+            })
+        });
+        ctors.chain(accessors)
     }
 }
 

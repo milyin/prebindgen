@@ -1018,14 +1018,36 @@ impl Prebindgen for JniGen {
     }
 
     /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
-    /// the registry's "skipping undeclared" warning, emits nothing.
+    /// the registry's "skipping undeclared" warning, emits nothing. Also
+    /// includes functions referenced only inside boundary decls
+    /// (`return_expand!` accessors / `param_expand!` ctors that are not
+    /// otherwise declared): they are called by the generated fold/unfold code
+    /// and need no extern of their own. Declared functions are subtracted —
+    /// a fn that is also a real member/package fn keeps its extern, and the
+    /// registry rejects a declared∩ignored overlap as conflicting intent.
     fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.ignored_fns.clone()
+        let declared = self.declared_functions();
+        let mut out = self.ignored_fns.clone();
+        out.extend(
+            self.boundary_referenced_fns()
+                .filter(|f| !declared.contains(f)),
+        );
+        out
     }
 
     /// Types acknowledged-but-undeclared via [`JniGen::ignore_class`].
     fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
+    }
+
+    /// **Rust-side-only** types: boundary decls (`param_expand!` /
+    /// `return_expand!`) whose type has no class declaration. They never
+    /// materialize in Kotlin — only their ingredients (fold) and fields
+    /// (unfold / error channel) cross the boundary — so the registry
+    /// acknowledges them and drops their direct converter requirements once
+    /// the plans are in place.
+    fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
+        self.rust_side_only_types().collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by

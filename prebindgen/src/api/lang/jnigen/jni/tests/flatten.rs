@@ -292,3 +292,174 @@ fn method_constructor_and_inline_field_self() {
         "{all}"
     );
 }
+
+/// A **rust-side-only** error type: `return_expand!` with NO class
+/// declaration. The `Result<_, ZErr>` error channel decomposes the error into
+/// its fields (here just the message), the `ZErrHandler` interface lands in
+/// the BASE package (no type package exists), and no Kotlin class / `freePtr`
+/// is emitted for `ZErr` — the value lives and dies in Rust.
+#[test]
+fn rust_side_only_error_type() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
+        "pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
+        // No class declaration for ZErr anywhere — rust-side-only. The field
+        // name is explicit (no class member to inherit from).
+        .return_expand(
+            crate::return_expand!(ZErr).field(crate::fun!(z_err_message).name("message")),
+        );
+
+    let dir = unique_test_dir("jnigen_rust_side_only_err");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    // The error decomposition calls the accessor Rust-side...
+    assert!(rc.contains("myflat::z_err_message(&__de)"), "{rust}");
+    // ...and no freePtr destructor exists for ZErr (no opaque handle).
+    assert!(!rc.contains("ZErr_1freePtr"), "{rust}");
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    // Handler in the BASE package with the decomposed message field; no ZErr
+    // class anywhere.
+    assert!(
+        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(je:String?,message:String):R"),
+        "{all}"
+    );
+    assert!(!all.contains("classZErr("), "{all}");
+    // The handler file belongs to the base package (io/test/jni.kt), not a
+    // type package.
+    let base_file: String = paths
+        .iter()
+        .filter(|p| p.ends_with("io/test/jni.kt"))
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    assert!(base_file.contains("funinterfaceZErrHandler"), "{all}");
+}
+
+/// A **rust-side-only** input type: `param_expand!` with NO class
+/// declaration. Every param of the type is built from the ctor's ingredients
+/// (no selector — single variant); the type never surfaces in Kotlin.
+#[test]
+fn rust_side_only_input_type() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
+        "pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(crate::fun!(z_run)))
+        .param_expand(crate::param_expand!(ZOpts).variant(crate::fun!(z_opts_new)));
+
+    let dir = unique_test_dir("jnigen_rust_side_only_in");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // The wrapper folds the ctor Rust-side.
+    assert!(rc.contains("myflat::z_opts_new("), "{rust}");
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .split_whitespace()
+        .collect();
+    // The Kotlin wrapper takes the ctor's flattened ingredients (prefixed by
+    // the param name), not a ZOpts object; no ZOpts class exists.
+    assert!(
+        all.contains("funzRun(optsRetries:Int,optsVerbose:Boolean"),
+        "{all}"
+    );
+    assert!(!all.contains("classZOpts("), "{all}");
+}
+
+/// `variant_self()` on a type with no class declaration is structurally
+/// impossible (no Kotlin object to pass) — hard error at write time.
+#[test]
+#[should_panic(expected = "has no class declaration")]
+fn rust_side_only_variant_self_rejected() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .package(crate::package!("ops").fun(crate::fun!(z_run)))
+        .param_expand(crate::param_expand!(ZOpts).variant_self());
+    let dir = unique_test_dir("jnigen_rso_self_in");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+}
+
+/// `field_self()` on a type with no class declaration is structurally
+/// impossible (no Kotlin object to deliver) — hard error at write time.
+#[test]
+#[should_panic(expected = "has no class declaration")]
+fn rust_side_only_field_self_rejected() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn = syn::parse_str("pub fn z_make() -> ZThing { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    let jni = JniGen::new()
+        .set_source_module(syn::parse_quote!(myflat))
+        .package(crate::package!("ops").fun(crate::fun!(z_make)))
+        .return_expand(crate::return_expand!(ZThing).field_self());
+    let dir = unique_test_dir("jnigen_rso_self_out");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+}

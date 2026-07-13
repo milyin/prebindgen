@@ -194,6 +194,12 @@ macro_rules! return_expand {
 /// as opposed to plain data you copy across ([`data_class!`](crate::data_class))
 /// or small `Copy` values ([`value_class!`](crate::value_class)).
 ///
+/// A type that never materializes in Kotlin needs **no class declaration at
+/// all**: give it boundary decls only ([`param_expand!`](crate::param_expand)
+/// / [`return_expand!`](crate::return_expand)) and it stays rust-side-only —
+/// built from ingredients on the way in, decomposed into fields on the way
+/// out.
+///
 /// Build one with [`ptr_class!`](crate::ptr_class), add it to a
 /// [`PackageDecl`], and hand that to [`JniGen::package`].
 ///
@@ -278,6 +284,13 @@ impl From<syn::Type> for PtrClassDecl {
 /// it to [`JniGen::param_expand`]. With more than one arm the generated Kotlin
 /// selects the variant at runtime.
 ///
+/// The type does **not** have to be declared in any package. A boundary decl
+/// on an undeclared type makes it **rust-side-only**: the value is always
+/// built from its ingredients at the boundary and never materializes in
+/// Kotlin — no class, no handle, nothing to `close()`. The one restriction is
+/// structural: [`variant_self`](Self::variant_self) hard-errors for such a
+/// type, since there is no Kotlin object to pass.
+///
 /// ```
 /// // A KeyExpr param accepts EITHER a String (built via keyexpr_new_try_from)
 /// // OR an existing KeyExpr handle:
@@ -327,6 +340,16 @@ impl ParamExpandDecl {
 /// Build one with [`return_expand!`](crate::return_expand), add fields with
 /// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
 /// [`JniGen::return_expand`].
+///
+/// The type does **not** have to be declared in any package. A boundary decl
+/// on an undeclared type makes it **rust-side-only**: every returned /
+/// callback-delivered / `Result`-error value of it is decomposed into these
+/// fields and the value itself never reaches Kotlin. This is the natural
+/// shape for an error type consumed by the `onError` channel — no dead
+/// Kotlin class is emitted. Restrictions for such a type:
+/// [`field_self`](Self::field_self) hard-errors (there is no Kotlin object to
+/// deliver), and field names cannot inherit from class members (there are
+/// none) — use `.name(...)` on each field or accept the camel-cased default.
 ///
 /// ```
 /// // A returned Sample crosses as { payload, kind } in one call:

@@ -334,6 +334,24 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Canonical keys of the adapter's **boundary-only** (rust-side-only)
+    /// types: types the adapter converts exclusively through its
+    /// expansion/deconstruction plans — built from ingredients on input,
+    /// decomposed into fields on output — so the value itself never crosses
+    /// the boundary and has no destination-language representation.
+    ///
+    /// `write_rust` treats them as acknowledged (no "skipping undeclared"
+    /// warning) and, after the adapter's plans are applied, drops their
+    /// direct converter requirements in both directions
+    /// ([`crate::api::core::registry::Registry`]'s `unrequire_input` /
+    /// `unrequire_output`) — a direct converter for such a type is genuinely
+    /// not needed and typically cannot resolve.
+    ///
+    /// Default: empty.
+    fn boundary_only_types(&self) -> HashSet<TypeKey> {
+        HashSet::new()
+    }
+
     /// Final post-processing pass applied to every emitted item right
     /// before write. Default: no-op.
     ///

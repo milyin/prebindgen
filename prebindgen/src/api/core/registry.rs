@@ -373,6 +373,11 @@ struct DeclaredItems {
     method_receivers: HashMap<syn::Ident, TypeKey>,
     types: HashSet<TypeKey>,
     ignored_types: HashSet<TypeKey>,
+    /// Types converted exclusively through the adapter's plans (built from
+    /// ingredients / decomposed into fields); acknowledged for warning
+    /// purposes and un-required after plans — see
+    /// [`Prebindgen::boundary_only_types`].
+    boundary_only_types: HashSet<TypeKey>,
     /// `None` = the adapter has no const declaration mechanism (all consts
     /// re-emitted verbatim, no scan, no warnings) — see
     /// [`Prebindgen::declared_consts`].
@@ -396,6 +401,7 @@ impl DeclaredItems {
             method_receivers: adapter.method_receivers(),
             types: adapter.declared_types(),
             ignored_types: adapter.ignored_types(),
+            boundary_only_types: adapter.boundary_only_types(),
             consts: adapter.declared_consts(),
             ignored_consts: adapter.ignored_consts(),
             required_output_types: adapter.required_output_types(),
@@ -585,15 +591,20 @@ impl<M> Registry<M> {
         }
 
         let mut skipped_types: Vec<String> = Vec::new();
+        let type_acknowledged = |key: &TypeKey| {
+            declared.types.contains(key)
+                || declared.ignored_types.contains(key)
+                || declared.boundary_only_types.contains(key)
+        };
         for ident in self.structs.keys() {
             let key = TypeKey::parse(&ident.to_string());
-            if !declared.types.contains(&key) && !declared.ignored_types.contains(&key) {
+            if !type_acknowledged(&key) {
                 skipped_types.push(ident.to_string());
             }
         }
         for ident in self.enums.keys() {
             let key = TypeKey::parse(&ident.to_string());
-            if !declared.types.contains(&key) && !declared.ignored_types.contains(&key) {
+            if !type_acknowledged(&key) {
                 skipped_types.push(ident.to_string());
             }
         }
@@ -699,6 +710,16 @@ impl<M> Registry<M> {
     /// JObject-shaped), so requiring it would wrongly fail resolution.
     pub(crate) fn unrequire_output(&mut self, ty: &syn::Type) {
         self.required_outputs_scan.remove(&TypeKey::from_type(ty));
+    }
+
+    /// Drop `ty` from the required-input scan set — the input-side peer of
+    /// [`Self::unrequire_output`]. Used by [`Self::apply_adapter_plans`] for
+    /// the adapter's boundary-only types: a fold plan replaces every direct
+    /// crossing of the type with its ingredients, so the type's own input
+    /// converter is genuinely not needed (and for an undeclared type cannot
+    /// resolve at all).
+    pub(crate) fn unrequire_input(&mut self, ty: &syn::Type) {
+        self.required_inputs_scan.remove(&TypeKey::from_type(ty));
     }
 
     fn index_item(&mut self, item: syn::Item, loc: SourceLocation) -> Result<(), ScanError> {
@@ -987,6 +1008,17 @@ impl<M> Registry<M> {
                 leaf_elements,
                 &declared.functions,
             )?;
+        }
+        // Boundary-only types: every crossing is now covered by a plan (fold
+        // in, unfold out / error channel), so the scan-time direct converter
+        // requirement is stale — and typically unresolvable, since the type
+        // has no destination-language representation. Drop it both ways; the
+        // entry stays in the table, so a converter is still produced if one
+        // happens to resolve.
+        for key in &declared.boundary_only_types {
+            let ty = key.to_type();
+            self.unrequire_input(&ty);
+            self.unrequire_output(&ty);
         }
         Ok(())
     }
