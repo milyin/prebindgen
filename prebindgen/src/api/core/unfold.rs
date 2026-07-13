@@ -2,7 +2,7 @@
 //! (`api/core/expand.rs`). A function returning a rich type is *decomposed* by a
 //! **deconstructor** into a set of leaf values.
 //!
-//! A **deconstructor** (a type's `.default_return_expand*` list /
+//! A **deconstructor** (a type-level `return_expand!` `.field*` list,
 //! or the per-fn `.return_expand*` override) is a
 //! **deterministic product**: every record always runs and contributes its leaf
 //! — there is no selector (unlike a *constructor*, whose selector picks one
@@ -66,12 +66,12 @@ struct DeconstructorDecl {
     records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
     /// carries the inferred `(target-position, delivery)` to use). Always
-    /// `Some` for class-default (`.default_return_expand*`) declarations.
+    /// `Some` for type-level default (`return_expand!`) declarations.
     default: Option<(DeconTarget, Delivery)>,
 }
 
 /// How an output expansion chooses the deconstructor for a function's return
-/// type: the type's default (`.default_return_expand*`) or a per-fn
+/// type: the type's default (`return_expand!`-declared) or a per-fn
 /// inline record list (`.return_expand*`).
 #[derive(Clone)]
 enum DeconSel {
@@ -119,7 +119,7 @@ struct OutputDecl {
 pub struct Deconstructors {
     deconstructors: Vec<DeconstructorDecl>,
     outputs: Vec<OutputDecl>,
-    /// Cursor for the type-level default builder (`.default_return_expand` →
+    /// Cursor for the type-level default builder (`return_expand!` →
     /// `.field`/`.field_self`).
     cur_deconstructor: Option<usize>,
     /// Cursor for an in-progress per-fn inline output override    /// (`.return_expand`/`.return_expand_self`): index into
@@ -132,7 +132,7 @@ pub struct Deconstructors {
 
 impl Deconstructors {
     /// Find-or-create the default (always-`default`) deconstructor for `target`
-    /// and set the cursor to it. Idempotent across a `.default_return_expand` chain.
+    /// and set the cursor to it. Idempotent across a `.field*` chain.
     /// Delivery is derived from leaf count at emit time (1 ⇒ return, N ⇒ callback),
     /// so the stored `Delivery` is just a marker.
     pub fn ensure_default_deconstructor(&mut self, target: syn::Type) {
@@ -166,8 +166,8 @@ impl Deconstructors {
         self.skip_output.insert(func);
     }
 
-    /// `.default_return_expand(fun)` — add an accessor-function
-    /// record with the author-supplied (literal) leaf `name`.
+    /// `return_expand!` `.field(fun)` — add an accessor-function
+    /// record with the resolved (literal) leaf `name`.
     pub fn add_deconstructor_record(&mut self, func: syn::Ident, name: impl Into<String>) {
         let i = self
             .cur_deconstructor
@@ -178,7 +178,7 @@ impl Deconstructors {
         });
     }
 
-    /// `.default_return_expand_self()` — add the identity record
+    /// `return_expand!` `.field_self()` — add the identity record
     /// (the value itself).
     pub fn add_deconstructor_record_id(&mut self) {
         let i = self
@@ -217,7 +217,7 @@ impl Deconstructors {
         }
     }
 
-    /// `.default_return_expand_self()` — append the identity
+    /// `.return_expand_self()` — append the identity
     /// (the handle itself) field to the current per-fn inline output.
     pub fn push_inline_field_self(&mut self) {
         let i = self
@@ -278,7 +278,7 @@ pub fn apply<M>(
         done.insert((ed.func.clone(), ed.target));
     }
 
-    // Default auto-apply: a type's deconstructor (`.default_return_expand*`) is
+    // Default auto-apply: a type's deconstructor (`return_expand!`) is
     // applied to every declared fn that returns it (Output) or has it as a
     // `Result<_, E>` error (Error), unless the fn is `fun_accessor` or has a
     // per-fn override. `Delivery` is recomputed from leaf count inside

@@ -24,8 +24,8 @@
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `ScalarTypeWrapperDecl`              | `Millis` ⇄ `Long` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
-//! | `.default_param_expand()` (+`_self`)| `Summary` default input |
-//! | `.default_return_expand()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
+//! | `param_expand!` `.variant()` (+`_self`)| `Summary` default input |
+//! | `return_expand!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
@@ -72,7 +72,7 @@
 
 use prebindgen::{
     constant, constant_expr, core::Registry, data_class, enum_class, fun, lang::JniGen, package,
-    ptr_class, scalar_type_wrapper, value_class,
+    param_expand, ptr_class, return_expand, scalar_type_wrapper, value_class,
 };
 use syn::parse_quote as pq;
 
@@ -127,33 +127,34 @@ fn main() {
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(
             package!("errors").class(
-                // `StorageError` is the `E` of a fallible `Result`. Declaring it a
-                // ptr_class with a a default return-field list makes the generated `onError`
-                // handler receive the decomposed fields: the `message` string plus —
-                // via `.default_return_expand_self()` — the error handle itself (an
-                // owned `StorageError` the handler must `close()`).
-                ptr_class!(StorageError)
-                    .fun(fun!(storage_error_message).name("message"))
-                    .default_return_expand(fun!(storage_error_message).name("message"))
-                    .default_return_expand_self(),
+                // `StorageError` is the `E` of a fallible `Result`; its
+                // boundary shape is declared with `return_expand!` below.
+                ptr_class!(StorageError).fun(fun!(storage_error_message).name("message")),
             ),
+        )
+        // `StorageError`'s default return fields make the generated `onError`
+        // handler receive the decomposed error: the `message` string (name
+        // inherited from the class member) plus — via `.field_self()` — the
+        // error handle itself (an owned `StorageError` the handler must
+        // `close()`).
+        .return_expand(
+            return_expand!(StorageError)
+                .field(fun!(storage_error_message))
+                .field_self(),
         )
         // ── Subpackage `analytics`: param-variant / return-field defaults on `Summary`
         .package(
             package!("analytics")
-                // `Summary` is an opaque handle whose default boundary shape is its
-                // `(count, total)` leaves: the return-field default decomposes it, the param-variant default
-                // rebuilds it (via the `of` constructor) or accepts a handle.
+                // `Summary` is an opaque handle; its default boundary shape —
+                // decomposed `(count, total)` leaves out, rebuilt via the `of`
+                // constructor (or an existing handle) in — is declared with
+                // `param_expand!` / `return_expand!` below.
                 .class(
                     ptr_class!(Summary)
                         .constructor(fun!(summary_new).name("of"))
                         .fun(fun!(summary_count).name("count"))
                         .fun(fun!(summary_total).name("total"))
-                        .fun(fun!(summary_scaled).name("scaled"))
-                        .default_param_expand(fun!(summary_new))
-                        .default_param_expand_self()
-                        .default_return_expand(fun!(summary_count).name("count"))
-                        .default_return_expand(fun!(summary_total).name("total")),
+                        .fun(fun!(summary_scaled).name("scaled")),
                 )
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -161,6 +162,20 @@ fn main() {
                 // RENAMED via the per-declaration `.name()` override (the type-level
                 // dual of the per-fn `.name`; literal, bypasses the mangle closures).
                 .class(ptr_class!(Archive).name("SummaryVault")),
+        )
+        // `Summary` default input: rebuilt from the `of` constructor's
+        // ingredients OR passed as an existing handle (runtime-selected).
+        .param_expand(
+            param_expand!(Summary)
+                .variant(fun!(summary_new))
+                .variant_self(),
+        )
+        // `Summary` default output: decomposed `(count, total)` leaves, names
+        // inherited from the class members.
+        .return_expand(
+            return_expand!(Summary)
+                .field(fun!(summary_count))
+                .field(fun!(summary_total)),
         )
         // ── Base-package handle type: `Storage` + scalar members ────────────
         // Back in the base package so the typed handle classes live alongside

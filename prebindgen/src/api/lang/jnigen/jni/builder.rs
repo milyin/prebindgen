@@ -3,6 +3,7 @@
 //! [`JniGen::new`] starts from defaults; global settings are applied with
 //! the `set_*` methods (`config.rs`) and declarations are *accepted* as
 //! pre-built objects (`decl.rs`) via [`JniGen::package`],
+//! [`JniGen::param_expand`], [`JniGen::return_expand`],
 //! [`JniGen::scalar_type_wrapper`], and [`JniGen::generic_type_wrapper`] —
 //! there is no fluent typestate cursor. Carved from the former monolithic
 //! JNI module; shares the `jni` namespace via `use super::*`.
@@ -60,6 +61,8 @@ impl JniGen {
             jni_native_init: None,
             expansions: crate::api::core::expand::Expansions::default(),
             deconstructors: crate::api::core::unfold::Deconstructors::default(),
+            param_expand_decls: Vec::new(),
+            return_expand_decls: Vec::new(),
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
             ignored_class_types: std::collections::HashSet::new(),
@@ -291,35 +294,6 @@ impl JniGen {
             .expect("register_class_name created the entry")
             .opaque = Some(OpaqueConfig::default());
         self.accept_members(&key, decl.members);
-
-        if let Some(variants) = decl.input_variants {
-            // Identity-only normalization: `.default_param_expand_self()`
-            // alone declares the plain-handle form — exactly the default
-            // when nothing is declared, so registering it would only add a
-            // degenerate 1-variant selector to every param of this type.
-            if !matches!(variants.as_slice(), [LocalVariant::SelfIdentity]) {
-                self.expansions.ensure_default_constructor(key.to_type());
-                for v in variants {
-                    match v {
-                        LocalVariant::Ctor(f) => self.expansions.add_constructor_variant(f),
-                        LocalVariant::SelfIdentity => self.expansions.add_constructor_variant_id(),
-                    }
-                }
-            }
-        }
-        if let Some(fields) = decl.output_fields {
-            self.deconstructors
-                .ensure_default_deconstructor(key.to_type());
-            for f in fields {
-                match f {
-                    LocalField::Named(func, name) => {
-                        self.accessor_record_fns.insert(func.clone());
-                        self.deconstructors.add_deconstructor_record(func, name)
-                    }
-                    LocalField::SelfField => self.deconstructors.add_deconstructor_record_id(),
-                }
-            }
-        }
     }
 
     fn accept_enum_class(&mut self, subpackage: &str, decl: EnumClassDecl) {
@@ -471,12 +445,114 @@ impl JniGen {
                 match f {
                     LocalField::Named(func, name) => {
                         self.accessor_record_fns.insert(func.clone());
+                        let name = name.unwrap_or_else(|| snake_to_camel(&func.to_string()));
                         self.deconstructors.push_inline_field(func, name)
                     }
                     LocalField::SelfField => self.deconstructors.push_inline_field_self(),
                 }
             }
         }
+    }
+}
+
+// ── Accepting boundary decls ─────────────────────────────────────────────
+
+impl JniGen {
+    /// Declare a type's **default input boundary** (a [`ParamExpandDecl`],
+    /// built with [`param_expand!`](crate::param_expand)): how a parameter of
+    /// that type may be supplied, as an OR-list of build variants. Applies to
+    /// every function with a parameter of the type, in any package; a single
+    /// function overrides via [`FunctionDecl::param_expand`] /
+    /// [`FunctionDecl::param_expand_self`].
+    pub fn param_expand(mut self, decl: ParamExpandDecl) -> Self {
+        assert!(
+            !decl.variants.is_empty(),
+            "param_expand!({}) declares no variants — add .variant(fun!(...)) and/or \
+             .variant_self()",
+            decl.key.as_str()
+        );
+        self.param_expand_decls.push(decl);
+        self
+    }
+
+    /// Declare a type's **default output boundary** (a [`ReturnExpandDecl`],
+    /// built with [`return_expand!`](crate::return_expand)): the AND-set of
+    /// fields a returned / callback-delivered value of that type decomposes
+    /// into. Applies to every function returning the type, in any package; a
+    /// single function overrides via [`FunctionDecl::return_expand`] /
+    /// [`FunctionDecl::return_expand_self`].
+    pub fn return_expand(mut self, decl: ReturnExpandDecl) -> Self {
+        assert!(
+            !decl.fields.is_empty(),
+            "return_expand!({}) declares no fields — add .field(fun!(...)) and/or \
+             .field_self()",
+            decl.key.as_str()
+        );
+        self.return_expand_decls.push(decl);
+        self
+    }
+
+    /// The Kotlin name of `func` as a declared member (`.fun`/`.constructor`)
+    /// of the class keyed by `key`, if it is one — the name-inheritance
+    /// source for [`ReturnExpandDecl::field`].
+    fn member_kotlin_name(&self, key: &TypeKey, func: &syn::Ident) -> Option<String> {
+        self.class_members
+            .get(key)?
+            .iter()
+            .find(|m| &m.rust_ident == func)
+            .map(|m| m.kotlin_name.clone())
+    }
+
+    /// Assemble the full [`Expansions`] set at the point of use: the eagerly
+    /// accumulated per-fn overrides plus the raw type-level
+    /// [`ParamExpandDecl`]s. Building on demand keeps declarations
+    /// order-independent — a `param_expand` may precede or follow the
+    /// `package` that declares its constructors.
+    pub(crate) fn build_expansions(&self) -> crate::api::core::expand::Expansions {
+        let mut exp = self.expansions.clone();
+        for decl in &self.param_expand_decls {
+            // Identity-only normalization: `.variant_self()` alone declares
+            // the plain-handle form — exactly the default when nothing is
+            // declared, so registering it would only add a degenerate
+            // 1-variant selector to every param of this type.
+            if matches!(decl.variants.as_slice(), [LocalVariant::SelfIdentity]) {
+                continue;
+            }
+            exp.ensure_default_constructor(decl.key.to_type());
+            for v in &decl.variants {
+                match v {
+                    LocalVariant::Ctor(f) => exp.add_constructor_variant(f.clone()),
+                    LocalVariant::SelfIdentity => exp.add_constructor_variant_id(),
+                }
+            }
+        }
+        exp
+    }
+
+    /// Assemble the full [`Deconstructors`] set at the point of use — the
+    /// output-side peer of [`Self::build_expansions`]. Field names resolve
+    /// here, against the complete declaration set: explicit `.name()` first,
+    /// then the class member's Kotlin name (a getter that is both a method
+    /// and a field is named once, on the member), else the camel-cased Rust
+    /// name.
+    pub(crate) fn build_deconstructors(&self) -> crate::api::core::unfold::Deconstructors {
+        let mut dec = self.deconstructors.clone();
+        for decl in &self.return_expand_decls {
+            dec.ensure_default_deconstructor(decl.key.to_type());
+            for f in &decl.fields {
+                match f {
+                    LocalField::Named(func, name_override) => {
+                        let name = name_override
+                            .clone()
+                            .or_else(|| self.member_kotlin_name(&decl.key, func))
+                            .unwrap_or_else(|| snake_to_camel(&func.to_string()));
+                        dec.add_deconstructor_record(func.clone(), name);
+                    }
+                    LocalField::SelfField => dec.add_deconstructor_record_id(),
+                }
+            }
+        }
+        dec
     }
 }
 

@@ -962,14 +962,14 @@ impl<M> Registry<M> {
         if let Some(exp) = ext.expansions() {
             crate::api::core::expand::apply(
                 self,
-                exp,
+                &exp,
                 &declared.functions,
                 &declared.accessors,
                 &declared.method_receivers,
             )?;
         }
         if let Some(dec) = ext.deconstructors() {
-            crate::api::core::unfold::apply(self, dec, &declared.functions, &declared.accessors)?;
+            crate::api::core::unfold::apply(self, &dec, &declared.functions, &declared.accessors)?;
         }
         // Synthesized by-value `data_class` decompositions: build the leaves
         // (immutable borrow), then wire them into fixed-builder plans.

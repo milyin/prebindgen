@@ -23,7 +23,8 @@ pub use jni::{
     decode_byte_array, decode_string, encode_byte_array, encode_string, null_byte_array,
     null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConstExprDecl, DataClassDecl,
     EnumClassDecl, FunctionDecl, GenericTypeWrapperDecl, JniBindingError, JniGen, PackageDecl,
-    PtrClassDecl, ScalarTypeWrapperDecl, ValueClassDecl, WireBody,
+    ParamExpandDecl, PtrClassDecl, ReturnExpandDecl, ScalarTypeWrapperDecl, ValueClassDecl,
+    WireBody,
 };
 
 // Kotlin emission types now live in the standalone generator module

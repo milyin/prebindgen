@@ -126,7 +126,7 @@ impl std::fmt::Display for UnfoldError {
             ),
             UnfoldError::RootIdentityBeforeNested { target } => write!(
                 f,
-                "return-field list of `{}`: `.default_return_expand_self()` (the root identity) must be \
+                "return-field list of `{}`: `.field_self()` (the root identity) must be \
                  declared AFTER fields that splice a nested identity — the root identity moves the owned \
                  value while nested identities borrow it, so this order would generate \
                  non-compiling Rust. Declare the `_self` field last.",

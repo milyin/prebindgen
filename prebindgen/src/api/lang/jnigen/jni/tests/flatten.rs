@@ -1,8 +1,8 @@
 use super::*;
 
 /// Two fns returning the same type under different output decompositions:
-/// the default one and a per-fn `.default_return_expand(...)` inline field list.
-/// Each gets its own builder interface.
+/// the type-level `return_expand!` default and a per-fn `.return_expand(...)`
+/// inline field list. Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
     use crate::SourceLocation;
@@ -30,10 +30,7 @@ fn inline_output_gets_own_builder() {
                 .class(
                     crate::ptr_class!(ZThing)
                         .fun(crate::fun!(z_thing_name).name("name"))
-                        .fun(crate::fun!(z_thing_size).name("size"))
-                        // Default output: name + size (2 leaves ⇒ builder callback).
-                        .default_return_expand(crate::fun!(z_thing_name).name("name"))
-                        .default_return_expand(crate::fun!(z_thing_size).name("size")),
+                        .fun(crate::fun!(z_thing_size).name("size")),
                 )
                 .fun(crate::fun!(z_make_a))
                 // Per-fn inline fields: name + size + name again (different shape). The
@@ -45,6 +42,14 @@ fn inline_output_gets_own_builder() {
                         .return_expand(crate::fun!(z_thing_size).name("size"))
                         .return_expand(crate::fun!(z_thing_name).name("name2")),
                 ),
+        )
+        // Default output: name + size (2 leaves ⇒ builder callback). The
+        // `name` field inherits its Kotlin name from the class member; `size`
+        // sets it explicitly — both paths resolve to the member-equal names.
+        .return_expand(
+            crate::return_expand!(ZThing)
+                .field(crate::fun!(z_thing_name))
+                .field(crate::fun!(z_thing_size).name("size")),
         );
 
     let dir = unique_test_dir("jnigen_inline_out");
@@ -119,22 +124,23 @@ fn error_unwrap_universal_records() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("errors")
-                .class(
-                    crate::ptr_class!(ZDetail)
-                        .fun(crate::fun!(z_detail_code).name("code"))
-                        .default_return_expand(crate::fun!(z_detail_code).name("code")),
-                )
+                .class(crate::ptr_class!(ZDetail).fun(crate::fun!(z_detail_code).name("code")))
                 .class(
                     crate::ptr_class!(ZErr)
                         .fun(crate::fun!(z_err_message).name("message"))
-                        .fun(crate::fun!(z_err_detail).name("detail"))
-                        // Canonical error decomposition: the owned error handle itself,
-                        // its message, and the Option-nested detail spliced to its code leaf.
-                        .default_return_expand_self()
-                        .default_return_expand(crate::fun!(z_err_message).name("message"))
-                        .default_return_expand(crate::fun!(z_err_detail).name("detail")),
+                        .fun(crate::fun!(z_err_detail).name("detail")),
                 )
                 .fun(crate::fun!(z_fallible)),
+        )
+        .return_expand(crate::return_expand!(ZDetail).field(crate::fun!(z_detail_code)))
+        // Canonical error decomposition: the owned error handle itself, its
+        // message, and the Option-nested detail spliced to its code leaf.
+        // Field names inherit from the class members.
+        .return_expand(
+            crate::return_expand!(ZErr)
+                .field_self()
+                .field(crate::fun!(z_err_message))
+                .field(crate::fun!(z_err_detail)),
         );
 
     let dir = unique_test_dir("jnigen_err_universal");
@@ -216,7 +222,7 @@ fn error_unwrap_universal_records() {
 /// signature, its handle locked) while keeping the non-receiver params; the
 /// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
 /// companion-object factory returning the class. Per-fn
-/// `.default_return_expand_self()` emits the handle leaf.
+/// `.return_expand_self()` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
     use crate::SourceLocation;

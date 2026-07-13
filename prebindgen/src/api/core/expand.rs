@@ -4,7 +4,7 @@
 //!
 //! A *constructor* is any `#[prebindgen]` function `f(p0, …) -> T` (or
 //! `-> Result<T, E>`) that builds a target type `T`. A type's input flatten
-//! (`.default_param_expand*` on a class decl, or the per-fn
+//! (a type-level `param_expand!` `.variant*` list, or the per-fn
 //! `.param_expand(param, …)` override) replaces a parameter of that type —
 //! in the generated foreign signature only — with the constructor's inputs,
 //! flattened. The generated wrapper decodes those inputs, runs the
@@ -63,7 +63,7 @@ struct ConstructorDecl {
     target: syn::Type,
     variants: Vec<Variant>,
     /// Auto-`construct` every matching param of every declared fn. Always
-    /// `true` for class-default (`.default_param_expand*`) declarations.
+    /// `true` for type-level default (`param_expand!` `.variant*`) declarations.
     default: bool,
 }
 
@@ -103,7 +103,7 @@ pub struct Expansions {
 
 impl Expansions {
     /// Find-or-create the default (always-`default`) constructor for `target`
-    /// and set the cursor to it. Idempotent across a `.default_param_expand` chain —
+    /// and set the cursor to it. Idempotent across a `.variant*` chain —
     /// the first call creates it, subsequent ones reuse it so variants accumulate.
     pub fn ensure_default_constructor(&mut self, target: syn::Type) {
         let key = TypeKey::from_type(&target);
@@ -129,7 +129,7 @@ impl Expansions {
         self.skip_construct.insert((func, param));
     }
 
-    /// `.default_param_expand(fun)` — add a constructor-function arm.
+    /// `param_expand!` `.variant(fun)` — add a constructor-function arm.
     pub fn add_constructor_variant(&mut self, func: syn::Ident) {
         let i = self
             .cur_constructor
@@ -137,7 +137,7 @@ impl Expansions {
         self.constructors[i].variants.push(Variant::Ctor(func));
     }
 
-    /// `.default_param_expand_self()` — add the identity arm
+    /// `param_expand!` `.variant_self()` — add the identity arm
     /// (pass the target value straight through).
     pub fn add_constructor_variant_id(&mut self) {
         let i = self

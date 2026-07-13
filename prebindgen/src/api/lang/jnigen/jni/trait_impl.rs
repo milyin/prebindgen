@@ -804,14 +804,19 @@ impl Prebindgen for JniGen {
 
     /// Hand the registry this back-end's constructor-expansion declarations so
     /// `write_rust` can resolve `.expand`s into fold plans before resolution.
-    fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
-        Some(&self.expansions)
+    /// Assembled on demand from the per-fn overrides plus the raw type-level
+    /// [`ParamExpandDecl`]s (see [`JniGen::build_expansions`]).
+    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
+        Some(self.build_expansions())
     }
 
     /// Hand the registry this back-end's output-expansion declarations so
     /// `write_rust` can resolve them into unfold plans before resolution.
-    fn deconstructors(&self) -> Option<&crate::api::core::unfold::Deconstructors> {
-        Some(&self.deconstructors)
+    /// Assembled on demand — field names (member inheritance) resolve here,
+    /// against the complete declaration set (see
+    /// [`JniGen::build_deconstructors`]).
+    fn deconstructors(&self) -> Option<crate::api::core::unfold::Deconstructors> {
+        Some(self.build_deconstructors())
     }
 
     /// Synthesize a field-decomposition for every `.data_class` type whose
@@ -936,13 +941,21 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Functions ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
+    /// Functions ever referenced as a named leaf in a `return_expand!` `.field(fun!(...))`/
     /// `.return_expand(...)` record — see
     /// `accessor_record_fns`'s doc (`jni/mod.rs`). Usage-derived, not tied to
     /// `.fun()` class-member declarations: a function need not also be
     /// exposed as an instance method to be referenced this way.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.accessor_record_fns.clone()
+        let mut set = self.accessor_record_fns.clone();
+        for decl in &self.return_expand_decls {
+            for f in &decl.fields {
+                if let LocalField::Named(func, _) = f {
+                    set.insert(func.clone());
+                }
+            }
+        }
+        set
     }
 
     /// Fun members (`.fun`) — their fn ident mapped to the owning class's

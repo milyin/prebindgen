@@ -39,18 +39,18 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
-                .class(
-                    crate::ptr_class!(ZThing)
-                        // Canonical output: handle (identity) + its string form — a
-                        // callback arg of ZThing decomposes into these 2 leaves.
-                        .fun(crate::fun!(z_thing_name).name("name"))
-                        .default_return_expand_self()
-                        .default_return_expand(crate::fun!(z_thing_name).name("name")),
-                )
+                .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
                 // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
                 .class(crate::ptr_class!(ZOther))
                 .fun(crate::fun!(z_thing_sub))
                 .fun(crate::fun!(z_other_sub)),
+        )
+        // Canonical output: handle (identity) + its string form — a callback
+        // arg of ZThing decomposes into these 2 leaves.
+        .return_expand(
+            crate::return_expand!(ZThing)
+                .field_self()
+                .field(crate::fun!(z_thing_name)),
         );
 
     let dir = unique_test_dir("jnigen_cb_snap");
@@ -179,10 +179,10 @@ fn callback_snapshot_kotlin_side() {
 
 /// Regression: a callback-delivered type that has BOTH a nested handle identity
 /// (a child `ptr_class` reached by an accessor) AND its own root identity
-/// (`.default_return_expand().field_self()`) must emit the root MOVE after every borrow of
+/// (`return_expand!` `.field_self()`) must emit the root MOVE after every borrow of
 /// the owned value — otherwise the nested child clone (which borrows the root)
 /// follows `Box::into_raw(Box::new(value))` and fails to compile with "use of
-/// moved value". Declaring `.default_return_expand().field_self()` LAST guarantees the
+/// moved value". Declaring `.field_self()` LAST guarantees the
 /// correct order (the emitter emits identity leaves in declaration order, after
 /// all non-identity leaves). This mirrors the zenoh-flat `ZQuery` queryable
 /// callback (handle + decomposed fields, nested `ZKeyExpr` identity).
@@ -226,21 +226,21 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
-                // Child handle: canonical output = identity (clone) + its name string.
-                .class(
-                    crate::ptr_class!(ZChild)
-                        .fun(crate::fun!(z_child_name).name("name"))
-                        .default_return_expand_self()
-                        .default_return_expand(crate::fun!(z_child_name).name("name")),
-                )
-                // Parent: a nested child-handle record, then its OWN root identity LAST.
-                .class(
-                    crate::ptr_class!(ZParent)
-                        .fun(crate::fun!(z_parent_child).name("child"))
-                        .default_return_expand(crate::fun!(z_parent_child).name("child"))
-                        .default_return_expand_self(),
-                )
+                .class(crate::ptr_class!(ZChild).fun(crate::fun!(z_child_name).name("name")))
+                .class(crate::ptr_class!(ZParent).fun(crate::fun!(z_parent_child).name("child")))
                 .fun(crate::fun!(z_parent_sub)),
+        )
+        // Child handle: canonical output = identity (clone) + its name string.
+        .return_expand(
+            crate::return_expand!(ZChild)
+                .field_self()
+                .field(crate::fun!(z_child_name)),
+        )
+        // Parent: a nested child-handle record, then its OWN root identity LAST.
+        .return_expand(
+            crate::return_expand!(ZParent)
+                .field(crate::fun!(z_parent_child))
+                .field_self(),
         );
 
     let dir = unique_test_dir("jnigen_root_id_order");
@@ -313,41 +313,41 @@ fn callback_double_option_unwrap_pipeline() {
         .package(
             crate::package!("query")
                 .class(crate::value_class!(ZId))
-                .class(
-                    crate::ptr_class!(ZKeyExpr)
-                        .fun(crate::fun!(z_keyexpr_as_str).name("asStr"))
-                        .default_return_expand_self()
-                        .default_return_expand(crate::fun!(z_keyexpr_as_str).name("asStr")),
-                )
-                .class(
-                    crate::ptr_class!(ZTs)
-                        .fun(crate::fun!(z_ts_ntp64).name("ntp64"))
-                        .default_return_expand(crate::fun!(z_ts_ntp64).name("ntp64")),
-                )
+                .class(crate::ptr_class!(ZKeyExpr).fun(crate::fun!(z_keyexpr_as_str).name("asStr")))
+                .class(crate::ptr_class!(ZTs).fun(crate::fun!(z_ts_ntp64).name("ntp64")))
                 .class(
                     crate::ptr_class!(ZSample)
                         .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                        .fun(crate::fun!(z_sample_timestamp).name("timestamp"))
-                        .default_return_expand(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                        .default_return_expand(crate::fun!(z_sample_timestamp).name("timestamp")),
+                        .fun(crate::fun!(z_sample_timestamp).name("timestamp")),
                 )
-                .class(
-                    crate::ptr_class!(ZErr)
-                        .fun(crate::fun!(z_err_payload).name("payload"))
-                        .default_return_expand(crate::fun!(z_err_payload).name("payload")),
-                )
+                .class(crate::ptr_class!(ZErr).fun(crate::fun!(z_err_payload).name("payload")))
                 .class(
                     crate::ptr_class!(ZReply)
                         .fun(crate::fun!(z_reply_zid).name("zid"))
                         .fun(crate::fun!(z_reply_is_ok).name("isOk"))
                         .fun(crate::fun!(z_reply_sample).name("sample"))
-                        .fun(crate::fun!(z_reply_err).name("err"))
-                        .default_return_expand(crate::fun!(z_reply_zid).name("zid"))
-                        .default_return_expand(crate::fun!(z_reply_is_ok).name("isOk"))
-                        .default_return_expand(crate::fun!(z_reply_sample).name("sample"))
-                        .default_return_expand(crate::fun!(z_reply_err).name("err")),
+                        .fun(crate::fun!(z_reply_err).name("err")),
                 )
                 .fun(crate::fun!(z_get)),
+        )
+        .return_expand(
+            crate::return_expand!(ZKeyExpr)
+                .field_self()
+                .field(crate::fun!(z_keyexpr_as_str)),
+        )
+        .return_expand(crate::return_expand!(ZTs).field(crate::fun!(z_ts_ntp64)))
+        .return_expand(
+            crate::return_expand!(ZSample)
+                .field(crate::fun!(z_sample_key_expr))
+                .field(crate::fun!(z_sample_timestamp)),
+        )
+        .return_expand(crate::return_expand!(ZErr).field(crate::fun!(z_err_payload)))
+        .return_expand(
+            crate::return_expand!(ZReply)
+                .field(crate::fun!(z_reply_zid))
+                .field(crate::fun!(z_reply_is_ok))
+                .field(crate::fun!(z_reply_sample))
+                .field(crate::fun!(z_reply_err)),
         );
 
     let dir = unique_test_dir("jnigen_double_opt");

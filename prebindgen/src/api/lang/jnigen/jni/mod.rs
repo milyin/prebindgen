@@ -195,7 +195,7 @@ pub(crate) enum MemberKind {
     Fun,
     /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
     /// member returning the class; never output-flattened; referenceable by a
-    /// `.default_param_expand(fun!(...))`.
+    /// a `param_expand!` `.variant(fun!(...))` arm.
     Constructor,
 }
 
@@ -211,9 +211,9 @@ pub(crate) struct ClassMember {
     pub rust_ident: syn::Ident,
     /// Kotlin-visible name of this instance method / companion factory
     /// (derived from `FunctionDecl.name()`, defaulting to
-    /// `snake_to_camel(rust_ident)`). Independent of any `.default_param_expand`/
-    /// `.default_return_expand` reference to the same underlying function — those
-    /// take a fresh `FunctionDecl` directly and don't consult this list.
+    /// `snake_to_camel(rust_ident)`). A `return_expand!` `.field` referencing
+    /// the same underlying function inherits this name unless it sets its own
+    /// `.name()`; `param_expand!` variants reference the fn by ident only.
     pub kotlin_name: String,
     /// Member kind (fun / constructor).
     pub kind: MemberKind,
@@ -257,9 +257,9 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
 /// JNI back-end. Global settings are applied with the order-insensitive
 /// `set_*` methods; declarations are accepted as pre-built objects
-/// (`PackageDecl`, `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see
-/// `decl.rs`) built independently of `JniGen` itself; there is no fluent
-/// typestate cursor.
+/// (`PackageDecl`, `ParamExpandDecl`, `ReturnExpandDecl`,
+/// `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see `decl.rs`) built
+/// independently of `JniGen` itself; there is no fluent typestate cursor.
 ///
 /// ```
 /// use prebindgen::lang::JniGen;
@@ -267,11 +267,19 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 /// let jni = JniGen::new()
 ///     .set_package_prefix("io.test.jni")
 ///     .package(
-///         prebindgen::package!("session")
-///             .class(prebindgen::ptr_class!(ZKeyExpr)
-///                 .fun(prebindgen::fun!(z_keyexpr_as_str).name("getStr"))
-///                 .default_return_expand_self()),
-///     );
+///         prebindgen::package!("keyexpr")
+///             .class(prebindgen::ptr_class!(KeyExpr)
+///                 .fun(prebindgen::fun!(keyexpr_get_str).name("getStr"))
+///                 .constructor(prebindgen::fun!(keyexpr_new_try_from).name("tryFrom"))),
+///     )
+///     // A KeyExpr param accepts EITHER a String (built via tryFrom) OR an
+///     // existing handle; a returned KeyExpr decomposes into its string form.
+///     .param_expand(
+///         prebindgen::param_expand!(KeyExpr)
+///             .variant(prebindgen::fun!(keyexpr_new_try_from))
+///             .variant_self(),
+///     )
+///     .return_expand(prebindgen::return_expand!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
 /// ```
 #[derive(Clone)]
 pub struct JniGen {
@@ -353,16 +361,33 @@ pub struct JniGen {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
-    /// Constructor-expansion declarations (`.default_param_expand()` /    /// `.param_expand()` on a class/function decl). Resolved into
+    /// Per-fn constructor-expansion overrides (`.param_expand*` on a
+    /// [`FunctionDecl`]), replayed eagerly at accept time. The type-level
+    /// defaults live raw in [`Self::param_expand_decls`]; the two merge on
+    /// demand in [`JniGen::build_expansions`], resolved into
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
-    /// Output-expansion declarations (`.default_return_expand()` /
-    /// `.return_expand()` on a class/function decl). Resolved into
+    /// Per-fn output-expansion overrides (`.return_expand*` on a
+    /// [`FunctionDecl`]) plus constructor-member skip-defaults, replayed
+    /// eagerly at accept time. The type-level defaults live raw in
+    /// [`Self::return_expand_decls`]; the two merge on demand in
+    /// [`JniGen::build_deconstructors`], resolved into
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
+
+    /// Type-level default input boundaries ([`ParamExpandDecl`], accepted by
+    /// [`JniGen::param_expand`]), stored raw — merged into the expansion set
+    /// at the point of use so declarations stay order-independent.
+    pub(crate) param_expand_decls: Vec<ParamExpandDecl>,
+
+    /// Type-level default output boundaries ([`ReturnExpandDecl`], accepted
+    /// by [`JniGen::return_expand`]), stored raw — field names (member
+    /// inheritance) resolve at the point of use so declarations stay
+    /// order-independent.
+    pub(crate) return_expand_decls: Vec<ReturnExpandDecl>,
 
     /// Class members (funs / constructors) attached to a declared class via
     /// its decl's `.fun()`/`.constructor()`, keyed by the class's canonical
@@ -386,12 +411,12 @@ pub struct JniGen {
     /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
     pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
 
-    /// Every function ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
-    /// `.return_expand(...)` record (class- or
-    /// function-scoped) — populated as `builder.rs` accepts each decl.
-    /// Backs [`Prebindgen::accessor_functions`]: `core/unfold.rs`'s
+    /// Every function referenced as a named leaf in a per-fn
+    /// `.return_expand(fun!(...))` override — populated as `builder.rs`
+    /// accepts each decl. [`Prebindgen::accessor_functions`] unions this
+    /// with the field fns of [`Self::return_expand_decls`]: `core/unfold.rs`'s
     /// deconstructor gate requires every named record's function to be in
-    /// this set (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes
+    /// that set (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes
     /// them from parameter composition. Derived from *usage*, not from any
     /// separate declaration — a function need not also be a `.fun()` class
     /// member to be referenced this way.

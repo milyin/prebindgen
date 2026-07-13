@@ -175,8 +175,12 @@ pub trait Prebindgen {
     /// [`crate::api::core::expand::FoldPlan`] on the registry and its leaf
     /// types are registered as required inputs.
     ///
+    /// Returned by value so the adapter may assemble it on demand from its
+    /// raw declarations (keeping its builder free of stored derived state);
+    /// it is consulted exactly once per `write_rust`.
+    ///
     /// Default: `None`.
-    fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
+    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
         None
     }
 
@@ -187,8 +191,10 @@ pub trait Prebindgen {
     /// [`crate::api::core::unfold::UnfoldPlan`] on the registry and its leaf
     /// types are registered as required outputs.
     ///
+    /// Returned by value, same as [`Self::expansions`].
+    ///
     /// Default: `None`.
-    fn deconstructors(&self) -> Option<&crate::api::core::unfold::Deconstructors> {
+    fn deconstructors(&self) -> Option<crate::api::core::unfold::Deconstructors> {
         None
     }
 

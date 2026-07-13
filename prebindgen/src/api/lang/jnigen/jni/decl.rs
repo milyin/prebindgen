@@ -17,7 +17,8 @@ use super::*;
 // by the accept logic in `builder.rs` once a decl is handed to `JniGen`)
 // ──────────────────────────────────────────────────────────────────────
 
-/// One arm of a `.default_param_expand*`/`.param_expand*` build-from list.
+/// One arm of a `param_expand!` `.variant*` / per-fn `.param_expand*`
+/// build-from list.
 #[derive(Clone)]
 pub(crate) enum LocalVariant {
     /// Build via this declared constructor member / constructor fn.
@@ -26,11 +27,16 @@ pub(crate) enum LocalVariant {
     SelfIdentity,
 }
 
-/// One arm of a `.default_return_expand*`/`.return_expand*` field list.
+/// One arm of a `return_expand!` `.field*` / per-fn `.return_expand*` field
+/// list. The name is stored raw (`None` = derive at replay time: for a
+/// class-level field, the class member's Kotlin name if the accessor is a
+/// declared member, else `snake_to_camel`; for a per-fn field,
+/// `snake_to_camel`).
 #[derive(Clone)]
 pub(crate) enum LocalField {
-    /// Include the named accessor's value as this leaf/field name.
-    Named(syn::Ident, String),
+    /// Include the named accessor's value as a leaf/field, with an optional
+    /// explicit name override.
+    Named(syn::Ident, Option<String>),
     /// Include the handle itself as a field.
     SelfField,
 }
@@ -156,6 +162,26 @@ macro_rules! generic_type_wrapper {
     };
 }
 
+/// Build a [`ParamExpandDecl`] directly from a bare Rust type:
+/// `param_expand!(KeyExpr)` is `ParamExpandDecl::new(<KeyExpr as syn::Type>)`.
+/// See [`ptr_class!`] for the parsing mechanics.
+#[macro_export]
+macro_rules! param_expand {
+    ($t:ty) => {
+        $crate::lang::ParamExpandDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+    };
+}
+
+/// Build a [`ReturnExpandDecl`] directly from a bare Rust type:
+/// `return_expand!(Sample)` is `ReturnExpandDecl::new(<Sample as syn::Type>)`.
+/// See [`ptr_class!`] for the parsing mechanics.
+#[macro_export]
+macro_rules! return_expand {
+    ($t:ty) => {
+        $crate::lang::ReturnExpandDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+    };
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Class-kind decls
 // ──────────────────────────────────────────────────────────────────────
@@ -171,31 +197,24 @@ macro_rules! generic_type_wrapper {
 /// Build one with [`ptr_class!`](crate::ptr_class), add it to a
 /// [`PackageDecl`], and hand that to [`JniGen::package`].
 ///
-/// A `PtrClassDecl` does two jobs:
-///
-/// 1. **Defines the Kotlin class** — its name ([`name`](Self::name)), its
-///    instance methods ([`fun`](Self::fun)), and its companion-object
-///    factories ([`constructor`](Self::constructor)).
-/// 2. **Sets the type's default behavior at every FFI boundary** — how a
-///    *parameter* of this type is accepted ([`default_param_expand`](Self::default_param_expand))
-///    and how a *returned* or callback-delivered value of it is handed to
-///    Kotlin ([`default_return_expand`](Self::default_return_expand)), for
-///    *every* function that mentions the type. Any single function can
-///    override its own copy of these defaults (see [`FunctionDecl`]).
+/// A `PtrClassDecl` defines the **Kotlin class only** — its name
+/// ([`name`](Self::name)), its instance methods ([`fun`](Self::fun)), and its
+/// companion-object factories ([`constructor`](Self::constructor)). How the
+/// type crosses the FFI boundary by default — accepted as which parameter
+/// variants, returned as which field set — is declared separately with
+/// [`param_expand!`](crate::param_expand) / [`return_expand!`](crate::return_expand)
+/// handed to [`JniGen::param_expand`] / [`JniGen::return_expand`]; any single
+/// function can override those defaults locally (see [`FunctionDecl`]).
 ///
 /// ```
-/// // A KeyExpr handle exposing `str()` as an instance method; by default a
-/// // KeyExpr returned to Kotlin is delivered as just the handle.
+/// // A KeyExpr handle exposing `str()` as an instance method.
 /// let _ = prebindgen::ptr_class!(KeyExpr)
-///     .fun(prebindgen::fun!(keyexpr_get_str).name("str"))
-///     .default_return_expand_self();
+///     .fun(prebindgen::fun!(keyexpr_get_str).name("str"));
 /// ```
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
-    pub(crate) input_variants: Option<Vec<LocalVariant>>,
-    pub(crate) output_fields: Option<Vec<LocalField>>,
 }
 
 impl PtrClassDecl {
@@ -204,8 +223,6 @@ impl PtrClassDecl {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
             members: Vec::new(),
-            input_variants: None,
-            output_fields: None,
         }
     }
 
@@ -232,82 +249,10 @@ impl PtrClassDecl {
     /// Expose a `#[prebindgen]` factory as a Kotlin **companion-object
     /// factory** — callers write `Class.name(...)`. `rust_fun` returns `Self`
     /// (or `Result<Self, E>`) and its parameters become the factory's
-    /// arguments. A constructor can also serve as a build option in
-    /// [`default_param_expand`](Self::default_param_expand).
+    /// arguments. A constructor can also serve as a build option in a
+    /// [`param_expand!`](crate::param_expand) variant list.
     pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
         self.members.push((rust_fun, MemberKind::Constructor));
-        self
-    }
-
-    /// Let callers pass the **ingredients** of this type wherever a parameter
-    /// of it is expected, instead of having to build the handle first. Point
-    /// this at a `#[prebindgen]` constructor: at every such parameter, the
-    /// Kotlin signature gains that constructor's inputs and Rust builds the
-    /// value in the same call.
-    ///
-    /// For example, giving `KeyExpr` a `keyexpr_from_str(&str)` build option
-    /// lets every function taking a `KeyExpr` also accept a plain `String`.
-    ///
-    /// Call repeatedly to offer several ways to build the value (and add
-    /// [`default_param_expand_self`](Self::default_param_expand_self) to also
-    /// accept a ready-made handle); with more than one option the generated
-    /// Kotlin picks at runtime. Overridable per function via
-    /// [`FunctionDecl::param_expand`].
-    pub fn default_param_expand(mut self, rust_fun: FunctionDecl) -> Self {
-        self.input_variants
-            .get_or_insert_with(Vec::new)
-            .push(LocalVariant::Ctor(rust_fun.rust_ident));
-        self
-    }
-
-    /// Also accept an **already-built handle** at parameters of this type —
-    /// the "…or just pass one you already have" option alongside the
-    /// [`default_param_expand`](Self::default_param_expand) build variants.
-    /// On its own this is simply the default (a bare handle), so declaring it
-    /// alone changes nothing; it earns its place only next to build variants.
-    pub fn default_param_expand_self(mut self) -> Self {
-        self.input_variants
-            .get_or_insert_with(Vec::new)
-            .push(LocalVariant::SelfIdentity);
-        self
-    }
-
-    /// Decompose this type into **named fields delivered in one FFI crossing**
-    /// wherever it is returned or handed to a callback — instead of returning
-    /// an opaque handle the caller must then query field by field with more
-    /// JNI calls.
-    ///
-    /// Point each call at a `#[prebindgen]` reader (`f(&Self) -> Field`); its
-    /// value becomes one field, named via `fun!(reader).name("field")`
-    /// (default: the reader's camel-cased name). For example, decomposing a
-    /// `Sample` into `keyExpr`, `payload`, `timestamp`, … hands a subscriber
-    /// callback the whole sample in a single call with no follow-up accessor
-    /// round-trips.
-    ///
-    /// Call repeatedly to add fields, and add
-    /// [`default_return_expand_self`](Self::default_return_expand_self) to
-    /// also include the live handle. Overridable per function via
-    /// [`FunctionDecl::return_expand`].
-    pub fn default_return_expand(mut self, rust_fun: FunctionDecl) -> Self {
-        let name = rust_fun
-            .kotlin_name_override
-            .unwrap_or_else(|| snake_to_camel(&rust_fun.rust_ident.to_string()));
-        self.output_fields
-            .get_or_insert_with(Vec::new)
-            .push(LocalField::Named(rust_fun.rust_ident, name));
-        self
-    }
-
-    /// Include the **handle itself** among the decomposed fields, so the
-    /// consumer gets a live, closeable object in addition to the read-out
-    /// values (e.g. a `Query` delivered with its fields *and* the handle it
-    /// needs to reply). Declare it **last**, after any field that decomposes
-    /// a nested handle, so the generated Rust moves the value only after
-    /// those borrows.
-    pub fn default_return_expand_self(mut self) -> Self {
-        self.output_fields
-            .get_or_insert_with(Vec::new)
-            .push(LocalField::SelfField);
         self
     }
 }
@@ -315,6 +260,116 @@ impl PtrClassDecl {
 impl From<syn::Type> for PtrClassDecl {
     fn from(rust_type: syn::Type) -> Self {
         Self::new(rust_type)
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Boundary decls — how a declared type crosses the FFI boundary by default
+// ──────────────────────────────────────────────────────────────────────
+
+/// Declares a type's **default input boundary**: how a parameter of this type
+/// may be supplied, as a list of *variants* — "built from this constructor's
+/// ingredients, OR that one's, OR passed as an existing handle". Applies to
+/// every function with a parameter of the type; a single function opts out or
+/// narrows via [`FunctionDecl::param_expand`] / [`FunctionDecl::param_expand_self`].
+///
+/// Build one with [`param_expand!`](crate::param_expand), add arms with
+/// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
+/// it to [`JniGen::param_expand`]. With more than one arm the generated Kotlin
+/// selects the variant at runtime.
+///
+/// ```
+/// // A KeyExpr param accepts EITHER a String (built via keyexpr_new_try_from)
+/// // OR an existing KeyExpr handle:
+/// let _ = prebindgen::param_expand!(KeyExpr)
+///     .variant(prebindgen::fun!(keyexpr_new_try_from))
+///     .variant_self();
+/// ```
+#[derive(Clone)]
+pub struct ParamExpandDecl {
+    pub(crate) key: TypeKey,
+    pub(crate) variants: Vec<LocalVariant>,
+}
+
+impl ParamExpandDecl {
+    pub fn new(rust_type: syn::Type) -> Self {
+        Self {
+            key: TypeKey::from_type(&rust_type),
+            variants: Vec::new(),
+        }
+    }
+
+    /// Add a **build-from** arm: parameters of this type also accept the
+    /// named `#[prebindgen]` constructor's inputs, and Rust builds the value
+    /// in the same call. E.g. `keyexpr_new_try_from(&str)` lets every
+    /// function taking a `KeyExpr` also accept a plain `String`.
+    pub fn variant(mut self, ctor: FunctionDecl) -> Self {
+        self.variants.push(LocalVariant::Ctor(ctor.rust_ident));
+        self
+    }
+
+    /// Add the **existing-handle** arm: also accept an already-built value.
+    /// On its own this is simply the default (a bare handle), so declaring it
+    /// alone changes nothing; it earns its place next to build variants.
+    pub fn variant_self(mut self) -> Self {
+        self.variants.push(LocalVariant::SelfIdentity);
+        self
+    }
+}
+
+/// Declares a type's **default output boundary**: wherever the type is
+/// returned or handed to a callback, it is decomposed into this set of
+/// *fields*, all delivered in one FFI crossing — instead of an opaque handle
+/// the caller must then query field by field with more JNI calls. Applies to
+/// every function returning the type; a single function opts out or replaces
+/// the set via [`FunctionDecl::return_expand`] / [`FunctionDecl::return_expand_self`].
+///
+/// Build one with [`return_expand!`](crate::return_expand), add fields with
+/// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
+/// [`JniGen::return_expand`].
+///
+/// ```
+/// // A returned Sample crosses as { payload, kind } in one call:
+/// let _ = prebindgen::return_expand!(Sample)
+///     .field(prebindgen::fun!(sample_get_payload))
+///     .field(prebindgen::fun!(sample_get_kind));
+/// ```
+#[derive(Clone)]
+pub struct ReturnExpandDecl {
+    pub(crate) key: TypeKey,
+    pub(crate) fields: Vec<LocalField>,
+}
+
+impl ReturnExpandDecl {
+    pub fn new(rust_type: syn::Type) -> Self {
+        Self {
+            key: TypeKey::from_type(&rust_type),
+            fields: Vec::new(),
+        }
+    }
+
+    /// Add one field: the named `#[prebindgen]` reader's (`f(&Self) -> Field`)
+    /// value. The Kotlin field name is, in order of precedence: an explicit
+    /// `.name(...)` on `accessor`; the Kotlin name of the class member if the
+    /// same function is declared via [`PtrClassDecl::fun`] on this type (so a
+    /// getter that is both a method and a field is named once); else the
+    /// camel-cased Rust name.
+    pub fn field(mut self, accessor: FunctionDecl) -> Self {
+        self.fields.push(LocalField::Named(
+            accessor.rust_ident,
+            accessor.kotlin_name_override,
+        ));
+        self
+    }
+
+    /// Include the **handle itself** among the fields, so the consumer gets a
+    /// live, closeable object in addition to the read-out values (e.g. a
+    /// `Query` delivered with its fields *and* the handle it needs to reply).
+    /// Declare it **last**, after any field that decomposes a nested handle,
+    /// so the generated Rust moves the value only after those borrows.
+    pub fn field_self(mut self) -> Self {
+        self.fields.push(LocalField::SelfField);
+        self
     }
 }
 
@@ -500,9 +555,10 @@ impl From<ValueClassDecl> for ClassDecl {
 /// Build it from a bare Rust name with [`fun!`](crate::fun) and chain
 /// [`name`](Self::name) to set its Kotlin name. The `param_expand*` /
 /// `return_expand*` methods **override, for this one function**, the
-/// boundary defaults that its parameter/return types set on their
-/// `ptr_class!` — most often to opt back out (a lone `_self`) so this
-/// function sees the raw handle rather than the class's default expansion.
+/// boundary defaults its parameter/return types declare via
+/// [`param_expand!`](crate::param_expand) / [`return_expand!`](crate::return_expand)
+/// — most often to opt back out (a lone `_self`) so this function sees the
+/// raw handle rather than the type's default expansion.
 pub struct FunctionDecl {
     pub(crate) rust_ident: syn::Ident,
     pub(crate) kotlin_name_override: Option<String>,
@@ -528,7 +584,7 @@ impl FunctionDecl {
     }
 
     /// Override, for `param` of this function only, how that parameter is
-    /// built — the same idea as [`PtrClassDecl::default_param_expand`], but
+    /// built — the same idea as a [`ParamExpandDecl`] variant list, but
     /// scoped here and keyed by which parameter (a function may have several
     /// handle parameters, each overridden independently). Point at a
     /// constructor to offer it as a build option; call again (same or a
@@ -562,16 +618,17 @@ impl FunctionDecl {
         &mut self.input_overrides[idx].1
     }
 
-    /// Override this function's return decomposition — the same idea as
-    /// [`PtrClassDecl::default_return_expand`], but for this function alone.
-    /// Add one field per call.
+    /// Override this function's return decomposition — the same idea as a
+    /// [`ReturnExpandDecl`] field list, but for this function alone. Add one
+    /// field per call; the field name is `field`'s `.name(...)` or the
+    /// camel-cased Rust name.
     pub fn return_expand(mut self, field: FunctionDecl) -> Self {
-        let name = field
-            .kotlin_name_override
-            .unwrap_or_else(|| snake_to_camel(&field.rust_ident.to_string()));
         self.output_override
             .get_or_insert_with(Vec::new)
-            .push(LocalField::Named(field.rust_ident, name));
+            .push(LocalField::Named(
+                field.rust_ident,
+                field.kotlin_name_override,
+            ));
         self
     }
 
