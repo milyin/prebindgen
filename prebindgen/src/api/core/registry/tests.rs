@@ -249,7 +249,7 @@ fn duplicate_name_across_sources_names_both_crates() {
             },
             None,
         );
-        crate::api::utils::jsonl::write_to_jsonl_file(&dir.join("default_1.jsonl"), &[&record])
+        crate::api::utils::jsonl::write_to_jsonl_file(dir.join("default_1.jsonl"), &[&record])
             .unwrap();
         crate::Source::new(&dir)
     };

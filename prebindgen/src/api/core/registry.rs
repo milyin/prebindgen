@@ -269,48 +269,36 @@ impl<M> Default for Registry<M> {
     }
 }
 
+/// Payload of [`ScanError::DuplicateName`], boxed to keep the error enum
+/// small (`clippy::result_large_err`).
+#[derive(Debug)]
+pub struct DuplicateNameError {
+    pub name: syn::Ident,
+    pub first: SourceLocation,
+    pub second: SourceLocation,
+    /// Origin crates of the colliding items, when known (multi-source
+    /// ingestion via [`Registry::from_sources`]) — the `SourceLocation`
+    /// file paths are crate-relative, so with several sources they alone
+    /// may not identify the colliding crates.
+    pub first_crate: Option<String>,
+    pub second_crate: Option<String>,
+}
+
 /// Errors surfaced by the scan phase.
 #[derive(Debug)]
 pub enum ScanError {
-    DuplicateName {
-        name: syn::Ident,
-        first: SourceLocation,
-        second: SourceLocation,
-        /// Origin crates of the colliding items, when known (multi-source
-        /// ingestion via [`Registry::from_sources`]) — the `SourceLocation`
-        /// file paths are crate-relative, so with several sources they alone
-        /// may not identify the colliding crates.
-        first_crate: Option<String>,
-        second_crate: Option<String>,
-    },
-    ConflictingFunctionIntent {
-        name: syn::Ident,
-    },
-    ConflictingTypeIntent {
-        key: TypeKey,
-    },
-    DisallowedImplTrait {
-        ty: String,
-        loc: SourceLocation,
-    },
-    UnsupportedReceiver {
-        loc: SourceLocation,
-    },
-    UnsupportedParamPattern {
-        loc: SourceLocation,
-    },
+    DuplicateName(Box<DuplicateNameError>),
+    ConflictingFunctionIntent { name: syn::Ident },
+    ConflictingTypeIntent { key: TypeKey },
+    DisallowedImplTrait { ty: String, loc: SourceLocation },
+    UnsupportedReceiver { loc: SourceLocation },
+    UnsupportedParamPattern { loc: SourceLocation },
 }
 
 impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScanError::DuplicateName {
-                name,
-                first,
-                second,
-                first_crate,
-                second_crate,
-            } => {
+            ScanError::DuplicateName(e) => {
                 let in_crate = |c: &Option<String>| match c {
                     Some(c) => format!(" in crate `{c}`"),
                     None => String::new(),
@@ -319,11 +307,11 @@ impl fmt::Display for ScanError {
                     f,
                     "duplicate prebindgen name `{}`: first{} at {}, second{} at {} — prebindgen \
                      items live in one flat namespace across all sources; rename one of them",
-                    name,
-                    in_crate(first_crate),
-                    first,
-                    in_crate(second_crate),
-                    second
+                    e.name,
+                    in_crate(&e.first_crate),
+                    e.first,
+                    in_crate(&e.second_crate),
+                    e.second
                 )
             }
             ScanError::ConflictingFunctionIntent { name } => write!(
@@ -542,20 +530,10 @@ impl<M> Registry<M> {
                         self.item_origins.insert(ident, crate_name.clone());
                     }
                 }
-                Err(ScanError::DuplicateName {
-                    name,
-                    first,
-                    second,
-                    ..
-                }) => {
-                    let first_crate = self.item_origins.get(&name).cloned();
-                    return Err(ScanError::DuplicateName {
-                        name,
-                        first,
-                        second,
-                        first_crate,
-                        second_crate: Some(crate_name),
-                    });
+                Err(ScanError::DuplicateName(mut e)) => {
+                    e.first_crate = self.item_origins.get(&e.name).cloned();
+                    e.second_crate = Some(crate_name);
+                    return Err(ScanError::DuplicateName(e));
                 }
                 Err(e) => return Err(e),
             }
@@ -926,13 +904,13 @@ impl<M> Registry<M> {
         if let Some(first) = self.first_seen_loc(name) {
             // Origin crates are unknown at this level; `add_source` enriches
             // the error with them (the locations alone are crate-relative).
-            return Err(ScanError::DuplicateName {
+            return Err(ScanError::DuplicateName(Box::new(DuplicateNameError {
                 name: name.clone(),
                 first,
                 second: loc.clone(),
                 first_crate: None,
                 second_crate: None,
-            });
+            })));
         }
         Ok(())
     }
