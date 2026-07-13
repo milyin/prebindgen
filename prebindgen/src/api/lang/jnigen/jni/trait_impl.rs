@@ -278,6 +278,14 @@ impl JniGen {
                 names.insert(short);
             }
         }
+        // Rust-side-only boundary types are absent from the type table but
+        // still appear in emitted signatures (e.g. the `E` of a peeled
+        // `Result<T, E>`), so they need the same source-module qualification.
+        for key in self.rust_side_only_types() {
+            if let Some(short) = rust_short_name_opt(&key) {
+                names.insert(short);
+            }
+        }
         names
     }
 

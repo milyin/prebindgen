@@ -125,13 +125,11 @@ fn main() {
                 ),
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
-        .package(
-            package!("errors").class(
-                // `StorageError` is the `E` of a fallible `Result`; its
-                // boundary shape is declared with `return_expand!` below.
-                ptr_class!(StorageError).fun(fun!(storage_error_message).name("message")),
-            ),
-        )
+        .package(package!("errors").class(
+            // `StorageError` is the `E` of a fallible `Result`; its
+            // boundary shape is declared with `return_expand!` below.
+            ptr_class!(StorageError).fun(fun!(storage_error_message).name("message")),
+        ))
         // `StorageError`'s default return fields make the generated `onError`
         // handler receive the decomposed error: the `message` string (name
         // inherited from the class member) plus — via `.field_self()` — the
