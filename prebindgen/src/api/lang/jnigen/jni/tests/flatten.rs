@@ -46,7 +46,7 @@ fn inline_output_gets_own_builder() {
         // Default output: name + size (2 leaves ⇒ builder callback). The
         // `name` field inherits its Kotlin name from the class member; `size`
         // sets it explicitly — both paths resolve to the member-equal names.
-        .return_expand(
+        .expand(
             crate::return_expand!(ZThing)
                 .field(crate::fun!(z_thing_name))
                 .field(crate::fun!(z_thing_size).name("size")),
@@ -132,11 +132,11 @@ fn error_unwrap_universal_records() {
                 )
                 .fun(crate::fun!(z_fallible)),
         )
-        .return_expand(crate::return_expand!(ZDetail).field(crate::fun!(z_detail_code)))
+        .expand(crate::return_expand!(ZDetail).field(crate::fun!(z_detail_code)))
         // Canonical error decomposition: the owned error handle itself, its
         // message, and the Option-nested detail spliced to its code leaf.
         // Field names inherit from the class members.
-        .return_expand(
+        .expand(
             crate::return_expand!(ZErr)
                 .field_self()
                 .field(crate::fun!(z_err_message))
@@ -321,9 +321,7 @@ fn rust_side_only_error_type() {
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
         // No class declaration for ZErr anywhere — rust-side-only. The field
         // name is explicit (no class member to inherit from).
-        .return_expand(
-            crate::return_expand!(ZErr).field(crate::fun!(z_err_message).name("message")),
-        );
+        .expand(crate::return_expand!(ZErr).field(crate::fun!(z_err_message).name("message")));
 
     let dir = unique_test_dir("jnigen_rust_side_only_err");
     let _ = std::fs::remove_dir_all(&dir);
@@ -392,7 +390,7 @@ fn rust_side_only_input_type() {
         .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
-        .param_expand(crate::param_expand!(ZOpts).variant(crate::fun!(z_opts_new)));
+        .expand(crate::param_expand!(ZOpts).variant(crate::fun!(z_opts_new)));
 
     let dir = unique_test_dir("jnigen_rust_side_only_in");
     let _ = std::fs::remove_dir_all(&dir);
@@ -437,7 +435,7 @@ fn rust_side_only_variant_self_rejected() {
     let jni = JniGen::new()
         .set_source_module(syn::parse_quote!(myflat))
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
-        .param_expand(crate::param_expand!(ZOpts).variant_self());
+        .expand(crate::param_expand!(ZOpts).variant_self());
     let dir = unique_test_dir("jnigen_rso_self_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -457,7 +455,7 @@ fn rust_side_only_field_self_rejected() {
     let jni = JniGen::new()
         .set_source_module(syn::parse_quote!(myflat))
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
-        .return_expand(crate::return_expand!(ZThing).field_self());
+        .expand(crate::return_expand!(ZThing).field_self());
     let dir = unique_test_dir("jnigen_rso_self_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

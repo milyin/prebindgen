@@ -129,13 +129,20 @@ consumer's decl text is restatement.
 a second way to say the same thing), the two jobs were separated. A class decl
 now declares only the Kotlin surface; the boundary shape is declared once,
 per direction, at the generator level:
-`.param_expand(param_expand!(T).variant(fun!(ctor)).variant_self())` and
-`.return_expand(return_expand!(T).field(fun!(get)).field_self())`. A
+`.expand(param_expand!(T).variant(fun!(ctor)).variant_self())` and
+`.expand(return_expand!(T).field(fun!(get)).field_self())`. A
 `.field(fun!(x))` inherits its Kotlin name from the class member declaration
 of the same fn (explicit `.name()` wins), so the name is written once. The
 declarations remain order-independent: `JniGen` stores boundary decls raw and
 assembles the expansion sets at the point of use (the `Prebindgen` trait's
 `expansions()`/`deconstructors()` hooks now return by value).
+
+**Follow-up (2026-07-13):** the two acceptors were unified into a single
+`JniGen::expand(impl Into<ExpandDecl>)`, the direction carried by the decl
+object — the same pattern as `PackageDecl::class(impl Into<ClassDecl>)` with
+its four class-kind macros. The `param_expand!` / `return_expand!` macros are
+unchanged; `ExpandDecl` deliberately has no `From<syn::Type>` (a bare type
+doesn't say which direction it describes).
 
 ### I2. Order-independence advertised where it's cheap, absent where it's load-bearing
 

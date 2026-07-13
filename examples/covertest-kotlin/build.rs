@@ -135,7 +135,7 @@ fn main() {
         // inherited from the class member) plus — via `.field_self()` — the
         // error handle itself (an owned `StorageError` the handler must
         // `close()`).
-        .return_expand(
+        .expand(
             return_expand!(StorageError)
                 .field(fun!(storage_error_message))
                 .field_self(),
@@ -163,14 +163,14 @@ fn main() {
         )
         // `Summary` default input: rebuilt from the `of` constructor's
         // ingredients OR passed as an existing handle (runtime-selected).
-        .param_expand(
+        .expand(
             param_expand!(Summary)
                 .variant(fun!(summary_new))
                 .variant_self(),
         )
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
-        .return_expand(
+        .expand(
             return_expand!(Summary)
                 .field(fun!(summary_count))
                 .field(fun!(summary_total)),

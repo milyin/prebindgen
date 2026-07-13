@@ -279,7 +279,7 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 ///             .variant(prebindgen::fun!(keyexpr_new_try_from))
 ///             .variant_self(),
 ///     )
-///     .return_expand(prebindgen::return_expand!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
+///     .expand(prebindgen::return_expand!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
 /// ```
 #[derive(Clone)]
 pub struct JniGen {
@@ -379,12 +379,12 @@ pub struct JniGen {
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
 
     /// Type-level default input boundaries ([`ParamExpandDecl`], accepted by
-    /// [`JniGen::param_expand`]), stored raw — merged into the expansion set
+    /// [`JniGen::expand`]), stored raw — merged into the expansion set
     /// at the point of use so declarations stay order-independent.
     pub(crate) param_expand_decls: Vec<ParamExpandDecl>,
 
     /// Type-level default output boundaries ([`ReturnExpandDecl`], accepted
-    /// by [`JniGen::return_expand`]), stored raw — field names (member
+    /// by [`JniGen::expand`]), stored raw — field names (member
     /// inheritance) resolve at the point of use so declarations stay
     /// order-independent.
     pub(crate) return_expand_decls: Vec<ReturnExpandDecl>,

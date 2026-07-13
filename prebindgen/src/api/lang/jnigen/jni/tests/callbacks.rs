@@ -47,7 +47,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         )
         // Canonical output: handle (identity) + its string form — a callback
         // arg of ZThing decomposes into these 2 leaves.
-        .return_expand(
+        .expand(
             crate::return_expand!(ZThing)
                 .field_self()
                 .field(crate::fun!(z_thing_name)),
@@ -231,13 +231,13 @@ fn callback_root_identity_moved_after_nested_borrow() {
                 .fun(crate::fun!(z_parent_sub)),
         )
         // Child handle: canonical output = identity (clone) + its name string.
-        .return_expand(
+        .expand(
             crate::return_expand!(ZChild)
                 .field_self()
                 .field(crate::fun!(z_child_name)),
         )
         // Parent: a nested child-handle record, then its OWN root identity LAST.
-        .return_expand(
+        .expand(
             crate::return_expand!(ZParent)
                 .field(crate::fun!(z_parent_child))
                 .field_self(),
@@ -330,19 +330,19 @@ fn callback_double_option_unwrap_pipeline() {
                 )
                 .fun(crate::fun!(z_get)),
         )
-        .return_expand(
+        .expand(
             crate::return_expand!(ZKeyExpr)
                 .field_self()
                 .field(crate::fun!(z_keyexpr_as_str)),
         )
-        .return_expand(crate::return_expand!(ZTs).field(crate::fun!(z_ts_ntp64)))
-        .return_expand(
+        .expand(crate::return_expand!(ZTs).field(crate::fun!(z_ts_ntp64)))
+        .expand(
             crate::return_expand!(ZSample)
                 .field(crate::fun!(z_sample_key_expr))
                 .field(crate::fun!(z_sample_timestamp)),
         )
-        .return_expand(crate::return_expand!(ZErr).field(crate::fun!(z_err_payload)))
-        .return_expand(
+        .expand(crate::return_expand!(ZErr).field(crate::fun!(z_err_payload)))
+        .expand(
             crate::return_expand!(ZReply)
                 .field(crate::fun!(z_reply_zid))
                 .field(crate::fun!(z_reply_is_ok))

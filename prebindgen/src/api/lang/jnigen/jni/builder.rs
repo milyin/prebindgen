@@ -2,8 +2,7 @@
 //!
 //! [`JniGen::new`] starts from defaults; global settings are applied with
 //! the `set_*` methods (`config.rs`) and declarations are *accepted* as
-//! pre-built objects (`decl.rs`) via [`JniGen::package`],
-//! [`JniGen::param_expand`], [`JniGen::return_expand`],
+//! pre-built objects (`decl.rs`) via [`JniGen::package`], [`JniGen::expand`],
 //! [`JniGen::scalar_type_wrapper`], and [`JniGen::generic_type_wrapper`] —
 //! there is no fluent typestate cursor. Carved from the former monolithic
 //! JNI module; shares the `jni` namespace via `use super::*`.
@@ -458,37 +457,41 @@ impl JniGen {
 // ── Accepting boundary decls ─────────────────────────────────────────────
 
 impl JniGen {
-    /// Declare a type's **default input boundary** (a [`ParamExpandDecl`],
-    /// built with [`param_expand!`](crate::param_expand)): how a parameter of
-    /// that type may be supplied, as an OR-list of build variants. Applies to
-    /// every function with a parameter of the type, in any package; a single
-    /// function overrides via [`FunctionDecl::param_expand`] /
-    /// [`FunctionDecl::param_expand_self`].
-    pub fn param_expand(mut self, decl: ParamExpandDecl) -> Self {
-        assert!(
-            !decl.variants.is_empty(),
-            "param_expand!({}) declares no variants — add .variant(fun!(...)) and/or \
-             .variant_self()",
-            decl.key.as_str()
-        );
-        self.param_expand_decls.push(decl);
-        self
-    }
-
-    /// Declare a type's **default output boundary** (a [`ReturnExpandDecl`],
-    /// built with [`return_expand!`](crate::return_expand)): the AND-set of
-    /// fields a returned / callback-delivered value of that type decomposes
-    /// into. Applies to every function returning the type, in any package; a
-    /// single function overrides via [`FunctionDecl::return_expand`] /
-    /// [`FunctionDecl::return_expand_self`].
-    pub fn return_expand(mut self, decl: ReturnExpandDecl) -> Self {
-        assert!(
-            !decl.fields.is_empty(),
-            "return_expand!({}) declares no fields — add .field(fun!(...)) and/or \
-             .field_self()",
-            decl.key.as_str()
-        );
-        self.return_expand_decls.push(decl);
+    /// Declare a type's **default boundary behavior** — either of the two
+    /// [`ExpandDecl`] directions, the direction carried by the decl object
+    /// (the boundary-decl peer of [`PackageDecl::class`]):
+    ///
+    /// * [`param_expand!`](crate::param_expand) — the input side: how a
+    ///   parameter of the type may be supplied, as an OR-list of build
+    ///   variants.
+    /// * [`return_expand!`](crate::return_expand) — the output side: the
+    ///   AND-set of fields a returned / callback-delivered / `Result`-error
+    ///   value of the type decomposes into.
+    ///
+    /// Applies to every function mentioning the type, in any package; a
+    /// single function overrides via the [`FunctionDecl`] `param_expand*` /
+    /// `return_expand*` methods.
+    pub fn expand(mut self, decl: impl Into<ExpandDecl>) -> Self {
+        match decl.into() {
+            ExpandDecl::Param(decl) => {
+                assert!(
+                    !decl.variants.is_empty(),
+                    "param_expand!({}) declares no variants — add .variant(fun!(...)) and/or \
+                     .variant_self()",
+                    decl.key.as_str()
+                );
+                self.param_expand_decls.push(decl);
+            }
+            ExpandDecl::Return(decl) => {
+                assert!(
+                    !decl.fields.is_empty(),
+                    "return_expand!({}) declares no fields — add .field(fun!(...)) and/or \
+                     .field_self()",
+                    decl.key.as_str()
+                );
+                self.return_expand_decls.push(decl);
+            }
+        }
         self
     }
 

@@ -209,7 +209,7 @@ macro_rules! return_expand {
 /// type crosses the FFI boundary by default — accepted as which parameter
 /// variants, returned as which field set — is declared separately with
 /// [`param_expand!`](crate::param_expand) / [`return_expand!`](crate::return_expand)
-/// handed to [`JniGen::param_expand`] / [`JniGen::return_expand`]; any single
+/// handed to [`JniGen::expand`]; any single
 /// function can override those defaults locally (see [`FunctionDecl`]).
 ///
 /// ```
@@ -281,7 +281,7 @@ impl From<syn::Type> for PtrClassDecl {
 ///
 /// Build one with [`param_expand!`](crate::param_expand), add arms with
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
-/// it to [`JniGen::param_expand`]. With more than one arm the generated Kotlin
+/// it to [`JniGen::expand`]. With more than one arm the generated Kotlin
 /// selects the variant at runtime.
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
@@ -339,7 +339,7 @@ impl ParamExpandDecl {
 ///
 /// Build one with [`return_expand!`](crate::return_expand), add fields with
 /// [`field`](Self::field) / [`field_self`](Self::field_self), and hand it to
-/// [`JniGen::return_expand`].
+/// [`JniGen::expand`].
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: every returned /
@@ -393,6 +393,29 @@ impl ReturnExpandDecl {
     pub fn field_self(mut self) -> Self {
         self.fields.push(LocalField::SelfField);
         self
+    }
+}
+
+/// Unifies the two boundary decls into one type so [`JniGen::expand`] can
+/// expose a single entry point — the boundary-decl peer of [`ClassDecl`].
+/// Deliberately **no** `impl From<syn::Type> for ExpandDecl` — a bare
+/// `syn::Type` alone doesn't say which direction it describes, so every
+/// declaration names its direction via the matching constructor macro:
+/// `.expand(prebindgen::param_expand!(Summary)...)`,
+/// `.expand(prebindgen::return_expand!(Sample)...)`.
+pub enum ExpandDecl {
+    Param(ParamExpandDecl),
+    Return(ReturnExpandDecl),
+}
+
+impl From<ParamExpandDecl> for ExpandDecl {
+    fn from(d: ParamExpandDecl) -> Self {
+        Self::Param(d)
+    }
+}
+impl From<ReturnExpandDecl> for ExpandDecl {
+    fn from(d: ReturnExpandDecl) -> Self {
+        Self::Return(d)
     }
 }
 
