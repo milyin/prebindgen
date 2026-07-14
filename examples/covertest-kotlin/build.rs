@@ -30,6 +30,7 @@
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
+//! | namespace-relative member names (C1)  | `storage_len`→`len`, `stamp_secs`→`secs`, … (no `.name()`); `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `constant!` (bare = `#[prebindgen]` const) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
@@ -112,6 +113,7 @@ fn main() {
         .set_ptr_class_name_mangle(|n| n.to_string())
         .set_data_class_name_mangle(|n| n.to_string())
         .set_enum_name_mangle(|n| n.to_string())
+        .set_member_name_mangle(|n| n.to_string())
         // `Millis` newtype: a canonical single-value conversion to a bare
         // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
         // defined in the SEPARATE `covertest-helpers` source crate, proving
@@ -148,9 +150,7 @@ fn main() {
         // reassembled via a generated `fromParts`). A data class can carry
         // members like any re-enterable kind: the instance method's receiver
         // crosses as `this`'s field leaves (I5).
-        .package(
-            package!().class(data_class!(Payload).fun(fun!(payload_label_len).name("labelLen"))),
-        )
+        .package(package!().class(data_class!(Payload).fun(fun!(payload_label_len))))
         // ── Subpackage `model`: enum + value class + nested data class ──────
         .package(
             package!("model")
@@ -165,15 +165,15 @@ fn main() {
                 // surfaces as `List<ByteArray>`.
                 .class(
                     value_class!(Stamp)
-                        .fun(fun!(stamp_secs).name("secs"))
-                        .fun(fun!(stamp_nanos).name("nanos")),
+                        .fun(fun!(stamp_secs))
+                        .fun(fun!(stamp_nanos)),
                 ),
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(package!("errors").class(
             // `StorageError` is the `E` of a fallible `Result`; its
             // boundary shape is declared with `expand_return!` below.
-            ptr_class!(StorageError).fun(fun!(storage_error_message).name("message")),
+            ptr_class!(StorageError).fun(fun!(storage_error_message)),
         ))
         // `StorageError`'s default return fields make the generated `onError`
         // handler receive the decomposed error: the `message` string (name
@@ -195,9 +195,9 @@ fn main() {
                 .class(
                     ptr_class!(Summary)
                         .constructor(fun!(summary_new).name("of"))
-                        .fun(fun!(summary_count).name("count"))
-                        .fun(fun!(summary_total).name("total"))
-                        .fun(fun!(summary_scaled).name("scaled")),
+                        .fun(fun!(summary_count))
+                        .fun(fun!(summary_total))
+                        .fun(fun!(summary_scaled)),
                 )
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -249,9 +249,9 @@ fn main() {
                 )
                 .class(
                     ptr_class!(Storage)
-                        .fun(fun!(storage_len).name("len"))
-                        .fun(fun!(storage_contains).name("contains"))
-                        .constructor(fun!(storage_with_payload).name("withPayload")),
+                        .fun(fun!(storage_len))
+                        .fun(fun!(storage_contains))
+                        .constructor(fun!(storage_with_payload)),
                 )
                 // The callback-handler handles (single payload / whole batch / owned
                 // storage handle).

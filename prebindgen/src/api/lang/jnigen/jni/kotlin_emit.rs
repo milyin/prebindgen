@@ -309,7 +309,7 @@ impl JniGen {
                         item_fn,
                         registry,
                         &mut imports,
-                        Some(m.kotlin_name.as_str()),
+                        Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
                         class = class.member(f);
@@ -330,7 +330,7 @@ impl JniGen {
                             item_fn,
                             registry,
                             &mut imports,
-                            Some(m.kotlin_name.as_str()),
+                            Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
                             companion = companion.member(f);
@@ -503,7 +503,7 @@ impl JniGen {
                         item_fn,
                         registry,
                         &mut imports,
-                        Some(m.kotlin_name.as_str()),
+                        Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
                         class = class.member(f);
@@ -529,7 +529,7 @@ impl JniGen {
                             item_fn,
                             registry,
                             &mut imports,
-                            Some(m.kotlin_name.as_str()),
+                            Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
                             companion = companion.member(f);

@@ -65,6 +65,7 @@ impl JniGen {
             ptr_class_name_mangle: None,
             data_class_name_mangle: None,
             enum_name_mangle: None,
+            member_name_mangle: None,
             harness_name_mangle: None,
             types: HashMap::new(),
             packages: BTreeMap::new(),
@@ -141,6 +142,15 @@ impl JniGen {
     /// or `name` verbatim when unset.
     pub(crate) fn mangle_enum(&self, name: &str) -> String {
         match &self.enum_name_mangle {
+            Some(f) => f(name),
+            None => name.to_string(),
+        }
+    }
+    /// Apply the member mangle closure to `name` (the namespace-stripped
+    /// camelCase default), returning the closure result or `name` verbatim
+    /// when unset.
+    pub(crate) fn mangle_member(&self, name: &str) -> String {
+        match &self.member_name_mangle {
             Some(f) => f(name),
             None => name.to_string(),
         }
@@ -409,10 +419,7 @@ impl JniGen {
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
         for (decl, kind) in members {
             let rust_ident = decl.rust_ident.clone();
-            let kotlin_name = decl
-                .kotlin_name_override
-                .clone()
-                .unwrap_or_else(|| snake_to_camel(&rust_ident.to_string()));
+            let kotlin_name_override = decl.kotlin_name_override.clone();
             self.accept_fn_expands(decl);
             if kind == MemberKind::Constructor {
                 self.deconstructors
@@ -423,7 +430,7 @@ impl JniGen {
                 .or_default()
                 .push(ClassMember {
                     rust_ident,
-                    kotlin_name,
+                    kotlin_name_override,
                     kind,
                 });
         }
@@ -514,7 +521,26 @@ impl JniGen {
             .get(key)?
             .iter()
             .find(|m| &m.rust_ident == func)
-            .map(|m| m.kotlin_name.clone())
+            .map(|m| self.effective_member_name(key, m))
+    }
+
+    /// The effective Kotlin name of a class member, derived at point of
+    /// use (order-independent w.r.t. `set_member_name_mangle`): the
+    /// per-member `.name()` override verbatim, else the member-mangle hook
+    /// over the **namespace-relative** camelCase default — the class's
+    /// Rust-name prefix is stripped from the fn ident first
+    /// ([`strip_type_prefix`]), because a flat crate spells the type
+    /// namespace inside the ident while a Kotlin member already lives in
+    /// its class. No prefix match ⇒ the full ident camel-cases as before.
+    pub(crate) fn effective_member_name(&self, key: &TypeKey, m: &ClassMember) -> String {
+        if let Some(name) = &m.kotlin_name_override {
+            return name.clone();
+        }
+        let ident = m.rust_ident.to_string();
+        let short = rust_short_name(key);
+        let base = crate::api::lang::jnigen::util::strip_type_prefix(&ident, &short)
+            .unwrap_or(ident.as_str());
+        self.mangle_member(&snake_to_camel(base))
     }
 
     /// Whether `key` was declared as a class in some package (any of the four

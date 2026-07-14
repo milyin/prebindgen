@@ -285,7 +285,7 @@ pub(crate) fn build_typed_handle(
                 item_fn,
                 registry,
                 imports,
-                Some(m.kotlin_name.as_str()),
+                Some(ext.effective_member_name(key, m).as_str()),
                 None,
             ) {
                 companion = companion.member(f);
@@ -340,7 +340,7 @@ pub(crate) fn build_typed_handle(
                 item_fn,
                 registry,
                 imports,
-                Some(m.kotlin_name.as_str()),
+                Some(ext.effective_member_name(key, m).as_str()),
                 Some(key),
             ) {
                 class = class.member(f);

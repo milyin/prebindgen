@@ -197,3 +197,120 @@ fn generation_writes_are_order_free() {
     assert_eq!(rust1, rust2);
     assert_eq!(kt1, kt2);
 }
+
+/// C1: the default member name is namespace-relative — the class's Rust-name
+/// prefix is stripped from the fn ident (underscore-insensitively), the rest
+/// camel-cases. `.name()` stays verbatim; a no-prefix member falls back to
+/// the full camelCase ident.
+#[test]
+fn member_names_default_to_namespace_relative() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn key_expr_get_str(k: &KeyExpr) -> String { unimplemented!() }",
+        "pub fn keyexpr_intersects(k: &KeyExpr, s: String) -> bool { unimplemented!() }",
+        "pub fn shared_helper(k: &KeyExpr) -> i64 { unimplemented!() }",
+        "pub fn keyexpr_to_string(k: &KeyExpr) -> String { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("ke").class(
+            crate::ptr_class!(KeyExpr)
+                // Underscore-insensitive strip: `key_expr_` and `keyexpr_`
+                // both spell the class namespace.
+                .fun(crate::fun!(key_expr_get_str))
+                .fun(crate::fun!(keyexpr_intersects))
+                // No class prefix → full camelCase fallback.
+                .fun(crate::fun!(shared_helper))
+                // `.name()` is verbatim and wins over the derivation.
+                .fun(crate::fun!(keyexpr_to_string).name("toStr")),
+        ),
+    );
+    let dir = unique_test_dir("jnigen_member_names");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ac: String = all.split_whitespace().collect();
+    assert!(ac.contains("fungetStr("), "{all}");
+    assert!(ac.contains("funintersects("), "{all}");
+    assert!(ac.contains("funsharedHelper("), "{all}");
+    assert!(ac.contains("funtoStr("), "{all}");
+    // The wrapper tier lost the namespace; the extern tier (JNINative)
+    // keeps the full ident — that's the JNI symbol, not a member name.
+    let ke_file: String = paths
+        .iter()
+        .filter(|p| p.ends_with("ke.kt"))
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("")
+        .split_whitespace()
+        .collect();
+    assert!(!ke_file.contains("funkeyExprGetStr("), "{all}");
+    assert!(ac.contains("externalfunkeyExprGetStr("), "{all}");
+}
+
+/// C1: `set_member_name_mangle` — the sixth hook — receives the
+/// namespace-stripped camelCase default, skips `.name()`d members, and is
+/// order-independent (registered AFTER the `.package(...)` declaration).
+#[test]
+fn member_name_mangle_hook_applies_order_independently() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn thing_size(t: &ZThing) -> i64 { unimplemented!() }",
+        "pub fn thing_label(t: &ZThing) -> String { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("t").class(
+                crate::ptr_class!(ZThing)
+                    .name("Thing")
+                    .fun(crate::fun!(thing_size))
+                    .fun(crate::fun!(thing_label).name("label")),
+            ),
+        )
+        // Registered AFTER the declaration — must still apply (settings are
+        // order-independent by construction).
+        .set_member_name_mangle(|n| format!("{n}Native"));
+    let dir = unique_test_dir("jnigen_member_mangle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ac: String = all.split_whitespace().collect();
+    // Hook over the stripped default (`thing_size` → `size` → `sizeNative`);
+    // note the strip matched the RUST short name ZThing? No — `thing_size`
+    // has no `zthing` prefix, so the fallback full ident applies first:
+    // `thingSize` → `thingSizeNative`.
+    assert!(ac.contains("funthingSizeNative("), "{all}");
+    // `.name("label")` bypasses the hook entirely.
+    assert!(ac.contains("funlabel("), "{all}");
+    assert!(!ac.contains("funlabelNative("), "{all}");
+}

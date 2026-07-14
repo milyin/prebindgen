@@ -425,6 +425,27 @@ class's Rust name; it could strip `<class>_get_` / `<class>_` prefixes for
 members, or offer a member-name mangle hook (five global mangle hooks exist;
 none applies here).
 
+> **Resolution (2026-07-15): fixed — namespace-relative member names +
+> `set_member_name_mangle`.** The default rule is a statement about
+> namespaces, not string munging: a flat Rust crate spells the type
+> namespace inside the ident (`storage_len`, `keyexpr_intersects`)
+> precisely because flat FFI has no method syntax; a Kotlin member already
+> lives in its class's namespace, so the default removes exactly that
+> prefix — nothing else — and camel-cases the rest. Matching is
+> underscore-insensitive on both sides (class `KeyExpr` strips `keyexpr_*`
+> AND `key_expr_*`); no prefix ⇒ full-ident camelCase as before; the
+> extern/`JNINative` tier keeps the full ident (it's the JNI symbol).
+> `get_`/`new_` dropping is deliberately NOT automatic — zenoh itself keeps
+> `get` in `getSchema`/`getStr` and drops it in `id` — those are style
+> choices for `.name()` or the new **sixth mangle hook**
+> `set_member_name_mangle` (same `Fn(&str) -> String` shape as the other
+> five, receives the stripped camelCase default, skipped by `.name()`,
+> order-independent — `ClassMember` now stores the raw override and the
+> effective name derives at point of use; expand `.field(fun!(x))`
+> inheritance follows it automatically). Validated by byte-identical
+> regen after deleting the now-redundant `.name()`s: 10 in covertest, 13
+> in zenoh-flat-jni (the 45 remaining are genuine renames).
+
 ### C2. No bulk/pattern ignore
 
 53 hand-enumerated `ident!(encoding_const_*)` calls exist only to silence

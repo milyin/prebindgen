@@ -209,12 +209,14 @@ pub(crate) enum MemberKind {
 pub(crate) struct ClassMember {
     /// Rust function ident (`registry.functions[ident]`).
     pub rust_ident: syn::Ident,
-    /// Kotlin-visible name of this instance method / companion factory
-    /// (derived from `FunctionDecl.name()`, defaulting to
-    /// `snake_to_camel(rust_ident)`). A `expand_return!` `.field` referencing
-    /// the same underlying function inherits this name unless it sets its own
-    /// `.name()`; `expand_param!` variants reference the fn by ident only.
-    pub kotlin_name: String,
+    /// Per-member `.name()` override, stored RAW — the effective Kotlin
+    /// name is derived at point of use by [`JniGen::member_kotlin_name`]
+    /// (override, else member-mangle over the namespace-stripped camelCase
+    /// ident), keeping `set_member_name_mangle` order-independent. An
+    /// `expand_return!` `.field` referencing the same underlying function
+    /// inherits the effective name unless it sets its own `.name()`;
+    /// `expand_param!` variants reference the fn by ident only.
+    pub kotlin_name_override: Option<String>,
     /// Member kind (fun / constructor).
     pub kind: MemberKind,
 }
@@ -306,6 +308,10 @@ pub struct JniGen {
     /// Mangler for `EnumClassDecl`-declared C-like enum class
     /// names. Default = identity.
     pub(crate) enum_name_mangle: Option<NameMangle>,
+    /// Member-name mangle hook ([`JniGen::set_member_name_mangle`]) —
+    /// applied to the namespace-stripped camelCase default of every class
+    /// member without a per-member `.name()`.
+    pub(crate) member_name_mangle: Option<NameMangle>,
     /// Mangler for the framework "harness" class name —
     /// `"Native"` (the centralized JNI extern holder). Default when
     /// unset = prepend `"JNI"`, so you get `JNINative`. Override to

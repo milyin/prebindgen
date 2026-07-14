@@ -131,6 +131,21 @@ impl JniGen {
         self
     }
 
+    /// Set the closure that mangles **class member** names (instance
+    /// methods and companion factories). Receives the derived camelCase
+    /// name AFTER the class-namespace prefix was stripped from the fn
+    /// ident (`storage_len` on class `Storage` arrives as `"len"`); runs
+    /// only for members without a per-member `.name()` (which is always
+    /// verbatim). Default = identity. The sixth hook of the name-mangle
+    /// family, covering the one name tier the other five don't.
+    pub fn set_member_name_mangle<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&str) -> String + Send + Sync + 'static,
+    {
+        self.member_name_mangle = Some(Arc::new(f));
+        self
+    }
+
     /// Toggle the per-call locking the generator wraps around every handle a
     /// wrapper touches (which guards against a handle being `close()`d on
     /// another thread mid-call). Defaults to `true`; pass `false` only if
