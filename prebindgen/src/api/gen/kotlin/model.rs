@@ -409,6 +409,9 @@ pub struct KtProperty {
     pub ty: Option<KtType>,
     /// Raw initializer expression text.
     pub initializer: Option<String>,
+    /// Raw delegate expression text (`val x by <delegate>`, e.g.
+    /// `lazy { … }`). Mutually exclusive with `initializer`.
+    pub delegate: Option<String>,
     pub mutable: bool,
     pub vis: Vis,
     /// Inline annotations rendered before the keyword: `@Volatile internal var …`.
@@ -425,6 +428,7 @@ impl KtProperty {
             name: name.into(),
             ty: None,
             initializer: None,
+            delegate: None,
             mutable: false,
             vis: Vis::Default,
             annotations: Vec::new(),
@@ -444,6 +448,10 @@ impl KtProperty {
     }
     pub fn initializer(mut self, i: impl Into<String>) -> Self {
         self.initializer = Some(i.into());
+        self
+    }
+    pub fn delegate(mut self, d: impl Into<String>) -> Self {
+        self.delegate = Some(d.into());
         self
     }
     pub fn vis(mut self, v: Vis) -> Self {

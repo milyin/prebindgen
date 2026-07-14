@@ -778,10 +778,8 @@ pub(crate) fn render_wrapper_fn(
 /// Render one declared const (see `ConstDecl`): a **private** nullary helper
 /// — the standard wrapper fn over the synthetic getter signature
 /// ([`const_getter_fn`]), reused verbatim so the const's type crosses through
-/// the ordinary output machinery — plus the public eagerly-initialized `val`
-/// that calls it once with a throwing `JniErrorHandler` (dead code for
-/// infallible converts; a binding-layer failure surfaces as
-/// `IllegalStateException` via `error(...)`).
+/// the ordinary output machinery — plus the public lazily-initialized `val`
+/// that calls it once, on first use (see [`render_val_over_helper`]).
 pub(crate) fn render_const_val(
     ext: &JniGen,
     c: &syn::ItemConst,
@@ -795,8 +793,8 @@ pub(crate) fn render_const_val(
         .map(str::to_string)
         .unwrap_or_else(|| c.ident.to_string());
     let framework_line = format!(
-        "Mirrors the Rust `#[prebindgen]` const `{}` (read once through the \
-         generated JNI getter).",
+        "Mirrors the Rust `#[prebindgen]` const `{}` (read lazily, once, through \
+         the generated JNI getter on first use).",
         c.ident
     );
     let kdoc = crate::api::lang::jnigen::util::doc_string(&c.attrs)
@@ -807,9 +805,9 @@ pub(crate) fn render_const_val(
 
 /// Render one fn-sourced constant (see `ConstDecl::fun`):
 /// the declared nullary fn's ordinary wrapper demoted to a **private**
-/// helper, plus the public eagerly-initialized `val` holding its result —
-/// computed once, at package-file class-load, through the ordinary generated
-/// wrapper (one JNI call, exactly like a const getter).
+/// helper, plus the public lazily-initialized `val` holding its result —
+/// computed once, on first use, through the ordinary generated wrapper
+/// (one JNI call, exactly like a const getter).
 pub(crate) fn render_constant_fn_val(
     ext: &JniGen,
     f: &syn::ItemFn,
@@ -822,8 +820,8 @@ pub(crate) fn render_constant_fn_val(
         .map(str::to_string)
         .unwrap_or_else(|| f.sig.ident.to_string());
     let framework_line = format!(
-        "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated once through the \
-         generated JNI wrapper).",
+        "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated lazily, once, \
+         through the generated JNI wrapper on first use).",
         f.sig.ident
     );
     let kdoc = crate::api::lang::jnigen::util::doc_string(&f.attrs)
@@ -834,9 +832,9 @@ pub(crate) fn render_constant_fn_val(
 
 /// Render one expression-backed constant (see `ConstDecl::expr`):
 /// a private nullary helper over the synthetic `const_get_*` getter (seeded
-/// from the val name), plus the public eagerly-initialized `val` — the value
-/// is the binding-defined expression, evaluated once at package-file
-/// class-load through the generated getter.
+/// from the val name), plus the public lazily-initialized `val` — the value
+/// is the binding-defined expression, evaluated once, on first use, through
+/// the generated getter.
 pub(crate) fn render_const_expr_val(
     ext: &JniGen,
     decl: &crate::api::lang::jnigen::jni::decl::ConstExprDecl,
@@ -847,18 +845,19 @@ pub(crate) fn render_const_expr_val(
     let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
     let expr = decl.expr.to_token_stream();
     let kdoc = format!(
-        "Binding-defined constant: `{expr}` (evaluated once through the \
-         generated JNI getter)."
+        "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
+         the generated JNI getter on first use)."
     );
     render_val_over_helper(ext, helper, decl.kotlin_name.clone(), kdoc, imports)
 }
 
 /// Shared val-rendering core for both constant kinds (`ConstDecl` /
 /// `ConstDecl::fun`): demote the rendered wrapper to a private
-/// helper and emit the public eagerly-initialized `val` that calls it once
-/// with a throwing `JniErrorHandler` (dead code for infallible converts; a
-/// binding-layer failure surfaces as `IllegalStateException` via
-/// `error(...)`).
+/// helper and emit the public `val X: T by lazy { … }` that calls it once,
+/// on first use, with a throwing `JniErrorHandler` (dead code for infallible
+/// converts; a binding-layer failure surfaces as `IllegalStateException` via
+/// `error(...)` at first use). Lazy, not eager: a consts-heavy package must
+/// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
     ext: &JniGen,
     mut helper: kt::KtFun,
@@ -879,7 +878,7 @@ fn render_val_over_helper(
     let prop = kt::KtProperty::val(&val_name)
         .ty(val_ty)
         .vis(kt::Vis::Public)
-        .initializer(init)
+        .delegate(format!("lazy {{ {init} }}"))
         .kdoc(kdoc);
     Some((helper, prop))
 }

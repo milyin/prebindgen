@@ -1,6 +1,7 @@
 //! Declared-const emission: a `#[prebindgen] const` declared via
 //! `package!().constant(constant!(X))` surfaces as a Rust nullary JNI
-//! getter extern plus a Kotlin top-level eagerly-initialized `val`.
+//! getter extern plus a Kotlin top-level lazily-initialized `val`
+//! (`by lazy` — zero JNI calls at class-load, #58).
 
 use super::*;
 
@@ -77,10 +78,13 @@ fn declared_consts_emit_getter_and_val() {
         .map(|p| std::fs::read_to_string(p).unwrap())
         .expect("cfg package file");
     let pc: String = pkg.split_whitespace().collect();
-    // Public eagerly-initialized vals, typed from the output converters;
-    // the `.name()` override applies to the val, not the extern.
-    assert!(pc.contains("valMAX_LEN:Long=constGetMaxLen("), "{pkg}");
-    assert!(pc.contains("valHELLO:String=constGetGreeting("), "{pkg}");
+    // Public lazily-initialized vals (`by lazy` — zero JNI calls at
+    // class-load, #58), typed from the output converters; the `.name()`
+    // override applies to the val, not the extern.
+    assert!(pc.contains("valMAX_LEN:Longbylazy{constGetMaxLen("), "{pkg}");
+    assert!(pc.contains("valHELLO:Stringbylazy{constGetGreeting("), "{pkg}");
+    // No eager form anywhere in the package file.
+    assert!(!pc.contains("=constGet"), "{pkg}");
     // The helpers are private wrapper functions.
     assert!(pc.contains("privatefunconstGetMaxLen("), "{pkg}");
     // JNINative declares the extern halves.
@@ -126,7 +130,7 @@ fn undeclared_const_not_emitted() {
 }
 
 /// End-to-end for fn-sourced constants (`constant!(N).fun(…)`): a declared
-/// nullary fn surfaces as a private helper + public eagerly-initialized
+/// nullary fn surfaces as a private helper + public lazily-initialized
 /// `val` in the package file; the extern and the Rust wrapper are the
 /// ordinary declared-function ones (`myflat::tag()` call).
 #[test]
@@ -164,9 +168,9 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
         .map(|p| std::fs::read_to_string(p).unwrap())
         .expect("cfg package file");
     let pc: String = pkg.split_whitespace().collect();
-    // Public eagerly-initialized val named by `.name()`, over a PRIVATE
+    // Public lazily-initialized val named by `.name()`, over a PRIVATE
     // helper — no public callable fun.
-    assert!(pc.contains("valTHE_TAG:String=tag("), "{pkg}");
+    assert!(pc.contains("valTHE_TAG:Stringbylazy{tag("), "{pkg}");
     assert!(pc.contains("privatefuntag("), "{pkg}");
     assert!(!pc.contains("publicfuntag("), "{pkg}");
     // JNINative declares the ordinary extern.
@@ -292,7 +296,7 @@ fn constant_expr_emits_getter_and_val() {
         .expect("cfg package file");
     let pc: String = pkg.split_whitespace().collect();
     assert!(
-        pc.contains("valDEFAULT_TAG:String=constGetDefaultTag("),
+        pc.contains("valDEFAULT_TAG:Stringbylazy{constGetDefaultTag("),
         "{pkg}"
     );
     assert!(pc.contains("privatefunconstGetDefaultTag("), "{pkg}");
@@ -440,7 +444,7 @@ fn constant_with_source_calls_path_verbatim() {
         .expect("cfg package file");
     let pc: String = pkg.split_whitespace().collect();
     assert!(
-        pc.contains("valCOVER_VERSION:String=constGetCoverVersion("),
+        pc.contains("valCOVER_VERSION:Stringbylazy{constGetCoverVersion("),
         "{pkg}"
     );
 }

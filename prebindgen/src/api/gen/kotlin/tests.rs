@@ -560,3 +560,16 @@ fn multiline_kdoc() {
         "{src}"
     );
 }
+
+#[test]
+fn delegated_property_renders_by_clause() {
+    let p = KtProperty::val("MAGIC")
+        .ty(KtType::long())
+        .vis(Vis::Public)
+        .delegate("lazy { constGetMagic(handler) }");
+    let src = render::render_one(&p.into(), "p");
+    assert!(
+        src.contains("public val MAGIC: Long by lazy { constGetMagic(handler) }"),
+        "{src}"
+    );
+}
