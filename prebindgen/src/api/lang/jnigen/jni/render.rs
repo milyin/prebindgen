@@ -1466,7 +1466,10 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
                 // Nullable consume: tag the slot only when present (null-safe).
                 ParamMode::ConsumeNullable => (
                     p.kt_name.clone(),
-                    Some(format!("{n}?.let {{ it.ptr = it.ptr or 1L }}", n = p.kt_name)),
+                    Some(format!(
+                        "{n}?.let {{ it.ptr = it.ptr or 1L }}",
+                        n = p.kt_name
+                    )),
                     true,
                 ),
                 _ => return None,
