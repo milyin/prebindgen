@@ -78,7 +78,7 @@ pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &s
     );
 }
 
-/// Validates a [`PackageDecl::constant_fun`] declaration against the real
+/// Validates a [`ConstDecl::fun`] declaration against the real
 /// signature: the fn must be **nullary** (a constant has no inputs), must
 /// not return a `Result` (a domain-fallible value is not a constant — and
 /// the `val` initializer's throwing `JniErrorHandler` only fits the

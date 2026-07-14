@@ -149,6 +149,9 @@ pub(crate) struct IfaceSpec {
     /// twin still takes the leaf `params`; the `asRaw` proxy reassembles. Always
     /// forces a raw twin (see [`Self::needs_raw`]).
     pub typed_groups: Vec<TypedGroup>,
+    /// Interface-level KDoc, rendered on the TYPED declaration (the raw
+    /// twin is internal machinery). `None` = no doc.
+    pub kdoc: Option<String>,
 }
 
 impl IfaceSpec {
@@ -171,6 +174,7 @@ impl IfaceSpec {
             params,
             ret,
             descr,
+            kdoc: None,
             typed_groups: Vec::new(),
         }
     }
@@ -332,6 +336,9 @@ impl IfaceSpec {
         }
         m = m.returns(self.ret.clone());
         let mut i = kt::KtFunInterface::new(&self.name, m).vis(kt::Vis::Public);
+        if let Some(doc) = &self.kdoc {
+            i = i.kdoc(doc.clone());
+        }
         for tp in &self.type_params {
             i = i.type_param(tp);
         }
@@ -1092,13 +1099,22 @@ pub(crate) fn error_handler_iface_spec(
         decon_base_name(&subject_short(&spec.source), Some(decon))
     );
     let package = subject_package(ext, &spec.source);
-    Some(IfaceSpec::assemble(
+    let source_short = subject_short(&spec.source);
+    let mut iface = IfaceSpec::assemble(
         package,
         name,
         vec!["out R".to_string()],
         params,
         kt::KtType::var_r(),
-    ))
+    );
+    iface.kdoc = Some(format!(
+        "Error callback. Contract: `je != null` ⇒ a binding/system-tier failure — `je` is\n\
+         its message and the remaining parameters carry defaults; `je == null` ⇒ a domain\n\
+         error — the remaining parameters carry the decomposed `{source_short}`. The\n\
+         wrapper returns whatever `run` returns; throwing from `run` is safe (it executes\n\
+         after the native call has returned)."
+    ));
+    Some(iface)
 }
 
 /// The shared infallible handler `JniErrorHandler<out R> { run(je: String?): R }`
@@ -1109,13 +1125,21 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
         "je".to_string(),
         kt::KtType::string().nullable(),
     )];
-    IfaceSpec::assemble(
+    let mut iface = IfaceSpec::assemble(
         ext.package.clone(),
         "JniErrorHandler".to_string(),
         vec!["out R".to_string()],
         params,
         kt::KtType::var_r(),
-    )
+    );
+    iface.kdoc = Some(
+        "Error callback for wrappers without a declared error type. `je` is the\n\
+         binding/system failure message (any converter in the chain may fail). The\n\
+         wrapper returns whatever `run` returns; throwing from `run` is safe (it\n\
+         executes after the native call has returned)."
+            .to_string(),
+    );
+    iface
 }
 
 /// The onError handler spec for a declared function: its error plan's

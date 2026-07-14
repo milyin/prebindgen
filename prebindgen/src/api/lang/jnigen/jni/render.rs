@@ -803,7 +803,7 @@ pub(crate) fn render_const_val(
     render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
-/// Render one function-backed constant (see `PackageDecl::constant_fun`):
+/// Render one fn-sourced constant (see `ConstDecl::fun`):
 /// the declared nullary fn's ordinary wrapper demoted to a **private**
 /// helper, plus the public eagerly-initialized `val` holding its result —
 /// computed once, at package-file class-load, through the ordinary generated
@@ -830,7 +830,7 @@ pub(crate) fn render_constant_fn_val(
     render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
-/// Render one expression-backed constant (see `PackageDecl::constant_expr`):
+/// Render one expression-backed constant (see `ConstDecl::expr`):
 /// a private nullary helper over the synthetic `const_get_*` getter (seeded
 /// from the val name), plus the public eagerly-initialized `val` — the value
 /// is the binding-defined expression, evaluated once at package-file
@@ -852,7 +852,7 @@ pub(crate) fn render_const_expr_val(
 }
 
 /// Shared val-rendering core for both constant kinds (`ConstDecl` /
-/// `PackageDecl::constant_fun`): demote the rendered wrapper to a private
+/// `ConstDecl::fun`): demote the rendered wrapper to a private
 /// helper and emit the public eagerly-initialized `val` that calls it once
 /// with a throwing `JniErrorHandler` (dead code for infallible converts; a
 /// binding-layer failure surfaces as `IllegalStateException` via

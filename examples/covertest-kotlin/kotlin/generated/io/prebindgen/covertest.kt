@@ -349,6 +349,12 @@ internal object __StringFolderHolder {
     StringFolder { acc, element -> acc.add(element); acc }
 }
 
+/**
+ * Error callback for wrappers without a declared error type. `je` is the
+ * binding/system failure message (any converter in the chain may fail). The
+ * wrapper returns whatever `run` returns; throwing from `run` is safe (it
+ * executes after the native call has returned).
+ */
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
 }

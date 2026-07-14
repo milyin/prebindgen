@@ -1008,7 +1008,7 @@ impl Prebindgen for JniGen {
     /// and undeclared consts get the skip warning (see
     /// [`Prebindgen::declared_consts`]).
     /// The declared value types of every expression constant
-    /// (`PackageDecl::constant_expr`) — they have no `#[prebindgen]` item to
+    /// (`ConstDecl::expr`) — they have no `#[prebindgen]` item to
     /// scan, so the resolver is told directly to produce their output
     /// converters.
     fn required_output_types(&self) -> Vec<syn::Type> {
@@ -1098,12 +1098,12 @@ impl Prebindgen for JniGen {
         Ok(())
     }
 
-    /// Consts acknowledged-but-unexposed via [`JniGen::ignore_const`].
+    /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
     fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()
     }
 
-    /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
+    /// Fns acknowledged-but-unbound via [`JniGen::ignore`] — suppresses
     /// the registry's "skipping undeclared" warning, emits nothing.
     fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_fns.clone()
@@ -1121,7 +1121,7 @@ impl Prebindgen for JniGen {
     /// `expand_param!` ctors, called by the generated fold/unfold code).
     /// Routing both through the *helper* channel — not the ignore channel —
     /// makes a typo'd `fun!(…)` inside a decl a hard scan error
-    /// ([`crate::ScanError::DeclaredNotFound`]) instead of a stale-ignore
+    /// (`ScanError::DeclaredNotFound`) instead of a stale-ignore
     /// warning.
     /// Declared functions are subtracted: a fn that is also a real
     /// member/package fn keeps its extern. Type requirements come through
@@ -1158,7 +1158,7 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Types acknowledged-but-undeclared via [`JniGen::ignore_class`].
+    /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
     fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
     }

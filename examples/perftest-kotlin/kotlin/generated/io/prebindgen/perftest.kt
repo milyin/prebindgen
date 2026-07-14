@@ -203,6 +203,12 @@ internal object __PayloadFolderRawHolder {
     PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
 }
 
+/**
+ * Error callback for wrappers without a declared error type. `je` is the
+ * binding/system failure message (any converter in the chain may fail). The
+ * wrapper returns whatever `run` returns; throwing from `run` is safe (it
+ * executes after the native call has returned).
+ */
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
 }

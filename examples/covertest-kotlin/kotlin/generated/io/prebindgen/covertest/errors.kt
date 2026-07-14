@@ -46,6 +46,13 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+/**
+ * Error callback. Contract: `je != null` ⇒ a binding/system-tier failure — `je` is
+ * its message and the remaining parameters carry defaults; `je == null` ⇒ a domain
+ * error — the remaining parameters carry the decomposed `StorageError`. The
+ * wrapper returns whatever `run` returns; throwing from `run` is safe (it executes
+ * after the native call has returned).
+ */
 public fun interface StorageErrorHandler<out R> {
     public fun run(je: String?, message: String, handle: StorageError): R
 }

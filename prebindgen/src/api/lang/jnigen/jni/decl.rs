@@ -286,8 +286,15 @@ impl From<syn::Type> for PtrClassDecl {
 ///
 /// Build one with [`expand_param!`](crate::expand_param), add arms with
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
-/// it to [`JniGen::expand`]. With more than one arm the generated Kotlin
-/// selects the variant at runtime.
+/// it to [`JniGen::expand`].
+///
+/// **Generated shape** — this is a WIRE-level dispatch, not overloads: with
+/// more than one arm the parameter crosses as a selector `Int` plus one
+/// nullable slot per arm (`keyExprSel: Int, keyExpr0: String?,
+/// keyExpr1: KeyExpr?`), and the call site passes `(0, "key", null)`-style
+/// tuples. Idiomatic overloads / sealed types are a hand-written SDK tier's
+/// job on top; the wrapper's generated KDoc shape-notes document the exact
+/// slots per function.
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: the value is always
@@ -317,10 +324,12 @@ impl ExpandParamDecl {
         }
     }
 
-    /// Add a **build-from** arm: parameters of this type also accept the
-    /// named `#[prebindgen]` constructor's inputs, and Rust builds the value
-    /// in the same call. E.g. `keyexpr_new_try_from(&str)` lets every
-    /// function taking a `KeyExpr` also accept a plain `String`.
+    /// Add a **build-from** arm: parameters of this type also carry the
+    /// named `#[prebindgen]` constructor's inputs on the wire, and Rust
+    /// builds the value in the same call. E.g. `keyexpr_new_try_from(&str)`
+    /// gives every function taking a `KeyExpr` a String-carrying arm —
+    /// as a selector + nullable slot at the wire tier (see the type-level
+    /// docs for the exact generated shape), not as a Kotlin overload.
     pub fn variant(mut self, ctor: FunctionDecl) -> Self {
         self.variants.push(LocalVariant::Ctor(ctor.rust_ident));
         self
@@ -845,7 +854,7 @@ impl ConstDecl {
     /// exactly when nothing flows in (a unary conversion source must be a
     /// named callable — see [`ConvertDecl`]). Fns referenced only inside
     /// expressions are undeclared to the registry — acknowledge them via
-    /// [`JniGen::ignore_fun`] / [`JniGen::ignore_funs_where`].
+    /// [`JniGen::ignore`] (+ [`matching`](crate::lang::matching)).
     pub fn expr(self, ty: syn::Type, expr: syn::Expr) -> Self {
         self.set_source(ConstSource::Expr { ty, expr })
     }

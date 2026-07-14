@@ -169,14 +169,14 @@ pub(crate) struct PackageConfig {
     /// initialized through a generated nullary JNI getter. `MethodEntry`
     /// is reused as-is (rust ident + Kotlin-name override).
     pub constants: Vec<MethodEntry>,
-    /// Function-backed constants declared via [`PackageDecl::constant_fun`]:
+    /// Fn-sourced constants declared via [`ConstDecl::fun`]:
     /// nullary `#[prebindgen]` fns whose result surfaces as a top-level
     /// Kotlin `val` (eagerly initialized through the fn's ordinary generated
     /// wrapper) instead of a callable `fun`. Rust-side emission and the
     /// `JNINative` extern are the plain declared-function ones.
     pub constant_functions: Vec<MethodEntry>,
     /// Expression-backed constants declared via
-    /// [`PackageDecl::constant_expr`](super::jni::decl::PackageDecl::constant_expr):
+    /// [`ConstDecl::expr`](super::jni::decl::ConstDecl::expr):
     /// binding-defined expressions evaluated once inside a generated nullary
     /// getter (extern symbol seeded from the val name), surfacing as
     /// top-level Kotlin `val`s. Stored as the full decl — there is no Rust
@@ -419,7 +419,7 @@ pub struct JniGen {
     pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
 
     /// `#[prebindgen]` fns the binding deliberately does NOT wrap, declared
-    /// via [`JniGen::ignore_fun`]. Backs [`Prebindgen::ignored_functions`]:
+    /// via [`JniGen::ignore`]. Backs [`Prebindgen::ignored_functions`]:
     /// suppresses the registry's per-item "skipping undeclared" warning
     /// without emitting anything.
     pub(crate) ignored_fns: std::collections::HashSet<syn::Ident>,
@@ -431,7 +431,7 @@ pub struct JniGen {
     pub(crate) ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
 
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
-    /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
+    /// via [`JniGen::ignore`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
 
     /// `#[prebindgen]` consts the binding deliberately does NOT declare,

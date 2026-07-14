@@ -383,7 +383,7 @@ impl fmt::Display for ScanError {
 
 impl std::error::Error for ScanError {}
 
-/// Combined error surfaced by [`Registry::write_rust`].
+/// Combined error surfaced by [`Registry::resolve`] / [`Generation::write_rust`].
 #[derive(Debug)]
 pub enum WriteRustError {
     Scan(ScanError),

@@ -20,10 +20,10 @@
 //! last segment and lives in the directory of its parent package, holding all
 //! of that package's classes, enums, value-classes and free functions.
 //!
-//! Every `#[prebindgen]` function must be assigned a Kotlin home via
-//! `.method(...)` on either a typed-handle / data-class / enum config
-//! or on `package(...)`. Undeclared functions are skipped (see
-//! `Registry::scan_declared` warnings). There is no "orphan" bucket.
+//! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
+//! class member (`.fun`/`.constructor` on a class decl) or a free function
+//! (`PackageDecl::fun`). Undeclared functions are skipped with a build
+//! warning (`Registry::scan_declared`); there is no "orphan" bucket.
 
 use super::*;
 use crate::api::gen::{

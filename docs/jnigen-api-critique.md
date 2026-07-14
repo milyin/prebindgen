@@ -76,6 +76,15 @@ public fun sessionPut(
 (`0, "key", null`). No overloads, no sealed type. If this tier is meant to be
 hand-wrapped, the decl docs shouldn't be phrased in end-user ergonomics terms.
 
+**Resolution (2026-07-14): docs rephrased in wire terms.** The
+`ExpandParamDecl` type doc and `variant()` method doc now state the actual
+generated shape — the parameter crosses as a selector `Int` plus one nullable
+slot per arm (`keyExprSel: Int, keyExpr0: String?, keyExpr1: KeyExpr?`), and
+say explicitly that this is wire-level dispatch: idiomatic overloads / sealed
+types are a hand-written SDK tier's job. Since N1 the generated wrapper's KDoc
+shape-notes document the exact slots per function, so callers see the real
+prototype at the call site too. No behavior change.
+
 ### M4. Error support requires declaring a phantom class
 
 To make `Result<T, Error>` resolve, `Error` must be declared `ptr_class!(Error)`
@@ -220,11 +229,36 @@ renamed away long ago. The `JniGen` doc example (`jni/mod.rs`) uses
 `ZKeyExpr`/`z_keyexpr_as_str` — pre-de-prefix names that no longer exist
 anywhere in the workspace.
 
+**Resolution (2026-07-14): full sweep, verified by `cargo doc`.** The
+`kotlin_emit.rs` "via `.method(...)`" line now describes the current
+vocabulary (`.fun`/`.constructor` on a class decl, `PackageDecl::fun` for free
+functions). The `JniGen` doc example was already de-prefixed by an earlier
+round. Beyond the critique's two anchors, the sweep fixed every stale
+reference this cleanup's own renames introduced: `PackageDecl::constant_expr`
+/ `constant_fun` → `ConstDecl::expr` / `ConstDecl::fun` (I6),
+`JniGen::ignore_fun` / `ignore_class` / `ignore_const` /
+`ignore_funs_where` → `JniGen::ignore` / `matching` (I4), and
+`Registry::write_rust` → `Registry::resolve` / `Generation::write_rust` (I3).
+`cargo doc -p prebindgen` now reports zero unresolved intradoc links.
+
 ### M8. Generator internals leak into the public generated API
 
 `ErrorHandler.run(je: String?, message: String)` — `je` ("JNI error") is an
 internal abbreviation in a public Kotlin signature; capture fields `ze0`,
 `__cap.ze0!!` force-unwraps.
+
+**Resolution (2026-07-14): keep `je`, document the contract.** Renaming was
+rejected: `je` is load-bearing shorthand used consistently across the whole
+error model (docs, capture classes, generated Rust), and any longer name still
+needs the null-contract explanation to mean anything. Instead every generated
+handler `fun interface` now carries a KDoc stating the contract: `je != null`
+⇒ a binding/system-tier failure (`je` is its message, remaining parameters
+carry defaults); `je == null` ⇒ a domain error (remaining parameters carry the
+decomposed error, the typed handler's KDoc names the type); throwing from
+`run` is safe because it executes after the native call has returned. The
+`ze{i}` capture fields were already non-public (`internal … Capture` classes),
+so no generated *public* signature leaks them. Plumbing: `IfaceSpec.kdoc` →
+`KtFunInterface.kdoc`.
 
 ---
 
