@@ -10,6 +10,26 @@
 //! setting-derived value (class FQN, `FindClass` path, JNI extern symbol
 //! path) is computed at the point of use, so there is no stored derived
 //! state that could go stale.
+//!
+//! # Name-mangle hooks
+//!
+//! One uniform contract for all six hooks: **the hook receives the derived
+//! default name for its tier** — exactly what the generator would use if no
+//! hook were set — **and returns the final name; every default is the
+//! identity.** The input *domain* differs per tier (a fn name is camelCase,
+//! a class name is a Rust short name); the table states each:
+//!
+//! | hook | names | input (the derived default) | default |
+//! |---|---|---|---|
+//! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | `"JNINative"` | identity |
+//! | [`set_fun_name_mangle`](JniGen::set_fun_name_mangle) | JNI extern short names (scanned fns, synthetic `freePtr`) | camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
+//! | [`set_ptr_class_name_mangle`](JniGen::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | Rust type short name (`"KeyExpr"`) | identity |
+//! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` + `value_class` Kotlin classes | Rust type short name | identity |
+//! | [`set_enum_name_mangle`](JniGen::set_enum_name_mangle) | `enum_class` Kotlin classes | Rust type short name | identity |
+//! | [`set_member_name_mangle`](JniGen::set_member_name_mangle) | class members without a per-member `.name()` | namespace-stripped camelCase (`storage_len` on `Storage` → `"len"`) | identity |
+//!
+//! A per-decl `.name()` override is always verbatim and **bypasses** the
+//! hooks entirely.
 
 use super::*;
 
@@ -76,10 +96,16 @@ impl JniGen {
         self
     }
 
-    /// Set the closure that mangles the framework "harness" class name
-    /// `"Native"` (the centralized extern holder). Default = prepend
-    /// `"JNI"` (yielding `JNINative`). Affects the generated Kotlin class
-    /// name and the derived JNI extern symbol path on the Rust side.
+    /// Set the closure that renames the framework "harness" class (the
+    /// centralized extern holder). Receives the derived default
+    /// `"JNINative"`; default = identity (see the module-level table).
+    /// Affects the generated Kotlin class name and the derived JNI extern
+    /// symbol path on the Rust side.
+    ///
+    /// **Breaking change vs pre-0.6**: the hook used to receive the bare
+    /// stem `"Native"` with a hidden `JNI`-prepending default; it now
+    /// receives the full derived default `"JNINative"` and replaces it
+    /// wholesale (`|_| "MyNative".to_string()`).
     pub fn set_harness_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -91,7 +117,8 @@ impl JniGen {
     /// Set the closure that mangles function names. Called for every scanned
     /// `#[prebindgen]` free function and the synthetic `freePtr` destructor;
     /// receives the camelCased Kotlin-side name and returns the final form
-    /// (e.g. `"putPublisher"` → `"putPublisherViaJNI"`). Default = identity.
+    /// (e.g. `"putPublisher"` → `"putPublisherViaJNI"`). Default = identity
+    /// (see the module-level table).
     pub fn set_fun_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -101,7 +128,8 @@ impl JniGen {
     }
 
     /// Set the closure that mangles Kotlin ptr-class names declared via a
-    /// `PtrClassDecl`. Receives the Rust short name. Default = identity.
+    /// `PtrClassDecl`. Receives the Rust short name. Default = identity
+    /// (see the module-level table).
     pub fn set_ptr_class_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -112,7 +140,7 @@ impl JniGen {
 
     /// Set the closure that mangles Kotlin data-class names declared via a
     /// `DataClassDecl` (and value classes, which reuse this hook). Receives
-    /// the Rust short name. Default = identity.
+    /// the Rust short name. Default = identity (see the module-level table).
     pub fn set_data_class_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -122,7 +150,8 @@ impl JniGen {
     }
 
     /// Set the closure that mangles enum-class names declared via an
-    /// `EnumClassDecl`. Receives the Rust short name. Default = identity.
+    /// `EnumClassDecl`. Receives the Rust short name. Default = identity
+    /// (see the module-level table).
     pub fn set_enum_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -136,8 +165,9 @@ impl JniGen {
     /// name AFTER the class-namespace prefix was stripped from the fn
     /// ident (`storage_len` on class `Storage` arrives as `"len"`); runs
     /// only for members without a per-member `.name()` (which is always
-    /// verbatim). Default = identity. The sixth hook of the name-mangle
-    /// family, covering the one name tier the other five don't.
+    /// verbatim). Default = identity (see the module-level table). The
+    /// sixth hook of the name-mangle family, covering the one name tier
+    /// the other five don't.
     pub fn set_member_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,
@@ -208,10 +238,10 @@ impl JniGen {
     }
 
     /// Derived on demand: `"Java_" + package.replace('.', "_") + "_" +
-    /// mangle_harness("Native")` — the JNI extern symbol path of the
+    /// jni_native_class_name()` — the JNI extern symbol path of the
     /// centralized Native object every emitted wrapper hangs off.
     pub(crate) fn jni_class_path(&self) -> String {
-        let native_class = self.mangle_harness("Native");
+        let native_class = self.jni_native_class_name();
         if self.package.is_empty() {
             format!("Java_{}", native_class)
         } else {

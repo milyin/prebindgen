@@ -105,13 +105,14 @@ fn main() {
     let jni = JniGen::new()
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
-        // All five per-kind name-mangle hooks are registered. The harness hook
-        // is a real transform (`Native` → `CovNative`, an internal symbol so it
-        // needs no Kotlin-side coordination); the other four are the identity
+        // All six name-mangle hooks are registered. The harness hook is a
+        // real transform: it receives the derived default `JNINative` and
+        // replaces it wholesale with `CovNative` (an internal symbol, so no
+        // Kotlin-side coordination is needed); the other five are the identity
         // (the domain names are already the desired Kotlin names) — registering
         // them still exercises the customization API and its `Some(closure)`
         // path.
-        .set_harness_name_mangle(|n| format!("Cov{n}"))
+        .set_harness_name_mangle(|_| "CovNative".to_string())
         .set_fun_name_mangle(|n| n.to_string())
         .set_ptr_class_name_mangle(|n| n.to_string())
         .set_data_class_name_mangle(|n| n.to_string())
