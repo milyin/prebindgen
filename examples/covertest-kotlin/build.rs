@@ -5,8 +5,8 @@
 //! Unlike `examples/perftest-kotlin` (which maps only the lean perf surface in
 //! the performance-optimal shape), this binding maps the *same* flat library —
 //! including the coverage-only items in `perftest_flat::ext` — through the full
-//! adapter surface. `JniGen` accepts pre-built declaration objects (see
-//! `prebindgen::lang::jnigen::jni::decl`) rather than a fluent typestate
+//! adapter surface. `JniGen` accepts pre-built declaration objects (the
+//! `prebindgen::lang` decl types, built by the root decl macros) rather than a fluent typestate
 //! chain — each row below is a `PackageDecl`/`ConvertDecl`/etc. built
 //! independently and then handed to `jni.package(...)` / `jni.convert(...)`:
 //!

@@ -291,7 +291,9 @@ pub struct JniGen {
     /// (`JniGen::java_class_prefix()`), `_`-mangled for JNI extern idents
     /// (`JniGen::jni_class_path()`), dot-separated for Kotlin `package`
     /// declarations — is computed from this at the point of use.
-    pub package: String,
+    /// `pub(crate)`: consumers go through [`JniGen::set_package_prefix`],
+    /// whose trimming a direct field write would bypass.
+    pub(crate) package: String,
 
     /// Mangler for function names (scanned `#[prebindgen]` free fns and
     /// the synthetic `freePtr` destructor). Default = identity; in

@@ -624,6 +624,23 @@ output-side `Option<prim>` boxing deliberately not done.
 `set_package_prefix`'s trimming; `pub mod jni` exposes undocumented internals
 (`MethodEntry`, `WireBody` plumbing) beyond the curated `lang::` re-export list.
 
+> **Resolution (2026-07-15): fixed — one field sealed; the rest was
+> already sealed by earlier rounds.** Audit of the flagged leaks:
+> `source_module` no longer exists (deleted with `set_source_module`,
+> M5 follow-up); `WireBody` died with the wrapper tier (M5); the module
+> leak is structurally closed — `lib.rs` declares `pub(crate) mod api`, so
+> `lang::jnigen::jni` is not a public path and the ONLY public surface is
+> the curated `lang::{…}` re-export list (`MethodEntry`/`TypeConfig`'s pub
+> fields are crate-internal convention, unreachable from outside). The one
+> real remaining leak was `JniGen.package: pub String` — `JniGen` itself
+> is publicly reachable, so a direct field write compiled and bypassed
+> `set_package_prefix`'s trimming, corrupting every derived form
+> (FindClass paths, extern idents, Kotlin package lines). Sealed to
+> `pub(crate)`. Sweep of the rest of the curated list (decl types,
+> `Cbindgen`, `JniBindingError`, `CachedIfaceMethod`) found no other pub
+> fields; `KotlinFile`'s model fields are its deliberate surface. A stale
+> doc-comment path in covertest (`lang::jnigen::jni::decl`) corrected.
+
 ### N5. Decl-time validation gaps
 
 Nothing checks a `.fun()` target takes `&Self` first or a `.constructor()`
