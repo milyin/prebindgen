@@ -315,6 +315,43 @@ fn member_name_mangle_hook_applies_order_independently() {
     assert!(!ac.contains("funlabelNative("), "{all}");
 }
 
+/// #56: the harness hook follows the same contract as the other five —
+/// it receives the DERIVED DEFAULT for its tier (`"JNINative"`, an explicit
+/// default value, not a hidden `JNI`-prepend) and replaces it wholesale;
+/// the unset default is identity.
+#[test]
+fn harness_hook_receives_derived_default() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .set_harness_name_mangle(|n| {
+            assert_eq!(n, "JNINative", "hook must receive the derived default");
+            "MyNative".to_string()
+        })
+        .package(crate::package!("thing").fun(crate::fun!(z_ping)));
+    let dir = unique_test_dir("jnigen_harness_mangle");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    // The extern symbol path carries the replaced harness name.
+    assert!(rust.contains("Java_io_test_jni_MyNative_zPing"), "{rust}");
+    assert!(!rust.contains("JNINative"), "{rust}");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(all.contains("object MyNative"), "{all}");
+    assert!(!all.contains("JNINative"), "{all}");
+}
+
 /// C4: the Kotlin root is generator-owned — `write_kotlin` deletes and
 /// recreates it on every run, so stale files from a previous generation
 /// (renamed package, removed declaration) never linger and consumers need

@@ -155,20 +155,22 @@ impl JniGen {
             None => name.to_string(),
         }
     }
-    /// Apply the harness mangle closure to `name`. Defaults to
-    /// `|n| format!("JNI{n}")` when unset, so `mangle_harness("Native")`
-    /// yields `"JNINative"`.
+    /// Apply the harness mangle closure to `name`, returning the closure
+    /// result or `name` verbatim when unset — identity default, same
+    /// contract as the other five hooks.
     pub(crate) fn mangle_harness(&self, name: &str) -> String {
         match &self.harness_name_mangle {
             Some(f) => f(name),
-            None => format!("JNI{name}"),
+            None => name.to_string(),
         }
     }
-    /// The mangled name of the centralized Native object that hosts every
-    /// JNI `external fun`. Drives both the Kotlin class emission and the
-    /// JNI extern symbol path on the Rust side.
+    /// The name of the centralized Native object that hosts every JNI
+    /// `external fun`: the explicit default value `"JNINative"` run through
+    /// the harness mangle hook (identity when unset). Drives both the
+    /// Kotlin class emission and the JNI extern symbol path on the Rust
+    /// side.
     pub(crate) fn jni_native_class_name(&self) -> String {
-        self.mangle_harness("Native")
+        self.mangle_harness("JNINative")
     }
 
     /// Resolve a relative class name against [`Self::package`] +
