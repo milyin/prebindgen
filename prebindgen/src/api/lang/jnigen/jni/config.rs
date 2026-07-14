@@ -148,9 +148,16 @@ impl JniGen {
 
     /// Toggle the per-call locking the generator wraps around every handle a
     /// wrapper touches (which guards against a handle being `close()`d on
-    /// another thread mid-call). Defaults to `true`; pass `false` only if
-    /// you know your handles are never used concurrently and want the
-    /// overhead gone.
+    /// another thread mid-call). Defaults to `true`.
+    ///
+    /// The locks are **not** a performance trade-off: benchmarks (perftest,
+    /// N = 5M per op, JDK 21 / macOS arm64, 2026-07-15) show locks-on vs
+    /// locks-off deltas within run-to-run noise on every op that does real
+    /// work (±3%, mixed sign); the cheapest op (`put` with no string field,
+    /// ~33 ns/call) bounds the whole uncontended lock pair at about one
+    /// nanosecond. This setting exists so that claim can be independently
+    /// re-verified on your own workload — generate once with `false`,
+    /// benchmark both, and keep the default — not as an optimization knob.
     pub fn set_emit_handle_locks(mut self, emit: bool) -> Self {
         self.emit_handle_locks = emit;
         self

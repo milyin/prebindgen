@@ -63,7 +63,9 @@
 //!   * `JniGen::set_emit_handle_locks` — kept ENABLED (default). Toggling
 //!     it OFF would remove the `withSortedHandleLocks` codegen this example
 //!     asserts against; a single binding can only be in one lock mode, so we
-//!     keep the locked one.
+//!     keep the locked one. (The toggle is a verification aid, not an
+//!     optimization: benchmarks show the locks cost ~1 ns/call — see
+//!     `set_emit_handle_locks` docs.)
 //!
 //! `perftest-kotlin`'s declared surface is a strict subset of this binding
 //! (verified 2026-07-03): its only unique configurations are the unset

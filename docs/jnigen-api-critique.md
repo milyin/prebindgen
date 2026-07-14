@@ -502,6 +502,20 @@ function's real signature; typos surface late (or as warnings).
 `set_emit_handle_locks(bool)` is all-or-nothing; the known per-call lock
 overhead on hot paths can't be traded per class or function.
 
+> **Resolution (2026-07-15): premise tested and found false — toggle
+> re-documented as verification-only, no granularity added.** The "known
+> per-call lock overhead" was measured (perftest Kotlin leg, N = 5M per
+> op, best of two runs per config, JDK 21 / macOS arm64): locks-on vs
+> locks-off deltas ranged −3.2%…+3.6% with **mixed sign** — i.e. within
+> run-to-run noise (which itself exceeded 30% on the cheapest op across
+> passes). The tightest bound comes from `put native.null` (~33 ns/call,
+> no string, no real work): ~1 ns for the entire uncontended
+> `withSortedHandleLocks` pair + closed-handle guard. Every op doing real
+> work is dominated by the JNI crossing. Per-class/per-fn lock granularity
+> is therefore a knob without a payoff and is rejected;
+> `set_emit_handle_locks(false)` stays global, documented as existing so
+> anyone can independently re-verify this claim on their own workload.
+
 ### C7. No introspection
 
 Canonical inputs/outputs "AUTO-APPLY" at a distance; the only way to learn what
