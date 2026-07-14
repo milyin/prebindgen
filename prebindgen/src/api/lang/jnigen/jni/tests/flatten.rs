@@ -592,8 +592,10 @@ fn fn_expand_return_duplicate_rejected() {
 /// omission, no stale-ignore warning.
 #[test]
 fn typo_in_expand_decl_is_hard_error() {
-    use crate::api::core::registry::{ScanError, WriteRustError};
-    use crate::SourceLocation;
+    use crate::{
+        api::core::registry::{ScanError, WriteRustError},
+        SourceLocation,
+    };
     let loc = SourceLocation::default();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
