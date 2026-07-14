@@ -81,7 +81,7 @@ impl Source {
         /// Path to the directory containing prebindgen data files
         input_dir: P,
     ) -> Self {
-        // Backward-compatible constructor: defaults to asserting the `FEATURES` constant
+        // Shorthand for `builder(...).build()`: defaults to asserting the `FEATURES` constant
         Self::builder(input_dir).build()
     }
 
