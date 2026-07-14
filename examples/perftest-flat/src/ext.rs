@@ -547,7 +547,7 @@ pub fn storage_put_opt(s: &mut Storage, p: Option<Payload>) -> bool {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Consts — declared via `PackageDecl::constant`, surfacing as generated JNI
-// getters + eagerly-initialized Kotlin top-level `val`s.
+// getters + lazily-initialized Kotlin top-level `val`s.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The storage capacity limit advertised to bindings (a primitive const).
@@ -560,8 +560,8 @@ pub const COVER_TAG: &str = "covertest";
 
 /// The tag with a runtime-computed suffix — a constant value no Rust `const`
 /// can express (built through `format!`). Exercises
-/// `PackageDecl::constant_fun`: a nullary fn surfaced as an
-/// eagerly-initialized Kotlin top-level `val`.
+/// `PackageDecl::constant_fun`: a nullary fn surfaced as a
+/// lazily-initialized Kotlin top-level `val`.
 #[prebindgen]
 pub fn cover_tag_runtime() -> String {
     format!("{COVER_TAG}-runtime")

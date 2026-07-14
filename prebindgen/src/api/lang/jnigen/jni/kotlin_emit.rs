@@ -986,7 +986,7 @@ impl JniGen {
             }
         }
         // Declared consts: a private nullary helper + the public
-        // eagerly-initialized `val` (see `render_const_val`).
+        // lazily-initialized `val` (see `render_const_val`).
         for entry in &pkg_cfg.constants {
             let (item_const, _loc) = registry.consts.get(&entry.rust_ident).unwrap_or_else(|| {
                 panic!(
@@ -1008,7 +1008,7 @@ impl JniGen {
             }
         }
         // Function-backed constants: the declared nullary fn's ordinary
-        // wrapper demoted to a private helper + the public eagerly-initialized
+        // wrapper demoted to a private helper + the public lazily-initialized
         // `val` (see `render_constant_fn_val`). The JNINative extern and the
         // Rust wrapper are the plain declared-function ones.
         for entry in &pkg_cfg.constant_functions {
@@ -1035,7 +1035,7 @@ impl JniGen {
             }
         }
         // Expression constants: a private nullary helper over the synthetic
-        // getter + the public eagerly-initialized `val` (see
+        // getter + the public lazily-initialized `val` (see
         // `render_const_expr_val`). The value is a binding-defined expression
         // evaluated Rust-side (`prerequisites`).
         for decl in &pkg_cfg.constant_exprs {

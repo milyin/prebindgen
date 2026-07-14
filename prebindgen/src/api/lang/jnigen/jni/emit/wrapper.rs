@@ -34,10 +34,10 @@ pub(crate) fn const_getter_fn(c: &syn::ItemConst) -> syn::ItemFn {
     }
 }
 
-/// A const whose (peeled) type is a declared opaque handle is rejected: an
-/// eagerly-initialized shared closeable `val` is semantically wrong (whose
-/// `close()` is it?). Expose a factory function instead — the established
-/// idiom (e.g. zenoh's `encoding_const_*` companion factories).
+/// A const whose (peeled) type is a declared opaque handle is rejected: a
+/// shared closeable `val` is semantically wrong (whose `close()` is it?).
+/// Expose a factory function instead — the established idiom (e.g. zenoh's
+/// `encoding_const_*` companion factories).
 pub(crate) fn reject_handle_const(ext: &JniGen, c: &syn::ItemConst) {
     reject_handle_constant_type(ext, &c.ty, "const", &c.ident.to_string());
 }

@@ -457,6 +457,14 @@ fn render_property(p: &KtProperty, level: usize, imports: &mut ImportSet, out: &
     if let Some(ty) = &p.ty {
         out.push_str(&format!(": {}", ty.render(imports)));
     }
+    debug_assert!(
+        p.delegate.is_none() || p.initializer.is_none(),
+        "property `{}`: delegate and initializer are mutually exclusive",
+        p.name
+    );
+    if let Some(delegate) = &p.delegate {
+        out.push_str(&format!(" by {delegate}"));
+    }
     if let Some(init) = &p.initializer {
         out.push_str(&format!(" = {init}"));
     }

@@ -768,10 +768,11 @@ pub(crate) enum ConstSource {
     Expr { ty: syn::Type, expr: syn::Expr },
 }
 
-/// Declares one **constant** for emission: an eagerly-initialized top-level
-/// Kotlin `val` in its package's `.kt` file, initialized through a generated
-/// nullary JNI getter (the value type goes through the ordinary
-/// output-converter machinery, exactly like a function return).
+/// Declares one **constant** for emission: a lazily-initialized top-level
+/// Kotlin `val` (`by lazy`) in its package's `.kt` file, initialized on
+/// first use through a generated nullary JNI getter (the value type goes
+/// through the ordinary output-converter machinery, exactly like a function
+/// return; zero JNI calls at class-load).
 ///
 /// Build one with [`constant!`](crate::constant) — the ident is the `val`
 /// name — and pick the value source:

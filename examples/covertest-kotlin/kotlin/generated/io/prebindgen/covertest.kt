@@ -410,9 +410,9 @@ private fun constGetCoverMagic(onError: JniErrorHandler<Long>): Long {
 /**
  * The storage capacity limit advertised to bindings (a primitive const).
  *
- * Mirrors the Rust `#[prebindgen]` const `COVER_MAGIC` (read once through the generated JNI getter).
+ * Mirrors the Rust `#[prebindgen]` const `COVER_MAGIC` (read lazily, once, through the generated JNI getter on first use).
  */
-public val COVER_MAGIC: Long = constGetCoverMagic(JniErrorHandler { je -> error(je ?: "const COVER_MAGIC: JNI getter failed") })
+public val COVER_MAGIC: Long by lazy { constGetCoverMagic(JniErrorHandler { je -> error(je ?: "const COVER_MAGIC: JNI getter failed") }) }
 
 private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
@@ -424,15 +424,15 @@ private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
 /**
  * The coverage surface's tag string (a string const).
  *
- * Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read once through the generated JNI getter).
+ * Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read lazily, once, through the generated JNI getter on first use).
  */
-public val COVER_TAG: String = constGetCoverTag(JniErrorHandler { je -> error(je ?: "const COVER_TAG: JNI getter failed") })
+public val COVER_TAG: String by lazy { constGetCoverTag(JniErrorHandler { je -> error(je ?: "const COVER_TAG: JNI getter failed") }) }
 
 /**
  * The tag with a runtime-computed suffix — a constant value no Rust `const`
  * can express (built through `format!`). Exercises
- * `PackageDecl::constant_fun`: a nullary fn surfaced as an
- * eagerly-initialized Kotlin top-level `val`.
+ * `PackageDecl::constant_fun`: a nullary fn surfaced as a
+ * lazily-initialized Kotlin top-level `val`.
  */
 private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
@@ -444,12 +444,12 @@ private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
 /**
  * The tag with a runtime-computed suffix — a constant value no Rust `const`
  * can express (built through `format!`). Exercises
- * `PackageDecl::constant_fun`: a nullary fn surfaced as an
- * eagerly-initialized Kotlin top-level `val`.
+ * `PackageDecl::constant_fun`: a nullary fn surfaced as a
+ * lazily-initialized Kotlin top-level `val`.
  *
- * Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated once through the generated JNI wrapper).
+ * Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated lazily, once, through the generated JNI wrapper on first use).
  */
-public val COVER_TAG_RUNTIME: String = coverTagRuntime(JniErrorHandler { je -> error(je ?: "const COVER_TAG_RUNTIME: JNI getter failed") })
+public val COVER_TAG_RUNTIME: String by lazy { coverTagRuntime(JniErrorHandler { je -> error(je ?: "const COVER_TAG_RUNTIME: JNI getter failed") }) }
 
 private fun constGetCoverVersion(onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
@@ -458,8 +458,8 @@ private fun constGetCoverVersion(onError: JniErrorHandler<String>): String {
     return __ret
 }
 
-/** Binding-defined constant: `crate :: cover_version ()` (evaluated once through the generated JNI getter). */
-public val COVER_VERSION: String = constGetCoverVersion(JniErrorHandler { je -> error(je ?: "const COVER_VERSION: JNI getter failed") })
+/** Binding-defined constant: `crate :: cover_version ()` (evaluated lazily, once, through the generated JNI getter on first use). */
+public val COVER_VERSION: String by lazy { constGetCoverVersion(JniErrorHandler { je -> error(je ?: "const COVER_VERSION: JNI getter failed") }) }
 
 private fun constGetCoverBanner(onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
@@ -468,8 +468,8 @@ private fun constGetCoverBanner(onError: JniErrorHandler<String>): String {
     return __ret
 }
 
-/** Binding-defined constant: `format ! ("{COVER_TAG}:{COVER_MAGIC:#x}")` (evaluated once through the generated JNI getter). */
-public val COVER_BANNER: String = constGetCoverBanner(JniErrorHandler { je -> error(je ?: "const COVER_BANNER: JNI getter failed") })
+/** Binding-defined constant: `format ! ("{COVER_TAG}:{COVER_MAGIC:#x}")` (evaluated lazily, once, through the generated JNI getter on first use). */
+public val COVER_BANNER: String by lazy { constGetCoverBanner(JniErrorHandler { je -> error(je ?: "const COVER_BANNER: JNI getter failed") }) }
 
 internal object CovNative {
     init {
