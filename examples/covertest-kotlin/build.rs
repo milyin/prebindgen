@@ -134,11 +134,7 @@ fn main() {
         .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
         // `Percent`: fallible input via `TryFrom<i32>` (out-of-range values
         // from the JVM route the impl's Error to onError); infallible output.
-        .convert(
-            convert!(Percent)
-                .input(try_from!(i32))
-                .output(into!(i32)),
-        )
+        .convert(convert!(Percent).input(try_from!(i32)).output(into!(i32)))
         // `Label`: conversions are plain fns in THIS binding crate (see
         // src/lib.rs) — no #[prebindgen], no helper crate. The input is
         // FALLIBLE (`fn(String) -> Result<Label, String>`; the error type is
@@ -146,7 +142,11 @@ fn main() {
         // route the Err to onError.
         .convert(
             convert!(Label)
-                .input(try_from!(String).with(path!(crate::label_in)).error(ty!(String)))
+                .input(
+                    try_from!(String)
+                        .with(path!(crate::label_in))
+                        .error(ty!(String)),
+                )
                 .output(into!(String).with(path!(crate::label_out))),
         )
         // ── Base-package types ──────────────────────────────────────────────

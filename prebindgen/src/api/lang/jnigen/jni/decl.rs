@@ -178,9 +178,9 @@ macro_rules! expand_param {
 #[macro_export]
 macro_rules! from {
     ($t:ty) => {
-        $crate::lang::ConvertSourceDecl::from_type($crate::__macro_support::parse_type(
-            stringify!($t),
-        ))
+        $crate::lang::ConvertSourceDecl::from_type($crate::__macro_support::parse_type(stringify!(
+            $t
+        )))
     };
 }
 
@@ -205,9 +205,9 @@ macro_rules! try_from {
 #[macro_export]
 macro_rules! into {
     ($t:ty) => {
-        $crate::lang::ConvertSourceDecl::into_type($crate::__macro_support::parse_type(
-            stringify!($t),
-        ))
+        $crate::lang::ConvertSourceDecl::into_type($crate::__macro_support::parse_type(stringify!(
+            $t
+        )))
     };
 }
 
@@ -1452,7 +1452,6 @@ impl ConvertDecl {
         let spec = self.spec_of(ConvertDirection::Output, "output", src.into());
         self.set_output(spec)
     }
-
 }
 
 /// Rejects a `convert!` declaration on a Rust **builtin** type: builtins
