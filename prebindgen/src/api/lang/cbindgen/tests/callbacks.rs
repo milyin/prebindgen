@@ -17,7 +17,7 @@ fn takeable_callback_param() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(func), loc.clone()),
     ])
@@ -31,7 +31,7 @@ fn takeable_callback_param() {
         .takeable_param(0)
         .function(syn::parse_quote!(z_declare_sub));
 
-    let src = write(&cbindgen, &mut registry, "takeable");
+    let src = write(cbindgen, registry, "takeable");
     let compact: String = src.split_whitespace().collect();
 
     // Closure `call` receives the sample as an owned pointer.
@@ -77,7 +77,7 @@ fn callback_subscriber_emits_closure_structs() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -101,7 +101,7 @@ fn callback_subscriber_emits_closure_structs() {
         .base_name("z_closure_drop_t")
         .function(syn::parse_quote!(z_sub));
 
-    let src = write(&cbindgen, &mut registry, "cb_sub");
+    let src = write(cbindgen, registry, "cb_sub");
     let compact: String = src.split_whitespace().collect();
 
     // Closure structs: sample carries the owned handle wire; drop is zero-arg.
@@ -173,7 +173,7 @@ fn callback_scalar_arg_not_module_qualified() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -189,7 +189,7 @@ fn callback_scalar_arg_not_module_qualified() {
         .base_name("z_closure_value_t")
         .function(syn::parse_quote!(z_on_value));
 
-    let src = write(&cbindgen, &mut registry, "cb_scalar");
+    let src = write(cbindgen, registry, "cb_scalar");
     let compact: String = src.split_whitespace().collect();
 
     // The bug was `f64` qualified to `zenoh_flat::f64`.
@@ -218,7 +218,7 @@ fn callback_struct_name_defaults_generically() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -240,7 +240,7 @@ fn callback_struct_name_defaults_generically() {
         .callback(syn::parse_quote!(impl Fn(ZSample) + Send + Sync + 'static))
         .function(syn::parse_quote!(z_sub2));
 
-    let src = write(&cbindgen, &mut registry, "cb_default");
+    let src = write(cbindgen, registry, "cb_default");
     let compact: String = src.split_whitespace().collect();
 
     // Composed from the arg's configured C name `z_sample_t`.

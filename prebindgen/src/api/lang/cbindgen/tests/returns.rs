@@ -10,7 +10,7 @@ fn result_unit_omits_out_param() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -24,7 +24,7 @@ fn result_unit_omits_out_param() {
         .error()
         .function(syn::parse_quote!(z_unit_op));
 
-    let src = write(&cbindgen, &mut registry, "resultunit");
+    let src = write(cbindgen, registry, "resultunit");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("extern\"C\"fnz_unit_op"), "{src}");
@@ -47,7 +47,7 @@ fn result_string_uses_owned_string_wire() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -61,7 +61,7 @@ fn result_string_uses_owned_string_wire() {
         .error()
         .function(syn::parse_quote!(z_config_get_json));
 
-    let src = write(&cbindgen, &mut registry, "result_string");
+    let src = write(cbindgen, registry, "result_string");
     let compact: String = src.split_whitespace().collect();
 
     assert!(!compact.contains("cbg_string_t"), "{src}");
@@ -93,7 +93,7 @@ fn option_string_returns_pointer_null_for_none() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -104,7 +104,7 @@ fn option_string_returns_pointer_null_for_none() {
         .function(syn::parse_quote!(z_encoding_schema))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "option_string");
+    let src = write(cbindgen, registry, "option_string");
     let compact: String = src.split_whitespace().collect();
 
     // Plain-Option wrapper: `char*` return, no out-param, no error param.
@@ -136,7 +136,7 @@ fn result_option_uses_out_param() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -152,7 +152,7 @@ fn result_option_uses_out_param() {
         .error()
         .function(syn::parse_quote!(z_get_opt));
 
-    let src = write(&cbindgen, &mut registry, "result_option");
+    let src = write(cbindgen, registry, "result_option");
     let compact: String = src.split_whitespace().collect();
 
     // Value-wire shape: bool return, pointer-to-pointer out-param, error param.
@@ -183,7 +183,7 @@ fn vec_string_returns_ptr_and_len() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -194,7 +194,7 @@ fn vec_string_returns_ptr_and_len() {
         .function(syn::parse_quote!(z_hello_locators))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "vec_string");
+    let src = write(cbindgen, registry, "vec_string");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("extern\"C\"fnz_hello_locators"), "{src}");
@@ -231,7 +231,7 @@ fn vec_u8_returns_scalar_array() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -242,7 +242,7 @@ fn vec_u8_returns_scalar_array() {
         .function(syn::parse_quote!(z_zbytes_to_bytes))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "vec_u8");
+    let src = write(cbindgen, registry, "vec_u8");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("->*mutu8"), "{src}");
@@ -259,7 +259,7 @@ fn cow_u8_returns_scalar_array() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -270,7 +270,7 @@ fn cow_u8_returns_scalar_array() {
         .function(syn::parse_quote!(z_zbytes_as_bytes))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "cow_u8");
+    let src = write(cbindgen, registry, "cow_u8");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("->*mutu8"), "{src}");
@@ -292,7 +292,7 @@ fn result_vec_uses_out_params() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -308,7 +308,7 @@ fn result_vec_uses_out_params() {
         .error()
         .function(syn::parse_quote!(z_things));
 
-    let src = write(&cbindgen, &mut registry, "result_vec");
+    let src = write(cbindgen, registry, "result_vec");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("->bool"), "{src}");
@@ -333,7 +333,7 @@ fn option_vec_uses_present_and_out() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -346,7 +346,7 @@ fn option_vec_uses_present_and_out() {
         .function(syn::parse_quote!(z_maybe_things))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "option_vec");
+    let src = write(cbindgen, registry, "option_vec");
     let compact: String = src.split_whitespace().collect();
 
     // `bool` return is the `present` flag; the array rides `out`/`out_len`.
@@ -371,7 +371,7 @@ fn result_option_vec_full() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -387,7 +387,7 @@ fn result_option_vec_full() {
         .error()
         .function(syn::parse_quote!(z_full));
 
-    let src = write(&cbindgen, &mut registry, "result_option_vec");
+    let src = write(cbindgen, registry, "result_option_vec");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("->bool"), "{src}");
@@ -412,7 +412,7 @@ fn result_pointer_returns_null_on_error() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -428,7 +428,7 @@ fn result_pointer_returns_null_on_error() {
         .error()
         .function(syn::parse_quote!(z_keyexpr_try_from));
 
-    let src = write(&cbindgen, &mut registry, "ptr_null");
+    let src = write(cbindgen, registry, "ptr_null");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("->*mutz_keyexpr"), "{src}");
@@ -450,7 +450,7 @@ fn borrowed_ref_output_is_const_non_owning() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -462,7 +462,7 @@ fn borrowed_ref_output_is_const_non_owning() {
         .function(syn::parse_quote!(z_sample_payload))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "borrow_ret");
+    let src = write(cbindgen, registry, "borrow_ret");
     let compact: String = src.split_whitespace().collect();
 
     // Const, non-owning return; the return path goes through the reinterpret
@@ -488,7 +488,7 @@ fn borrowed_option_ref_output_nullable() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -500,7 +500,7 @@ fn borrowed_option_ref_output_nullable() {
         .function(syn::parse_quote!(z_sample_timestamp))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "borrow_opt_ret");
+    let src = write(cbindgen, registry, "borrow_opt_ret");
     let compact: String = src.split_whitespace().collect();
 
     // Nullable const loaned pointer rides the return (no out-param needed:

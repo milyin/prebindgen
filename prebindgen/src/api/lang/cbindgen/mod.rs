@@ -191,7 +191,8 @@ enum ErrRoute<'a> {
 
 /// C / cbindgen language adapter. Build it with [`Cbindgen::new`], declare the
 /// items to convert with the fluent methods, then drive it through
-/// [`Registry::write_rust`](crate::core::Registry::write_rust).
+/// [`Registry::resolve`](crate::core::Registry::resolve) →
+/// [`Generation::write_rust`](crate::core::Generation::write_rust).
 #[derive(Default)]
 pub struct Cbindgen {
     /// Module path the original `#[prebindgen]` items live under. Used to

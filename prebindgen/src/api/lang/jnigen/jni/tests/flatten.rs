@@ -19,7 +19,7 @@ fn inline_output_gets_own_builder() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -55,9 +55,8 @@ fn inline_output_gets_own_builder() {
     let dir = unique_test_dir("jnigen_inline_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
@@ -70,7 +69,7 @@ fn inline_output_gets_own_builder() {
     );
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let all: String = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -116,7 +115,7 @@ fn error_unwrap_universal_records() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -144,9 +143,8 @@ fn error_unwrap_universal_records() {
     let dir = unique_test_dir("jnigen_err_universal");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
@@ -173,7 +171,7 @@ fn error_unwrap_universal_records() {
     assert!(rc.contains("env.new_string(\"\")"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let all: String = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -237,7 +235,7 @@ fn method_constructor_and_inline_field_self() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -262,11 +260,10 @@ fn method_constructor_and_inline_field_self() {
     let dir = unique_test_dir("jnigen_method_ctor");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let all: String = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -308,7 +305,7 @@ fn rust_side_only_error_type() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -320,9 +317,8 @@ fn rust_side_only_error_type() {
     let dir = unique_test_dir("jnigen_rust_side_only_err");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
@@ -332,7 +328,7 @@ fn rust_side_only_error_type() {
     assert!(!rc.contains("ZErr_1freePtr"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let all: String = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -377,7 +373,7 @@ fn rust_side_only_input_type() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -387,16 +383,15 @@ fn rust_side_only_input_type() {
     let dir = unique_test_dir("jnigen_rust_side_only_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
     // The wrapper folds the ctor Rust-side.
     assert!(rc.contains("myflat::z_opts_new("), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let all: String = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
@@ -421,7 +416,7 @@ fn rust_side_only_variant_self_rejected() {
     let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }").unwrap();
-    let mut registry =
+    let registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
     let jni = JniGen::new()
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
@@ -429,7 +424,9 @@ fn rust_side_only_variant_self_rejected() {
     let dir = unique_test_dir("jnigen_rso_self_in");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+    let _ = registry
+        .resolve(jni)
+        .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
 /// `field_self()` on a type with no class declaration is structurally
@@ -439,7 +436,7 @@ fn rust_side_only_variant_self_rejected() {
 fn rust_side_only_field_self_rejected() {
     let loc = myflat_loc();
     let f: syn::ItemFn = syn::parse_str("pub fn z_make() -> ZThing { unimplemented!() }").unwrap();
-    let mut registry =
+    let registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
     let jni = JniGen::new()
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
@@ -447,7 +444,9 @@ fn rust_side_only_field_self_rejected() {
     let dir = unique_test_dir("jnigen_rso_self_out");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+    let _ = registry
+        .resolve(jni)
+        .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
 /// Per-fn `.expand_param(name, expand_param!(T))`: the decl's `T` must match
@@ -467,7 +466,7 @@ fn fn_expand_param_type_mismatch_rejected() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
@@ -481,9 +480,7 @@ fn fn_expand_param_type_mismatch_rejected() {
     let dir = unique_test_dir("jnigen_fn_param_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect_err("type mismatch must fail");
+    let err = registry.resolve(jni).expect_err("type mismatch must fail");
     let msg = format!("{err}");
     assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
 }
@@ -504,7 +501,7 @@ fn fn_expand_return_type_mismatch_rejected() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
@@ -515,9 +512,7 @@ fn fn_expand_return_type_mismatch_rejected() {
     let dir = unique_test_dir("jnigen_fn_return_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect_err("type mismatch must fail");
+    let err = registry.resolve(jni).expect_err("type mismatch must fail");
     let msg = format!("{err}");
     assert!(msg.contains("ZOther") && msg.contains("ZThing"), "{msg}");
 }
@@ -538,7 +533,7 @@ fn fn_expand_param_unknown_param_rejected() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
@@ -550,9 +545,7 @@ fn fn_expand_param_unknown_param_rejected() {
     let dir = unique_test_dir("jnigen_fn_param_unknown");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let err = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect_err("unknown param must fail");
+    let err = registry.resolve(jni).expect_err("unknown param must fail");
     assert!(format!("{err}").contains("typo"), "{err}");
 }
 
@@ -576,7 +569,7 @@ fn typo_in_expand_decl_is_hard_error() {
     let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
-    let mut registry =
+    let registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -587,7 +580,7 @@ fn typo_in_expand_decl_is_hard_error() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let err = registry
-        .write_rust(&jni, dir.join("gen.rs"))
+        .resolve(jni)
         .expect_err("typo'd expand accessor must fail the scan");
     match err {
         WriteRustError::Scan(ScanError::DeclaredNotFound { entries }) => {
@@ -619,7 +612,7 @@ fn ignore_funs_where_acknowledges_matching_family() {
             (syn::Item::Fn(f), loc.clone())
         })
         .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_len)))
@@ -635,9 +628,8 @@ fn ignore_funs_where_acknowledges_matching_family() {
     let dir = unique_test_dir("jnigen_ignore_funs_where");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("Java_io_test_jni_JNINative_zLen"), "{rust}");
     assert!(!rust.contains("detailConstA"), "{rust}");

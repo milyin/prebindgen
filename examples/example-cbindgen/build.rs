@@ -122,12 +122,14 @@ fn generate_ffi_bindings() -> PathBuf {
         cbindgen = cbindgen.function(function).panic();
     }
 
-    let mut registry =
+    let registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
     // Always written to OUT_DIR under a stable name too, so the commented-out
     // `include!(OUT_DIR ...)` alternative in `lib.rs` works for any target.
     let out_file = registry
-        .write_rust(&cbindgen, "example_flat.rs")
+        .resolve(cbindgen)
+        .expect("resolve prebindgen items")
+        .write_rust("example_flat.rs")
         .expect("write generated bindings");
 
     // Publish the generated Rust into the crate tree under a per-target-arch name

@@ -28,7 +28,7 @@ fn const_items() -> Vec<(syn::Item, crate::SourceLocation)> {
 /// private helpers, and `JNINative` declares the matching `external fun`s.
 #[test]
 fn declared_consts_emit_getter_and_val() {
-    let mut registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg")
@@ -39,9 +39,8 @@ fn declared_consts_emit_getter_and_val() {
     let dir = unique_test_dir("jnigen_consts_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // Path-alias const re-emission (the initializer tokens are never
     // copied — they may reference source-crate internals) + one extern
@@ -71,7 +70,7 @@ fn declared_consts_emit_getter_and_val() {
     assert!(rust.contains("myflat::MAX_LEN"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let pkg = paths
         .iter()
         .find(|p| p.ends_with("io/test/jni/cfg.kt"))
@@ -100,7 +99,7 @@ fn declared_consts_emit_getter_and_val() {
 /// acknowledges it without emitting.
 #[test]
 fn undeclared_const_not_emitted() {
-    let mut registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -110,16 +109,15 @@ fn undeclared_const_not_emitted() {
     let dir = unique_test_dir("jnigen_consts_undeclared");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("pub const MAX_LEN"), "{rust}");
     // The ignored const neither re-emits nor gets a getter.
     assert!(!rust.contains("GREETING"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let all: String = paths
         .iter()
         .map(|p| std::fs::read_to_string(p).unwrap())
@@ -142,7 +140,7 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
         )),
         loc.clone(),
     )];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -151,16 +149,15 @@ fn constant_fun_source_emits_val_over_ordinary_wrapper() {
     let dir = unique_test_dir("jnigen_constant_fun_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     // Ordinary declared-function wrapper: an extern calling `myflat::tag()`.
     assert!(rust.contains("Java_io_test_jni_JNINative_tag"), "{rust}");
     assert!(rust.contains("myflat::tag()"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let pkg = paths
         .iter()
         .find(|p| p.ends_with("io/test/jni/cfg.kt"))
@@ -195,17 +192,16 @@ fn constant_fun_source_non_nullary_rejected() {
         )),
         loc.clone(),
     )];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg").constant(crate::constant!(SCALED).fun(crate::fun!(scaled))),
     );
     let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
-    let _ = jni.write_kotlin(&registry, &dir.join("kotlin"));
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
 
 /// A fn returning a declared opaque handle cannot be a constant — same
@@ -232,7 +228,7 @@ fn constant_fun_source_handle_return_rejected() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
@@ -241,10 +237,9 @@ fn constant_fun_source_handle_return_rejected() {
     let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
-    let _ = jni.write_kotlin(&registry, &dir.join("kotlin"));
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let _ = gen.write_kotlin(&dir.join("kotlin"));
 }
 
 /// End-to-end for expression-sourced constants (`constant!(N).expr(…)`):
@@ -264,7 +259,7 @@ fn constant_expr_emits_getter_and_val() {
         )),
         loc.clone(),
     )];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg").fun(crate::fun!(tag_of)).constant(
@@ -275,9 +270,8 @@ fn constant_expr_emits_getter_and_val() {
     let dir = unique_test_dir("jnigen_constant_expr_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
     // The getter extern is seeded from the val name and evaluates the
@@ -290,7 +284,7 @@ fn constant_expr_emits_getter_and_val() {
     assert!(rc.contains("tag_of(7)"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let pkg = paths
         .iter()
         .find(|p| p.ends_with("io/test/jni/cfg.kt"))
@@ -336,7 +330,7 @@ fn constant_expr_handle_type_rejected() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
@@ -348,7 +342,9 @@ fn constant_expr_handle_type_rejected() {
     let dir = unique_test_dir("jnigen_constant_expr_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+    let _ = registry
+        .resolve(jni)
+        .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
 /// A const whose type is a declared opaque handle is rejected with guidance
@@ -381,7 +377,7 @@ fn handle_const_rejected() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
@@ -393,7 +389,9 @@ fn handle_const_rejected() {
     let dir = unique_test_dir("jnigen_consts_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+    let _ = registry
+        .resolve(jni)
+        .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
 /// `.with(ty!, path!)` — the binding-local nullary fn source, const analog
@@ -411,7 +409,7 @@ fn constant_with_source_calls_path_verbatim() {
         )),
         loc.clone(),
     )];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg").fun(crate::fun!(unrelated)).constant(
             crate::constant!(COVER_VERSION)
@@ -421,9 +419,8 @@ fn constant_with_source_calls_path_verbatim() {
     let dir = unique_test_dir("jnigen_constant_with_basic");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
     assert!(
@@ -435,7 +432,7 @@ fn constant_with_source_calls_path_verbatim() {
     assert!(!rc.contains("myflat::cover_version"), "{rust}");
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let pkg = paths
         .iter()
         .find(|p| p.ends_with("io/test/jni/cfg.kt"))

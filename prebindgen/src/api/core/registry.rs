@@ -1136,25 +1136,32 @@ impl<M> Registry<M> {
         out
     }
 
-    /// One-shot: resolve every required type using an adapter, then write the
-    /// generated Rust bindings file. The single public entry point for
-    /// language-specific binding generation — language-agnostic because
-    /// `ext` is any [`crate::api::core::prebindgen::Prebindgen`] impl
+    /// Resolve the binding: scan the adapter's declarations, apply its
+    /// plans, and run type resolution — consuming both the registry and the
+    /// adapter into a [`Generation`], whose `write_*` methods are pure,
+    /// order-free emissions. This is the single public entry point for
+    /// language-specific binding generation; language-agnostic because
+    /// `adapter` is any [`crate::api::core::prebindgen::Prebindgen`] impl
     /// whose `Metadata` matches this registry's `M` parameter.
-    pub fn write_rust<E>(
-        &mut self,
-        ext: &E,
-        out_path: impl AsRef<std::path::Path>,
-    ) -> Result<std::path::PathBuf, WriteRustError>
+    ///
+    /// ```ignore
+    /// let gen = Registry::from_items(source.items_all())?.resolve(jni)?;
+    /// gen.write_rust(&rust_dest)?;
+    /// gen.write_kotlin(&kotlin_root)?;   // JNI adapter's second artifact
+    /// ```
+    pub fn resolve<E>(mut self, adapter: E) -> Result<Generation<E>, WriteRustError>
     where
         E: Prebindgen<Metadata = M>,
         M: Clone + Default,
     {
-        let declared = DeclaredItems::from_adapter(ext)?;
+        let declared = DeclaredItems::from_adapter(&adapter)?;
         self.scan_declared_items(&declared)?;
-        self.apply_adapter_plans(ext, &declared)?;
-        crate::api::core::resolve::resolve(self, ext)?;
-        Ok(crate::api::core::write::write_rust(self, ext, out_path)?)
+        self.apply_adapter_plans(&adapter, &declared)?;
+        crate::api::core::resolve::resolve(&mut self, &adapter)?;
+        Ok(Generation {
+            registry: self,
+            adapter,
+        })
     }
 
     fn apply_adapter_plans<E>(
@@ -1295,6 +1302,53 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
         args
     } else {
         None
+    }
+}
+
+/// A **resolved** binding generation: the [`Registry`] after
+/// [`Registry::resolve`] ran the adapter's scan, plans, and type
+/// resolution, bound together with the adapter that produced it. Both
+/// halves of a generation run are methods here — [`Self::write_rust`] and
+/// any adapter-specific artifact (e.g. `write_kotlin` for the JNI
+/// adapter) — so the resolve-before-write ordering is enforced by
+/// construction, and the writes themselves are pure reads that may run in
+/// any order.
+pub struct Generation<E: Prebindgen> {
+    registry: Registry<E::Metadata>,
+    adapter: E,
+}
+
+// Opaque — exists so `Result<Generation, _>::expect_err` works in tests.
+impl<E: Prebindgen> fmt::Debug for Generation<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Generation(..)")
+    }
+}
+
+impl<E: Prebindgen> Generation<E> {
+    /// Write the generated Rust bindings file. `out_path` may be relative
+    /// (resolved against `OUT_DIR`) or absolute; returns the path actually
+    /// written. Pure emission — the registry was fully resolved by
+    /// [`Registry::resolve`].
+    pub fn write_rust(
+        &self,
+        out_path: impl AsRef<std::path::Path>,
+    ) -> Result<std::path::PathBuf, WriteRustError> {
+        Ok(crate::api::core::write::write_rust(
+            &self.registry,
+            &self.adapter,
+            out_path,
+        )?)
+    }
+
+    /// The resolved registry (converter tables, plans, item maps).
+    pub fn registry(&self) -> &Registry<E::Metadata> {
+        &self.registry
+    }
+
+    /// The adapter this generation was resolved with.
+    pub fn adapter(&self) -> &E {
+        &self.adapter
     }
 }
 

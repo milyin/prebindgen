@@ -84,7 +84,7 @@ fn main() {
                 .fun(fun!(storage_callback_vec)),
         );
 
-    let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    let registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
@@ -92,9 +92,8 @@ fn main() {
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let rust_path = registry
-        .write_rust(&jni, &rust_dest)
-        .expect("write_rust failed");
+    let gen = registry.resolve(jni).expect("resolve failed");
+    let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
@@ -109,10 +108,7 @@ fn main() {
             panic!("cleanup kotlin/generated failed: {err}");
         }
     }
-    for path in jni
-        .write_kotlin(&registry, &kotlin_root)
-        .expect("write_kotlin failed")
-    {
+    for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 }

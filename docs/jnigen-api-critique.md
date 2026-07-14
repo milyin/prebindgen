@@ -286,6 +286,20 @@ two halves of one generation run with inverted receivers, and `write_kotlin`
 silently requires the resolution `write_rust` performed. Nothing in the types
 enforces the order.
 
+> **Resolution (2026-07-15): fixed — `Generation` object.**
+> `Registry::resolve(self, adapter)` consumes both halves (scan + plans +
+> type resolution) and returns `Generation<E>`; `gen.write_rust(path)` and
+> `gen.write_kotlin(root)` (an inherent impl on `Generation<JniGen>`) are
+> pure emissions on ONE receiver. The resolve-before-write coupling is
+> enforced by construction — the old entry points no longer exist — and the
+> two writes commute: the write phase was verified to take `&Registry`
+> (all mutation happens in resolve), the adapter holds no interior
+> mutability, and a test asserts byte-identical output with the calls
+> flipped. The adapter is named once (`resolve(jni)`) instead of being
+> re-passed to every call; cbindgen consumers chain
+> `from_items(…)?.resolve(cbindgen)?.write_rust(…)?`. Escape hatches:
+> `gen.registry()` / `gen.adapter()`.
+
 ### I4. Inconsistent argument kinds for the same concept
 
 `ignore_fun(FunctionDecl)` vs `ignore_class(syn::Type)`. Several ways to spell

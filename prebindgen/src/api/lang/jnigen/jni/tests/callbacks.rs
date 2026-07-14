@@ -32,7 +32,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -56,13 +56,12 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let mut kotlin = std::collections::BTreeMap::new();
     for p in &paths {
         let name = p.file_name().unwrap().to_string_lossy().to_string();
@@ -218,7 +217,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -244,9 +243,8 @@ fn callback_root_identity_moved_after_nested_borrow() {
     let dir = unique_test_dir("jnigen_root_id_order");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
@@ -303,7 +301,7 @@ fn callback_double_option_unwrap_pipeline() {
         )),
         loc.clone(),
     ));
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -350,9 +348,8 @@ fn callback_double_option_unwrap_pipeline() {
     let dir = unique_test_dir("jnigen_double_opt");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
@@ -393,7 +390,7 @@ fn callback_double_option_unwrap_pipeline() {
     // the discriminator non-null; the value-blob leaf surfaces as its raw
     // (nullable) ByteArray wire, NOT the value class — the SDK wraps.
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let iface_file = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())

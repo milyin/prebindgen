@@ -10,7 +10,7 @@ fn slice_u8_input_two_params() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -19,7 +19,7 @@ fn slice_u8_input_two_params() {
         .base_name("z_zbytes")
         .function(syn::parse_quote!(z_zbytes_from_bytes));
 
-    let src = write(&cbindgen, &mut registry, "slice_u8");
+    let src = write(cbindgen, registry, "slice_u8");
     let compact: String = src.split_whitespace().collect();
 
     // Two params: pointer + length.
@@ -46,7 +46,7 @@ fn option_opaque_input_reuses_pointer() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -62,7 +62,7 @@ fn option_opaque_input_reuses_pointer() {
         .error()
         .function(syn::parse_quote!(z_op));
 
-    let src = write(&cbindgen, &mut registry, "option_in_opaque");
+    let src = write(cbindgen, registry, "option_in_opaque");
     let compact: String = src.split_whitespace().collect();
 
     // Param reuses the bare handle pointer; NULL ⇒ None.
@@ -90,14 +90,14 @@ fn option_scalar_input_boxed_pointer() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_op));
 
-    let src = write(&cbindgen, &mut registry, "option_in_scalar");
+    let src = write(cbindgen, registry, "option_in_scalar");
     let compact: String = src.split_whitespace().collect();
 
     // Boxed behind a const pointer; NULL ⇒ None, else `Some(*v)`.
@@ -121,7 +121,7 @@ fn str_borrow_input_lowering() {
             unimplemented!()
         }
     );
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -129,7 +129,7 @@ fn str_borrow_input_lowering() {
         .function(syn::parse_quote!(z_init_logs))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "str_borrow");
+    let src = write(cbindgen, registry, "str_borrow");
     let compact: String = src.split_whitespace().collect();
 
     assert!(compact.contains("extern\"C\"fnz_init_logs"), "{src}");
@@ -161,7 +161,7 @@ fn relation_to_lowering() {
         }
     );
 
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Enum(enum_item), loc.clone()),
     ])
@@ -176,7 +176,7 @@ fn relation_to_lowering() {
         .function(syn::parse_quote!(z_keyexpr_relation_to))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "relation_to");
+    let src = write(cbindgen, registry, "relation_to");
     let compact: String = src.split_whitespace().collect();
 
     // repr(C) enum mirror with discriminants — renamed via `.base_name()`.
@@ -214,7 +214,7 @@ fn mutable_opaque_borrow_input_lowering() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -230,7 +230,7 @@ fn mutable_opaque_borrow_input_lowering() {
         .error()
         .function(syn::parse_quote!(z_config_insert_json5));
 
-    let src = write(&cbindgen, &mut registry, "mut_opaque_borrow");
+    let src = write(cbindgen, registry, "mut_opaque_borrow");
     let compact: String = src.split_whitespace().collect();
 
     assert!(

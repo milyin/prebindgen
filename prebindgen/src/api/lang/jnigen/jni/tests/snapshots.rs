@@ -43,7 +43,7 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -63,13 +63,12 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let mut kotlin = std::collections::BTreeMap::new();
     for p in &paths {
         let name = p.file_name().unwrap().to_string_lossy().to_string();
@@ -221,7 +220,7 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("payload")
@@ -233,14 +232,13 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
         .iter()
         .map(|p| std::fs::read_to_string(p).unwrap())
@@ -299,7 +297,7 @@ fn slice_input_builds_vec_handle() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("foo")
@@ -311,14 +309,13 @@ fn slice_input_builds_vec_handle() {
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
         .iter()
         .map(|p| std::fs::read_to_string(p).unwrap())
@@ -393,7 +390,7 @@ fn jni_native_init_emits_init_block() {
         )),
         loc.clone(),
     )];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -403,12 +400,9 @@ fn jni_native_init_emits_init_block() {
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
-    let paths = jni
-        .write_kotlin(&registry, &dir.join("kotlin"))
-        .expect("write_kotlin");
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let native = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())

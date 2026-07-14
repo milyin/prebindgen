@@ -42,7 +42,7 @@ fn per_class_name_and_base_package_fun() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -58,11 +58,10 @@ fn per_class_name_and_base_package_fun() {
     let dir = unique_test_dir("jnigen_class_name_base_fun");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
         .iter()
         .map(|p| std::fs::read_to_string(p).unwrap())
@@ -116,7 +115,7 @@ fn setters_after_declarations_apply() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     // Declarations first, settings last.
     let jni = JniGen::new()
@@ -131,11 +130,10 @@ fn setters_after_declarations_apply() {
     let dir = unique_test_dir("jnigen_setters_after_decls");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
 
     // The late-set package prefix drives the file layout...
     let things = paths
@@ -151,4 +149,51 @@ fn setters_after_declarations_apply() {
         tc.contains("funthingNew(onError:JniErrorHandler<Thing>):Thing"),
         "{things}"
     );
+}
+
+/// The I3 contract: after `Registry::resolve`, `write_kotlin` and
+/// `write_rust` are pure reads on one receiver — calling Kotlin FIRST
+/// produces byte-identical output to the usual order.
+#[test]
+fn generation_writes_are_order_free() {
+    let build = || {
+        let loc = myflat_loc();
+        let f: syn::ItemFn =
+            syn::parse_str("pub fn z_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
+        let registry =
+            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!("thing").fun(crate::fun!(z_ping)));
+        registry.resolve(jni).expect("resolve")
+    };
+    let read_all = |dir: &std::path::Path, paths: &[std::path::PathBuf]| -> String {
+        let mut out = String::new();
+        let mut sorted: Vec<_> = paths.to_vec();
+        sorted.sort();
+        for p in sorted {
+            out.push_str(&format!("== {}\n", p.strip_prefix(dir).unwrap().display()));
+            out.push_str(&std::fs::read_to_string(&p).unwrap());
+        }
+        out
+    };
+
+    // Usual order: rust, then kotlin.
+    let d1 = unique_test_dir("jnigen_orderfree_a");
+    let _ = std::fs::remove_dir_all(&d1);
+    std::fs::create_dir_all(&d1).unwrap();
+    let gen = build();
+    let rust1 = std::fs::read_to_string(gen.write_rust(d1.join("gen.rs")).unwrap()).unwrap();
+    let kt1 = read_all(&d1, &gen.write_kotlin(&d1.join("kotlin")).unwrap());
+
+    // Flipped order: kotlin FIRST.
+    let d2 = unique_test_dir("jnigen_orderfree_b");
+    let _ = std::fs::remove_dir_all(&d2);
+    std::fs::create_dir_all(&d2).unwrap();
+    let gen = build();
+    let kt2 = read_all(&d2, &gen.write_kotlin(&d2.join("kotlin")).unwrap());
+    let rust2 = std::fs::read_to_string(gen.write_rust(d2.join("gen.rs")).unwrap()).unwrap();
+
+    assert_eq!(rust1, rust2);
+    assert_eq!(kt1, kt2);
 }

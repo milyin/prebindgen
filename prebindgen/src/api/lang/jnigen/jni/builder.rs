@@ -53,7 +53,8 @@ impl JniGen {
     /// name-mangling, handle locks enabled. Adjust settings with the `set_*`
     /// methods, add declarations with [`package`](Self::package),
     /// [`expand`](Self::expand), [`convert`](Self::convert), etc., then run the
-    /// result through `Registry::write_rust` / `write_kotlin`. Settings and
+    /// result through `Registry::resolve` → `Generation::write_rust` /
+    /// `write_kotlin`. Settings and
     /// declarations may be interleaved in any order — the builder stores
     /// only raw inputs, and every setting-derived name is computed at the
     /// point of use.

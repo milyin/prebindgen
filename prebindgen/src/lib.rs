@@ -98,10 +98,12 @@
 //!         .function(pq!(calculator_new))
 //!         .function(pq!(calculator_get_value)).panic();
 //!
-//!     // Resolve types and write the Rust file of `extern "C"` wrappers.
-//!     let mut registry =
-//!         prebindgen::core::Registry::from_items(source.items_all()).unwrap();
-//!     let bindings_file = registry.write_rust(&cbindgen, "example_flat.rs").unwrap();
+//!     // Resolve types, then write the Rust file of `extern "C"` wrappers.
+//!     let generation = prebindgen::core::Registry::from_items(source.items_all())
+//!         .unwrap()
+//!         .resolve(cbindgen)
+//!         .unwrap();
+//!     let bindings_file = generation.write_rust("example_flat.rs").unwrap();
 //!
 //!     // Pass the generated file to cbindgen for C header generation.
 //!     generate_c_headers(&bindings_file);
@@ -215,9 +217,10 @@ macro_rules! ident {
 ///
 /// 1. [`Registry::from_items`](core::Registry::from_items) indexes the
 ///    `(syn::Item, SourceLocation)` stream (typically [`Source::items_all`]).
-/// 2. [`Registry::write_rust`](core::Registry::write_rust) resolves every
-///    required type via your back-end and writes the generated Rust bindings
-///    file.
+/// 2. [`Registry::resolve`](core::Registry::resolve) resolves every required
+///    type via your back-end, yielding a [`Generation`](core::Generation);
+///    its `write_rust` (and adapter-specific `write_*`) methods emit the
+///    artifacts.
 /// 3. The back-end produces any secondary artifacts (C headers, Kotlin sources,
 ///    …) by walking the resolved [`Registry`](core::Registry).
 ///
@@ -237,8 +240,8 @@ macro_rules! ident {
 /// ([`lang::Cbindgen`]) and the JNI / Kotlin back-end ([`lang::JniGen`]).
 pub mod core {
     pub use crate::api::core::{
-        ConverterImpl, Direction, Gravestone, NicheSlot, Niches, Prebindgen, Registry, ScanError,
-        Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
+        ConverterImpl, Direction, Generation, Gravestone, NicheSlot, Niches, Prebindgen, Registry,
+        ScanError, Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
     };
 }
 
