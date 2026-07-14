@@ -822,6 +822,77 @@ pub(crate) struct ConstExprDecl {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// IgnoreDecl — one acceptor for acknowledged-unbound items
+// ──────────────────────────────────────────────────────────────────────
+
+/// Declares a `#[prebindgen]` item this binding deliberately does NOT
+/// bind: nothing is emitted for it and the registry's per-item "skipping
+/// undeclared" warning is suppressed. One acceptor
+/// ([`JniGen::ignore`]), the kind carried by what you built:
+///
+/// ```rust,ignore
+/// .ignore(fun!(string_len))                                // a fn
+/// .ignore(ty!(InternalThing))                              // a struct/enum
+/// .ignore(constant!(INTERNAL_MAGIC))                       // a const
+/// .ignore(matching(|n| n.starts_with("encoding_const_")))  // a naming family
+/// ```
+pub struct IgnoreDecl(pub(crate) IgnoreKind);
+
+pub(crate) enum IgnoreKind {
+    Fun(syn::Ident),
+    Type(TypeKey),
+    Const(syn::Ident),
+    Matching(crate::api::core::prebindgen::NamePredicate),
+}
+
+impl From<FunctionDecl> for IgnoreDecl {
+    fn from(decl: FunctionDecl) -> Self {
+        assert!(
+            decl.kotlin_name_override.is_none()
+                && decl.param_expands.is_empty()
+                && decl.return_expand.is_none(),
+            "ignore(fun!({})): an ignored fn is never surfaced — \
+             .name()/expand overrides don't apply",
+            decl.rust_ident
+        );
+        IgnoreDecl(IgnoreKind::Fun(decl.rust_ident))
+    }
+}
+
+impl From<syn::Type> for IgnoreDecl {
+    fn from(ty: syn::Type) -> Self {
+        IgnoreDecl(IgnoreKind::Type(TypeKey::from_type(&ty)))
+    }
+}
+
+impl From<ConstDecl> for IgnoreDecl {
+    fn from(decl: ConstDecl) -> Self {
+        assert!(
+            matches!(decl.source, ConstSource::Item) && decl.kotlin_name_override.is_none(),
+            "ignore(constant!({})): an ignore names a `#[prebindgen]` const — \
+             value sources/.name() don't apply",
+            decl.rust_ident
+        );
+        IgnoreDecl(IgnoreKind::Const(decl.rust_ident))
+    }
+}
+
+/// Bulk [`IgnoreDecl`]: acknowledge every `#[prebindgen]` item whose NAME
+/// matches the predicate — kind-agnostic (fn, struct/enum, const), since
+/// prebindgen items live in one flat namespace. E.g.
+/// `.ignore(matching(|n| n.starts_with("encoding_const_")))` instead of one
+/// line per member of a naming family. A *declared* item matching the
+/// predicate is unaffected (declaration wins), and unlike an exact-name
+/// ignore, a predicate matching nothing is silent — it is a filter, not a
+/// claim about a specific item (match counts vary across feature configs).
+pub fn matching<F>(f: F) -> IgnoreDecl
+where
+    F: Fn(&str) -> bool + Send + Sync + 'static,
+{
+    IgnoreDecl(IgnoreKind::Matching(std::sync::Arc::new(f)))
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // PackageDecl — aggregates the package-scoped decls
 // ──────────────────────────────────────────────────────────────────────
 

@@ -251,6 +251,11 @@ pub mod core {
 /// reference them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
 pub use crate::api::core::gravestone::{Gravestone, Transmute};
 
+/// Root re-export of [`lang::matching`] so the ignore-predicate constructor
+/// sits next to the decl macros it composes with
+/// (`.ignore(matching(|n| …))`, like `.ignore(fun!(…))`).
+pub use crate::api::lang::jnigen::matching;
+
 /// Destination-language adapters implementing [`core::Prebindgen`].
 ///
 /// [`lang::Cbindgen`] is the C / cbindgen adapter: it turns a flat
@@ -268,10 +273,10 @@ pub mod lang {
         jnigen::{
             box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
             box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
-            null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
-            DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
-            FunctionDecl, JniBindingError, JniGen, KotlinFile, PackageDecl, PtrClassDecl,
-            ValueClassDecl, WriteKotlinError,
+            matching, null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl,
+            ConvertDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
+            ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, KotlinFile,
+            PackageDecl, PtrClassDecl, ValueClassDecl, WriteKotlinError,
         },
     };
 }

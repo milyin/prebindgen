@@ -51,8 +51,8 @@
 //! | `String` return                      | `string_new` |
 //! | binding-error channel (`je != null`) | malformed `Stamp` bytes (value-blob length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
-//! | `JniGen::ignore_fun`                 | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
-//! | `JniGen::ignore_funs_where`          | the `storage_get_into_*` group (one predicate instead of per-name lines) |
+//! | `JniGen::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGen::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
 //! One feature is deliberately left at its default and documented rather than
 //! toggled, because it is mutually exclusive with a richer path this example
@@ -72,13 +72,13 @@
 //! with no JVM mapping (`string_len`'s `&String` param / `usize` return, the
 //! `storage_get_into_*` out-param group, `storage_put_by_read_and_update`'s
 //! read-write borrow). The two loners are acknowledged per-name via
-//! `JniGen::ignore_fun`; the `storage_get_into_*` naming family via one
-//! `JniGen::ignore_funs_where` predicate. Both suppress the per-item
+//! `.ignore(fun!(…))`; the `storage_get_into_*` naming family via one
+//! `.ignore(matching(…))` predicate. Both suppress the per-item
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    fun, lang::JniGen, package, path, ptr_class, ty, value_class,
+    fun, lang::JniGen, matching, package, path, ptr_class, ty, value_class,
 };
 
 fn main() {
@@ -354,9 +354,9 @@ fn main() {
         // The deliberately-unbound group (C-tier shapes with no JVM mapping):
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
-        .ignore_fun(fun!(string_len))
-        .ignore_funs_where(|name| name.starts_with("storage_get_into_"))
-        .ignore_fun(fun!(storage_put_by_read_and_update));
+        .ignore(fun!(string_len))
+        .ignore(matching(|name| name.starts_with("storage_get_into_")))
+        .ignore(fun!(storage_put_by_read_and_update));
 
     let registry = Registry::from_items(source.items_all().chain(helpers.items_all()))
         .expect("scan prebindgen items");

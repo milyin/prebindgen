@@ -1039,9 +1039,10 @@ impl Prebindgen for JniGen {
         self.ignored_fns.clone()
     }
 
-    /// Bulk fn ignores from [`JniGen::ignore_funs_where`].
-    fn ignored_function_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
-        self.ignored_fn_predicates.clone()
+    /// Bulk name-family ignores from [`JniGen::ignore`] +
+    /// [`matching`](crate::lang::matching).
+    fn ignored_name_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
+        self.ignored_name_predicates.clone()
     }
 
     /// Framework-called fns that get no extern of their own: `convert!`

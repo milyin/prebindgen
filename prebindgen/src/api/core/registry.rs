@@ -435,11 +435,12 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
 struct DeclaredItems {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
-    /// Bulk-ignore predicates over fn names — every matching *undeclared*
-    /// fn is an acknowledged skip (no warning). A declared fn matching a
-    /// predicate is unaffected: declaration wins. See
-    /// [`Prebindgen::ignored_function_predicates`].
-    ignored_fn_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+    /// Bulk-ignore predicates over item names — every matching *undeclared*
+    /// item (fn, struct/enum, const) is an acknowledged skip (no warning).
+    /// Kind-agnostic: prebindgen names live in one flat namespace. A
+    /// declared item matching a predicate is unaffected: declaration wins.
+    /// See [`Prebindgen::ignored_name_predicates`].
+    ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
     /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
     helper_functions: HashSet<syn::Ident>,
     accessors: HashSet<syn::Ident>,
@@ -470,7 +471,7 @@ impl DeclaredItems {
         let declared = Self {
             functions: adapter.declared_functions(),
             ignored_functions: adapter.ignored_functions(),
-            ignored_fn_predicates: adapter.ignored_function_predicates(),
+            ignored_name_predicates: adapter.ignored_name_predicates(),
             helper_functions: adapter.helper_functions(),
             accessors: adapter.accessor_functions(),
             method_receivers: adapter.method_receivers(),
@@ -741,14 +742,13 @@ impl<M> Registry<M> {
         }
 
         // Warn about indexed items that the adapter never claimed. An
-        // ignore *predicate* acknowledges every matching fn in bulk; a
-        // predicate matching nothing is silent by design (it is a filter,
+        // ignore *predicate* acknowledges every matching item in bulk —
+        // kind-agnostic, since prebindgen names live in one flat namespace;
+        // a predicate matching nothing is silent by design (it is a filter,
         // not a claim — match counts vary across feature configurations).
-        let pred_ignored = |k: &syn::Ident| {
-            !declared.ignored_fn_predicates.is_empty() && {
-                let name = k.to_string();
-                declared.ignored_fn_predicates.iter().any(|p| p(&name))
-            }
+        let pred_ignored = |name: &str| {
+            !declared.ignored_name_predicates.is_empty()
+                && declared.ignored_name_predicates.iter().any(|p| p(name))
         };
         let mut skipped_fns: Vec<String> = self
             .functions
@@ -757,7 +757,7 @@ impl<M> Registry<M> {
                 !declared.functions.contains(*k)
                     && !declared.ignored_functions.contains(*k)
                     && !declared.helper_functions.contains(*k)
-                    && !pred_ignored(k)
+                    && !pred_ignored(&k.to_string())
             })
             .map(|k| k.to_string())
             .collect();
@@ -775,16 +775,11 @@ impl<M> Registry<M> {
                 || declared.ignored_types.contains(key)
                 || declared.boundary_only_types.contains(key)
         };
-        for ident in self.structs.keys() {
-            let key = TypeKey::parse(&ident.to_string());
-            if !type_acknowledged(&key) {
-                skipped_types.push(ident.to_string());
-            }
-        }
-        for ident in self.enums.keys() {
-            let key = TypeKey::parse(&ident.to_string());
-            if !type_acknowledged(&key) {
-                skipped_types.push(ident.to_string());
+        for ident in self.structs.keys().chain(self.enums.keys()) {
+            let name = ident.to_string();
+            let key = TypeKey::parse(&name);
+            if !type_acknowledged(&key) && !pred_ignored(&name) {
+                skipped_types.push(name);
             }
         }
         skipped_types.sort();
@@ -803,7 +798,10 @@ impl<M> Registry<M> {
                 // guard) are infrastructure: not declarable, always emitted
                 // verbatim — never a skip.
                 .filter(|k| {
-                    *k != "_" && !decl_consts.contains(*k) && !declared.ignored_consts.contains(*k)
+                    *k != "_"
+                        && !decl_consts.contains(*k)
+                        && !declared.ignored_consts.contains(*k)
+                        && !pred_ignored(&k.to_string())
                 })
                 .map(|k| k.to_string())
                 .collect();

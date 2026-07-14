@@ -104,7 +104,7 @@ fn undeclared_const_not_emitted() {
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant(crate::constant!(MAX_LEN)))
-        .ignore_const(crate::constant!(GREETING));
+        .ignore(crate::constant!(GREETING));
 
     let dir = unique_test_dir("jnigen_consts_undeclared");
     let _ = std::fs::remove_dir_all(&dir);

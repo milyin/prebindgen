@@ -15,7 +15,7 @@ use crate::api::core::{
 struct StubExt {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
-    ignored_fn_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+    ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
     helper_functions: HashSet<syn::Ident>,
     consts: Option<HashSet<syn::Ident>>,
     types: HashSet<TypeKey>,
@@ -31,8 +31,8 @@ impl Prebindgen for StubExt {
     fn ignored_functions(&self) -> HashSet<syn::Ident> {
         self.ignored_functions.clone()
     }
-    fn ignored_function_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
-        self.ignored_fn_predicates.clone()
+    fn ignored_name_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
+        self.ignored_name_predicates.clone()
     }
     fn helper_functions(&self) -> HashSet<syn::Ident> {
         self.helper_functions.clone()
@@ -232,20 +232,33 @@ fn scan_declared_missing_ignore_is_not_an_error() {
         .expect("stale ignore must only warn");
 }
 
-/// An ignore predicate acknowledges matching undeclared fns (C2) and is
-/// silent when it matches nothing — it is a filter, not a claim.
+/// An ignore predicate acknowledges matching undeclared items of EVERY
+/// kind — fn, struct/enum, const (one flat namespace, so a name filter
+/// needs no kind) — and is silent when it matches nothing: a filter, not a
+/// claim.
 #[test]
 fn scan_declared_accepts_ignore_predicates() {
+    let s: syn::ItemStruct = syn::parse_str("struct HelperThing { v: u64 }").unwrap();
+    let c: syn::ItemConst = syn::parse_str("const HELPER_MAX: u64 = 1;").unwrap();
     let items = vec![
         fn_item("fn helper_a(x: u64) -> u64 { x }"),
         fn_item("fn helper_b(x: u64) -> u64 { x }"),
+        (syn::Item::Struct(s), SourceLocation::default()),
+        (syn::Item::Const(c), SourceLocation::default()),
     ];
     let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-    let mut ext = StubExt::default();
-    ext.ignored_fn_predicates
-        .push(std::sync::Arc::new(|n: &str| n.starts_with("helper_")));
-    // Matches both fns — and a second, zero-match predicate is fine too.
-    ext.ignored_fn_predicates
+    // Const skip-warnings only run for adapters WITH a const mechanism.
+    let mut ext = StubExt {
+        consts: Some(HashSet::new()),
+        ..StubExt::default()
+    };
+    ext.ignored_name_predicates
+        .push(std::sync::Arc::new(|n: &str| {
+            let l = n.to_lowercase();
+            l.starts_with("helper")
+        }));
+    // A second, zero-match predicate is fine too.
+    ext.ignored_name_predicates
         .push(std::sync::Arc::new(|n: &str| n.starts_with("nothing_")));
     reg.scan_declared(&ext).expect("predicates must scan clean");
     // Nothing was declared, so nothing became required.

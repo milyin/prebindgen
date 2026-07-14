@@ -91,7 +91,7 @@ impl JniGen {
             fn_return_expands: Vec::new(),
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
-            ignored_fn_predicates: Vec::new(),
+            ignored_name_predicates: Vec::new(),
             ignored_class_types: std::collections::HashSet::new(),
             ignored_const_idents: std::collections::HashSet::new(),
         };
@@ -241,43 +241,28 @@ impl JniGen {
         self
     }
 
-    /// Acknowledge a `#[prebindgen]` function this binding deliberately does
-    /// NOT wrap: nothing is emitted for it and the registry's per-item
-    /// "skipping undeclared" warning is suppressed. Global — an ignored fn
-    /// belongs to no package. E.g. `.ignore_fun(fun!(string_len))`.
-    pub fn ignore_fun(mut self, decl: FunctionDecl) -> Self {
-        self.ignored_fns.insert(decl.rust_ident);
-        self
-    }
-
-    /// Bulk form of [`Self::ignore_fun`]: acknowledge every `#[prebindgen]`
-    /// function whose name matches the predicate — e.g.
-    /// `.ignore_funs_where(|n| n.starts_with("encoding_const_"))` instead of
-    /// one `ignore_fun` line per member of a naming family. A *declared*
-    /// function matching the predicate is unaffected (declaration wins), and
-    /// unlike an exact-name ignore, a predicate matching nothing is silent —
-    /// it is a filter, not a claim about a specific item.
-    pub fn ignore_funs_where<F>(mut self, f: F) -> Self
-    where
-        F: Fn(&str) -> bool + Send + Sync + 'static,
-    {
-        self.ignored_fn_predicates.push(Arc::new(f));
-        self
-    }
-
-    /// Acknowledge a `#[prebindgen]` type this binding deliberately does NOT
-    /// declare as a class — the type-level dual of [`Self::ignore_fun`].
-    pub fn ignore_class(mut self, rust_type: syn::Type) -> Self {
-        self.ignored_class_types
-            .insert(TypeKey::from_type(&rust_type));
-        self
-    }
-
-    /// Acknowledge a `#[prebindgen]` const this binding deliberately does
-    /// NOT expose — the const-level dual of [`Self::ignore_fun`]. E.g.
-    /// `.ignore_const(constant!(INTERNAL_MAGIC))`.
-    pub fn ignore_const(mut self, decl: ConstDecl) -> Self {
-        self.ignored_const_idents.insert(decl.rust_ident);
+    /// Acknowledge a `#[prebindgen]` item this binding deliberately does
+    /// NOT bind: nothing is emitted for it and the registry's per-item
+    /// "skipping undeclared" warning is suppressed. Global — an ignored
+    /// item belongs to no package. One acceptor, the kind carried by the
+    /// decl (see [`IgnoreDecl`]): `fun!` / `ty!` / `constant!` for exact
+    /// items, [`matching`](crate::lang::matching) for a name-family
+    /// predicate over ANY item kind.
+    pub fn ignore(mut self, decl: impl Into<IgnoreDecl>) -> Self {
+        match decl.into().0 {
+            super::decl::IgnoreKind::Fun(ident) => {
+                self.ignored_fns.insert(ident);
+            }
+            super::decl::IgnoreKind::Type(key) => {
+                self.ignored_class_types.insert(key);
+            }
+            super::decl::IgnoreKind::Const(ident) => {
+                self.ignored_const_idents.insert(ident);
+            }
+            super::decl::IgnoreKind::Matching(pred) => {
+                self.ignored_name_predicates.push(pred);
+            }
+        }
         self
     }
 

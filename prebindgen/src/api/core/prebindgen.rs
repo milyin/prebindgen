@@ -27,8 +27,8 @@ use crate::api::core::{
 };
 
 /// A shared predicate over an item name, as used by
-/// [`Prebindgen::ignored_function_predicates`] (bulk ignores keyed on the
-/// fn-name family rather than an exact ident).
+/// [`Prebindgen::ignored_name_predicates`] (bulk ignores keyed on a naming
+/// family rather than an exact ident).
 pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
@@ -282,16 +282,18 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
-    /// Bulk form of [`Self::ignored_functions`]: predicates over the fn
-    /// name — every *undeclared* `#[prebindgen]` fn whose name matches any
-    /// predicate is an acknowledged skip (no "skipping undeclared" warning).
-    /// A declared fn matching a predicate is unaffected (declaration wins),
+    /// Bulk form of the `ignored_*` sets: predicates over the item NAME —
+    /// every *undeclared* `#[prebindgen]` item (function, struct/enum, or
+    /// const) whose name matches any predicate is an acknowledged skip (no
+    /// "skipping undeclared" warning). Kind-agnostic by design: prebindgen
+    /// items live in one flat namespace, so a name filter needs no kind. A
+    /// declared item matching a predicate is unaffected (declaration wins),
     /// and a predicate matching nothing is silent — it is a filter, not a
     /// claim, so unlike an exact-name ignore there is no "not found"
     /// warning.
     ///
     /// Default: empty.
-    fn ignored_function_predicates(&self) -> Vec<NamePredicate> {
+    fn ignored_name_predicates(&self) -> Vec<NamePredicate> {
         Vec::new()
     }
 

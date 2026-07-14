@@ -306,6 +306,24 @@ enforces the order.
 a function reference coexist (`fun!(x)`, `FunctionDecl::new(ident!(x))`, `pq!`
 for params) — the consumer file uses three of them.
 
+> **Resolution (2026-07-15): fixed — one `.ignore(impl Into<IgnoreDecl>)`
+> acceptor**, the kind carried by what you built (mirroring `.class` /
+> `.constant` / `.expand` / `.convert`): `fun!(x)` / `ty!(T)` /
+> `constant!(X)` for exact items, plus `matching(|n| …)` — a **universal**
+> name-family predicate covering ANY undeclared item kind (fn, struct/enum,
+> const). Kind-agnosticism costs nothing: prebindgen items live in one flat
+> namespace, so a name filter needs no kind; the fn-only
+> `ignore_funs_where` from I7's first cut is superseded (core hook renamed
+> `ignored_name_predicates`, applied in all three skip-warning filters).
+> The four `ignore_*` methods are deleted. Surface overrides on ignored
+> decls (`.name()`, expand overrides, const value sources) are decl-time
+> panics — an ignore names a bare source item. Spelling standard recorded:
+> decl macros (`fun!`/`ty!`/`constant!`) are the normal form,
+> `FunctionDecl::new` / `ConstDecl::named` the runtime loop forms; the
+> `pq!` spelling survives only in the Cbindgen builder
+> (`ignore_function(syn::Ident)` / `ignore_type(syn::Type)`), a different
+> pre-decl-macro model, out of this item's scope.
+
 ### I5. Member support varies by class kind for implementation reasons
 
 `data_class` forbids `.fun`/`.constructor` ("no handle to hang a method on")

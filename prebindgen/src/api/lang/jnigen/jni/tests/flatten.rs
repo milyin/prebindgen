@@ -593,12 +593,13 @@ fn typo_in_expand_decl_is_hard_error() {
     }
 }
 
-/// `ignore_funs_where` (C2): one predicate acknowledges a whole naming
-/// family — the matching undeclared fns are skipped without per-name
-/// `ignore_fun` lines, no extern is emitted for them, and the generation
-/// still succeeds with only the declared surface.
+/// `.ignore(matching(…))` (C2/I4): one predicate acknowledges a whole
+/// naming family — the matching undeclared items are skipped without
+/// per-name lines, no extern is emitted for them, and the generation still
+/// succeeds with only the declared surface. Also exercises the exact
+/// type-ignore path (`.ignore(ty!(…))`).
 #[test]
-fn ignore_funs_where_acknowledges_matching_family() {
+fn ignore_matching_acknowledges_naming_family() {
     let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_len(v: i64) -> i64 { unimplemented!() }",
@@ -616,13 +617,18 @@ fn ignore_funs_where_acknowledges_matching_family() {
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_len)))
-        .ignore_funs_where(|name| name.starts_with("detail_const_"));
+        .ignore(crate::matching(|name| name.starts_with("detail_const_")))
+        // The previously-untested type-ignore path: acknowledge a type by key.
+        .ignore(crate::ty!(ZUnusedThing));
     // The predicate flows through the Prebindgen hook…
     {
         use crate::api::core::prebindgen::Prebindgen;
-        let preds = jni.ignored_function_predicates();
+        let preds = jni.ignored_name_predicates();
         assert_eq!(preds.len(), 1);
         assert!(preds[0]("detail_const_a") && !preds[0]("z_len"));
+        assert!(jni
+            .ignored_types()
+            .contains(&TypeKey::parse("ZUnusedThing")));
     }
     // …and the full pipeline runs clean, emitting only the declared fn.
     let dir = unique_test_dir("jnigen_ignore_funs_where");
@@ -633,4 +639,22 @@ fn ignore_funs_where_acknowledges_matching_family() {
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     assert!(rust.contains("Java_io_test_jni_JNINative_zLen"), "{rust}");
     assert!(!rust.contains("detailConstA"), "{rust}");
+}
+
+/// An ignore names a bare item — surface overrides are meaningless and
+/// rejected at decl time.
+#[test]
+#[should_panic(expected = "expand overrides don't apply")]
+fn ignore_fun_with_overrides_rejected() {
+    let _ = crate::lang::IgnoreDecl::from(crate::fun!(z_thing).name("thing"));
+}
+
+/// Same for constants: an ignore names a `#[prebindgen]` const, not a
+/// value-sourced val.
+#[test]
+#[should_panic(expected = "value sources/.name() don't apply")]
+fn ignore_const_with_source_rejected() {
+    let _ = crate::lang::IgnoreDecl::from(
+        crate::constant!(X).expr(crate::ty!(i64), crate::expr!(1 + 1)),
+    );
 }
