@@ -1034,30 +1034,31 @@ impl Prebindgen for JniGen {
     }
 
     /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
-    /// the registry's "skipping undeclared" warning, emits nothing. Also
-    /// includes functions referenced only inside boundary decls
-    /// (`expand_return!` accessors / `expand_param!` ctors that are not
-    /// otherwise declared): they are called by the generated fold/unfold code
-    /// and need no extern of their own. Declared functions are subtracted —
-    /// a fn that is also a real member/package fn keeps its extern, and the
-    /// registry rejects a declared∩ignored overlap as conflicting intent.
+    /// the registry's "skipping undeclared" warning, emits nothing.
     fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        let declared = self.declared_functions();
-        let mut out = self.ignored_fns.clone();
-        out.extend(
-            self.boundary_referenced_fns()
-                .filter(|f| !declared.contains(f)),
-        );
-        out
+        self.ignored_fns.clone()
     }
 
-    /// `convert!` conversion functions: no extern is emitted for them —
-    /// generated converter bodies call them directly; the registry stops
-    /// warning about them. Their type requirements come through
+    /// Bulk fn ignores from [`JniGen::ignore_funs_where`].
+    fn ignored_function_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
+        self.ignored_fn_predicates.clone()
+    }
+
+    /// Framework-called fns that get no extern of their own: `convert!`
+    /// conversion fns (called by generated converter bodies) and fns
+    /// referenced only inside boundary decls (`expand_return!` accessors /
+    /// `expand_param!` ctors, called by the generated fold/unfold code).
+    /// Routing both through the *helper* channel — not the ignore channel —
+    /// makes a typo'd `fun!(…)` inside a decl a hard scan error
+    /// ([`crate::ScanError::DeclaredNotFound`]) instead of a stale-ignore
+    /// warning.
+    /// Declared functions are subtracted: a fn that is also a real
+    /// member/package fn keeps its extern. Type requirements come through
     /// [`Self::extra_required_types`], not a signature scan.
     fn helper_functions(&self) -> std::collections::HashSet<syn::Ident> {
         let declared = self.declared_functions();
         self.convert_fns()
+            .chain(self.boundary_referenced_fns())
             .filter(|f| !declared.contains(f))
             .collect()
     }

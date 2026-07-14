@@ -416,6 +416,11 @@ pub struct JniGen {
     /// without emitting anything.
     pub(crate) ignored_fns: std::collections::HashSet<syn::Ident>,
 
+    /// Bulk fn-ignore predicates, declared via [`JniGen::ignore_funs_where`].
+    /// Backs [`Prebindgen::ignored_function_predicates`]: every undeclared
+    /// fn whose name matches is an acknowledged skip.
+    pub(crate) ignored_fn_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
     /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,

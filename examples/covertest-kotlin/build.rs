@@ -49,7 +49,8 @@
 //! | `String` return                      | `string_new` |
 //! | binding-error channel (`je != null`) | malformed `Stamp` bytes (value-blob length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
-//! | `JniGen::ignore_fun`                 | `string_len` / `storage_get_into_*` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGen::ignore_fun`                 | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
+//! | `JniGen::ignore_funs_where`          | the `storage_get_into_*` group (one predicate instead of per-name lines) |
 //!
 //! One feature is deliberately left at its default and documented rather than
 //! toggled, because it is mutually exclusive with a richer path this example
@@ -68,9 +69,10 @@
 //! Four functions are deliberately NOT wrapped — their shapes are C-tier
 //! with no JVM mapping (`string_len`'s `&String` param / `usize` return, the
 //! `storage_get_into_*` out-param group, `storage_put_by_read_and_update`'s
-//! read-write borrow) — and are acknowledged via `JniGen::ignore_fun`, which
-//! suppresses the per-item "skipping undeclared" build warning while
-//! emitting nothing.
+//! read-write borrow). The two loners are acknowledged per-name via
+//! `JniGen::ignore_fun`; the `storage_get_into_*` naming family via one
+//! `JniGen::ignore_funs_where` predicate. Both suppress the per-item
+//! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
     constant, constant_expr, convert, core::Registry, data_class, enum_class, expand_param,
@@ -339,8 +341,7 @@ fn main() {
         // acknowledged so the build log stays free of "skipping undeclared"
         // warnings without emitting anything.
         .ignore_fun(fun!(string_len))
-        .ignore_fun(fun!(storage_get_into_init))
-        .ignore_fun(fun!(storage_get_into_uninit))
+        .ignore_funs_where(|name| name.starts_with("storage_get_into_"))
         .ignore_fun(fun!(storage_put_by_read_and_update));
 
     let mut registry = Registry::from_sources([&source, &helpers]).expect("scan prebindgen items");

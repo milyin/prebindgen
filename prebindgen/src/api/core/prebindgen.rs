@@ -26,6 +26,11 @@ use crate::api::core::{
     registry::{Direction, Registry, TypeKey},
 };
 
+/// A shared predicate over an item name, as used by
+/// [`Prebindgen::ignored_function_predicates`] (bulk ignores keyed on the
+/// fn-name family rather than an exact ident).
+pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
 /// a value-inspecting step that sits between the rust value the
 /// `#[prebindgen]` fn yields/receives and the wire-facing
@@ -275,6 +280,19 @@ pub trait Prebindgen {
     /// Default: empty.
     fn ignored_functions(&self) -> HashSet<syn::Ident> {
         HashSet::new()
+    }
+
+    /// Bulk form of [`Self::ignored_functions`]: predicates over the fn
+    /// name — every *undeclared* `#[prebindgen]` fn whose name matches any
+    /// predicate is an acknowledged skip (no "skipping undeclared" warning).
+    /// A declared fn matching a predicate is unaffected (declaration wins),
+    /// and a predicate matching nothing is silent — it is a filter, not a
+    /// claim, so unlike an exact-name ignore there is no "not found"
+    /// warning.
+    ///
+    /// Default: empty.
+    fn ignored_function_predicates(&self) -> Vec<NamePredicate> {
+        Vec::new()
     }
 
     /// Idents of `#[prebindgen]` **helper** functions: called from the

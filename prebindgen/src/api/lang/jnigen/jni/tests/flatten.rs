@@ -585,3 +585,84 @@ fn fn_expand_return_duplicate_rejected() {
         .expand_return(crate::expand_return!(ZThing).field_self())
         .expand_return(crate::expand_return!(ZThing).field_self());
 }
+
+/// A typo'd `fun!` inside a boundary decl is a HARD scan error (I7):
+/// boundary-referenced fns ride the helper-function channel, and a declared
+/// helper matching no `#[prebindgen]` item fails the scan — no silent
+/// omission, no stale-ignore warning.
+#[test]
+fn typo_in_expand_decl_is_hard_error() {
+    use crate::api::core::registry::{ScanError, WriteRustError};
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    registry.set_default_module("myflat");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
+        // `z_err_mesage` (sic) exists nowhere among the indexed items.
+        .expand(crate::expand_return!(ZErr).field(crate::fun!(z_err_mesage).name("message")));
+    let dir = unique_test_dir("jnigen_expand_typo_hard_error");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let err = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect_err("typo'd expand accessor must fail the scan");
+    match err {
+        WriteRustError::Scan(ScanError::DeclaredNotFound { entries }) => {
+            assert_eq!(
+                entries,
+                vec![("helper function", "z_err_mesage".to_string())]
+            );
+        }
+        other => panic!("expected DeclaredNotFound, got {other:?}"),
+    }
+}
+
+/// `ignore_funs_where` (C2): one predicate acknowledges a whole naming
+/// family — the matching undeclared fns are skipped without per-name
+/// `ignore_fun` lines, no extern is emitted for them, and the generation
+/// still succeeds with only the declared surface.
+#[test]
+fn ignore_funs_where_acknowledges_matching_family() {
+    use crate::SourceLocation;
+    let loc = SourceLocation::default();
+    let fns: &[&str] = &[
+        "pub fn z_len(v: i64) -> i64 { unimplemented!() }",
+        "pub fn detail_const_a() -> i64 { unimplemented!() }",
+        "pub fn detail_const_b() -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    registry.set_default_module("myflat");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(crate::fun!(z_len)))
+        .ignore_funs_where(|name| name.starts_with("detail_const_"));
+    // The predicate flows through the Prebindgen hook…
+    {
+        use crate::api::core::prebindgen::Prebindgen;
+        let preds = jni.ignored_function_predicates();
+        assert_eq!(preds.len(), 1);
+        assert!(preds[0]("detail_const_a") && !preds[0]("z_len"));
+    }
+    // …and the full pipeline runs clean, emitting only the declared fn.
+    let dir = unique_test_dir("jnigen_ignore_funs_where");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    assert!(rust.contains("Java_io_test_jni_JNINative_zLen"), "{rust}");
+    assert!(!rust.contains("detailConstA"), "{rust}");
+}

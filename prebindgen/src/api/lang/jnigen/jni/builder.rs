@@ -90,6 +90,7 @@ impl JniGen {
             fn_return_expands: Vec::new(),
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
+            ignored_fn_predicates: Vec::new(),
             ignored_class_types: std::collections::HashSet::new(),
             ignored_const_idents: std::collections::HashSet::new(),
         };
@@ -247,6 +248,21 @@ impl JniGen {
     /// belongs to no package. E.g. `.ignore_fun(fun!(string_len))`.
     pub fn ignore_fun(mut self, decl: FunctionDecl) -> Self {
         self.ignored_fns.insert(decl.rust_ident);
+        self
+    }
+
+    /// Bulk form of [`Self::ignore_fun`]: acknowledge every `#[prebindgen]`
+    /// function whose name matches the predicate — e.g.
+    /// `.ignore_funs_where(|n| n.starts_with("encoding_const_"))` instead of
+    /// one `ignore_fun` line per member of a naming family. A *declared*
+    /// function matching the predicate is unaffected (declaration wins), and
+    /// unlike an exact-name ignore, a predicate matching nothing is silent —
+    /// it is a filter, not a claim about a specific item.
+    pub fn ignore_funs_where<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&str) -> bool + Send + Sync + 'static,
+    {
+        self.ignored_fn_predicates.push(Arc::new(f));
         self
     }
 

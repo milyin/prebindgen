@@ -288,11 +288,31 @@ pub struct DuplicateNameError {
 #[derive(Debug)]
 pub enum ScanError {
     DuplicateName(Box<DuplicateNameError>),
-    ConflictingFunctionIntent { name: syn::Ident },
-    ConflictingTypeIntent { key: TypeKey },
-    DisallowedImplTrait { ty: String, loc: SourceLocation },
-    UnsupportedReceiver { loc: SourceLocation },
-    UnsupportedParamPattern { loc: SourceLocation },
+    ConflictingFunctionIntent {
+        name: syn::Ident,
+    },
+    ConflictingTypeIntent {
+        key: TypeKey,
+    },
+    DisallowedImplTrait {
+        ty: String,
+        loc: SourceLocation,
+    },
+    UnsupportedReceiver {
+        loc: SourceLocation,
+    },
+    UnsupportedParamPattern {
+        loc: SourceLocation,
+    },
+    /// Explicitly declared items (functions, helper functions, constants)
+    /// that match no indexed `#[prebindgen]` item. A declaration is a
+    /// statement of intent — its target being absent is always a bug (a
+    /// typo in build.rs, or the item was renamed/removed in the source
+    /// crate), so this is a hard error, unlike the soft warnings for stale
+    /// *ignore* entries. All missing names are collected before failing.
+    DeclaredNotFound {
+        entries: Vec<(&'static str, String)>,
+    },
 }
 
 impl fmt::Display for ScanError {
@@ -334,6 +354,21 @@ impl fmt::Display for ScanError {
             }
             ScanError::UnsupportedParamPattern { loc } => {
                 write!(f, "non-ident parameter pattern is not supported at {}", loc)
+            }
+            ScanError::DeclaredNotFound { entries } => {
+                writeln!(
+                    f,
+                    "{} declared item(s) not found among #[prebindgen] items:",
+                    entries.len()
+                )?;
+                for (kind, name) in entries {
+                    writeln!(f, "  - {kind} `{name}`")?;
+                }
+                write!(
+                    f,
+                    "a declaration names an item that does not exist — typo in build.rs, \
+                     or renamed/removed in the source crate?"
+                )
             }
         }
     }
@@ -399,6 +434,11 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
 struct DeclaredItems {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
+    /// Bulk-ignore predicates over fn names — every matching *undeclared*
+    /// fn is an acknowledged skip (no warning). A declared fn matching a
+    /// predicate is unaffected: declaration wins. See
+    /// [`Prebindgen::ignored_function_predicates`].
+    ignored_fn_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
     /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
     helper_functions: HashSet<syn::Ident>,
     accessors: HashSet<syn::Ident>,
@@ -429,6 +469,7 @@ impl DeclaredItems {
         let declared = Self {
             functions: adapter.declared_functions(),
             ignored_functions: adapter.ignored_functions(),
+            ignored_fn_predicates: adapter.ignored_function_predicates(),
             helper_functions: adapter.helper_functions(),
             accessors: adapter.accessor_functions(),
             method_receivers: adapter.method_receivers(),
@@ -609,15 +650,18 @@ impl<M> Registry<M> {
     }
 
     fn scan_declared_items(&mut self, declared: &DeclaredItems) -> Result<(), ScanError> {
+        // Declared-but-missing items are collected across all three loops and
+        // reported together as one hard error (see
+        // [`ScanError::DeclaredNotFound`]); stale *ignore* entries below only
+        // warn.
+        let mut missing: Vec<(&'static str, String)> = Vec::new();
+
         // Scan declared functions.
         for ident in &declared.functions {
             if let Some((item_fn, loc)) = self.functions.get(ident).cloned() {
                 self.scan_fn_signature(&item_fn, &loc)?;
             } else {
-                println!(
-                    "cargo:warning=prebindgen: declared function `{}` not found among #[prebindgen] items",
-                    ident
-                );
+                missing.push(("function", ident.to_string()));
             }
         }
 
@@ -632,13 +676,11 @@ impl<M> Registry<M> {
 
         // Helper functions: never emitted, no blanket signature scan (the
         // adapter registers the specific requirements via
-        // `extra_required_types`) — but a typo'd name still warns.
+        // `extra_required_types`) — but they are referenced by name from
+        // adapter declarations, so a missing one is a hard error.
         for ident in &declared.helper_functions {
             if !self.functions.contains_key(ident) {
-                println!(
-                    "cargo:warning=prebindgen: helper function `{}` not found among #[prebindgen] items",
-                    ident
-                );
+                missing.push(("helper function", ident.to_string()));
             }
         }
 
@@ -650,10 +692,7 @@ impl<M> Registry<M> {
                 if let Some((item_const, loc)) = self.consts.get(ident).cloned() {
                     self.ensure_entry(Direction::Output, &item_const.ty, true, &loc);
                 } else {
-                    println!(
-                        "cargo:warning=prebindgen: declared const `{}` not found among #[prebindgen] items",
-                        ident
-                    );
+                    missing.push(("constant", ident.to_string()));
                 }
             }
             for ident in &declared.ignored_consts {
@@ -664,6 +703,11 @@ impl<M> Registry<M> {
                     );
                 }
             }
+        }
+
+        if !missing.is_empty() {
+            missing.sort();
+            return Err(ScanError::DeclaredNotFound { entries: missing });
         }
 
         // Adapter-required extra output types — synthesized values with no
@@ -713,7 +757,16 @@ impl<M> Registry<M> {
             }
         }
 
-        // Warn about indexed items that the adapter never claimed.
+        // Warn about indexed items that the adapter never claimed. An
+        // ignore *predicate* acknowledges every matching fn in bulk; a
+        // predicate matching nothing is silent by design (it is a filter,
+        // not a claim — match counts vary across feature configurations).
+        let pred_ignored = |k: &syn::Ident| {
+            !declared.ignored_fn_predicates.is_empty() && {
+                let name = k.to_string();
+                declared.ignored_fn_predicates.iter().any(|p| p(&name))
+            }
+        };
         let mut skipped_fns: Vec<String> = self
             .functions
             .keys()
@@ -721,6 +774,7 @@ impl<M> Registry<M> {
                 !declared.functions.contains(*k)
                     && !declared.ignored_functions.contains(*k)
                     && !declared.helper_functions.contains(*k)
+                    && !pred_ignored(k)
             })
             .map(|k| k.to_string())
             .collect();

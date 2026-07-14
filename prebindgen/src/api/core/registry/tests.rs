@@ -15,6 +15,9 @@ use crate::api::core::{
 struct StubExt {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
+    ignored_fn_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+    helper_functions: HashSet<syn::Ident>,
+    consts: Option<HashSet<syn::Ident>>,
     types: HashSet<TypeKey>,
     ignored_types: HashSet<TypeKey>,
 }
@@ -27,6 +30,15 @@ impl Prebindgen for StubExt {
     }
     fn ignored_functions(&self) -> HashSet<syn::Ident> {
         self.ignored_functions.clone()
+    }
+    fn ignored_function_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
+        self.ignored_fn_predicates.clone()
+    }
+    fn helper_functions(&self) -> HashSet<syn::Ident> {
+        self.helper_functions.clone()
+    }
+    fn declared_consts(&self) -> Option<HashSet<syn::Ident>> {
+        self.consts.clone()
     }
     fn declared_types(&self) -> HashSet<TypeKey> {
         self.types.clone()
@@ -160,6 +172,84 @@ fn scan_declared_rejects_type_declared_and_ignored_overlap() {
         Err(ScanError::ConflictingTypeIntent { key: actual }) if actual == key => (),
         other => panic!("expected ConflictingTypeIntent, got {:?}", other),
     }
+}
+
+/// A declared function that matches no indexed item is a hard error, not a
+/// warning — explicit intent gone wrong (I7).
+#[test]
+fn scan_declared_missing_function_is_hard_error() {
+    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("good").unwrap());
+    ext.functions.insert(syn::parse_str("typo_fn").unwrap());
+    match reg.scan_declared(&ext) {
+        Err(ScanError::DeclaredNotFound { entries }) => {
+            assert_eq!(entries, vec![("function", "typo_fn".to_string())]);
+        }
+        other => panic!("expected DeclaredNotFound, got {:?}", other),
+    }
+}
+
+/// All missing declared items (fn, helper fn, const) are collected into ONE
+/// error, sorted, so a broken build.rs is fixed in a single pass.
+#[test]
+fn scan_declared_collects_all_missing_kinds_in_one_error() {
+    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("typo_fn").unwrap());
+    ext.helper_functions
+        .insert(syn::parse_str("typo_helper").unwrap());
+    ext.consts = Some(HashSet::from([syn::parse_str("TYPO_CONST").unwrap()]));
+    match reg.scan_declared(&ext) {
+        Err(ScanError::DeclaredNotFound { entries }) => {
+            assert_eq!(
+                entries,
+                vec![
+                    ("constant", "TYPO_CONST".to_string()),
+                    ("function", "typo_fn".to_string()),
+                    ("helper function", "typo_helper".to_string()),
+                ]
+            );
+            // The message lists every entry.
+            let msg = ScanError::DeclaredNotFound { entries }.to_string();
+            assert!(msg.contains("typo_fn") && msg.contains("TYPO_CONST"));
+        }
+        other => panic!("expected DeclaredNotFound, got {:?}", other),
+    }
+}
+
+/// A stale *ignore* entry stays a warning: the scan succeeds.
+#[test]
+fn scan_declared_missing_ignore_is_not_an_error() {
+    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.ignored_functions
+        .insert(syn::parse_str("gone_fn").unwrap());
+    reg.scan_declared(&ext)
+        .expect("stale ignore must only warn");
+}
+
+/// An ignore predicate acknowledges matching undeclared fns (C2) and is
+/// silent when it matches nothing — it is a filter, not a claim.
+#[test]
+fn scan_declared_accepts_ignore_predicates() {
+    let items = vec![
+        fn_item("fn helper_a(x: u64) -> u64 { x }"),
+        fn_item("fn helper_b(x: u64) -> u64 { x }"),
+    ];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.ignored_fn_predicates
+        .push(std::sync::Arc::new(|n: &str| n.starts_with("helper_")));
+    // Matches both fns — and a second, zero-match predicate is fine too.
+    ext.ignored_fn_predicates
+        .push(std::sync::Arc::new(|n: &str| n.starts_with("nothing_")));
+    reg.scan_declared(&ext).expect("predicates must scan clean");
+    // Nothing was declared, so nothing became required.
+    assert!(reg.required_inputs_scan.is_empty());
 }
 
 #[test]

@@ -286,6 +286,21 @@ typo'd `fun!(name)` → **cargo warning + silent omission** (`registry.rs`
 wildcard rank > 3 → silent `return None`. A *declared*-but-missing function is
 explicit intent gone wrong and should be a hard error.
 
+> **Resolution (2026-07-14): fixed — declared-but-missing is now a hard
+> error.** Policy: a *declaration* names a specific item, so its target
+> being absent is always a bug and fails the scan
+> (`ScanError::DeclaredNotFound`) — declared functions, `convert!`/boundary
+> helper functions, and declared constants; all missing names are collected
+> into ONE error (sorted) so a broken build.rs is fixed in a single pass.
+> An *ignore*, by contrast, is bookkeeping about something deliberately
+> unused — a stale entry keeps its soft `cargo:warning`. jnigen's
+> boundary-referenced fns (`expand_*!` ctors/accessors) were rerouted from
+> the ignore channel to the helper channel so a typo'd `fun!` inside an
+> expand decl is also a hard error. Two of the flagged examples were
+> already stale: the scalar-wrapper panic died with the wrapper tier (M5),
+> and the rank > 3 silent `None` died with the rank resolver (the
+> structural resolver hard-errors via `ResolveError::Unresolved`).
+
 ---
 
 ## Inconvenient
@@ -305,6 +320,19 @@ none applies here).
 undeclared-fn warnings — and the same 53 names appear a second time (lowercase)
 to build the consts. No prefix/regex ignore, no way to derive one list from the
 other.
+
+> **Resolution (2026-07-14): fixed —
+> `.ignore_funs_where(|name| name.starts_with("encoding_const_"))`.** A
+> plain-Rust closure predicate (no glob/regex mini-dialect to learn), in
+> the style of the existing mangle hooks; core hook
+> `Prebindgen::ignored_function_predicates` (`NamePredicate` alias).
+> Semantics: a predicate is a *filter*, not a claim — matching undeclared
+> fns are acknowledged skips, a declared fn matching a predicate is
+> unaffected (declaration wins), and a predicate matching nothing is
+> silent (unlike an exact-name ignore, which warns when stale — match
+> counts legitimately vary across feature configs). zenoh-flat-jni's
+> 53-line loop is now one line; covertest demonstrates both mechanisms
+> (`storage_get_into_*` via predicate, the two loners via `ignore_fun`).
 
 ### C3. The advanced wrapper tier demands syn/quote fluency
 
