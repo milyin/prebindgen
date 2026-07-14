@@ -162,7 +162,7 @@ public class PayloadVecHandler(initialPtr: Long) : NativeHandle(initialPtr) {
 }
 
 /** Typed handle for a native Zenoh `Storage`. */
-public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
+public class Storage(initialPtr: Long) : NativeHandle(initialPtr), CovResource {
     @Synchronized
     override fun close() {
         val p = ptr

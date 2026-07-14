@@ -9,6 +9,58 @@ fn builtin_convert_type_panics() {
     let _ = crate::convert!(usize);
 }
 
+/// #54: `.implements(...)` — the ptr_class integration hatch. Declared
+/// interfaces join the generated class's supertype list after the lifecycle
+/// base; dotted FQNs are imported and shortened; the class body (close/take/
+/// freePtr) is unchanged.
+#[test]
+fn ptr_class_implements_adds_interface_supertypes() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_thing_new() -> ZThing { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .class(
+                crate::ptr_class!(ZThing)
+                    .implements("io.other.Resource")
+                    .implements("LocalIface"),
+            )
+            .fun(crate::fun!(z_thing_new)),
+    );
+    let dir = unique_test_dir("jnigen_implements");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let thing = paths
+        .iter()
+        .find(|p| p.ends_with("io/test/jni/thing.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("thing package file");
+    assert!(
+        thing.contains(
+            "class ZThing(initialPtr: Long) : NativeHandle(initialPtr), Resource, LocalIface {"
+        ),
+        "{thing}"
+    );
+    assert!(thing.contains("import io.other.Resource"), "{thing}");
+    // The lifecycle members are untouched by the hatch.
+    assert!(thing.contains("override fun close()"), "{thing}");
+    assert!(thing.contains("fun take(): ZThing"), "{thing}");
+}
+
+/// A duplicate interface on one decl is a decl-time hard error.
+#[test]
+#[should_panic(expected = "the interface is already declared")]
+fn ptr_class_duplicate_implements_rejected() {
+    let _ = crate::ptr_class!(ZThing)
+        .implements("io.other.Resource")
+        .implements("io.other.Resource");
+}
+
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn
 /// override) and base-package functions (`.fun` with the empty subpackage —
 /// mirroring class declarations, which could always live in the base package).

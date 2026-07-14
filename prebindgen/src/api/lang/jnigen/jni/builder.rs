@@ -324,10 +324,18 @@ impl JniGen {
                 kind: NameKind::Ptr,
             },
         );
-        self.types
+        let opaque = self
+            .types
             .get_mut(&key)
             .expect("register_class_name created the entry")
-            .opaque = Some(OpaqueConfig::default());
+            .opaque
+            .get_or_insert_with(OpaqueConfig::default);
+        // Reopened decls merge; a repeated interface is idempotent.
+        for iface in decl.interfaces {
+            if !opaque.interfaces.contains(&iface) {
+                opaque.interfaces.push(iface);
+            }
+        }
         self.accept_members(&key, decl.members);
     }
 

@@ -80,7 +80,12 @@ pub(crate) use crate::api::{
 /// Kotlin emitter writes a typed-handle `.kt` file (and the Rust side its
 /// `freePtr` destructor) for every opaque type.
 #[derive(Clone, Default)]
-pub(crate) struct OpaqueConfig {}
+pub(crate) struct OpaqueConfig {
+    /// Kotlin interfaces added to the generated class's supertype list
+    /// (`PtrClassDecl::implements`) — the bounded integration hatch; the
+    /// class body and lifecycle members are unaffected.
+    pub(crate) interfaces: Vec<String>,
+}
 
 /// Per-enum configuration (driven by `JniGen::enum_class`).
 ///

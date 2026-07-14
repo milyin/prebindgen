@@ -33,6 +33,7 @@
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | namespace-relative member names (C1)  | `storage_len`→`len`, `stamp_secs`→`secs`, … (no `.name()`); `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
+//! | `.implements(…)` integration hatch    | `Storage` implements hand-written `CovResource` (#54) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `constant!` (bare = `#[prebindgen]` const) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
 //! | `constant!(N).fun(fun!(…))`           | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
@@ -255,7 +256,12 @@ fn main() {
                     ptr_class!(Storage)
                         .fun(fun!(storage_len))
                         .fun(fun!(storage_contains))
-                        .constructor(fun!(storage_with_payload)),
+                        .constructor(fun!(storage_with_payload))
+                        // #54 integration hatch: the generated class joins a
+                        // hand-written consumer interface (satisfied by
+                        // NativeHandle's public peek()/isClosed()) — no
+                        // hand-editing of generated code.
+                        .implements("io.prebindgen.covertest.CovResource"),
                 )
                 // The callback-handler handles (single payload / whole batch / owned
                 // storage handle).

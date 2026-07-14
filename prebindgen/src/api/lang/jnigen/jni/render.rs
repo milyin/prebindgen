@@ -309,7 +309,20 @@ pub(crate) fn build_typed_handle(
         .vis(kt::Vis::Public)
         .kdoc(class_kdoc)
         .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()))
-        .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
+        .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"));
+    // Declared consumer interfaces (`PtrClassDecl::implements`) join the
+    // supertype list after the lifecycle base — nominal only, the class
+    // body is unaffected.
+    for iface in ext
+        .types
+        .get(key)
+        .and_then(|c| c.opaque.as_ref())
+        .map(|o| o.interfaces.as_slice())
+        .unwrap_or(&[])
+    {
+        class = class.supertype(kt::KtType::cls(iface), None);
+    }
+    class = class
         .member(
             kt::KtFun::new("close")
                 .annotation("Synchronized")

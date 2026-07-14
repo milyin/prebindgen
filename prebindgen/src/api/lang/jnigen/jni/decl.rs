@@ -287,6 +287,7 @@ pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
+    pub(crate) interfaces: Vec<String>,
 }
 
 impl PtrClassDecl {
@@ -295,6 +296,7 @@ impl PtrClassDecl {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
             members: Vec::new(),
+            interfaces: Vec::new(),
         }
     }
 
@@ -304,6 +306,34 @@ impl PtrClassDecl {
     /// from the enclosing [`PackageDecl`].
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name_override = Some(name.into());
+        self
+    }
+
+    /// Add a Kotlin **interface** to the generated class's supertype list —
+    /// the bounded integration hatch for plugging generated handles into an
+    /// existing SDK hierarchy (a `ptr_class` has no `.kotlin_type()`: the
+    /// generated class owns the lifecycle contract, and an interface adds
+    /// obligations without overriding `close()`/`take()`/`ptr` behavior).
+    ///
+    /// `iface` is a Kotlin interface FQN (dotted names are imported and
+    /// shortened) or a same-package name. The interface is implemented
+    /// *nominally*: its abstract members must be satisfied by the generated
+    /// surface — `NativeHandle`'s public `peek()`/`isClosed()`, `close()`
+    /// (via `AutoCloseable`), and the class's declared members — or carry
+    /// default implementations. Call again to add several interfaces.
+    pub fn implements(mut self, iface: impl Into<String>) -> Self {
+        let iface = iface.into();
+        assert!(
+            !iface.trim().is_empty(),
+            "ptr_class!({}).implements(...): the interface name is empty",
+            self.key.as_str()
+        );
+        assert!(
+            !self.interfaces.contains(&iface),
+            "ptr_class!({}).implements(\"{iface}\"): the interface is already declared",
+            self.key.as_str()
+        );
+        self.interfaces.push(iface);
         self
     }
 

@@ -172,6 +172,20 @@ fun main() {
         s.close()
     }
 
+    // ── .implements(...) integration hatch (#54): the generated Storage class
+    // implements the HAND-WRITTEN CovResource interface — used here through a
+    // polymorphic interface reference, including an interface-default member
+    // built on the generated peek()/isClosed() surface ────────────────────────
+    section(".implements() hatch (Storage as CovResource)") {
+        val s = storageNew(boom)
+        val r: CovResource = s
+        check(r.isLive())                 // default member over generated surface
+        check(!r.isClosed() && r.peek() != 0L)
+        s.close()
+        check(!r.isLive())
+        check(r.isClosed() && r.peek() == 0L)
+    }
+
     // ── impl Fn callbacks: single-payload + whole-batch ──────────────────────
     section("callbacks (impl Fn single + slice)") {
         val s = storageNew(boom)
