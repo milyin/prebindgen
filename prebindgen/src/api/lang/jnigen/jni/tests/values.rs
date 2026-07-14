@@ -423,7 +423,7 @@ fn output_only_convert_resolves_without_input_twin() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .convert(crate::convert!(Len).output(crate::fun!(len_value)))
+        .convert(crate::convert!(Len).output_fun(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_convert");
     let _ = std::fs::remove_dir_all(&dir);
@@ -467,7 +467,7 @@ fn convert_fn_qualifies_with_origin_crate() {
         Registry::<KotlinMeta>::from_items(flat.into_iter().chain(helpers)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .convert(crate::convert!(Len).output(crate::fun!(len_value)))
+        .convert(crate::convert!(Len).output_fun(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_convert_origin");
     let _ = std::fs::remove_dir_all(&dir);
@@ -502,7 +502,7 @@ fn convert_input_target_mismatch_rejected() {
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
-        .convert(crate::convert!(Len).input(crate::fun!(from_long)))
+        .convert(crate::convert!(Len).input_fun(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
     let dir = unique_test_dir("jnigen_convert_mismatch");
     let _ = std::fs::remove_dir_all(&dir);

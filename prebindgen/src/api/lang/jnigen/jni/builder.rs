@@ -204,8 +204,6 @@ impl JniGen {
             classes,
             functions,
             constants,
-            constant_functions,
-            constant_exprs,
         } = decl;
         self.packages.entry(name.clone()).or_default();
         for class in classes {
@@ -214,30 +212,30 @@ impl JniGen {
         for func in functions {
             self.accept_function(&name, func);
         }
+        // One acceptor, dispatched on the decl's value source. The `.with`
+        // source was already lowered to an expression (`path()`) at decl
+        // time, so only three storage kinds exist internally.
         for c in constants {
-            let mut entry = MethodEntry::new(c.rust_ident);
-            entry.kotlin_name_override = c.kotlin_name_override;
-            self.packages
-                .entry(name.clone())
-                .or_default()
-                .constants
-                .push(entry);
-        }
-        for f in constant_functions {
-            let mut entry = MethodEntry::new(f.rust_ident);
-            entry.kotlin_name_override = f.kotlin_name_override;
-            self.packages
-                .entry(name.clone())
-                .or_default()
-                .constant_functions
-                .push(entry);
-        }
-        for e in constant_exprs {
-            self.packages
-                .entry(name.clone())
-                .or_default()
-                .constant_exprs
-                .push(e);
+            let pkg = self.packages.entry(name.clone()).or_default();
+            match c.source {
+                super::decl::ConstSource::Item => {
+                    let mut entry = MethodEntry::new(c.rust_ident);
+                    entry.kotlin_name_override = c.kotlin_name_override;
+                    pkg.constants.push(entry);
+                }
+                super::decl::ConstSource::Fun(ref fn_ident) => {
+                    let mut entry = MethodEntry::new(fn_ident.clone());
+                    entry.kotlin_name_override = Some(c.val_name());
+                    pkg.constant_functions.push(entry);
+                }
+                super::decl::ConstSource::Expr { ref ty, ref expr } => {
+                    pkg.constant_exprs.push(super::decl::ConstExprDecl {
+                        kotlin_name: c.val_name(),
+                        ty: ty.clone(),
+                        expr: expr.clone(),
+                    });
+                }
+            }
         }
         self
     }

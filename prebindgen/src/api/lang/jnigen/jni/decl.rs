@@ -97,28 +97,14 @@ macro_rules! fun {
     };
 }
 
-/// Build a [`ConstDecl`] directly from a bare const ident:
-/// `constant!(MAX_LEN)` is `ConstDecl::new(prebindgen::ident!(MAX_LEN))`.
+/// Build a [`ConstDecl`] from a bare ident: `constant!(MAX_LEN)` is
+/// `ConstDecl::new(prebindgen::ident!(MAX_LEN))` — with no source modifier
+/// it declares the same-named `#[prebindgen]` const; `.fun(…)` / `.with(…)`
+/// / `.expr(…)` switch the value source (the ident stays as the `val` name).
 #[macro_export]
 macro_rules! constant {
     ($name:ident) => {
         $crate::lang::ConstDecl::new($crate::ident!($name))
-    };
-}
-
-/// Build a [`ConstExprDecl`] in val-declaration syntax:
-/// `constant_expr!(BANNER: String = format!("{COVER_TAG}:{COVER_MAGIC}"))` is
-/// `ConstExprDecl::new("BANNER", <String>, <the expression>)`. The expression
-/// is evaluated inside the generated getter with a glob import of every
-/// source module in scope.
-#[macro_export]
-macro_rules! constant_expr {
-    ($name:ident : $ty:ty = $expr:expr) => {
-        $crate::lang::ConstExprDecl::new(
-            stringify!($name),
-            ::syn::parse_quote!($ty),
-            ::syn::parse_quote!($expr),
-        )
     };
 }
 
@@ -148,11 +134,21 @@ macro_rules! ty {
 
 /// Build a `syn::Path` from a bare path token: `path!(crate::conv::f)`. The
 /// callable argument of [`ConvertDecl::input_with`] /
-/// [`ConvertDecl::output_with`].
+/// [`ConvertDecl::output_with`] and [`ConstDecl::with`].
 #[macro_export]
 macro_rules! path {
     ($p:path) => {
         $crate::__macro_support::parse_path(stringify!($p))
+    };
+}
+
+/// Build a `syn::Expr` from an expression token: `expr!(format!("{A}:{B}"))`.
+/// The initializer argument of [`ConstDecl::expr`] — allowed only for
+/// constants, where the expression binds no arguments.
+#[macro_export]
+macro_rules! expr {
+    ($e:expr) => {
+        $crate::__macro_support::parse_expr(stringify!($e))
     };
 }
 
@@ -677,19 +673,52 @@ impl FunctionDecl {
     }
 }
 
-/// Declares one `#[prebindgen]` **const** for emission: on the Rust side a
-/// nullary JNI getter extern is generated (the const's type goes through the
-/// ordinary output-converter machinery, exactly like a function return); on
-/// the Kotlin side the const surfaces as an eagerly-initialized top-level
-/// `val` in its package's `.kt` file.
+/// A [`ConstDecl`]'s **value source** — where the constant's value comes
+/// from. Mirrors `convert!`'s source vocabulary at the nullary edge:
+/// prebindgen item (bare) / prebindgen fn (`.fun`) / binding-local named fn
+/// (`.with`) / expression (`.expr` — const-only: an expression binds no
+/// arguments only when there is no value flowing in).
+// Build-time declaration object, a handful per binding — the Expr variant's
+// size is irrelevant, same trade-off as `ConvertSpec`.
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum ConstSource {
+    /// The same-named `#[prebindgen]` const (the bare `constant!(X)` form).
+    Item,
+    /// A **nullary** `#[prebindgen]` fn; the value type is read from its
+    /// registry signature and the result flows through the ordinary
+    /// generated wrapper, consumed as an eager `val`.
+    Fun(syn::Ident),
+    /// A binding-defined initializer expression with a **stated** value
+    /// type, evaluated once inside a generated nullary JNI getter (with a
+    /// glob import of every source module in scope). `.with(ty, path)`
+    /// lowers here as `path()`.
+    Expr { ty: syn::Type, expr: syn::Expr },
+}
+
+/// Declares one **constant** for emission: an eagerly-initialized top-level
+/// Kotlin `val` in its package's `.kt` file, initialized through a generated
+/// nullary JNI getter (the value type goes through the ordinary
+/// output-converter machinery, exactly like a function return).
 ///
-/// Build one with [`constant!`](crate::constant) and add it to a
-/// [`PackageDecl`] via [`PackageDecl::constant`]. Opaque-handle-typed consts
-/// are rejected (a shared closeable `val` is semantically wrong) — expose a
-/// factory function instead.
+/// Build one with [`constant!`](crate::constant) — the ident is the `val`
+/// name — and pick the value source:
+///
+/// ```rust,ignore
+/// .constant(constant!(MAX_LEN))                          // #[prebindgen] const MAX_LEN
+/// .constant(constant!(TAG_RUNTIME).fun(fun!(tag_runtime)))  // nullary #[prebindgen] fn
+/// .constant(constant!(VERSION).with(ty!(String), path!(crate::version)))  // binding-local fn
+/// .constant(constant!(BANNER).expr(ty!(String), expr!(format!("{A}:{B}"))))  // expression
+/// ```
+///
+/// For declaration loops build the subject at runtime with
+/// [`ConstDecl::named`]. Opaque-handle-typed (and `Result`-typed) constants
+/// are rejected for every source — expose a factory function instead.
 pub struct ConstDecl {
+    /// Subject ident: the default `val` name; for the [`ConstSource::Item`]
+    /// source also the `#[prebindgen]` const to look up.
     pub(crate) rust_ident: syn::Ident,
     pub(crate) kotlin_name_override: Option<String>,
+    pub(crate) source: ConstSource,
 }
 
 impl ConstDecl {
@@ -697,51 +726,99 @@ impl ConstDecl {
         Self {
             rust_ident,
             kotlin_name_override: None,
+            source: ConstSource::Item,
         }
     }
 
-    /// Set the Kotlin-side name. Default: the Rust const ident verbatim
+    /// Runtime form of [`constant!`](crate::constant) for declaration
+    /// loops: `ConstDecl::named(format!("ENCODING_{n}")).expr(ty, expr)`.
+    /// The name must be a valid identifier (it seeds the extern symbol).
+    pub fn named(name: impl AsRef<str>) -> Self {
+        let name = name.as_ref();
+        let ident: syn::Ident = syn::parse_str(name)
+            .unwrap_or_else(|e| panic!("constant name `{name}` is not a valid identifier: {e}"));
+        Self::new(ident)
+    }
+
+    /// Set the Kotlin-side `val` name. Default: the subject ident verbatim
     /// (`MAX_LEN` → `val MAX_LEN` — SCREAMING_SNAKE is the Kotlin constant
     /// convention too).
     pub fn name(mut self, kotlin_name: impl Into<String>) -> Self {
         self.kotlin_name_override = Some(kotlin_name.into());
         self
     }
+
+    /// The declared `val` name (override, else the subject ident).
+    pub(crate) fn val_name(&self) -> String {
+        self.kotlin_name_override
+            .clone()
+            .unwrap_or_else(|| self.rust_ident.to_string())
+    }
+
+    fn set_source(mut self, source: ConstSource) -> Self {
+        assert!(
+            matches!(self.source, ConstSource::Item),
+            "constant `{}`: value source already set — a constant has exactly one source \
+             (.fun / .with / .expr)",
+            self.rust_ident
+        );
+        self.source = source;
+        self
+    }
+
+    /// Value source: a **nullary** `#[prebindgen]` fn (e.g. a value a Rust
+    /// `const` cannot express — a string only obtainable through a runtime
+    /// `Display`). The value type is read from the fn's signature; the fn
+    /// must take no parameters and must not return `Result`.
+    pub fn fun(self, decl: FunctionDecl) -> Self {
+        assert!(
+            decl.param_expands.is_empty() && decl.return_expand.is_none(),
+            "constant `{}`: expand overrides don't apply to a constant source fn `{}`",
+            self.rust_ident,
+            decl.rust_ident
+        );
+        assert!(
+            decl.kotlin_name_override.is_none(),
+            "constant `{}`: the val name belongs on `constant!(…)` (or its `.name(…)`), \
+             not on the source fn `{}`",
+            self.rust_ident,
+            decl.rust_ident
+        );
+        self.set_source(ConstSource::Fun(decl.rust_ident))
+    }
+
+    /// Value source: a **binding-local nullary fn** named by path —
+    /// `(stated value type, path)`, the const analog of
+    /// [`ConvertDecl::input_with`]. The fn lives in the binding crate
+    /// (callable because the generated file compiles inside it):
+    /// `fn() -> T`.
+    pub fn with(self, ty: syn::Type, path: syn::Path) -> Self {
+        let expr: syn::Expr = syn::parse_quote!(#path());
+        self.set_source(ConstSource::Expr { ty, expr })
+    }
+
+    /// Value source: a binding-defined **expression** with a stated value
+    /// type, evaluated once inside the generated getter with a glob import
+    /// of every source module in scope — so it composes source-crate
+    /// `#[prebindgen]` items freely, e.g.
+    /// `expr!(encoding_to_string(encoding_const_text_plain()))`. This
+    /// source exists only for constants: an expression binds no arguments
+    /// exactly when nothing flows in (a unary conversion source must be a
+    /// named callable — see [`ConvertDecl`]). Fns referenced only inside
+    /// expressions are undeclared to the registry — acknowledge them via
+    /// [`JniGen::ignore_fun`] / [`JniGen::ignore_funs_where`].
+    pub fn expr(self, ty: syn::Type, expr: syn::Expr) -> Self {
+        self.set_source(ConstSource::Expr { ty, expr })
+    }
 }
 
-/// Declares one **expression-backed constant**: an arbitrary binding-defined
-/// Rust expression, evaluated once inside a generated nullary JNI getter and
-/// surfaced as an eagerly-initialized top-level Kotlin `val`. The expression
-/// runs with a glob import of every source module in scope, so it composes the source
-/// crate's `#[prebindgen]` items freely without the source crate having to
-/// export a dedicated accessor per constant — e.g.
-/// `encoding_to_string(encoding_const_text_plain())`.
-///
-/// Build one with [`constant_expr!`](crate::constant_expr) (literal form) or
-/// [`ConstExprDecl::new`] (runtime form, for declaration loops) and add it to
-/// a [`PackageDecl`] via [`PackageDecl::constant_expr`]. The value type is
-/// declared explicitly and flows through the ordinary output-converter
-/// machinery; opaque-handle and `Result` types are rejected like every other
-/// constant kind.
+/// Internal storage form of an expression-backed constant (the lowered
+/// `.with` / `.expr` sources of [`ConstDecl`]).
 #[derive(Clone)]
-pub struct ConstExprDecl {
+pub(crate) struct ConstExprDecl {
     pub(crate) kotlin_name: String,
     pub(crate) ty: syn::Type,
     pub(crate) expr: syn::Expr,
-}
-
-impl ConstExprDecl {
-    /// `kotlin_name` is the top-level `val` name (also the seed of the
-    /// extern symbol, so it must be unique among the binding's constants);
-    /// `ty` is the Rust value type the expression yields; `expr` is the
-    /// initializer expression, resolved against the source module.
-    pub fn new(kotlin_name: impl Into<String>, ty: syn::Type, expr: syn::Expr) -> Self {
-        Self {
-            kotlin_name: kotlin_name.into(),
-            ty,
-            expr,
-        }
-    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -760,8 +837,6 @@ pub struct PackageDecl {
     pub(crate) classes: Vec<ClassDecl>,
     pub(crate) functions: Vec<FunctionDecl>,
     pub(crate) constants: Vec<ConstDecl>,
-    pub(crate) constant_functions: Vec<FunctionDecl>,
-    pub(crate) constant_exprs: Vec<ConstExprDecl>,
 }
 
 impl PackageDecl {
@@ -777,8 +852,6 @@ impl PackageDecl {
             classes: Vec::new(),
             functions: Vec::new(),
             constants: Vec::new(),
-            constant_functions: Vec::new(),
-            constant_exprs: Vec::new(),
         }
     }
 
@@ -798,46 +871,13 @@ impl PackageDecl {
         self
     }
 
-    /// Add a `#[prebindgen]` const to this package: a top-level Kotlin `val`
-    /// in the package file, initialized through a generated nullary JNI
-    /// getter. Take a bare name via [`constant!`](crate::constant), or a
-    /// customized [`ConstDecl`] when you need `.name(...)`.
+    /// Add a **constant** to this package: a top-level Kotlin `val` in the
+    /// package file, initialized through a generated nullary JNI getter.
+    /// Build the decl with [`constant!`](crate::constant) and pick its
+    /// value source (`#[prebindgen]` const by default, `.fun` / `.with` /
+    /// `.expr` otherwise) — see [`ConstDecl`].
     pub fn constant(mut self, decl: ConstDecl) -> Self {
         self.constants.push(decl);
-        self
-    }
-
-    /// Add a **function-backed constant** to this package: a **nullary**
-    /// `#[prebindgen]` fn whose result surfaces as an eagerly-initialized
-    /// top-level Kotlin `val` (computed once, at package-file class-load,
-    /// through the ordinary generated wrapper) instead of a callable `fun`.
-    /// Use it for constant values a Rust `const` cannot express — e.g. a
-    /// string only obtainable through a runtime `Display`.
-    ///
-    /// `.name(...)` sets the val name; the default is the fn ident verbatim
-    /// (you almost always want an explicit SCREAMING_SNAKE name). The same
-    /// restrictions as [`Self::constant`] apply to the return type
-    /// (opaque-handle results are rejected), the fn must take no parameters,
-    /// and expand overrides are meaningless here — both are hard errors.
-    pub fn constant_fun(mut self, decl: FunctionDecl) -> Self {
-        assert!(
-            decl.param_expands.is_empty() && decl.return_expand.is_none(),
-            "constant_fun `{}`: expand overrides don't apply to a constant — \
-             declare a plain `FunctionDecl` (optionally with `.name(...)`)",
-            decl.rust_ident
-        );
-        self.constant_functions.push(decl);
-        self
-    }
-
-    /// Add an **expression-backed constant** to this package: an arbitrary
-    /// binding-defined Rust expression evaluated once (at package-file
-    /// class-load) inside a generated nullary JNI getter, surfacing as an
-    /// eagerly-initialized top-level Kotlin `val`. See [`ConstExprDecl`];
-    /// build one with [`constant_expr!`](crate::constant_expr) or
-    /// [`ConstExprDecl::new`].
-    pub fn constant_expr(mut self, decl: ConstExprDecl) -> Self {
-        self.constant_exprs.push(decl);
         self
     }
 }
@@ -854,8 +894,8 @@ impl PackageDecl {
 ///
 /// ```rust,ignore
 /// .convert(convert!(Millis)
-///     .input(fun!(millis_from_long))   // fn(u64) -> Millis    (wire → rust)
-///     .output(fun!(millis_value)))     // fn(&Millis) -> u64   (rust → wire)
+///     .input_fun(fun!(millis_from_long))   // fn(u64) -> Millis    (wire → rust)
+///     .output_fun(fun!(millis_value)))     // fn(&Millis) -> u64   (rust → wire)
 /// ```
 ///
 /// The Kotlin surface derives from the conversion functions' other-side type
@@ -924,7 +964,7 @@ impl ConvertDecl {
         assert!(
             self.input.is_none(),
             "convert!({}): the input conversion is already declared — pick ONE of \
-             .input()/.input_from()/.input_try_from()/.input_with()",
+             .input_fun()/.input_from()/.input_try_from()/.input_with()",
             self.key.as_str()
         );
         self.input = Some(spec);
@@ -935,7 +975,7 @@ impl ConvertDecl {
         assert!(
             self.output.is_none(),
             "convert!({}): the output conversion is already declared — pick ONE of \
-             .output()/.output_into()/.output_try_into()/.output_with()",
+             .output_fun()/.output_into()/.output_try_into()/.output_with()",
             self.key.as_str()
         );
         self.output = Some(spec);
@@ -967,8 +1007,8 @@ impl ConvertDecl {
     /// `#[prebindgen]` `fn(U) -> T` or `fn(U) -> Result<T, E>` where `T` is
     /// this decl's type. `U` (taken by value or `&U`) determines the wire and
     /// the Kotlin surface through its own converter chain.
-    pub fn input(self, rust_fun: FunctionDecl) -> Self {
-        let ident = self.plain_fn_ident("input", rust_fun);
+    pub fn input_fun(self, rust_fun: FunctionDecl) -> Self {
+        let ident = self.plain_fn_ident("input_fun", rust_fun);
         self.set_input(ConvertSpec::PrebindgenFn(ident))
     }
 
@@ -1027,9 +1067,9 @@ impl ConvertDecl {
 
     /// The **out-of-Rust** conversion (returns, callback arguments) as a
     /// `#[prebindgen]` `fn(&T) -> U` (or `fn(T) -> U`) where `T` is this
-    /// decl's type — the counterpart of [`input`](Self::input).
-    pub fn output(self, rust_fun: FunctionDecl) -> Self {
-        let ident = self.plain_fn_ident("output", rust_fun);
+    /// decl's type — the counterpart of [`input_fun`](Self::input_fun).
+    pub fn output_fun(self, rust_fun: FunctionDecl) -> Self {
+        let ident = self.plain_fn_ident("output_fun", rust_fun);
         self.set_output(ConvertSpec::PrebindgenFn(ident))
     }
 

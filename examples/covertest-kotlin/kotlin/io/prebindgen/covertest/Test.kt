@@ -87,13 +87,14 @@ private fun payload(id: Long, seq: Int, value: Double, flag: Boolean, label: Str
 fun main() {
     println("covertest-kotlin: exercising every JniGen feature")
 
-    // ── consts: eagerly-initialized top-level vals — const-backed (generated
-    // nullary getters over Rust consts) and function-backed (constant_fun:
-    // the value comes from a nullary #[prebindgen] fn at class-load) ─────────
-    section("top-level const vals (const- and function-backed)") {
+    // ── consts: eagerly-initialized top-level vals, one per value source —
+    // #[prebindgen] const (bare constant!), nullary #[prebindgen] fn (.fun),
+    // binding-local fn by path (.with), binding-defined expression (.expr) ────
+    section("top-level const vals (all four value sources)") {
         check(COVER_MAGIC == 0xC0FFEE.toLong())
         check(COVER_TAG == "covertest")
         check(COVER_TAG_RUNTIME == "covertest-runtime")
+        check(COVER_VERSION.startsWith("cover-"))
         check(COVER_BANNER == "covertest:0xc0ffee")
     }
 

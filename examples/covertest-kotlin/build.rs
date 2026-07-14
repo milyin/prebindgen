@@ -32,9 +32,10 @@
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
-//! | `PackageDecl::constant` (`constant!`) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
-//! | `PackageDecl::constant_fun` | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
-//! | `PackageDecl::constant_expr` (`constant_expr!`) | `COVER_BANNER` = binding-defined `format!` expression |
+//! | `constant!` (bare = `#[prebindgen]` const) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
+//! | `constant!(N).fun(fun!(…))`           | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
+//! | `constant!(N).with(ty!, path!)`       | `val COVER_VERSION` from binding-local `crate::cover_version()` |
+//! | `constant!(N).expr(ty!, expr!)`       | `COVER_BANNER` = binding-defined `format!` expression |
 //! | per-fn `.expand_param(name, …)` identity-only | `summary_total_raw` (raw handle param, overrides the type default) |
 //! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
@@ -76,8 +77,8 @@
 //! "skipping undeclared" build warning while emitting nothing.
 
 use prebindgen::{
-    constant, constant_expr, convert, core::Registry, data_class, enum_class, expand_param,
-    expand_return, fun, lang::JniGen, package, path, ptr_class, ty, value_class,
+    constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
+    fun, lang::JniGen, package, path, ptr_class, ty, value_class,
 };
 
 fn main() {
@@ -117,8 +118,8 @@ fn main() {
         // from the fns' `i64` side; nothing is stated verbatim.
         .convert(
             convert!(Millis)
-                .input(fun!(millis_from_long))
-                .output(fun!(millis_value)),
+                .input_fun(fun!(millis_from_long))
+                .output_fun(fun!(millis_value)),
         )
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
@@ -223,17 +224,22 @@ fn main() {
                 // (`COVER_MAGIC: Long`, `COVER_TAG: String`) in the base package.
                 .constant(constant!(COVER_MAGIC))
                 .constant(constant!(COVER_TAG))
-                // Function-backed constant: a nullary `#[prebindgen]` fn
-                // surfaced as an eagerly-initialized top-level `val`
+                // Fn-sourced constant: a nullary `#[prebindgen]` fn surfaced
+                // as an eagerly-initialized top-level `val`
                 // (`COVER_TAG_RUNTIME: String`) — the value comes from the
                 // fn at class-load, not from a Rust `const`.
-                .constant_fun(fun!(cover_tag_runtime).name("COVER_TAG_RUNTIME"))
-                // Expression-backed constant: an arbitrary binding-defined
+                .constant(constant!(COVER_TAG_RUNTIME).fun(fun!(cover_tag_runtime)))
+                // Binding-local-fn-sourced constant (`.with`, the const
+                // analog of convert!'s `_with`): a nullary fn in THIS crate,
+                // named by path, stated value type.
+                .constant(constant!(COVER_VERSION).with(ty!(String), path!(crate::cover_version)))
+                // Expression-sourced constant: an arbitrary binding-defined
                 // expression (composing source-crate items via
                 // `use perftest_flat::*;`) evaluated once at class-load —
                 // no dedicated accessor fn in the source crate.
-                .constant_expr(
-                    constant_expr!(COVER_BANNER: String = format!("{COVER_TAG}:{COVER_MAGIC:#x}")),
+                .constant(
+                    constant!(COVER_BANNER)
+                        .expr(ty!(String), expr!(format!("{COVER_TAG}:{COVER_MAGIC:#x}"))),
                 )
                 .class(
                     ptr_class!(Storage)

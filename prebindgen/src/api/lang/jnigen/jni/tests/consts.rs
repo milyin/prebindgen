@@ -127,12 +127,12 @@ fn undeclared_const_not_emitted() {
     assert!(!all.contains("GREETING"), "{all}");
 }
 
-/// End-to-end for function-backed constants (`PackageDecl::constant_fun`):
-/// a declared nullary fn surfaces as a private helper + public
-/// eagerly-initialized `val` in the package file; the extern and the Rust
-/// wrapper are the ordinary declared-function ones (`myflat::tag()` call).
+/// End-to-end for fn-sourced constants (`constant!(N).fun(…)`): a declared
+/// nullary fn surfaces as a private helper + public eagerly-initialized
+/// `val` in the package file; the extern and the Rust wrapper are the
+/// ordinary declared-function ones (`myflat::tag()` call).
 #[test]
-fn constant_fun_emits_val_over_ordinary_wrapper() {
+fn constant_fun_source_emits_val_over_ordinary_wrapper() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
@@ -146,7 +146,7 @@ fn constant_fun_emits_val_over_ordinary_wrapper() {
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .package(crate::package!("cfg").constant_fun(crate::fun!(tag).name("THE_TAG")));
+        .package(crate::package!("cfg").constant(crate::constant!(THE_TAG).fun(crate::fun!(tag))));
 
     let dir = unique_test_dir("jnigen_constant_fun_basic");
     let _ = std::fs::remove_dir_all(&dir);
@@ -185,7 +185,7 @@ fn constant_fun_emits_val_over_ordinary_wrapper() {
 /// A non-nullary fn cannot be a constant.
 #[test]
 #[should_panic(expected = "must be nullary")]
-fn constant_fun_non_nullary_rejected() {
+fn constant_fun_source_non_nullary_rejected() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
@@ -196,9 +196,9 @@ fn constant_fun_non_nullary_rejected() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_package_prefix("io.test.jni")
-        .package(crate::package!("cfg").constant_fun(crate::fun!(scaled)));
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("cfg").constant(crate::constant!(SCALED).fun(crate::fun!(scaled))),
+    );
     let dir = unique_test_dir("jnigen_constant_fun_arity_reject");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -212,7 +212,7 @@ fn constant_fun_non_nullary_rejected() {
 /// rejection (and guidance) as a handle-typed const.
 #[test]
 #[should_panic(expected = "declared opaque handle")]
-fn constant_fun_handle_return_rejected() {
+fn constant_fun_source_handle_return_rejected() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
         (
@@ -236,7 +236,7 @@ fn constant_fun_handle_return_rejected() {
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
-            .constant_fun(crate::fun!(default_thing)),
+            .constant(crate::constant!(DEFAULT_THING).fun(crate::fun!(default_thing))),
     );
     let dir = unique_test_dir("jnigen_constant_fun_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
@@ -247,7 +247,7 @@ fn constant_fun_handle_return_rejected() {
     let _ = jni.write_kotlin(&registry, &dir.join("kotlin"));
 }
 
-/// End-to-end for expression-backed constants (`PackageDecl::constant_expr`):
+/// End-to-end for expression-sourced constants (`constant!(N).expr(…)`):
 /// the binding-defined expression is evaluated inside a generated nullary
 /// getter (with every source module glob-imported, composing source items
 /// without the source crate exporting a dedicated accessor), and surfaces as
@@ -267,9 +267,9 @@ fn constant_expr_emits_getter_and_val() {
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("cfg")
-            .fun(crate::fun!(tag_of))
-            .constant_expr(crate::constant_expr!(DEFAULT_TAG: String = tag_of(7))),
+        crate::package!("cfg").fun(crate::fun!(tag_of)).constant(
+            crate::constant!(DEFAULT_TAG).expr(crate::ty!(String), crate::expr!(tag_of(7))),
+        ),
     );
 
     let dir = unique_test_dir("jnigen_constant_expr_basic");
@@ -341,7 +341,9 @@ fn constant_expr_handle_type_rejected() {
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
             .fun(crate::fun!(thing_new))
-            .constant_expr(crate::constant_expr!(DEFAULT_THING: ZThing = thing_new())),
+            .constant(
+                crate::constant!(DEFAULT_THING).expr(crate::ty!(ZThing), crate::expr!(thing_new())),
+            ),
     );
     let dir = unique_test_dir("jnigen_constant_expr_handle_reject");
     let _ = std::fs::remove_dir_all(&dir);
@@ -392,4 +394,84 @@ fn handle_const_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let _ = registry.write_rust(&jni, dir.join("gen.rs"));
+}
+
+/// `.with(ty!, path!)` — the binding-local nullary fn source, const analog
+/// of `ConvertDecl::input_with`: lowers to an expression getter that calls
+/// the path verbatim (multi-segment paths bypass source-module
+/// qualification, exactly like convert's `_with`).
+#[test]
+fn constant_with_source_calls_path_verbatim() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn unrelated() -> i64 {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("cfg").fun(crate::fun!(unrelated)).constant(
+            crate::constant!(COVER_VERSION)
+                .with(crate::ty!(String), crate::path!(crate::cover_version)),
+        ),
+    );
+    let dir = unique_test_dir("jnigen_constant_with_basic");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let rust_path = registry
+        .write_rust(&jni, dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rust.contains("Java_io_test_jni_JNINative_constGetCoverVersion"),
+        "{rust}"
+    );
+    // The path is called verbatim — no `myflat::` qualification.
+    assert!(rc.contains("crate::cover_version()"), "{rust}");
+    assert!(!rc.contains("myflat::cover_version"), "{rust}");
+
+    let kdir = dir.join("kotlin");
+    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let pkg = paths
+        .iter()
+        .find(|p| p.ends_with("io/test/jni/cfg.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("cfg package file");
+    let pc: String = pkg.split_whitespace().collect();
+    assert!(
+        pc.contains("valCOVER_VERSION:String=constGetCoverVersion("),
+        "{pkg}"
+    );
+}
+
+/// A constant has exactly ONE value source — a second modifier panics.
+#[test]
+#[should_panic(expected = "value source already set")]
+fn constant_second_source_rejected() {
+    let _ = crate::constant!(X)
+        .expr(crate::ty!(i64), crate::expr!(1 + 1))
+        .with(crate::ty!(i64), crate::path!(crate::f));
+}
+
+/// `ConstDecl::named(...)` is the runtime subject form for declaration
+/// loops — equivalent to the `constant!` macro with the same ident.
+#[test]
+fn constant_named_runtime_form_matches_macro() {
+    let a = crate::lang::ConstDecl::named(format!("ENCODING_{}", "ZENOH_BYTES"))
+        .expr(crate::ty!(String), crate::expr!(enc()));
+    let b = crate::constant!(ENCODING_ZENOH_BYTES).expr(crate::ty!(String), crate::expr!(enc()));
+    assert_eq!(a.val_name(), b.val_name());
+    assert_eq!(a.rust_ident, b.rust_ident);
+}
+
+/// A non-identifier runtime name is a decl-time panic (it seeds the extern
+/// symbol).
+#[test]
+#[should_panic(expected = "not a valid identifier")]
+fn constant_named_invalid_ident_rejected() {
+    let _ = crate::lang::ConstDecl::named("NOT AN IDENT");
 }

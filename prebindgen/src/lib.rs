@@ -153,6 +153,10 @@ pub mod __macro_support {
     pub fn parse_path(s: &str) -> ::syn::Path {
         ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid path `{s}`: {e}"))
     }
+
+    pub fn parse_expr(s: &str) -> ::syn::Expr {
+        ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid expression `{s}`: {e}"))
+    }
 }
 
 /// Build a `syn::Ident` from a bare identifier token. Unlike
@@ -261,10 +265,10 @@ pub mod lang {
         jnigen::{
             box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
             box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
-            null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConstExprDecl,
-            ConvertDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
-            ExpandReturnDecl, FunctionDecl, JniBindingError, JniGen, KotlinFile, PackageDecl,
-            PtrClassDecl, ValueClassDecl, WriteKotlinError,
+            null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
+            DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl,
+            FunctionDecl, JniBindingError, JniGen, KotlinFile, PackageDecl, PtrClassDecl,
+            ValueClassDecl, WriteKotlinError,
         },
     };
 }

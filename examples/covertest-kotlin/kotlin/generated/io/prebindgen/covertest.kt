@@ -373,6 +373,16 @@ private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
 /** Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated once through the generated JNI wrapper). */
 public val COVER_TAG_RUNTIME: String = coverTagRuntime(JniErrorHandler { je -> error(je ?: "const COVER_TAG_RUNTIME: JNI getter failed") })
 
+private fun constGetCoverVersion(onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.constGetCoverVersion(__cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/** Binding-defined constant: `crate :: cover_version ()` (evaluated once through the generated JNI getter). */
+public val COVER_VERSION: String = constGetCoverVersion(JniErrorHandler { je -> error(je ?: "const COVER_VERSION: JNI getter failed") })
+
 private fun constGetCoverBanner(onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.constGetCoverBanner(__cap)
@@ -534,6 +544,7 @@ internal object CovNative {
     external fun constGetCoverMagic(errorSink: Any): Long
     external fun constGetCoverTag(errorSink: Any): String
     external fun constGetCoverBanner(errorSink: Any): String
+    external fun constGetCoverVersion(errorSink: Any): String
     external fun payloadVecNew(cap: Int): Long
     external fun payloadVecPush(handle: Long, eId: Long, eSeq: Int, eValue: Double, eFlag: Boolean, eLabel: String?)
     external fun payloadVecFree(handle: Long)

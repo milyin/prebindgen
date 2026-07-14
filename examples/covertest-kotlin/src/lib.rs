@@ -19,6 +19,13 @@ pub fn label_out(l: perftest_flat::Label) -> String {
     l.0
 }
 
+// Binding-local nullary fn backing the `.with`-sourced constant
+// `COVER_VERSION` (build.rs: `constant!(COVER_VERSION).with(ty!(String),
+// path!(crate::cover_version))`) — the const analog of convert!'s `_with`.
+pub fn cover_version() -> String {
+    format!("cover-{}", env!("CARGO_PKG_VERSION"))
+}
+
 // The generated JNI bindings, written by build.rs from perftest-flat's
 // #[prebindgen] surface (the perf surface plus the `ext` coverage surface). The
 // generated code refers to source types fully qualified by each item's origin

@@ -305,6 +305,33 @@ classes can't be mapped onto existing types.
 `constant_expr` for the non-trivial cases; the superseded `constant_fun` /
 path-alias rounds shipped anyway.
 
+> **Resolution (2026-07-15): one mechanism, source-kinded — aligned with
+> `convert!`.** Constants and conversions are the nullary and unary edges of
+> one source-kind vocabulary, so the three acceptors collapsed into one
+> `PackageDecl::constant(ConstDecl)` with the source carried by the decl:
+>
+> | source | `convert!` (unary) | `constant!` (nullary) |
+> |---|---|---|
+> | prebindgen item | — | `constant!(MAX_LEN)` (bare) |
+> | prebindgen fn | `.input_fun(fun!)` / `.output_fun(fun!)` | `.fun(fun!)` |
+> | trait impl | `.input_from` / `.output_into` / `_try_` | — (nothing flows in) |
+> | binding-local fn | `.input_with(ty!, path!)` / `_try_with` | `.with(ty!, path!)` |
+> | expression | — | `.expr(ty!, expr!)` |
+>
+> `convert!`'s bare `.input`/`.output` were renamed `input_fun`/`output_fun`
+> so the fn source is named uniformly. The `.expr` source (new root `expr!`
+> macro, one simple argument like `ty!`/`path!`) exists ONLY for constants:
+> an expression binds no arguments exactly when nothing flows in — a unary
+> expr source would resurrect the value-ident closure convention M5 deleted.
+> `.with` lowers to `.expr(path())` internally, but stays a distinct decl
+> (same "(stated type, named callable)" pair as convert's `_with`). Macro
+> style rule adopted: decl macros take ONE simple argument — the
+> `constant_expr!(N: T = e)` val-decl DSL arm was rejected and deleted;
+> loops use `ConstDecl::named(name).expr(ty, expr)`. All four sources
+> demonstrated in covertest (`COVER_MAGIC`/`COVER_TAG_RUNTIME`/
+> `COVER_VERSION`/`COVER_BANNER`); zenoh's 106-val loop unchanged in
+> spirit, one call shorter in form.
+
 ### I7. Mixed failure modes with no policy
 
 Dotted `.name()` → panic at decl time; builtin scalar-wrapper pattern → panic;
