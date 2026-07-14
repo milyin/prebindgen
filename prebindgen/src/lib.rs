@@ -250,7 +250,6 @@ pub mod core {
 /// root because the `extern "C"` converters emitted by [`lang::Cbindgen`]
 /// reference them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
 pub use crate::api::core::gravestone::{Gravestone, Transmute};
-
 /// Root re-export of [`lang::matching`] so the ignore-predicate constructor
 /// sits next to the decl macros it composes with
 /// (`.ignore(matching(|n| …))`, like `.ignore(fun!(…))`).
