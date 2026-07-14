@@ -497,6 +497,29 @@ option.
 `param_expand_self(pq!(key_expr))` — no decl-time validation against the
 function's real signature; typos surface late (or as warnings).
 
+> **Resolution (2026-07-15): already fixed by M2/I7/I3 — no change; test
+> gaps filled.** The example API is gone (M2 replaced the modal
+> `param_expand_*` methods). Every bare-ident reference a declaration
+> writes is now checked against the registry when `Registry::resolve`
+> runs — the earliest moment signatures exist (decl objects are built
+> before any source is read, so literal decl-time validation is
+> structurally impossible; resolve-time hard errors are what the critique
+> was actually asking for). The map, all hard `Err`s out of `.resolve()`:
+>
+> | reference | validation |
+> |---|---|
+> | declared fn / member / const / helper fn | `ScanError::DeclaredNotFound` (I7) |
+> | `.expand_param("name", …)` param string | `ExpandError::UnknownParam` |
+> | per-fn expand decl type | `ParamTypeMismatch` / `ReturnTypeMismatch` (M2) |
+> | `expand_param!` variant ctor | `UnknownConstructor` / `TargetMismatch` / `NoConstructor` |
+> | `expand_return!` field accessor | `UnfoldError::UnknownAccessor` / `AccessorTargetMismatch` / `RecordNotAccessor` |
+> | output leaf names | `DuplicateLeafName` (explicit-literal rule) |
+> | exact `.ignore(...)` entries | warning **by design** (an ignore is bookkeeping, not a claim) |
+>
+> Gap-fill: `UnknownConstructor`, ctor `TargetMismatch`, and
+> `UnknownAccessor` had no direct tests — added (core expand/unfold test
+> modules); the rest were already covered.
+
 ### C6. Global-only lock toggle
 
 `set_emit_handle_locks(bool)` is all-or-nothing; the known per-call lock

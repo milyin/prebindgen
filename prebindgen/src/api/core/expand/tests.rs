@@ -511,3 +511,57 @@ fn recursive_input_cycle_errors() {
     .unwrap_err();
     assert!(matches!(err, ExpandError::InputCycle { .. }), "got {err:?}");
 }
+
+/// C5 validation map: a variant ctor ident that names no `#[prebindgen]`
+/// fn is a hard `UnknownConstructor` at resolve time — a typo'd
+/// `expand_param!(...).variant(fun!(…))` cannot silently vanish.
+#[test]
+fn unknown_constructor_errors() {
+    use crate::api::core::types_util::ident;
+    let mut reg =
+        reg_with(&["fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }"]);
+    let mut exp = Expansions::default();
+    exp.begin_subset(
+        ident("z_keyexpr_intersects"),
+        ident("a"),
+        syn::parse_quote!(ZKeyExpr),
+    );
+    exp.push_subset_variant(ident("z_keyexpr_try_from_typo"));
+    let err = apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ExpandError::UnknownConstructor(_)), "{err}");
+}
+
+/// C5 validation map: a variant ctor that exists but does not produce the
+/// expanded type is a hard `TargetMismatch` — the ctor's return is
+/// cross-checked against the parameter's type.
+#[test]
+fn constructor_target_mismatch_errors() {
+    use crate::api::core::types_util::ident;
+    let mut reg = reg_with(&[
+        "fn z_sample_new(s: String) -> ZSample { todo!() }",
+        "fn z_keyexpr_intersects(a: &ZKeyExpr, b: &ZKeyExpr) -> bool { todo!() }",
+    ]);
+    let mut exp = Expansions::default();
+    exp.begin_subset(
+        ident("z_keyexpr_intersects"),
+        ident("a"),
+        syn::parse_quote!(ZKeyExpr),
+    );
+    exp.push_subset_variant(ident("z_sample_new"));
+    let err = apply(
+        &mut reg,
+        &exp,
+        &Default::default(),
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, ExpandError::TargetMismatch { .. }), "{err}");
+}

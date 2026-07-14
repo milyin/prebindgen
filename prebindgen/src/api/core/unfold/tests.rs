@@ -1088,3 +1088,25 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
         "pre-existing plan preserved (not overwritten)"
     );
 }
+
+/// C5 validation map: a field accessor ident that names no `#[prebindgen]`
+/// fn is a hard `UnknownAccessor` at resolve time — a typo'd
+/// `expand_return!(...).field(fun!(…))` cannot silently vanish. (At the
+/// jnigen level a registry-absent fn is caught even earlier, by the scan's
+/// `DeclaredNotFound` on the helper channel; this is the core-tier guard
+/// that stands on its own for any adapter.)
+#[test]
+fn unknown_accessor_errors() {
+    let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
+    let mut acc = Deconstructors::default();
+    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
+    acc.add_deconstructor_record(ident("z_keyexpr_as_str_typo"), "as_str");
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_foo")].into_iter().collect(),
+        &[ident("z_keyexpr_as_str_typo")].into_iter().collect(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, UnfoldError::UnknownAccessor(_)), "{err}");
+}
