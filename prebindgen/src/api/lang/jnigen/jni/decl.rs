@@ -330,7 +330,20 @@ impl ExpandParamDecl {
     /// gives every function taking a `KeyExpr` a String-carrying arm —
     /// as a selector + nullable slot at the wire tier (see the type-level
     /// docs for the exact generated shape), not as a Kotlin overload.
+    ///
+    /// A variant arm only *names* the constructor: no Kotlin surface of its
+    /// own, so a decorated `fun!` (`.name()` / expand overrides) is a hard
+    /// error rather than a silent discard.
     pub fn variant(mut self, ctor: FunctionDecl) -> Self {
+        assert!(
+            ctor.kotlin_name_override.is_none()
+                && ctor.param_expands.is_empty()
+                && ctor.return_expand.is_none(),
+            "expand_param!({}).variant(fun!({})): a variant arm only names the \
+             `#[prebindgen]` constructor — .name()/expand overrides don't apply",
+            self.key.as_str(),
+            ctor.rust_ident
+        );
         self.variants.push(LocalVariant::Ctor(ctor.rust_ident));
         self
     }
@@ -391,7 +404,19 @@ impl ExpandReturnDecl {
     /// same function is declared via [`PtrClassDecl::fun`] on this type (so a
     /// getter that is both a method and a field is named once); else the
     /// camel-cased Rust name.
+    ///
+    /// Only the accessor's name is used here: expand overrides on the `fun!`
+    /// are a hard error rather than a silent discard (the field's own
+    /// decomposition comes from ITS type's boundary decl, not from the
+    /// accessor).
     pub fn field(mut self, accessor: FunctionDecl) -> Self {
+        assert!(
+            accessor.param_expands.is_empty() && accessor.return_expand.is_none(),
+            "expand_return!({}).field(fun!({})): expand overrides don't apply to a \
+             field accessor — only .name() is honored",
+            self.key.as_str(),
+            accessor.rust_ident
+        );
         self.fields.push(LocalField::Named(
             accessor.rust_ident,
             accessor.kotlin_name_override,

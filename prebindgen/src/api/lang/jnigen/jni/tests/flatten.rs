@@ -659,6 +659,40 @@ fn ignore_const_with_source_rejected() {
     );
 }
 
+/// A `.variant()` arm only names its constructor — a `.name()` decoration
+/// has no surface to land on and is rejected at decl time (was a silent
+/// discard).
+#[test]
+#[should_panic(expected = ".name()/expand overrides don't apply")]
+fn expand_param_variant_with_name_rejected() {
+    let _ = crate::expand_param!(ZThing).variant(crate::fun!(z_thing_new).name("thing"));
+}
+
+/// Same for expand overrides on a variant constructor.
+#[test]
+#[should_panic(expected = ".name()/expand overrides don't apply")]
+fn expand_param_variant_with_expand_override_rejected() {
+    let _ = crate::expand_param!(ZThing)
+        .variant(crate::fun!(z_thing_new).expand_return(crate::expand_return!(ZName).field_self()));
+}
+
+/// A `.field()` accessor honors `.name()` but nothing else — expand
+/// overrides are rejected at decl time (was a silent discard).
+#[test]
+#[should_panic(expected = "only .name() is honored")]
+fn expand_return_field_with_expand_override_rejected() {
+    let _ = crate::expand_return!(ZThing).field(
+        crate::fun!(z_thing_name).expand_param("v", crate::expand_param!(ZName).variant_self()),
+    );
+}
+
+/// Positive pin for the asymmetry: `.name()` on a `.field()` accessor is
+/// the documented way to name the field — still accepted.
+#[test]
+fn expand_return_field_with_name_accepted() {
+    let _ = crate::expand_return!(ZThing).field(crate::fun!(z_thing_name).name("label"));
+}
+
 /// N5: a `.fun()` member whose target has no parameter of the class type
 /// is a hard `AdapterInvariant` error at resolve — previously it silently
 /// emitted a method that ignored `this`.
