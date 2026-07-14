@@ -17,7 +17,6 @@
 //! `String?` automatically.
 
 use prebindgen::{core::Registry, data_class, fun, lang::JniGen, package, ptr_class};
-use syn::parse_quote as pq;
 
 fn main() {
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
