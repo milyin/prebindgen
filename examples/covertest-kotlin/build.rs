@@ -30,6 +30,7 @@
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
+//! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | namespace-relative member names (C1)  | `storage_len`→`len`, `stamp_secs`→`secs`, … (no `.name()`); `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
@@ -390,4 +391,14 @@ fn main() {
     for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
+
+    // The resolved-surface report (C7): committed next to the regen so a
+    // decl's effect is reviewable in a PR without reading generated Kotlin.
+    std::fs::write(
+        std::path::Path::new(&crate_dir)
+            .join("kotlin")
+            .join("REPORT.md"),
+        gen.report(),
+    )
+    .expect("write REPORT.md");
 }

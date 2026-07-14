@@ -351,3 +351,80 @@ fn write_kotlin_owns_and_resets_the_root() {
     assert_eq!(paths, paths2);
     assert!(paths2.iter().all(|p| p.exists()));
 }
+
+/// C7: `Generation::report()` — the explain mode. The report carries the
+/// FINAL Kotlin signature of each fn (same render path as the emitters),
+/// the plans that shaped it, an unshaped fn with no `shaped by:` lines,
+/// and the type table. Deterministic across calls.
+#[test]
+fn report_explains_the_resolved_surface() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn summary_count(s: &Summary) -> i64 { unimplemented!() }",
+        "pub fn summary_total(s: &Summary) -> i64 { unimplemented!() }",
+        "pub fn storage_summary(v: i64) -> Summary { unimplemented!() }",
+        "pub fn z_plain(v: i64) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(
+                    crate::ptr_class!(Summary)
+                        .fun(crate::fun!(summary_count))
+                        .fun(crate::fun!(summary_total)),
+                )
+                .fun(crate::fun!(storage_summary))
+                .fun(crate::fun!(z_plain)),
+        )
+        .expand(
+            crate::expand_return!(Summary)
+                .field(crate::fun!(summary_count))
+                .field(crate::fun!(summary_total)),
+        );
+    let gen = registry.resolve(jni).expect("resolve");
+    let report = gen.report();
+
+    // The reshaped fn: exact signature (builder callback form) + provenance.
+    assert!(report.contains("`storage_summary`"), "{report}");
+    assert!(
+        report.contains("build: io.test.jni.ops.SummaryBuilder<R>"),
+        "{report}"
+    );
+    assert!(
+        report.contains("return `Summary` decomposed → [count, total] (Callback delivery)"),
+        "{report}"
+    );
+    // The plain fn appears with no `shaped by:` after it.
+    let plain_at = report.find("`z_plain`").expect("plain fn listed");
+    let after_plain = &report[plain_at..];
+    let next_entry = after_plain[1..]
+        .find("- `")
+        .map(|i| i + 1)
+        .unwrap_or(after_plain.len());
+    assert!(
+        !after_plain[..next_entry].contains("shaped by:"),
+        "{report}"
+    );
+    // Class members appear under the class heading with C1-derived names.
+    assert!(
+        report.contains("## class `io.test.jni.ops.Summary` (ptr_class, Rust `Summary`)"),
+        "{report}"
+    );
+    assert!(report.contains("fun count("), "{report}");
+    // Types table with the jlong wire.
+    assert!(
+        report.contains("- `Summary`: ptr_class → `io.test.jni.ops.Summary`"),
+        "{report}"
+    );
+    // Deterministic.
+    assert_eq!(report, gen.report());
+}

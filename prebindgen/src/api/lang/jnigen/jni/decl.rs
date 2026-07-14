@@ -1053,6 +1053,29 @@ pub(crate) enum ConvertSpec {
     },
 }
 
+impl ConvertSpec {
+    /// One-line human description of the source kind (report use).
+    pub(crate) fn describe(&self) -> String {
+        match self {
+            ConvertSpec::PrebindgenFn(f) => format!("`#[prebindgen]` fn `{f}`"),
+            ConvertSpec::Trait {
+                repr,
+                fallible: false,
+            } => format!("`Into` ⇄ `{}`", repr.to_token_stream()),
+            ConvertSpec::Trait {
+                repr,
+                fallible: true,
+            } => format!("`TryInto` ⇄ `{}`", repr.to_token_stream()),
+            ConvertSpec::LocalFn { repr, path, error } => format!(
+                "binding-local `{}` ⇄ `{}`{}",
+                path.to_token_stream(),
+                repr.to_token_stream(),
+                if error.is_some() { " (fallible)" } else { "" }
+            ),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ConvertDecl {
     pub(crate) key: TypeKey,
@@ -1061,6 +1084,22 @@ pub struct ConvertDecl {
 }
 
 impl ConvertDecl {
+    /// `: input …, output …` suffix for the report's conversions section.
+    pub(crate) fn describe_sources(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(i) = &self.input {
+            parts.push(format!("input {}", i.describe()));
+        }
+        if let Some(o) = &self.output {
+            parts.push(format!("output {}", o.describe()));
+        }
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!(": {}", parts.join(", "))
+        }
+    }
+
     pub fn new(rust_type: syn::Type) -> Self {
         reject_builtin_convert_type(&TypeKey::from_type(&rust_type));
         Self {

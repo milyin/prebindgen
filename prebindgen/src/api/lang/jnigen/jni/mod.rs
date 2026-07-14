@@ -453,6 +453,7 @@ mod trait_impl;
 mod fold;
 mod kotlin_emit;
 mod render;
+mod report;
 mod struct_plan;
 
 pub(crate) use builder::*;
