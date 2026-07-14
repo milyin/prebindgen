@@ -25,6 +25,10 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
         return StorageError(p)
     }
 
+    /**
+     * Render a [`StorageError`] as its message (the error's flatten-output
+     * **accessor**, fed to `onError`).
+     */
     public fun message(onError: JniErrorHandler<String>): String {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()

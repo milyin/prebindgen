@@ -282,13 +282,17 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), fqn.clone()),
             };
+            let framework_line = format!(
+                "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
+                 as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
+                key.as_str()
+            );
+            let class_kdoc = crate::api::lang::jnigen::jni::source_item_doc(registry, key)
+                .map(|d| format!("{d}\n\n{framework_line}"))
+                .unwrap_or(framework_line);
             let mut class = KtClass::new(ClassKind::ValueInline, class_name)
                 .vis(Vis::Public)
-                .kdoc(format!(
-                    "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                     as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
-                    key.as_str()
-                ))
+                .kdoc(class_kdoc)
                 .ctor_param(
                     KtCtorParam::new("bytes", KtType::byte_array())
                         .val()

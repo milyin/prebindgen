@@ -428,3 +428,121 @@ fn report_explains_the_resolved_surface() {
     // Deterministic.
     assert_eq!(report, gen.report());
 }
+
+/// N1: `///` docs become KDoc, and shaped positions get generated notes
+/// documenting the REAL prototype after expansions.
+#[test]
+fn docs_become_kdoc_with_shape_notes() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                /// A summary of stored payloads.
+                pub struct Summary {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                /// Count of aggregated entries.
+                pub fn summary_count(s: &Summary) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn summary_total(s: &Summary) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                /// Produces the storage summary.
+                pub fn storage_summary(v: i64) -> Summary {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_plain(v: i64) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Const(syn::parse_quote!(
+                /// The magic number.
+                pub const MAGIC: i64 = 7;
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(
+                    crate::ptr_class!(Summary)
+                        .fun(crate::fun!(summary_count))
+                        .fun(crate::fun!(summary_total)),
+                )
+                .fun(crate::fun!(storage_summary))
+                .fun(crate::fun!(z_plain))
+                .constant(crate::constant!(MAGIC)),
+        )
+        .expand(
+            crate::expand_return!(Summary)
+                .field(crate::fun!(summary_count))
+                .field(crate::fun!(summary_total)),
+        );
+    let gen = registry.resolve(jni).expect("resolve");
+    let dir = unique_test_dir("jnigen_kdoc");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Author prose on the wrapper + shape notes for the decomposed return.
+    assert!(all.contains("Produces the storage summary."), "{all}");
+    assert!(
+        all.contains("The Rust `Summary` result is delivered decomposed"),
+        "{all}"
+    );
+    assert!(all.contains("(`count`, `total`)"), "{all}");
+    // Member method carries the fn's doc (name derived by C1).
+    assert!(all.contains("Count of aggregated entries."), "{all}");
+    // Class kdoc: author prose FIRST, framework line after.
+    let class_doc_at = all
+        .find("A summary of stored payloads.")
+        .expect("struct doc present");
+    let framework_at = all
+        .find("Typed handle for a native Zenoh `Summary`.")
+        .expect("framework line kept");
+    assert!(class_doc_at < framework_at, "{all}");
+    // Const doc + framework line.
+    assert!(all.contains("The magic number."), "{all}");
+    assert!(
+        all.contains("Mirrors the Rust `#[prebindgen]` const `MAGIC`"),
+        "{all}"
+    );
+    // Undocumented, unshaped fn: no kdoc block directly above it.
+    let plain_at = all.find("fun zPlain(").expect("plain fn present");
+    let before = &all[..plain_at];
+    let tail = &before[before.len().saturating_sub(120)..];
+    assert!(!tail.contains("*/"), "unexpected kdoc above zPlain: {tail}");
+}

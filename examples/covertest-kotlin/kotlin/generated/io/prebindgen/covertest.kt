@@ -59,7 +59,18 @@ internal inline fun <R> withSortedHandleLocks(
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
+/**
+ * A by-value, FFI-safe payload. Scalars cross the C ABI as themselves; the
+ * `label` string crosses as an opaque pointer (`Option<Box<String>>` ⇒ a nullable
+ * `string_t *`). Being `#[repr(C)]`, the whole struct is passed by direct
+ * reinterpret (zero-copy) — see `perftest-c`'s `.repr_c_struct(Payload)`.
+ */
 public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
+    /**
+     * Length of a payload's label, or `None` when it is unlabeled. Exercises an
+     * `Option<i64>` (nullable primitive) return, distinct from the `Option<handle>`
+     * / `Option<data-class>` shapes elsewhere.
+     */
     public fun labelLen(onError: JniErrorHandler<Long?>): Long? {
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = CovNative.payloadLabelLen(
@@ -152,6 +163,7 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
         return Storage(p)
     }
 
+    /** Number of stored payloads (an **accessor** on `Storage`). */
     public fun len(onError: JniErrorHandler<Long>): Long {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
@@ -163,6 +175,7 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
         return __ret
     }
 
+    /** Whether any stored payload has the given id (a **method** on `Storage`). */
     public fun contains(id: Long, onError: JniErrorHandler<Boolean>): Boolean {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
@@ -178,6 +191,10 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
         @JvmStatic
         external fun freePtr(ptr: Long)
 
+        /**
+         * Build a storage holding a single payload (a **constructor** / companion
+         * factory on `Storage`).
+         */
         public fun withPayload(payload: Payload, onError: JniErrorHandler<Storage>): Storage {
             val __cap = JniErrorHandlerCapture.acquire()
             val __ret = Storage(
@@ -350,6 +367,10 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
     }
 }
 
+/**
+ * Build the opaque string the C side stores in [`Payload::label`]. To C this
+ * returns a `string_t *` (since `String` is declared `opaque_ptr`).
+ */
 public fun stringNew(s: String, onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.stringNew(s, __cap)
@@ -364,7 +385,11 @@ private fun constGetCoverMagic(onError: JniErrorHandler<Long>): Long {
     return __ret
 }
 
-/** Mirrors the Rust `#[prebindgen]` const `COVER_MAGIC` (read once through the generated JNI getter). */
+/**
+ * The storage capacity limit advertised to bindings (a primitive const).
+ *
+ * Mirrors the Rust `#[prebindgen]` const `COVER_MAGIC` (read once through the generated JNI getter).
+ */
 public val COVER_MAGIC: Long = constGetCoverMagic(JniErrorHandler { je -> error(je ?: "const COVER_MAGIC: JNI getter failed") })
 
 private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
@@ -374,9 +399,19 @@ private fun constGetCoverTag(onError: JniErrorHandler<String>): String {
     return __ret
 }
 
-/** Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read once through the generated JNI getter). */
+/**
+ * The coverage surface's tag string (a string const).
+ *
+ * Mirrors the Rust `#[prebindgen]` const `COVER_TAG` (read once through the generated JNI getter).
+ */
 public val COVER_TAG: String = constGetCoverTag(JniErrorHandler { je -> error(je ?: "const COVER_TAG: JNI getter failed") })
 
+/**
+ * The tag with a runtime-computed suffix — a constant value no Rust `const`
+ * can express (built through `format!`). Exercises
+ * `PackageDecl::constant_fun`: a nullary fn surfaced as an
+ * eagerly-initialized Kotlin top-level `val`.
+ */
 private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.coverTagRuntime(__cap)
@@ -384,7 +419,14 @@ private fun coverTagRuntime(onError: JniErrorHandler<String>): String {
     return __ret
 }
 
-/** Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated once through the generated JNI wrapper). */
+/**
+ * The tag with a runtime-computed suffix — a constant value no Rust `const`
+ * can express (built through `format!`). Exercises
+ * `PackageDecl::constant_fun`: a nullary fn surfaced as an
+ * eagerly-initialized Kotlin top-level `val`.
+ *
+ * Mirrors the Rust `#[prebindgen]` fn `cover_tag_runtime()` (evaluated once through the generated JNI wrapper).
+ */
 public val COVER_TAG_RUNTIME: String = coverTagRuntime(JniErrorHandler { je -> error(je ?: "const COVER_TAG_RUNTIME: JNI getter failed") })
 
 private fun constGetCoverVersion(onError: JniErrorHandler<String>): String {

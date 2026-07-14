@@ -25,12 +25,16 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
             })
             .collect();
 
+    let framework_line = format!(
+        "JVM-side surface for the native Rust `{}` enum.",
+        item_enum.ident
+    );
+    let enum_kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.attrs)
+        .map(|d| format!("{d}\n\n{framework_line}"))
+        .unwrap_or(framework_line);
     kt::KtClass::new(kt::ClassKind::Enum(entries), class_name)
         .vis(kt::Vis::Public)
-        .kdoc(format!(
-            "JVM-side surface for the native Rust `{}` enum.",
-            item_enum.ident
-        ))
+        .kdoc(enum_kdoc)
         .ctor_param(
             kt::KtCtorParam::new("value", kt::KtType::int())
                 .val()
@@ -179,6 +183,9 @@ pub(crate) fn build_data_class(
             });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
+    if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.attrs) {
+        class = class.kdoc(doc);
+    }
     for p in ctor_params {
         class = class.ctor_param(p);
     }
@@ -293,11 +300,14 @@ pub(crate) fn build_typed_handle(
         }
     }
 
+    // KDoc: the Rust struct's `///` prose first, framework line after.
+    let framework_line = format!("Typed handle for a native Zenoh `{rust_doc_name}`.");
+    let class_kdoc = source_item_doc(registry, key)
+        .map(|d| format!("{d}\n\n{framework_line}"))
+        .unwrap_or(framework_line);
     let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
-        .kdoc(format!(
-            "Typed handle for a native Zenoh `{rust_doc_name}`."
-        ))
+        .kdoc(class_kdoc)
         .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()))
         .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
         .member(
@@ -722,6 +732,11 @@ pub(crate) fn render_wrapper_fn(
     let sink = error_sink_parts(ext, f, registry, imports, &r_ty)?;
 
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
+    // KDoc: the Rust fn's `///` prose first, then generated notes for every
+    // position an expansion reshaped away from the Rust signature (N1).
+    if let Some(doc) = wrapper_kdoc(ext, f, registry) {
+        fun = fun.kdoc(doc);
+    }
     if let Some(g) = &out.generic {
         fun = fun.generic(g);
     }
@@ -777,11 +792,14 @@ pub(crate) fn render_const_val(
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| c.ident.to_string());
-    let kdoc = format!(
+    let framework_line = format!(
         "Mirrors the Rust `#[prebindgen]` const `{}` (read once through the \
          generated JNI getter).",
         c.ident
     );
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&c.attrs)
+        .map(|d| format!("{d}\n\n{framework_line}"))
+        .unwrap_or(framework_line);
     render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
@@ -801,11 +819,14 @@ pub(crate) fn render_constant_fn_val(
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| f.sig.ident.to_string());
-    let kdoc = format!(
+    let framework_line = format!(
         "Mirrors the Rust `#[prebindgen]` fn `{}()` (evaluated once through the \
          generated JNI wrapper).",
         f.sig.ident
     );
+    let kdoc = crate::api::lang::jnigen::util::doc_string(&f.attrs)
+        .map(|d| format!("{d}\n\n{framework_line}"))
+        .unwrap_or(framework_line);
     render_val_over_helper(ext, helper, val_name, kdoc, imports)
 }
 
@@ -2055,4 +2076,114 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
     } else {
         camel
     }
+}
+
+/// A wrapper's KDoc (N1): the Rust fn's `///` prose, then generated notes
+/// documenting the REAL prototype after all expansions — one note per
+/// position a plan reshaped, phrased for the caller. `None` for an
+/// undocumented, unshaped fn.
+fn wrapper_kdoc(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
+    let prose = crate::api::lang::jnigen::util::doc_string(&f.attrs);
+    let notes = shape_notes(ext, f, registry);
+    match (prose, notes) {
+        (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
+        (Some(p), None) => Some(p),
+        (None, Some(n)) => Some(n),
+        (None, None) => None,
+    }
+}
+
+/// Caller-facing notes for every boundary position an expansion reshaped:
+/// expanded params (what to pass instead of the Rust argument), decomposed
+/// returns (what the builder/fold receives), and error decompositions
+/// (what `onError` receives). Reads the same resolved plan maps the C7
+/// report uses.
+fn shape_notes(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
+    let fn_ident = &f.sig.ident;
+    let mut notes: Vec<String> = Vec::new();
+
+    let mut plans: Vec<(&syn::Ident, &crate::api::core::expand::FoldPlan)> = registry
+        .expansion_plans
+        .iter()
+        .filter(|((func, _), _)| func == fn_ident)
+        .map(|((_, param), plan)| (param, plan))
+        .collect();
+    plans.sort_by_key(|(p, _)| p.to_string());
+    for (param, plan) in plans {
+        let target = plan.target.to_token_stream().to_string();
+        let arms: Vec<String> = plan
+            .variants
+            .iter()
+            .map(|v| match &v.ctor {
+                Some(c) => format!("its `{c}` inputs"),
+                None => format!("an existing `{target}`"),
+            })
+            .collect();
+        let leaf_names: Vec<String> = plan
+            .leaves
+            .iter()
+            .map(|l| ext.mangle_member(&snake_to_camel(&l.name.to_string())))
+            .collect();
+        let how = if plan.selector.is_some() {
+            format!(
+                "pass EITHER {} — the selector chooses the arm",
+                arms.join(" OR ")
+            )
+        } else {
+            arms.join(" / ").to_string()
+        };
+        notes.push(format!(
+            "Parameter `{param}` is the Rust `{target}` argument, expanded: {how} \
+             (crosses as `{}`).",
+            leaf_names.join("`, `")
+        ));
+    }
+
+    if let Some(plan) = registry.unfold_plans.get(fn_ident) {
+        let source = plan.source.to_token_stream().to_string();
+        let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
+        match plan.delivery {
+            crate::api::core::unfold::Delivery::Callback if !leaves.is_empty() => {
+                notes.push(format!(
+                    "The Rust `{source}` result is delivered decomposed: the builder \
+                     callback receives (`{}`).",
+                    leaves.join("`, `")
+                ));
+            }
+            crate::api::core::unfold::Delivery::Return => {
+                notes.push(format!(
+                    "The Rust `{source}` result is converted and returned as a single value."
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(plan) = registry.error_plans.get(fn_ident) {
+        let source = plan.source.to_token_stream().to_string();
+        let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
+        notes.push(format!(
+            "On failure `onError` receives `je` plus the decomposed Rust `{source}` \
+             error (`{}`).",
+            leaves.join("`, `")
+        ));
+    }
+
+    if notes.is_empty() {
+        None
+    } else {
+        Some(notes.join("\n"))
+    }
+}
+
+/// The `///` doc of the `#[prebindgen]` struct/enum behind a declared type
+/// key, when the item is indexed (a re-exported foreign type has none).
+pub(crate) fn source_item_doc<M>(registry: &Registry<M>, key: &TypeKey) -> Option<String> {
+    let ident = bare_path_ident(&key.to_type())?;
+    let attrs = registry
+        .structs
+        .get(&ident)
+        .map(|(s, _)| s.attrs.as_slice())
+        .or_else(|| registry.enums.get(&ident).map(|(e, _)| e.attrs.as_slice()))?;
+    crate::api::lang::jnigen::util::doc_string(attrs)
 }

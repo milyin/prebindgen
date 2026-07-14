@@ -572,6 +572,25 @@ the consumer's build.rs are compensating for a missing explain/dry-run mode.
 `#[prebindgen]` items carry `///` docs (e.g. `session_put`), but the generated
 Kotlin functions have no KDoc — a real gap for a published Maven artifact.
 
+> **Resolution (2026-07-15): fixed — KDoc = author prose + shape notes.**
+> The `///` docs were already captured (as `#[doc]` attrs in the JSONL) and
+> the `kt` model already rendered `kdoc` — the gap was pure plumbing. Every
+> wrapper fn, class member, companion factory, data/enum/value/ptr class,
+> and const `val` now carries the Rust item's doc verbatim; where the
+> generator writes a framework line (typed handle, enum surface, value
+> blob, const mirror), author prose comes first, framework line after. On
+> top of the prose, **shape notes** document the REAL prototype after all
+> expansions (user addition): every position a plan reshaped gets a
+> caller-phrased note — expanded params ("pass EITHER its `summary_new`
+> inputs OR an existing `Summary` — the selector chooses the arm"),
+> decomposed returns ("the builder callback receives (`count`, `total`)"),
+> error decompositions ("`onError` receives `je` plus the decomposed
+> `StorageError` (…)"). Sourced from the same resolved plan maps as C7's
+> report, but phrased for the caller rather than as provenance. An
+> undocumented, unshaped fn keeps no KDoc. Callback/handler interfaces are
+> out of scope (framework-documented protocol types); enum *variant* docs
+> are skipped (entries carry no kdoc slot).
+
 ### N2. Acknowledged coverage holes
 
 `Vec<closeable-handle>` is an explicit `panic!`; `Option<ptr_class>` params
