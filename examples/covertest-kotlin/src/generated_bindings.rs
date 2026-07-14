@@ -81,10 +81,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_PayloadHandler_free
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::PayloadHandler));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::PayloadHandler>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_PayloadVecHandler_freePtr(
@@ -92,10 +97,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_PayloadVecHandler_f
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::PayloadVecHandler));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::PayloadVecHandler>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_StorageHandler_freePtr(
@@ -103,10 +113,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_StorageHandler_free
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::StorageHandler));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::StorageHandler>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_Storage_freePtr(
@@ -114,10 +129,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_Storage_freePtr(
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::Storage));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::Storage>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_SummaryVault_freePtr(
@@ -125,10 +145,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_SummaryVa
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::Archive));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::Archive>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_Summary_freePtr(
@@ -136,10 +161,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_analytics_Summary_f
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::Summary));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::Summary>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_errors_StorageError_freePtr(
@@ -147,10 +177,15 @@ pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_errors_StorageError
     _class: jni::objects::JClass,
     ptr: jni::sys::jlong,
 ) {
-    if ptr != 0 {
+    if ptr != 0 && (ptr & 1) == 0 {
         drop(Box::from_raw(ptr as *mut perftest_flat::StorageError));
     }
 }
+const _: () = {
+    if ::core::mem::align_of::<perftest_flat::StorageError>() < 2 {
+        panic!("opaque handle types must have alignment >= 2 (bit 0 is the closed tag)");
+    }
+};
 #[no_mangle]
 #[allow(non_snake_case, unused_variables)]
 pub(crate) unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecFree(
@@ -1616,6 +1651,13 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Archive>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Archive) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1626,6 +1668,12 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     Ok({
         if *v == 0 {
             None
+        } else if (*v & 1) == 1 {
+            return ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from("Operation on a closed native handle.".to_string()),
+            );
         } else {
             Some(*std::boxed::Box::from_raw(*v as *mut perftest_flat::Summary))
         }
@@ -1636,6 +1684,13 @@ pub(crate) unsafe fn jlong_to_PayloadHandler_d61fd890<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::PayloadHandler>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadHandler) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1643,6 +1698,13 @@ pub(crate) unsafe fn jlong_to_PayloadVecHandler_b32d2812<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::PayloadVecHandler>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadVecHandler) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1650,6 +1712,13 @@ pub(crate) unsafe fn jlong_to_StorageError_26b2d298<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::StorageError>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::StorageError) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1657,6 +1726,13 @@ pub(crate) unsafe fn jlong_to_StorageHandler_3b4d3ed3<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::StorageHandler>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::StorageHandler) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1664,6 +1740,13 @@ pub(crate) unsafe fn jlong_to_Storage_1b233abd<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Storage>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Storage) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1671,6 +1754,13 @@ pub(crate) unsafe fn jlong_to_Summary_3cb103b9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Summary>, __JniErr> {
+    if *v == 0 || (*v & 1) == 1 {
+        return ::core::result::Result::Err(
+            <__JniErr as ::core::convert::From<
+                String,
+            >>::from("Operation on a closed native handle.".to_string()),
+        );
+    }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Summary) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -6376,6 +6466,19 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalRaw<
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    if s == 0 || (s & 1) == 1 {
+        let __zd = __ze_defaults(&mut env);
+        signal_error(
+            &mut env,
+            &__error_sink,
+            &__SINK_MID,
+            __SINK_FQN,
+            __SINK_DESCR,
+            ::core::option::Option::Some("Operation on a closed native handle."),
+            &__zd,
+        );
+        return 0.0 as jni::sys::jdouble;
+    }
     let s: perftest_flat::Summary = unsafe {
         *std::boxed::Box::from_raw(s as *mut perftest_flat::Summary)
     };

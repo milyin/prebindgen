@@ -124,7 +124,15 @@ impl JniGen {
                 .kdoc(
                     "Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
                      slot and its monitor. Subclasses add their type-specific `close()` /\n\
-                     `take()` / `freePtr`.",
+                     `take()` / `freePtr`.\n\
+                     \n\
+                     Lifecycle is a tag bit: `Box` pointers are at least 2-aligned (asserted\n\
+                     on the Rust side), so bit 0 is free — closing/consuming sets `ptr = p or 1`\n\
+                     instead of zeroing. The address bits (`ptr and -2`) are therefore\n\
+                     write-once for the object's whole lifetime, which is what makes them a\n\
+                     sound lock-ordering key (a mutable key could reorder concurrent lock\n\
+                     acquisition and deadlock). All `ptr` writes happen under this handle's\n\
+                     monitor.",
                 )
                 .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
                 .supertype(KtType::cls("AutoCloseable"), None)
@@ -138,14 +146,19 @@ impl JniGen {
                 .member(
                     KtFun::new("peek")
                         .vis(Vis::Public)
+                        .kdoc("The live pointer, or `0` if this handle is closed.")
                         .returns(KtType::long())
-                        .expr_body(Code::new().line("ptr")),
+                        .body(
+                            Code::new()
+                                .line("val p = ptr")
+                                .line("return if (p == 0L || (p and 1L) != 0L) 0L else p"),
+                        ),
                 )
                 .member(
                     KtFun::new("isClosed")
                         .vis(Vis::Public)
                         .returns(KtType::boolean())
-                        .expr_body(Code::new().line("ptr == 0L")),
+                        .expr_body(Code::new().line("ptr == 0L || (ptr and 1L) != 0L")),
                 ),
         );
 
@@ -157,10 +170,14 @@ impl JniGen {
                 KtFun::new("withSortedHandleLocks")
                     .vis(Vis::Internal)
                     .kdoc(
-                        "Acquire every handle's monitor in one global order (sorted by raw\n\
-                         pointer) so concurrent calls touching the same handles can't deadlock,\n\
-                         then run [body]. Closed handles (`ptr == 0`) are still locked; callers\n\
-                         re-read and null-check each pointer inside [body]. Scales to any arity.",
+                        "Acquire every handle's monitor in one global order — sorted by the\n\
+                         immutable address bits (`ptr and -2`; bit 0 is the closed tag and\n\
+                         never participates) — so concurrent calls touching the same handles\n\
+                         can't deadlock, then run [body]. The key never changes after\n\
+                         construction: closing only sets bit 0, so a concurrent `close()`\n\
+                         can't reorder anyone's acquisition. Closed handles are still locked;\n\
+                         their tagged pointers are rejected by the Rust-side converter guard\n\
+                         inside the native call. Scales to any arity.",
                     )
                     .generic("R")
                     .param(KtParam::new(
@@ -171,7 +188,7 @@ impl JniGen {
                     .returns(KtType::var_r())
                     .body(
                         Code::new()
-                            .line("val sorted = handles.sortedBy { it.ptr }")
+                            .line("val sorted = handles.sortedBy { it.ptr and -2L }")
                             .line("fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }")
                             .line("return rec(0)"),
                     ),
@@ -180,9 +197,10 @@ impl JniGen {
             // statically-known, non-null handles). `inline` folds both the
             // helper and [body] into the call site — no `ArrayList`, no
             // `sortedBy`, no recursion, no lambda object. The ordering key is
-            // `ptr` ascending, IDENTICAL to the `List` overload above, so the
-            // global lock order is consistent whichever overload a wrapper
-            // uses — deadlock-freedom is preserved even across paths.
+            // the masked address bits (`ptr and -2L`) ascending, IDENTICAL to
+            // the `List` overload above, so the global lock order is
+            // consistent whichever overload a wrapper uses — deadlock-freedom
+            // is preserved even across paths.
             file = file
                 .decl(
                     KtFun::new("withSortedHandleLocks")
@@ -199,7 +217,7 @@ impl JniGen {
                     KtFun::new("withSortedHandleLocks")
                         .vis(Vis::Internal)
                         .modifier("inline")
-                        .kdoc("Allocation-free two-handle lock: order by `ptr` then nest monitors.")
+                        .kdoc("Allocation-free two-handle lock: order by masked address then nest monitors.")
                         .generic("R")
                         .param(KtParam::new("a", handle_ty.clone()))
                         .param(KtParam::new("b", handle_ty.clone()))
@@ -209,7 +227,7 @@ impl JniGen {
                             Code::new()
                                 .line("val first: NativeHandle")
                                 .line("val second: NativeHandle")
-                                .line("if (a.ptr <= b.ptr) { first = a; second = b } else { first = b; second = a }")
+                                .line("if ((a.ptr and -2L) <= (b.ptr and -2L)) { first = a; second = b } else { first = b; second = a }")
                                 .line("return synchronized(first) { synchronized(second) { body() } }"),
                         ),
                 )
@@ -229,9 +247,9 @@ impl JniGen {
                                 .line("var x = a")
                                 .line("var y = b")
                                 .line("var z = c")
-                                .line("if (x.ptr > y.ptr) { val t = x; x = y; y = t }")
-                                .line("if (y.ptr > z.ptr) { val t = y; y = z; z = t }")
-                                .line("if (x.ptr > y.ptr) { val t = x; x = y; y = t }")
+                                .line("if ((x.ptr and -2L) > (y.ptr and -2L)) { val t = x; x = y; y = t }")
+                                .line("if ((y.ptr and -2L) > (z.ptr and -2L)) { val t = y; y = z; z = t }")
+                                .line("if ((x.ptr and -2L) > (y.ptr and -2L)) { val t = x; x = y; y = t }")
                                 .line("return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }"),
                         ),
                 );

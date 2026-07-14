@@ -64,6 +64,16 @@ pub(crate) fn struct_input_body(
                         quote! { let #fname_ident = #field_conv(env, &#raw_ident)?; }
                     } else {
                         quote! {
+                            // Null or closed handle in a required field —
+                            // reject before any dereference (`peek()`
+                            // normalizes closed handles to 0).
+                            if #raw_ident == 0 || (#raw_ident & 1) == 1 {
+                                return ::core::result::Result::Err(
+                                    <__JniErr as ::core::convert::From<String>>::from(
+                                        "Operation on a closed native handle.".to_string(),
+                                    ),
+                                );
+                            }
                             let #fname_ident: #field_ty = unsafe {
                                 *std::boxed::Box::from_raw(#raw_ident as *mut #field_ty)
                             };

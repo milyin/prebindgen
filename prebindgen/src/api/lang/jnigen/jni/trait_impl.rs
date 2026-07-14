@@ -182,10 +182,15 @@ impl JniGen {
     /// * Output: `Box::into_raw(Box::new(v)) as i64` — leak the heap
     ///   allocation to Java; sole owner is whoever later calls
     ///   `Box::from_raw` on the same pointer.
-    /// * Input: `OwnedObject::from_raw(*v as *const T)` (borrow only).
+    /// * Input: `OwnedObject::from_raw(*v as *const T)` (borrow only),
+    ///   after rejecting null and tag-bit-set values — bit 0 is the
+    ///   Kotlin-side closed tag (see `NativeHandle`), so an odd `jlong`
+    ///   is a handle that was closed after the wrapper's pre-lock guard;
+    ///   it must never be dereferenced.
     /// * Niche: `0i64` / `*v == 0` — `Box::into_raw` never returns 0,
     ///   so `Option<T>` automatically synthesises `0` = `None`,
     ///   matching the legacy "null pointer" ABI for nullable handles.
+    ///   A *tagged* (closed-but-present) value is an error, not `None`.
     pub fn opaque_handle_input(&self, ty: &syn::Type) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let name = input_name(ty, &wire);
@@ -195,6 +200,15 @@ impl JniGen {
                 env: &mut jni::JNIEnv<'env>,
                 v: &jni::sys::jlong,
             ) -> ::core::result::Result<OwnedObject<#ty>, __JniErr> {
+                // Null or tag-bit-set (closed handle raced past the Kotlin
+                // pre-lock guard) — reject before any dereference.
+                if *v == 0 || (*v & 1) == 1 {
+                    return ::core::result::Result::Err(
+                        <__JniErr as ::core::convert::From<String>>::from(
+                            "Operation on a closed native handle.".to_string(),
+                        ),
+                    );
+                }
                 Ok(unsafe { OwnedObject::from_raw(*v as *const #ty) })
             }
         );
@@ -484,6 +498,21 @@ pub(crate) fn build_handle_destructor_items(
             format!("Java_{class_pkg}_{class_short}_{free_ptr}")
         };
         let ident = syn::Ident::new(&symbol, Span::call_site());
+        // Bit 0 of the jlong is the Kotlin-side closed tag, so every handle
+        // type must leave it free: `Box` pointers to `T` are `align_of::<T>()`
+        // aligned, hence the compile-time floor of 2. Spelled as an `if` +
+        // `panic!` (not `assert!`) so the type reference is real AST — the
+        // `qualify_item` pass does not descend into macro token streams.
+        let item: syn::Item = syn::parse_quote!(
+            const _: () = {
+                if ::core::mem::align_of::<#ty>() < 2 {
+                    panic!(
+                        "opaque handle types must have alignment >= 2 (bit 0 is the closed tag)"
+                    );
+                }
+            };
+        );
+        named.push((format!("{symbol}__align_assert"), item));
         let item: syn::Item = syn::parse_quote!(
             #[no_mangle]
             #[allow(non_snake_case, unused_variables)]
@@ -492,7 +521,7 @@ pub(crate) fn build_handle_destructor_items(
                 _class: jni::objects::JClass,
                 ptr: jni::sys::jlong,
             ) {
-                if ptr != 0 {
+                if ptr != 0 && (ptr & 1) == 0 {
                     drop(Box::from_raw(ptr as *mut #ty));
                 }
             }
@@ -700,6 +729,15 @@ impl JniGen {
                         Ok({
                             if *v == 0 {
                                 None
+                            } else if (*v & 1) == 1 {
+                                // Tagged (closed) handle raced past the Kotlin
+                                // pre-lock guard — present-but-closed is an
+                                // error, absent is None.
+                                return ::core::result::Result::Err(
+                                    <__JniErr as ::core::convert::From<String>>::from(
+                                        "Operation on a closed native handle.".to_string(),
+                                    ),
+                                );
                             } else {
                                 Some(*std::boxed::Box::from_raw(*v as *mut #t1))
                             }

@@ -87,6 +87,15 @@ fn snapshot_rust_side() {
     // Opaque handle round-trips as a boxed pointer of the source type.
     assert!(rc.contains("myflat::ZThing"), "{rust}");
     assert!(rc.contains("Box::from_raw"), "{rust}");
+    // Handle-input converters reject null AND tag-bit-set (closed) pointers
+    // before any dereference — the #34 guard; bit 0 is the Kotlin closed tag.
+    assert!(rc.contains("if*v==0||(*v&1)==1"), "{rust}");
+    // Every opaque type carries the compile-time alignment floor that keeps
+    // bit 0 free for the closed tag (source-module-qualified: the check is
+    // real AST, so it rides the `qualify_item` pass).
+    assert!(rc.contains("align_of::<myflat::ZThing>()<2"), "{rust}");
+    // The freePtr destructor ignores tagged (already-closed) pointers.
+    assert!(rc.contains("ifptr!=0&&(ptr&1)==0"), "{rust}");
     // Errors funnel to the single `signal_error` channel fn (no JVM throw); it
     // now invokes the error callback with `(je, ze…)`.
     assert!(rc.contains("fnsignal_error"), "{rust}");
@@ -133,6 +142,14 @@ fn snapshot_kotlin_side() {
     assert!(!nhc.contains("funinterfaceErrorSink"), "{nh}");
     assert!(!nhc.contains("ZException"), "{nh}");
 
+    // Tag-bit lifecycle: closed = bit 0 set (or the 0 sentinel); the lock
+    // ordering key is the immutable masked address, never the live `ptr`
+    // (a mutable key could invert concurrent lock order → deadlock, #35).
+    assert!(nhc.contains("ptr==0L||(ptrand1L)!=0L"), "{nh}");
+    assert!(nhc.contains("sortedBy{it.ptrand-2L}"), "{nh}");
+    assert!(nhc.contains("(a.ptrand-2L)<=(b.ptrand-2L)"), "{nh}");
+    assert!(!nhc.contains("sortedBy{it.ptr}"), "{nh}");
+
     let nativec: String = native.split_whitespace().collect();
     assert!(nativec.contains("externalfun"), "{native}");
     // Each extern declares the trailing `errorSink: Any` param.
@@ -149,13 +166,12 @@ fn snapshot_kotlin_side() {
 
     // Typed handle subclass of NativeHandle.
     let thing = find("class ZThing(");
-    assert!(
-        thing
-            .split_whitespace()
-            .collect::<String>()
-            .contains(":NativeHandle"),
-        "{thing}"
-    );
+    let thingc: String = thing.split_whitespace().collect();
+    assert!(thingc.contains(":NativeHandle"), "{thing}");
+    // close()/take() mark the handle closed by setting the tag bit — the
+    // address bits (= the lock-ordering key) are never rewritten.
+    assert!(thingc.contains("ptr=por1L"), "{thing}");
+    assert!(!thingc.contains("ptr=0L"), "{thing}");
 
     // The free-function wrappers live in the namespace package object, take a
     // trailing `onError` callback, and call it on failure (no throw).
@@ -175,6 +191,9 @@ fn snapshot_kotlin_side() {
         pc.contains("if(__cap.failed)returnonError.run("),
         "package wrappers: {pkg}"
     );
+    // Pre-lock closed guards go through `isClosed()` (tag-bit aware), not a
+    // raw `ptr == 0L` compare.
+    assert!(pc.contains(".isClosed())returnonError.run("), "{pkg}");
     // `onError` is a **required** parameter (no default) and the wrappers
     // never throw — error surfacing is entirely the caller's business.
     assert!(

@@ -13,8 +13,8 @@ public class SummaryVault(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -22,7 +22,7 @@ public class SummaryVault(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): SummaryVault {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return SummaryVault(p)
     }
 
@@ -37,8 +37,8 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -46,13 +46,13 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): Summary {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return Summary(p)
     }
 
     /** Number of payloads (flatten-output **field** / **accessor**). */
     public fun count(onError: JniErrorHandler<Long>): Long {
-        if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
@@ -64,7 +64,7 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
 
     /** Sum of payload values (flatten-output **field** / **accessor**). */
     public fun total(onError: JniErrorHandler<Double>): Double {
-        if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
@@ -76,7 +76,7 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
 
     /** Total scaled by a factor (an instance **method**: `&Self` receiver + arg). */
     public fun scaled(factor: Double, onError: JniErrorHandler<Double>): Double {
-        if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
@@ -135,7 +135,7 @@ public fun <R> SummaryStorageSummaryFullBuilder<R>.asRaw(): SummaryStorageSummar
  */
 @Suppress("UNCHECKED_CAST")
 public fun <R> storageSummary(s: Storage, onError: JniErrorHandler<R>, build: SummaryBuilder<R>): R {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -160,8 +160,8 @@ public fun storageMatchesSummary(
     expected1: Summary?,
     onError: JniErrorHandler<Boolean>,
 ): Boolean {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
-    if (expected1 != null && expected1.ptr == 0L) return onError.run(
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
+    if (expected1 != null && expected1.isClosed()) return onError.run(
         "Operation on a closed native handle.",
     )
     val __cap = JniErrorHandlerCapture.acquire()
@@ -184,7 +184,7 @@ public fun storageMatchesSummary(
                     __cap,
                 )
             } finally {
-                expected1?.let { it.ptr = 0L }
+                expected1?.let { it.ptr = it.ptr or 1L }
             }
         }
     }
@@ -197,7 +197,7 @@ public fun storageMatchesSummary(
  * handle (per-fn **flatten-output-suppress**).
  */
 public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): Summary {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -212,14 +212,14 @@ public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): 
  * on the `Summary` parameter).
  */
 public fun summaryTotalRaw(s: Summary, onError: JniErrorHandler<Double>): Double {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
         try {
             CovNative.summaryTotalRaw(s_ptr, __cap)
         } finally {
-            s.ptr = 0L
+            s.ptr = s.ptr or 1L
         }
     }
     if (__cap.failed) return onError.run(__cap.je)
@@ -238,7 +238,7 @@ public fun <R> storageSummaryFull(
     onError: JniErrorHandler<R>,
     build: SummaryStorageSummaryFullBuilder<R>,
 ): R {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -263,8 +263,8 @@ public fun storageExpectSummary(
     expected1: Summary?,
     onError: JniErrorHandler<Boolean>,
 ): Boolean {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
-    if (expected1 != null && expected1.ptr == 0L) return onError.run(
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
+    if (expected1 != null && expected1.isClosed()) return onError.run(
         "Operation on a closed native handle.",
     )
     val __cap = JniErrorHandlerCapture.acquire()
@@ -287,7 +287,7 @@ public fun storageExpectSummary(
                     __cap,
                 )
             } finally {
-                expected1?.let { it.ptr = 0L }
+                expected1?.let { it.ptr = it.ptr or 1L }
             }
         }
     }
@@ -316,8 +316,8 @@ public fun archiveStore(
     s1: Summary?,
     onError: JniErrorHandler<Unit>,
 ) {
-    if (a.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
-    if (s1 != null && s1.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (a.isClosed()) { onError.run("Operation on a closed native handle."); return }
+    if (s1 != null && s1.isClosed()) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     run {
         val __locks = ArrayList<NativeHandle>()
@@ -338,7 +338,7 @@ public fun archiveStore(
                     __cap,
                 )
             } finally {
-                s1?.let { it.ptr = 0L }
+                s1?.let { it.ptr = it.ptr or 1L }
             }
         }
     }
@@ -350,7 +350,7 @@ public fun archiveStore(
  * empty, otherwise cloned into a fresh owned handle by the JVM binding).
  */
 public fun archiveLatest(a: SummaryVault, onError: JniErrorHandler<Summary?>): Summary? {
-    if (a.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (a.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(a) {
         val a_ptr = a.ptr

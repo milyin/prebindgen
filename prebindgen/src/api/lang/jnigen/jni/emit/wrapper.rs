@@ -595,20 +595,25 @@ fn emit_input_param(
 
     // By-value `T` opaque-handle parameter: emit the consume
     // converter inline, bypassing `OwnedObject`. The Java side
-    // takes the pointer out of its `NativeHandle.consume` under
-    // the write lock and passes it here; `Box::from_raw`
-    // reconstructs the unique owner and `*box` moves `T` out,
-    // dropping the heap allocation. The unique-ownership
-    // invariant is upheld by `NativeHandle.consume` (write-lock
-    // + atomic pointer take), which drains all in-flight borrows
-    // and ensures no live borrow can outlive this point. No
-    // `T: Clone` bound, so non-Clone handles (e.g. `Publisher<'a>`)
-    // work too. This decode is infallible — no `match` needed.
+    // holds the handle's monitor and passes the pointer here;
+    // `Box::from_raw` reconstructs the unique owner and `*box`
+    // moves `T` out, dropping the heap allocation. The
+    // unique-ownership invariant is upheld by the Kotlin wrapper
+    // (monitor + tag-bit close in `finally`), which ensures the
+    // same live pointer cannot be passed twice. No `T: Clone`
+    // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
+    // A null or tagged (closed) pointer — a close that raced past
+    // the pre-lock guard — is rejected before any dereference.
     let is_consume =
         !matches!(arg_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
     if is_consume {
         wire_params.push(quote!(#wire_ident: jni::sys::jlong));
         prelude.push(quote!(
+            if #wire_ident == 0 || (#wire_ident & 1) == 1 {
+                let __zd = __ze_defaults(&mut env);
+                signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some("Operation on a closed native handle."), &__zd);
+                return #on_err;
+            }
             let #arg_ident: #arg_ty = unsafe {
                 *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
             };
@@ -774,13 +779,19 @@ pub(crate) fn emit_expanded_param(
         }
 
         // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
-        // jlong handle inline, mirroring the normal by-value-handle path.
+        // jlong handle inline, mirroring the normal by-value-handle path —
+        // including its null/tagged (closed) pointer guard.
         let is_consume =
             !matches!(leaf_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
         if is_consume {
             let wire_ident = format_ident!("{}_ptr", leaf.name);
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
             prelude.push(quote!(
+                if #wire_ident == 0 || (#wire_ident & 1) == 1 {
+                    let __zd = __ze_defaults(&mut env);
+                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some("Operation on a closed native handle."), &__zd);
+                    return #on_err;
+                }
                 let #local: #leaf_ty = unsafe {
                     *std::boxed::Box::from_raw(#wire_ident as *mut #leaf_ty)
                 };

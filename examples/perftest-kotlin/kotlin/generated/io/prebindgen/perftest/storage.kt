@@ -33,7 +33,7 @@ public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
  * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
  */
 public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -50,7 +50,7 @@ public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? 
  * (see `perftest-c`'s `.repr_c_struct(Payload)` — owned-ness is inferred from `label`).
  */
 public fun storagePutByTake(s: Storage, payload: Payload, onError: JniErrorHandler<Unit>) {
-    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (s.isClosed()) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -72,7 +72,7 @@ public fun storagePutByTake(s: Storage, payload: Payload, onError: JniErrorHandl
  * The caller's payload is left untouched.
  */
 public fun storagePutByRead(s: Storage, payload: Payload, onError: JniErrorHandler<Unit>) {
-    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (s.isClosed()) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -117,8 +117,8 @@ public fun payloadHandlerNew(
  * reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
  */
 public fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErrorHandler<Unit>) {
-    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
-    if (handler.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (s.isClosed()) { onError.run("Operation on a closed native handle."); return }
+    if (handler.isClosed()) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     withSortedHandleLocks(s, handler) {
         val s_ptr = s.ptr
@@ -133,7 +133,7 @@ public fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErro
  * are the array-of-one case of this.
  */
 public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErrorHandler<Unit>) {
-    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (s.isClosed()) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     val __vec_payloads = JNINative.payloadVecNew(payloads.size)
     try {
@@ -168,7 +168,7 @@ public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErro
  * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
  */
 public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): List<Payload>? {
-    if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
@@ -205,8 +205,8 @@ public fun storageCallbackVec(
     handler: PayloadVecHandler,
     onError: JniErrorHandler<Unit>,
 ) {
-    if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
-    if (handler.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
+    if (s.isClosed()) { onError.run("Operation on a closed native handle."); return }
+    if (handler.isClosed()) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
     withSortedHandleLocks(s, handler) {
         val s_ptr = s.ptr

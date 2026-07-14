@@ -472,6 +472,66 @@ fun main() {
         listOf(s1, s2, s3, s4).forEach { it.close() }
     }
 
+    // ── close/take storm vs N-ary locking: lock-order stability + closed-race ─
+    // Regression test for prebindgen#35 (lock ordering keyed by a MUTABLE ptr:
+    // a concurrent close() moved a handle across the sort order, letting two
+    // threads acquire the same pair of monitors in opposite orders — AB/BA
+    // deadlock) and prebindgen#34 (a close between the wrapper's pre-lock guard
+    // and the native call passed a dead pointer into Rust — UB/SIGSEGV).
+    // Readers hammer the 3-handle storageTotalLen over a shared pool while
+    // stormers close()/take() the same handles and swap in fresh ones. With the
+    // tag-bit lifecycle the sort key (ptr and -2) is immutable, so no deadlock
+    // (watchdog); a closed handle racing a call must surface via onError as
+    // "closed native handle" — never a crash, never any other error.
+    section("close/take storm (lock-order stability + closed-handle race)") {
+        val slots = 4
+        val pool = java.util.concurrent.atomic.AtomicReferenceArray<Storage>(slots)
+        for (i in 0 until slots) pool.set(i, storageNew(boom))
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        val closedRaces = AtomicInteger()
+        val unexpected = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val tolerant = JniErrorHandler<Long> { je ->
+            if (je != null && je.contains("closed native handle")) closedRaces.incrementAndGet()
+            else unexpected.compareAndSet(null, je ?: "je == null")
+            -1L
+        }
+        val readers = List(4) {
+            thread {
+                val rnd = java.util.concurrent.ThreadLocalRandom.current()
+                while (!stop.get()) {
+                    val a = pool.get(rnd.nextInt(slots))
+                    val b = pool.get(rnd.nextInt(slots))
+                    val c = pool.get(rnd.nextInt(slots))
+                    storageTotalLen(a, b, c, tolerant)
+                }
+            }
+        }
+        val stormers = List(2) {
+            thread {
+                val rnd = java.util.concurrent.ThreadLocalRandom.current()
+                repeat(3_000) { n ->
+                    val i = rnd.nextInt(slots)
+                    val old = pool.getAndSet(i, storageNew(boom))
+                    when (n % 3) {
+                        0 -> old.close()
+                        // take(): the twin shares the old handle's masked
+                        // address (an intentional sort-key tie) — the old
+                        // object is closed before the twin exists.
+                        1 -> old.take().close()
+                        else -> { old.close(); old.close() }   // idempotent
+                    }
+                }
+            }
+        }
+        stormers.forEach { it.join(60_000) }
+        stop.set(true)
+        readers.forEach { it.join(60_000) }
+        check((stormers + readers).none { it.isAlive }) { "deadlock: storm threads still alive" }
+        check(unexpected.get() == null) { "unexpected native error: ${unexpected.get()}" }
+        check(closedRaces.get() > 0) { "storm never observed a closed handle — test is not racing" }
+        for (i in 0 until slots) pool.get(i).close()
+    }
+
     // ── high-volume callback: per-upcall local-frame hygiene ─────────────────
     // 20k upcalls, half carrying a fresh String local each — leaked JNI local
     // refs (the historical daemon-thread OOM) would accumulate here.
