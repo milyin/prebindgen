@@ -110,7 +110,18 @@ pub fn merged_file_path(kotlin_root: &Path, file: &KtFile, fallback_name: &str) 
 }
 
 /// Render and write every merged file; returns the written paths.
+///
+/// `kotlin_root` is **generator-owned**: it is deleted and recreated on
+/// every run, so stale files from a previous generation (a renamed
+/// package, a removed declaration) can never linger. Point it at a
+/// dedicated directory (the established convention is
+/// `kotlin/generated/`), never at a tree containing hand-written sources.
 pub fn write_files(files: &[KtFile], kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
+    match std::fs::remove_dir_all(kotlin_root) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
     let mut written = Vec::new();
     for f in files {
         let fallback = f

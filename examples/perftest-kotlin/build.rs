@@ -103,11 +103,6 @@ fn main() {
     let kotlin_root = std::path::Path::new(&crate_dir)
         .join("kotlin")
         .join("generated");
-    if let Err(err) = std::fs::remove_dir_all(&kotlin_root) {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            panic!("cleanup kotlin/generated failed: {err}");
-        }
-    }
     for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }

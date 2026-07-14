@@ -314,3 +314,40 @@ fn member_name_mangle_hook_applies_order_independently() {
     assert!(ac.contains("funlabel("), "{all}");
     assert!(!ac.contains("funlabelNative("), "{all}");
 }
+
+/// C4: the Kotlin root is generator-owned — `write_kotlin` deletes and
+/// recreates it on every run, so stale files from a previous generation
+/// (renamed package, removed declaration) never linger and consumers need
+/// no cleanup boilerplate. Repeat runs are idempotent.
+#[test]
+fn write_kotlin_owns_and_resets_the_root() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("thing").fun(crate::fun!(z_ping)));
+    let gen = registry.resolve(jni).expect("resolve");
+
+    let dir = unique_test_dir("jnigen_owned_root");
+    let _ = std::fs::remove_dir_all(&dir);
+    let root = dir.join("kotlin");
+    // A stale file from a "previous run" at a path this generation won't
+    // write — wiped with the rest of the owned root.
+    let stale_dir = root.join("io/test/jni/old");
+    std::fs::create_dir_all(&stale_dir).unwrap();
+    let stale = stale_dir.join("stale.kt");
+    std::fs::write(&stale, "package io.test.jni.old\n").unwrap();
+
+    let paths = gen.write_kotlin(&root).expect("write_kotlin");
+    assert!(!stale.exists(), "stale file must be wiped with the root");
+    assert!(!stale_dir.exists());
+    assert!(paths.iter().all(|p| p.exists()));
+
+    // Idempotent: a second run rewrites the same set.
+    let paths2 = gen.write_kotlin(&root).expect("write_kotlin again");
+    assert_eq!(paths, paths2);
+    assert!(paths2.iter().all(|p| p.exists()));
+}

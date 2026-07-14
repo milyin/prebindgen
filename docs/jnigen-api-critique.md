@@ -481,6 +481,17 @@ The consumer must `remove_dir_all` the Kotlin root itself to avoid stale files
 after package moves; `write_kotlin` returns paths written but offers no prune
 option.
 
+> **Resolution (2026-07-15): fixed — the Kotlin root is generator-owned.**
+> `write_kotlin` (via `kt::write_files`) deletes and recreates `kotlin_root`
+> on every run, so stale files from a renamed package or removed
+> declaration can never linger and the identical `remove_dir_all`
+> boilerplate is gone from all three consumers. The contract is documented
+> on both entry points: point the root at a dedicated directory (the
+> established `kotlin/generated/` convention), never at hand-written
+> sources. A marker-based selective prune was considered and rejected as
+> too complex for the problem — whole-directory ownership is the simple,
+> predictable rule.
+
 ### C5. Parameters named by bare ident
 
 `param_expand_self(pq!(key_expr))` — no decl-time validation against the
