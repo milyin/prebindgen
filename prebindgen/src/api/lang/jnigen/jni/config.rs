@@ -42,6 +42,15 @@ pub(crate) enum NameSpec {
     },
 }
 
+impl NameSpec {
+    /// True for a `kotlin_type`-mapped declaration: the type surfaces as an
+    /// EXISTING Kotlin type — emitters generate no file for it (the FQN is
+    /// used verbatim at reference sites only).
+    pub(crate) fn is_verbatim(&self) -> bool {
+        matches!(self, NameSpec::Verbatim(_))
+    }
+}
+
 impl JniGen {
     /// Set the JVM/Kotlin **base** package (dot-separated, e.g.
     /// `"io.zenoh.jni"`). All derived forms (slash-separated `FindClass`

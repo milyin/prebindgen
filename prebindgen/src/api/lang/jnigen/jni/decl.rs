@@ -217,6 +217,11 @@ macro_rules! expand_return {
 /// let _ = prebindgen::ptr_class!(KeyExpr)
 ///     .fun(prebindgen::fun!(keyexpr_get_str).name("str"));
 /// ```
+/// Deliberately has no `.kotlin_type()`: the generated typed-handle class
+/// OWNS a lifecycle contract — the `NativeHandle` base, the `ptr` slot,
+/// `close()`, the lock protocol, and the paired `freePtr` extern — that an
+/// arbitrary existing Kotlin type cannot be assumed to honor. The other
+/// class kinds are pure surface and may be mapped; a handle is not.
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
@@ -425,11 +430,14 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// unit-variant only and `#[repr(i32)]`-style with explicit discriminants,
 /// so both sides agree on the numbers.
 ///
-/// Has no `.fun`/`.constructor` — instance members are only meaningful on
-/// handle ([`PtrClassDecl`]) and value ([`ValueClassDecl`]) classes.
+/// Has no `.fun`/`.constructor` by rule, not omission: members belong to
+/// class kinds whose instances can re-enter Rust as an object (handle /
+/// blob / field leaves). An enum value is a bare scalar with no object
+/// identity — a "method" on it is just a free function taking the enum.
 pub struct EnumClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
+    pub(crate) kotlin_type: Option<String>,
 }
 
 impl EnumClassDecl {
@@ -437,12 +445,23 @@ impl EnumClassDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
+            kotlin_type: None,
         }
     }
 
     /// Override the Kotlin **class name** (relative, no dots).
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name_override = Some(name.into());
+        self
+    }
+
+    /// Surface this enum as an **existing** Kotlin type instead of
+    /// generating an `enum class` file (see [`DataClassDecl::kotlin_type`]).
+    /// The named type must expose the generated protocol: a companion
+    /// `fromInt(Int): T` and a `val value: Int` with the Rust
+    /// discriminants — exactly what a generated enum class provides.
+    pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
+        self.kotlin_type = Some(expr.into());
         self
     }
 }
@@ -460,12 +479,14 @@ impl From<syn::Type> for EnumClassDecl {
 /// [`ptr_class!`](crate::ptr_class) handles or
 /// [`value_class!`](crate::value_class) blobs.
 ///
-/// Has no `.fun`/`.constructor` — a data class has no handle to hang an
-/// instance method on.
+/// Members work like every class kind whose instance can re-enter Rust —
+/// here the receiver re-enters as its **field leaves** (the same call-site
+/// destructuring a data-class parameter gets), just rebased to `this`.
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
     pub(crate) kotlin_type: Option<String>,
+    pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
 }
 
 impl DataClassDecl {
@@ -474,6 +495,7 @@ impl DataClassDecl {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
             kotlin_type: None,
+            members: Vec::new(),
         }
     }
 
@@ -485,9 +507,26 @@ impl DataClassDecl {
 
     /// Surface this type as a verbatim Kotlin type instead of a generated
     /// class — for when it should map onto an existing or container type,
-    /// e.g. `"List<ByteArray>"`.
+    /// e.g. `"List<ByteArray>"`. Mutually exclusive with members (a mapped
+    /// type has no generated class to hold them).
     pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
         self.kotlin_type = Some(expr.into());
+        self
+    }
+
+    /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
+    /// method on the generated data class (see [`PtrClassDecl::fun`]) — the
+    /// receiver crosses as `this`'s field leaves, exactly like a data-class
+    /// parameter.
+    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
+        self.members.push((rust_fun, MemberKind::Fun));
+        self
+    }
+
+    /// Expose a `#[prebindgen]` factory as a companion-object factory
+    /// (see [`PtrClassDecl::constructor`]).
+    pub fn constructor(mut self, rust_fun: FunctionDecl) -> Self {
+        self.members.push((rust_fun, MemberKind::Constructor));
         self
     }
 }

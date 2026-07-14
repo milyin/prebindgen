@@ -331,6 +331,30 @@ while `value_class` — equally handle-less — allows them. `.kotlin_type()` (m
 onto an existing Kotlin type) exists only on data/value classes; enums and ptr
 classes can't be mapped onto existing types.
 
+> **Resolution (2026-07-15): fixed — the matrix now follows two rules.**
+>
+> | capability | ptr | data | value | enum |
+> |---|---|---|---|---|
+> | `.fun` / `.constructor` | ✓ | ✓ *(new)* | ✓ | ✗ by rule |
+> | `.kotlin_type()` | ✗ by rule | ✓ | ✓ | ✓ *(new)* |
+>
+> **Rule 1 — members**: meaningful wherever an instance can re-enter Rust.
+> A ptr receiver re-enters as its handle, a value receiver as its blob, a
+> data receiver as its **field leaves** — the same call-site destructuring
+> a data-class *parameter* already got, rebased to `this` (implemented;
+> zero new wire machinery, the extern is unchanged). An enum value is a
+> bare scalar with no object identity — a "method" is just a free fn.
+> **Rule 2 — `.kotlin_type()`**: meaningful wherever the generated class is
+> pure surface. Data/value/enum all qualify (the enum mapping only requires
+> the target type to honor the `fromInt`/`.value` protocol; implemented, no
+> file generated). A ptr class is NOT pure surface — it owns a lifecycle
+> contract (NativeHandle base, `ptr` slot, `close()`, lock protocol, paired
+> `freePtr`) an existing type can't be assumed to honor.
+> `.kotlin_type()` + members is rejected (a mapped type has no generated
+> class to hold them; assert added to data AND value). Demonstrated in
+> covertest: `Payload.labelLen()` — the free fn moved into the data class,
+> regen diff is exactly the receiver rebasing to `this.id, this.seq, …`.
+
 ### I6. Three overlapping const mechanisms
 
 `constant`, `constant_fun`, `constant_expr`: the flagship consumer only needed

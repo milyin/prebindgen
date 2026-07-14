@@ -330,15 +330,19 @@ impl JniGen {
              a type can be one or the other, not both",
             short
         );
-        self.register_class_name(
-            &key,
-            NameSpec::Class {
+        // An explicit `kotlin_type` maps the enum onto an existing Kotlin
+        // type (verbatim FQN, no file generated); the jint wire and the
+        // `fromInt`/`.value` call protocol are identical either way.
+        let spec = match decl.kotlin_type {
+            Some(expr) => NameSpec::Verbatim(expr),
+            None => NameSpec::Class {
                 subpackage: subpackage.to_string(),
                 short,
                 name_override: decl.name_override,
                 kind: NameKind::Enum,
             },
-        );
+        };
+        self.register_class_name(&key, spec);
         self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
@@ -368,14 +372,25 @@ impl JniGen {
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
+        assert!(
+            decl.kotlin_type.is_none() || decl.members.is_empty(),
+            "data_class `{short}`: .kotlin_type() maps onto an EXISTING type — there is no \
+             generated class to hold members"
+        );
         let spec =
             Self::data_value_name_spec(subpackage, short, decl.name_override, decl.kotlin_type);
         self.register_class_name(&key, spec);
+        self.accept_members(&key, decl.members);
     }
 
     fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
+        assert!(
+            decl.kotlin_type.is_none() || decl.members.is_empty(),
+            "value_class `{short}`: .kotlin_type() maps onto an EXISTING type — there is no \
+             generated class to hold members"
+        );
         let spec =
             Self::data_value_name_spec(subpackage, short, decl.name_override, decl.kotlin_type);
         self.register_class_name(&key, spec);
@@ -386,11 +401,11 @@ impl JniGen {
         self.accept_members(&key, decl.members);
     }
 
-    /// Shared tail of `accept_ptr_class`/`accept_value_class` (the two class
-    /// kinds whose members are emitted): each member's per-fn expand
-    /// overrides apply exactly as a free function's would; a constructor
-    /// member's return is additionally never output-flattened (it's a
-    /// factory); then the members join the class's registered set.
+    /// Shared tail of the member-bearing class kinds (`ptr` / `value` /
+    /// `data` — every kind whose instance can re-enter Rust): each member's
+    /// per-fn expand overrides apply exactly as a free function's would; a
+    /// constructor member's return is additionally never output-flattened
+    /// (it's a factory); then the members join the class's registered set.
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
         for (decl, kind) in members {
             let rust_ident = decl.rust_ident.clone();

@@ -60,6 +60,20 @@ internal inline fun <R> withSortedHandleLocks(
 }
 
 public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
+    public fun labelLen(onError: JniErrorHandler<Long?>): Long? {
+        val __cap = JniErrorHandlerCapture.acquire()
+        val __ret = CovNative.payloadLabelLen(
+            this.id,
+            this.seq,
+            this.value,
+            this.flag,
+            this.label,
+            __cap,
+        )
+        if (__cap.failed) return onError.run(__cap.je)
+        return __ret
+    }
+
     public companion object {
         @JvmStatic
         public fun fromParts(

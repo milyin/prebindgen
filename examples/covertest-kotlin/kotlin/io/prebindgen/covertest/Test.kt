@@ -22,7 +22,6 @@ import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
-import io.prebindgen.covertest.model.payloadLabelLen
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
@@ -133,10 +132,11 @@ fun main() {
         check(stampSeries(0L, boom).isEmpty())
     }
 
-    // ── Option<scalar>: nullable primitive return ────────────────────────────
-    section("Option<i64> payloadLabelLen") {
-        check(payloadLabelLen(payload(1L, 0, 0.0, false, "abcd"), boom) == 4L)
-        check(payloadLabelLen(payload(1L, 0, 0.0, false, null), boom) == null)
+    // ── Option<scalar> nullable primitive return + data_class instance
+    // member (I5): the receiver crosses as `this`'s field leaves ────────────
+    section("Option<i64> Payload.labelLen") {
+        check(payload(1L, 0, 0.0, false, "abcd").labelLen(boom) == 4L)
+        check(payload(1L, 0, 0.0, false, null).labelLen(boom) == null)
     }
 
     // ── ptr_class members + Option<Payload>/Option<Vec>/Vec round-trips ──────

@@ -121,13 +121,6 @@ public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List
     return __ret
 }
 
-public fun payloadLabelLen(p: Payload, onError: JniErrorHandler<Long?>): Long? {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.payloadLabelLen(p.id, p.seq, p.value, p.flag, p.label, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
-    return __ret
-}
-
 public fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.celsiusDouble(c, __cap)

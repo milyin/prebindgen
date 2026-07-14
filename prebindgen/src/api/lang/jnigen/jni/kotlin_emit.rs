@@ -261,6 +261,10 @@ impl JniGen {
             if !cfg.value_blob {
                 continue;
             }
+            // `kotlin_type`-mapped: surfaces as an existing type, no file.
+            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
+                continue;
+            }
             let fqn = cfg
                 .name_spec
                 .as_ref()
@@ -404,6 +408,11 @@ impl JniGen {
             if cfg.enum_cfg.is_none() {
                 continue;
             }
+            // `kotlin_type`-mapped: the enum surfaces as an existing Kotlin
+            // type honoring the `fromInt`/`.value` protocol — no file.
+            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
+                continue;
+            }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
@@ -447,6 +456,10 @@ impl JniGen {
             if cfg.special_decl() {
                 continue;
             }
+            // `kotlin_type`-mapped: surfaces as an existing type, no file.
+            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
+                continue;
+            }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
@@ -470,7 +483,61 @@ impl JniGen {
             if item_struct.ident != class_name {
                 aliases.push((item_struct.ident.to_string(), class_name.clone()));
             }
-            let (class, imports) = build_data_class(self, &class_name, item_struct, registry);
+            let (mut class, mut imports) =
+                build_data_class(self, &class_name, item_struct, registry);
+            // Members: same shape as the value-blob path — the instance
+            // method's receiver re-enters Rust as `this`'s field leaves
+            // (the data-class param destructuring, rebased to `this`).
+            let members = self
+                .class_members
+                .get(key)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            if !members.is_empty() && !self.package.is_empty() {
+                imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
+            }
+            for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
+                if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                    if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+                        self,
+                        item_fn,
+                        registry,
+                        &mut imports,
+                        Some(m.kotlin_name.as_str()),
+                        Some(key),
+                    ) {
+                        class = class.member(f);
+                    }
+                }
+            }
+            let ctors: Vec<_> = members
+                .iter()
+                .filter(|m| m.kind == MemberKind::Constructor)
+                .collect();
+            if !ctors.is_empty() {
+                // `build_data_class` already installed the `fromParts`
+                // companion — factories join it rather than replacing it.
+                let mut companion = class
+                    .companion
+                    .take()
+                    .map(|c| *c)
+                    .unwrap_or_else(|| KtClass::companion_object().vis(Vis::Public));
+                for m in ctors {
+                    if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                        if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+                            self,
+                            item_fn,
+                            registry,
+                            &mut imports,
+                            Some(m.kotlin_name.as_str()),
+                            None,
+                        ) {
+                            companion = companion.member(f);
+                        }
+                    }
+                }
+                class = class.companion(companion);
+            }
             written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }
 
