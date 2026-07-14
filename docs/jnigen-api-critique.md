@@ -598,6 +598,21 @@ can't be built through by the recursive input fold (forces Sample's
 identity-only input); opaque-handle consts rejected; `&mut [T]` unsupported;
 output-side `Option<prim>` boxing deliberately not done.
 
+> **Resolution (2026-07-15): catalogued in
+> [issue #33](https://github.com/milyin/prebindgen/issues/33) — feature
+> work, not API-shape defects; tracked outside this cleanup PR.** Triage:
+> *deferred gaps* — `Vec<handle>` INPUT (loud panic with hint; output side
+> already folds Kotlin-side), `Option<ptr_class>` through the recursive
+> fold (loud `UnsupportedOptional`; per-fn identity-only opt-out is the
+> workaround), `&mut [T]`/`&mut T` (falls through to the generic
+> unresolved-type error — a targeted reject-with-hint is the issue's first
+> sub-task, per the I7 policy); *by-design exclusions* — opaque-handle
+> consts (a shared closeable `val` is semantically wrong; the loaning
+> factory + `constant!(N).expr(…)` idiom is the pattern) and output-side
+> `Option<prim>` boxing (inherent to the single-value return channel;
+> revisit only with a benchmark). Each entry in the issue carries the
+> failure-mode anchor, the workaround, and an implementation sketch.
+
 ### N3. API split across branches
 
 **Resolution (2026-07-13): already resolved before this effort started** —
