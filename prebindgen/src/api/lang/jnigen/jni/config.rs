@@ -98,14 +98,10 @@ impl JniGen {
 
     /// Set the closure that renames the framework "harness" class (the
     /// centralized extern holder). Receives the derived default
-    /// `"JNINative"`; default = identity (see the module-level table).
-    /// Affects the generated Kotlin class name and the derived JNI extern
-    /// symbol path on the Rust side.
-    ///
-    /// **Breaking change vs pre-0.6**: the hook used to receive the bare
-    /// stem `"Native"` with a hidden `JNI`-prepending default; it now
-    /// receives the full derived default `"JNINative"` and replaces it
-    /// wholesale (`|_| "MyNative".to_string()`).
+    /// `"JNINative"` and replaces it wholesale
+    /// (`|_| "MyNative".to_string()`); default = identity (see the
+    /// module-level table). Affects the generated Kotlin class name and
+    /// the derived JNI extern symbol path on the Rust side.
     pub fn set_harness_name_mangle<F>(mut self, f: F) -> Self
     where
         F: Fn(&str) -> String + Send + Sync + 'static,

@@ -419,7 +419,7 @@ fn output_only_convert_resolves_without_input_twin() {
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .convert(crate::convert!(Len).output_fun(crate::fun!(len_value)))
+        .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_outonly_convert");
     let _ = std::fs::remove_dir_all(&dir);
@@ -464,7 +464,7 @@ fn convert_fn_qualifies_with_origin_crate() {
         Registry::<KotlinMeta>::from_items(flat.into_iter().chain(helpers)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .convert(crate::convert!(Len).output_fun(crate::fun!(len_value)))
+        .convert(crate::convert!(Len).output(crate::fun!(len_value)))
         .package(crate::package!("len").fun(crate::fun!(len_of)));
     let dir = unique_test_dir("jnigen_convert_origin");
     let _ = std::fs::remove_dir_all(&dir);
@@ -498,7 +498,7 @@ fn convert_input_target_mismatch_rejected() {
         .collect();
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
-        .convert(crate::convert!(Len).input_fun(crate::fun!(from_long)))
+        .convert(crate::convert!(Len).input(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
     let dir = unique_test_dir("jnigen_convert_mismatch");
     let _ = std::fs::remove_dir_all(&dir);
@@ -508,8 +508,8 @@ fn convert_input_target_mismatch_rejected() {
         .and_then(|gen| gen.write_rust(dir.join("gen.rs")));
 }
 
-/// `convert!` via `core::convert` trait impls: `.input_from(ty!(i32))` /
-/// `.output_into(ty!(i32))` generate fully-qualified `Into` calls; the wire
+/// `convert!` via `core::convert` trait impls: `.input(from!(i32))` /
+/// `.output(into!(i32))` generate fully-qualified `Into` calls; the wire
 /// and Kotlin surface derive from the stated repr's converter chain.
 #[test]
 fn convert_via_trait_impls() {
@@ -522,8 +522,8 @@ fn convert_via_trait_impls() {
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Celsius)
-                .input_from(crate::ty!(i32))
-                .output_into(crate::ty!(i32)),
+                .input(crate::from!(i32))
+                .output(crate::into!(i32)),
         )
         .package(crate::package!("m").fun(crate::fun!(temp_double)));
     let dir = unique_test_dir("jnigen_convert_trait");
@@ -543,7 +543,7 @@ fn convert_via_trait_impls() {
     );
 }
 
-/// `.input_try_from(ty!(i32))`: the generated converter is fallible with the
+/// `.input(try_from!(i32))`: the generated converter is fallible with the
 /// impl's associated `Error` as its error type; the body is the qualified
 /// `try_into` call.
 #[test]
@@ -555,7 +555,7 @@ fn convert_via_try_from_is_fallible() {
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .convert(crate::convert!(Percent).input_try_from(crate::ty!(i32)))
+        .convert(crate::convert!(Percent).input(crate::try_from!(i32)))
         .package(crate::package!("m").fun(crate::fun!(pct_use)));
     let dir = unique_test_dir("jnigen_convert_tryfrom");
     let _ = std::fs::remove_dir_all(&dir);
@@ -575,7 +575,7 @@ fn convert_via_try_from_is_fallible() {
     );
 }
 
-/// `.input_with`/`.output_with`: the callable path is emitted verbatim —
+/// `from!(…).with(…)`/`into!(…).with(…)`: the callable path is emitted verbatim —
 /// binding-local `crate::…` fns need no `#[prebindgen]` marking.
 #[test]
 fn convert_via_local_fns() {
@@ -588,8 +588,8 @@ fn convert_via_local_fns() {
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Label)
-                .input_with(crate::ty!(String), crate::path!(crate::conv::label_in))
-                .output_with(crate::ty!(String), crate::path!(crate::conv::label_out)),
+                .input(crate::from!(String).with(crate::path!(crate::conv::label_in)))
+                .output(crate::into!(String).with(crate::path!(crate::conv::label_out))),
         )
         .package(crate::package!("m").fun(crate::fun!(label_id)));
     let dir = unique_test_dir("jnigen_convert_local");
@@ -608,11 +608,58 @@ fn convert_via_local_fns() {
 #[should_panic(expected = "input conversion is already declared")]
 fn convert_duplicate_input_rejected() {
     let _ = crate::convert!(Widget)
-        .input_from(crate::ty!(i32))
-        .input_with(crate::ty!(String), crate::path!(crate::widget_in));
+        .input(crate::from!(i32))
+        .input(crate::from!(String).with(crate::path!(crate::widget_in)));
 }
 
-/// `.input_try_with`: the fallible binding-local form — the converter's
+/// The source macros state their direction; the acceptor cross-checks it.
+#[test]
+#[should_panic(expected = "an input conversion is built with from!/try_from!")]
+fn convert_input_into_direction_rejected() {
+    let _ = crate::convert!(Widget).input(crate::into!(i32));
+}
+
+#[test]
+#[should_panic(expected = "an output conversion is built with into!/try_into!")]
+fn convert_output_from_direction_rejected() {
+    let _ = crate::convert!(Widget).output(crate::from!(i32));
+}
+
+/// `.error` is only meaningful on a fallible source.
+#[test]
+#[should_panic(expected = "an infallible source has no error channel")]
+fn convert_error_on_infallible_source_rejected() {
+    let _ = crate::from!(String)
+        .with(crate::path!(crate::widget_in))
+        .error(crate::ty!(String));
+}
+
+/// `.error` states a `.with(...)` callable's Err type — a bare trait
+/// source's error is its associated type.
+#[test]
+#[should_panic(expected = "chain .with first")]
+fn convert_error_on_trait_source_rejected() {
+    let _ = crate::try_from!(String).error(crate::ty!(String));
+}
+
+/// A fallible local callable must state its error type — a path carries no
+/// signature to read.
+#[test]
+#[should_panic(expected = "state its Err type via .error(...)")]
+fn convert_try_with_missing_error_rejected() {
+    let _ = crate::convert!(Widget)
+        .input(crate::try_from!(String).with(crate::path!(crate::widget_in)));
+}
+
+/// A `fun!` conversion source is never surfaced in Kotlin — decorations are
+/// rejected at the source seam (same policy as ignore/variant/field).
+#[test]
+#[should_panic(expected = ".name()/expand overrides don't apply")]
+fn convert_source_fun_with_decorations_rejected() {
+    let _ = crate::convert!(Widget).input(crate::fun!(widget_in).name("widgetIn"));
+}
+
+/// `try_from!(…).with(…).error(…)`: the fallible binding-local form — the converter's
 /// error type is the decl-stated one and the fn's `Result` is emitted
 /// verbatim (no `Ok(...)` wrap).
 #[test]
@@ -626,12 +673,12 @@ fn convert_via_local_try_fn_is_fallible() {
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Label)
-                .input_try_with(
-                    crate::ty!(String),
-                    crate::ty!(String),
-                    crate::path!(crate::conv::label_in),
+                .input(
+                    crate::try_from!(String)
+                        .with(crate::path!(crate::conv::label_in))
+                        .error(crate::ty!(String)),
                 )
-                .output_with(crate::ty!(String), crate::path!(crate::conv::label_out)),
+                .output(crate::into!(String).with(crate::path!(crate::conv::label_out))),
         )
         .package(crate::package!("m").fun(crate::fun!(label_id)));
     let dir = unique_test_dir("jnigen_convert_local_try");

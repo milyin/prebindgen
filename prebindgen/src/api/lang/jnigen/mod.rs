@@ -21,9 +21,9 @@ pub(crate) mod util;
 pub use jni::{
     box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong, box_jshort,
     decode_byte_array, decode_string, encode_byte_array, encode_string, matching, null_byte_array,
-    null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl, DataClassDecl,
-    EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FunctionDecl, IgnoreDecl,
-    JniBindingError, JniGen, PackageDecl, PtrClassDecl, ValueClassDecl,
+    null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl, ConvertSourceDecl,
+    DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl, ExpandReturnDecl, FunctionDecl,
+    IgnoreDecl, JniBindingError, JniGen, PackageDecl, PtrClassDecl, ValueClassDecl,
 };
 
 // Kotlin emission types now live in the standalone generator module
