@@ -12,8 +12,8 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -21,7 +21,7 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): StorageError {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return StorageError(p)
     }
 
@@ -30,7 +30,7 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
      * **accessor**, fed to `onError`).
      */
     public fun message(onError: JniErrorHandler<String>): String {
-        if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr

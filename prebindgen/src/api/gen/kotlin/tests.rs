@@ -141,7 +141,7 @@ fn typed_handle_subclass_with_ctor_args_supertype() {
                 .annotation("Synchronized")
                 .modifier("override")
                 .body(Code::new().blk("if (ptr != 0L) {", |c| {
-                    c.line("freePtr(ptr)").line("ptr = 0L")
+                    c.line("freePtr(ptr)").line("ptr = ptr or 1L")
                 })),
         )
         .companion(
@@ -161,7 +161,7 @@ public class ZThing(initialPtr: Long) : NativeHandle(initialPtr) {
     override fun close() {
         if (ptr != 0L) {
             freePtr(ptr)
-            ptr = 0L
+            ptr = ptr or 1L
         }
     }
 

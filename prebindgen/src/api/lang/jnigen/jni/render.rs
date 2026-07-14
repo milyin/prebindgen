@@ -317,8 +317,8 @@ pub(crate) fn build_typed_handle(
                 .body(
                     kt::Code::new()
                         .line("val p = ptr")
-                        .blk("if (p != 0L) {", |c| {
-                            c.line("ptr = 0L").line(format!("{free_extern}(p)"))
+                        .blk("if (p != 0L && (p and 1L) == 0L) {", |c| {
+                            c.line("ptr = p or 1L").line(format!("{free_extern}(p)"))
                         }),
                 ),
         )
@@ -334,7 +334,7 @@ pub(crate) fn build_typed_handle(
                 .body(
                     kt::Code::new()
                         .line("val p = ptr")
-                        .line("ptr = 0L")
+                        .line("ptr = p or 1L")
                         .line(format!("return {class_name}(p)")),
                 ),
         )
@@ -650,8 +650,10 @@ struct Opaque {
     name: String,
     /// Object to synchronize on and read the pointer from (`<name>`).
     target: String,
-    /// Statement that nulls the pointer slot after consume (`"<target>.ptr =
-    /// 0L"`), or `None` for borrow modes.
+    /// Statement that marks the pointer slot closed after consume by setting
+    /// the tag bit (`"<target>.ptr = <target>.ptr or 1L"` — the address bits
+    /// stay put so the lock-ordering key never changes), or `None` for
+    /// borrow modes.
     consume_null: Option<String>,
     /// `true` for `Option<&T>` — nullable param, branches before lock.
     nullable: bool,
@@ -1457,14 +1459,14 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
                 ParamMode::Borrow => (p.kt_name.clone(), None, false),
                 ParamMode::Consume => (
                     p.kt_name.clone(),
-                    Some(format!("{}.ptr = 0L", p.kt_name)),
+                    Some(format!("{n}.ptr = {n}.ptr or 1L", n = p.kt_name)),
                     false,
                 ),
                 ParamMode::BorrowNullable => (p.kt_name.clone(), None, true),
-                // Nullable consume: null the slot only when present (null-safe).
+                // Nullable consume: tag the slot only when present (null-safe).
                 ParamMode::ConsumeNullable => (
                     p.kt_name.clone(),
-                    Some(format!("{n}?.let {{ it.ptr = 0L }}", n = p.kt_name)),
+                    Some(format!("{n}?.let {{ it.ptr = it.ptr or 1L }}", n = p.kt_name)),
                     true,
                 ),
                 _ => return None,
@@ -1561,15 +1563,18 @@ fn error_sink_parts(
     })
 }
 
-/// Pre-lock closed-handle guards: a racy-but-safe `ptr == 0L` check before the
-/// lock, returning `onError.run(...)` (function-level return; no throw).
+/// Pre-lock closed-handle guards: a racy-but-safe `isClosed()` check before
+/// the lock, returning `onError.run(...)` (function-level return; no throw).
+/// Racy: a close between this check and the native call is caught by the
+/// Rust-side converter guard (the tag bit survives the race), which routes
+/// through the same error channel.
 fn render_prelock_guards(opaques: &[Opaque], guard_args: &str, is_unit: bool) -> kt::Code {
     let mut guards = kt::Code::new();
     for o in opaques {
         let cond = if o.nullable {
-            format!("{n} != null && {t}.ptr == 0L", n = o.name, t = o.target)
+            format!("{n} != null && {t}.isClosed()", n = o.name, t = o.target)
         } else {
-            format!("{t}.ptr == 0L", t = o.target)
+            format!("{t}.isClosed()", t = o.target)
         };
         guards = if is_unit {
             guards.wline(format!(
@@ -1614,7 +1619,10 @@ fn render_core_stmt(
     bind: &str,
 ) -> kt::Code {
     // Under-lock pointer reads. The closed-handle check is done pre-lock
-    // (`prelock_guards`, → `onError`); these just bind the ptr the call passes.
+    // (`prelock_guards`, → `onError`); these just bind the ptr the call
+    // passes. A handle closed after the guard carries the tag bit (odd
+    // value), which the Rust-side converter guard rejects — never
+    // dereferenced.
     let mut ptr_binds = kt::Code::new();
     for o in opaques {
         ptr_binds = if o.nullable {

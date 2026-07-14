@@ -11,23 +11,39 @@ import io.prebindgen.covertest.model.Stamp
  * Base class for every typed native handle: owns the raw `Box<T>` pointer
  * slot and its monitor. Subclasses add their type-specific `close()` /
  * `take()` / `freePtr`.
+ *
+ * Lifecycle is a tag bit: `Box` pointers are at least 2-aligned (asserted
+ * on the Rust side), so bit 0 is free — closing/consuming sets `ptr = p or 1`
+ * instead of zeroing. The address bits (`ptr and -2`) are therefore
+ * write-once for the object's whole lifetime, which is what makes them a
+ * sound lock-ordering key (a mutable key could reorder concurrent lock
+ * acquisition and deadlock). All `ptr` writes happen under this handle's
+ * monitor.
  */
 public abstract class NativeHandle(initialPtr: Long) : AutoCloseable {
     @Volatile internal var ptr: Long = initialPtr
 
-    public fun peek(): Long = ptr
+    /** The live pointer, or `0` if this handle is closed. */
+    public fun peek(): Long {
+        val p = ptr
+        return if (p == 0L || (p and 1L) != 0L) 0L else p
+    }
 
-    public fun isClosed(): Boolean = ptr == 0L
+    public fun isClosed(): Boolean = ptr == 0L || (ptr and 1L) != 0L
 }
 
 /**
- * Acquire every handle's monitor in one global order (sorted by raw
- * pointer) so concurrent calls touching the same handles can't deadlock,
- * then run [body]. Closed handles (`ptr == 0`) are still locked; callers
- * re-read and null-check each pointer inside [body]. Scales to any arity.
+ * Acquire every handle's monitor in one global order — sorted by the
+ * immutable address bits (`ptr and -2`; bit 0 is the closed tag and
+ * never participates) — so concurrent calls touching the same handles
+ * can't deadlock, then run [body]. The key never changes after
+ * construction: closing only sets bit 0, so a concurrent `close()`
+ * can't reorder anyone's acquisition. Closed handles are still locked;
+ * their tagged pointers are rejected by the Rust-side converter guard
+ * inside the native call. Scales to any arity.
  */
 internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> R): R {
-    val sorted = handles.sortedBy { it.ptr }
+    val sorted = handles.sortedBy { it.ptr and -2L }
     fun rec(i: Int): R = if (i == sorted.size) body() else synchronized(sorted[i]) { rec(i + 1) }
     return rec(0)
 }
@@ -35,11 +51,11 @@ internal fun <R> withSortedHandleLocks(handles: List<NativeHandle>, body: () -> 
 /** Allocation-free single-handle lock (one monitor, nothing to order). */
 internal inline fun <R> withSortedHandleLocks(a: NativeHandle, body: () -> R): R = synchronized(a) { body() }
 
-/** Allocation-free two-handle lock: order by `ptr` then nest monitors. */
+/** Allocation-free two-handle lock: order by masked address then nest monitors. */
 internal inline fun <R> withSortedHandleLocks(a: NativeHandle, b: NativeHandle, body: () -> R): R {
     val first: NativeHandle
     val second: NativeHandle
-    if (a.ptr <= b.ptr) { first = a; second = b } else { first = b; second = a }
+    if ((a.ptr and -2L) <= (b.ptr and -2L)) { first = a; second = b } else { first = b; second = a }
     return synchronized(first) { synchronized(second) { body() } }
 }
 
@@ -53,9 +69,9 @@ internal inline fun <R> withSortedHandleLocks(
     var x = a
     var y = b
     var z = c
-    if (x.ptr > y.ptr) { val t = x; x = y; y = t }
-    if (y.ptr > z.ptr) { val t = y; y = z; z = t }
-    if (x.ptr > y.ptr) { val t = x; x = y; y = t }
+    if ((x.ptr and -2L) > (y.ptr and -2L)) { val t = x; x = y; y = t }
+    if ((y.ptr and -2L) > (z.ptr and -2L)) { val t = y; y = z; z = t }
+    if ((x.ptr and -2L) > (y.ptr and -2L)) { val t = x; x = y; y = t }
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
@@ -102,8 +118,8 @@ public class PayloadHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -111,7 +127,7 @@ public class PayloadHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): PayloadHandler {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return PayloadHandler(p)
     }
 
@@ -126,8 +142,8 @@ public class PayloadVecHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -135,7 +151,7 @@ public class PayloadVecHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): PayloadVecHandler {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return PayloadVecHandler(p)
     }
 
@@ -150,8 +166,8 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -159,13 +175,13 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): Storage {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return Storage(p)
     }
 
     /** Number of stored payloads (an **accessor** on `Storage`). */
     public fun len(onError: JniErrorHandler<Long>): Long {
-        if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
@@ -177,7 +193,7 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
 
     /** Whether any stored payload has the given id (a **method** on `Storage`). */
     public fun contains(id: Long, onError: JniErrorHandler<Boolean>): Boolean {
-        if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
@@ -218,8 +234,8 @@ public class StorageHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     override fun close() {
         val p = ptr
-        if (p != 0L) {
-            ptr = 0L
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
             freePtr(p)
         }
     }
@@ -227,7 +243,7 @@ public class StorageHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     @Synchronized
     public fun take(): StorageHandler {
         val p = ptr
-        ptr = 0L
+        ptr = p or 1L
         return StorageHandler(p)
     }
 
