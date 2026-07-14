@@ -1028,6 +1028,76 @@ impl Prebindgen for JniGen {
         Some(out)
     }
 
+    /// Member-shape invariants (N5), checked against registry signatures —
+    /// the earliest possible moment. Without this, a receiver-less `.fun()`
+    /// member would silently emit a method that ignores `this`, and a
+    /// wrong-return `.constructor()` a factory of the wrong type.
+    fn validate(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+        for (key, members) in &self.class_members {
+            for m in members {
+                // A registry-absent fn already hard-errored in the scan.
+                let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) else {
+                    continue;
+                };
+                match m.kind {
+                    MemberKind::Fun => {
+                        let has_receiver = item_fn.sig.inputs.iter().any(|input| {
+                            matches!(input, syn::FnArg::Typed(pt)
+                                if &peel_receiver_key(&pt.ty) == key)
+                        });
+                        if !has_receiver {
+                            let took: Vec<String> = item_fn
+                                .sig
+                                .inputs
+                                .iter()
+                                .filter_map(|i| match i {
+                                    syn::FnArg::Typed(pt) => {
+                                        Some(pt.ty.to_token_stream().to_string())
+                                    }
+                                    _ => None,
+                                })
+                                .collect();
+                            return Err(format!(
+                                "class `{}` member fun `{}`: no parameter of type `{}` — an \
+                                 instance method's receiver must appear in the signature \
+                                 (took: {})",
+                                key.as_str(),
+                                m.rust_ident,
+                                key.as_str(),
+                                if took.is_empty() {
+                                    "no parameters".to_string()
+                                } else {
+                                    took.join(", ")
+                                }
+                            ));
+                        }
+                    }
+                    MemberKind::Constructor => {
+                        let ret = match &item_fn.sig.output {
+                            syn::ReturnType::Type(_, ty) => (**ty).clone(),
+                            syn::ReturnType::Default => syn::parse_quote!(()),
+                        };
+                        // Allowed factory shapes: `Self` and `Result<Self, E>`.
+                        let core = crate::api::core::types_util::result_ok_type(&ret)
+                            .unwrap_or_else(|| ret.clone());
+                        if &peel_receiver_key(&core) != key {
+                            return Err(format!(
+                                "class `{}` constructor `{}`: must return `{}` or \
+                                 `Result<{}, E>` — it returns `{}`",
+                                key.as_str(),
+                                m.rust_ident,
+                                key.as_str(),
+                                key.as_str(),
+                                ret.to_token_stream()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Consts acknowledged-but-unexposed via [`JniGen::ignore_const`].
     fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()

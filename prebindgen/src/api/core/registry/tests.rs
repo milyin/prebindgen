@@ -413,3 +413,39 @@ fn from_items_records_origins_from_location_stamps() {
         vec!["flat_crate".to_string(), "helper_crate".to_string()]
     );
 }
+
+/// N5: `Prebindgen::validate` runs during `resolve` after the scan; an
+/// adapter-invariant failure surfaces as `ScanError::AdapterInvariant`
+/// with the adapter's message verbatim.
+#[test]
+fn resolve_surfaces_adapter_invariant_errors() {
+    struct FailingExt(StubExt);
+    impl Prebindgen for FailingExt {
+        type Metadata = ();
+        fn validate(&self, _registry: &Registry<()>) -> Result<(), String> {
+            Err("member fun `f` has no receiver".to_string())
+        }
+        fn on_function(&self, f: &syn::ItemFn, r: &Registry<()>) -> TokenStream {
+            self.0.on_function(f, r)
+        }
+        fn on_struct(&self, s: &syn::ItemStruct, r: &Registry<()>) -> TokenStream {
+            self.0.on_struct(s, r)
+        }
+        fn on_enum(&self, e: &syn::ItemEnum, r: &Registry<()>) -> TokenStream {
+            self.0.on_enum(e, r)
+        }
+        fn on_input_type(&self, t: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+            self.0.on_input_type(t, r)
+        }
+        fn on_output_type(&self, t: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
+            self.0.on_output_type(t, r)
+        }
+    }
+    let items = vec![fn_item("fn good(x: u64) -> u64 { x }")];
+    let reg: Registry<()> = Registry::from_items(items).unwrap();
+    let err = reg
+        .resolve(FailingExt(StubExt::default()))
+        .expect_err("validate Err must abort resolve");
+    let msg = format!("{err}");
+    assert!(msg.contains("member fun `f` has no receiver"), "{msg}");
+}

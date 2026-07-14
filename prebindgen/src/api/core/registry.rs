@@ -305,6 +305,11 @@ pub enum ScanError {
     UnsupportedParamPattern {
         loc: SourceLocation,
     },
+    /// An adapter-invariant check failed — see [`Prebindgen::validate`].
+    /// The message is adapter-authored and printed verbatim.
+    AdapterInvariant {
+        message: String,
+    },
     /// Explicitly declared items (functions, helper functions, constants)
     /// that match no indexed `#[prebindgen]` item. A declaration is a
     /// statement of intent — its target being absent is always a bug (a
@@ -356,6 +361,7 @@ impl fmt::Display for ScanError {
             ScanError::UnsupportedParamPattern { loc } => {
                 write!(f, "non-ident parameter pattern is not supported at {}", loc)
             }
+            ScanError::AdapterInvariant { message } => write!(f, "{}", message),
             ScanError::DeclaredNotFound { entries } => {
                 writeln!(
                     f,
@@ -1154,6 +1160,9 @@ impl<M> Registry<M> {
     {
         let declared = DeclaredItems::from_adapter(&adapter)?;
         self.scan_declared_items(&declared)?;
+        adapter
+            .validate(&self)
+            .map_err(|message| ScanError::AdapterInvariant { message })?;
         self.apply_adapter_plans(&adapter, &declared)?;
         crate::api::core::resolve::resolve(&mut self, &adapter)?;
         Ok(Generation {

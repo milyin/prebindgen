@@ -410,6 +410,20 @@ pub trait Prebindgen {
     /// inside function bodies are covered.
     fn post_process_item(&self, _item: &mut syn::Item, _registry: &Registry<Self::Metadata>) {}
 
+    /// Adapter-invariant checks that need registry **signatures** — the
+    /// earliest they can run (decl objects are built before any source is
+    /// read). Called by `Registry::resolve` right after the declaration
+    /// scan (so a missing fn has already hard-errored; validate sees only
+    /// indexed items) and before plan application. An `Err` aborts the
+    /// resolve as `ScanError::AdapterInvariant` with the message verbatim
+    /// — e.g. jnigen rejects a `.fun()` member whose target has no
+    /// receiver parameter of the class type.
+    ///
+    /// Default: no checks.
+    fn validate(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Absolute path under which the source crate's items are reachable
     /// from the generated file (e.g. `zenoh_flat`), for adapters that
     /// qualify emitted references against one. Drives the default

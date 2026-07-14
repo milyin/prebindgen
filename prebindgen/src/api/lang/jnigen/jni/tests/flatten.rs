@@ -658,3 +658,67 @@ fn ignore_const_with_source_rejected() {
         crate::constant!(X).expr(crate::ty!(i64), crate::expr!(1 + 1)),
     );
 }
+
+/// N5: a `.fun()` member whose target has no parameter of the class type
+/// is a hard `AdapterInvariant` error at resolve — previously it silently
+/// emitted a method that ignored `this`.
+#[test]
+fn member_fun_without_receiver_rejected() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_free_standing(v: i64) -> i64 { unimplemented!() }",
+        "pub fn z_make() -> ZThing { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("t").class(
+            crate::ptr_class!(ZThing)
+                .fun(crate::fun!(z_thing_free_standing))
+                .constructor(crate::fun!(z_make)),
+        ),
+    );
+    let err = registry.resolve(jni).expect_err("receiver-less member");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("member fun `z_thing_free_standing`") && msg.contains("`ZThing`"),
+        "{msg}"
+    );
+}
+
+/// N5: a `.constructor()` member must return `Self` or `Result<Self, E>`.
+#[test]
+fn constructor_with_wrong_return_rejected() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_len(t: &ZThing) -> i64 { unimplemented!() }",
+        "pub fn z_make_number() -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("t").class(
+            crate::ptr_class!(ZThing)
+                .fun(crate::fun!(z_thing_len))
+                .constructor(crate::fun!(z_make_number)),
+        ),
+    );
+    let err = registry.resolve(jni).expect_err("wrong ctor return");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("constructor `z_make_number`") && msg.contains("it returns `i64`"),
+        "{msg}"
+    );
+}

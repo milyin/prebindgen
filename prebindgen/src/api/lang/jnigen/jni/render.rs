@@ -660,7 +660,7 @@ struct Opaque {
 /// Peel `&` / `Option<…>` / `Option<&…>` layers and return the inner type's
 /// [`TypeKey`] — used to match an accessor's receiver parameter against its
 /// owning class key in [`render_wrapper_fn`].
-fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
+pub(crate) fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
     let core = match ty {
         syn::Type::Reference(r) => &*r.elem,
         other => other,
