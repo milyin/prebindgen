@@ -672,9 +672,8 @@ fn expand_param_variant_with_name_rejected() {
 #[test]
 #[should_panic(expected = ".name()/expand overrides don't apply")]
 fn expand_param_variant_with_expand_override_rejected() {
-    let _ = crate::expand_param!(ZThing).variant(
-        crate::fun!(z_thing_new).expand_return(crate::expand_return!(ZName).field_self()),
-    );
+    let _ = crate::expand_param!(ZThing)
+        .variant(crate::fun!(z_thing_new).expand_return(crate::expand_return!(ZName).field_self()));
 }
 
 /// A `.field()` accessor honors `.name()` but nothing else — expand
