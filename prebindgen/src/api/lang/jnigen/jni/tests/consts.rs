@@ -81,8 +81,14 @@ fn declared_consts_emit_getter_and_val() {
     // Public lazily-initialized vals (`by lazy` — zero JNI calls at
     // class-load, #58), typed from the output converters; the `.name()`
     // override applies to the val, not the extern.
-    assert!(pc.contains("valMAX_LEN:Longbylazy{constGetMaxLen("), "{pkg}");
-    assert!(pc.contains("valHELLO:Stringbylazy{constGetGreeting("), "{pkg}");
+    assert!(
+        pc.contains("valMAX_LEN:Longbylazy{constGetMaxLen("),
+        "{pkg}"
+    );
+    assert!(
+        pc.contains("valHELLO:Stringbylazy{constGetGreeting("),
+        "{pkg}"
+    );
     // No eager form anywhere in the package file.
     assert!(!pc.contains("=constGet"), "{pkg}");
     // The helpers are private wrapper functions.
