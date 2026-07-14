@@ -98,9 +98,17 @@ macro_rules! fun {
 }
 
 /// Build a [`ConstDecl`] from a bare ident: `constant!(MAX_LEN)` is
-/// `ConstDecl::new(prebindgen::ident!(MAX_LEN))` — with no source modifier
-/// it declares the same-named `#[prebindgen]` const; `.fun(…)` / `.with(…)`
-/// / `.expr(…)` switch the value source (the ident stays as the `val` name).
+/// `ConstDecl::new(prebindgen::ident!(MAX_LEN))`.
+///
+/// What the ident names depends on where the decl lands:
+/// * in `.constant(...)` it is always the Kotlin **`val` name**, and in the
+///   **bare** form (no source modifier) it is *additionally* the lookup key
+///   of the same-named `#[prebindgen]` const — `.fun(…)` / `.with(…)` /
+///   `.expr(…)` replace that lookup with the stated value source (see the
+///   four-source example on [`ConstDecl`](crate::lang::ConstDecl));
+/// * in `.ignore(constant!(X))` it is *only* the `#[prebindgen]` const
+///   lookup key — nothing is emitted, so sources and `.name()` are rejected
+///   there.
 #[macro_export]
 macro_rules! constant {
     ($name:ident) => {
@@ -836,6 +844,12 @@ pub(crate) enum ConstSource {
 /// .constant(constant!(VERSION).with(ty!(String), path!(crate::version)))  // binding-local fn
 /// .constant(constant!(BANNER).expr(ty!(String), expr!(format!("{A}:{B}"))))  // expression
 /// ```
+///
+/// Note the ident's role split: only the **bare** form also looks up the
+/// same-named `#[prebindgen]` const (`MAX_LEN` above); under a stated
+/// source the ident is purely the `val` name (`TAG_RUNTIME`, `VERSION`,
+/// `BANNER` name no Rust item). In `.ignore(constant!(X))` the ident is
+/// only the const lookup key.
 ///
 /// For declaration loops build the subject at runtime with
 /// [`ConstDecl::named`]. Opaque-handle-typed (and `Result`-typed) constants
