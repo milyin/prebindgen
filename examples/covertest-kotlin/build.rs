@@ -23,9 +23,9 @@
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
-//! | `convert!` `.input_from`/`.output_into` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
-//! | `convert!` `.input_try_from` (fallible)  | `Percent` ⇄ `Int`; out-of-range → `onError` |
-//! | `convert!` `.input_try_with`/`.output_with` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
+//! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
+//! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
+//! | `convert!` sources `.with(path!)`/`.error(ty!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
@@ -84,7 +84,7 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    fun, lang::JniGen, matching, package, path, ptr_class, ty, value_class,
+    from, fun, into, lang::JniGen, matching, package, path, ptr_class, try_from, ty, value_class,
 };
 
 fn main() {
@@ -126,18 +126,18 @@ fn main() {
         // from the fns' `i64` side; nothing is stated verbatim.
         .convert(
             convert!(Millis)
-                .input_fun(fun!(millis_from_long))
-                .output_fun(fun!(millis_value)),
+                .input(fun!(millis_from_long))
+                .output(fun!(millis_value)),
         )
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
-        .convert(convert!(Celsius).input_from(ty!(i32)).output_into(ty!(i32)))
+        .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
         // `Percent`: fallible input via `TryFrom<i32>` (out-of-range values
         // from the JVM route the impl's Error to onError); infallible output.
         .convert(
             convert!(Percent)
-                .input_try_from(ty!(i32))
-                .output_into(ty!(i32)),
+                .input(try_from!(i32))
+                .output(into!(i32)),
         )
         // `Label`: conversions are plain fns in THIS binding crate (see
         // src/lib.rs) — no #[prebindgen], no helper crate. The input is
@@ -146,8 +146,8 @@ fn main() {
         // route the Err to onError.
         .convert(
             convert!(Label)
-                .input_try_with(ty!(String), ty!(String), path!(crate::label_in))
-                .output_with(ty!(String), path!(crate::label_out)),
+                .input(try_from!(String).with(path!(crate::label_in)).error(ty!(String)))
+                .output(into!(String).with(path!(crate::label_out))),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,

@@ -405,9 +405,9 @@ fn handle_const_rejected() {
 }
 
 /// `.with(ty!, path!)` — the binding-local nullary fn source, const analog
-/// of `ConvertDecl::input_with`: lowers to an expression getter that calls
+/// of `ConvertSourceDecl::with`: lowers to an expression getter that calls
 /// the path verbatim (multi-segment paths bypass source-module
-/// qualification, exactly like convert's `_with`).
+/// qualification, exactly like convert's `.with`).
 #[test]
 fn constant_with_source_calls_path_verbatim() {
     let loc = myflat_loc();
