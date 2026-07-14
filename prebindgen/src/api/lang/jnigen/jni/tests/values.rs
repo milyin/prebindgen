@@ -9,8 +9,7 @@ use super::*;
 /// (`<name>?.value ?: 0` for an enum).
 #[test]
 fn option_scalar_param_crosses_as_present_value_pair() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Enum(syn::parse_quote!(
@@ -31,7 +30,6 @@ fn option_scalar_param_crosses_as_present_value_pair() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -102,8 +100,7 @@ fn option_scalar_param_crosses_as_present_value_pair() {
 /// objects is built (the `reject_vec_of_handle` guard is lifted for outputs).
 #[test]
 fn vec_of_handle_output_folds_kotlin_side() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -131,7 +128,6 @@ fn vec_of_handle_output_folds_kotlin_side() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -189,8 +185,7 @@ fn vec_of_handle_output_folds_kotlin_side() {
 /// leaf pair the Rust side rebuilds with no reflective unbox.
 #[test]
 fn option_scalar_struct_field_flattens() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -212,7 +207,6 @@ fn option_scalar_struct_field_flattens() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!()
@@ -282,8 +276,7 @@ fn option_scalar_struct_field_flattens() {
 ///    class while the native side returned a boxed `Integer`.
 #[test]
 fn fromparts_fallback_boxes_option_fields() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Enum(syn::parse_quote!(
@@ -331,7 +324,6 @@ fn fromparts_fallback_boxes_option_fields() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -416,8 +408,7 @@ fn fromparts_fallback_boxes_option_fields() {
 /// jlong wire, Kotlin `Long`), no verbatim strings, no injected expressions.
 #[test]
 fn output_only_convert_resolves_without_input_twin() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn len_of(s: &String) -> Len { unimplemented!() }",
         "pub fn len_value(l: &Len) -> i64 { unimplemented!() }",
@@ -430,7 +421,6 @@ fn output_only_convert_resolves_without_input_twin() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))
@@ -454,7 +444,6 @@ fn output_only_convert_resolves_without_input_twin() {
 /// registry's default module — the helper-crate model behind `convert!`.
 #[test]
 fn convert_fn_qualifies_with_origin_crate() {
-    use crate::SourceLocation;
     // Two chained streams: the flat crate provides `len_of`, a helper crate
     // provides the conversion fn — each item's origin rides its
     // `SourceLocation` stamp, exactly as `Source` streams deliver it.
@@ -499,8 +488,7 @@ fn convert_fn_qualifies_with_origin_crate() {
 #[test]
 #[should_panic(expected = "produces `Other`, not `Len`")]
 fn convert_input_target_mismatch_rejected() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn from_long(v: i64) -> Other { unimplemented!() }",
         "pub fn use_len(l: Len) { unimplemented!() }",
@@ -513,7 +501,6 @@ fn convert_input_target_mismatch_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .convert(crate::convert!(Len).input(crate::fun!(from_long)))
         .package(crate::package!("len").fun(crate::fun!(use_len)));
@@ -528,13 +515,11 @@ fn convert_input_target_mismatch_rejected() {
 /// and Kotlin surface derive from the stated repr's converter chain.
 #[test]
 fn convert_via_trait_impls() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn temp_double(c: Celsius) -> Celsius { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -566,13 +551,11 @@ fn convert_via_trait_impls() {
 /// `try_into` call.
 #[test]
 fn convert_via_try_from_is_fallible() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn pct_use(p: Percent) -> i32 { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Percent).input_try_from(crate::ty!(i32)))
@@ -600,13 +583,11 @@ fn convert_via_try_from_is_fallible() {
 /// binding-local `crate::…` fns need no `#[prebindgen]` marking.
 #[test]
 fn convert_via_local_fns() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(
@@ -641,13 +622,11 @@ fn convert_duplicate_input_rejected() {
 /// verbatim (no `Ok(...)` wrap).
 #[test]
 fn convert_via_local_try_fn_is_fallible() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn label_id(l: Label) -> Label { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(

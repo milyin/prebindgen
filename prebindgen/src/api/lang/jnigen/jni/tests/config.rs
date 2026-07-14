@@ -15,7 +15,7 @@ fn builtin_convert_type_panics() {
 #[test]
 fn per_class_name_and_base_package_fun() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -43,7 +43,6 @@ fn per_class_name_and_base_package_fun() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -98,7 +97,7 @@ fn per_class_name_and_base_package_fun() {
 #[test]
 fn setters_after_declarations_apply() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -118,7 +117,6 @@ fn setters_after_declarations_apply() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     // Declarations first, settings last.
     let jni = JniGen::new()

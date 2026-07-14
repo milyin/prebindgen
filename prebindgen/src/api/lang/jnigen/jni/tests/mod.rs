@@ -1,13 +1,27 @@
 use quote::ToTokens;
 
 use super::*;
-use crate::api::{
-    core::{
-        niches::{NicheSlot, Niches},
-        registry::{Registry, TypeEntry, TypeKey},
+use crate::{
+    api::{
+        core::{
+            niches::{NicheSlot, Niches},
+            registry::{Registry, TypeEntry, TypeKey},
+        },
+        test_util::unique_test_dir,
     },
-    test_util::unique_test_dir,
+    SourceLocation,
 };
+
+/// A test item's `SourceLocation` stamped with the tests' canonical source
+/// crate `myflat` — the production path records origins from stream stamps
+/// (`Source` fills them at parse time), so tests build their items the same
+/// way instead of poking a registry-level override.
+fn myflat_loc() -> crate::SourceLocation {
+    crate::SourceLocation {
+        crate_name: Some("myflat".to_string()),
+        ..Default::default()
+    }
+}
 
 mod callbacks;
 mod config;

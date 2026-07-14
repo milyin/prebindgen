@@ -2,7 +2,7 @@ use super::*;
 
 fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Fn(syn::parse_quote!(
@@ -33,7 +33,6 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -189,7 +188,7 @@ fn callback_snapshot_kotlin_side() {
 #[test]
 fn callback_root_identity_moved_after_nested_borrow() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Fn(syn::parse_quote!(
@@ -220,7 +219,6 @@ fn callback_root_identity_moved_after_nested_borrow() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -278,7 +276,7 @@ fn callback_root_identity_moved_after_nested_borrow() {
 #[test]
 fn callback_double_option_unwrap_pipeline() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_reply_zid(r: &ZReply) -> Option<ZId> { unimplemented!() }",
         "pub fn z_reply_is_ok(r: &ZReply) -> bool { unimplemented!() }",
@@ -306,7 +304,6 @@ fn callback_double_option_unwrap_pipeline() {
         loc.clone(),
     ));
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")

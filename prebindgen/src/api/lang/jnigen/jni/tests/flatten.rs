@@ -5,8 +5,7 @@ use super::*;
 /// inline field list. Each gets its own builder interface.
 #[test]
 fn inline_output_gets_own_builder() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
         "pub fn z_thing_size(t: &ZThing) -> i64 { unimplemented!() }",
@@ -21,7 +20,6 @@ fn inline_output_gets_own_builder() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -104,8 +102,7 @@ fn inline_output_gets_own_builder() {
 /// defaults (closed handle, "", null for nullable).
 #[test]
 fn error_unwrap_universal_records() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
         "pub fn z_err_detail(e: &ZErr) -> Option<&ZDetail> { unimplemented!() }",
@@ -120,7 +117,6 @@ fn error_unwrap_universal_records() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -227,8 +223,7 @@ fn error_unwrap_universal_records() {
 /// `.expand_return(...field_self()...)` emits the handle leaf.
 #[test]
 fn method_constructor_and_inline_field_self() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
         "pub fn z_thing_rename(t: &ZThing, name: String) -> bool { unimplemented!() }",
@@ -243,7 +238,6 @@ fn method_constructor_and_inline_field_self() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
@@ -302,8 +296,7 @@ fn method_constructor_and_inline_field_self() {
 /// is emitted for `ZErr` — the value lives and dies in Rust.
 #[test]
 fn rust_side_only_error_type() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
         "pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }",
@@ -316,7 +309,6 @@ fn rust_side_only_error_type() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -373,8 +365,7 @@ fn rust_side_only_error_type() {
 /// (no selector — single variant); the type never surfaces in Kotlin.
 #[test]
 fn rust_side_only_input_type() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_opts_new(retries: i32, verbose: bool) -> ZOpts { unimplemented!() }",
         "pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }",
@@ -387,7 +378,6 @@ fn rust_side_only_input_type() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -428,13 +418,11 @@ fn rust_side_only_input_type() {
 #[test]
 #[should_panic(expected = "has no class declaration")]
 fn rust_side_only_variant_self_rejected() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_run(opts: ZOpts) -> i64 { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .package(crate::package!("ops").fun(crate::fun!(z_run)))
         .expand(crate::expand_param!(ZOpts).variant_self());
@@ -449,12 +437,10 @@ fn rust_side_only_variant_self_rejected() {
 #[test]
 #[should_panic(expected = "has no class declaration")]
 fn rust_side_only_field_self_rejected() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let f: syn::ItemFn = syn::parse_str("pub fn z_make() -> ZThing { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .package(crate::package!("ops").fun(crate::fun!(z_make)))
         .expand(crate::expand_return!(ZThing).field_self());
@@ -469,8 +455,7 @@ fn rust_side_only_field_self_rejected() {
 /// both types.
 #[test]
 fn fn_expand_param_type_mismatch_rejected() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_thing_make(name: String) -> ZThing { unimplemented!() }",
         "pub fn z_use(t: ZThing) -> i64 { unimplemented!() }",
@@ -483,7 +468,6 @@ fn fn_expand_param_type_mismatch_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
@@ -508,8 +492,7 @@ fn fn_expand_param_type_mismatch_rejected() {
 /// function's peeled return type — a mismatch is a hard error.
 #[test]
 fn fn_expand_return_type_mismatch_rejected() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
         "pub fn z_make() -> ZThing { unimplemented!() }",
@@ -522,7 +505,6 @@ fn fn_expand_return_type_mismatch_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
@@ -544,8 +526,7 @@ fn fn_expand_return_type_mismatch_rejected() {
 /// error (`UnknownParam`) — the second typo guard.
 #[test]
 fn fn_expand_param_unknown_param_rejected() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_thing_make(name: String) -> ZThing { unimplemented!() }",
         "pub fn z_use(t: ZThing) -> i64 { unimplemented!() }",
@@ -558,7 +539,6 @@ fn fn_expand_param_unknown_param_rejected() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new().package(
         crate::package!("ops")
             .class(crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_make)))
@@ -592,16 +572,12 @@ fn fn_expand_return_duplicate_rejected() {
 /// omission, no stale-ignore warning.
 #[test]
 fn typo_in_expand_decl_is_hard_error() {
-    use crate::{
-        api::core::registry::{ScanError, WriteRustError},
-        SourceLocation,
-    };
-    let loc = SourceLocation::default();
+    use crate::api::core::registry::{ScanError, WriteRustError};
+    let loc = myflat_loc();
     let f: syn::ItemFn =
         syn::parse_str("pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }").unwrap();
     let mut registry =
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
@@ -630,8 +606,7 @@ fn typo_in_expand_decl_is_hard_error() {
 /// still succeeds with only the declared surface.
 #[test]
 fn ignore_funs_where_acknowledges_matching_family() {
-    use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_len(v: i64) -> i64 { unimplemented!() }",
         "pub fn detail_const_a() -> i64 { unimplemented!() }",
@@ -645,7 +620,6 @@ fn ignore_funs_where_acknowledges_matching_family() {
         })
         .collect();
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("ops").fun(crate::fun!(z_len)))

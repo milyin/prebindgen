@@ -184,12 +184,12 @@ pub struct Registry<M = ()> {
     /// crates on top of the flat crate.
     pub(crate) item_origins: HashMap<syn::Ident, String>,
 
-    /// Module name of every ingested source, in ingestion order (crate
-    /// names, dashes normalized to underscores). The FIRST entry doubles as
-    /// the **default module** for references with no recorded origin (e.g.
-    /// a declared type with no `#[prebindgen]` item). Settable directly via
-    /// [`Self::set_default_module`] for item-level construction
-    /// ([`Self::from_items`]).
+    /// Module name of every ingested source, in first-seen stream order
+    /// (crate names, dashes normalized to underscores). The FIRST entry
+    /// doubles as the **default module** for references with no recorded
+    /// origin (e.g. a declared type with no `#[prebindgen]` item);
+    /// origin-less hand-built streams leave it empty and adapters fall
+    /// back to `crate`.
     pub(crate) source_modules: Vec<String>,
 
     /// Type tables, one per direction. Each scanned type maps to its resolved
@@ -522,9 +522,11 @@ impl<M> Registry<M> {
     /// by [`Source`](crate::Source) when parsing records): named items get
     /// their origin recorded for qualified references in generated code
     /// (`flat_crate::…` vs `helper_crate::…`), and the first origin seen
-    /// becomes the default module ([`Self::default_module`];
-    /// [`Self::set_default_module`] overrides — needed for hand-built,
-    /// origin-less item streams).
+    /// becomes the default module ([`Self::default_module`]). When a
+    /// dependency is renamed in Cargo.toml, override the stamp at the
+    /// source: `Source::builder(dir).crate_name("myflat")` — being
+    /// per-source, it composes across chained streams (a registry-level
+    /// override could only fix one module).
     ///
     /// This step only populates the item maps (`functions`, `structs`,
     /// `enums`, `consts`, `passthrough`). Signature/body scanning that
@@ -571,20 +573,6 @@ impl<M> Registry<M> {
         Ok(registry)
     }
 
-    /// Set the default module for generated references when the item stream
-    /// carries no origins (hand-built items, tests) — the module the items'
-    /// crate is reachable under from the generated file. With
-    /// [`Source`](crate::Source)-backed streams this is derived
-    /// automatically (the first item's origin), so calling it is only
-    /// needed to override.
-    pub fn set_default_module(&mut self, module: &str) {
-        let module = module.replace('-', "_");
-        if self.source_modules.first().map(String::as_str) == Some(module.as_str()) {
-            return;
-        }
-        self.source_modules.insert(0, module);
-    }
-
     /// The origin crate's **module path** for an item ingested via
     /// the item's [`SourceLocation`] stamp, or `None` when unknown —
     /// callers then fall
@@ -595,9 +583,13 @@ impl<M> Registry<M> {
         syn::parse_str(&module).ok()
     }
 
-    /// The default module for references with no recorded origin: the first
-    /// ingested source's module (or the [`Self::set_default_module`]
-    /// override). `None` for an origin-less item-level registry.
+    /// The default module for references with no recorded origin: the
+    /// first-seen item origin. `None` for an origin-less item-level
+    /// registry (adapters then fall back to `crate`). To change a module
+    /// name, override it at the source — a stream's origin stamps
+    /// (`Source::builder(dir).crate_name("myflat")`) — never here: a
+    /// registry-level override could only fix ONE module, which is
+    /// incomplete with chained multi-source streams.
     pub fn default_module(&self) -> Option<syn::Path> {
         self.source_modules
             .first()

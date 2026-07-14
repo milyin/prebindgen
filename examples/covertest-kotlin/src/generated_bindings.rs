@@ -258,7 +258,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
         #[allow(unused_imports)]
         use perftest_flat::*;
         #[allow(unused_imports)]
-        use covertest_helpers::*;
+        use cov_helpers::*;
         format!("{COVER_TAG}:{COVER_MAGIC:#x}")
     };
     match String_to_JString_c7f3ca43(&mut env, __out) {
@@ -1131,7 +1131,7 @@ pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Millis,
 ) -> ::core::result::Result<i64, __JniErr> {
-    Ok(covertest_helpers::millis_value(&v))
+    Ok(cov_helpers::millis_value(&v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
@@ -1522,7 +1522,7 @@ pub(crate) unsafe fn i64_to_Millis_bb88777a<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i64,
 ) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
-    Ok(covertest_helpers::millis_from_long(v))
+    Ok(cov_helpers::millis_from_long(v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn i64_to_jlong_fbf9a9bc<'a>(
@@ -6439,7 +6439,7 @@ const _: () = {
 };
 const _: () = {
     konst::assertc_eq!(
-        covertest_helpers::FEATURES, "",
+        cov_helpers::FEATURES, "",
         "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
                         This usually happens if source crate is compiled with different feature set\n\
                         for build dependencies and for library usage. You may need to explicitly set\n\

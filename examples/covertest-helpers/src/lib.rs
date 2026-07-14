@@ -4,8 +4,12 @@
 //! This crate exists to prove the multi-source model: a binding crate's
 //! `build.rs` chains SEVERAL prebindgen source streams into one registry
 //! (`Registry::from_items(flat.items_all().chain(helpers.items_all()))`) and
-//! the generated Rust qualifies each function with its origin crate
-//! (`perftest_flat::…` vs `covertest_helpers::…`).
+//! the generated Rust qualifies each function with its origin crate.
+//! covertest-kotlin additionally RENAMES this dependency
+//! (`cov_helpers = { package = "covertest-helpers", .. }`) and overrides the
+//! stamped origin via `Source::builder(..).crate_name("cov_helpers")` — so
+//! generated calls read `perftest_flat::…` vs `cov_helpers::…`, proving the
+//! per-source rename escape hatch.
 //!
 //! Why a separate crate at all: `#[prebindgen]` markers are captured during a
 //! crate's own compilation, which happens *after* its `build.rs` runs — so a

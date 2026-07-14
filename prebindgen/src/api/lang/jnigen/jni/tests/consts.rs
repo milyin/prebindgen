@@ -5,7 +5,7 @@
 use super::*;
 
 fn const_items() -> Vec<(syn::Item, crate::SourceLocation)> {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     vec![
         (
             syn::Item::Const(syn::parse_quote!(
@@ -29,7 +29,6 @@ fn const_items() -> Vec<(syn::Item, crate::SourceLocation)> {
 #[test]
 fn declared_consts_emit_getter_and_val() {
     let mut registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg")
@@ -102,7 +101,6 @@ fn declared_consts_emit_getter_and_val() {
 #[test]
 fn undeclared_const_not_emitted() {
     let mut registry = Registry::<KotlinMeta>::from_items(const_items()).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -135,7 +133,7 @@ fn undeclared_const_not_emitted() {
 /// wrapper are the ordinary declared-function ones (`myflat::tag()` call).
 #[test]
 fn constant_fun_emits_val_over_ordinary_wrapper() {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
             pub fn tag() -> String {
@@ -145,7 +143,6 @@ fn constant_fun_emits_val_over_ordinary_wrapper() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -189,7 +186,7 @@ fn constant_fun_emits_val_over_ordinary_wrapper() {
 #[test]
 #[should_panic(expected = "must be nullary")]
 fn constant_fun_non_nullary_rejected() {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
             pub fn scaled(factor: i64) -> i64 {
@@ -199,7 +196,6 @@ fn constant_fun_non_nullary_rejected() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("cfg").constant_fun(crate::fun!(scaled)));
@@ -217,7 +213,7 @@ fn constant_fun_non_nullary_rejected() {
 #[test]
 #[should_panic(expected = "declared opaque handle")]
 fn constant_fun_handle_return_rejected() {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -237,7 +233,6 @@ fn constant_fun_handle_return_rejected() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
@@ -259,7 +254,7 @@ fn constant_fun_handle_return_rejected() {
 /// a private helper + public eagerly-initialized `val`.
 #[test]
 fn constant_expr_emits_getter_and_val() {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     // Only `tag_of` exists in the source crate; the constant composes it.
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
@@ -270,7 +265,6 @@ fn constant_expr_emits_getter_and_val() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("cfg")
@@ -323,7 +317,7 @@ fn constant_expr_emits_getter_and_val() {
 #[test]
 #[should_panic(expected = "declared opaque handle")]
 fn constant_expr_handle_type_rejected() {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -343,7 +337,6 @@ fn constant_expr_handle_type_rejected() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")
             .class(crate::ptr_class!(ZThing))
@@ -361,7 +354,7 @@ fn constant_expr_handle_type_rejected() {
 #[test]
 #[should_panic(expected = "declared opaque handle")]
 fn handle_const_rejected() {
-    let loc = crate::SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -387,7 +380,6 @@ fn handle_const_rejected() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("things")

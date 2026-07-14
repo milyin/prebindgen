@@ -11,7 +11,10 @@ crate-type = ["cdylib"]
 [dependencies]
 prebindgen = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
-covertest-helpers = { path = "../covertest-helpers" }
+# Renamed dependency ON PURPOSE: proves `Source::builder(..).crate_name(..)`
+# — generated code must qualify helper calls with the RENAMED module
+# (`cov_helpers::…`), the name this crate actually references it by.
+cov_helpers = { package = "covertest-helpers", path = "../covertest-helpers" }
 jni = "0.21.1"
 konst = "0.3.0"
 # The generated JNI error path logs via `tracing::error!`.
@@ -21,7 +24,7 @@ tracing = "0.1"
 prebindgen = { workspace = true }
 syn = { workspace = true }
 perftest-flat = { path = "../perftest-flat" }
-covertest-helpers = { path = "../covertest-helpers" }
+cov_helpers = { package = "covertest-helpers", path = "../covertest-helpers" }
 
 # NOTE: a production JNI crate should set `[profile.release] panic = "abort"`
 # (a Rust panic unwinding into the JVM is UB). That profile key is only honored

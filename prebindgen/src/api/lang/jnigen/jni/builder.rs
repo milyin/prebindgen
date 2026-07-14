@@ -13,7 +13,7 @@ impl JniGen {
     /// qualified with: the fn's **origin crate** as recorded from its
     /// stream's `SourceLocation` stamp (multi-source bindings — helper
     /// crates layered on the flat crate), else the registry's default
-    /// module ([`crate::core::Registry::set_default_module`]).
+    /// module (first-seen stream origin), else `crate`.
     pub(crate) fn fn_module(
         &self,
         registry: &Registry<KotlinMeta>,

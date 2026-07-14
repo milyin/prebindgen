@@ -180,6 +180,20 @@ compose with ordinary iterator combinators:
 default module; duplicate-name errors still name both crates. One
 constructor, full prefiltering, multi-source for free.
 
+**Follow-up (2026-07-15): rename override moved to the `Source` builder —
+`Registry::set_default_module` removed.** The stamped origin is the source
+crate's `CARGO_PKG_NAME` at capture time, which breaks when the binding
+crate renames the dependency (`cov_helpers = { package =
+"covertest-helpers", .. }`). The registry-level override could only fix
+the *default* (first) module — incomplete with chained multi-source
+streams — so the override now lives where the stamp is made:
+`Source::builder(dir).crate_name("cov_helpers")`, per-source and therefore
+complete. It also fixes the features-guard qualification
+(`cov_helpers::FEATURES`) in one move. Proven in covertest: the helpers
+dependency is renamed in Cargo.toml on purpose. Hand-built origin-less
+streams (tests) stamp `SourceLocation.crate_name` directly — the same
+mechanism production uses.
+
 ### M6. Two "package" concepts
 
 `.package(package!("bytes"))` adds a declaration batch under a *sub*package;

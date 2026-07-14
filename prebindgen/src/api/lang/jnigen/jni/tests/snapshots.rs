@@ -6,7 +6,7 @@ use super::*;
 /// discriminants), and a throwable data class (`Error`).
 fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -44,7 +44,6 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
@@ -194,7 +193,7 @@ fn snapshot_kotlin_side() {
 #[test]
 fn box_string_field_maps_to_nullable_kotlin_string() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -223,7 +222,6 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("payload")
@@ -273,7 +271,7 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
 #[test]
 fn slice_input_builds_vec_handle() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -302,7 +300,6 @@ fn slice_input_builds_vec_handle() {
         ),
     ];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("foo")
@@ -387,7 +384,7 @@ fn slice_input_builds_vec_handle() {
 #[test]
 fn jni_native_init_emits_init_block() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
             pub fn z_ping() {
@@ -397,7 +394,6 @@ fn jni_native_init_emits_init_block() {
         loc.clone(),
     )];
     let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
 
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")

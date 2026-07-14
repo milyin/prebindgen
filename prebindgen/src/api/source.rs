@@ -96,6 +96,7 @@ impl Source {
         input_dir: &Path,
         features_constant: Option<String>,
         target_triple: Option<String>,
+        crate_name_override: Option<String>,
     ) -> Self {
         if let Some(source) = DOCTEST_SOURCE.with(|source| (*source.borrow()).clone()) {
             return source;
@@ -106,13 +107,18 @@ impl Source {
                 input_dir.display()
             );
         }
-        let crate_name = read_stored_crate_name(input_dir).unwrap_or_else(|| {
+        // The stored name (CARGO_PKG_NAME at capture time) doubles as the
+        // "directory was initialized" check, so it is read even when
+        // overridden. The override wins: it is the name THIS crate
+        // references the source crate by (a Cargo.toml dependency rename).
+        let stored_crate_name = read_stored_crate_name(input_dir).unwrap_or_else(|| {
             panic!(
                 "The directory {} was not initialized with init_prebindgen_out_dir(). \
                 Please ensure that init_prebindgen_out_dir() is called in the build.rs of the source crate.",
                 input_dir.display()
             )
         });
+        let crate_name = crate_name_override.unwrap_or(stored_crate_name);
 
         let groups = Self::discover_groups(input_dir);
         let mut items = HashMap::new();
@@ -411,6 +417,7 @@ pub struct Builder {
     input_dir: PathBuf,
     features_constant: Option<String>,
     target_triple: Option<String>,
+    crate_name: Option<String>,
 }
 
 impl Builder {
@@ -428,7 +435,28 @@ impl Builder {
             input_dir: input_dir.as_ref().to_path_buf(),
             features_constant: Some("FEATURES".to_string()),
             target_triple,
+            crate_name: None,
         }
+    }
+
+    /// Override the crate name recorded by the source crate's build script
+    /// (`CARGO_PKG_NAME` at capture time) with the name **this** crate
+    /// references the source crate by. Needed when the dependency is
+    /// renamed in Cargo.toml:
+    ///
+    /// ```toml
+    /// [dependencies]
+    /// myflat = { package = "some-flat-crate", version = "..." }
+    /// ```
+    ///
+    /// The name is stamped into every yielded item's `SourceLocation`, so
+    /// it is what generated code qualifies references with
+    /// (`myflat::…`) and what qualifies the features-guard constant. Being
+    /// per-`Source`, it composes with multi-source registries — each
+    /// chained stream carries its own (possibly overridden) origin.
+    pub fn crate_name(mut self, name: impl Into<String>) -> Self {
+        self.crate_name = Some(name.into());
+        self
     }
 
     /// Enables or disables filtering by features when extracting collected data.
@@ -516,6 +544,11 @@ impl Builder {
 
     /// Build the `Source` instance
     pub fn build(self) -> Source {
-        Source::build_internal(&self.input_dir, self.features_constant, self.target_triple)
+        Source::build_internal(
+            &self.input_dir,
+            self.features_constant,
+            self.target_triple,
+            self.crate_name,
+        )
     }
 }

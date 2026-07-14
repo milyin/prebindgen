@@ -22,6 +22,7 @@
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
+//! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input_from`/`.output_into` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input_try_from` (fallible)  | `Percent` ⇄ `Int`; out-of-range → `onError` |
 //! | `convert!` `.input_try_with`/`.output_with` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
@@ -82,10 +83,17 @@ use prebindgen::{
 fn main() {
     // Two prebindgen sources: the flat crate plus the binding-side helper
     // crate (conversion fns for `convert!`). The registry records each fn's
-    // origin so generated calls qualify with the defining crate
-    // (`perftest_flat::…` vs `covertest_helpers::…`).
+    // origin from the stream's `SourceLocation` stamps so generated calls
+    // qualify with the defining crate (`perftest_flat::…` vs
+    // `cov_helpers::…`). The helper dependency is RENAMED in Cargo.toml
+    // (`cov_helpers = { package = "covertest-helpers", .. }`), so the stamp
+    // recorded at capture time (`covertest-helpers`) would not resolve from
+    // this crate — `.crate_name()` overrides it with the name this crate
+    // actually uses.
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
-    let helpers = prebindgen::Source::new(covertest_helpers::PREBINDGEN_OUT_DIR);
+    let helpers = prebindgen::Source::builder(cov_helpers::PREBINDGEN_OUT_DIR)
+        .crate_name("cov_helpers")
+        .build();
 
     let jni = JniGen::new()
         .set_package_prefix("io.prebindgen.covertest")
@@ -105,7 +113,7 @@ fn main() {
         // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
         // defined in the SEPARATE `covertest-helpers` source crate, proving
         // the multi-source model (generated calls carry the
-        // `covertest_helpers::` prefix). The Kotlin surface (`Long`) derives
+        // `cov_helpers::` prefix). The Kotlin surface (`Long`) derives
         // from the fns' `i64` side; nothing is stated verbatim.
         .convert(
             convert!(Millis)
