@@ -455,26 +455,27 @@ fn output_only_convert_resolves_without_input_twin() {
 #[test]
 fn convert_fn_qualifies_with_origin_crate() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
-    let fns: &[&str] = &[
+    // Two chained streams: the flat crate provides `len_of`, a helper crate
+    // provides the conversion fn — each item's origin rides its
+    // `SourceLocation` stamp, exactly as `Source` streams deliver it.
+    let loc = |krate: &str| SourceLocation {
+        crate_name: Some(krate.to_string()),
+        ..SourceLocation::default()
+    };
+    let item = |src: &str, krate: &str| -> (syn::Item, SourceLocation) {
+        let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+        (syn::Item::Fn(f), loc(krate))
+    };
+    let flat = vec![item(
         "pub fn len_of(s: &String) -> Len { unimplemented!() }",
+        "myflat",
+    )];
+    let helpers = vec![item(
         "pub fn len_value(l: &Len) -> i64 { unimplemented!() }",
-    ];
-    let items: Vec<(syn::Item, SourceLocation)> = fns
-        .iter()
-        .map(|src| {
-            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
-            (syn::Item::Fn(f), loc.clone())
-        })
-        .collect();
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    registry.set_default_module("myflat");
-    // Simulate `from_sources` ingestion: the conversion fn comes from a
-    // separate helper crate.
-    registry.item_origins.insert(
-        syn::Ident::new("len_value", proc_macro2::Span::call_site()),
-        "my-helpers".to_string(),
-    );
+        "my-helpers",
+    )];
+    let mut registry =
+        Registry::<KotlinMeta>::from_items(flat.into_iter().chain(helpers)).expect("index items");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .convert(crate::convert!(Len).output(crate::fun!(len_value)))

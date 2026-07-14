@@ -314,10 +314,11 @@ fn type_entry_helpers_expose_converter_chain_contract() {
     );
 }
 
-/// A name collision across two sources fails registry construction with an
-/// error that names BOTH origin crates — the `SourceLocation` file paths are
-/// crate-relative (both may read `src/lib.rs`), so the crates are the only
-/// unambiguous coordinates.
+/// A name collision across two chained source streams fails registry
+/// construction with an error that names BOTH origin crates — the
+/// `SourceLocation` file paths are crate-relative (both may read
+/// `src/lib.rs`), so the crates (stamped into each stream item's location
+/// by `Source`) are the only unambiguous coordinates.
 #[test]
 fn duplicate_name_across_sources_names_both_crates() {
     use crate::{
@@ -338,6 +339,7 @@ fn duplicate_name_across_sources_names_both_crates() {
                 file: "src/lib.rs".to_string(),
                 line: 1,
                 column: 1,
+                crate_name: None,
             },
             None,
         );
@@ -348,11 +350,53 @@ fn duplicate_name_across_sources_names_both_crates() {
 
     let a = make_source("first-crate");
     let b = make_source("second-crate");
-    let msg = match Registry::<()>::from_sources([&a, &b]) {
+    let msg = match Registry::<()>::from_items(a.items_all().chain(b.items_all())) {
         Ok(_) => panic!("collision must fail"),
         Err(e) => e.to_string(),
     };
     assert!(msg.contains("same_name"), "{msg}");
     assert!(msg.contains("first-crate"), "{msg}");
     assert!(msg.contains("second-crate"), "{msg}");
+}
+
+/// Chained streams from two sources feed ONE `from_items` call: per-item
+/// origins come from the `SourceLocation` stamps, and the first item's
+/// origin becomes the default module.
+#[test]
+fn from_items_records_origins_from_location_stamps() {
+    let loc = |krate: &str| SourceLocation {
+        file: "src/lib.rs".to_string(),
+        line: 1,
+        column: 1,
+        crate_name: Some(krate.to_string()),
+    };
+    let f_a: syn::ItemFn = syn::parse_str("fn from_flat(x: u64) -> u64 { x }").unwrap();
+    let f_b: syn::ItemFn = syn::parse_str("fn from_helper(x: u64) -> u64 { x }").unwrap();
+    let a = vec![(syn::Item::Fn(f_a), loc("flat-crate"))];
+    let b = vec![(syn::Item::Fn(f_b), loc("helper-crate"))];
+    let reg: Registry<()> = Registry::from_items(a.into_iter().chain(b)).unwrap();
+
+    let path = |p: syn::Path| p.to_token_stream().to_string();
+    assert_eq!(
+        reg.origin_module(&syn::parse_str("from_flat").unwrap())
+            .map(path),
+        Some("flat_crate".to_string())
+    );
+    assert_eq!(
+        reg.origin_module(&syn::parse_str("from_helper").unwrap())
+            .map(path),
+        Some("helper_crate".to_string())
+    );
+    // First origin seen = default module; both modules listed in order.
+    assert_eq!(
+        reg.default_module().map(path),
+        Some("flat_crate".to_string())
+    );
+    assert_eq!(
+        reg.all_source_modules()
+            .into_iter()
+            .map(path)
+            .collect::<Vec<_>>(),
+        vec!["flat_crate".to_string(), "helper_crate".to_string()]
+    );
 }

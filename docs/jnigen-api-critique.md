@@ -133,9 +133,10 @@ the expand family's position words, and documented.
 
 Conversion fns the flat crate doesn't provide live in a **helper crate**
 (same-crate `#[prebindgen]` markers cannot feed the same crate's build.rs —
-macro expansion runs after it): `Registry::from_sources` ingests several
-sources, records per-fn origin crates, and generated calls qualify each fn
-with its defining crate. Proven in covertest via `examples/covertest-helpers`.
+macro expansion runs after it): the helper's item stream is chained into the
+same `Registry::from_items` call, per-item origin crates are recorded, and
+generated calls qualify each fn with its defining crate. Proven in covertest
+via `examples/covertest-helpers`.
 
 Scope cut, recorded: deleting `GenericTypeWrapperDecl` removes user-defined
 *wildcard* wrapper patterns (`MyWrapper<_>`). The rank tables and the built-in
@@ -157,7 +158,7 @@ three new kinds are demonstrated in covertest (`Celsius`/`Percent`/`Label`)
 with JVM assertions including the TryFrom error path.
 
 **Follow-up (2026-07-14): `set_source_module` removed entirely.** With
-per-item origins recorded for every named item at `from_sources` ingestion,
+per-item origins recorded for every named item at multi-source ingestion,
 the setter had no information the registry didn't already own. The first
 source doubles as the default module (declared-but-unindexed types,
 deliberately unmarked types); item-level registries (`from_items`, tests)
@@ -165,6 +166,19 @@ use `Registry::set_default_module`. `constant_expr` getters now glob-import
 every source module, so binding-defined expressions compose items from all
 sources. One less setting, one less way for the declaration to disagree
 with the data.
+
+**Follow-up (2026-07-14): `from_sources`/`add_source` removed — origins
+ride the stream.** Taking whole `Source` objects bypassed the item-stream
+design (`from_items` exists precisely so callers prefilter by group, cfg,
+or any hand-rolled chain). Instead, `Source` stamps its crate name into
+each yielded item's `SourceLocation` (`crate_name: Option<String>`; not
+part of the captured JSONL — the proc-macro can't know the name consumers
+see), so streams stay plain `(syn::Item, SourceLocation)` values that
+compose with ordinary iterator combinators:
+`Registry::from_items(flat.items_all().chain(helpers.items_all()))`.
+`from_items` records per-item origins and the first-seen origin as the
+default module; duplicate-name errors still name both crates. One
+constructor, full prefiltering, multi-source for free.
 
 ### M6. Two "package" concepts
 

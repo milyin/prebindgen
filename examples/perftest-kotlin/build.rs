@@ -84,7 +84,7 @@ fn main() {
                 .fun(fun!(storage_callback_vec)),
         );
 
-    let mut registry = Registry::from_sources([&source]).expect("scan prebindgen items");
+    let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

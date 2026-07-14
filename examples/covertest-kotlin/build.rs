@@ -12,7 +12,7 @@
 //!
 //! | JniGen feature                       | Exercised by |
 //! |--------------------------------------|--------------|
-//! | default module (first `from_sources` src) | `perftest_flat` |
+//! | default module (first stream origin)  | `perftest_flat` |
 //! | `JniGen::set_package_prefix`       | `io.prebindgen.covertest` |
 //! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
 //! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
@@ -21,7 +21,7 @@
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
-//! | `convert!` + multi-source (`from_sources`) | `Millis` ⇄ `Long` via `covertest-helpers` fns |
+//! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `convert!` `.input_from`/`.output_into` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input_try_from` (fallible)  | `Percent` ⇄ `Int`; out-of-range → `onError` |
 //! | `convert!` `.input_try_with`/`.output_with` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
@@ -344,7 +344,8 @@ fn main() {
         .ignore_funs_where(|name| name.starts_with("storage_get_into_"))
         .ignore_fun(fun!(storage_put_by_read_and_update));
 
-    let mut registry = Registry::from_sources([&source, &helpers]).expect("scan prebindgen items");
+    let mut registry = Registry::from_items(source.items_all().chain(helpers.items_all()))
+        .expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 

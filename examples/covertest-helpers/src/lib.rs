@@ -2,9 +2,9 @@
 //! `#[prebindgen]` source crate** layered on top of [`perftest_flat`].
 //!
 //! This crate exists to prove the multi-source model: a binding crate's
-//! `build.rs` ingests SEVERAL prebindgen sources
-//! (`Registry::from_sources([&flat, &helpers])`) and the generated Rust
-//! qualifies each function with its origin crate
+//! `build.rs` chains SEVERAL prebindgen source streams into one registry
+//! (`Registry::from_items(flat.items_all().chain(helpers.items_all()))`) and
+//! the generated Rust qualifies each function with its origin crate
 //! (`perftest_flat::…` vs `covertest_helpers::…`).
 //!
 //! Why a separate crate at all: `#[prebindgen]` markers are captured during a

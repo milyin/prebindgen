@@ -175,8 +175,9 @@ pub struct Registry<M = ()> {
     pub passthrough: Vec<(syn::Item, SourceLocation)>,
 
     /// Origin crate name of each named item (fn/struct/enum/const),
-    /// recorded when items are ingested via [`Self::from_sources`] /
-    /// [`Self::add_source`] (absent for [`Self::from_items`]). Adapters
+    /// recorded by [`Self::from_items`] from each item's
+    /// [`SourceLocation::crate_name`] stamp (absent for hand-built,
+    /// origin-less item streams). Adapters
     /// consult [`Self::origin_module`] so generated references qualify each
     /// item with the module of the crate that actually defines it — the
     /// multi-source model, where a binding layers helper `#[prebindgen]`
@@ -277,7 +278,7 @@ pub struct DuplicateNameError {
     pub first: SourceLocation,
     pub second: SourceLocation,
     /// Origin crates of the colliding items, when known (multi-source
-    /// ingestion via [`Registry::from_sources`]) — the `SourceLocation`
+    /// ingestion via [`Registry::from_items`]) — the `SourceLocation`
     /// file paths are crate-relative, so with several sources they alone
     /// may not identify the colliding crates.
     pub first_crate: Option<String>,
@@ -508,7 +509,22 @@ impl<M> Registry<M> {
     /// Callers feed any `(syn::Item, SourceLocation)` iterator — typically
     /// `source.items_all()`, `source.items_except_groups(...)`, or a
     /// hand-rolled filter chain — so item-level selection happens upstream
-    /// of the registry rather than inside it.
+    /// of the registry rather than inside it. Streams from several sources
+    /// combine with plain iterator composition:
+    ///
+    /// ```ignore
+    /// let registry = Registry::from_items(
+    ///     flat.items_all().chain(helpers.items_all()),
+    /// )?;
+    /// ```
+    ///
+    /// Each item's **origin crate** rides its [`SourceLocation`] (stamped
+    /// by [`Source`](crate::Source) when parsing records): named items get
+    /// their origin recorded for qualified references in generated code
+    /// (`flat_crate::…` vs `helper_crate::…`), and the first origin seen
+    /// becomes the default module ([`Self::default_module`];
+    /// [`Self::set_default_module`] overrides — needed for hand-built,
+    /// origin-less item streams).
     ///
     /// This step only populates the item maps (`functions`, `structs`,
     /// `enums`, `consts`, `passthrough`). Signature/body scanning that
@@ -522,40 +538,13 @@ impl<M> Registry<M> {
     {
         let mut registry = Registry::default();
         for (item, loc) in items {
-            registry.index_item(item, loc)?;
-        }
-        Ok(registry)
-    }
-
-    /// Construct a `Registry` from one or more prebindgen [`Source`]s,
-    /// recording each function's **origin crate**. This is the multi-source
-    /// form of [`Self::from_items`]: a binding may layer helper
-    /// `#[prebindgen]` crates on top of the flat crate (conversion helpers
-    /// the flat crate doesn't provide), and the generated Rust must qualify
-    /// each call with the module of the crate that defines it
-    /// (`flat_crate::…` vs `helper_crate::…` — see [`Self::fn_origin`]).
-    ///
-    /// [`Source`]: crate::Source
-    pub fn from_sources<'a, I>(sources: I) -> Result<Self, ScanError>
-    where
-        I: IntoIterator<Item = &'a crate::api::source::Source>,
-    {
-        let mut registry = Registry::default();
-        for source in sources {
-            registry.add_source(source)?;
-        }
-        Ok(registry)
-    }
-
-    /// Ingest one [`Source`]'s items, recording the source's crate name as
-    /// each named item's origin (and the first ingested source as the
-    /// default module). See [`Self::from_sources`].
-    ///
-    /// [`Source`]: crate::Source
-    pub fn add_source(&mut self, source: &crate::api::source::Source) -> Result<(), ScanError> {
-        let crate_name = source.crate_name().to_string();
-        self.source_modules.push(crate_name.replace('-', "_"));
-        for (item, loc) in source.items_all() {
+            let crate_name = loc.crate_name.clone();
+            if let Some(crate_name) = &crate_name {
+                let module = crate_name.replace('-', "_");
+                if !registry.source_modules.contains(&module) {
+                    registry.source_modules.push(module);
+                }
+            }
             let named: Option<syn::Ident> = match &item {
                 syn::Item::Fn(f) => Some(f.sig.ident.clone()),
                 syn::Item::Struct(s) => Some(s.ident.clone()),
@@ -563,30 +552,31 @@ impl<M> Registry<M> {
                 syn::Item::Const(c) if c.ident != "_" => Some(c.ident.clone()),
                 _ => None,
             };
-            match self.index_item(item, loc) {
+            match registry.index_item(item, loc) {
                 Ok(()) => {
                     // Only after successful indexing — a collision must keep
                     // the FIRST item's origin for the error below.
-                    if let Some(ident) = named {
-                        self.item_origins.insert(ident, crate_name.clone());
+                    if let (Some(ident), Some(crate_name)) = (named, crate_name) {
+                        registry.item_origins.insert(ident, crate_name);
                     }
                 }
                 Err(ScanError::DuplicateName(mut e)) => {
-                    e.first_crate = self.item_origins.get(&e.name).cloned();
-                    e.second_crate = Some(crate_name);
+                    e.first_crate = registry.item_origins.get(&e.name).cloned();
+                    e.second_crate = crate_name;
                     return Err(ScanError::DuplicateName(e));
                 }
                 Err(e) => return Err(e),
             }
         }
-        Ok(())
+        Ok(registry)
     }
 
-    /// Set the default module for generated references when the registry is
-    /// built item-by-item ([`Self::from_items`]) — the module the items'
+    /// Set the default module for generated references when the item stream
+    /// carries no origins (hand-built items, tests) — the module the items'
     /// crate is reachable under from the generated file. With
-    /// [`Self::from_sources`] this is derived automatically (the first
-    /// source), so calling it is only needed to override.
+    /// [`Source`](crate::Source)-backed streams this is derived
+    /// automatically (the first item's origin), so calling it is only
+    /// needed to override.
     pub fn set_default_module(&mut self, module: &str) {
         let module = module.replace('-', "_");
         if self.source_modules.first().map(String::as_str) == Some(module.as_str()) {
@@ -596,7 +586,8 @@ impl<M> Registry<M> {
     }
 
     /// The origin crate's **module path** for an item ingested via
-    /// [`Self::from_sources`], or `None` when unknown — callers then fall
+    /// the item's [`SourceLocation`] stamp, or `None` when unknown —
+    /// callers then fall
     /// back to [`Self::default_module`].
     pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
         let crate_name = self.item_origins.get(ident)?;
@@ -956,7 +947,7 @@ impl<M> Registry<M> {
 
     fn check_no_duplicate(&self, name: &syn::Ident, loc: &SourceLocation) -> Result<(), ScanError> {
         if let Some(first) = self.first_seen_loc(name) {
-            // Origin crates are unknown at this level; `add_source` enriches
+            // Origin crates are unknown at this level; `from_items` enriches
             // the error with them (the locations alone are crate-relative).
             return Err(ScanError::DuplicateName(Box::new(DuplicateNameError {
                 name: name.clone(),

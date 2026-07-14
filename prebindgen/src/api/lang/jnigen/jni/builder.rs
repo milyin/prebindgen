@@ -10,9 +10,9 @@ use super::*;
 
 impl JniGen {
     /// The module path a generated call to `#[prebindgen]` fn `ident` must be
-    /// qualified with: the fn's **origin crate** when the registry was built
-    /// from [`crate::core::Registry::from_sources`] (multi-source bindings —
-    /// helper crates layered on the flat crate), else the registry's default
+    /// qualified with: the fn's **origin crate** as recorded from its
+    /// stream's `SourceLocation` stamp (multi-source bindings — helper
+    /// crates layered on the flat crate), else the registry's default
     /// module ([`crate::core::Registry::set_default_module`]).
     pub(crate) fn fn_module(
         &self,

@@ -862,8 +862,9 @@ impl PackageDecl {
 /// (`u64` ⇒ `Long`) — nothing is stated verbatim. An input function may be
 /// fallible (`fn(U) -> Result<T, E>`): an `Err` routes to the caller's error
 /// handler. The functions may live in the flat crate or in a **helper
-/// crate** ingested as an extra source ([`crate::core::Registry::from_sources`]);
-/// generated calls qualify each function with its origin crate.
+/// crate** whose item stream is chained into the same
+/// [`crate::core::Registry::from_items`] call; generated calls qualify each
+/// function with its origin crate.
 ///
 /// Distinct from the [`expand_param!`](crate::expand_param) /
 /// [`expand_return!`](crate::expand_return) boundary decls: those reshape a

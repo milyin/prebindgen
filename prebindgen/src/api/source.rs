@@ -118,7 +118,20 @@ impl Source {
         let mut items = HashMap::new();
         for group in groups {
             let records = Self::read_group(input_dir, &group);
-            let group_items = records.iter().map(|r| r.parse()).collect::<Vec<_>>();
+            let group_items = records
+                .iter()
+                .map(|r| {
+                    // Stamp the origin crate into every item's location: the
+                    // captured JSONL doesn't carry it (the proc-macro runs
+                    // inside the crate), but from here on the item streams
+                    // are self-describing — streams from several sources can
+                    // be chained into one `Registry::from_items` call
+                    // without losing per-item origins.
+                    let (item, mut loc) = r.parse();
+                    loc.crate_name = Some(crate_name.clone());
+                    (item, loc)
+                })
+                .collect::<Vec<_>>();
             items.insert(group, group_items);
         }
 
@@ -149,7 +162,10 @@ impl Source {
                                 pub field: i32,
                             }
                         },
-                        SourceLocation::default(),
+                        SourceLocation {
+                            crate_name: Some("source_ffi".to_string()),
+                            ..SourceLocation::default()
+                        },
                     )],
                 ),
                 (
@@ -159,7 +175,10 @@ impl Source {
                             #[prebindgen("functions")]
                             pub fn test_function() -> i32 { 42 }
                         },
-                        SourceLocation::default(),
+                        SourceLocation {
+                            crate_name: Some("source_ffi".to_string()),
+                            ..SourceLocation::default()
+                        },
                     )],
                 ),
             ]),
