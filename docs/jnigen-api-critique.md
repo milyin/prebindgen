@@ -545,6 +545,24 @@ Canonical inputs/outputs "AUTO-APPLY" at a distance; the only way to learn what
 a decl produces is to run generation and diff. The extensive prose comments in
 the consumer's build.rs are compensating for a missing explain/dry-run mode.
 
+> **Resolution (2026-07-15): fixed — `Generation::<JniGen>::report()`.**
+> The missing explain mode, computed from the resolved registry after
+> `resolve()`: per package/class every wrapper's FINAL Kotlin signature —
+> rendered through the same `render_wrapper_fn` the emitters use, so it
+> cannot drift from real output — plus `shaped by:` provenance (param
+> expansions with variant lists, return decompositions with leaf names and
+> delivery, error decompositions), then the type table (kind / FQN / wire),
+> `convert!` sources, and rust-side-only types. Deterministic; consumers
+> commit `kotlin/REPORT.md` next to the regen (covertest + zenoh-flat-jni),
+> so a decl's effect is reviewable in a PR without reading generated Kotlin
+> and drift is caught by regen-check. Placement is the `write_kotlin` seam
+> (I3): an inherent method on `Generation<JniGen>`, not a core trait hook —
+> the *pattern* (describe your resolved surface) is adapter-universal, the
+> *content* is intrinsically destination-language vocabulary, so each
+> adapter implements its own (`Generation<Cbindgen>::report()` is a natural
+> future twin); a language-neutral core dump was rejected as describing the
+> machinery rather than the surface.
+
 ---
 
 ## Incomplete
