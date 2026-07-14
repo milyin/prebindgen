@@ -1200,6 +1200,10 @@ pub struct ConvertSourceDecl {
     pub(crate) kind: ConvertSourceKind,
 }
 
+// large_enum_variant: a handful of these exist per binding, held transiently
+// while a decl is built — boxing the syn payloads would only complicate the
+// arms (same trade-off as `ConvertSpec`).
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub(crate) enum ConvertSourceKind {
     /// `fun!(f)` — a `#[prebindgen]` conversion fn; representable type and
