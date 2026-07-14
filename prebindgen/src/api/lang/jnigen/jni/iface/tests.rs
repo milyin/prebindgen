@@ -21,6 +21,7 @@ fn as_raw_adapter_is_multiline_even_when_short() {
         ret: kt::KtType::unit(),
         descr: "(J)V".to_string(),
         typed_groups: Vec::new(),
+        kdoc: None,
     };
 
     let src = render_as_raw(spec);
@@ -69,6 +70,7 @@ fn as_raw_adapter_breaks_wide_lambda_params_and_run_args() {
         ret: kt::KtType::unit(),
         descr: "([BIZLjava/lang/Long;Ljava/lang/Long;)V".to_string(),
         typed_groups: Vec::new(),
+        kdoc: None,
     };
 
     let src = render_as_raw(spec);

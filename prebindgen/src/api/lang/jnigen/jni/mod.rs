@@ -169,14 +169,14 @@ pub(crate) struct PackageConfig {
     /// initialized through a generated nullary JNI getter. `MethodEntry`
     /// is reused as-is (rust ident + Kotlin-name override).
     pub constants: Vec<MethodEntry>,
-    /// Function-backed constants declared via [`PackageDecl::constant_fun`]:
+    /// Fn-sourced constants declared via [`ConstDecl::fun`]:
     /// nullary `#[prebindgen]` fns whose result surfaces as a top-level
     /// Kotlin `val` (eagerly initialized through the fn's ordinary generated
     /// wrapper) instead of a callable `fun`. Rust-side emission and the
     /// `JNINative` extern are the plain declared-function ones.
     pub constant_functions: Vec<MethodEntry>,
     /// Expression-backed constants declared via
-    /// [`PackageDecl::constant_expr`](super::jni::decl::PackageDecl::constant_expr):
+    /// [`ConstDecl::expr`](super::jni::decl::ConstDecl::expr):
     /// binding-defined expressions evaluated once inside a generated nullary
     /// getter (extern symbol seeded from the val name), surfacing as
     /// top-level Kotlin `val`s. Stored as the full decl — there is no Rust
@@ -195,7 +195,7 @@ pub(crate) enum MemberKind {
     Fun,
     /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
     /// member returning the class; never output-flattened; referenceable by a
-    /// `.default_param_expand(fun!(...))`.
+    /// a `expand_param!` `.variant(fun!(...))` arm.
     Constructor,
 }
 
@@ -209,12 +209,14 @@ pub(crate) enum MemberKind {
 pub(crate) struct ClassMember {
     /// Rust function ident (`registry.functions[ident]`).
     pub rust_ident: syn::Ident,
-    /// Kotlin-visible name of this instance method / companion factory
-    /// (derived from `FunctionDecl.name()`, defaulting to
-    /// `snake_to_camel(rust_ident)`). Independent of any `.default_param_expand`/
-    /// `.default_return_expand` reference to the same underlying function — those
-    /// take a fresh `FunctionDecl` directly and don't consult this list.
-    pub kotlin_name: String,
+    /// Per-member `.name()` override, stored RAW — the effective Kotlin
+    /// name is derived at point of use by [`JniGen::member_kotlin_name`]
+    /// (override, else member-mangle over the namespace-stripped camelCase
+    /// ident), keeping `set_member_name_mangle` order-independent. An
+    /// `expand_return!` `.field` referencing the same underlying function
+    /// inherits the effective name unless it sets its own `.name()`;
+    /// `expand_param!` variants reference the fn by ident only.
+    pub kotlin_name_override: Option<String>,
     /// Member kind (fun / constructor).
     pub kind: MemberKind,
 }
@@ -257,9 +259,9 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
 /// JNI back-end. Global settings are applied with the order-insensitive
 /// `set_*` methods; declarations are accepted as pre-built objects
-/// (`PackageDecl`, `ScalarTypeWrapperDecl`, `GenericTypeWrapperDecl` — see
-/// `decl.rs`) built independently of `JniGen` itself; there is no fluent
-/// typestate cursor.
+/// (`PackageDecl`, `ExpandParamDecl`, `ExpandReturnDecl`,
+/// `ConvertDecl` — see `decl.rs`) built
+/// independently of `JniGen` itself; there is no fluent typestate cursor.
 ///
 /// ```
 /// use prebindgen::lang::JniGen;
@@ -267,25 +269,31 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 /// let jni = JniGen::new()
 ///     .set_package_prefix("io.test.jni")
 ///     .package(
-///         prebindgen::package!("session")
-///             .class(prebindgen::ptr_class!(ZKeyExpr)
-///                 .fun(prebindgen::fun!(z_keyexpr_as_str).name("getStr"))
-///                 .default_return_expand_self()),
-///     );
+///         prebindgen::package!("keyexpr")
+///             .class(prebindgen::ptr_class!(KeyExpr)
+///                 .fun(prebindgen::fun!(keyexpr_get_str).name("getStr"))
+///                 .constructor(prebindgen::fun!(keyexpr_new_try_from).name("tryFrom"))),
+///     )
+///     // A KeyExpr param accepts EITHER a String (built via tryFrom) OR an
+///     // existing handle; a returned KeyExpr decomposes into its string form.
+///     .expand(
+///         prebindgen::expand_param!(KeyExpr)
+///             .variant(prebindgen::fun!(keyexpr_new_try_from))
+///             .variant_self(),
+///     )
+///     .expand(prebindgen::expand_return!(KeyExpr).field(prebindgen::fun!(keyexpr_get_str)));
 /// ```
 #[derive(Clone)]
 pub struct JniGen {
-    /// Module path the original `#[prebindgen]` fns live under (e.g.
-    /// the host crate of `#[prebindgen]` items). The wrapper body calls
-    /// `<source_module>::<fn>(args)`.
-    pub source_module: syn::Path,
     /// Single source of truth for the JVM/Kotlin namespace this binding
     /// targets, dot-separated (e.g. `io.zenoh.jni`). Empty = no prefix.
     /// Every derived form — slash-separated for `FindClass`
     /// (`JniGen::java_class_prefix()`), `_`-mangled for JNI extern idents
     /// (`JniGen::jni_class_path()`), dot-separated for Kotlin `package`
     /// declarations — is computed from this at the point of use.
-    pub package: String,
+    /// `pub(crate)`: consumers go through [`JniGen::set_package_prefix`],
+    /// whose trimming a direct field write would bypass.
+    pub(crate) package: String,
 
     /// Mangler for function names (scanned `#[prebindgen]` free fns and
     /// the synthetic `freePtr` destructor). Default = identity; in
@@ -302,6 +310,10 @@ pub struct JniGen {
     /// Mangler for `EnumClassDecl`-declared C-like enum class
     /// names. Default = identity.
     pub(crate) enum_name_mangle: Option<NameMangle>,
+    /// Member-name mangle hook ([`JniGen::set_member_name_mangle`]) —
+    /// applied to the namespace-stripped camelCase default of every class
+    /// member without a per-member `.name()`.
+    pub(crate) member_name_mangle: Option<NameMangle>,
     /// Mangler for the framework "harness" class name —
     /// `"Native"` (the centralized JNI extern holder). Default when
     /// unset = prepend `"JNI"`, so you get `JNINative`. Override to
@@ -310,7 +322,7 @@ pub struct JniGen {
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting
-    /// a `ClassDecl` or a `ScalarTypeWrapperDecl`. Holds opaque-handle
+    /// a `ClassDecl`. Holds opaque-handle
     /// config, enum config, and the raw [`NameSpec`] (Kotlin FQNs are
     /// derived from it on read via [`JniGen::kotlin_fqn`] /
     /// [`JniGen::fqn_of`]); the converter bodies themselves live in
@@ -336,6 +348,13 @@ pub struct JniGen {
     /// Per-rank output converters. Same shape as [`Self::input_wrappers`].
     pub(crate) output_wrappers: [HashMap<TypeKey, WrapperFn>; 4],
 
+    /// Canonical single-value conversions ([`ConvertDecl`], accepted by
+    /// [`JniGen::convert`]), stored raw — the rank-0 converter bodies derive
+    /// from the conversion fns' registry signatures at lookup time
+    /// ([`JniGen::convert_input_body`] / [`JniGen::convert_output_body`]),
+    /// keeping declarations order-independent and origin-qualified.
+    pub(crate) convert_decls: Vec<ConvertDecl>,
+
     /// When `true` (default), generated wrappers wrap each call that
     /// touches an opaque handle in the per-call `withSortedHandleLocks`
     /// scaffold (deadlock-safe N-ary monitor acquisition + atomic
@@ -353,16 +372,43 @@ pub struct JniGen {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
-    /// Constructor-expansion declarations (`.default_param_expand()` /    /// `.param_expand()` on a class/function decl). Resolved into
+    /// Per-fn constructor-expansion overrides (`.expand_param` on a
+    /// [`FunctionDecl`]), replayed eagerly at accept time. The type-level
+    /// defaults live raw in [`Self::param_expand_decls`]; the two merge on
+    /// demand in [`JniGen::build_expansions`], resolved into
     /// [`crate::api::core::expand::FoldPlan`]s on the registry during
     /// `write_rust` and consumed at the parameter-emission site.
     pub(crate) expansions: crate::api::core::expand::Expansions,
 
-    /// Output-expansion declarations (`.default_return_expand()` /
-    /// `.return_expand()` on a class/function decl). Resolved into
+    /// Per-fn output-expansion overrides (`.expand_return` on a
+    /// [`FunctionDecl`]) plus constructor-member skip-defaults, replayed
+    /// eagerly at accept time. The type-level defaults live raw in
+    /// [`Self::return_expand_decls`]; the two merge on demand in
+    /// [`JniGen::build_deconstructors`], resolved into
     /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
     /// `write_rust` and consumed at the return-emission site.
     pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
+
+    /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
+    /// [`JniGen::expand`]), stored raw — merged into the expansion set
+    /// at the point of use so declarations stay order-independent.
+    pub(crate) param_expand_decls: Vec<ExpandParamDecl>,
+
+    /// Type-level default output boundaries ([`ExpandReturnDecl`], accepted
+    /// by [`JniGen::expand`]), stored raw — field names (member
+    /// inheritance) resolve at the point of use so declarations stay
+    /// order-independent.
+    pub(crate) return_expand_decls: Vec<ExpandReturnDecl>,
+
+    /// Per-fn input overrides ([`FunctionDecl::expand_param`]): the fn ident,
+    /// the parameter name, and the decl — stored raw like the type-level
+    /// decls; cross-checked and lowered in `core/expand.rs`'s `apply`.
+    pub(crate) fn_param_expands: Vec<(syn::Ident, String, ExpandParamDecl)>,
+
+    /// Per-fn output overrides ([`FunctionDecl::expand_return`]): the fn
+    /// ident and the decl — stored raw; cross-checked and lowered in
+    /// `core/unfold.rs`'s `apply`.
+    pub(crate) fn_return_expands: Vec<(syn::Ident, ExpandReturnDecl)>,
 
     /// Class members (funs / constructors) attached to a declared class via
     /// its decl's `.fun()`/`.constructor()`, keyed by the class's canonical
@@ -373,29 +419,24 @@ pub struct JniGen {
     pub(crate) class_members: HashMap<TypeKey, Vec<ClassMember>>,
 
     /// `#[prebindgen]` fns the binding deliberately does NOT wrap, declared
-    /// via [`JniGen::ignore_fun`]. Backs [`Prebindgen::ignored_functions`]:
+    /// via [`JniGen::ignore`]. Backs [`Prebindgen::ignored_functions`]:
     /// suppresses the registry's per-item "skipping undeclared" warning
     /// without emitting anything.
     pub(crate) ignored_fns: std::collections::HashSet<syn::Ident>,
 
+    /// Bulk name-family ignore predicates, declared via [`JniGen::ignore`] +
+    /// [`matching`](crate::lang::matching). Backs
+    /// [`Prebindgen::ignored_name_predicates`]: every undeclared item
+    /// (fn/type/const) whose name matches is an acknowledged skip.
+    pub(crate) ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+
     /// `#[prebindgen]` types the binding deliberately does NOT declare,
-    /// via [`JniGen::ignore_class`]. Backs [`Prebindgen::ignored_types`].
+    /// via [`JniGen::ignore`]. Backs [`Prebindgen::ignored_types`].
     pub(crate) ignored_class_types: std::collections::HashSet<TypeKey>,
 
     /// `#[prebindgen]` consts the binding deliberately does NOT declare,
     /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
     pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
-
-    /// Every function ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
-    /// `.return_expand(...)` record (class- or
-    /// function-scoped) — populated as `builder.rs` accepts each decl.
-    /// Backs [`Prebindgen::accessor_functions`]: `core/unfold.rs`'s
-    /// deconstructor gate requires every named record's function to be in
-    /// this set (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes
-    /// them from parameter composition. Derived from *usage*, not from any
-    /// separate declaration — a function need not also be a `.fun()` class
-    /// member to be referenced this way.
-    pub(crate) accessor_record_fns: std::collections::HashSet<syn::Ident>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────
@@ -414,6 +455,7 @@ mod trait_impl;
 mod fold;
 mod kotlin_emit;
 mod render;
+mod report;
 mod struct_plan;
 
 pub(crate) use builder::*;

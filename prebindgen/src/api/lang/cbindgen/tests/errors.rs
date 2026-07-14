@@ -10,7 +10,7 @@ fn result_error_not_declared_is_build_error() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -27,7 +27,9 @@ fn result_error_not_declared_is_build_error() {
         .function(syn::parse_quote!(z_keyexpr_try_from));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = registry.write_rust(&cbindgen, std::env::temp_dir().join("nope.rs"));
+        let _ = registry
+            .resolve(cbindgen)
+            .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope.rs")));
     }));
     assert!(
         result.is_err(),
@@ -47,24 +49,26 @@ fn fallible_input_without_result_needs_panic() {
     );
 
     // No `.panic()` → build error.
-    let mut reg1 = Registry::<()>::from_items([(syn::Item::Fn(func.clone()), loc.clone())])
+    let reg1 = Registry::<()>::from_items([(syn::Item::Fn(func.clone()), loc.clone())])
         .expect("index items");
     let cb1 = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log));
     let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = reg1.write_rust(&cb1, std::env::temp_dir().join("nope2.rs"));
+        let _ = reg1
+            .resolve(cb1)
+            .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nope2.rs")));
     }));
     assert!(err.is_err(), "expected a build error without .panic()");
 
     // With `.panic()` → wrapper aborts on decode failure.
-    let mut reg2 =
+    let reg2 =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
     let cb2 = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(z_log))
         .panic();
-    let src = write(&cb2, &mut reg2, "panicfn");
+    let src = write(cb2, reg2, "panicfn");
     let compact: String = src.split_whitespace().collect();
     assert!(compact.contains("extern\"C\"fnz_log"), "{src}");
     assert!(compact.contains("panic!("), "{src}");
@@ -91,7 +95,7 @@ fn error_out_param_is_null_guarded() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(ptr_fn), loc.clone()),
         (syn::Item::Fn(unit_fn), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
@@ -109,7 +113,7 @@ fn error_out_param_is_null_guarded() {
         .function(syn::parse_quote!(z_keyexpr_try_from))
         .function(syn::parse_quote!(z_unit_op));
 
-    let src = write(&cbindgen, &mut registry, "err_null_guard");
+    let src = write(cbindgen, registry, "err_null_guard");
     let compact: String = src.split_whitespace().collect();
 
     // Pointer-return Err arm: guarded write, then NULL.

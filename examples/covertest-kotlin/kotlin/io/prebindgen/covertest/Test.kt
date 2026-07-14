@@ -16,10 +16,12 @@ import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.annotatedNew
+import io.prebindgen.covertest.model.celsiusDouble
+import io.prebindgen.covertest.model.labelReverse
+import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
-import io.prebindgen.covertest.model.payloadLabelLen
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
@@ -84,13 +86,14 @@ private fun payload(id: Long, seq: Int, value: Double, flag: Boolean, label: Str
 fun main() {
     println("covertest-kotlin: exercising every JniGen feature")
 
-    // ── consts: eagerly-initialized top-level vals — const-backed (generated
-    // nullary getters over Rust consts) and function-backed (constant_fun:
-    // the value comes from a nullary #[prebindgen] fn at class-load) ─────────
-    section("top-level const vals (const- and function-backed)") {
+    // ── consts: eagerly-initialized top-level vals, one per value source —
+    // #[prebindgen] const (bare constant!), nullary #[prebindgen] fn (.fun),
+    // binding-local fn by path (.with), binding-defined expression (.expr) ────
+    section("top-level const vals (all four value sources)") {
         check(COVER_MAGIC == 0xC0FFEE.toLong())
         check(COVER_TAG == "covertest")
         check(COVER_TAG_RUNTIME == "covertest-runtime")
+        check(COVER_VERSION.startsWith("cover-"))
         check(COVER_BANNER == "covertest:0xc0ffee")
     }
 
@@ -129,10 +132,11 @@ fun main() {
         check(stampSeries(0L, boom).isEmpty())
     }
 
-    // ── Option<scalar>: nullable primitive return ────────────────────────────
-    section("Option<i64> payloadLabelLen") {
-        check(payloadLabelLen(payload(1L, 0, 0.0, false, "abcd"), boom) == 4L)
-        check(payloadLabelLen(payload(1L, 0, 0.0, false, null), boom) == null)
+    // ── Option<scalar> nullable primitive return + data_class instance
+    // member (I5): the receiver crosses as `this`'s field leaves ────────────
+    section("Option<i64> Payload.labelLen") {
+        check(payload(1L, 0, 0.0, false, "abcd").labelLen(boom) == 4L)
+        check(payload(1L, 0, 0.0, false, null).labelLen(boom) == null)
     }
 
     // ── ptr_class members + Option<Payload>/Option<Vec>/Vec round-trips ──────
@@ -280,6 +284,39 @@ fun main() {
     section("input/output wrapper Millis -> Long (+ .name rename)") {
         check(addMillis(100L, 50L, boom) == 150L)
         check(addMillis(0L, 0L, boom) == 0L)
+    }
+
+    // ── convert! source kinds: trait impls and binding-local fns ────────────
+    section("convert! via From/Into impls (Celsius -> Int)") {
+        check(celsiusDouble(21, boom) == 42)
+        check(celsiusDouble(-5, boom) == -10)
+    }
+    section("convert! via TryFrom (Percent -> Int, fallible input)") {
+        check(percentScale(50, 2, boom) == 100)
+        check(percentScale(30, 2, boom) == 60)
+        // Out-of-range input: the TryFrom impl's Err(String) routes to
+        // onError through the converter's error slot (je carries the
+        // Display'd message).
+        var msg: String? = null
+        percentScale(150, 1) { je ->
+            msg = je
+            0
+        }
+        check(msg?.contains("percent out of range: 150") == true) {
+            "percentScale(150) must report the range error, got: $msg"
+        }
+    }
+    section("convert! via binding-local fns (Label -> String, fallible input)") {
+        check(labelReverse("abc", boom) == "cba")
+        // Empty label: the local fn's Err(String) routes to onError.
+        var msg: String? = null
+        labelReverse("") { je ->
+            msg = je
+            ""
+        }
+        check(msg?.contains("label must not be empty") == true) {
+            "labelReverse(\"\") must report the empty-label error, got: $msg"
+        }
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────

@@ -409,7 +409,7 @@ pub(crate) fn cast_wire_to_jobject(
 /// a final `Option` step unwraps too.
 #[allow(clippy::too_many_arguments)]
 fn reach_leaf(
-    source_module: &syn::Path,
+    qualify: &dyn Fn(&syn::Ident) -> syn::Path,
     path: &[syn::Ident],
     returns_option: &dyn Fn(&syn::Ident) -> bool,
     base: TokenStream,
@@ -428,18 +428,21 @@ fn reach_leaf(
         // No (more) `Option` nesting steps: compose the rest plainly.
         None => {
             for a in path {
-                e = quote!(#source_module::#a(#e));
+                let m = qualify(a);
+                e = quote!(#m::#a(#e));
             }
             body(e)
         }
         Some(k) => {
             for a in &path[..k] {
-                e = quote!(#source_module::#a(#e));
+                let m = qualify(a);
+                e = quote!(#m::#a(#e));
             }
             let opt_acc = &path[k];
+            let opt_m = qualify(opt_acc);
             let nested = format_ident!("__n{}", depth);
             let inner = reach_leaf(
-                source_module,
+                qualify,
                 &path[k + 1..],
                 returns_option,
                 quote!(#nested),
@@ -449,7 +452,7 @@ fn reach_leaf(
                 body,
             );
             quote! {
-                match #source_module::#opt_acc(#e) {
+                match #opt_m::#opt_acc(#e) {
                     ::core::option::Option::Some(#nested) => { #inner }
                     ::core::option::Option::None => jni::objects::JObject::null(),
                 }
@@ -478,7 +481,9 @@ pub(crate) fn encode_plan_leaves(
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> (TokenStream, Vec<TokenStream>) {
-    let source_module = &ext.source_module;
+    // Per-fn origin qualification: each accessor call is prefixed with the
+    // module of the crate that defines it (multi-source bindings).
+    let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
     let by_ref = plan.by_ref;
     let n = plan.leaves.len();
 
@@ -569,7 +574,7 @@ pub(crate) fn encode_plan_leaves(
                         // Reached non-null handle: clone via the converter,
                         // raw jlong (no Option steps on the path).
                         let expr = reach_leaf(
-                            source_module,
+                            &qualify,
                             &leaf.path,
                             &returns_option,
                             value.clone(),
@@ -597,7 +602,7 @@ pub(crate) fn encode_plan_leaves(
                         // JVM null when absent — matching the `Long?` param.
                         let box_fail = fail(quote!(__e.to_string()));
                         let expr = reach_leaf(
-                            source_module,
+                            &qualify,
                             &leaf.path,
                             &returns_option,
                             value.clone(),
@@ -645,7 +650,7 @@ pub(crate) fn encode_plan_leaves(
                         ));
                     } else {
                         let expr = reach_leaf(
-                            source_module,
+                            &qualify,
                             &leaf.path,
                             &returns_option,
                             value.clone(),
@@ -682,7 +687,7 @@ pub(crate) fn encode_plan_leaves(
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
             match leaf.source {
                 LeafSource::Accessor => reach_leaf(
-                    source_module,
+                    &qualify,
                     &leaf.path,
                     &returns_option,
                     value.clone(),

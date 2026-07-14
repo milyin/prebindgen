@@ -30,6 +30,14 @@ pub struct SourceLocation {
     pub line: usize,
     /// The column number where the item starts (1-based)
     pub column: usize,
+    /// Origin crate of the item. Not part of the captured JSONL (the
+    /// proc-macro writes records from inside the crate, which reaches its
+    /// consumers under a name only they know) — `Source` stamps it while
+    /// parsing records, so every item stream carries its origin and streams
+    /// from different sources can be `chain`ed into one
+    /// `Registry::from_items` call without losing per-item origins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crate_name: Option<String>,
 }
 
 impl std::fmt::Display for SourceLocation {
@@ -48,6 +56,7 @@ impl SourceLocation {
                     file: span.unwrap().file(),
                     line: span.unwrap().line(),
                     column: span.unwrap().column(),
+                    crate_name: None,
                 }
             }
         } else {
@@ -57,6 +66,7 @@ impl SourceLocation {
                 file: "<unknown>".to_string(),
                 line: 0,
                 column: 0,
+                crate_name: None,
             }
         }}
     }

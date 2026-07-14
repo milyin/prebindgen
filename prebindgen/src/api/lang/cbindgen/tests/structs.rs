@@ -22,7 +22,7 @@ fn opaque_owned_transmute_by_value() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(out_fn), loc.clone()),
         (syn::Item::Fn(in_fn), loc.clone()),
@@ -37,7 +37,7 @@ fn opaque_owned_transmute_by_value() {
         .function(syn::parse_quote!(z_payload_take))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "value_opaque");
+    let src = write(cbindgen, registry, "value_opaque");
     let compact: String = src.split_whitespace().collect();
 
     // Fail-closed size + align asserts against the opaque counterpart.
@@ -117,7 +117,7 @@ fn opaque_data_no_gravestone_writeback() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(out_fn), loc.clone()),
         (syn::Item::Fn(in_fn), loc.clone()),
@@ -132,7 +132,7 @@ fn opaque_data_no_gravestone_writeback() {
         .function(syn::parse_quote!(z_stamp_take))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "opaque_data_struct");
+    let src = write(cbindgen, registry, "opaque_data_struct");
     let compact: String = src.split_whitespace().collect();
 
     // Same transmute glue + asserts as an owned type.
@@ -196,7 +196,7 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(make_fn), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
@@ -220,7 +220,7 @@ fn repr_c_struct_visible_mirror_and_zero_copy_borrow() {
         .function(syn::parse_quote!(foo_cb))
         .function(syn::parse_quote!(string_make));
 
-    let src = write(&cbindgen, &mut registry, "repr_c_struct");
+    let src = write(cbindgen, registry, "repr_c_struct");
     let compact: String = src.split_whitespace().collect();
 
     // Visible `#[repr(C)]` mirror: scalar passes through, the `Option<Box<String>>`
@@ -284,7 +284,7 @@ fn repr_c_struct_owned_inferred_field_nulls_without_default() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
@@ -302,7 +302,7 @@ fn repr_c_struct_owned_inferred_field_nulls_without_default() {
         .panic()
         .function(syn::parse_quote!(string_make));
 
-    let src = write(&cbindgen, &mut registry, "owned_inferred");
+    let src = write(cbindgen, registry, "owned_inferred");
     let compact: String = src.split_whitespace().collect();
 
     // By-value consume: takes `*mut foo_t`, moves the value out, and nulls only the
@@ -337,7 +337,7 @@ fn repr_c_struct_plain_data_has_no_writeback() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(take_fn), loc.clone()),
     ])
@@ -352,7 +352,7 @@ fn repr_c_struct_plain_data_has_no_writeback() {
         .function(syn::parse_quote!(pt_sum))
         .panic();
 
-    let src = write(&cbindgen, &mut registry, "plain_data");
+    let src = write(cbindgen, registry, "plain_data");
     let compact: String = src.split_whitespace().collect();
 
     // The consume moves the value out with no clean-up of the moved-from slot.
@@ -385,7 +385,7 @@ fn repr_c_struct_bare_box_field_keeps_full_gravestone() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(put_fn), loc.clone()),
         (syn::Item::Fn(string_fn), loc.clone()),
@@ -403,7 +403,7 @@ fn repr_c_struct_bare_box_field_keeps_full_gravestone() {
         .panic()
         .function(syn::parse_quote!(string_make));
 
-    let src = write(&cbindgen, &mut registry, "bare_box");
+    let src = write(cbindgen, registry, "bare_box");
     let compact: String = src.split_whitespace().collect();
 
     // A bare `Box<String>` field falls back to the full gravestone write + impl.
@@ -450,7 +450,7 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Struct(st), loc.clone()),
         (syn::Item::Fn(upd_fn), loc.clone()),
         (syn::Item::Fn(into_fn), loc.clone()),
@@ -471,7 +471,7 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
         .panic()
         .function(syn::parse_quote!(string_make));
 
-    let src = write(&cbindgen, &mut registry, "repr_c_struct_mut");
+    let src = write(cbindgen, registry, "repr_c_struct_mut");
     let compact: String = src.split_whitespace().collect();
 
     // Both lower to a `*mut foo_t` wire.

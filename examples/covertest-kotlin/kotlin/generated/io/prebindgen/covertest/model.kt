@@ -6,7 +6,13 @@ import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.Payload
 
-/** JVM-side surface for the native Rust `Priority` enum. */
+/**
+ * Coarse importance bucket derived from a payload's `value`. A C-like
+ * `#[repr(i32)]` enum with explicit discriminants, mapped by the binding to a
+ * Kotlin `enum class` (and a C enum).
+ *
+ * JVM-side surface for the native Rust `Priority` enum.
+ */
 public enum class Priority(public val value: Int) {
     LOW(0),
     NORMAL(1),
@@ -18,6 +24,13 @@ public enum class Priority(public val value: Int) {
     }
 }
 
+/**
+ * A [`Payload`] with optional delivery metadata. As a `data_class` it
+ * exercises the shapes flat `Payload` cannot: a **nested** data-class field
+ * (`payload`, recursive `fromParts` on output / recursive leaf decode on
+ * input) and `Option<primitive>` / `Option<enum>` **fields** (each crossing
+ * as a decoupled `(present, value)` leaf pair).
+ */
 public data class Annotated(val payload: Payload, val ttl: Long?, val priority: Priority?) {
     public companion object {
         @JvmStatic
@@ -34,11 +47,16 @@ public data class Annotated(val payload: Payload, val ttl: Long?, val priority: 
 }
 
 /**
+ * A plain `Copy` timestamp. Declared `value_class` in the binding, so it
+ * crosses **by value as its raw bytes** in a `ByteArray` (no heap handle, no
+ * `close()`), and `Vec<Stamp>` surfaces as `List<ByteArray>`.
+ *
  * Typed by-value wrapper for the native Rust `Stamp` (a `Copy` blob carried
  * as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).
  */
 @JvmInline
 public value class Stamp(public val bytes: ByteArray) {
+    /** Seconds component (value-class **accessor**, receiver = the value bytes). */
     public fun secs(onError: JniErrorHandler<Long>): Long {
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = CovNative.stampSecs(this.bytes, __cap)
@@ -46,6 +64,7 @@ public value class Stamp(public val bytes: ByteArray) {
         return __ret
     }
 
+    /** Nanoseconds component (value-class **accessor**). */
     public fun nanos(onError: JniErrorHandler<Long>): Long {
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = CovNative.stampNanos(this.bytes, __cap)
@@ -78,6 +97,7 @@ internal object __StampFolderRawHolder {
     StampFolderRaw { acc, element -> acc.add(Stamp(element)); acc }
 }
 
+/** Classify a payload by magnitude of its `value` (enum **return**). */
 public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = Priority.fromInt(
@@ -87,6 +107,7 @@ public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Prio
     return __ret
 }
 
+/** Numeric weight of a priority (enum **by-value parameter**). */
 public fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.priorityWeight(p.value, __cap)
@@ -94,6 +115,7 @@ public fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int {
     return __ret
 }
 
+/** Resolve an optional priority against a fallback (`Option<enum>` parameter). */
 public fun priorityOr(
     p: Priority?,
     fallback: Priority,
@@ -107,6 +129,7 @@ public fun priorityOr(
     return __ret
 }
 
+/** Build a [`Stamp`] (value-class **return**). */
 public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = Stamp(CovNative.stampNew(secs, nanos, __cap))
@@ -114,6 +137,10 @@ public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): S
     return __ret
 }
 
+/**
+ * A monotonically increasing run of stamps (`Vec<value-class>` →
+ * `List<ByteArray>`).
+ */
 public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp> {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = (CovNative.stampSeries(count, ArrayList<Stamp>(), __StampFolderRawHolder.instance, __cap) as List<Stamp>)
@@ -121,13 +148,43 @@ public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List
     return __ret
 }
 
-public fun payloadLabelLen(p: Payload, onError: JniErrorHandler<Long?>): Long? {
+/**
+ * Double a temperature (exercises the `Into`-based conversion on a
+ * parameter and the return).
+ */
+public fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int {
     val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.payloadLabelLen(p.id, p.seq, p.value, p.flag, p.label, __cap)
+    val __ret = CovNative.celsiusDouble(c, __cap)
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }
 
+/**
+ * Scale a percentage, saturating at 100 (exercises the `TryInto`-based
+ * input conversion — including its error path — and the `Into` output).
+ */
+public fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.percentScale(p, factor, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/**
+ * Reverse a label's characters (exercises the binding-local conversion on
+ * a parameter and the return).
+ */
+public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.labelReverse(l, __cap)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/**
+ * Assemble an [`Annotated`] (nested data-class **output** + bare
+ * `Option<scalar>` / `Option<enum>` inputs).
+ */
 public fun annotatedNew(
     payload: Payload,
     ttl: Long?,
@@ -151,6 +208,10 @@ public fun annotatedNew(
     return __ret
 }
 
+/**
+ * The metadata TTL (`Option<prim>` field read back through a data-class
+ * **input**).
+ */
 public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.annotatedTtl(a, __cap)
@@ -158,6 +219,7 @@ public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
     return __ret
 }
 
+/** The metadata priority (`Option<enum>` **return**). */
 public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.annotatedPriority(a, __cap)?.let { Priority.fromInt(it) }
@@ -165,6 +227,10 @@ public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>):
     return __ret
 }
 
+/**
+ * The nested payload's `value` (proves the nested field survived the
+ * input decode).
+ */
 public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.annotatedPayloadValue(a, __cap)

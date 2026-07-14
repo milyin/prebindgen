@@ -271,29 +271,53 @@ impl JniGen {
         output_name(rust, wire)
     }
 
-    fn emitted_source_type_names(&self) -> std::collections::HashSet<String> {
-        let mut names = std::collections::HashSet::new();
-        for key in self.types.keys() {
+    fn emitted_source_type_names(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> std::collections::HashMap<String, syn::Path> {
+        let mut names = std::collections::HashMap::new();
+        let mut add = |key: &TypeKey| {
             if let Some(short) = rust_short_name_opt(key) {
-                names.insert(short);
+                // Per-item origin when the type has an indexed
+                // `#[prebindgen]` item; else the default module (a declared
+                // type re-exported by the primary source, or a deliberately
+                // unmarked type like a convert!-only newtype).
+                let ident = syn::Ident::new(&short, Span::call_site());
+                let module = registry
+                    .origin_module(&ident)
+                    .unwrap_or_else(|| self.default_module(registry));
+                names.insert(short, module);
             }
+        };
+        for key in self.types.keys() {
+            add(key);
+        }
+        // Rust-side-only boundary types are absent from the type table but
+        // still appear in emitted signatures (e.g. the `E` of a peeled
+        // `Result<T, E>`), so they need the same qualification.
+        for key in self.rust_side_only_types().collect::<Vec<_>>() {
+            add(&key);
+        }
+        // `convert!`-declared types likewise have no type-table entry but
+        // appear in emitted converter signatures.
+        for decl in &self.convert_decls {
+            add(&decl.key);
         }
         names
     }
 
     /// Walk `item` and prefix every bare single-segment type reference
-    /// matching a [`Self::emitted_source_type_names`] name with
-    /// [`Self::source_module`]. Applied once per emitted item at write
+    /// matching a [`Self::emitted_source_type_names`] name with that name's
+    /// origin module. Applied once per emitted item at write
     /// time via [`Prebindgen::post_process_item`] so converter bodies,
     /// type ascriptions, and casts all stay in sync without each emit
     /// site having to remember to qualify.
-    fn qualify_item(&self, item: &mut syn::Item) {
-        let source_names = self.emitted_source_type_names();
+    fn qualify_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+        let source_names = self.emitted_source_type_names(registry);
         if source_names.is_empty() {
             return;
         }
         let mut visitor = QualifyEmittedTypes {
-            source_module: &self.source_module,
             source_names: &source_names,
         };
         syn::visit_mut::VisitMut::visit_item_mut(&mut visitor, item);
@@ -804,14 +828,19 @@ impl Prebindgen for JniGen {
 
     /// Hand the registry this back-end's constructor-expansion declarations so
     /// `write_rust` can resolve `.expand`s into fold plans before resolution.
-    fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
-        Some(&self.expansions)
+    /// Assembled on demand from the per-fn overrides plus the raw type-level
+    /// [`ExpandParamDecl`]s (see [`JniGen::build_expansions`]).
+    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
+        Some(self.build_expansions())
     }
 
     /// Hand the registry this back-end's output-expansion declarations so
     /// `write_rust` can resolve them into unfold plans before resolution.
-    fn deconstructors(&self) -> Option<&crate::api::core::unfold::Deconstructors> {
-        Some(&self.deconstructors)
+    /// Assembled on demand — field names (member inheritance) resolve here,
+    /// against the complete declaration set (see
+    /// [`JniGen::build_deconstructors`]).
+    fn deconstructors(&self) -> Option<crate::api::core::unfold::Deconstructors> {
+        Some(self.build_deconstructors())
     }
 
     /// Synthesize a field-decomposition for every `.data_class` type whose
@@ -936,13 +965,13 @@ impl Prebindgen for JniGen {
         out
     }
 
-    /// Functions ever referenced as a named leaf in a `.default_return_expand(fun!(...))`/
-    /// `.return_expand(...)` record — see
-    /// `accessor_record_fns`'s doc (`jni/mod.rs`). Usage-derived, not tied to
-    /// `.fun()` class-member declarations: a function need not also be
-    /// exposed as an instance method to be referenced this way.
+    /// Functions ever referenced as a named `.field(fun!(...))` in any
+    /// `expand_return!` decl, type-level or per-fn — see
+    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.fun()`
+    /// class-member declarations: a function need not also be exposed as an
+    /// instance method to be referenced this way.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
-        self.accessor_record_fns.clone()
+        self.field_accessor_fns()
     }
 
     /// Fun members (`.fun`) — their fn ident mapped to the owning class's
@@ -979,7 +1008,7 @@ impl Prebindgen for JniGen {
     /// and undeclared consts get the skip warning (see
     /// [`Prebindgen::declared_consts`]).
     /// The declared value types of every expression constant
-    /// (`PackageDecl::constant_expr`) — they have no `#[prebindgen]` item to
+    /// (`ConstDecl::expr`) — they have no `#[prebindgen]` item to
     /// scan, so the resolver is told directly to produce their output
     /// converters.
     fn required_output_types(&self) -> Vec<syn::Type> {
@@ -999,20 +1028,149 @@ impl Prebindgen for JniGen {
         Some(out)
     }
 
-    /// Consts acknowledged-but-unexposed via [`JniGen::ignore_const`].
+    /// Member-shape invariants (N5), checked against registry signatures —
+    /// the earliest possible moment. Without this, a receiver-less `.fun()`
+    /// member would silently emit a method that ignores `this`, and a
+    /// wrong-return `.constructor()` a factory of the wrong type.
+    fn validate(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+        for (key, members) in &self.class_members {
+            for m in members {
+                // A registry-absent fn already hard-errored in the scan.
+                let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) else {
+                    continue;
+                };
+                match m.kind {
+                    MemberKind::Fun => {
+                        let has_receiver = item_fn.sig.inputs.iter().any(|input| {
+                            matches!(input, syn::FnArg::Typed(pt)
+                                if &peel_receiver_key(&pt.ty) == key)
+                        });
+                        if !has_receiver {
+                            let took: Vec<String> = item_fn
+                                .sig
+                                .inputs
+                                .iter()
+                                .filter_map(|i| match i {
+                                    syn::FnArg::Typed(pt) => {
+                                        Some(pt.ty.to_token_stream().to_string())
+                                    }
+                                    _ => None,
+                                })
+                                .collect();
+                            return Err(format!(
+                                "class `{}` member fun `{}`: no parameter of type `{}` — an \
+                                 instance method's receiver must appear in the signature \
+                                 (took: {})",
+                                key.as_str(),
+                                m.rust_ident,
+                                key.as_str(),
+                                if took.is_empty() {
+                                    "no parameters".to_string()
+                                } else {
+                                    took.join(", ")
+                                }
+                            ));
+                        }
+                    }
+                    MemberKind::Constructor => {
+                        let ret = match &item_fn.sig.output {
+                            syn::ReturnType::Type(_, ty) => (**ty).clone(),
+                            syn::ReturnType::Default => syn::parse_quote!(()),
+                        };
+                        // Allowed factory shapes: `Self` and `Result<Self, E>`.
+                        let core = crate::api::core::types_util::result_ok_type(&ret)
+                            .unwrap_or_else(|| ret.clone());
+                        if &peel_receiver_key(&core) != key {
+                            return Err(format!(
+                                "class `{}` constructor `{}`: must return `{}` or \
+                                 `Result<{}, E>` — it returns `{}`",
+                                key.as_str(),
+                                m.rust_ident,
+                                key.as_str(),
+                                key.as_str(),
+                                ret.to_token_stream()
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
     fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()
     }
 
-    /// Fns acknowledged-but-unbound via [`JniGen::ignore_fun`] — suppresses
+    /// Fns acknowledged-but-unbound via [`JniGen::ignore`] — suppresses
     /// the registry's "skipping undeclared" warning, emits nothing.
     fn ignored_functions(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_fns.clone()
     }
 
-    /// Types acknowledged-but-undeclared via [`JniGen::ignore_class`].
+    /// Bulk name-family ignores from [`JniGen::ignore`] +
+    /// [`matching`](crate::lang::matching).
+    fn ignored_name_predicates(&self) -> Vec<crate::api::core::prebindgen::NamePredicate> {
+        self.ignored_name_predicates.clone()
+    }
+
+    /// Framework-called fns that get no extern of their own: `convert!`
+    /// conversion fns (called by generated converter bodies) and fns
+    /// referenced only inside boundary decls (`expand_return!` accessors /
+    /// `expand_param!` ctors, called by the generated fold/unfold code).
+    /// Routing both through the *helper* channel — not the ignore channel —
+    /// makes a typo'd `fun!(…)` inside a decl a hard scan error
+    /// (`ScanError::DeclaredNotFound`) instead of a stale-ignore
+    /// warning.
+    /// Declared functions are subtracted: a fn that is also a real
+    /// member/package fn keeps its extern. Type requirements come through
+    /// [`Self::extra_required_types`], not a signature scan.
+    fn helper_functions(&self) -> std::collections::HashSet<syn::Ident> {
+        let declared = self.declared_functions();
+        self.convert_fns()
+            .chain(self.boundary_referenced_fns())
+            .filter(|f| !declared.contains(f))
+            .collect()
+    }
+
+    /// The other-side type of every `convert!` conversion, in the
+    /// conversion's direction: an input fn's parameter type (peeled of `&`)
+    /// must have its own **input** converter for the composed rank-0 body to
+    /// chain through; an output fn's return type needs the **output** twin.
+    /// Signatures are read from the registry (missing fns are reported by
+    /// the scan's helper-function warning; the body derivation later
+    /// hard-errors with the precise decl).
+    fn extra_required_types(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<(crate::api::core::registry::Direction, syn::Type)> {
+        use crate::api::core::registry::Direction;
+        let mut out = Vec::new();
+        for decl in &self.convert_decls {
+            if let Some((ty, _, _)) = self.convert_input_body(&decl.key, registry) {
+                out.push((Direction::Input, ty));
+            }
+            if let Some((ty, _, _)) = self.convert_output_body(&decl.key, registry) {
+                out.push((Direction::Output, ty));
+            }
+        }
+        out
+    }
+
+    /// Types acknowledged-but-undeclared via [`JniGen::ignore`].
     fn ignored_types(&self) -> std::collections::HashSet<TypeKey> {
         self.ignored_class_types.clone()
+    }
+
+    /// **Rust-side-only** types: boundary decls (`expand_param!` /
+    /// `expand_return!`) whose type has no class declaration. They never
+    /// materialize in Kotlin — only their ingredients (fold) and fields
+    /// (unfold / error channel) cross the boundary — so the registry
+    /// acknowledges them and drops their direct converter requirements once
+    /// the plans are in place.
+    fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
+        self.rust_side_only_types().collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by
@@ -1054,7 +1212,7 @@ impl Prebindgen for JniGen {
         // `Copy` types. A mis-declared non-`Copy` type fails to compile here
         // (at the include site) with a clear bound error rather than at a
         // converter use. The bare type name is qualified against
-        // `source_module` by `post_process_item` like every other body.
+        // its origin module by `post_process_item` like every other body.
         for (key, cfg) in &self.types {
             if cfg.value_blob {
                 let ty = key.to_type();
@@ -1068,18 +1226,23 @@ impl Prebindgen for JniGen {
         }
         // Expression constants — one nullary JNI getter extern per
         // `PackageDecl::constant_expr`, its value the binding-defined
-        // expression evaluated with `use <source_module>::*;` in scope (so
+        // expression evaluated with a glob import of every source module (so
         // it composes the source crate's items without qualification). The
         // getter reuses the whole function-wrapper pipeline via the
         // synthetic signature, exactly like a const-backed getter.
-        let source_module = &self.source_module;
+        let mut glob_modules = registry.all_source_modules();
+        if glob_modules.is_empty() {
+            glob_modules.push(self.default_module(registry));
+        }
         for decl in self.packages.values().flat_map(|p| &p.constant_exprs) {
             validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
             let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
             let expr = &decl.expr;
             let callee: syn::Expr = syn::parse_quote!({
-                #[allow(unused_imports)]
-                use #source_module::*;
+                #(
+                    #[allow(unused_imports)]
+                    use #glob_modules::*;
+                )*
                 #expr
             });
             let wrapper =
@@ -1091,8 +1254,8 @@ impl Prebindgen for JniGen {
         items
     }
 
-    fn post_process_item(&self, item: &mut syn::Item) {
-        self.qualify_item(item);
+    fn post_process_item(&self, item: &mut syn::Item, registry: &Registry<KotlinMeta>) {
+        self.qualify_item(item, registry);
     }
 
     // ── Item methods ─────────────────────────────────────────────────
@@ -1112,10 +1275,6 @@ impl Prebindgen for JniGen {
         TokenStream::new()
     }
 
-    fn source_module(&self) -> Option<&syn::Path> {
-        Some(&self.source_module)
-    }
-
     /// Declared consts only reach here (write gating via
     /// [`Prebindgen::declared_consts`]): re-emit the const as a path-alias
     /// to its source-of-truth (initializer tokens are never copied — they
@@ -1133,10 +1292,10 @@ impl Prebindgen for JniGen {
         reject_handle_const(self, c);
         let getter = const_getter_fn(c);
         let const_ident = &c.ident;
-        let source_module = &self.source_module;
+        let source_module = self.fn_module(registry, const_ident);
         let callee: syn::Expr = syn::parse_quote!(#source_module::#const_ident);
         let wrapper = emit_jni_function_wrapper_with_callee(self, &getter, registry, Some(callee));
-        let alias = crate::api::core::const_path_alias(c, source_module);
+        let alias = crate::api::core::const_path_alias(c, &source_module);
         quote! {
             #alias
             #wrapper
@@ -1240,7 +1399,7 @@ impl JniGen {
             if cfg.enum_cfg.is_some() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some((e, _)) = registry.enums.get(&name) {
-                        let (wire, body) = enum_input_body(self, e);
+                        let (wire, body) = enum_input_body(self, registry, e);
                         let niches = default_niches_for_wire(&wire);
                         let kotlin_name = cfg
                             .name_spec

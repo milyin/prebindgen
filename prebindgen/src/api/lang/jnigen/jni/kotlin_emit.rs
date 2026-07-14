@@ -20,10 +20,10 @@
 //! last segment and lives in the directory of its parent package, holding all
 //! of that package's classes, enums, value-classes and free functions.
 //!
-//! Every `#[prebindgen]` function must be assigned a Kotlin home via
-//! `.method(...)` on either a typed-handle / data-class / enum config
-//! or on `package(...)`. Undeclared functions are skipped (see
-//! `Registry::scan_declared` warnings). There is no "orphan" bucket.
+//! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
+//! class member (`.fun`/`.constructor` on a class decl) or a free function
+//! (`PackageDecl::fun`). Undeclared functions are skipped with a build
+//! warning (`Registry::scan_declared`); there is no "orphan" bucket.
 
 use super::*;
 use crate::api::gen::{
@@ -51,15 +51,27 @@ pub(crate) struct TypedHandle<'a> {
     pub key: &'a TypeKey,
 }
 
+impl crate::api::core::Generation<JniGen> {
+    /// Unified Kotlin emission — the JNI adapter's second artifact,
+    /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
+    /// builds in-memory [`kt::KtFile`] model fragments; they are merged
+    /// into one file per package, rendered, and written under
+    /// `kotlin_root` — which is **generator-owned**: deleted and recreated
+    /// on every run (point it at a dedicated directory like
+    /// `kotlin/generated/`, never at hand-written sources). Pure emission
+    /// over the resolved registry — order-free with respect to
+    /// `write_rust`. Returns every path written (one per non-empty
+    /// package).
+    pub fn write_kotlin(&self, kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
+        self.adapter().write_kotlin(self.registry(), kotlin_root)
+    }
+}
+
 impl JniGen {
-    /// Unified Kotlin emission — single public entry point. Each per-kind
-    /// emitter builds in-memory [`kt::KtFile`] model fragments; they are then
-    /// merged into one file per package, rendered, and written under
-    /// `kotlin_root`. Reads all
-    /// configuration (typed-handle methods, Kotlin type names) from internal
-    /// state set during the builder phase. Returns every path written (one
-    /// per non-empty package).
-    pub fn write_kotlin(
+    /// Kotlin emission body — the public entry point is
+    /// `Generation::<JniGen>::write_kotlin`, which guarantees the registry
+    /// was resolved first.
+    pub(crate) fn write_kotlin(
         &self,
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
@@ -252,6 +264,10 @@ impl JniGen {
             if !cfg.value_blob {
                 continue;
             }
+            // `kotlin_type`-mapped: surfaces as an existing type, no file.
+            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
+                continue;
+            }
             let fqn = cfg
                 .name_spec
                 .as_ref()
@@ -266,13 +282,17 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), fqn.clone()),
             };
+            let framework_line = format!(
+                "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
+                 as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
+                key.as_str()
+            );
+            let class_kdoc = crate::api::lang::jnigen::jni::source_item_doc(registry, key)
+                .map(|d| format!("{d}\n\n{framework_line}"))
+                .unwrap_or(framework_line);
             let mut class = KtClass::new(ClassKind::ValueInline, class_name)
                 .vis(Vis::Public)
-                .kdoc(format!(
-                    "Typed by-value wrapper for the native Rust `{}` (a `Copy` blob carried\n\
-                     as its raw bytes; `@JvmInline`-erased to `ByteArray` at the JNI boundary).",
-                    key.as_str()
-                ))
+                .kdoc(class_kdoc)
                 .ctor_param(
                     KtCtorParam::new("bytes", KtType::byte_array())
                         .val()
@@ -296,7 +316,7 @@ impl JniGen {
                         item_fn,
                         registry,
                         &mut imports,
-                        Some(m.kotlin_name.as_str()),
+                        Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
                         class = class.member(f);
@@ -317,7 +337,7 @@ impl JniGen {
                             item_fn,
                             registry,
                             &mut imports,
-                            Some(m.kotlin_name.as_str()),
+                            Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
                             companion = companion.member(f);
@@ -395,6 +415,11 @@ impl JniGen {
             if cfg.enum_cfg.is_none() {
                 continue;
             }
+            // `kotlin_type`-mapped: the enum surfaces as an existing Kotlin
+            // type honoring the `fromInt`/`.value` protocol — no file.
+            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
+                continue;
+            }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
@@ -438,6 +463,10 @@ impl JniGen {
             if cfg.special_decl() {
                 continue;
             }
+            // `kotlin_type`-mapped: surfaces as an existing type, no file.
+            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
+                continue;
+            }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
@@ -461,7 +490,61 @@ impl JniGen {
             if item_struct.ident != class_name {
                 aliases.push((item_struct.ident.to_string(), class_name.clone()));
             }
-            let (class, imports) = build_data_class(self, &class_name, item_struct, registry);
+            let (mut class, mut imports) =
+                build_data_class(self, &class_name, item_struct, registry);
+            // Members: same shape as the value-blob path — the instance
+            // method's receiver re-enters Rust as `this`'s field leaves
+            // (the data-class param destructuring, rebased to `this`).
+            let members = self
+                .class_members
+                .get(key)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            if !members.is_empty() && !self.package.is_empty() {
+                imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
+            }
+            for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
+                if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                    if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+                        self,
+                        item_fn,
+                        registry,
+                        &mut imports,
+                        Some(self.effective_member_name(key, m).as_str()),
+                        Some(key),
+                    ) {
+                        class = class.member(f);
+                    }
+                }
+            }
+            let ctors: Vec<_> = members
+                .iter()
+                .filter(|m| m.kind == MemberKind::Constructor)
+                .collect();
+            if !ctors.is_empty() {
+                // `build_data_class` already installed the `fromParts`
+                // companion — factories join it rather than replacing it.
+                let mut companion = class
+                    .companion
+                    .take()
+                    .map(|c| *c)
+                    .unwrap_or_else(|| KtClass::companion_object().vis(Vis::Public));
+                for m in ctors {
+                    if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
+                        if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
+                            self,
+                            item_fn,
+                            registry,
+                            &mut imports,
+                            Some(self.effective_member_name(key, m).as_str()),
+                            None,
+                        ) {
+                            companion = companion.member(f);
+                        }
+                    }
+                }
+                class = class.companion(companion);
+            }
             written.push(kt::KtFile::new(package).decl(class).imports(imports));
         }
 

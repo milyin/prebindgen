@@ -174,6 +174,24 @@ pub struct Registry<M = ()> {
     /// Anything else (use, mod, type alias, macro_rules) — passed through.
     pub passthrough: Vec<(syn::Item, SourceLocation)>,
 
+    /// Origin crate name of each named item (fn/struct/enum/const),
+    /// recorded by [`Self::from_items`] from each item's
+    /// [`SourceLocation::crate_name`] stamp (absent for hand-built,
+    /// origin-less item streams). Adapters
+    /// consult [`Self::origin_module`] so generated references qualify each
+    /// item with the module of the crate that actually defines it — the
+    /// multi-source model, where a binding layers helper `#[prebindgen]`
+    /// crates on top of the flat crate.
+    pub(crate) item_origins: HashMap<syn::Ident, String>,
+
+    /// Module name of every ingested source, in first-seen stream order
+    /// (crate names, dashes normalized to underscores). The FIRST entry
+    /// doubles as the **default module** for references with no recorded
+    /// origin (e.g. a declared type with no `#[prebindgen]` item);
+    /// origin-less hand-built streams leave it empty and adapters fall
+    /// back to `crate`.
+    pub(crate) source_modules: Vec<String>,
+
     /// Type tables, one per direction. Each scanned type maps to its resolved
     /// [`TypeEntry`] (`Some`) or stays unresolved (`None`) until the structural
     /// resolver fills it.
@@ -236,6 +254,8 @@ impl<M> Default for Registry<M> {
             enums: HashMap::new(),
             consts: HashMap::new(),
             passthrough: Vec::new(),
+            item_origins: HashMap::new(),
+            source_modules: Vec::new(),
             input_types: Default::default(),
             output_types: Default::default(),
             type_locations: HashMap::new(),
@@ -250,14 +270,25 @@ impl<M> Default for Registry<M> {
     }
 }
 
+/// Payload of [`ScanError::DuplicateName`], boxed to keep the error enum
+/// small (`clippy::result_large_err`).
+#[derive(Debug)]
+pub struct DuplicateNameError {
+    pub name: syn::Ident,
+    pub first: SourceLocation,
+    pub second: SourceLocation,
+    /// Origin crates of the colliding items, when known (multi-source
+    /// ingestion via [`Registry::from_items`]) — the `SourceLocation`
+    /// file paths are crate-relative, so with several sources they alone
+    /// may not identify the colliding crates.
+    pub first_crate: Option<String>,
+    pub second_crate: Option<String>,
+}
+
 /// Errors surfaced by the scan phase.
 #[derive(Debug)]
 pub enum ScanError {
-    DuplicateName {
-        name: syn::Ident,
-        first: SourceLocation,
-        second: SourceLocation,
-    },
+    DuplicateName(Box<DuplicateNameError>),
     ConflictingFunctionIntent {
         name: syn::Ident,
     },
@@ -274,16 +305,41 @@ pub enum ScanError {
     UnsupportedParamPattern {
         loc: SourceLocation,
     },
+    /// An adapter-invariant check failed — see [`Prebindgen::validate`].
+    /// The message is adapter-authored and printed verbatim.
+    AdapterInvariant {
+        message: String,
+    },
+    /// Explicitly declared items (functions, helper functions, constants)
+    /// that match no indexed `#[prebindgen]` item. A declaration is a
+    /// statement of intent — its target being absent is always a bug (a
+    /// typo in build.rs, or the item was renamed/removed in the source
+    /// crate), so this is a hard error, unlike the soft warnings for stale
+    /// *ignore* entries. All missing names are collected before failing.
+    DeclaredNotFound {
+        entries: Vec<(&'static str, String)>,
+    },
 }
 
 impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScanError::DuplicateName { name, first, second } => write!(
-                f,
-                "duplicate prebindgen name `{}`: first at {}, second at {}",
-                name, first, second
-            ),
+            ScanError::DuplicateName(e) => {
+                let in_crate = |c: &Option<String>| match c {
+                    Some(c) => format!(" in crate `{c}`"),
+                    None => String::new(),
+                };
+                write!(
+                    f,
+                    "duplicate prebindgen name `{}`: first{} at {}, second{} at {} — prebindgen \
+                     items live in one flat namespace across all sources; rename one of them",
+                    e.name,
+                    in_crate(&e.first_crate),
+                    e.first,
+                    in_crate(&e.second_crate),
+                    e.second
+                )
+            }
             ScanError::ConflictingFunctionIntent { name } => write!(
                 f,
                 "function `{}` cannot be both declared and ignored",
@@ -305,13 +361,29 @@ impl fmt::Display for ScanError {
             ScanError::UnsupportedParamPattern { loc } => {
                 write!(f, "non-ident parameter pattern is not supported at {}", loc)
             }
+            ScanError::AdapterInvariant { message } => write!(f, "{}", message),
+            ScanError::DeclaredNotFound { entries } => {
+                writeln!(
+                    f,
+                    "{} declared item(s) not found among #[prebindgen] items:",
+                    entries.len()
+                )?;
+                for (kind, name) in entries {
+                    writeln!(f, "  - {kind} `{name}`")?;
+                }
+                write!(
+                    f,
+                    "a declaration names an item that does not exist — typo in build.rs, \
+                     or renamed/removed in the source crate?"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for ScanError {}
 
-/// Combined error surfaced by [`Registry::write_rust`].
+/// Combined error surfaced by [`Registry::resolve`] / [`Generation::write_rust`].
 #[derive(Debug)]
 pub enum WriteRustError {
     Scan(ScanError),
@@ -369,10 +441,23 @@ impl From<crate::api::core::write::WriteError> for WriteRustError {
 struct DeclaredItems {
     functions: HashSet<syn::Ident>,
     ignored_functions: HashSet<syn::Ident>,
+    /// Bulk-ignore predicates over item names — every matching *undeclared*
+    /// item (fn, struct/enum, const) is an acknowledged skip (no warning).
+    /// Kind-agnostic: prebindgen names live in one flat namespace. A
+    /// declared item matching a predicate is unaffected: declaration wins.
+    /// See [`Prebindgen::ignored_name_predicates`].
+    ignored_name_predicates: Vec<crate::api::core::prebindgen::NamePredicate>,
+    /// Signature-scanned but not emitted — see [`Prebindgen::helper_functions`].
+    helper_functions: HashSet<syn::Ident>,
     accessors: HashSet<syn::Ident>,
     method_receivers: HashMap<syn::Ident, TypeKey>,
     types: HashSet<TypeKey>,
     ignored_types: HashSet<TypeKey>,
+    /// Types converted exclusively through the adapter's plans (built from
+    /// ingredients / decomposed into fields); acknowledged for warning
+    /// purposes and un-required after plans — see
+    /// [`Prebindgen::boundary_only_types`].
+    boundary_only_types: HashSet<TypeKey>,
     /// `None` = the adapter has no const declaration mechanism (all consts
     /// re-emitted verbatim, no scan, no warnings) — see
     /// [`Prebindgen::declared_consts`].
@@ -392,10 +477,13 @@ impl DeclaredItems {
         let declared = Self {
             functions: adapter.declared_functions(),
             ignored_functions: adapter.ignored_functions(),
+            ignored_name_predicates: adapter.ignored_name_predicates(),
+            helper_functions: adapter.helper_functions(),
             accessors: adapter.accessor_functions(),
             method_receivers: adapter.method_receivers(),
             types: adapter.declared_types(),
             ignored_types: adapter.ignored_types(),
+            boundary_only_types: adapter.boundary_only_types(),
             consts: adapter.declared_consts(),
             ignored_consts: adapter.ignored_consts(),
             required_output_types: adapter.required_output_types(),
@@ -428,7 +516,24 @@ impl<M> Registry<M> {
     /// Callers feed any `(syn::Item, SourceLocation)` iterator — typically
     /// `source.items_all()`, `source.items_except_groups(...)`, or a
     /// hand-rolled filter chain — so item-level selection happens upstream
-    /// of the registry rather than inside it.
+    /// of the registry rather than inside it. Streams from several sources
+    /// combine with plain iterator composition:
+    ///
+    /// ```ignore
+    /// let registry = Registry::from_items(
+    ///     flat.items_all().chain(helpers.items_all()),
+    /// )?;
+    /// ```
+    ///
+    /// Each item's **origin crate** rides its [`SourceLocation`] (stamped
+    /// by [`Source`](crate::Source) when parsing records): named items get
+    /// their origin recorded for qualified references in generated code
+    /// (`flat_crate::…` vs `helper_crate::…`), and the first origin seen
+    /// becomes the default module ([`Self::default_module`]). When a
+    /// dependency is renamed in Cargo.toml, override the stamp at the
+    /// source: `Source::builder(dir).crate_name("myflat")` — being
+    /// per-source, it composes across chained streams (a registry-level
+    /// override could only fix one module).
     ///
     /// This step only populates the item maps (`functions`, `structs`,
     /// `enums`, `consts`, `passthrough`). Signature/body scanning that
@@ -442,9 +547,69 @@ impl<M> Registry<M> {
     {
         let mut registry = Registry::default();
         for (item, loc) in items {
-            registry.index_item(item, loc)?;
+            let crate_name = loc.crate_name.clone();
+            if let Some(crate_name) = &crate_name {
+                let module = crate_name.replace('-', "_");
+                if !registry.source_modules.contains(&module) {
+                    registry.source_modules.push(module);
+                }
+            }
+            let named: Option<syn::Ident> = match &item {
+                syn::Item::Fn(f) => Some(f.sig.ident.clone()),
+                syn::Item::Struct(s) => Some(s.ident.clone()),
+                syn::Item::Enum(e) => Some(e.ident.clone()),
+                syn::Item::Const(c) if c.ident != "_" => Some(c.ident.clone()),
+                _ => None,
+            };
+            match registry.index_item(item, loc) {
+                Ok(()) => {
+                    // Only after successful indexing — a collision must keep
+                    // the FIRST item's origin for the error below.
+                    if let (Some(ident), Some(crate_name)) = (named, crate_name) {
+                        registry.item_origins.insert(ident, crate_name);
+                    }
+                }
+                Err(ScanError::DuplicateName(mut e)) => {
+                    e.first_crate = registry.item_origins.get(&e.name).cloned();
+                    e.second_crate = crate_name;
+                    return Err(ScanError::DuplicateName(e));
+                }
+                Err(e) => return Err(e),
+            }
         }
         Ok(registry)
+    }
+
+    /// The origin crate's **module path** for an item ingested via
+    /// the item's [`SourceLocation`] stamp, or `None` when unknown —
+    /// callers then fall
+    /// back to [`Self::default_module`].
+    pub fn origin_module(&self, ident: &syn::Ident) -> Option<syn::Path> {
+        let crate_name = self.item_origins.get(ident)?;
+        let module = crate_name.replace('-', "_");
+        syn::parse_str(&module).ok()
+    }
+
+    /// The default module for references with no recorded origin: the
+    /// first-seen item origin. `None` for an origin-less item-level
+    /// registry (adapters then fall back to `crate`). To change a module
+    /// name, override it at the source — a stream's origin stamps
+    /// (`Source::builder(dir).crate_name("myflat")`) — never here: a
+    /// registry-level override could only fix ONE module, which is
+    /// incomplete with chained multi-source streams.
+    pub fn default_module(&self) -> Option<syn::Path> {
+        self.source_modules
+            .first()
+            .and_then(|m| syn::parse_str(m).ok())
+    }
+
+    /// Module paths of every ingested source, ingestion order — e.g. for a
+    /// glob import that must see all sources' items.
+    pub fn all_source_modules(&self) -> Vec<syn::Path> {
+        self.source_modules
+            .iter()
+            .filter_map(|m| syn::parse_str(m).ok())
+            .collect()
     }
 
     /// Scan the signature/body of every item declared by the adapter.
@@ -475,15 +640,18 @@ impl<M> Registry<M> {
     }
 
     fn scan_declared_items(&mut self, declared: &DeclaredItems) -> Result<(), ScanError> {
+        // Declared-but-missing items are collected across all three loops and
+        // reported together as one hard error (see
+        // [`ScanError::DeclaredNotFound`]); stale *ignore* entries below only
+        // warn.
+        let mut missing: Vec<(&'static str, String)> = Vec::new();
+
         // Scan declared functions.
         for ident in &declared.functions {
             if let Some((item_fn, loc)) = self.functions.get(ident).cloned() {
                 self.scan_fn_signature(&item_fn, &loc)?;
             } else {
-                println!(
-                    "cargo:warning=prebindgen: declared function `{}` not found among #[prebindgen] items",
-                    ident
-                );
+                missing.push(("function", ident.to_string()));
             }
         }
 
@@ -496,6 +664,16 @@ impl<M> Registry<M> {
             }
         }
 
+        // Helper functions: never emitted, no blanket signature scan (the
+        // adapter registers the specific requirements via
+        // `extra_required_types`) — but they are referenced by name from
+        // adapter declarations, so a missing one is a hard error.
+        for ident in &declared.helper_functions {
+            if !self.functions.contains_key(ident) {
+                missing.push(("helper function", ident.to_string()));
+            }
+        }
+
         // Scan declared consts (only when the adapter has a const
         // declaration mechanism): a const is a nullary source of its type,
         // so the type is required in the output direction only.
@@ -504,10 +682,7 @@ impl<M> Registry<M> {
                 if let Some((item_const, loc)) = self.consts.get(ident).cloned() {
                     self.ensure_entry(Direction::Output, &item_const.ty, true, &loc);
                 } else {
-                    println!(
-                        "cargo:warning=prebindgen: declared const `{}` not found among #[prebindgen] items",
-                        ident
-                    );
+                    missing.push(("constant", ident.to_string()));
                 }
             }
             for ident in &declared.ignored_consts {
@@ -518,6 +693,11 @@ impl<M> Registry<M> {
                     );
                 }
             }
+        }
+
+        if !missing.is_empty() {
+            missing.sort();
+            return Err(ScanError::DeclaredNotFound { entries: missing });
         }
 
         // Adapter-required extra output types — synthesized values with no
@@ -567,12 +747,23 @@ impl<M> Registry<M> {
             }
         }
 
-        // Warn about indexed items that the adapter never claimed.
+        // Warn about indexed items that the adapter never claimed. An
+        // ignore *predicate* acknowledges every matching item in bulk —
+        // kind-agnostic, since prebindgen names live in one flat namespace;
+        // a predicate matching nothing is silent by design (it is a filter,
+        // not a claim — match counts vary across feature configurations).
+        let pred_ignored = |name: &str| {
+            !declared.ignored_name_predicates.is_empty()
+                && declared.ignored_name_predicates.iter().any(|p| p(name))
+        };
         let mut skipped_fns: Vec<String> = self
             .functions
             .keys()
             .filter(|k| {
-                !declared.functions.contains(*k) && !declared.ignored_functions.contains(*k)
+                !declared.functions.contains(*k)
+                    && !declared.ignored_functions.contains(*k)
+                    && !declared.helper_functions.contains(*k)
+                    && !pred_ignored(&k.to_string())
             })
             .map(|k| k.to_string())
             .collect();
@@ -585,16 +776,16 @@ impl<M> Registry<M> {
         }
 
         let mut skipped_types: Vec<String> = Vec::new();
-        for ident in self.structs.keys() {
-            let key = TypeKey::parse(&ident.to_string());
-            if !declared.types.contains(&key) && !declared.ignored_types.contains(&key) {
-                skipped_types.push(ident.to_string());
-            }
-        }
-        for ident in self.enums.keys() {
-            let key = TypeKey::parse(&ident.to_string());
-            if !declared.types.contains(&key) && !declared.ignored_types.contains(&key) {
-                skipped_types.push(ident.to_string());
+        let type_acknowledged = |key: &TypeKey| {
+            declared.types.contains(key)
+                || declared.ignored_types.contains(key)
+                || declared.boundary_only_types.contains(key)
+        };
+        for ident in self.structs.keys().chain(self.enums.keys()) {
+            let name = ident.to_string();
+            let key = TypeKey::parse(&name);
+            if !type_acknowledged(&key) && !pred_ignored(&name) {
+                skipped_types.push(name);
             }
         }
         skipped_types.sort();
@@ -613,7 +804,10 @@ impl<M> Registry<M> {
                 // guard) are infrastructure: not declarable, always emitted
                 // verbatim — never a skip.
                 .filter(|k| {
-                    *k != "_" && !decl_consts.contains(*k) && !declared.ignored_consts.contains(*k)
+                    *k != "_"
+                        && !decl_consts.contains(*k)
+                        && !declared.ignored_consts.contains(*k)
+                        && !pred_ignored(&k.to_string())
                 })
                 .map(|k| k.to_string())
                 .collect();
@@ -701,6 +895,16 @@ impl<M> Registry<M> {
         self.required_outputs_scan.remove(&TypeKey::from_type(ty));
     }
 
+    /// Drop `ty` from the required-input scan set — the input-side peer of
+    /// [`Self::unrequire_output`]. Used by [`Self::apply_adapter_plans`] for
+    /// the adapter's boundary-only types: a fold plan replaces every direct
+    /// crossing of the type with its ingredients, so the type's own input
+    /// converter is genuinely not needed (and for an undeclared type cannot
+    /// resolve at all).
+    pub(crate) fn unrequire_input(&mut self, ty: &syn::Type) {
+        self.required_inputs_scan.remove(&TypeKey::from_type(ty));
+    }
+
     fn index_item(&mut self, item: syn::Item, loc: SourceLocation) -> Result<(), ScanError> {
         match item {
             syn::Item::Fn(f) => {
@@ -719,6 +923,13 @@ impl<M> Registry<M> {
                 Ok(())
             }
             syn::Item::Const(c) => {
+                // Unnamed `const _` items (each source's injected `konst`
+                // feature guard) live outside the flat namespace: several
+                // sources may each carry one, all passed through verbatim.
+                if c.ident == "_" {
+                    self.passthrough.push((syn::Item::Const(c), loc));
+                    return Ok(());
+                }
                 self.check_no_duplicate(&c.ident, &loc)?;
                 self.consts.insert(c.ident.clone(), (c, loc));
                 Ok(())
@@ -732,11 +943,15 @@ impl<M> Registry<M> {
 
     fn check_no_duplicate(&self, name: &syn::Ident, loc: &SourceLocation) -> Result<(), ScanError> {
         if let Some(first) = self.first_seen_loc(name) {
-            return Err(ScanError::DuplicateName {
+            // Origin crates are unknown at this level; `from_items` enriches
+            // the error with them (the locations alone are crate-relative).
+            return Err(ScanError::DuplicateName(Box::new(DuplicateNameError {
                 name: name.clone(),
                 first,
                 second: loc.clone(),
-            });
+                first_crate: None,
+                second_crate: None,
+            })));
         }
         Ok(())
     }
@@ -925,25 +1140,35 @@ impl<M> Registry<M> {
         out
     }
 
-    /// One-shot: resolve every required type using an adapter, then write the
-    /// generated Rust bindings file. The single public entry point for
-    /// language-specific binding generation — language-agnostic because
-    /// `ext` is any [`crate::api::core::prebindgen::Prebindgen`] impl
+    /// Resolve the binding: scan the adapter's declarations, apply its
+    /// plans, and run type resolution — consuming both the registry and the
+    /// adapter into a [`Generation`], whose `write_*` methods are pure,
+    /// order-free emissions. This is the single public entry point for
+    /// language-specific binding generation; language-agnostic because
+    /// `adapter` is any [`crate::api::core::prebindgen::Prebindgen`] impl
     /// whose `Metadata` matches this registry's `M` parameter.
-    pub fn write_rust<E>(
-        &mut self,
-        ext: &E,
-        out_path: impl AsRef<std::path::Path>,
-    ) -> Result<std::path::PathBuf, WriteRustError>
+    ///
+    /// ```ignore
+    /// let gen = Registry::from_items(source.items_all())?.resolve(jni)?;
+    /// gen.write_rust(&rust_dest)?;
+    /// gen.write_kotlin(&kotlin_root)?;   // JNI adapter's second artifact
+    /// ```
+    pub fn resolve<E>(mut self, adapter: E) -> Result<Generation<E>, WriteRustError>
     where
         E: Prebindgen<Metadata = M>,
         M: Clone + Default,
     {
-        let declared = DeclaredItems::from_adapter(ext)?;
+        let declared = DeclaredItems::from_adapter(&adapter)?;
         self.scan_declared_items(&declared)?;
-        self.apply_adapter_plans(ext, &declared)?;
-        crate::api::core::resolve::resolve(self, ext)?;
-        Ok(crate::api::core::write::write_rust(self, ext, out_path)?)
+        adapter
+            .validate(&self)
+            .map_err(|message| ScanError::AdapterInvariant { message })?;
+        self.apply_adapter_plans(&adapter, &declared)?;
+        crate::api::core::resolve::resolve(&mut self, &adapter)?;
+        Ok(Generation {
+            registry: self,
+            adapter,
+        })
     }
 
     fn apply_adapter_plans<E>(
@@ -962,14 +1187,14 @@ impl<M> Registry<M> {
         if let Some(exp) = ext.expansions() {
             crate::api::core::expand::apply(
                 self,
-                exp,
+                &exp,
                 &declared.functions,
                 &declared.accessors,
                 &declared.method_receivers,
             )?;
         }
         if let Some(dec) = ext.deconstructors() {
-            crate::api::core::unfold::apply(self, dec, &declared.functions, &declared.accessors)?;
+            crate::api::core::unfold::apply(self, &dec, &declared.functions, &declared.accessors)?;
         }
         // Synthesized by-value `data_class` decompositions: build the leaves
         // (immutable borrow), then wire them into fixed-builder plans.
@@ -987,6 +1212,26 @@ impl<M> Registry<M> {
                 leaf_elements,
                 &declared.functions,
             )?;
+        }
+        // Adapter-derived extra requirements (registry-aware — e.g. the
+        // other-side types of `convert!` conversion fns, per direction).
+        for (dir, ty) in ext.extra_required_types(self) {
+            let loc = SourceLocation::default();
+            match dir {
+                Direction::Input => self.require_input(&ty, &loc),
+                Direction::Output => self.require_output(&ty, &loc),
+            }
+        }
+        // Boundary-only types: every crossing is now covered by a plan (fold
+        // in, unfold out / error channel), so the scan-time direct converter
+        // requirement is stale — and typically unresolvable, since the type
+        // has no destination-language representation. Drop it both ways; the
+        // entry stays in the table, so a converter is still produced if one
+        // happens to resolve.
+        for key in &declared.boundary_only_types {
+            let ty = key.to_type();
+            self.unrequire_input(&ty);
+            self.unrequire_output(&ty);
         }
         Ok(())
     }
@@ -1064,6 +1309,53 @@ pub fn extract_fn_trait_args(ty: &syn::Type) -> Option<Vec<syn::Type>> {
         args
     } else {
         None
+    }
+}
+
+/// A **resolved** binding generation: the [`Registry`] after
+/// [`Registry::resolve`] ran the adapter's scan, plans, and type
+/// resolution, bound together with the adapter that produced it. Both
+/// halves of a generation run are methods here — [`Self::write_rust`] and
+/// any adapter-specific artifact (e.g. `write_kotlin` for the JNI
+/// adapter) — so the resolve-before-write ordering is enforced by
+/// construction, and the writes themselves are pure reads that may run in
+/// any order.
+pub struct Generation<E: Prebindgen> {
+    registry: Registry<E::Metadata>,
+    adapter: E,
+}
+
+// Opaque — exists so `Result<Generation, _>::expect_err` works in tests.
+impl<E: Prebindgen> fmt::Debug for Generation<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Generation(..)")
+    }
+}
+
+impl<E: Prebindgen> Generation<E> {
+    /// Write the generated Rust bindings file. `out_path` may be relative
+    /// (resolved against `OUT_DIR`) or absolute; returns the path actually
+    /// written. Pure emission — the registry was fully resolved by
+    /// [`Registry::resolve`].
+    pub fn write_rust(
+        &self,
+        out_path: impl AsRef<std::path::Path>,
+    ) -> Result<std::path::PathBuf, WriteRustError> {
+        Ok(crate::api::core::write::write_rust(
+            &self.registry,
+            &self.adapter,
+            out_path,
+        )?)
+    }
+
+    /// The resolved registry (converter tables, plans, item maps).
+    pub fn registry(&self) -> &Registry<E::Metadata> {
+        &self.registry
+    }
+
+    /// The adapter this generation was resolved with.
+    pub fn adapter(&self) -> &E {
+        &self.adapter
     }
 }
 

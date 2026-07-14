@@ -19,6 +19,73 @@ pub(crate) fn snake_to_camel(s: &str) -> String {
     out
 }
 
+/// Strip a type's **namespace prefix** from a flat-crate fn ident: a flat
+/// Rust crate spells the type namespace inside the ident (`storage_len`,
+/// `keyexpr_intersects`) because flat FFI has no method syntax; a class
+/// member already lives in its class's namespace, so its default Kotlin
+/// name removes exactly that prefix — nothing else.
+///
+/// Matching is underscore-insensitive on both sides (class `KeyExpr`
+/// strips `keyexpr_get_str` AND `key_expr_get_str`): leading
+/// `_`-separated segments of `ident` are consumed while their
+/// concatenation (lowercased) is a prefix of the lowercased,
+/// underscore-free `type_short`. Succeeds only when the consumed segments
+/// spell the class name exactly and a non-empty remainder follows.
+pub(crate) fn strip_type_prefix<'a>(ident: &'a str, type_short: &str) -> Option<&'a str> {
+    let class: String = type_short
+        .chars()
+        .filter(|c| *c != '_')
+        .flat_map(|c| c.to_lowercase())
+        .collect();
+    if class.is_empty() {
+        return None;
+    }
+    let mut consumed = String::new();
+    let mut rest = ident;
+    while let Some((seg, tail)) = rest.split_once('_') {
+        consumed.extend(seg.chars().flat_map(|c| c.to_lowercase()));
+        if !class.starts_with(&consumed) {
+            return None;
+        }
+        rest = tail;
+        if consumed == class {
+            return if rest.is_empty() { None } else { Some(rest) };
+        }
+    }
+    None
+}
+
+/// Extract an item's `///` documentation from its captured attributes
+/// (`#[doc = " …"]` lines, in order): one leading space stripped per line,
+/// joined with `\n`; `None` when the item carries no docs. `*/` is
+/// defanged so the text is always safe inside a `/** … */` KDoc block.
+pub(crate) fn doc_string(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident("doc") {
+            continue;
+        }
+        let syn::Meta::NameValue(nv) = &attr.meta else {
+            continue;
+        };
+        let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(s),
+            ..
+        }) = &nv.value
+        else {
+            continue;
+        };
+        let raw = s.value();
+        let line = raw.strip_prefix(' ').unwrap_or(&raw);
+        lines.push(line.replace("*/", "*\u{200B}/"));
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
+}
+
 /// Convert a `CamelCase` Rust identifier to `SCREAMING_SNAKE_CASE`. Used to
 /// project Rust enum variant idents into Kotlin enum constant names.
 pub(crate) fn camel_to_screaming_snake(s: &str) -> String {

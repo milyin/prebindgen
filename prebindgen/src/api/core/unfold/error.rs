@@ -57,6 +57,13 @@ pub enum UnfoldError {
     RootIdentityBeforeNested {
         target: String,
     },
+    /// A per-fn `.expand_return(expand_return!(T)…)` decl whose `T` does not
+    /// match the function's peeled return type.
+    ReturnTypeMismatch {
+        func: syn::Ident,
+        declared: String,
+        actual: String,
+    },
 }
 
 impl std::fmt::Display for UnfoldError {
@@ -71,6 +78,17 @@ impl std::fmt::Display for UnfoldError {
                 f,
                 "output expansion: accessor `{}` is not a #[prebindgen] item",
                 name
+            ),
+            UnfoldError::ReturnTypeMismatch {
+                func,
+                declared,
+                actual,
+            } => write!(
+                f,
+                "output expansion: `{}`.expand_return(expand_return!({declared})): the \
+                 function's return type is `{actual}`, not `{declared}` — declare the decl \
+                 for the actual return type",
+                func
             ),
             UnfoldError::NoDeconstructor { func, target } => write!(
                 f,
@@ -126,7 +144,7 @@ impl std::fmt::Display for UnfoldError {
             ),
             UnfoldError::RootIdentityBeforeNested { target } => write!(
                 f,
-                "return-field list of `{}`: `.default_return_expand_self()` (the root identity) must be \
+                "return-field list of `{}`: `.field_self()` (the root identity) must be \
                  declared AFTER fields that splice a nested identity — the root identity moves the owned \
                  value while nested identities borrow it, so this order would generate \
                  non-compiling Rust. Declare the `_self` field last.",

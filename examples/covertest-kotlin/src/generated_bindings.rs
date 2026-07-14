@@ -241,6 +241,45 @@ const _: () = {
 };
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverVersion<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __out = {
+        #[allow(unused_imports)]
+        use perftest_flat::*;
+        #[allow(unused_imports)]
+        use cov_helpers::*;
+        crate::cover_version()
+    };
+    match String_to_JString_c7f3ca43(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBanner<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -257,6 +296,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
     let __out = {
         #[allow(unused_imports)]
         use perftest_flat::*;
+        #[allow(unused_imports)]
+        use cov_helpers::*;
         format!("{COVER_TAG}:{COVER_MAGIC:#x}")
     };
     match String_to_JString_c7f3ca43(&mut env, __out) {
@@ -339,6 +380,13 @@ pub(crate) unsafe fn Archive_to_jlong_cd73502c<'a>(
     v: perftest_flat::Archive,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Celsius,
+) -> ::core::result::Result<i32, __JniErr> {
+    Ok(<perftest_flat::Celsius as ::core::convert::Into<i32>>::into(v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn JByteArray_to_Stamp_2fc9bd18<'env, 'v>(
@@ -1111,11 +1159,18 @@ pub(crate) unsafe fn JString_to_std_boxed_Box_std_string_String_cfbab680<'env, '
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn Millis_to_jlong_a7037db5<'a>(
+pub(crate) unsafe fn Label_to_String_63dec766<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Label,
+) -> ::core::result::Result<String, __JniErr> {
+    Ok(crate::label_out(v))
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Millis,
-) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
-    Ok(v.0 as jni::sys::jlong)
+) -> ::core::result::Result<i64, __JniErr> {
+    Ok(cov_helpers::millis_value(&v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
@@ -1286,6 +1341,13 @@ pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Percent_to_i32_01484801<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Percent,
+) -> ::core::result::Result<i32, __JniErr> {
+    Ok(<perftest_flat::Percent as ::core::convert::Into<i32>>::into(v))
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Priority_to_jint_447102d2<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Priority,
@@ -1353,6 +1415,13 @@ pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
                 >>::from(format!("encode_string: {}", e))
             })?
     })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn String_to_Label_c1a79668<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: String,
+) -> ::core::result::Result<perftest_flat::Label, String> {
+    crate::label_in(v)
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Summary_to_jlong_3cb103b9<'a>(
@@ -1464,11 +1533,35 @@ pub(crate) unsafe fn f64_to_jdouble_9e4a8f70<'a>(
     Ok(v as jni::sys::jdouble)
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn i32_to_Celsius_8c363100<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i32,
+) -> ::core::result::Result<perftest_flat::Celsius, __JniErr> {
+    Ok(<i32 as ::core::convert::Into<perftest_flat::Celsius>>::into(v))
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn i32_to_Percent_db3641cc<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i32,
+) -> ::core::result::Result<
+    perftest_flat::Percent,
+    <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::Error,
+> {
+    <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::try_into(v)
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn i32_to_jint_a3e3b6ef<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i32,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     Ok(v as jni::sys::jint)
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn i64_to_Millis_bb88777a<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: i64,
+) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
+    Ok(cov_helpers::millis_from_long(v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn i64_to_jlong_fbf9a9bc<'a>(
@@ -1524,13 +1617,6 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<OwnedObject<perftest_flat::Archive>, __JniErr> {
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Archive) })
-}
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn jlong_to_Millis_a7037db5<'env, 'v>(
-    env: &mut jni::JNIEnv<'env>,
-    v: &jni::sys::jlong,
-) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
-    Ok(perftest_flat::Millis(*v as u64))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
@@ -2226,6 +2312,88 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    c: jni::sys::jint,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jint {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __c_s0 = match jint_to_i32_a3e3b6ef(&mut env, &c) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let c = match i32_to_Celsius_8c363100(&mut env, __c_s0) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __out = perftest_flat::celsius_double(c);
+    let __out_s0 = match Celsius_to_i32_88c8e884(&mut env, __out) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    match i32_to_jint_a3e3b6ef(&mut env, __out_s0) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -2259,6 +2427,88 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    l: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JString<'a> {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __l_s0 = match JString_to_String_c7f3ca43(&mut env, &l) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let l = match String_to_Label_c1a79668(&mut env, __l_s0) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::label_reverse(l);
+    let __out_s0 = match Label_to_String_63dec766(&mut env, __out) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    match String_to_JString_c7f3ca43(&mut env, __out_s0) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -2274,7 +2524,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let a = match jlong_to_Millis_a7037db5(&mut env, &a) {
+    let __a_s0 = match jlong_to_i64_fbf9a9bc(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -2290,7 +2540,39 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
             return 0 as jni::sys::jlong;
         }
     };
-    let b = match jlong_to_Millis_a7037db5(&mut env, &b) {
+    let a = match i64_to_Millis_bb88777a(&mut env, __a_s0) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __b_s0 = match jlong_to_i64_fbf9a9bc(&mut env, &b) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let b = match i64_to_Millis_bb88777a(&mut env, __b_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -2307,7 +2589,23 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
         }
     };
     let __out = perftest_flat::millis_add(a, b);
-    match Millis_to_jlong_a7037db5(&mut env, __out) {
+    let __out_s0 = match Millis_to_i64_61ecf054(&mut env, __out) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    match i64_to_jlong_fbf9a9bc(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);
@@ -2671,6 +2969,105 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecHandle
                 &__zd,
             );
             0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    p: jni::sys::jint,
+    factor: jni::sys::jint,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jint {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __p_s0 = match jint_to_i32_a3e3b6ef(&mut env, &p) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let p = match i32_to_Percent_db3641cc(&mut env, __p_s0) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let factor = match jint_to_i32_a3e3b6ef(&mut env, &factor) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __out = perftest_flat::percent_scale(p, factor);
+    let __out_s0 = match Percent_to_i32_01484801(&mut env, __out) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    match i32_to_jint_a3e3b6ef(&mut env, __out_s0) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            0 as jni::sys::jint
         }
     }
 }
@@ -6073,6 +6470,15 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverTag
 const _: () = {
     konst::assertc_eq!(
         perftest_flat::FEATURES, "",
+        "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
+                        This usually happens if source crate is compiled with different feature set\n\
+                        for build dependencies and for library usage. You may need to explicitly set\n\
+                        the necessary features."
+    );
+};
+const _: () = {
+    konst::assertc_eq!(
+        cov_helpers::FEATURES, "",
         "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
                         This usually happens if source crate is compiled with different feature set\n\
                         for build dependencies and for library usage. You may need to explicitly set\n\

@@ -23,8 +23,13 @@ use proc_macro2::TokenStream;
 
 use crate::api::core::{
     niches::Niches,
-    registry::{Registry, TypeKey},
+    registry::{Direction, Registry, TypeKey},
 };
+
+/// A shared predicate over an item name, as used by
+/// [`Prebindgen::ignored_name_predicates`] (bulk ignores keyed on a naming
+/// family rather than an exact ident).
+pub type NamePredicate = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 /// One link in a converter's [stage chain](`ConverterImpl::pre_stages`) —
 /// a value-inspecting step that sits between the rust value the
@@ -175,8 +180,12 @@ pub trait Prebindgen {
     /// [`crate::api::core::expand::FoldPlan`] on the registry and its leaf
     /// types are registered as required inputs.
     ///
+    /// Returned by value so the adapter may assemble it on demand from its
+    /// raw declarations (keeping its builder free of stored derived state);
+    /// it is consulted exactly once per `write_rust`.
+    ///
     /// Default: `None`.
-    fn expansions(&self) -> Option<&crate::api::core::expand::Expansions> {
+    fn expansions(&self) -> Option<crate::api::core::expand::Expansions> {
         None
     }
 
@@ -187,8 +196,10 @@ pub trait Prebindgen {
     /// [`crate::api::core::unfold::UnfoldPlan`] on the registry and its leaf
     /// types are registered as required outputs.
     ///
+    /// Returned by value, same as [`Self::expansions`].
+    ///
     /// Default: `None`.
-    fn deconstructors(&self) -> Option<&crate::api::core::unfold::Deconstructors> {
+    fn deconstructors(&self) -> Option<crate::api::core::unfold::Deconstructors> {
         None
     }
 
@@ -271,6 +282,48 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Bulk form of the `ignored_*` sets: predicates over the item NAME —
+    /// every *undeclared* `#[prebindgen]` item (function, struct/enum, or
+    /// const) whose name matches any predicate is an acknowledged skip (no
+    /// "skipping undeclared" warning). Kind-agnostic by design: prebindgen
+    /// items live in one flat namespace, so a name filter needs no kind. A
+    /// declared item matching a predicate is unaffected (declaration wins),
+    /// and a predicate matching nothing is silent — it is a filter, not a
+    /// claim, so unlike an exact-name ignore there is no "not found"
+    /// warning.
+    ///
+    /// Default: empty.
+    fn ignored_name_predicates(&self) -> Vec<NamePredicate> {
+        Vec::new()
+    }
+
+    /// Idents of `#[prebindgen]` **helper** functions: called from the
+    /// adapter's generated converter bodies rather than exported. No
+    /// extern/wrapper is emitted for them and the "skipping undeclared"
+    /// warning is suppressed; the specific types a helper makes the adapter
+    /// depend on are registered via [`Self::extra_required_types`] (a full
+    /// signature scan would over-require — e.g. an output conversion fn's
+    /// `&T` parameter has no input-direction meaning).
+    ///
+    /// Default: empty.
+    fn helper_functions(&self) -> HashSet<syn::Ident> {
+        HashSet::new()
+    }
+
+    /// Extra converter requirements the adapter derives from its own decls
+    /// **with registry access** (e.g. a `convert!` conversion fn's
+    /// other-side type, in the conversion's direction, read from the fn's
+    /// registry signature). Consulted by `write_rust` after the adapter's
+    /// plans are applied and before resolution.
+    ///
+    /// Default: none.
+    fn extra_required_types(
+        &self,
+        _registry: &Registry<Self::Metadata>,
+    ) -> Vec<(Direction, syn::Type)> {
+        Vec::new()
+    }
+
     /// Idents of `#[prebindgen]` consts the adapter claims for emission.
     ///
     /// * `None` (default) — the adapter has **no const declaration
@@ -328,6 +381,24 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// Canonical keys of the adapter's **boundary-only** (rust-side-only)
+    /// types: types the adapter converts exclusively through its
+    /// expansion/deconstruction plans — built from ingredients on input,
+    /// decomposed into fields on output — so the value itself never crosses
+    /// the boundary and has no destination-language representation.
+    ///
+    /// `write_rust` treats them as acknowledged (no "skipping undeclared"
+    /// warning) and, after the adapter's plans are applied, drops their
+    /// direct converter requirements in both directions
+    /// ([`crate::api::core::registry::Registry`]'s `unrequire_input` /
+    /// `unrequire_output`) — a direct converter for such a type is genuinely
+    /// not needed and typically cannot resolve.
+    ///
+    /// Default: empty.
+    fn boundary_only_types(&self) -> HashSet<TypeKey> {
+        HashSet::new()
+    }
+
     /// Final post-processing pass applied to every emitted item right
     /// before write. Default: no-op.
     ///
@@ -337,7 +408,21 @@ pub trait Prebindgen {
     /// converter bodies compile in the binding crate's scope. Walks the
     /// entire AST, not just signatures, so type ascriptions and casts
     /// inside function bodies are covered.
-    fn post_process_item(&self, _item: &mut syn::Item) {}
+    fn post_process_item(&self, _item: &mut syn::Item, _registry: &Registry<Self::Metadata>) {}
+
+    /// Adapter-invariant checks that need registry **signatures** — the
+    /// earliest they can run (decl objects are built before any source is
+    /// read). Called by `Registry::resolve` right after the declaration
+    /// scan (so a missing fn has already hard-errored; validate sees only
+    /// indexed items) and before plan application. An `Err` aborts the
+    /// resolve as `ScanError::AdapterInvariant` with the message verbatim
+    /// — e.g. jnigen rejects a `.fun()` member whose target has no
+    /// receiver parameter of the class type.
+    ///
+    /// Default: no checks.
+    fn validate(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+        Ok(())
+    }
 
     /// Absolute path under which the source crate's items are reachable
     /// from the generated file (e.g. `zenoh_flat`), for adapters that

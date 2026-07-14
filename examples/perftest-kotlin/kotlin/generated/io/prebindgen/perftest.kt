@@ -53,6 +53,12 @@ internal inline fun <R> withSortedHandleLocks(
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
+/**
+ * A by-value, FFI-safe payload. Scalars cross the C ABI as themselves; the
+ * `label` string crosses as an opaque pointer (`Option<Box<String>>` ⇒ a nullable
+ * `string_t *`). Being `#[repr(C)]`, the whole struct is passed by direct
+ * reinterpret (zero-copy) — see `perftest-c`'s `.repr_c_struct(Payload)`.
+ */
 public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
     public companion object {
         @JvmStatic
@@ -197,6 +203,12 @@ internal object __PayloadFolderRawHolder {
     PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
 }
 
+/**
+ * Error callback for wrappers without a declared error type. `je` is the
+ * binding/system failure message (any converter in the chain may fail). The
+ * wrapper returns whatever `run` returns; throwing from `run` is safe (it
+ * executes after the native call has returned).
+ */
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
 }

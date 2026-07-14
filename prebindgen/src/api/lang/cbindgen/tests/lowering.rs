@@ -4,8 +4,8 @@ use super::*;
 #[test]
 fn empty_adapter_writes_empty_file() {
     let cbindgen = Cbindgen::new();
-    let mut registry: Registry<()> = Registry::default();
-    let src = write(&cbindgen, &mut registry, "empty");
+    let registry: Registry<()> = Registry::default();
+    let src = write(cbindgen, registry, "empty");
     assert!(src.trim().is_empty(), "expected empty output, got:\n{src}");
 }
 
@@ -21,7 +21,7 @@ fn keyexpr_try_from_lowering() {
         }
     );
 
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -37,7 +37,7 @@ fn keyexpr_try_from_lowering() {
         .error()
         .function(syn::parse_quote!(z_keyexpr_try_from));
 
-    let src = write(&cbindgen, &mut registry, "keyexpr");
+    let src = write(cbindgen, registry, "keyexpr");
     // Whitespace-insensitive haystack (the file is prettyplease-formatted).
     let compact: String = src.split_whitespace().collect();
 
@@ -93,7 +93,7 @@ fn opaque_error_lowering() {
         }
     );
 
-    let mut registry =
+    let registry =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
 
     let cbindgen = Cbindgen::new()
@@ -107,7 +107,7 @@ fn opaque_error_lowering() {
         )
         .function(syn::parse_quote!(z_keyexpr_try_from));
 
-    let src = write(&cbindgen, &mut registry, "opaque_error");
+    let src = write(cbindgen, registry, "opaque_error");
     let compact: String = src.split_whitespace().collect();
 
     // Pointer-return wrapper; the error out-param is a bare `char **e`.

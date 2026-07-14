@@ -9,11 +9,12 @@ mod lowering;
 mod returns;
 mod structs;
 
-fn write(cbindgen: &Cbindgen, registry: &mut Registry<()>, tag: &str) -> String {
+fn write(cbindgen: Cbindgen, registry: Registry<()>, tag: &str) -> String {
     let dir = unique_test_dir(&format!("cbindgen_{tag}"));
     std::fs::create_dir_all(&dir).unwrap();
     let out = dir.join(format!("{tag}.rs"));
-    let path = registry.write_rust(cbindgen, &out).expect("write_rust");
+    let gen = registry.resolve(cbindgen).expect("resolve");
+    let path = gen.write_rust(&out).expect("write_rust");
     std::fs::read_to_string(&path).unwrap()
 }
 

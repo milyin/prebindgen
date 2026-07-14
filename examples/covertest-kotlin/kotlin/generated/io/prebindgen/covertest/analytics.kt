@@ -50,6 +50,7 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
         return Summary(p)
     }
 
+    /** Number of payloads (flatten-output **field** / **accessor**). */
     public fun count(onError: JniErrorHandler<Long>): Long {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
@@ -61,6 +62,7 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
         return __ret
     }
 
+    /** Sum of payload values (flatten-output **field** / **accessor**). */
     public fun total(onError: JniErrorHandler<Double>): Double {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
@@ -72,6 +74,7 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
         return __ret
     }
 
+    /** Total scaled by a factor (an instance **method**: `&Self` receiver + arg). */
     public fun scaled(factor: Double, onError: JniErrorHandler<Double>): Double {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
@@ -87,6 +90,10 @@ public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
         @JvmStatic
         external fun freePtr(ptr: Long)
 
+        /**
+         * Construct a [`Summary`] from its parts (declared a **constructor** /
+         * companion factory, and the build-from **variant** of the flatten-input).
+         */
         public fun of(count: Long, total: Double, onError: JniErrorHandler<Summary>): Summary {
             val __cap = JniErrorHandlerCapture.acquire()
             val __ret = Summary(CovNative.summaryNew(count, total, __cap))
@@ -120,6 +127,12 @@ public fun <R> SummaryStorageSummaryFullBuilder<R>.asRaw(): SummaryStorageSummar
         )
     }
 
+/**
+ * Summarize a storage (returns a `Summary`; the binding's **default
+ * flatten-output** turns it into `(count, total)` leaves).
+ *
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`).
+ */
 @Suppress("UNCHECKED_CAST")
 public fun <R> storageSummary(s: Storage, onError: JniErrorHandler<R>, build: SummaryBuilder<R>): R {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
@@ -132,6 +145,13 @@ public fun <R> storageSummary(s: Storage, onError: JniErrorHandler<R>, build: Su
     return __ret
 }
 
+/**
+ * Whether `expected` matches the storage's live summary (takes a `Summary`
+ * **parameter**; the binding's **default flatten-input** rebuilds it from
+ * `(count, total)` or accepts a handle).
+ *
+ * Parameter `expected` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `expectedSel`, `expected00`, `expected01`, `expected1`).
+ */
 public fun storageMatchesSummary(
     s: Storage,
     expectedSel: Int,
@@ -172,6 +192,10 @@ public fun storageMatchesSummary(
     return __ret
 }
 
+/**
+ * Like [`storage_summary`] but the binding keeps the result as a raw opaque
+ * handle (per-fn **flatten-output-suppress**).
+ */
 public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): Summary {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
@@ -183,6 +207,10 @@ public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): 
     return __ret
 }
 
+/**
+ * Read a summary's total through a raw handle (per-fn **flatten-input-suppress**
+ * on the `Summary` parameter).
+ */
 public fun summaryTotalRaw(s: Summary, onError: JniErrorHandler<Double>): Double {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
@@ -198,6 +226,12 @@ public fun summaryTotalRaw(s: Summary, onError: JniErrorHandler<Double>): Double
     return __ret
 }
 
+/**
+ * Like [`storage_summary`] but the binding decomposes it with a **custom**
+ * field set that also keeps the handle (per-fn **flatten-output-with**).
+ *
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`, `handle`).
+ */
 @Suppress("UNCHECKED_CAST")
 public fun <R> storageSummaryFull(
     s: Storage,
@@ -214,6 +248,13 @@ public fun <R> storageSummaryFull(
     return __ret
 }
 
+/**
+ * Set the storage's "expected" summary, accepting a `Summary` built via an
+ * explicit per-fn **flatten-input-with** variant list. Returns whether it
+ * matched the live summary before being consumed.
+ *
+ * Parameter `expected` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `expectedSel`, `expected00`, `expected01`, `expected1`).
+ */
 public fun storageExpectSummary(
     s: Storage,
     expectedSel: Int,
@@ -254,6 +295,7 @@ public fun storageExpectSummary(
     return __ret
 }
 
+/** Create an empty archive. */
 public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = SummaryVault(CovNative.archiveNew(__cap))
@@ -261,6 +303,11 @@ public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     return __ret
 }
 
+/**
+ * Store a summary, consuming it (owned-handle input).
+ *
+ * Parameter `s` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `sSel`, `s00`, `s01`, `s1`).
+ */
 public fun archiveStore(
     a: SummaryVault,
     sSel: Int,
@@ -298,6 +345,10 @@ public fun archiveStore(
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * The stored summary, borrowed (`Option<&Summary>` **return** — `None` when
+ * empty, otherwise cloned into a fresh owned handle by the JVM binding).
+ */
 public fun archiveLatest(a: SummaryVault, onError: JniErrorHandler<Summary?>): Summary? {
     if (a.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()

@@ -22,6 +22,7 @@ import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.errors.StorageErrorHandlerRawCapture
 import io.prebindgen.covertest.withSortedHandleLocks
 
+/** Create a new, empty storage handle. */
 public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = Storage(CovNative.storageNew(__cap))
@@ -29,6 +30,15 @@ public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
     return __ret
 }
 
+/**
+ * Return a clone of the **first** stored payload, or `None` if the storage is empty
+ * (by value; crosses by reinterpret, the `label` becoming a fresh owned `string_t *`
+ * the C caller must drop). Across the C ABI an `Option<Payload>` lowers to
+ * `bool storage_get(const storage_t *, payload_t *out)` (true + writes `*out` if
+ * present); in Kotlin it surfaces as a nullable `Payload?`.
+ *
+ * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
+ */
 public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
@@ -40,6 +50,12 @@ public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? 
     return __ret
 }
 
+/**
+ * Move `payload` into the storage. Taken **by value**: across the C ABI this is a
+ * consume — Rust reads the `payload_t` out through a `*mut` and writes a gravestone
+ * back (nulling the owned `label` pointer) so the caller's later free is a no-op
+ * (see `perftest-c`'s `.repr_c_struct(Payload)` — owned-ness is inferred from `label`).
+ */
 public fun storagePutByTake(s: Storage, payload: Payload, onError: JniErrorHandler<Unit>) {
     if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
@@ -58,6 +74,10 @@ public fun storagePutByTake(s: Storage, payload: Payload, onError: JniErrorHandl
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * Store a clone of `payload`, read through a shared borrow (`const payload_t *`).
+ * The caller's payload is left untouched.
+ */
 public fun storagePutByRead(s: Storage, payload: Payload, onError: JniErrorHandler<Unit>) {
     if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
@@ -76,6 +96,10 @@ public fun storagePutByRead(s: Storage, payload: Payload, onError: JniErrorHandl
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * Replace the stored batch with a clone of `payloads`. The single-payload puts
+ * are the array-of-one case of this.
+ */
 public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErrorHandler<Unit>) {
     if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
@@ -101,6 +125,16 @@ public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErro
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * Return a clone of the **whole** stored batch, or `None` if the storage is empty
+ * (each `label` becoming a fresh owned `string_t *` the C caller must drop). A
+ * returned `Some` is always non-empty (empty storage is `None`). [`storage_get`] is
+ * the first-element case of this. Across the C ABI `Option<Vec<Payload>>` lowers to
+ * `bool storage_get_vec(const storage_t *, payload_t **out, size_t *out_len)`; in
+ * Kotlin it surfaces as a nullable `List<Payload>?`.
+ *
+ * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
+ */
 public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): List<Payload>? {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
@@ -112,6 +146,13 @@ public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): 
     return __ret
 }
 
+/**
+ * Prepare a reusable [`PayloadHandler`] from a callback `f`. The (foreign) closure
+ * is decoded into the handler **once** here — reuse the handler across many
+ * [`storage_callback`] calls instead of passing a fresh callback each time. This
+ * is the "declare the subscriber once" step (its trampoline + per-call setup are
+ * built here, amortized over every later delivery).
+ */
 public fun payloadHandlerNew(
     f: PayloadCallback,
     onError: JniErrorHandler<PayloadHandler>,
@@ -122,6 +163,16 @@ public fun payloadHandlerNew(
     return __ret
 }
 
+/**
+ * Invoke the prepared `handler` once **per stored payload** with a borrow of each
+ * — reuses the handler's already-built foreign trampoline, so there is **no
+ * per-call callback decoding** (only firing). After a single-payload put this
+ * fires exactly once; after a [`storage_put_slice`] it fires once per slice
+ * element. In C the closure receives a `const payload_t *` (zero-copy); in Kotlin
+ * the borrowed `Payload` is delivered whole to the handler's
+ * `PayloadCallback.run(Payload)` (its fields cross as decoupled leaves and are
+ * reassembled on the Kotlin side — see `prebindgen::lang::JniGen`).
+ */
 public fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErrorHandler<Unit>) {
     if (s.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
     if (handler.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
@@ -134,6 +185,11 @@ public fun storageCallback(s: Storage, handler: PayloadHandler, onError: JniErro
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * Prepare a reusable [`PayloadVecHandler`] from a whole-batch callback `f`. Like
+ * [`payload_handler_new`], the foreign closure is decoded **once** here; reuse the
+ * handler across many [`storage_callback_vec`] calls.
+ */
 public fun payloadVecHandlerNew(
     f: PayloadListCallback,
     onError: JniErrorHandler<PayloadVecHandler>,
@@ -144,6 +200,13 @@ public fun payloadVecHandlerNew(
     return __ret
 }
 
+/**
+ * Invoke the prepared `handler` **once** with the whole stored batch as a slice
+ * (the dual of [`storage_callback`], which fires once per element). In C the closure
+ * receives the slice **by reference** — `const payload_t *` + `size_t`, zero-copy, no
+ * per-element materialization; in Kotlin the batch is delivered as a `List<Payload>`
+ * to the handler's `PayloadVecCallback.run(List<Payload>)`.
+ */
 public fun storageCallbackVec(
     s: Storage,
     handler: PayloadVecHandler,
@@ -160,6 +223,12 @@ public fun storageCallbackVec(
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * Build a storage seeded with a single labelled payload, **failing** on an
+ * empty label (`Result<T, E>` routing + a `&str` input).
+ *
+ * On failure `onError` receives `je` plus the decomposed Rust `StorageError` error (`message`, `handle`).
+ */
 public fun storageTryWithLabel(label: String, onError: StorageErrorHandler<Storage>): Storage {
     val __cap = StorageErrorHandlerRawCapture.acquire()
     val __ret = Storage(CovNative.storageTryWithLabel(label, __cap))
@@ -167,6 +236,11 @@ public fun storageTryWithLabel(label: String, onError: StorageErrorHandler<Stora
     return __ret
 }
 
+/**
+ * Build `count` independent storages of `each` payloads (a
+ * `Vec<opaque-handle>` **return** — each element crosses as a raw pointer the
+ * Kotlin folder wraps into a typed `Storage` handle).
+ */
 public fun storageShards(
     count: Long,
     each: Long,
@@ -178,6 +252,10 @@ public fun storageShards(
     return __ret
 }
 
+/**
+ * Like [`storage_shards`] but `None` when `count == 0`
+ * (`Option<Vec<opaque-handle>>` — the fold under the null niche).
+ */
 public fun storageShardsOpt(
     count: Long,
     each: Long,
@@ -189,6 +267,7 @@ public fun storageShardsOpt(
     return __ret
 }
 
+/** Wrap a `Fn(Storage)` closure into a reusable [`StorageHandler`]. */
 public fun storageHandlerNew(
     f: StorageCallback,
     onError: JniErrorHandler<StorageHandler>,
@@ -199,6 +278,10 @@ public fun storageHandlerNew(
     return __ret
 }
 
+/**
+ * Build a synthetic storage of `n` payloads and hand **ownership** of it to
+ * the handler's callback.
+ */
 public fun storageEmit(n: Long, h: StorageHandler, onError: JniErrorHandler<Unit>) {
     if (h.ptr == 0L) { onError.run("Operation on a closed native handle."); return }
     val __cap = JniErrorHandlerCapture.acquire()
@@ -209,6 +292,10 @@ public fun storageEmit(n: Long, h: StorageHandler, onError: JniErrorHandler<Unit
     if (__cap.failed) return onError.run(__cap.je)
 }
 
+/**
+ * Combined length of three storages (a **3-opaque-handle** call — the
+ * generated wrapper must sort-lock all three).
+ */
 public fun storageTotalLen(a: Storage, b: Storage, c: Storage, onError: JniErrorHandler<Long>): Long {
     if (a.ptr == 0L) return onError.run("Operation on a closed native handle.")
     if (b.ptr == 0L) return onError.run("Operation on a closed native handle.")
@@ -224,6 +311,10 @@ public fun storageTotalLen(a: Storage, b: Storage, c: Storage, onError: JniError
     return __ret
 }
 
+/**
+ * All present labels, in storage order (`Vec<String>` **return** — the
+ * single-leaf string fold).
+ */
 public fun storageLabels(s: Storage, onError: JniErrorHandler<List<String>>): List<String> {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
@@ -235,6 +326,7 @@ public fun storageLabels(s: Storage, onError: JniErrorHandler<List<String>>): Li
     return __ret
 }
 
+/** Push `p` if present; whether it was pushed (`Option<data-class>` **input**). */
 public fun storagePutOpt(s: Storage, p: Payload?, onError: JniErrorHandler<Boolean>): Boolean {
     if (s.ptr == 0L) return onError.run("Operation on a closed native handle.")
     val __cap = JniErrorHandlerCapture.acquire()
@@ -255,6 +347,10 @@ public fun storagePutOpt(s: Storage, p: Payload?, onError: JniErrorHandler<Boole
     return __ret
 }
 
+/**
+ * Sum two durations (exercises the custom wrapper on both a **parameter** and
+ * the **return**).
+ */
 public fun addMillis(a: Long, b: Long, onError: JniErrorHandler<Long>): Long {
     val __cap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.millisAdd(a, b, __cap)

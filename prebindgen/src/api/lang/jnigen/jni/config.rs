@@ -1,8 +1,8 @@
-//! Global settings of a [`JniGen`] instance — the source module, target
+//! Global settings of a [`JniGen`] instance — the target
 //! package, name-mangling rules, native-init hook and handle-lock toggle.
 //!
 //! Every setter carries the `set_` prefix: unlike the declaration methods
-//! ([`JniGen::package`], [`JniGen::scalar_type_wrapper`], …) which each add
+//! ([`JniGen::package`], [`JniGen::convert`], …) which each add
 //! one item to the binding surface, a `set_` method changes how *all* other
 //! declarations are interpreted. Setters are **order-independent by
 //! construction**: the builder stores only raw inputs — settings here,
@@ -42,15 +42,16 @@ pub(crate) enum NameSpec {
     },
 }
 
-impl JniGen {
-    /// Set the Rust module path that contains the original `#[prebindgen]`
-    /// items. Generated Rust wrappers call functions as
-    /// `<source_module>::<function>(...)`; defaults to `crate`.
-    pub fn set_source_module(mut self, p: syn::Path) -> Self {
-        self.source_module = p;
-        self
+impl NameSpec {
+    /// True for a `kotlin_type`-mapped declaration: the type surfaces as an
+    /// EXISTING Kotlin type — emitters generate no file for it (the FQN is
+    /// used verbatim at reference sites only).
+    pub(crate) fn is_verbatim(&self) -> bool {
+        matches!(self, NameSpec::Verbatim(_))
     }
+}
 
+impl JniGen {
     /// Set the JVM/Kotlin **base** package (dot-separated, e.g.
     /// `"io.zenoh.jni"`). All derived forms (slash-separated `FindClass`
     /// paths, `_`-mangled JNI extern idents, Kotlin `package` declarations)
@@ -130,11 +131,33 @@ impl JniGen {
         self
     }
 
+    /// Set the closure that mangles **class member** names (instance
+    /// methods and companion factories). Receives the derived camelCase
+    /// name AFTER the class-namespace prefix was stripped from the fn
+    /// ident (`storage_len` on class `Storage` arrives as `"len"`); runs
+    /// only for members without a per-member `.name()` (which is always
+    /// verbatim). Default = identity. The sixth hook of the name-mangle
+    /// family, covering the one name tier the other five don't.
+    pub fn set_member_name_mangle<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&str) -> String + Send + Sync + 'static,
+    {
+        self.member_name_mangle = Some(Arc::new(f));
+        self
+    }
+
     /// Toggle the per-call locking the generator wraps around every handle a
     /// wrapper touches (which guards against a handle being `close()`d on
-    /// another thread mid-call). Defaults to `true`; pass `false` only if
-    /// you know your handles are never used concurrently and want the
-    /// overhead gone.
+    /// another thread mid-call). Defaults to `true`.
+    ///
+    /// The locks are **not** a performance trade-off: benchmarks (perftest,
+    /// N = 5M per op, JDK 21 / macOS arm64, 2026-07-15) show locks-on vs
+    /// locks-off deltas within run-to-run noise on every op that does real
+    /// work (±3%, mixed sign); the cheapest op (`put` with no string field,
+    /// ~33 ns/call) bounds the whole uncontended lock pair at about one
+    /// nanosecond. This setting exists so that claim can be independently
+    /// re-verified on your own workload — generate once with `false`,
+    /// benchmark both, and keep the default — not as an optimization knob.
     pub fn set_emit_handle_locks(mut self, emit: bool) -> Self {
         self.emit_handle_locks = emit;
         self

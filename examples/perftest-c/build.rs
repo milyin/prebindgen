@@ -121,10 +121,12 @@ fn generate_ffi_bindings() -> PathBuf {
     cbindgen = cbindgen.function(pq!(payload_vec_handler_new));
     cbindgen = cbindgen.function(pq!(storage_callback_vec)).panic();
 
-    let mut registry =
+    let registry =
         prebindgen::core::Registry::from_items(source.items_all()).expect("scan prebindgen items");
     let out_file = registry
-        .write_rust(&cbindgen, "perftest.rs")
+        .resolve(cbindgen)
+        .expect("resolve prebindgen items")
+        .write_rust("perftest.rs")
         .expect("write generated bindings");
 
     // Publish the generated Rust into the crate tree (committed artifact `lib.rs`

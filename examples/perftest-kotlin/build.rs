@@ -17,13 +17,11 @@
 //! `String?` automatically.
 
 use prebindgen::{core::Registry, data_class, fun, lang::JniGen, package, ptr_class};
-use syn::parse_quote as pq;
 
 fn main() {
     let source = prebindgen::Source::new(perftest_flat::PREBINDGEN_OUT_DIR);
 
     let jni = JniGen::new()
-        .set_source_module(pq!(perftest_flat))
         .set_package_prefix("io.prebindgen.perftest")
         // Trigger native-library loading from the generated `JNINative` static
         // init (the single choke point through which every JNI call routes).
@@ -85,7 +83,7 @@ fn main() {
                 .fun(fun!(storage_callback_vec)),
         );
 
-    let mut registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
+    let registry = Registry::from_items(source.items_all()).expect("scan prebindgen items");
 
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
@@ -93,9 +91,8 @@ fn main() {
     let rust_dest = std::path::Path::new(&crate_dir)
         .join("src")
         .join("generated_bindings.rs");
-    let rust_path = registry
-        .write_rust(&jni, &rust_dest)
-        .expect("write_rust failed");
+    let gen = registry.resolve(jni).expect("resolve failed");
+    let rust_path = gen.write_rust(&rust_dest).expect("write_rust failed");
     println!(
         "cargo:warning=Generated bindings at: {}",
         rust_path.display()
@@ -105,15 +102,7 @@ fn main() {
     let kotlin_root = std::path::Path::new(&crate_dir)
         .join("kotlin")
         .join("generated");
-    if let Err(err) = std::fs::remove_dir_all(&kotlin_root) {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            panic!("cleanup kotlin/generated failed: {err}");
-        }
-    }
-    for path in jni
-        .write_kotlin(&registry, &kotlin_root)
-        .expect("write_kotlin failed")
-    {
+    for path in gen.write_kotlin(&kotlin_root).expect("write_kotlin failed") {
         println!("cargo:warning=Wrote {}", path.display());
     }
 }

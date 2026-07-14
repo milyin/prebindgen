@@ -9,7 +9,7 @@ pub(crate) fn struct_input_body(
     registry: &Registry<KotlinMeta>,
 ) -> Option<(syn::Type, syn::Expr)> {
     let struct_name = s.ident.to_string();
-    let struct_module = struct_module_path(ext, s);
+    let struct_module = struct_module_path(ext, registry, s);
     let struct_ident = &s.ident;
 
     let syn::Fields::Named(named) = &s.fields else {
@@ -462,7 +462,7 @@ pub(crate) fn build_flat_input_plan(
     };
 
     // 3. Classify every field as a simple leaf, else fall back.
-    let struct_module = struct_module_path(ext, st);
+    let struct_module = struct_module_path(ext, registry, st);
     // `kt_base` is the Kotlin expression for the object at the call site —
     // normally the camelCase param name, or `this` for a promoted instance
     // receiver. The native param idents / extern names stay keyed on

@@ -138,10 +138,12 @@ fn main() {
         .function(pq!(calculator_new))
         .function(pq!(calculator_get_value)).panic();
 
-    // Resolve types and write the Rust file of `extern "C"` wrappers.
-    let mut registry =
-        prebindgen::core::Registry::from_items(source.items_all()).unwrap();
-    let bindings_file = registry.write_rust(&cbindgen, "example_flat.rs").unwrap();
+    // Resolve types, then write the Rust file of `extern "C"` wrappers.
+    let generation = prebindgen::core::Registry::from_items(source.items_all())
+        .unwrap()
+        .resolve(cbindgen)
+        .unwrap();
+    let bindings_file = generation.write_rust("example_flat.rs").unwrap();
 
     // Pass the generated file to cbindgen for C header generation.
     generate_c_headers(&bindings_file);

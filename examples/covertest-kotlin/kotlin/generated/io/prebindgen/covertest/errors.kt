@@ -25,6 +25,10 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
         return StorageError(p)
     }
 
+    /**
+     * Render a [`StorageError`] as its message (the error's flatten-output
+     * **accessor**, fed to `onError`).
+     */
     public fun message(onError: JniErrorHandler<String>): String {
         if (this.ptr == 0L) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
@@ -42,6 +46,13 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+/**
+ * Error callback. Contract: `je != null` ⇒ a binding/system-tier failure — `je` is
+ * its message and the remaining parameters carry defaults; `je == null` ⇒ a domain
+ * error — the remaining parameters carry the decomposed `StorageError`. The
+ * wrapper returns whatever `run` returns; throwing from `run` is safe (it executes
+ * after the native call has returned).
+ */
 public fun interface StorageErrorHandler<out R> {
     public fun run(je: String?, message: String, handle: StorageError): R
 }

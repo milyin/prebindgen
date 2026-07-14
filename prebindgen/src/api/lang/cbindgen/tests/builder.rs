@@ -10,13 +10,13 @@ fn function_name_renames_symbol() {
             unimplemented!()
         }
     );
-    let mut reg =
+    let reg =
         Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
     let cb = Cbindgen::new()
         .source_module(syn::parse_quote!(zenoh_flat))
         .function(syn::parse_quote!(rust_init))
         .base_name("z_init");
-    let src = write(&cb, &mut reg, "fnname");
+    let src = write(cb, reg, "fnname");
     let compact: String = src.split_whitespace().collect();
     assert!(compact.contains("extern\"C\"fnz_init("), "{src}");
     assert!(compact.contains("zenoh_flat::rust_init("), "{src}");
@@ -81,7 +81,7 @@ fn free_memory_function_required() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -96,7 +96,9 @@ fn free_memory_function_required() {
         .function(syn::parse_quote!(z_describe));
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _ = registry.write_rust(&cbindgen, std::env::temp_dir().join("nofree.rs"));
+        let _ = registry
+            .resolve(cbindgen)
+            .and_then(|gen| gen.write_rust(std::env::temp_dir().join("nofree.rs")));
     }));
     assert!(
         result.is_err(),
@@ -120,7 +122,7 @@ fn manglers_generate_all_names() {
             unimplemented!()
         }
     );
-    let mut registry = Registry::<()>::from_items([
+    let registry = Registry::<()>::from_items([
         (syn::Item::Fn(func), loc.clone()),
         (syn::Item::Struct(error_struct()), loc.clone()),
     ])
@@ -164,7 +166,7 @@ fn manglers_generate_all_names() {
         .callback(syn::parse_quote!(impl Fn() + Send + Sync + 'static))
         .function(syn::parse_quote!(z_sub));
 
-    let src = write(&cbindgen, &mut registry, "manglers");
+    let src = write(cbindgen, registry, "manglers");
     let compact: String = src.split_whitespace().collect();
 
     // Type-name mangler over the base (note `keyexpr`, not `key_expr`).

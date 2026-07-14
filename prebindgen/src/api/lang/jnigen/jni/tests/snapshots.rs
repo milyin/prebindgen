@@ -6,7 +6,7 @@ use super::*;
 /// discriminants), and a throwable data class (`Error`).
 fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -43,10 +43,9 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!()
@@ -64,13 +63,12 @@ fn snapshot_pipeline() -> (String, std::collections::BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let mut kotlin = std::collections::BTreeMap::new();
     for p in &paths {
         let name = p.file_name().unwrap().to_string_lossy().to_string();
@@ -185,6 +183,62 @@ fn snapshot_kotlin_side() {
     );
 }
 
+/// Generated onError handler interfaces carry the `je` contract KDoc: the
+/// typed `<Err>Handler` documents the `je != null` (binding/system, defaults)
+/// vs `je == null` (decomposed domain error) split naming the error type; the
+/// shared `JniErrorHandler` documents `je` as the binding/system message.
+#[test]
+fn handler_interfaces_carry_je_contract_kdoc() {
+    // The snapshot pipeline has no error plan, so it emits the SHARED handler.
+    let (_, kotlin) = snapshot_pipeline();
+    let shared = kotlin
+        .values()
+        .find(|v| v.contains("fun interface JniErrorHandler<"))
+        .cloned()
+        .expect("no generated file declares JniErrorHandler");
+    assert!(
+        shared.contains("binding/system failure message"),
+        "{shared}"
+    );
+    assert!(shared.contains("throwing from `run` is safe"), "{shared}");
+
+    // A `Result<_, ZErr>` fn with a declared error decomposition emits the
+    // TYPED handler; its KDoc states the je-null/non-null contract and names
+    // the decomposed error type.
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
+        "pub fn z_fallible() -> Result<i64, ZErr> { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("ops").fun(crate::fun!(z_fallible)))
+        .expand(crate::expand_return!(ZErr).field(crate::fun!(z_err_message).name("message")));
+
+    let dir = unique_test_dir("jnigen_handler_kdoc");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let typed = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .find(|v| v.contains("fun interface ZErrHandler<"))
+        .expect("no generated file declares ZErrHandler");
+    assert!(typed.contains("`je != null`"), "{typed}");
+    assert!(typed.contains("decomposed `ZErr`"), "{typed}");
+    assert!(typed.contains("throwing from `run` is safe"), "{typed}");
+}
+
 /// A `data_class` struct with an opaque-pointer string field
 /// (`label: Option<Box<String>>`) maps that field to a nullable Kotlin `String?`
 /// (via the `Box<String>` terminal converter + the `Option<_>` wrapper), and the
@@ -194,7 +248,7 @@ fn snapshot_kotlin_side() {
 #[test]
 fn box_string_field_maps_to_nullable_kotlin_string() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -222,29 +276,25 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("payload")
-                .class(crate::data_class!(Payload))
-                .fun(crate::fun!(payload_get))
-                .fun(crate::fun!(payload_put)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("payload")
+            .class(crate::data_class!(Payload))
+            .fun(crate::fun!(payload_get))
+            .fun(crate::fun!(payload_put)),
+    );
 
     let dir = unique_test_dir("jnigen_boxstr");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
         .iter()
         .map(|p| std::fs::read_to_string(p).unwrap())
@@ -275,7 +325,7 @@ fn box_string_field_maps_to_nullable_kotlin_string() {
 #[test]
 fn slice_input_builds_vec_handle() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
             syn::Item::Struct(syn::parse_quote!(
@@ -303,29 +353,25 @@ fn slice_input_builds_vec_handle() {
             loc.clone(),
         ),
     ];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
-    let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("foo")
-                .class(crate::data_class!(Foo))
-                .fun(crate::fun!(put_slice))
-                .fun(crate::fun!(put_vec)),
-        );
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("foo")
+            .class(crate::data_class!(Foo))
+            .fun(crate::fun!(put_slice))
+            .fun(crate::fun!(put_vec)),
+    );
 
     let dir = unique_test_dir("jnigen_slice_vec_handle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    let rust_path = registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
     let kdir = dir.join("kotlin");
-    let paths = jni.write_kotlin(&registry, &kdir).expect("write_kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
     let kotlin: String = paths
         .iter()
         .map(|p| std::fs::read_to_string(p).unwrap())
@@ -391,7 +437,7 @@ fn slice_input_builds_vec_handle() {
 #[test]
 fn jni_native_init_emits_init_block() {
     use crate::SourceLocation;
-    let loc = SourceLocation::default();
+    let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![(
         syn::Item::Fn(syn::parse_quote!(
             pub fn z_ping() {
@@ -400,10 +446,9 @@ fn jni_native_init_emits_init_block() {
         )),
         loc.clone(),
     )];
-    let mut registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
 
     let jni = JniGen::new()
-        .set_source_module(syn::parse_quote!(myflat))
         .set_package_prefix("io.test.jni")
         .set_jni_native_init("io.test.jni.NativeLibrary.ensureLoaded()")
         .package(crate::package!("thing").fun(crate::fun!(z_ping)));
@@ -411,12 +456,9 @@ fn jni_native_init_emits_init_block() {
     let dir = unique_test_dir("jnigen_native_init");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    registry
-        .write_rust(&jni, dir.join("gen.rs"))
-        .expect("write_rust");
-    let paths = jni
-        .write_kotlin(&registry, &dir.join("kotlin"))
-        .expect("write_kotlin");
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let native = paths
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())

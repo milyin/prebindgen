@@ -2,8 +2,32 @@
 // belong to the generator, not to this file.
 #![allow(clippy::all)]
 
+// Binding-local conversion fns for `Label` — referenced by build.rs as
+// `.convert(convert!(Label).input_try_with(…, path!(crate::label_in))…)`.
+// NOT `#[prebindgen]`-marked: the generated file compiles inside this crate,
+// so plain `crate::` paths resolve; no helper crate needed. The input is the
+// FALLIBLE local form (`fn(Repr) -> Result<T, E>`, E stated in the decl);
+// the output is the infallible one.
+pub fn label_in(s: String) -> Result<perftest_flat::Label, String> {
+    if s.is_empty() {
+        Err("label must not be empty".to_string())
+    } else {
+        Ok(perftest_flat::Label(s))
+    }
+}
+pub fn label_out(l: perftest_flat::Label) -> String {
+    l.0
+}
+
+// Binding-local nullary fn backing the `.with`-sourced constant
+// `COVER_VERSION` (build.rs: `constant!(COVER_VERSION).with(ty!(String),
+// path!(crate::cover_version))`) — the const analog of convert!'s `_with`.
+pub fn cover_version() -> String {
+    format!("cover-{}", env!("CARGO_PKG_VERSION"))
+}
+
 // The generated JNI bindings, written by build.rs from perftest-flat's
 // #[prebindgen] surface (the perf surface plus the `ext` coverage surface). The
-// generated code refers to source types fully qualified through the
-// `source_module` (e.g. `perftest_flat::Payload`), so no extra `use` is needed.
+// generated code refers to source types fully qualified by each item's origin
+// crate (e.g. `perftest_flat::Payload`), so no extra `use` is needed.
 include!("generated_bindings.rs");
