@@ -268,6 +268,11 @@ pub(crate) type WrapperFn = Arc<
 /// per-kind `set_*_name_mangle` setters. Closure-unset = identity.
 pub(crate) type NameMangle = Arc<dyn Fn(&str, &str) -> String + Send + Sync>;
 
+/// Closure that transforms the centralized JNI harness class short name.
+/// The harness always lives in the configured base package, so no placement
+/// context is needed. Closure-unset = identity.
+pub(crate) type HarnessNameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
+
 /// Closure that transforms a Kotlin method name with both its containing
 /// package and final class short name. This is distinct from [`NameMangle`]
 /// because flat Rust APIs conventionally encode the class namespace in the
@@ -329,9 +334,9 @@ pub struct JniGen {
     /// to the camelCase Rust function name of every class method/factory
     /// without a per-method `.name()`, with package and class context.
     pub(crate) method_name_mangle: Option<MethodNameMangle>,
-    /// Mangler for the framework `JNINative` harness class name. Receives the
-    /// base package and default class name; unset = identity.
-    pub(crate) harness_name_mangle: Option<NameMangle>,
+    /// Mangler for the framework `JNINative` harness class name. Receives its
+    /// default class name; unset = identity.
+    pub(crate) harness_name_mangle: Option<HarnessNameMangle>,
     /// Mangler turning a class name into its generated `.interface()` name.
     /// Receives the target package and final class name; identity is forbidden
     /// (a class and its interface can't share a name). Default when unset =

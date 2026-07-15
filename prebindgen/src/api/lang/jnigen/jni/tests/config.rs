@@ -597,7 +597,7 @@ fn method_name_mangle_hook_applies_order_independently() {
     assert!(!ac.contains("funlabelNative("), "{all}");
 }
 
-/// #56: the harness hook receives the package and DERIVED DEFAULT for its tier
+/// #56: the harness hook receives the DERIVED DEFAULT for its tier
 /// (`"JNINative"`, an explicit
 /// default value, not a hidden `JNI`-prepend) and replaces it wholesale;
 /// the unset default is identity.
@@ -610,8 +610,7 @@ fn harness_hook_receives_derived_default() {
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .set_harness_name_mangle(|package, n| {
-            assert_eq!(package, "io.test.jni");
+        .set_harness_name_mangle(|n| {
             assert_eq!(n, "JNINative", "hook must receive the derived default");
             "MyNative".to_string()
         })

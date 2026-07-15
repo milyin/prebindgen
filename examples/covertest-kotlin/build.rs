@@ -128,7 +128,7 @@ fn main() {
         // (the domain names are already the desired Kotlin names) — registering
         // closures, and the method hook strips the flat class prefix. The
         // generated-interface hook deliberately keeps its `ClassApi` default.
-        .set_harness_name_mangle(|_, _| "CovNative".to_string())
+        .set_harness_name_mangle(|_| "CovNative".to_string())
         .set_fun_name_mangle(|_, n| n.to_string())
         .set_ptr_class_name_mangle(|_, n| n.to_string())
         .set_data_class_name_mangle(|_, n| n.to_string())

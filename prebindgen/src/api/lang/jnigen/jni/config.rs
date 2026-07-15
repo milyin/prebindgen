@@ -13,14 +13,16 @@
 //!
 //! # Name-mangle hooks
 //!
-//! Every name hook receives the fully-qualified Kotlin **package where the
-//! named object is emitted**, followed by the derived default name for its
+//! Placement-aware hooks receive the fully-qualified Kotlin **package where
+//! the named object is emitted**, followed by the derived default name for its
 //! tier. The method hook additionally receives the final containing class
-//! short name. Hooks return the final short name; unset hooks are identity.
+//! short name. The harness is the exception: it has one fixed placement and
+//! receives only its default short name. Hooks return the final short name;
+//! unset hooks are identity.
 //!
 //! | hook | names | input (the derived default) | default |
 //! |---|---|---|---|
-//! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | package, `"JNINative"` | identity |
+//! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | `"JNINative"` | identity |
 //! | [`set_fun_name_mangle`](JniGen::set_fun_name_mangle) | top-level package functions | package, camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
 //! | [`set_ptr_class_name_mangle`](JniGen::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | package, Rust type short name (`"KeyExpr"`) | identity |
 //! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` + `value_class` Kotlin classes | package, Rust type short name | identity |
@@ -89,14 +91,13 @@ impl JniGen {
     }
 
     /// Set the closure that renames the framework "harness" class (the
-    /// centralized extern holder). Receives its package and the derived default
-    /// `"JNINative"` and replaces it wholesale
-    /// (`|_, _| "MyNative".to_string()`); default = identity (see the
+    /// centralized extern holder). Receives the derived default `"JNINative"`
+    /// and replaces it wholesale (`|_| "MyNative".to_string()`); default = identity (see the
     /// module-level table). Affects the generated Kotlin class name and
     /// the derived JNI extern symbol path on the Rust side.
     pub fn set_harness_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str, &str) -> String + Send + Sync + 'static,
+        F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.harness_name_mangle = Some(Arc::new(f));
         self
