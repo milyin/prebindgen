@@ -438,13 +438,17 @@ impl From<syn::Type> for PtrClassDecl {
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
 /// it to [`JniGen::expand`].
 ///
-/// **Generated shape** — this is a WIRE-level dispatch, not overloads: with
+/// **Generated shape** — at the wire tier this is a selector dispatch: with
 /// more than one arm the parameter crosses as a selector `Int` plus one
 /// nullable slot per arm (`keyExprSel: Int, keyExpr0: String?,
-/// keyExpr1: KeyExpr?`), and the call site passes `(0, "key", null)`-style
-/// tuples. Idiomatic overloads / sealed types are a hand-written SDK tier's
-/// job on top; the wrapper's generated KDoc shape-notes document the exact
-/// slots per function.
+/// keyExpr1: KeyExpr?`), and the raw call site passes `(0, "key", null)`-style
+/// tuples. That selector form is always emitted; the wrapper's generated KDoc
+/// shape-notes document the exact slots per function. To surface the idiomatic
+/// typed **overloads** on top of it (`f(key: String, …)` / `f(key: KeyExpr,
+/// …)`), add [`.split()`](Self::split) — opt-in, one function may split one
+/// parameter. Without it, an idiomatic tier is a hand-written SDK's job (and
+/// remains possible: the selector form is public, so consumers can add their
+/// own same-named overloads).
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: the value is always
@@ -464,6 +468,10 @@ impl From<syn::Type> for PtrClassDecl {
 pub struct ExpandParamDecl {
     pub(crate) key: TypeKey,
     pub(crate) variants: Vec<LocalVariant>,
+    /// `.split()` — emit one idiomatic typed Kotlin overload per variant
+    /// (delegating to the selector form) instead of leaving the selector
+    /// tuple as the only surface. Opt-in; see [`Self::split`].
+    pub(crate) split: bool,
 }
 
 impl ExpandParamDecl {
@@ -471,6 +479,7 @@ impl ExpandParamDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             variants: Vec::new(),
+            split: false,
         }
     }
 
@@ -503,6 +512,33 @@ impl ExpandParamDecl {
     /// alone changes nothing; it earns its place next to build variants.
     pub fn variant_self(mut self) -> Self {
         self.variants.push(LocalVariant::SelfIdentity);
+        self
+    }
+
+    /// **Opt in to idiomatic typed overloads.** By default a multi-arm
+    /// expansion crosses only as the selector tuple (see the type-level docs).
+    /// With `.split()` the generator additionally emits, alongside that form,
+    /// one typed Kotlin overload per variant — `f(count: Long, total: Double,
+    /// onError)` for a `summary_new(count, total)` arm, `f(summary: Summary,
+    /// onError)` for `variant_self()` — each delegating to the selector form.
+    /// The selector form stays public (the delegation target, and a base for
+    /// hand-written overloads).
+    ///
+    /// Rules, all hard build errors:
+    /// * needs **≥2 variants** (a single arm already flattens idiomatically);
+    /// * the variants must surface as **distinct JVM signatures** (two arms
+    ///   with the same erased parameter types are a platform-declaration clash
+    ///   — disambiguate the constructors or drop `.split()`);
+    /// * a function may have **at most one split parameter** (overloads are the
+    ///   product of every split param's arms; capping at one keeps the surface
+    ///   sound and finite — un-split the others with a per-fn
+    ///   [`expand_param`](crate::fun) override that omits `.split()`).
+    ///
+    /// Only flat, non-optional arms are overloaded; an `Option<T>` / `Vec<T>`
+    /// parameter or a recursively-built arm keeps the selector form for that
+    /// function (the overload has no clean single type).
+    pub fn split(mut self) -> Self {
+        self.split = true;
         self
     }
 }

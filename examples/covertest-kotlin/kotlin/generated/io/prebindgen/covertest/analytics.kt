@@ -145,6 +145,19 @@ public fun <R> storageSummary(s: Storage, onError: JniErrorHandler<R>, build: Su
     return __ret
 }
 
+public fun storageMatchesSummary(
+    s: Storage,
+    count: Long,
+    total: Double,
+    onError: JniErrorHandler<Boolean>,
+): Boolean = storageMatchesSummary(s, 0, count, total, null, onError)
+
+public fun storageMatchesSummary(
+    s: Storage,
+    expected: Summary,
+    onError: JniErrorHandler<Boolean>,
+): Boolean = storageMatchesSummary(s, 1, null, null, expected, onError)
+
 /**
  * Whether `expected` matches the storage's live summary (takes a `Summary`
  * **parameter**; the binding's **default flatten-input** rebuilds it from
@@ -248,6 +261,19 @@ public fun <R> storageSummaryFull(
     return __ret
 }
 
+public fun storageExpectSummary(
+    s: Storage,
+    count: Long,
+    total: Double,
+    onError: JniErrorHandler<Boolean>,
+): Boolean = storageExpectSummary(s, 0, count, total, null, onError)
+
+public fun storageExpectSummary(
+    s: Storage,
+    expected: Summary,
+    onError: JniErrorHandler<Boolean>,
+): Boolean = storageExpectSummary(s, 1, null, null, expected, onError)
+
 /**
  * Set the storage's "expected" summary, accepting a `Summary` built via an
  * explicit per-fn **flatten-input-with** variant list. Returns whether it
@@ -302,6 +328,10 @@ public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }
+
+public fun archiveStore(a: SummaryVault, count: Long, total: Double, onError: JniErrorHandler<Unit>) = archiveStore(a, 0, count, total, null, onError)
+
+public fun archiveStore(a: SummaryVault, s: Summary, onError: JniErrorHandler<Unit>) = archiveStore(a, 1, null, null, s, onError)
 
 /**
  * Store a summary, consuming it (owned-handle input).

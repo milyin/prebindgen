@@ -295,6 +295,9 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_member_name(key, m).as_str()),
                 None,
             ) {
+                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                    companion = companion.member(ov);
+                }
                 companion = companion.member(f);
             }
         }
@@ -356,6 +359,9 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_member_name(key, m).as_str()),
                 Some(key),
             ) {
+                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                    class = class.member(ov);
+                }
                 class = class.member(f);
             }
         }

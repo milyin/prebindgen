@@ -568,6 +568,12 @@ impl JniGen {
         let mut exp = self.expansions.clone();
         for decl in &self.param_expand_decls {
             assert!(
+                !decl.split || decl.variants.len() >= 2,
+                "expand_param!({}).split(): needs ≥2 variants — a single arm already \
+                 flattens to an idiomatic signature, so there is nothing to overload",
+                decl.key.as_str()
+            );
+            assert!(
                 self.is_class_declared(&decl.key)
                     || !decl
                         .variants
@@ -597,6 +603,13 @@ impl JniGen {
         // param-name/type cross-check and the identity-only lowering happen
         // in `core/expand.rs`'s `apply` (which sees the fn signatures).
         for (func, param, decl) in &self.fn_param_expands {
+            assert!(
+                !decl.split || decl.variants.len() >= 2,
+                "fun!({func}).expand_param(\"{param}\", expand_param!({k}).split()): needs ≥2 \
+                 variants — a single arm already flattens to an idiomatic signature, so there is \
+                 nothing to overload",
+                k = decl.key.as_str()
+            );
             assert!(
                 self.is_class_declared(&decl.key)
                     || !decl

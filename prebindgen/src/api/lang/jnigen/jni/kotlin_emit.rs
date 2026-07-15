@@ -333,6 +333,11 @@ impl JniGen {
                         Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
+                        for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                            self, item_fn, registry, &f,
+                        ) {
+                            class = class.member(ov);
+                        }
                         class = class.member(f);
                     }
                 }
@@ -354,6 +359,11 @@ impl JniGen {
                             Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
+                            for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                                self, item_fn, registry, &f,
+                            ) {
+                                companion = companion.member(ov);
+                            }
                             companion = companion.member(f);
                         }
                     }
@@ -531,6 +541,11 @@ impl JniGen {
                         Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
+                        for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                            self, item_fn, registry, &f,
+                        ) {
+                            class = class.member(ov);
+                        }
                         class = class.member(f);
                     }
                 }
@@ -557,6 +572,11 @@ impl JniGen {
                             Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
+                            for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                                self, item_fn, registry, &f,
+                            ) {
+                                companion = companion.member(ov);
+                            }
                             companion = companion.member(f);
                         }
                     }
@@ -988,6 +1008,11 @@ impl JniGen {
                 entry.kotlin_name_override.as_deref(),
                 None,
             ) {
+                // #52: idiomatic typed overloads for a `.split()` param,
+                // delegating to this selector wrapper.
+                for ov in render_param_overloads(self, item_fn, registry, &f) {
+                    file = file.decl(ov);
+                }
                 file = file.decl(f);
             }
         }

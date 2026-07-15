@@ -470,6 +470,7 @@ mod trait_impl;
 
 mod fold;
 mod kotlin_emit;
+mod overloads;
 mod render;
 mod report;
 mod struct_plan;
@@ -481,6 +482,7 @@ pub use decl::*;
 pub(crate) use emit::*;
 pub(crate) use fold::*;
 pub(crate) use iface::*;
+pub(crate) use overloads::*;
 pub(crate) use prim::*;
 pub(crate) use render::*;
 pub(crate) use struct_plan::*;

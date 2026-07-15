@@ -28,6 +28,7 @@
 //! | `convert!` sources `.with(path!)`/`.error(ty!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
+//! | `expand_param!` `.split()` (#52)      | `Summary` typed overloads — `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); manual same-named overload in `ManualOverloads.kt` |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
@@ -231,10 +232,15 @@ fn main() {
         )
         // `Summary` default input: rebuilt from the `of` constructor's
         // ingredients OR passed as an existing handle (runtime-selected).
+        // `.split()` (#52) also emits idiomatic typed overloads per variant —
+        // `f(count, total, …)` / `f(summary, …)` — delegating to the selector
+        // form. This is the CLASS-DEFAULT split: it fires on every function
+        // taking a `Summary` by the type default (e.g. `archiveStore`).
         .expand(
             expand_param!(Summary)
                 .variant(fun!(summary_new))
-                .variant_self(),
+                .variant_self()
+                .split(),
         )
         // `Summary` default output: decomposed `(count, total)` leaves, names
         // inherited from the class members.
@@ -337,12 +343,16 @@ fn main() {
                             .field_self(),
                     ),
                 )
+                // Per-fn split (#52): the `expected` param gets typed overloads
+                // `storageExpectSummary(count, total, …)` / `(expected, …)` on
+                // top of the selector form (which Test.kt still calls directly).
                 .fun(
                     fun!(storage_expect_summary).expand_param(
                         "expected",
                         expand_param!(Summary)
                             .variant(fun!(summary_new))
-                            .variant_self(),
+                            .variant_self()
+                            .split(),
                     ),
                 )
                 // The borrowed-accessor trio. `archive_latest` suppresses the default

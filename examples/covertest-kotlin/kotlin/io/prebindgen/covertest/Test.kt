@@ -271,18 +271,25 @@ fun main() {
         check(sum.count(boom) == 2L && sum.total(boom) == 40.0 && sum.scaled(0.5, boom) == 20.0)
         sum.close()
 
-        // flatten_input DEFAULT, selector 0: rebuild from (count, total) leaves.
-        check(storageMatchesSummary(s, 0, 2L, 40.0, null, boom))
-        check(!storageMatchesSummary(s, 0, 1L, 40.0, null, boom))
-        // flatten_input DEFAULT, selector 1: pass a handle (consumed by the call).
+        // #52 `.split()` overloads (class-default `expand_param!(Summary)`):
+        // idiomatic typed forms delegating to the selector wrapper.
+        check(storageMatchesSummary(s, 2L, 40.0, boom))       // build-from-leaves arm
+        check(!storageMatchesSummary(s, 1L, 40.0, boom))
         val h0 = Summary.of(2L, 40.0, boom)
-        check(storageMatchesSummary(s, 1, null, null, h0, boom))
+        check(storageMatchesSummary(s, h0, boom))             // pass-handle arm
+        // The selector form stays public underneath (raw arm dispatch).
+        check(storageMatchesSummary(s, 0, 2L, 40.0, null, boom))
 
-        // flatten_input_with, selector 0: rebuild from leaves.
-        check(storageExpectSummary(s, 0, 2L, 40.0, null, boom))
-        // flatten_input_with, selector 1: pass a handle (consumed by the call).
+        // #52 `.split()` overloads (per-fn `.expand_param("expected", …)`).
+        check(storageExpectSummary(s, 2L, 40.0, boom))        // build-from-leaves arm
         val h1 = Summary.of(2L, 40.0, boom)
-        check(storageExpectSummary(s, 1, null, null, h1, boom))
+        check(storageExpectSummary(s, h1, boom))              // pass-handle arm
+
+        // Auto-generated overloads coexist with a HAND-WRITTEN same-named one
+        // (issue #52's manual path): `ManualOverloads.kt` adds another
+        // `storageExpectSummary` — an `Int`-typed arm — in the analytics
+        // package; Kotlin resolves it by signature alongside the generated ones.
+        check(storageExpectSummary(s, 2, 40.0, boom))         // manual Int overload
         s.close()
     }
 
