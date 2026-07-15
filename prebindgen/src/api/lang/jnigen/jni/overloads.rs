@@ -214,8 +214,8 @@ fn prefixed(origin: &str, name: &str) -> String {
     }
 }
 
-/// Clear nullability (`T?` → `T`): an overload takes each arm's real,
-/// non-nullable constructor parameter type.
+/// Clear selector-dispatch nullability (`T?` → `T`). Genuinely optional
+/// constructor parameters bypass this helper and retain their rendered `T?`.
 fn non_null(mut ty: kt::KtType) -> kt::KtType {
     match &mut ty {
         kt::KtType::Named { nullable, .. } | kt::KtType::Function { nullable, .. } => {
@@ -223,6 +223,15 @@ fn non_null(mut ty: kt::KtType) -> kt::KtType {
         }
     }
     ty
+}
+
+fn is_option(ty: &syn::Type) -> bool {
+    matches!(
+        ty,
+        syn::Type::Path(p)
+            if p.qself.is_none()
+                && p.path.segments.last().is_some_and(|s| s.ident == "Option")
+    )
 }
 
 /// The typed overload params of one variant arm, paired with the leaf index
@@ -237,14 +246,23 @@ fn variant_typed_params(
     multi: bool,
 ) -> Option<Vec<(kt::KtParam, usize)>> {
     let origin_kt = kt_param_name(&origin.to_string());
-    let names: Vec<String> = match &variant.ctor {
+    let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
         Some(cf) => {
             let (item_fn, _) = registry.functions.get(cf)?;
-            ctor_param_names(item_fn)
+            let optional = item_fn
+                .sig
+                .inputs
+                .iter()
+                .filter_map(|a| match a {
+                    syn::FnArg::Typed(pt) => Some(is_option(&pt.ty)),
+                    _ => None,
+                })
+                .collect();
+            (ctor_param_names(item_fn), optional)
         }
         // Identity arm: one parameter, the value itself, named after the origin
         // parameter (already unique across split params — never prefixed).
-        None => vec![origin_kt.clone()],
+        None => (vec![origin_kt.clone()], vec![false]),
     };
     let mut out = Vec::new();
     for (m, arg) in variant.inputs.iter().enumerate() {
@@ -258,7 +276,12 @@ fn variant_typed_params(
         } else {
             base
         };
-        out.push((kt::KtParam::new(&name, non_null(slot.ty.clone())), *idx));
+        let ty = if optional.get(m).copied().unwrap_or(false) {
+            slot.ty.clone()
+        } else {
+            non_null(slot.ty.clone())
+        };
+        out.push((kt::KtParam::new(&name, ty), *idx));
     }
     Some(out)
 }
@@ -534,4 +557,48 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
         })
         .collect();
     format!("({})", parts.join(", "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SourceLocation;
+
+    #[test]
+    fn split_params_preserve_constructor_option_nullability() {
+        let ctor: syn::ItemFn = syn::parse_quote! {
+            pub fn z_summary_optional(count: Option<i64>, total: f64) -> ZSummary {
+                unimplemented!()
+            }
+        };
+        let registry = Registry::<KotlinMeta>::from_items(vec![(
+            syn::Item::Fn(ctor),
+            SourceLocation::default(),
+        )])
+        .expect("index constructor");
+        let variant = crate::api::core::expand::FoldVariant {
+            ctor: Some(syn::parse_quote!(z_summary_optional)),
+            fallible: false,
+            clone: false,
+            inputs: vec![FoldArg::Leaf(0), FoldArg::Leaf(1)],
+        };
+        // Both slots are nullable in the selector wrapper. Only the first is
+        // nullable in the constructor's actual signature.
+        let block = vec![
+            kt::KtParam::new("expected0", kt::KtType::long().nullable()),
+            kt::KtParam::new("expected1", kt::KtType::cls("Double").nullable()),
+        ];
+
+        let params = variant_typed_params(
+            &registry,
+            &variant,
+            &syn::parse_quote!(expected),
+            &block,
+            false,
+        )
+        .expect("flat arm");
+
+        assert_eq!(params[0].0.ty.to_string(), "Long?");
+        assert_eq!(params[1].0.ty.to_string(), "Double");
+    }
 }
