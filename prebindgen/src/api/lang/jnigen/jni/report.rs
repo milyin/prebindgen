@@ -262,15 +262,9 @@ impl JniGen {
         if cfg.opaque.is_some() {
             "ptr_class"
         } else if cfg.enum_cfg.is_some() {
-            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
-                "enum_class (kotlin_type-mapped)"
-            } else {
-                "enum_class"
-            }
+            "enum_class"
         } else if cfg.value_blob {
             "value_class"
-        } else if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
-            "kotlin_type-mapped"
         } else if cfg.class_decl {
             "data_class"
         } else {

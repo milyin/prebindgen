@@ -694,63 +694,6 @@ fn convert_via_local_try_fn_is_fallible() {
     assert!(rc.contains("Result<myflat::Label,String>"), "{rust}");
 }
 
-/// I5: `enum_class!(T).kotlin_type("io.other.Mode")` maps the enum onto an
-/// EXISTING Kotlin type — no `enum class` file is generated, and wrappers
-/// speak the `fromInt`/`.value` protocol against the mapped FQN. The jint
-/// wire on the Rust side is unchanged.
-#[test]
-fn enum_kotlin_type_maps_to_existing_type() {
-    let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![
-        (
-            syn::Item::Enum(syn::parse_quote!(
-                pub enum Mode {
-                    A = 0,
-                    B = 1,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn flip(m: Mode) -> Mode {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-    ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!()
-            .class(crate::enum_class!(Mode).kotlin_type("io.other.Mode"))
-            .fun(crate::fun!(flip)),
-    );
-    let dir = unique_test_dir("jnigen_enum_kotlin_type");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
-    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
-    let rust = std::fs::read_to_string(&rust_path).unwrap();
-    // Rust side: ordinary jint enum wire.
-    assert!(rust.contains("jni::sys::jint"), "{rust}");
-
-    let kdir = dir.join("kotlin");
-    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
-    let all: String = paths
-        .iter()
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let ac: String = all.split_whitespace().collect();
-    // No generated enum class anywhere…
-    assert!(!ac.contains("enumclass"), "{all}");
-    // …and the wrapper references the mapped type's protocol.
-    assert!(ac.contains("io.other.Mode"), "{all}");
-    assert!(ac.contains("Mode.fromInt("), "{all}");
-    assert!(ac.contains("m.value"), "{all}");
-}
-
 /// I5: data-class members — the receiver re-enters Rust as `this`'s field
 /// leaves (the data-class param destructuring rebased to `this`); a
 /// constructor member joins the `fromParts` companion. Extern signatures
@@ -823,18 +766,4 @@ fn data_class_members_reenter_as_field_leaves() {
     let pb: String = point_block.split_whitespace().collect();
     assert!(pb.contains("funorigin("), "{all}");
     assert!(pb.contains("funfromParts("), "{all}");
-}
-
-/// I5: `.kotlin_type()` and members are mutually exclusive — a mapped type
-/// has no generated class to hold them.
-#[test]
-#[should_panic(expected = "no generated class to hold members")]
-fn data_class_kotlin_type_with_members_rejected() {
-    let _ = JniGen::new().package(
-        crate::package!().class(
-            crate::data_class!(Point)
-                .kotlin_type("io.other.Point")
-                .fun(crate::fun!(point_norm)),
-        ),
-    );
 }

@@ -67,6 +67,7 @@ impl JniGen {
             enum_name_mangle: None,
             member_name_mangle: None,
             harness_name_mangle: None,
+            interface_name_mangle: None,
             types: HashMap::new(),
             packages: BTreeMap::new(),
             input_wrappers: [
@@ -295,7 +296,7 @@ impl JniGen {
         // derived at write time, but a dotted relative name is a declaration
         // mistake and should surface in the declaring call (the same check
         // `resolve_class_fqn` repeats at derivation time).
-        if let NameSpec::Class {
+        if let NameSpec {
             name_override: Some(n),
             ..
         } = &spec
@@ -312,30 +313,44 @@ impl JniGen {
         entry.name_spec = Some(spec);
     }
 
+    /// Merge a decl's interface options into the type's [`TypeConfig`]
+    /// (reopened decls merge; the `.interface()` switch and name override are
+    /// sticky-OR / last-wins, a repeated `.implements` interface is
+    /// idempotent).
+    fn store_iface_opts(&mut self, key: &TypeKey, iface: IfaceOpts) {
+        let cfg = self
+            .types
+            .get_mut(key)
+            .expect("register_class_name created the entry");
+        cfg.interface_enabled |= iface.enabled;
+        if iface.name_override.is_some() {
+            cfg.interface_name_override = iface.name_override;
+        }
+        for i in iface.implements {
+            if !cfg.interfaces.contains(&i) {
+                cfg.interfaces.push(i);
+            }
+        }
+    }
+
     fn accept_ptr_class(&mut self, subpackage: &str, decl: PtrClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
         self.register_class_name(
             &key,
-            NameSpec::Class {
+            NameSpec {
                 subpackage: subpackage.to_string(),
                 short,
                 name_override: decl.name_override,
                 kind: NameKind::Ptr,
             },
         );
-        let opaque = self
-            .types
+        self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
             .opaque
             .get_or_insert_with(OpaqueConfig::default);
-        // Reopened decls merge; a repeated interface is idempotent.
-        for iface in decl.interfaces {
-            if !opaque.interfaces.contains(&iface) {
-                opaque.interfaces.push(iface);
-            }
-        }
+        self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }
 
@@ -350,74 +365,54 @@ impl JniGen {
              a type can be one or the other, not both",
             short
         );
-        // An explicit `kotlin_type` maps the enum onto an existing Kotlin
-        // type (verbatim FQN, no file generated); the jint wire and the
-        // `fromInt`/`.value` call protocol are identical either way.
-        let spec = match decl.kotlin_type {
-            Some(expr) => NameSpec::Verbatim(expr),
-            None => NameSpec::Class {
+        self.register_class_name(
+            &key,
+            NameSpec {
                 subpackage: subpackage.to_string(),
                 short,
                 name_override: decl.name_override,
                 kind: NameKind::Enum,
             },
-        };
-        self.register_class_name(&key, spec);
+        );
         self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
             .enum_cfg = Some(EnumConfig::default());
+        self.store_iface_opts(&key, decl.iface);
     }
 
-    /// A data/value class's explicit `kotlin_type` expression is a verbatim
-    /// Kotlin type and wins over everything; otherwise the name derives from
-    /// settings at read time like any other declared class.
     fn data_value_name_spec(
         subpackage: &str,
         short: String,
         name_override: Option<String>,
-        kotlin_type: Option<String>,
     ) -> NameSpec {
-        match kotlin_type {
-            Some(expr) => NameSpec::Verbatim(expr),
-            None => NameSpec::Class {
-                subpackage: subpackage.to_string(),
-                short,
-                name_override,
-                kind: NameKind::DataOrValue,
-            },
+        NameSpec {
+            subpackage: subpackage.to_string(),
+            short,
+            name_override,
+            kind: NameKind::DataOrValue,
         }
     }
 
     fn accept_data_class(&mut self, subpackage: &str, decl: DataClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        assert!(
-            decl.kotlin_type.is_none() || decl.members.is_empty(),
-            "data_class `{short}`: .kotlin_type() maps onto an EXISTING type — there is no \
-             generated class to hold members"
-        );
-        let spec =
-            Self::data_value_name_spec(subpackage, short, decl.name_override, decl.kotlin_type);
+        let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
         self.register_class_name(&key, spec);
+        self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }
 
     fn accept_value_class(&mut self, subpackage: &str, decl: ValueClassDecl) {
         let short = rust_short_name(&decl.key);
         let key = decl.key;
-        assert!(
-            decl.kotlin_type.is_none() || decl.members.is_empty(),
-            "value_class `{short}`: .kotlin_type() maps onto an EXISTING type — there is no \
-             generated class to hold members"
-        );
-        let spec =
-            Self::data_value_name_spec(subpackage, short, decl.name_override, decl.kotlin_type);
+        let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
         self.register_class_name(&key, spec);
         self.types
             .get_mut(&key)
             .expect("register_class_name created the entry")
             .value_blob = true;
+        self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }
 

@@ -172,18 +172,34 @@ fun main() {
         s.close()
     }
 
-    // ── .implements(...) integration hatch (#54): the generated Storage class
-    // implements the HAND-WRITTEN CovResource interface — used here through a
-    // polymorphic interface reference, including an interface-default member
-    // built on the generated peek()/isClosed() surface ────────────────────────
-    section(".implements() hatch (Storage as CovResource)") {
+    // ── .interface() hatch (#54): each generated class emits a `<Name>Api`
+    // interface; the HAND-WRITTEN CovResource/Timestamped/Ranked interfaces
+    // EXTEND those and add default members that call the class's real
+    // generated members — used here polymorphically, no generated-code edits ──
+    section(".interface() hatch (Api interfaces extended by SDK interfaces)") {
+        // ptr class: Storage implements StorageApi; CovResource : StorageApi.
         val s = storageNew(boom)
         val r: CovResource = s
-        check(r.isLive())                 // default member over generated surface
-        check(!r.isClosed() && r.peek() != 0L)
+        check(r.live)                     // default over inherited peek()/isClosed()
+        check(r.isEmpty())                // default over class-specific len()
+        check(r.len(boom) == 0L)          // generated member through the interface
+        storagePutByTake(s, payload(7L, 0, 0.0, false, null), boom)
+        check(!r.isEmpty())
+        check(r.len(boom) == 1L)
         s.close()
-        check(!r.isLive())
+        check(!r.live)
         check(r.isClosed() && r.peek() == 0L)
+
+        // data class: Payload implements PayloadApi; Timestamped : PayloadApi.
+        val fresh: Timestamped = payload(1L, 5, 0.0, false, null)
+        val stale: Timestamped = payload(1L, 0, 0.0, false, null)
+        check(fresh.fresh && !stale.fresh)
+        check(fresh.seq == 5)             // generated field through the interface
+
+        // enum class: Priority implements PriorityKind + Ranked.
+        val hi: Ranked = Priority.HIGH
+        check(hi.outranks(Priority.LOW))  // default over generated `value`
+        check(!Priority.LOW.outranks(Priority.HIGH))
     }
 
     // ── impl Fn callbacks: single-payload + whole-batch ──────────────────────

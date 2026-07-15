@@ -305,24 +305,14 @@ pub(crate) fn build_typed_handle(
     let class_kdoc = source_item_doc(registry, key)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
+    // Consumer interfaces (`.implements`) and the generated `<Name>Api`
+    // interface (`.interface()`) are attached by `apply_class_interface` in
+    // `write_typed_handles` after the class body is built.
     let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
         .kdoc(class_kdoc)
         .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()))
-        .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"));
-    // Declared consumer interfaces (`PtrClassDecl::implements`) join the
-    // supertype list after the lifecycle base — nominal only, the class
-    // body is unaffected.
-    for iface in ext
-        .types
-        .get(key)
-        .and_then(|c| c.opaque.as_ref())
-        .map(|o| o.interfaces.as_slice())
-        .unwrap_or(&[])
-    {
-        class = class.supertype(kt::KtType::cls(iface), None);
-    }
-    class = class
+        .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
         .member(
             kt::KtFun::new("close")
                 .annotation("Synchronized")

@@ -33,7 +33,8 @@
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
 //! | namespace-relative member names (C1)  | `storage_len`→`len`, `stamp_secs`→`secs`, … (no `.name()`); `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
-//! | `.implements(…)` integration hatch    | `Storage` implements hand-written `CovResource` (#54) |
+//! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
+//! | `.interface_name(…)`                  | `Priority` → generated `PriorityKind` interface (#54) |
 //! | base-package functions               | `string_new` (declared in a `package!()`) |
 //! | `constant!` (bare = `#[prebindgen]` const) | `COVER_MAGIC` (`Long`) + `COVER_TAG` (`String`) → top-level `val`s |
 //! | `constant!(N).fun(fun!(…))`           | `cover_tag_runtime()` → eagerly-initialized `val COVER_TAG_RUNTIME` |
@@ -155,12 +156,30 @@ fn main() {
         // reassembled via a generated `fromParts`). A data class can carry
         // members like any re-enterable kind: the instance method's receiver
         // crosses as `this`'s field leaves (I5).
-        .package(package!().class(data_class!(Payload).fun(fun!(payload_label_len))))
+        // `Payload` also demos the `.interface()` hatch on a DATA class:
+        // `PayloadApi` exposes its fields + `labelLen()`, and the
+        // hand-written `Timestamped` interface extends it (#54).
+        .package(
+            package!().class(
+                data_class!(Payload)
+                    .interface()
+                    .implements("io.prebindgen.covertest.Timestamped")
+                    .fun(fun!(payload_label_len)),
+            ),
+        )
         // ── Subpackage `model`: enum + value class + nested data class ──────
         .package(
             package!("model")
-                // `Priority` as a Kotlin `enum class` (jint wire, `fromInt` companion).
-                .class(enum_class!(Priority))
+                // `Priority` as a Kotlin `enum class` (jint wire, `fromInt`
+                // companion); `.interface_name("PriorityKind")` demos the
+                // generated interface on an ENUM with a per-decl name, and the
+                // hand-written `Ranked` (which extends `PriorityKind`) is
+                // attached via `.implements` (#54).
+                .class(
+                    enum_class!(Priority)
+                        .interface_name("PriorityKind")
+                        .implements("io.prebindgen.covertest.Ranked"),
+                )
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
@@ -254,14 +273,17 @@ fn main() {
                 )
                 .class(
                     ptr_class!(Storage)
+                        // #54: emit the generated `StorageApi` interface (the
+                        // class implements it, members get `override`) AND
+                        // attach the hand-written `CovResource` which EXTENDS
+                        // `StorageApi` — so its defaults call `len()`/`peek()`
+                        // with full compiler checking, no hand-editing of
+                        // generated code.
+                        .interface()
+                        .implements("io.prebindgen.covertest.CovResource")
                         .fun(fun!(storage_len))
                         .fun(fun!(storage_contains))
-                        .constructor(fun!(storage_with_payload))
-                        // #54 integration hatch: the generated class joins a
-                        // hand-written consumer interface (satisfied by
-                        // NativeHandle's public peek()/isClosed()) — no
-                        // hand-editing of generated code.
-                        .implements("io.prebindgen.covertest.CovResource"),
+                        .constructor(fun!(storage_with_payload)),
                 )
                 // The callback-handler handles (single payload / whole batch / owned
                 // storage handle).

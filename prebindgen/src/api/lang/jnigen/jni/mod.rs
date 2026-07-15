@@ -80,12 +80,7 @@ pub(crate) use crate::api::{
 /// Kotlin emitter writes a typed-handle `.kt` file (and the Rust side its
 /// `freePtr` destructor) for every opaque type.
 #[derive(Clone, Default)]
-pub(crate) struct OpaqueConfig {
-    /// Kotlin interfaces added to the generated class's supertype list
-    /// (`PtrClassDecl::implements`) — the bounded integration hatch; the
-    /// class body and lifecycle members are unaffected.
-    pub(crate) interfaces: Vec<String>,
-}
+pub(crate) struct OpaqueConfig {}
 
 /// Per-enum configuration (driven by `JniGen::enum_class`).
 ///
@@ -159,6 +154,18 @@ pub(crate) struct TypeConfig {
     /// always resolve both ways); a wrapper-only entry is required per
     /// **usage** direction, so an output-only wrapper needs no input twin.
     pub class_decl: bool,
+    /// Emit the generated interface mirroring the class's public instance
+    /// surface, and make the class implement it with `override` on every
+    /// class-body member (`.interface()` / implied by `.interface_name()`).
+    pub interface_enabled: bool,
+    /// Per-decl literal interface name (`.interface_name(...)`, relative, no
+    /// dots) — bypasses the `set_interface_name_mangle` hook.
+    pub interface_name_override: Option<String>,
+    /// Kotlin interfaces added to the generated class's supertype list
+    /// (`.implements(...)`, any class kind) — the class implements them
+    /// nominally; the class body and lifecycle members are unaffected.
+    /// Orthogonal to [`Self::interface_enabled`].
+    pub interfaces: Vec<String>,
 }
 
 /// Free-standing functions emitted into a synthetic package-level wrapper
@@ -324,6 +331,10 @@ pub struct JniGen {
     /// unset = prepend `"JNI"`, so you get `JNINative`. Override to
     /// plug in a different convention.
     pub(crate) harness_name_mangle: Option<NameMangle>,
+    /// Mangler turning a class name into its generated `.interface()` name.
+    /// Receives the final class name; identity is forbidden (a class and its
+    /// interface can't share a name). Default when unset = append `"Api"`.
+    pub(crate) interface_name_mangle: Option<NameMangle>,
 
     /// Structured per-type configuration keyed by canonical Rust type.
     /// One entry per `Rust type ↔ JNI/Kotlin` rule; populated when accepting

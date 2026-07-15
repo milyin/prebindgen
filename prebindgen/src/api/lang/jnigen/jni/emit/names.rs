@@ -9,14 +9,13 @@ use super::*;
 /// [`JniGen::data_class`]) to derive a default Kotlin class name from
 /// the Rust type-key. Panics for non-path types (e.g. closures, references) —
 /// the per-kind `*_name_mangle` closures see only path-shaped
-/// shorts. For verbatim Kotlin expressions on non-path types, chain
-/// [`JniGen::kotlin_type`] after the structured builder.
+/// shorts. For verbatim Kotlin expressions on non-path types, use a
+/// scalar / generic type wrapper.
 pub(crate) fn rust_short_name(key: &TypeKey) -> String {
     rust_short_name_opt(key).unwrap_or_else(|| {
         panic!(
             "rust_short_name: cannot derive Kotlin name from type-key `{}` — \
-             only path-shaped types are supported here; use \
-             `kotlin_type(\"<verbatim>\")` to set the name explicitly",
+             only path-shaped types are supported here",
             key.as_str()
         )
     })

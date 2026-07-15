@@ -13,9 +13,9 @@
 //!
 //! # Name-mangle hooks
 //!
-//! One uniform contract for all six hooks: **the hook receives the derived
-//! default name for its tier** — exactly what the generator would use if no
-//! hook were set — **and returns the final name; every default is the
+//! One uniform contract for the six name hooks: **the hook receives the
+//! derived default name for its tier** — exactly what the generator would use
+//! if no hook were set — **and returns the final name; every default is the
 //! identity.** The input *domain* differs per tier (a fn name is camelCase,
 //! a class name is a Rust short name); the table states each:
 //!
@@ -28,8 +28,15 @@
 //! | [`set_enum_name_mangle`](JniGen::set_enum_name_mangle) | `enum_class` Kotlin classes | Rust type short name | identity |
 //! | [`set_member_name_mangle`](JniGen::set_member_name_mangle) | class members without a per-member `.name()` | namespace-stripped camelCase (`storage_len` on `Storage` → `"len"`) | identity |
 //!
-//! A per-decl `.name()` override is always verbatim and **bypasses** the
-//! hooks entirely.
+//! One further hook does NOT follow the identity rule, because its input and
+//! output are two names that must differ:
+//!
+//! | hook | names | input | default |
+//! |---|---|---|---|
+//! | [`set_interface_name_mangle`](JniGen::set_interface_name_mangle) | the generated `.interface()` interface | the final **class** name (`"Storage"`) | append `"Api"` (`"StorageApi"`); identity is a hard error |
+//!
+//! A per-decl `.name()` / `.interface_name()` override is always verbatim and
+//! **bypasses** the hooks entirely.
 
 use super::*;
 
@@ -42,33 +49,18 @@ pub(crate) enum NameKind {
     DataOrValue,
 }
 
-/// Raw naming spec of one type, stored in [`TypeConfig`] as declared and
-/// turned into a concrete Kotlin FQN only when read ([`JniGen::fqn_of`]),
-/// against whatever the settings are at that moment.
+/// Raw naming spec of one declared class type, stored in [`TypeConfig`] as
+/// declared and turned into a concrete Kotlin FQN only when read
+/// ([`JniGen::fqn_of`]), against whatever the settings are at that moment.
 #[derive(Clone)]
-pub(crate) enum NameSpec {
-    /// Verbatim Kotlin type/FQN — a scalar wrapper's `kotlin_type`, or a
-    /// data/value class's `kotlin_type` expression. Settings-independent.
-    Verbatim(String),
-    /// A declared class whose FQN derives from the current settings.
-    Class {
-        subpackage: String,
-        /// `rust_short_name(&key)` — the mangle hook's input.
-        short: String,
-        /// Per-decl `.name()` — resolved against package + subpackage,
-        /// bypasses the mangle hook.
-        name_override: Option<String>,
-        kind: NameKind,
-    },
-}
-
-impl NameSpec {
-    /// True for a `kotlin_type`-mapped declaration: the type surfaces as an
-    /// EXISTING Kotlin type — emitters generate no file for it (the FQN is
-    /// used verbatim at reference sites only).
-    pub(crate) fn is_verbatim(&self) -> bool {
-        matches!(self, NameSpec::Verbatim(_))
-    }
+pub(crate) struct NameSpec {
+    pub(crate) subpackage: String,
+    /// `rust_short_name(&key)` — the mangle hook's input.
+    pub(crate) short: String,
+    /// Per-decl `.name()` — resolved against package + subpackage,
+    /// bypasses the mangle hook.
+    pub(crate) name_override: Option<String>,
+    pub(crate) kind: NameKind,
 }
 
 impl JniGen {
@@ -120,6 +112,22 @@ impl JniGen {
         F: Fn(&str) -> String + Send + Sync + 'static,
     {
         self.fun_name_mangle = Some(Arc::new(f));
+        self
+    }
+
+    /// Set the closure that turns a class name into the name of its generated
+    /// `.interface()` interface. Receives the **final class name** and must
+    /// return a DIFFERENT name — identity is a hard error (a class and its
+    /// interface cannot share a name in one package), the one deviation from
+    /// the uniform hook contract in the module-level table. Default when
+    /// unset = append `"Api"` (`Storage` → `StorageApi`). A per-decl
+    /// [`interface_name`](crate::lang::PtrClassDecl::interface_name) wins over
+    /// the hook.
+    pub fn set_interface_name_mangle<F>(mut self, f: F) -> Self
+    where
+        F: Fn(&str) -> String + Send + Sync + 'static,
+    {
+        self.interface_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -196,25 +204,21 @@ impl JniGen {
     /// `name_override` (package-resolved, mangle-bypassed), then the mangle
     /// hook for the class kind + package resolution.
     pub(crate) fn fqn_of(&self, spec: &NameSpec) -> String {
-        match spec {
-            NameSpec::Verbatim(fqn) => fqn.clone(),
-            NameSpec::Class {
-                subpackage,
-                short,
-                name_override,
-                kind,
-            } => {
-                if let Some(n) = name_override {
-                    return self.resolve_class_fqn(subpackage, n);
-                }
-                let mangled = match kind {
-                    NameKind::Ptr => self.mangle_ptr_class(short),
-                    NameKind::Enum => self.mangle_enum(short),
-                    NameKind::DataOrValue => self.mangle_data_class(short),
-                };
-                self.resolve_class_fqn(subpackage, &mangled)
-            }
+        let NameSpec {
+            subpackage,
+            short,
+            name_override,
+            kind,
+        } = spec;
+        if let Some(n) = name_override {
+            return self.resolve_class_fqn(subpackage, n);
         }
+        let mangled = match kind {
+            NameKind::Ptr => self.mangle_ptr_class(short),
+            NameKind::Enum => self.mangle_enum(short),
+            NameKind::DataOrValue => self.mangle_data_class(short),
+        };
+        self.resolve_class_fqn(subpackage, &mangled)
     }
 
     /// The registered Kotlin FQN for a canonical Rust type key, derived on

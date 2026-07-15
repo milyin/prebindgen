@@ -148,6 +148,7 @@ fn class_keyword(kind: &ClassKind) -> &'static str {
         ClassKind::ValueInline => "value class",
         ClassKind::Object => "object",
         ClassKind::Companion => "companion object",
+        ClassKind::Interface => "interface",
     }
 }
 
@@ -157,6 +158,9 @@ fn render_ctor_param(p: &KtCtorParam, imports: &mut ImportSet) -> String {
         s.push_str(&format!("@{a} "));
     }
     s.push_str(p.vis.prefix());
+    if p.overrides {
+        s.push_str("override ");
+    }
     match p.prop {
         Some(false) => s.push_str("val "),
         Some(true) => s.push_str("var "),

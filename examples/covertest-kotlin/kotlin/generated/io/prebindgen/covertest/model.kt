@@ -5,6 +5,11 @@ import io.prebindgen.covertest.CovNative
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.Payload
+import io.prebindgen.covertest.Ranked
+
+public interface PriorityKind {
+    val value: Int
+}
 
 /**
  * Coarse importance bucket derived from a payload's `value`. A C-like
@@ -13,7 +18,7 @@ import io.prebindgen.covertest.Payload
  *
  * JVM-side surface for the native Rust `Priority` enum.
  */
-public enum class Priority(public val value: Int) {
+public enum class Priority(public override val value: Int) : PriorityKind, Ranked {
     LOW(0),
     NORMAL(1),
     HIGH(2);
