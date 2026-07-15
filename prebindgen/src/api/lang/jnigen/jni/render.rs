@@ -355,10 +355,13 @@ pub(crate) fn build_typed_handle(
 
     // Promoted instance methods: each `.fun(f)` becomes an instance method
     // (receiver bound to `this`), delegating to the same centralized
-    // `JNINative` extern as a free wrapper would.
+    // `JNINative` extern as a free wrapper would. `.overrides()` marks the
+    // member as implementing a matching abstract of a declared
+    // `.implements(...)` interface (Kotlin requires the modifier on
+    // class-body members).
     for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
         if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
-            if let Some(f) = render_wrapper_fn(
+            if let Some(mut f) = render_wrapper_fn(
                 ext,
                 item_fn,
                 registry,
@@ -366,6 +369,9 @@ pub(crate) fn build_typed_handle(
                 Some(ext.effective_member_name(key, m).as_str()),
                 Some(key),
             ) {
+                if m.overrides {
+                    f = f.modifier("override");
+                }
                 class = class.member(f);
             }
         }

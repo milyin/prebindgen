@@ -429,7 +429,8 @@ impl ExpandParamDecl {
         assert!(
             ctor.kotlin_name_override.is_none()
                 && ctor.param_expands.is_empty()
-                && ctor.return_expand.is_none(),
+                && ctor.return_expand.is_none()
+                && !ctor.overrides,
             "expand_param!({}).variant(fun!({})): a variant arm only names the \
              `#[prebindgen]` constructor — .name()/expand overrides don't apply",
             self.key.as_str(),
@@ -502,7 +503,9 @@ impl ExpandReturnDecl {
     /// accessor).
     pub fn field(mut self, accessor: FunctionDecl) -> Self {
         assert!(
-            accessor.param_expands.is_empty() && accessor.return_expand.is_none(),
+            accessor.param_expands.is_empty()
+                && accessor.return_expand.is_none()
+                && !accessor.overrides,
             "expand_return!({}).field(fun!({})): expand overrides don't apply to a \
              field accessor — only .name() is honored",
             self.key.as_str(),
@@ -774,6 +777,7 @@ pub struct FunctionDecl {
     pub(crate) kotlin_name_override: Option<String>,
     pub(crate) param_expands: Vec<(String, ExpandParamDecl)>,
     pub(crate) return_expand: Option<ExpandReturnDecl>,
+    pub(crate) overrides: bool,
 }
 
 impl FunctionDecl {
@@ -783,7 +787,19 @@ impl FunctionDecl {
             kotlin_name_override: None,
             param_expands: Vec::new(),
             return_expand: None,
+            overrides: false,
         }
+    }
+
+    /// Emit the Kotlin `override` modifier on the generated member — required
+    /// when a [`PtrClassDecl::implements`] interface declares a matching
+    /// abstract member (Kotlin demands `override` on a class-body member that
+    /// implements an interface member; inherited `NativeHandle` members need
+    /// no marker). Valid only on a `ptr_class` instance method
+    /// ([`PtrClassDecl::fun`]) — everywhere else it is a hard error.
+    pub fn overrides(mut self) -> Self {
+        self.overrides = true;
+        self
     }
 
     /// Set the Kotlin-side name. Default: the Rust name camel-cased
@@ -943,7 +959,7 @@ impl ConstDecl {
     /// must take no parameters and must not return `Result`.
     pub fn fun(self, decl: FunctionDecl) -> Self {
         assert!(
-            decl.param_expands.is_empty() && decl.return_expand.is_none(),
+            decl.param_expands.is_empty() && decl.return_expand.is_none() && !decl.overrides,
             "constant `{}`: expand overrides don't apply to a constant source fn `{}`",
             self.rust_ident,
             decl.rust_ident
@@ -1021,7 +1037,8 @@ impl From<FunctionDecl> for IgnoreDecl {
         assert!(
             decl.kotlin_name_override.is_none()
                 && decl.param_expands.is_empty()
-                && decl.return_expand.is_none(),
+                && decl.return_expand.is_none()
+                && !decl.overrides,
             "ignore(fun!({})): an ignored fn is never surfaced — \
              .name()/expand overrides don't apply",
             decl.rust_ident
@@ -1359,7 +1376,8 @@ impl From<FunctionDecl> for ConvertSourceDecl {
         assert!(
             decl.kotlin_name_override.is_none()
                 && decl.param_expands.is_empty()
-                && decl.return_expand.is_none(),
+                && decl.return_expand.is_none()
+                && !decl.overrides,
             "fun!({}) as a conversion source: a conversion fn is never surfaced in \
              Kotlin — .name()/expand overrides don't apply",
             decl.rust_ident

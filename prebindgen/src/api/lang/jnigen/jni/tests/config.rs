@@ -12,20 +12,30 @@ fn builtin_convert_type_panics() {
 /// #54: `.implements(...)` — the ptr_class integration hatch. Declared
 /// interfaces join the generated class's supertype list after the lifecycle
 /// base; dotted FQNs are imported and shortened; the class body (close/take/
-/// freePtr) is unchanged.
+/// freePtr) is unchanged. `.overrides()` on a member emits the Kotlin
+/// `override` modifier so the interface can abstract over generated methods.
 #[test]
 fn ptr_class_implements_adds_interface_supertypes() {
     let loc = myflat_loc();
-    let f: syn::ItemFn =
-        syn::parse_str("pub fn z_thing_new() -> ZThing { unimplemented!() }").unwrap();
-    let registry =
-        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let fns: &[&str] = &[
+        "pub fn z_thing_new() -> ZThing { unimplemented!() }",
+        "pub fn z_thing_size(t: &ZThing) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
                     .implements("io.other.Resource")
-                    .implements("LocalIface"),
+                    .implements("LocalIface")
+                    .fun(crate::fun!(z_thing_size).overrides()),
             )
             .fun(crate::fun!(z_thing_new)),
     );
@@ -50,6 +60,9 @@ fn ptr_class_implements_adds_interface_supertypes() {
     // The lifecycle members are untouched by the hatch.
     assert!(thing.contains("override fun close()"), "{thing}");
     assert!(thing.contains("fun take(): ZThing"), "{thing}");
+    // The marked member carries the modifier (namespace-stripped name:
+    // `z_thing_size` on `ZThing` → `size`); the wrapper body is unchanged.
+    assert!(thing.contains("override fun size("), "{thing}");
 }
 
 /// A duplicate interface on one decl is a decl-time hard error.
@@ -59,6 +72,39 @@ fn ptr_class_duplicate_implements_rejected() {
     let _ = crate::ptr_class!(ZThing)
         .implements("io.other.Resource")
         .implements("io.other.Resource");
+}
+
+/// `.overrides()` pairs with `.implements(...)` — a free package function
+/// overrides nothing.
+#[test]
+#[should_panic(expected = "a free package function overrides nothing")]
+fn overrides_on_free_function_rejected() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn = syn::parse_str("pub fn z_ping() -> i64 { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("t").fun(crate::fun!(z_ping).overrides()));
+    let _ = registry.resolve(jni);
+}
+
+/// Same for companion factories: only instance methods can override.
+#[test]
+#[should_panic(expected = "applies only to a ptr_class instance method")]
+fn overrides_on_constructor_rejected() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_thing_new() -> ZThing { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni =
+        JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!("t").class(
+                crate::ptr_class!(ZThing).constructor(crate::fun!(z_thing_new).overrides()),
+            ));
+    let _ = registry.resolve(jni);
 }
 
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn

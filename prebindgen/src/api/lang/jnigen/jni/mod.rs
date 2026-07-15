@@ -224,6 +224,10 @@ pub(crate) struct ClassMember {
     pub kotlin_name_override: Option<String>,
     /// Member kind (fun / constructor).
     pub kind: MemberKind,
+    /// Emit the Kotlin `override` modifier ([`FunctionDecl::overrides`]) —
+    /// the member implements a matching abstract of a
+    /// [`PtrClassDecl::implements`] interface.
+    pub overrides: bool,
 }
 
 /// Boxed closure that builds a converter when applied to the wildcard

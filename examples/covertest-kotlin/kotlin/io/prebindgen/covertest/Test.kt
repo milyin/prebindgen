@@ -174,13 +174,20 @@ fun main() {
 
     // ── .implements(...) integration hatch (#54): the generated Storage class
     // implements the HAND-WRITTEN CovResource interface — used here through a
-    // polymorphic interface reference, including an interface-default member
-    // built on the generated peek()/isClosed() surface ────────────────────────
-    section(".implements() hatch (Storage as CovResource)") {
+    // polymorphic interface reference. Abstracts are satisfied both by the
+    // inherited NativeHandle surface (peek/isClosed) and by the
+    // `.overrides()`-marked class-body method (len); the default members build
+    // interface-injected behavior over each ───────────────────────────────────
+    section(".implements() hatch (Storage as CovResource, .overrides() len)") {
         val s = storageNew(boom)
         val r: CovResource = s
-        check(r.isLive())                 // default member over generated surface
+        check(r.isLive())                 // default member over inherited surface
         check(!r.isClosed() && r.peek() != 0L)
+        check(r.isEmpty())                // default member over generated len()
+        check(r.len(boom) == 0L)          // class-specific method via the interface
+        storagePutByTake(s, payload(7L, 0, 0.0, false, null), boom)
+        check(!r.isEmpty())
+        check(r.len(boom) == 1L)
         s.close()
         check(!r.isLive())
         check(r.isClosed() && r.peek() == 0L)
