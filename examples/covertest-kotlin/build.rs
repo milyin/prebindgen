@@ -254,17 +254,13 @@ fn main() {
                 )
                 .class(
                     ptr_class!(Storage)
-                        // #54: `.overrides()` — the member implements the
-                        // matching CovResource abstract (Kotlin needs the
-                        // `override` modifier on class-body members).
-                        .fun(fun!(storage_len).overrides())
+                        .fun(fun!(storage_len))
                         .fun(fun!(storage_contains))
                         .constructor(fun!(storage_with_payload))
                         // #54 integration hatch: the generated class joins a
-                        // hand-written consumer interface — abstracts satisfied
-                        // by NativeHandle's inherited peek()/isClosed() AND the
-                        // `.overrides()`-marked len() — no hand-editing of
-                        // generated code.
+                        // hand-written consumer interface (satisfied by
+                        // NativeHandle's public peek()/isClosed()) — no
+                        // hand-editing of generated code.
                         .implements("io.prebindgen.covertest.CovResource"),
                 )
                 // The callback-handler handles (single payload / whole batch / owned

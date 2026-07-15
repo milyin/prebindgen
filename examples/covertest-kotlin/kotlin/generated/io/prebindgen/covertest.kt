@@ -180,7 +180,7 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr), CovResource {
     }
 
     /** Number of stored payloads (an **accessor** on `Storage`). */
-    public override fun len(onError: JniErrorHandler<Long>): Long {
+    public fun len(onError: JniErrorHandler<Long>): Long {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {

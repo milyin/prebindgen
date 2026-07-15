@@ -336,7 +336,7 @@ impl JniGen {
                 opaque.interfaces.push(iface);
             }
         }
-        self.accept_members_impl(&key, decl.members, true);
+        self.accept_members(&key, decl.members);
     }
 
     fn accept_enum_class(&mut self, subpackage: &str, decl: EnumClassDecl) {
@@ -427,27 +427,9 @@ impl JniGen {
     /// constructor member's return is additionally never output-flattened
     /// (it's a factory); then the members join the class's registered set.
     fn accept_members(&mut self, key: &TypeKey, members: Vec<(FunctionDecl, MemberKind)>) {
-        self.accept_members_impl(key, members, false)
-    }
-
-    /// `overrides_allowed`: only `ptr_class` instance methods may carry
-    /// `.overrides()` — the marker pairs with `PtrClassDecl::implements`,
-    /// which the other class kinds don't have.
-    fn accept_members_impl(
-        &mut self,
-        key: &TypeKey,
-        members: Vec<(FunctionDecl, MemberKind)>,
-        overrides_allowed: bool,
-    ) {
         for (decl, kind) in members {
             let rust_ident = decl.rust_ident.clone();
             let kotlin_name_override = decl.kotlin_name_override.clone();
-            let overrides = decl.overrides;
-            assert!(
-                !overrides || (overrides_allowed && kind == MemberKind::Fun),
-                "fun!({rust_ident}).overrides(): the `override` modifier applies only to a \
-                 ptr_class instance method (the marker pairs with `.implements(...)`)"
-            );
             self.accept_fn_expands(decl);
             if kind == MemberKind::Constructor {
                 self.deconstructors
@@ -460,18 +442,11 @@ impl JniGen {
                     rust_ident,
                     kotlin_name_override,
                     kind,
-                    overrides,
                 });
         }
     }
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
-        assert!(
-            !decl.overrides,
-            "fun!({}).overrides(): a free package function overrides nothing — the marker \
-             applies only to a ptr_class instance method",
-            decl.rust_ident
-        );
         let mut entry = MethodEntry::new(decl.rust_ident.clone());
         entry.kotlin_name_override = decl.kotlin_name_override.clone();
         self.packages
@@ -496,7 +471,6 @@ impl JniGen {
             kotlin_name_override: _,
             param_expands,
             return_expand,
-            overrides: _,
         } = decl;
         for (param, pdecl) in param_expands {
             self.fn_param_expands
