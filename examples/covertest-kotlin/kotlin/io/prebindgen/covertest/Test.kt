@@ -10,6 +10,7 @@ import io.prebindgen.covertest.analytics.storageMatchesSummary
 import io.prebindgen.covertest.analytics.storageSummary
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
+import io.prebindgen.covertest.analytics.summaryPrefer
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.model.Annotated
@@ -271,8 +272,8 @@ fun main() {
         check(sum.count(boom) == 2L && sum.total(boom) == 40.0 && sum.scaled(0.5, boom) == 20.0)
         sum.close()
 
-        // #52 `.split()` overloads (class-default `expand_param!(Summary)`):
-        // idiomatic typed forms delegating to the selector wrapper.
+        // #52 single-param `.split_on_param("expected")` on the CLASS-DEFAULT
+        // `Summary` variants: idiomatic typed forms delegating to the selector.
         check(storageMatchesSummary(s, 2L, 40.0, boom))       // build-from-leaves arm
         check(!storageMatchesSummary(s, 1L, 40.0, boom))
         val h0 = Summary.of(2L, 40.0, boom)
@@ -280,10 +281,21 @@ fun main() {
         // The selector form stays public underneath (raw arm dispatch).
         check(storageMatchesSummary(s, 0, 2L, 40.0, null, boom))
 
-        // #52 `.split()` overloads (per-fn `.expand_param("expected", …)`).
+        // #52 single-param split via a per-fn `.expand_param` override.
         check(storageExpectSummary(s, 2L, 40.0, boom))        // build-from-leaves arm
         val h1 = Summary.of(2L, 40.0, boom)
         check(storageExpectSummary(s, h1, boom))              // pass-handle arm
+
+        // #52 CARTESIAN PRODUCT: two split params → the 2×2 grid of typed
+        // overloads, all four combinations distinct. Build args are prefixed
+        // with the origin parameter name (`primaryCount`, `fallbackTotal`); the
+        // handle arm consumes its `Summary`, so each is a fresh handle.
+        check(summaryPrefer(2L, 40.0, 1L, 1.0, boom) == 1L)                       // build / build
+        check(summaryPrefer(1L, 1.0, Summary.of(3L, 99.0, boom), boom) == 0L)     // build / handle
+        check(summaryPrefer(Summary.of(3L, 99.0, boom), 1L, 1.0, boom) == 1L)     // handle / build
+        check(
+            summaryPrefer(Summary.of(1L, 1.0, boom), Summary.of(3L, 99.0, boom), boom) == 0L,
+        )                                                                          // handle / handle
 
         // Auto-generated overloads coexist with a HAND-WRITTEN same-named one
         // (issue #52's manual path): `ManualOverloads.kt` adds another

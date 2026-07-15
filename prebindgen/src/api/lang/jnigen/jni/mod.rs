@@ -426,6 +426,11 @@ pub struct JniGen {
     /// `core/unfold.rs`'s `apply`.
     pub(crate) fn_return_expands: Vec<(syn::Ident, ExpandReturnDecl)>,
 
+    /// Per-fn split requests ([`FunctionDecl::split_on_param`]): the fn ident
+    /// and the parameter name whose variants get idiomatic typed overloads
+    /// (#52). Consumed by `overloads::render_param_overloads`.
+    pub(crate) fn_split_params: Vec<(syn::Ident, String)>,
+
     /// Class members (funs / constructors) attached to a declared class via
     /// its decl's `.fun()`/`.constructor()`, keyed by the class's canonical
     /// Rust type. Supplies the instance-method / companion-factory emission

@@ -1,52 +1,28 @@
-//! #52: opt-in idiomatic Kotlin overloads for `.split()` expanded params.
+//! #52: idiomatic Kotlin overloads for expanded params.
 //!
 //! A multi-variant `expand_param!(T)` crosses the wire as a selector tuple
-//! (`expectedSel: Int, expected00: Long?, …`). With `.split()` the generator
-//! emits, alongside that selector form, one **typed overload per variant**
-//! delegating to it — turning `storageExpectSummary(s, 0, count, total, null,
-//! onError)` into `storageExpectSummary(s, count, total, onError)`.
+//! (`expectedSel: Int, expected00: Long?, …`); the raw call site passes magic
+//! ints and null-padding. Two mechanisms turn that into idiomatic Kotlin:
 //!
-//! Validation is folded into emission (in-scope-aware, so it never flags a
-//! case that would not emit an overload):
-//! * **≤1 split parameter per function** — overloads are the product of every
-//!   split param's arms; capping at one keeps the surface finite and reduces
-//!   collision detection to the sound, complete type-level check.
-//! * **distinct JVM-erased arm signatures** — two variants that surface as the
-//!   same erased parameter list are a platform-declaration clash; a hard build
-//!   error names the offending class's variants.
+//! * **Proactive splittability check** ([`JniGen::validate_split_declarations`]):
+//!   every multi-variant `expand_param!` declaration (type-level or per-fn) is
+//!   verified up front to be *splittable* — its arms surface as pairwise-distinct
+//!   JVM signatures — so a function can safely request overloads. A collision is
+//!   a hard build error attributed to the declaration; `.no_split()` opts out.
+//! * **Per-function emission** ([`render_param_overloads`], driven by
+//!   [`FunctionDecl::split_on_param`](crate::fun)): for the named split params the
+//!   generator emits, alongside the selector wrapper, the **cartesian product** of
+//!   their arms as typed overloads, each delegating to the selector form. The
+//!   concrete product must have no two combinations sharing a JVM signature.
 //!
-//! Only flat, non-optional single-level arms are overloaded; `Option<T>` /
-//! `Vec<T>` params and recursively-built arms keep the selector form for that
-//! function (documented fallback — there is no clean single type to offer).
+//! Only flat, non-optional arms are splittable; an explicit `.split_on_param` on
+//! an `Option<T>` / recursively-built / single-variant / unknown parameter is a
+//! hard error.
 
 use super::*;
 use crate::api::core::expand::{FoldArg, FoldPlan};
 
 impl JniGen {
-    /// Whether the expanded parameter `(func, param)` producing `target` is
-    /// marked `.split()`. A per-fn `.expand_param(param, …)` override for this
-    /// exact `(func, param)` wins over the type-level default — the same
-    /// replace semantics [`Self::build_expansions`] applies.
-    pub(crate) fn is_split_param(
-        &self,
-        func: &syn::Ident,
-        param: &syn::Ident,
-        target: &syn::Type,
-    ) -> bool {
-        let param_s = param.to_string();
-        if let Some((_, _, decl)) = self
-            .fn_param_expands
-            .iter()
-            .find(|(f, p, _)| f == func && *p == param_s)
-        {
-            return decl.split;
-        }
-        let key = TypeKey::from_type(target);
-        self.param_expand_decls
-            .iter()
-            .any(|d| d.key == key && d.split)
-    }
-
     /// `true` if `simple` is the Kotlin simple name of a `value_blob`
     /// (`@JvmInline value class`) type — which erases to `ByteArray` on the
     /// JVM, so two distinct such classes share one method descriptor.
@@ -61,19 +37,134 @@ impl JniGen {
                     == Some(simple)
         })
     }
+
+    /// Proactively verify every multi-variant `expand_param!` declaration is
+    /// splittable (its arms have pairwise-distinct JVM-erased signatures), so
+    /// [`FunctionDecl::split_on_param`](crate::fun) can emit unambiguous
+    /// overloads. Runs regardless of whether any function actually splits the
+    /// type, so authorship errors surface early. `.no_split()` opts a decl out.
+    /// A collision panics with a message attributed to the declaration.
+    pub(crate) fn validate_split_declarations(&self, registry: &Registry<KotlinMeta>) {
+        let type_level = self
+            .param_expand_decls
+            .iter()
+            .map(|d| (d.key.as_str().to_string(), d));
+        let per_fn = self
+            .fn_param_expands
+            .iter()
+            .map(|(func, param, d)| (format!("fun `{func}` param `{param}`"), d));
+        for (site, decl) in type_level.chain(per_fn) {
+            if decl.no_split || decl.variants.len() < 2 {
+                continue;
+            }
+            let target = decl.key.to_type();
+            let sigs: Vec<(String, Vec<String>)> = decl
+                .variants
+                .iter()
+                .map(|v| {
+                    let ctor = match v {
+                        LocalVariant::Ctor(c) => Some(c),
+                        LocalVariant::SelfIdentity => None,
+                    };
+                    (
+                        ctor.map(|c| c.to_string())
+                            .unwrap_or_else(|| "variant_self()".to_string()),
+                        arm_erased_sig(self, registry, &target, ctor),
+                    )
+                })
+                .collect();
+            for i in 0..sigs.len() {
+                for j in (i + 1)..sigs.len() {
+                    if sigs[i].1 == sigs[j].1 {
+                        panic!(
+                            "expand_param!({t}) [{site}]: variants {a} and {b} both surface as \
+                             `({sig})` — a split would emit two overloads with the same JVM \
+                             signature; disambiguate the constructors or add .no_split()",
+                            t = decl.key.as_str(),
+                            a = sigs[i].0,
+                            b = sigs[j].0,
+                            sig = sigs[i].1.join(", "),
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
-/// One resolved split parameter of a function.
-struct SplitParam<'a> {
-    /// The original Rust parameter ident (e.g. `expected`).
-    param: syn::Ident,
-    /// Its resolved expansion plan (multi-variant, non-optional, flat).
-    plan: &'a FoldPlan,
+/// The JVM-erased type list of one arm: the constructor's parameter types
+/// (build arm), or the single target type (`variant_self`, `ctor == None`).
+fn arm_erased_sig(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    target: &syn::Type,
+    ctor: Option<&syn::Ident>,
+) -> Vec<String> {
+    match ctor {
+        Some(cf) => match registry.functions.get(cf) {
+            Some((item_fn, _)) => item_fn
+                .sig
+                .inputs
+                .iter()
+                .filter_map(|a| match a {
+                    syn::FnArg::Typed(pt) => Some(rust_type_erased(ext, registry, &pt.ty)),
+                    _ => None,
+                })
+                .collect(),
+            None => Vec::new(),
+        },
+        None => vec![rust_type_erased(ext, registry, target)],
+    }
 }
 
-/// Whether `plan` is a multi-variant expansion this feature can turn into
-/// overloads: it has a selector (≥2 arms), a plain (non-`Option`) outer shape,
-/// and no recursively-built arm.
+/// The JVM-erased descriptor fragment a Rust type surfaces as: a declared
+/// value-blob class erases to `ByteArray`, another declared class to its simple
+/// Kotlin name, a primitive/`String` to its Kotlin builtin, everything else to
+/// its token string (structural fallback). References are peeled first (a `&T`
+/// handle erases like `T`).
+fn rust_type_erased(ext: &JniGen, registry: &Registry<KotlinMeta>, ty: &syn::Type) -> String {
+    let peeled = match ty {
+        syn::Type::Reference(r) => &*r.elem,
+        other => other,
+    };
+    let key = TypeKey::from_type(peeled);
+    if let Some(cfg) = ext.types.get(&key) {
+        if cfg.name_spec.is_some() {
+            if cfg.value_blob {
+                return "ByteArray".to_string();
+            }
+            if let Some(fqn) = ext.kotlin_fqn(key.as_str()) {
+                return fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
+            }
+        }
+    }
+    if let Some(kt) = registry
+        .input_entry(peeled)
+        .and_then(|e| e.metadata.kotlin_name.clone())
+    {
+        return erased(ext, &kt);
+    }
+    peeled.to_token_stream().to_string()
+}
+
+/// The JVM-erased descriptor fragment of an already-rendered [`kt::KtType`] —
+/// value classes to `ByteArray`, primitives/`String` to themselves, other
+/// classes to their simple name.
+fn erased(ext: &JniGen, ty: &kt::KtType) -> String {
+    let simple = ty.simple_name().unwrap_or("");
+    if ext.is_value_blob_kotlin(simple) {
+        return "ByteArray".to_string();
+    }
+    match simple {
+        "Int" | "Long" | "Double" | "Float" | "Boolean" | "Byte" | "Short" | "Char" | "String"
+        | "ByteArray" => simple.to_string(),
+        _ => simple.to_string(),
+    }
+}
+
+/// Whether `plan` is a multi-variant expansion that can be turned into
+/// overloads: a selector (≥2 arms), a plain (non-`Option`) outer shape, and no
+/// recursively-built arm.
 fn plan_in_scope(plan: &FoldPlan) -> bool {
     plan.selector.is_some()
         && !plan.produces_option()
@@ -83,43 +174,23 @@ fn plan_in_scope(plan: &FoldPlan) -> bool {
             .any(|v| v.inputs.iter().any(|a| matches!(a, FoldArg::Build(_))))
 }
 
-/// Every in-scope split parameter of `f`, in signature order. Used both to
-/// pick the one to overload and to enforce the ≤1-per-function rule.
-fn split_params<'a>(
-    ext: &JniGen,
-    f: &syn::ItemFn,
-    registry: &'a Registry<KotlinMeta>,
-) -> Vec<SplitParam<'a>> {
-    let mut out = Vec::new();
-    for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else {
-            continue;
-        };
-        let syn::Pat::Ident(pid) = &*pt.pat else {
-            continue;
-        };
-        let Some(plan) = registry
-            .expansion_plans
-            .get(&(f.sig.ident.clone(), pid.ident.clone()))
-        else {
-            continue;
-        };
-        if !ext.is_split_param(&f.sig.ident, &pid.ident, &plan.target) {
-            continue;
-        }
-        if !plan_in_scope(plan) {
-            continue;
-        }
-        out.push(SplitParam {
-            param: pid.ident.clone(),
-            plan,
-        });
-    }
-    out
+/// One resolved split parameter of a function, positioned against the rendered
+/// selector wrapper.
+struct Split<'a> {
+    /// The original Rust parameter ident (e.g. `expected`).
+    param: syn::Ident,
+    plan: &'a FoldPlan,
+    /// Start of this param's contiguous leaf block in `sel_fun.params`.
+    start: usize,
+    /// Block length (`plan.leaves.len()`).
+    len: usize,
+    /// Selector-leaf index within the block.
+    sel_idx: usize,
+    /// Per-variant typed params: `(param, leaf-index-within-block)`.
+    arms: Vec<Vec<(kt::KtParam, usize)>>,
 }
 
-/// Camel-cased Kotlin names of a `#[prebindgen]` constructor's parameters, in
-/// order — the idiomatic overload parameter names for a build arm.
+/// Camel-cased Kotlin names of a `#[prebindgen]` constructor's parameters.
 fn ctor_param_names(f: &syn::ItemFn) -> Vec<String> {
     f.sig
         .inputs
@@ -134,9 +205,17 @@ fn ctor_param_names(f: &syn::ItemFn) -> Vec<String> {
         .collect()
 }
 
-/// A named type with its nullability cleared (`T?` → `T`) — a split overload
-/// takes each arm's real, non-nullable constructor parameter type, unlike the
-/// selector form whose per-arm slots are all nullable.
+/// `origin` + Capitalized `name` (`primary` + `count` → `primaryCount`).
+fn prefixed(origin: &str, name: &str) -> String {
+    let mut c = name.chars();
+    match c.next() {
+        Some(first) => format!("{origin}{}{}", first.to_uppercase(), c.as_str()),
+        None => origin.to_string(),
+    }
+}
+
+/// Clear nullability (`T?` → `T`): an overload takes each arm's real,
+/// non-nullable constructor parameter type.
 fn non_null(mut ty: kt::KtType) -> kt::KtType {
     match &mut ty {
         kt::KtType::Named { nullable, .. } | kt::KtType::Function { nullable, .. } => {
@@ -146,39 +225,26 @@ fn non_null(mut ty: kt::KtType) -> kt::KtType {
     ty
 }
 
-/// The JVM method descriptor fragment one overload parameter erases to —
-/// value classes to `ByteArray`, primitives/`String` to themselves, other
-/// classes to their FQN. Two arms collide iff their fragment lists match.
-fn erased(ext: &JniGen, ty: &kt::KtType) -> String {
-    let simple = ty.simple_name().unwrap_or("");
-    if ext.is_value_blob_kotlin(simple) {
-        return "ByteArray".to_string();
-    }
-    match simple {
-        "Int" | "Long" | "Double" | "Float" | "Boolean" | "Byte" | "Short" | "Char" | "String"
-        | "ByteArray" => simple.to_string(),
-        _ => ty.leaf_name().unwrap_or(simple).to_string(),
-    }
-}
-
-/// The typed overload parameters of one variant arm, paired with the flat leaf
-/// index each fills in the selector form. `block` is the selector wrapper's
-/// contiguous run of leaf params (index `k` = `plan.leaves[k]`). Returns
-/// `None` if any input is not a flat leaf (out of scope).
+/// The typed overload params of one variant arm, paired with the leaf index
+/// each fills. `origin`/`multi` drive name disambiguation (build-arm params are
+/// prefixed with the origin parameter name when the function splits more than
+/// one parameter). Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
     registry: &Registry<KotlinMeta>,
     variant: &crate::api::core::expand::FoldVariant,
-    base_param: &syn::Ident,
+    origin: &syn::Ident,
     block: &[kt::KtParam],
+    multi: bool,
 ) -> Option<Vec<(kt::KtParam, usize)>> {
+    let origin_kt = kt_param_name(&origin.to_string());
     let names: Vec<String> = match &variant.ctor {
         Some(cf) => {
             let (item_fn, _) = registry.functions.get(cf)?;
             ctor_param_names(item_fn)
         }
-        // Identity arm: a single parameter, the target value itself, named
-        // after the original Rust parameter.
-        None => vec![kt_param_name(&base_param.to_string())],
+        // Identity arm: one parameter, the value itself, named after the origin
+        // parameter (already unique across split params — never prefixed).
+        None => vec![origin_kt.clone()],
     };
     let mut out = Vec::new();
     for (m, arg) in variant.inputs.iter().enumerate() {
@@ -186,14 +252,19 @@ fn variant_typed_params(
             return None;
         };
         let slot = block.get(*idx)?;
-        let name = names.get(m).cloned().unwrap_or_else(|| slot.name.clone());
+        let base = names.get(m).cloned().unwrap_or_else(|| slot.name.clone());
+        let name = if multi && variant.ctor.is_some() {
+            prefixed(&origin_kt, &base)
+        } else {
+            base
+        };
         out.push((kt::KtParam::new(&name, non_null(slot.ty.clone())), *idx));
     }
     Some(out)
 }
 
-/// Locate the split param's contiguous leaf block in the already-rendered
-/// selector wrapper's parameter list, matching by leaf name in order.
+/// Locate a param's contiguous leaf block in the selector wrapper's parameter
+/// list, matching by leaf name in order.
 fn find_block(params: &[kt::KtParam], leaf_names: &[String]) -> Option<usize> {
     if leaf_names.is_empty() || params.len() < leaf_names.len() {
         return None;
@@ -206,103 +277,212 @@ fn find_block(params: &[kt::KtParam], leaf_names: &[String]) -> Option<usize> {
     })
 }
 
-/// The overloads for one function, delegating to its already-rendered selector
-/// wrapper `sel_fun` (same Kotlin name). Empty unless the function has one
-/// in-scope split parameter. Panics (a build error) on the ≤1-per-function and
-/// distinct-signature rules.
-pub(crate) fn render_param_overloads(
-    ext: &JniGen,
+/// Resolve one `.split_on_param` request against the rendered selector wrapper,
+/// validating the parameter is expandable, multi-variant, and in-scope (all
+/// hard errors — the user explicitly asked to split it).
+fn resolve_split<'a>(
+    registry: &'a Registry<KotlinMeta>,
     f: &syn::ItemFn,
-    registry: &Registry<KotlinMeta>,
     sel_fun: &kt::KtFun,
-) -> Vec<kt::KtFun> {
-    let splits = split_params(ext, f, registry);
-    if splits.len() > 1 {
-        let names: Vec<String> = splits.iter().map(|s| s.param.to_string()).collect();
-        panic!(
-            "fn `{}` has {} `.split()` parameters ({}); a function may split at most one — \
-             un-split the others with a per-fn `.expand_param(name, …)` override that omits \
-             `.split()`",
-            f.sig.ident,
-            names.len(),
-            names.join(", ")
-        );
-    }
-    let Some(sp) = splits.first() else {
-        return Vec::new();
-    };
-    let plan = sp.plan;
-
+    param_name: &str,
+    multi: bool,
+) -> Split<'a> {
+    let param = syn::Ident::new(param_name, Span::call_site());
+    let plan = registry
+        .expansion_plans
+        .get(&(f.sig.ident.clone(), param.clone()))
+        .unwrap_or_else(|| {
+            panic!(
+                "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is not an expandable \
+                 parameter (it has no `expand_param!` variants)",
+                f.sig.ident
+            )
+        });
+    assert!(
+        plan.selector.is_some(),
+        "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` has a single variant — there \
+         is nothing to split (it already flattens to one signature)",
+        f.sig.ident
+    );
+    assert!(
+        !plan.produces_option(),
+        "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is an `Option<_>` / `Vec<_>` \
+         parameter — its overload has no clean single type; keep the selector form",
+        f.sig.ident
+    );
+    assert!(
+        plan_in_scope(plan),
+        "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` has a recursively-built arm — \
+         it cannot be overloaded; keep the selector form",
+        f.sig.ident
+    );
     let leaf_names: Vec<String> = plan
         .leaves
         .iter()
         .map(|l| kt_param_name(&l.name.to_string()))
         .collect();
     let len = leaf_names.len();
-    // Degrade to selector-only if the leaf block can't be located (a shape the
-    // offset assumption doesn't cover) — never emit a malformed overload.
-    let Some(start) = find_block(&sel_fun.params, &leaf_names) else {
-        return Vec::new();
-    };
+    let start = find_block(&sel_fun.params, &leaf_names).unwrap_or_else(|| {
+        panic!(
+            "fun!({}).split_on_param(\"{param_name}\"): could not locate the parameter's leaf \
+             block in the generated wrapper",
+            f.sig.ident
+        )
+    });
     let block = &sel_fun.params[start..start + len];
-    let sel_idx = plan.selector.expect("in-scope ⇒ selector present");
-
-    // Build every arm's typed params first, so the distinct-signature check
-    // runs before any emission.
-    let mut arms: Vec<Vec<(kt::KtParam, usize)>> = Vec::with_capacity(plan.variants.len());
-    for variant in &plan.variants {
-        let Some(tp) = variant_typed_params(registry, variant, &sp.param, block) else {
-            return Vec::new();
-        };
-        arms.push(tp);
-    }
-    // Distinct-signature (JVM erasure) check — class-attributed hard error.
-    for i in 0..arms.len() {
-        for j in (i + 1)..arms.len() {
-            let di: Vec<String> = arms[i].iter().map(|(p, _)| erased(ext, &p.ty)).collect();
-            let dj: Vec<String> = arms[j].iter().map(|(p, _)| erased(ext, &p.ty)).collect();
-            if di == dj {
+    let sel_idx = plan.selector.expect("selector present");
+    let arms: Vec<Vec<(kt::KtParam, usize)>> = plan
+        .variants
+        .iter()
+        .map(|v| {
+            variant_typed_params(registry, v, &param, block, multi).unwrap_or_else(|| {
                 panic!(
-                    "expand_param!({}).split(): variants {} and {} both surface as `({})` — \
-                     two overloads with the same JVM signature are a platform-declaration \
-                     clash; disambiguate the constructors or drop `.split()`",
-                    plan.target.to_token_stream(),
-                    variant_label(&plan.variants[i]),
-                    variant_label(&plan.variants[j]),
-                    di.join(", "),
+                    "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
+                     it cannot be overloaded",
+                    f.sig.ident
+                )
+            })
+        })
+        .collect();
+    Split {
+        param,
+        plan,
+        start,
+        len,
+        sel_idx,
+        arms,
+    }
+}
+
+/// The overloads for one function, delegating to its already-rendered selector
+/// wrapper `sel_fun`. Empty unless the function has `.split_on_param` requests.
+/// Emits the cartesian product of the named params' arms; panics (a build
+/// error) if the product has two combinations with the same JVM signature.
+pub(crate) fn render_param_overloads(
+    ext: &JniGen,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    sel_fun: &kt::KtFun,
+) -> Vec<kt::KtFun> {
+    // Requested split params for this function, in signature order.
+    let requested: Vec<String> = {
+        let want: std::collections::HashSet<&str> = ext
+            .fn_split_params
+            .iter()
+            .filter(|(func, _)| func == &f.sig.ident)
+            .map(|(_, p)| p.as_str())
+            .collect();
+        if want.is_empty() {
+            return Vec::new();
+        }
+        f.sig
+            .inputs
+            .iter()
+            .filter_map(|a| match a {
+                syn::FnArg::Typed(pt) => match &*pt.pat {
+                    syn::Pat::Ident(pid) if want.contains(pid.ident.to_string().as_str()) => {
+                        Some(pid.ident.to_string())
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    };
+    // Any requested name that didn't match a real parameter is a typo — surface
+    // it rather than silently dropping.
+    for (func, p) in &ext.fn_split_params {
+        if func == &f.sig.ident && !requested.iter().any(|r| r == p) {
+            panic!(
+                "fun!({}).split_on_param(\"{p}\"): no parameter named `{p}` on this function",
+                f.sig.ident
+            );
+        }
+    }
+
+    let multi = requested.len() > 1;
+    let splits: Vec<Split> = requested
+        .iter()
+        .map(|name| resolve_split(registry, f, sel_fun, name, multi))
+        .collect();
+
+    // Cartesian product of arm indices across all split params.
+    let combos = cartesian(&splits.iter().map(|s| s.arms.len()).collect::<Vec<_>>());
+
+    // Product-global JVM-signature collision check (fixed params are identical
+    // across every overload, so only the split-arm lists can collide).
+    let sigs: Vec<Vec<String>> = combos
+        .iter()
+        .map(|combo| {
+            splits
+                .iter()
+                .zip(combo)
+                .flat_map(|(s, &ai)| {
+                    let ctor = s.plan.variants[ai].ctor.as_ref();
+                    arm_erased_sig(ext, registry, &s.plan.target, ctor)
+                })
+                .collect()
+        })
+        .collect();
+    for i in 0..sigs.len() {
+        for j in (i + 1)..sigs.len() {
+            if sigs[i] == sigs[j] {
+                panic!(
+                    "fun!({}): split_on_param product is ambiguous — combinations {} and {} both \
+                     surface as `({})`; add .no_split() intent is not enough here, disambiguate \
+                     the constructors or drop one .split_on_param",
+                    f.sig.ident,
+                    combo_label(&splits, &combos[i]),
+                    combo_label(&splits, &combos[j]),
+                    sigs[i].join(", "),
                 );
             }
         }
     }
 
-    let mut out = Vec::with_capacity(arms.len());
-    for (i, typed) in arms.iter().enumerate() {
-        // Overload signature: fixed params, the arm's typed params in place of
-        // the leaf block, then the trailing fixed/onError params.
+    // Emit one overload per product combination.
+    let n = sel_fun.params.len();
+    let mut out = Vec::with_capacity(combos.len());
+    for combo in &combos {
+        // Per-split delegation slots, keyed by block start.
         let mut params: Vec<kt::KtParam> = Vec::new();
-        params.extend_from_slice(&sel_fun.params[..start]);
-        params.extend(typed.iter().map(|(p, _)| p.clone()));
-        params.extend_from_slice(&sel_fun.params[start + len..]);
-
-        // Delegation args: leaf slots get the selector value, this arm's typed
-        // params, or `null`; every other param passes through by name.
-        let mut leaf_arg: Vec<String> = vec!["null".to_string(); len];
-        leaf_arg[sel_idx] = i.to_string();
-        for (p, lidx) in typed {
-            leaf_arg[*lidx] = p.name.clone();
-        }
-        let call_args: Vec<String> = sel_fun
-            .params
-            .iter()
-            .enumerate()
-            .map(|(j, p)| {
-                if j >= start && j < start + len {
-                    leaf_arg[j - start].clone()
-                } else {
-                    p.name.clone()
+        let mut call_args: Vec<String> = Vec::new();
+        let mut pos = 0usize;
+        while pos < n {
+            if let Some((si, s)) = splits.iter().enumerate().find(|(_, s)| s.start == pos) {
+                // Replace this param's whole leaf block with the chosen arm's
+                // typed params; fill the block's delegation slots.
+                let ai = combo[si];
+                let typed = &s.arms[ai];
+                let mut leaf_arg: Vec<String> = vec!["null".to_string(); s.len];
+                leaf_arg[s.sel_idx] = ai.to_string();
+                for (p, lidx) in typed {
+                    params.push(p.clone());
+                    leaf_arg[*lidx] = p.name.clone();
                 }
-            })
-            .collect();
+                call_args.extend(leaf_arg);
+                pos += s.len;
+            } else {
+                // A fixed (or non-split expanded) param — passes through.
+                let p = &sel_fun.params[pos];
+                params.push(p.clone());
+                call_args.push(p.name.clone());
+                pos += 1;
+            }
+        }
+
+        // Guard against a param-name clash (e.g. an arm name colliding with a
+        // fixed param) rather than emitting uncompilable Kotlin.
+        let mut seen = std::collections::HashSet::new();
+        for p in &params {
+            assert!(
+                seen.insert(p.name.clone()),
+                "fun!({}): split overload has a duplicate parameter name `{}` — rename the \
+                 constructor parameter",
+                f.sig.ident,
+                p.name
+            );
+        }
 
         let mut ov = kt::KtFun::new(&sel_fun.name).vis(kt::Vis::Public);
         for p in params {
@@ -321,11 +501,37 @@ pub(crate) fn render_param_overloads(
     out
 }
 
-/// A short label for a variant in error messages: the constructor ident, or
-/// `variant_self()` for the identity arm.
-fn variant_label(v: &crate::api::core::expand::FoldVariant) -> String {
-    match &v.ctor {
-        Some(c) => c.to_string(),
-        None => "variant_self()".to_string(),
+/// Cartesian product of index ranges `0..counts[k]`, as a list of index
+/// tuples. `[2, 2]` → `[[0,0],[0,1],[1,0],[1,1]]`.
+fn cartesian(counts: &[usize]) -> Vec<Vec<usize>> {
+    let mut acc = vec![Vec::new()];
+    for &c in counts {
+        acc = acc
+            .into_iter()
+            .flat_map(|prefix| {
+                (0..c).map(move |i| {
+                    let mut next = prefix.clone();
+                    next.push(i);
+                    next
+                })
+            })
+            .collect();
     }
+    acc
+}
+
+/// A `param=variant` label for one product combination, for error messages.
+fn combo_label(splits: &[Split], combo: &[usize]) -> String {
+    let parts: Vec<String> = splits
+        .iter()
+        .zip(combo)
+        .map(|(s, &ai)| {
+            let v = match &s.plan.variants[ai].ctor {
+                Some(c) => c.to_string(),
+                None => "variant_self()".to_string(),
+            };
+            format!("{}={v}", s.param)
+        })
+        .collect();
+    format!("({})", parts.join(", "))
 }

@@ -642,6 +642,21 @@ internal object CovNative {
     external fun stringNew(s: String, errorSink: Any): String
     external fun summaryCount(s: Long, errorSink: Any): Long
     external fun summaryNew(count: Long, total: Double, errorSink: Any): Long
+    external fun summaryPrefer(
+        primarySel: Int,
+        primary00Present: Boolean,
+        primary00Value: Long,
+        primary01Present: Boolean,
+        primary01Value: Double,
+        primary1: Long,
+        fallbackSel: Int,
+        fallback00Present: Boolean,
+        fallback00Value: Long,
+        fallback01Present: Boolean,
+        fallback01Value: Double,
+        fallback1: Long,
+        errorSink: Any,
+    ): Long
     external fun summaryScaled(s: Long, factor: Double, errorSink: Any): Double
     external fun summaryTotal(s: Long, errorSink: Any): Double
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double

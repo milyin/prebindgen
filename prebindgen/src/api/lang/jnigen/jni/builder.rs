@@ -91,6 +91,7 @@ impl JniGen {
             return_expand_decls: Vec::new(),
             fn_param_expands: Vec::new(),
             fn_return_expands: Vec::new(),
+            fn_split_params: Vec::new(),
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
             ignored_name_predicates: Vec::new(),
@@ -466,6 +467,7 @@ impl JniGen {
             kotlin_name_override: _,
             param_expands,
             return_expand,
+            split_on_params,
         } = decl;
         for (param, pdecl) in param_expands {
             self.fn_param_expands
@@ -473,6 +475,9 @@ impl JniGen {
         }
         if let Some(rdecl) = return_expand {
             self.fn_return_expands.push((rust_ident.clone(), rdecl));
+        }
+        for param in split_on_params {
+            self.fn_split_params.push((rust_ident.clone(), param));
         }
     }
 }
@@ -568,12 +573,6 @@ impl JniGen {
         let mut exp = self.expansions.clone();
         for decl in &self.param_expand_decls {
             assert!(
-                !decl.split || decl.variants.len() >= 2,
-                "expand_param!({}).split(): needs ≥2 variants — a single arm already \
-                 flattens to an idiomatic signature, so there is nothing to overload",
-                decl.key.as_str()
-            );
-            assert!(
                 self.is_class_declared(&decl.key)
                     || !decl
                         .variants
@@ -603,13 +602,6 @@ impl JniGen {
         // param-name/type cross-check and the identity-only lowering happen
         // in `core/expand.rs`'s `apply` (which sees the fn signatures).
         for (func, param, decl) in &self.fn_param_expands {
-            assert!(
-                !decl.split || decl.variants.len() >= 2,
-                "fun!({func}).expand_param(\"{param}\", expand_param!({k}).split()): needs ≥2 \
-                 variants — a single arm already flattens to an idiomatic signature, so there is \
-                 nothing to overload",
-                k = decl.key.as_str()
-            );
             assert!(
                 self.is_class_declared(&decl.key)
                     || !decl

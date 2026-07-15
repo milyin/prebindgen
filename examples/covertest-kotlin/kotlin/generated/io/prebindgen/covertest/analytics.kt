@@ -321,6 +321,92 @@ public fun storageExpectSummary(
     return __ret
 }
 
+public fun summaryPrefer(
+    primaryCount: Long,
+    primaryTotal: Double,
+    fallbackCount: Long,
+    fallbackTotal: Double,
+    onError: JniErrorHandler<Long>,
+): Long = summaryPrefer(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError)
+
+public fun summaryPrefer(
+    primaryCount: Long,
+    primaryTotal: Double,
+    fallback: Summary,
+    onError: JniErrorHandler<Long>,
+): Long = summaryPrefer(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError)
+
+public fun summaryPrefer(
+    primary: Summary,
+    fallbackCount: Long,
+    fallbackTotal: Double,
+    onError: JniErrorHandler<Long>,
+): Long = summaryPrefer(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError)
+
+public fun summaryPrefer(primary: Summary, fallback: Summary, onError: JniErrorHandler<Long>): Long = summaryPrefer(1, null, null, primary, 1, null, null, fallback, onError)
+
+/**
+ * Two-`Summary`-parameter function exercising #52's **cartesian-product**
+ * overloads: covertest declares `.split_on_param("primary")
+ * .split_on_param("fallback")`, so each parameter is independently split into
+ * its (count, total)-build / handle arms and the generator emits the 2×2
+ * product (all four combinations distinct). Returns `1` when `primary` has the
+ * larger total, else `0`.
+ *
+ * Parameter `fallback` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `fallbackSel`, `fallback00`, `fallback01`, `fallback1`).
+ * Parameter `primary` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `primarySel`, `primary00`, `primary01`, `primary1`).
+ */
+public fun summaryPrefer(
+    primarySel: Int,
+    primary00: Long?,
+    primary01: Double?,
+    primary1: Summary?,
+    fallbackSel: Int,
+    fallback00: Long?,
+    fallback01: Double?,
+    fallback1: Summary?,
+    onError: JniErrorHandler<Long>,
+): Long {
+    if (primary1 != null && primary1.isClosed()) return onError.run(
+        "Operation on a closed native handle.",
+    )
+    if (fallback1 != null && fallback1.isClosed()) return onError.run(
+        "Operation on a closed native handle.",
+    )
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        primary1?.let { __locks.add(it) }
+        fallback1?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val primary1_ptr = primary1?.ptr ?: 0L
+            val fallback1_ptr = fallback1?.ptr ?: 0L
+            try {
+                CovNative.summaryPrefer(
+                    primarySel,
+                    primary00 != null,
+                    primary00 ?: 0L,
+                    primary01 != null,
+                    primary01 ?: 0.0,
+                    primary1_ptr,
+                    fallbackSel,
+                    fallback00 != null,
+                    fallback00 ?: 0L,
+                    fallback01 != null,
+                    fallback01 ?: 0.0,
+                    fallback1_ptr,
+                    __cap,
+                )
+            } finally {
+                primary1?.let { it.ptr = it.ptr or 1L }
+                fallback1?.let { it.ptr = it.ptr or 1L }
+            }
+        }
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
 /** Create an empty archive. */
 public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     val __cap = JniErrorHandlerCapture.acquire()

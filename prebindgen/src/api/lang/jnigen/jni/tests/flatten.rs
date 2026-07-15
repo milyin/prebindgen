@@ -757,120 +757,234 @@ fn constructor_with_wrong_return_rejected() {
     );
 }
 
-/// #52: a `.split()` multi-variant expansion emits, alongside the selector
+/// #52 shared fixture: a `ZSummary` ptr class, its `(count, total)` builder, a
+/// splittable 2-variant type-level `expand_param!`, and functions taking one or
+/// two `ZSummary` params. `extra` fns are appended before indexing.
+fn split_fixture(extra: &[&str]) -> Registry<KotlinMeta> {
+    let loc = myflat_loc();
+    let base: &[&str] = &[
+        "pub fn z_summary_new(count: i64, total: f64) -> ZSummary { unimplemented!() }",
+        "pub fn z_store_expect(expected: ZSummary) -> bool { unimplemented!() }",
+        "pub fn z_prefer(primary: ZSummary, fallback: ZSummary) -> i64 { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZSummary {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in base.iter().chain(extra) {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    Registry::<KotlinMeta>::from_items(items).expect("index items")
+}
+
+fn write_all(gen: crate::api::core::Generation<JniGen>, tag: &str) -> String {
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// #52: `FunctionDecl::split_on_param` emits, alongside the retained selector
 /// form, one idiomatic typed overload per variant — the build arm named after
 /// the constructor's parameters, the `variant_self()` arm typed as the class —
 /// each delegating to the selector wrapper.
 #[test]
-fn split_param_emits_typed_overloads() {
-    let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![
-        (
-            syn::Item::Struct(syn::parse_quote!(
-                pub struct ZSummary {
-                    _p: u8,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_summary_new(count: i64, total: f64) -> ZSummary {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_store_expect(expected: ZSummary) -> bool {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-    ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+fn split_on_param_emits_typed_overloads() {
+    let registry = split_fixture(&[]);
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
-                .fun(crate::fun!(z_store_expect)),
+                .fun(crate::fun!(z_store_expect).split_on_param("expected")),
         )
         .expand(
             crate::expand_param!(ZSummary)
                 .variant(crate::fun!(z_summary_new))
-                .variant_self()
-                .split(),
+                .variant_self(),
         );
-    let dir = unique_test_dir("jnigen_split_overloads");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
-    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
-    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
-    let raw = paths
-        .iter()
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_one");
     let all: String = raw.split_whitespace().collect();
-    // The selector form is retained (the delegation target).
-    assert!(all.contains("expectedSel:Int"), "{raw}");
-    // Build-arm overload: named after the constructor's own parameters.
+    assert!(all.contains("expectedSel:Int"), "{raw}"); // selector retained
     assert!(
         all.contains("funzStoreExpect(count:Long,total:Double,"),
         "{raw}"
     );
-    // Identity-arm overload: typed as the class, named after the parameter.
     assert!(all.contains("funzStoreExpect(expected:ZSummary,"), "{raw}");
-    // Each overload delegates to the selector form with its arm index.
     assert!(all.contains("zStoreExpect(0,count,total,null,"), "{raw}");
     assert!(all.contains("zStoreExpect(1,null,null,expected,"), "{raw}");
 }
 
-/// #52: two `.split()` variants that surface as the same JVM-erased signature
-/// are a platform-declaration clash — a hard, class-attributed build error.
+/// #52: two `.split_on_param` on one function emit the **cartesian product** of
+/// the params' arms (2×2 = four overloads); build-arm params are prefixed with
+/// their origin parameter name to stay unique.
+#[test]
+fn split_on_param_cartesian_product() {
+    let registry = split_fixture(&[]);
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZSummary))
+                .fun(
+                    crate::fun!(z_prefer)
+                        .split_on_param("primary")
+                        .split_on_param("fallback"),
+                ),
+        )
+        .expand(
+            crate::expand_param!(ZSummary)
+                .variant(crate::fun!(z_summary_new))
+                .variant_self(),
+        );
+    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_prod");
+    let all: String = raw.split_whitespace().collect();
+    // build / build
+    assert!(
+        all.contains(
+            "funzPrefer(primaryCount:Long,primaryTotal:Double,fallbackCount:Long,fallbackTotal:Double,"
+        ),
+        "{raw}"
+    );
+    // build / handle, handle / build, handle / handle
+    assert!(
+        all.contains("funzPrefer(primaryCount:Long,primaryTotal:Double,fallback:ZSummary,"),
+        "{raw}"
+    );
+    assert!(
+        all.contains("funzPrefer(primary:ZSummary,fallbackCount:Long,fallbackTotal:Double,"),
+        "{raw}"
+    );
+    assert!(
+        all.contains("funzPrefer(primary:ZSummary,fallback:ZSummary,"),
+        "{raw}"
+    );
+    // A product delegation fills BOTH selector blocks.
+    assert!(
+        all.contains(
+            "zPrefer(0,primaryCount,primaryTotal,null,0,fallbackCount,fallbackTotal,null,"
+        ),
+        "{raw}"
+    );
+}
+
+/// #52: a `.split_on_param` product whose two combinations erase to the same
+/// JVM signature is a hard, per-function error. `from_one(Long)` /
+/// `from_two(Long,Long)` on two params collide at (one,two) vs (two,one).
+#[test]
+#[should_panic(expected = "ambiguous")]
+fn split_on_param_product_ambiguous_rejected() {
+    let loc = myflat_loc();
+    let srcs: &[&str] = &[
+        "pub fn z_thing_one(a: i64) -> ZThing { unimplemented!() }",
+        "pub fn z_thing_two(a: i64, b: i64) -> ZThing { unimplemented!() }",
+        "pub fn z_combine(primary: ZThing, fallback: ZThing) -> bool { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZThing {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for s in srcs {
+        items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops").class(crate::ptr_class!(ZThing)).fun(
+                crate::fun!(z_combine)
+                    .split_on_param("primary")
+                    .split_on_param("fallback"),
+            ),
+        )
+        .expand(
+            crate::expand_param!(ZThing)
+                .variant(crate::fun!(z_thing_one))
+                .variant(crate::fun!(z_thing_two)),
+        );
+    let _ = write_all(
+        registry.resolve(jni).expect("resolve"),
+        "jnigen_split_ambig",
+    );
+}
+
+/// #52 proactive: a multi-variant `expand_param!` whose arms share a JVM
+/// signature is a hard error at the DECLARATION — no function need split it.
 #[test]
 #[should_panic(expected = "same JVM signature")]
-fn split_param_colliding_variants_rejected() {
+fn split_declaration_colliding_variants_rejected() {
     let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![
-        (
-            syn::Item::Struct(syn::parse_quote!(
-                pub struct ZName {
-                    _p: u8,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_name_from_text(text: String) -> ZName {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_name_from_label(label: String) -> ZName {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_use_name(name: ZName) -> bool {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
+    let srcs: &[&str] = &[
+        "pub fn z_name_from_text(text: String) -> ZName { unimplemented!() }",
+        "pub fn z_name_from_label(label: String) -> ZName { unimplemented!() }",
+        "pub fn z_use_name(name: ZName) -> bool { unimplemented!() }",
     ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZName {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for s in srcs {
+        items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZName))
+                .fun(crate::fun!(z_use_name)), // NOT split — still errors
+        )
+        .expand(
+            crate::expand_param!(ZName)
+                .variant(crate::fun!(z_name_from_text))
+                .variant(crate::fun!(z_name_from_label)),
+        );
+    let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_decl");
+}
+
+/// #52: `.no_split()` suppresses the proactive splittability check for a
+/// genuinely non-splittable variant set (used only as the selector form).
+#[test]
+fn split_no_split_suppresses_check() {
+    let loc = myflat_loc();
+    let srcs: &[&str] = &[
+        "pub fn z_name_from_text(text: String) -> ZName { unimplemented!() }",
+        "pub fn z_name_from_label(label: String) -> ZName { unimplemented!() }",
+        "pub fn z_use_name(name: ZName) -> bool { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZName {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for s in srcs {
+        items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
@@ -882,117 +996,53 @@ fn split_param_colliding_variants_rejected() {
             crate::expand_param!(ZName)
                 .variant(crate::fun!(z_name_from_text))
                 .variant(crate::fun!(z_name_from_label))
-                .split(),
+                .no_split(),
         );
-    let dir = unique_test_dir("jnigen_split_collision");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
-    // Collision is detected during Kotlin emission (in-scope-aware).
-    let _ = gen.write_kotlin(&dir.join("kotlin"));
+    // No panic: the colliding variants are tolerated as selector-only.
+    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_no_split");
+    let all: String = raw.split_whitespace().collect();
+    assert!(all.contains("nameSel:Int"), "{raw}"); // selector form emitted
 }
 
-/// #52: `.split()` on a single-variant expansion is meaningless (one arm
-/// already flattens idiomatically) — a hard error at declaration time.
+/// #52: `.split_on_param` naming a parameter that does not exist on the
+/// function is a hard error (typo guard).
 #[test]
-#[should_panic(expected = "needs ≥2 variants")]
-fn split_single_variant_rejected() {
-    let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![
-        (
-            syn::Item::Struct(syn::parse_quote!(
-                pub struct ZOne {
-                    _p: u8,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_one_new(x: i64) -> ZOne {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_use_one(o: ZOne) -> bool {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-    ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("ops")
-                .class(crate::ptr_class!(ZOne))
-                .fun(crate::fun!(z_use_one)),
-        )
-        .expand(
-            crate::expand_param!(ZOne)
-                .variant(crate::fun!(z_one_new))
-                .split(),
-        );
-    let dir = unique_test_dir("jnigen_split_single");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    // Panics during resolve (build_expansions runs the ≥2-variant assert).
-    let _ = registry.resolve(jni);
-}
-
-/// #52: a function may split at most one parameter — two split params would
-/// need the cartesian product of their arms. A hard error names both.
-#[test]
-#[should_panic(expected = "split at most one")]
-fn split_two_params_on_one_fn_rejected() {
-    let loc = myflat_loc();
-    let items: Vec<(syn::Item, SourceLocation)> = vec![
-        (
-            syn::Item::Struct(syn::parse_quote!(
-                pub struct ZSummary {
-                    _p: u8,
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_summary_new(count: i64, total: f64) -> ZSummary {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-        (
-            syn::Item::Fn(syn::parse_quote!(
-                pub fn z_combine(a: ZSummary, b: ZSummary) -> bool {
-                    unimplemented!()
-                }
-            )),
-            loc.clone(),
-        ),
-    ];
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+#[should_panic(expected = "no parameter named")]
+fn split_on_unknown_param_rejected() {
+    let registry = split_fixture(&[]);
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("ops")
                 .class(crate::ptr_class!(ZSummary))
-                .fun(crate::fun!(z_combine)),
+                .fun(crate::fun!(z_store_expect).split_on_param("nope")),
         )
         .expand(
             crate::expand_param!(ZSummary)
                 .variant(crate::fun!(z_summary_new))
-                .variant_self()
-                .split(),
+                .variant_self(),
         );
-    let dir = unique_test_dir("jnigen_split_two_params");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
-    let _ = gen.write_kotlin(&dir.join("kotlin"));
+    let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_typo");
+}
+
+/// #52: `.split_on_param` on an `Option<T>` parameter is a hard error — the
+/// overload has no clean single type; the selector form must be kept.
+#[test]
+#[should_panic(expected = "Option")]
+fn split_on_option_param_rejected() {
+    let registry =
+        split_fixture(&["pub fn z_maybe(opt: Option<ZSummary>) -> bool { unimplemented!() }"]);
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZSummary))
+                .fun(crate::fun!(z_maybe).split_on_param("opt")),
+        )
+        .expand(
+            crate::expand_param!(ZSummary)
+                .variant(crate::fun!(z_summary_new))
+                .variant_self(),
+        );
+    let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_opt");
 }
