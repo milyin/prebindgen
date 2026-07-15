@@ -56,7 +56,6 @@
 //! | binding-error channel (`je != null`) | malformed `Stamp` bytes (value-blob length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
-//! | `enum_class!(T).kotlin_type(…)`       | lib-tested (maps enum onto an existing Kotlin type; no file) |
 //! | `JniGen::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
 //! | `JniGen::ignore` + `matching(…)`      | the `storage_get_into_*` group (one name predicate, any item kind) |
 //!
