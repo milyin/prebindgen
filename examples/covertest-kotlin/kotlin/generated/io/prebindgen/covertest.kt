@@ -75,19 +75,33 @@ internal inline fun <R> withSortedHandleLocks(
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
+public interface PayloadApi {
+    val id: Long
+
+    val seq: Int
+
+    val value: Double
+
+    val flag: Boolean
+
+    val label: String?
+
+    fun labelLen(onError: JniErrorHandler<Long?>): Long?
+}
+
 /**
  * A by-value, FFI-safe payload. Scalars cross the C ABI as themselves; the
  * `label` string crosses as an opaque pointer (`Option<Box<String>>` ⇒ a nullable
  * `string_t *`). Being `#[repr(C)]`, the whole struct is passed by direct
  * reinterpret (zero-copy) — see `perftest-c`'s `.repr_c_struct(Payload)`.
  */
-public data class Payload(val id: Long, val seq: Int, val value: Double, val flag: Boolean, val label: String?) {
+public data class Payload(override val id: Long, override val seq: Int, override val value: Double, override val flag: Boolean, override val label: String?) : PayloadApi, Timestamped {
     /**
      * Length of a payload's label, or `None` when it is unlabeled. Exercises an
      * `Option<i64>` (nullable primitive) return, distinct from the `Option<handle>`
      * / `Option<data-class>` shapes elsewhere.
      */
-    public fun labelLen(onError: JniErrorHandler<Long?>): Long? {
+    public override fun labelLen(onError: JniErrorHandler<Long?>): Long? {
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = CovNative.payloadLabelLen(
             this.id,
@@ -161,8 +175,20 @@ public class PayloadVecHandler(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+public interface StorageApi : AutoCloseable {
+    fun peek(): Long
+
+    fun isClosed(): Boolean
+
+    fun take(): Storage
+
+    fun len(onError: JniErrorHandler<Long>): Long
+
+    fun contains(id: Long, onError: JniErrorHandler<Boolean>): Boolean
+}
+
 /** Typed handle for a native Zenoh `Storage`. */
-public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
+public class Storage(initialPtr: Long) : NativeHandle(initialPtr), StorageApi, CovResource {
     @Synchronized
     override fun close() {
         val p = ptr
@@ -173,14 +199,14 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 
     @Synchronized
-    public fun take(): Storage {
+    public override fun take(): Storage {
         val p = ptr
         ptr = p or 1L
         return Storage(p)
     }
 
     /** Number of stored payloads (an **accessor** on `Storage`). */
-    public fun len(onError: JniErrorHandler<Long>): Long {
+    public override fun len(onError: JniErrorHandler<Long>): Long {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
@@ -192,7 +218,7 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 
     /** Whether any stored payload has the given id (a **method** on `Storage`). */
-    public fun contains(id: Long, onError: JniErrorHandler<Boolean>): Boolean {
+    public override fun contains(id: Long, onError: JniErrorHandler<Boolean>): Boolean {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
         val __cap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {

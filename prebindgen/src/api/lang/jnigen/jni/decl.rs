@@ -278,15 +278,101 @@ macro_rules! expand_return {
 /// let _ = prebindgen::ptr_class!(KeyExpr)
 ///     .fun(prebindgen::fun!(keyexpr_get_str).name("str"));
 /// ```
-/// Deliberately has no `.kotlin_type()`: the generated typed-handle class
-/// OWNS a lifecycle contract — the `NativeHandle` base, the `ptr` slot,
-/// `close()`, the lock protocol, and the paired `freePtr` extern — that an
-/// arbitrary existing Kotlin type cannot be assumed to honor. The other
-/// class kinds are pure surface and may be mapped; a handle is not.
+/// Deliberately has no verbatim type mapping: the generated typed-handle
+/// class OWNS a lifecycle contract — the `NativeHandle` base, the `ptr`
+/// slot, `close()`, the lock protocol, and the paired `freePtr` extern —
+/// that an arbitrary existing Kotlin type cannot be assumed to honor.
+/// Customize it from above instead: [`interface`](Self::interface) /
+/// [`implements`](Self::implements).
 pub struct PtrClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
+    pub(crate) iface: IfaceOpts,
+}
+
+/// The interface-related options every class decl carries (see
+/// [`class_interface_methods!`]): the generated-interface switch + name
+/// override, and the `.implements(...)` list. The two features are
+/// orthogonal; used together, a user interface extends the generated one.
+#[derive(Clone, Default)]
+pub(crate) struct IfaceOpts {
+    pub(crate) enabled: bool,
+    pub(crate) name_override: Option<String>,
+    pub(crate) implements: Vec<String>,
+}
+
+/// The three interface methods shared verbatim by all four class decls —
+/// generated per decl so the panic messages name the right decl macro.
+macro_rules! class_interface_methods {
+    ($decl_macro:literal) => {
+        /// Emit a generated Kotlin **interface** mirroring this class's
+        /// public instance surface, and make the class implement it (every
+        /// class-body member gains the `override` modifier). The interface
+        /// is named by [`interface_name`](Self::interface_name), else the
+        /// [`JniGen::set_interface_name_mangle`] hook over the final class
+        /// name (default: append `"Api"`).
+        ///
+        /// This is the compiler-checked half of the integration hatch: a
+        /// hand-written interface that *extends* the generated one can build
+        /// default members over the class's real signatures — no
+        /// hand-replication. Pair it with [`implements`](Self::implements)
+        /// to attach that hand-written interface to the class. (For
+        /// behavior-only injection, a Kotlin extension function needs no
+        /// declaration at all.)
+        pub fn interface(mut self) -> Self {
+            self.iface.enabled = true;
+            self
+        }
+
+        /// Name the generated interface literally (relative, no dots),
+        /// bypassing the [`JniGen::set_interface_name_mangle`] hook.
+        /// Implies [`interface`](Self::interface).
+        pub fn interface_name(mut self, name: impl Into<String>) -> Self {
+            let name = name.into();
+            assert!(
+                !name.trim().is_empty(),
+                concat!($decl_macro, "!({}).interface_name(...): the name is empty"),
+                self.key.as_str()
+            );
+            self.iface.enabled = true;
+            self.iface.name_override = Some(name);
+            self
+        }
+
+        /// Add a Kotlin **interface** to the generated class's supertype
+        /// list — the class implements it *nominally*: its abstract members
+        /// must be satisfied by the generated surface or carry default
+        /// implementations. `iface` is an FQN (dotted names are imported and
+        /// shortened) or a same-package name; call again to add several.
+        ///
+        /// Orthogonal to [`interface`](Self::interface) — but to abstract
+        /// over the class's own members from your interface, enable the
+        /// generated interface and make yours extend it (that is what turns
+        /// mismatches into compile errors in YOUR file).
+        pub fn implements(mut self, iface: impl Into<String>) -> Self {
+            let iface = iface.into();
+            assert!(
+                !iface.trim().is_empty(),
+                concat!(
+                    $decl_macro,
+                    "!({}).implements(...): the interface name is empty"
+                ),
+                self.key.as_str()
+            );
+            assert!(
+                !self.iface.implements.contains(&iface),
+                concat!(
+                    $decl_macro,
+                    "!({}).implements(\"{}\"): the interface is already declared"
+                ),
+                self.key.as_str(),
+                iface
+            );
+            self.iface.implements.push(iface);
+            self
+        }
+    };
 }
 
 impl PtrClassDecl {
@@ -295,6 +381,7 @@ impl PtrClassDecl {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
             members: Vec::new(),
+            iface: IfaceOpts::default(),
         }
     }
 
@@ -306,6 +393,8 @@ impl PtrClassDecl {
         self.name_override = Some(name.into());
         self
     }
+
+    class_interface_methods!("ptr_class");
 
     /// Expose a `#[prebindgen]` method as a Kotlin **instance method** of this
     /// class. `rust_fun` must take `&Self` first — that receiver becomes
@@ -532,7 +621,7 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 pub struct EnumClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
-    pub(crate) kotlin_type: Option<String>,
+    pub(crate) iface: IfaceOpts,
 }
 
 impl EnumClassDecl {
@@ -540,7 +629,7 @@ impl EnumClassDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
-            kotlin_type: None,
+            iface: IfaceOpts::default(),
         }
     }
 
@@ -550,15 +639,7 @@ impl EnumClassDecl {
         self
     }
 
-    /// Surface this enum as an **existing** Kotlin type instead of
-    /// generating an `enum class` file (see [`DataClassDecl::kotlin_type`]).
-    /// The named type must expose the generated protocol: a companion
-    /// `fromInt(Int): T` and a `val value: Int` with the Rust
-    /// discriminants — exactly what a generated enum class provides.
-    pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
-        self.kotlin_type = Some(expr.into());
-        self
-    }
+    class_interface_methods!("enum_class");
 }
 
 impl From<syn::Type> for EnumClassDecl {
@@ -580,7 +661,7 @@ impl From<syn::Type> for EnumClassDecl {
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
-    pub(crate) kotlin_type: Option<String>,
+    pub(crate) iface: IfaceOpts,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
 }
 
@@ -589,7 +670,7 @@ impl DataClassDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
-            kotlin_type: None,
+            iface: IfaceOpts::default(),
             members: Vec::new(),
         }
     }
@@ -600,14 +681,7 @@ impl DataClassDecl {
         self
     }
 
-    /// Surface this type as a verbatim Kotlin type instead of a generated
-    /// class — for when it should map onto an existing or container type,
-    /// e.g. `"List<ByteArray>"`. Mutually exclusive with members (a mapped
-    /// type has no generated class to hold them).
-    pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
-        self.kotlin_type = Some(expr.into());
-        self
-    }
+    class_interface_methods!("data_class");
 
     /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
     /// method on the generated data class (see [`PtrClassDecl::fun`]) — the
@@ -641,7 +715,7 @@ impl From<syn::Type> for DataClassDecl {
 pub struct ValueClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
-    pub(crate) kotlin_type: Option<String>,
+    pub(crate) iface: IfaceOpts,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
 }
 
@@ -650,7 +724,7 @@ impl ValueClassDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
-            kotlin_type: None,
+            iface: IfaceOpts::default(),
             members: Vec::new(),
         }
     }
@@ -661,12 +735,7 @@ impl ValueClassDecl {
         self
     }
 
-    /// Surface this type as a verbatim Kotlin type instead of a generated
-    /// value class (see [`DataClassDecl::kotlin_type`]).
-    pub fn kotlin_type(mut self, expr: impl Into<String>) -> Self {
-        self.kotlin_type = Some(expr.into());
-        self
-    }
+    class_interface_methods!("value_class");
 
     /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
     /// method on the Kotlin value class (see [`PtrClassDecl::fun`]).

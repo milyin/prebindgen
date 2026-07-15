@@ -9,6 +9,258 @@ fn builtin_convert_type_panics() {
     let _ = crate::convert!(usize);
 }
 
+/// #54: `.implements(...)` WITHOUT `.interface()` — declared interfaces join
+/// the class's supertype list (nominal); dotted FQNs are imported and
+/// shortened; the class body is untouched and NO generated interface is
+/// emitted (members stay non-`override`).
+#[test]
+fn ptr_class_implements_adds_interface_supertypes() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_new() -> ZThing { unimplemented!() }",
+        "pub fn z_thing_size(t: &ZThing) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| (syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()))
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .class(
+                crate::ptr_class!(ZThing)
+                    .implements("io.other.Resource")
+                    .implements("LocalIface")
+                    .fun(crate::fun!(z_thing_size)),
+            )
+            .fun(crate::fun!(z_thing_new)),
+    );
+    let dir = unique_test_dir("jnigen_implements");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let thing = paths
+        .iter()
+        .find(|p| p.ends_with("io/test/jni/thing.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("thing package file");
+    assert!(
+        thing.contains(
+            "class ZThing(initialPtr: Long) : NativeHandle(initialPtr), Resource, LocalIface {"
+        ),
+        "{thing}"
+    );
+    assert!(thing.contains("import io.other.Resource"), "{thing}");
+    // No generated interface, no `override` on the declared member.
+    assert!(!thing.contains("interface ZThingApi"), "{thing}");
+    assert!(thing.contains("public fun size("), "{thing}");
+    assert!(!thing.contains("override fun size("), "{thing}");
+}
+
+/// #54: `.interface()` — the generated `<Name>Api` interface mirrors the
+/// class's public surface, the class implements it with `override` on
+/// class-body members (peek/isClosed inherited from NativeHandle need none),
+/// and a user `.implements` interface can extend it.
+#[test]
+fn ptr_class_interface_emits_generated_api() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_new() -> ZThing { unimplemented!() }",
+        "pub fn z_thing_size(t: &ZThing) -> i64 { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| (syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()))
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .class(
+                crate::ptr_class!(ZThing)
+                    .interface()
+                    .implements("io.other.Resource")
+                    .fun(crate::fun!(z_thing_size)),
+            )
+            .fun(crate::fun!(z_thing_new)),
+    );
+    let dir = unique_test_dir("jnigen_interface");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let thing = paths
+        .iter()
+        .find(|p| p.ends_with("io/test/jni/thing.kt"))
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .expect("thing package file");
+    let tc: String = thing.split_whitespace().collect();
+    // Generated interface with the inherited-surface abstracts + the member,
+    // extending AutoCloseable.
+    assert!(tc.contains("interfaceZThingApi:AutoCloseable{"), "{thing}");
+    assert!(tc.contains("funpeek():Long"), "{thing}");
+    assert!(tc.contains("funisClosed():Boolean"), "{thing}");
+    assert!(tc.contains("funsize("), "{thing}");
+    // Class implements the generated interface + the user one; members override.
+    assert!(
+        tc.contains("classZThing(initialPtr:Long):NativeHandle(initialPtr),ZThingApi,Resource{"),
+        "{thing}"
+    );
+    assert!(tc.contains("publicoverridefuntake():ZThing"), "{thing}");
+    assert!(tc.contains("publicoverridefunsize("), "{thing}");
+}
+
+/// A duplicate interface on one decl is a decl-time hard error.
+#[test]
+#[should_panic(expected = "the interface is already declared")]
+fn ptr_class_duplicate_implements_rejected() {
+    let _ = crate::ptr_class!(ZThing)
+        .implements("io.other.Resource")
+        .implements("io.other.Resource");
+}
+
+/// The `set_interface_name_mangle` hook receives the final class name and
+/// its result must differ (identity is a hard error).
+#[test]
+#[should_panic(expected = "must differ from the class name")]
+fn interface_name_mangle_identity_rejected() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_thing_new() -> ZThing { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .set_interface_name_mangle(|n| n.to_string())
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing).interface())
+                .fun(crate::fun!(z_thing_new)),
+        );
+    let dir = unique_test_dir("jnigen_iface_identity");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let _ = gen.write_kotlin(&dir.join("kotlin"));
+}
+
+/// A per-decl `.interface_name(...)` pins the interface name (and implies
+/// `.interface()`); `set_interface_name_mangle` receives the class name.
+#[test]
+fn interface_name_override_and_hook() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Mode {
+                    A = 0,
+                    B = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn flip(m: Mode) -> Mode {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .set_interface_name_mangle(|n| {
+            assert_eq!(n, "Mode", "hook receives the class name");
+            format!("{n}Contract")
+        })
+        .package(
+            crate::package!("m")
+                .class(crate::enum_class!(Mode).interface_name("ModeIface"))
+                .fun(crate::fun!(flip)),
+        );
+    let dir = unique_test_dir("jnigen_iface_name");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ac: String = all.split_whitespace().collect();
+    // The per-decl override wins over the hook.
+    assert!(ac.contains("interfaceModeIface{"), "{all}");
+    assert!(ac.contains("valvalue:Int"), "{all}");
+    assert!(
+        ac.contains("enumclassMode(overridepublicvalvalue:Int):ModeIface{")
+            || ac.contains("enumclassMode(publicoverridevalvalue:Int):ModeIface{"),
+        "{all}"
+    );
+}
+
+/// #54: `.interface()` on a `value_class!` — the generated `<Name>Api`
+/// interface carries the `bytes` property and the accessors, and the
+/// `@JvmInline value class` implements it with `override val bytes`
+/// (the ctor-prop path, shared with data/enum classes).
+#[test]
+fn value_class_interface_emits_generated_api() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                #[derive(Clone, Copy)]
+                pub struct ZStamp {
+                    pub secs: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_stamp_secs(s: &ZStamp) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("t").class(
+            crate::value_class!(ZStamp)
+                .interface()
+                .fun(crate::fun!(z_stamp_secs).name("secs")),
+        ),
+    );
+    let dir = unique_test_dir("jnigen_value_iface");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let ac: String = all.split_whitespace().collect();
+    assert!(ac.contains("interfaceZStampApi{"), "{all}");
+    assert!(ac.contains("valbytes:ByteArray"), "{all}");
+    assert!(ac.contains("funsecs("), "{all}");
+    assert!(
+        ac.contains("valueclassZStamp(overridepublicvalbytes:ByteArray):ZStampApi{")
+            || ac.contains("valueclassZStamp(publicoverridevalbytes:ByteArray):ZStampApi{"),
+        "{all}"
+    );
+    assert!(ac.contains("publicoverridefunsecs("), "{all}");
+}
+
 /// Per-declaration class rename (`.name()`, the type-level dual of the per-fn
 /// override) and base-package functions (`.fun` with the empty subpackage —
 /// mirroring class declarations, which could always live in the base package).

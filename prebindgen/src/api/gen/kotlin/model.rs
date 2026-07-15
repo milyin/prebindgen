@@ -175,6 +175,9 @@ pub enum ClassKind {
     Object,
     /// `companion object` (only valid as [`KtClass::companion`]).
     Companion,
+    /// A plain `interface` — members with no body render as abstract
+    /// signatures; no ctor params.
+    Interface,
 }
 
 #[derive(Clone, Debug)]
@@ -191,6 +194,9 @@ pub struct KtCtorParam {
     pub ty: KtType,
     /// `None` = plain ctor param; `Some(false)` = `val`, `Some(true)` = `var`.
     pub prop: Option<bool>,
+    /// Render the `override` modifier (`override val id: Long`) — the
+    /// property implements an abstract of a supertype interface.
+    pub overrides: bool,
     pub vis: Vis,
     pub default: Option<String>,
     pub annotations: Vec<String>,
@@ -202,6 +208,7 @@ impl KtCtorParam {
             name: name.into(),
             ty,
             prop: None,
+            overrides: false,
             vis: Vis::Default,
             default: None,
             annotations: Vec::new(),
@@ -209,6 +216,11 @@ impl KtCtorParam {
     }
     pub fn val(mut self) -> Self {
         self.prop = Some(false);
+        self
+    }
+    /// Mark the property as overriding a supertype-interface abstract.
+    pub fn overrides(mut self) -> Self {
+        self.overrides = true;
         self
     }
     pub fn var(mut self) -> Self {

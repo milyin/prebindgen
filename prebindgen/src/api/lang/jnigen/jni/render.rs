@@ -305,6 +305,9 @@ pub(crate) fn build_typed_handle(
     let class_kdoc = source_item_doc(registry, key)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
+    // Consumer interfaces (`.implements`) and the generated `<Name>Api`
+    // interface (`.interface()`) are attached by `apply_class_interface` in
+    // `write_typed_handles` after the class body is built.
     let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
         .kdoc(class_kdoc)

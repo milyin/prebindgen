@@ -282,10 +282,6 @@ impl JniGen {
             if !cfg.value_blob {
                 continue;
             }
-            // `kotlin_type`-mapped: surfaces as an existing type, no file.
-            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
-                continue;
-            }
             let fqn = cfg
                 .name_spec
                 .as_ref()
@@ -308,7 +304,7 @@ impl JniGen {
             let class_kdoc = crate::api::lang::jnigen::jni::source_item_doc(registry, key)
                 .map(|d| format!("{d}\n\n{framework_line}"))
                 .unwrap_or(framework_line);
-            let mut class = KtClass::new(ClassKind::ValueInline, class_name)
+            let mut class = KtClass::new(ClassKind::ValueInline, &class_name)
                 .vis(Vis::Public)
                 .kdoc(class_kdoc)
                 .ctor_param(
@@ -364,7 +360,13 @@ impl JniGen {
                 }
                 class = class.companion(companion);
             }
-            written.push(kt::KtFile::new(package).decl(class).imports(imports));
+            let mut file = kt::KtFile::new(package);
+            if let Some(iface) =
+                self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
+            {
+                file = file.decl(iface);
+            }
+            written.push(file.decl(class).imports(imports));
         }
         Ok(written)
     }
@@ -433,11 +435,6 @@ impl JniGen {
             if cfg.enum_cfg.is_none() {
                 continue;
             }
-            // `kotlin_type`-mapped: the enum surfaces as an existing Kotlin
-            // type honoring the `fromInt`/`.value` protocol — no file.
-            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
-                continue;
-            }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
                 continue;
             };
@@ -457,7 +454,14 @@ impl JniGen {
                 Some((p, c)) => (p.to_string(), c.to_string()),
                 None => (String::new(), kotlin_fqn.clone()),
             };
-            written.push(kt::KtFile::new(package).decl(build_enum_class(&class_name, item_enum)));
+            let mut class = build_enum_class(&class_name, item_enum);
+            let mut file = kt::KtFile::new(package);
+            if let Some(iface) =
+                self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
+            {
+                file = file.decl(iface);
+            }
+            written.push(file.decl(class));
         }
         Ok(written)
     }
@@ -479,10 +483,6 @@ impl JniGen {
             // types each have their own emitter; only plain structs become
             // data classes here.
             if cfg.special_decl() {
-                continue;
-            }
-            // `kotlin_type`-mapped: surfaces as an existing type, no file.
-            if cfg.name_spec.as_ref().is_some_and(|s| s.is_verbatim()) {
                 continue;
             }
             let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
@@ -563,7 +563,13 @@ impl JniGen {
                 }
                 class = class.companion(companion);
             }
-            written.push(kt::KtFile::new(package).decl(class).imports(imports));
+            let mut file = kt::KtFile::new(package);
+            if let Some(iface) =
+                self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
+            {
+                file = file.decl(iface);
+            }
+            written.push(file.decl(class).imports(imports));
         }
 
         if !aliases.is_empty() {
@@ -590,7 +596,7 @@ impl JniGen {
     /// [`Self::write_jni_native`]). Opaque-handle parameters become
     /// `NativeHandle`; the wrapper body nests `withPtr` / `consume` per
     /// the type-conversion rule. Non-opaque parameters pass through with
-    /// the Kotlin type from `kotlin_types`. Opaque-handle return values
+    /// their mapped Kotlin type. Opaque-handle return values
     /// are wrapped in `NativeHandle(...)` before return.
     /// Emit every typed callback `fun interface` the declared functions
     /// reference — impl-`Fn` delivery callbacks, output-expansion builders
@@ -1183,7 +1189,7 @@ impl JniGen {
     /// same `handles` slice to both methods.
     ///
     /// Each handle's `kotlin_fqn` must be registered via
-    /// [`Self::kotlin_type_fqn`] so the generator can map it back to its
+    /// [`JniGen::kotlin_fqn`] so the generator can map it back to its
     /// Rust type-key (which identifies the first param to drop in each
     /// promoted method's signature).
     pub(crate) fn write_typed_handles(
@@ -1198,7 +1204,7 @@ impl JniGen {
                 None => (String::new(), handle.kotlin_fqn.to_string()),
             };
             let mut imports: BTreeSet<String> = BTreeSet::new();
-            let class = build_typed_handle(
+            let mut class = build_typed_handle(
                 self,
                 registry,
                 &class_name,
@@ -1206,8 +1212,147 @@ impl JniGen {
                 handle.key,
                 &mut imports,
             );
-            written.push(kt::KtFile::new(package).decl(class).imports(imports));
+            // A ptr class's own surface for the generated interface: peek() /
+            // isClosed() are inherited from NativeHandle (declared abstract in
+            // the interface, satisfied without an `override`); take() and the
+            // declared members are class-body (marked override by the helper);
+            // close() is covered by AutoCloseable. The interface extends
+            // AutoCloseable so consumers get `close()` too.
+            let base = vec![
+                kt::KtFun::new("peek")
+                    .vis(kt::Vis::Default)
+                    .returns(kt::KtType::long()),
+                kt::KtFun::new("isClosed")
+                    .vis(kt::Vis::Default)
+                    .returns(kt::KtType::boolean()),
+            ];
+            let mut file = kt::KtFile::new(package);
+            if let Some(iface) = self.apply_class_interface(
+                handle.key,
+                &mut class,
+                &class_name,
+                &["AutoCloseable"],
+                base,
+                false,
+            ) {
+                file = file.decl(iface);
+            }
+            written.push(file.decl(class).imports(imports));
         }
         written
     }
+
+    /// The generated-interface short name for a class whose final Kotlin name
+    /// is `class_short`: the per-decl `.interface_name(...)` override, else
+    /// the `set_interface_name_mangle` hook over the class name (unset
+    /// default: append `"Api"`). Asserted to differ from the class name.
+    pub(crate) fn interface_short_name(
+        &self,
+        class_short: &str,
+        override_: Option<&str>,
+    ) -> String {
+        let name = match override_ {
+            Some(n) => n.to_string(),
+            None => match &self.interface_name_mangle {
+                Some(f) => f(class_short),
+                None => format!("{class_short}Api"),
+            },
+        };
+        assert!(
+            name != class_short,
+            "the generated interface name `{name}` must differ from the class name \
+             `{class_short}` (a class and its interface cannot share a name in one package)"
+        );
+        name
+    }
+
+    /// Attach interface information to a just-built class. The `.implements`
+    /// list is added to the class supertypes unconditionally (nominal
+    /// implementation). When `.interface()` is enabled, ALSO build the
+    /// generated `<Name>Api` interface mirroring the class's public surface,
+    /// add it as a supertype, mark every class-body member (and, when
+    /// `include_ctor_props`, every ctor `val`) `override`, and return the
+    /// interface decl to emit alongside. `base_abstracts` are signatures the
+    /// interface declares that are satisfied by an inherited base member (no
+    /// `override` on the class — e.g. a ptr class's `peek()`/`isClosed()`).
+    pub(crate) fn apply_class_interface(
+        &self,
+        key: &TypeKey,
+        class: &mut kt::KtClass,
+        class_short: &str,
+        extra_supers: &[&str],
+        base_abstracts: Vec<kt::KtFun>,
+        include_ctor_props: bool,
+    ) -> Option<kt::KtClass> {
+        let cfg = self.types.get(key)?;
+        let interfaces = cfg.interfaces.clone();
+        let enabled = cfg.interface_enabled;
+        let name_override = cfg.interface_name_override.clone();
+
+        if !enabled {
+            for iface in &interfaces {
+                class.supertypes.push((kt::KtType::cls(iface), None));
+            }
+            return None;
+        }
+
+        let iface_name = self.interface_short_name(class_short, name_override.as_deref());
+        let mut iface =
+            kt::KtClass::new(kt::ClassKind::Interface, &iface_name).vis(kt::Vis::Public);
+        for s in extra_supers {
+            iface = iface.supertype(kt::KtType::cls(*s), None);
+        }
+        // Signatures satisfied by an inherited base member.
+        for f in base_abstracts {
+            iface = iface.member(f);
+        }
+        // Ctor `val`s become interface properties (data/value/enum).
+        if include_ctor_props {
+            for p in &mut class.ctor_params {
+                if p.prop.is_some() {
+                    iface = iface.member(
+                        kt::KtProperty::val(&p.name)
+                            .ty(p.ty.clone())
+                            .vis(kt::Vis::Default),
+                    );
+                    p.overrides = true;
+                }
+            }
+        }
+        // Class-body instance methods become interface abstracts + `override`
+        // on the class. A member already marked `override` (a ptr class's
+        // `close()`, via AutoCloseable) is skipped — already covered.
+        for m in &mut class.members {
+            if let kt::KtDecl::Fun(f) = m {
+                if f.modifiers.iter().any(|s| s == "override") {
+                    continue;
+                }
+                iface = iface.member(abstract_fun_sig(f));
+                f.modifiers.push("override".to_string());
+            }
+        }
+        // The generated interface first, then the user `.implements` list.
+        class.supertypes.push((kt::KtType::cls(&iface_name), None));
+        for iface_fqn in &interfaces {
+            class.supertypes.push((kt::KtType::cls(iface_fqn), None));
+        }
+        Some(iface)
+    }
+}
+
+/// A concrete class member's signature as an abstract interface member:
+/// same name / generics / params / return, no body, no modifiers, no vis
+/// keyword (interface members are public-abstract by default).
+fn abstract_fun_sig(f: &kt::KtFun) -> kt::KtFun {
+    let mut a = kt::KtFun::new(&f.name).vis(kt::Vis::Default);
+    for g in &f.generics {
+        a = a.generic(g.clone());
+    }
+    for p in &f.params {
+        a = a.param(p.clone());
+    }
+    if let Some(r) = &f.ret {
+        a = a.returns(r.clone());
+    }
+    a
 }
