@@ -21,7 +21,7 @@
 //! of that package's classes, enums, value-classes and free functions.
 //!
 //! Every `#[prebindgen]` function must be assigned a Kotlin home — as a
-//! class member (`.fun`/`.constructor` on a class decl) or a free function
+//! class member (`.method`/`.constructor` on a class decl) or a free function
 //! (`PackageDecl::fun`). Undeclared functions are skipped with a build
 //! warning (`Registry::scan_declared`); there is no "orphan" bucket.
 
@@ -324,16 +324,16 @@ impl JniGen {
             if !members.is_empty() && !self.package.is_empty() {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
-            // Promoted instance methods (`.fun`): receiver bound to `this`,
+            // Promoted instance methods (`.method`): receiver bound to `this`,
             // passing `this.bytes` to the extern.
-            for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
+            for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
                 if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
                         item_fn,
                         registry,
                         &mut imports,
-                        Some(self.effective_member_name(key, m).as_str()),
+                        Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
                         for ov in crate::api::lang::jnigen::jni::render_param_overloads(
@@ -359,7 +359,7 @@ impl JniGen {
                             item_fn,
                             registry,
                             &mut imports,
-                            Some(self.effective_member_name(key, m).as_str()),
+                            Some(self.effective_method_name(key, m).as_str()),
                             None,
                         ) {
                             for ov in crate::api::lang::jnigen::jni::render_param_overloads(
@@ -534,14 +534,14 @@ impl JniGen {
             if !members.is_empty() && !self.package.is_empty() {
                 imports.insert(format!("{}.{}", self.package, self.jni_native_class_name()));
             }
-            for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
+            for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
                 if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
                     if let Some(f) = crate::api::lang::jnigen::jni::render_wrapper_fn(
                         self,
                         item_fn,
                         registry,
                         &mut imports,
-                        Some(self.effective_member_name(key, m).as_str()),
+                        Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
                         for ov in crate::api::lang::jnigen::jni::render_param_overloads(
@@ -572,7 +572,7 @@ impl JniGen {
                             item_fn,
                             registry,
                             &mut imports,
-                            Some(self.effective_member_name(key, m).as_str()),
+                            Some(self.effective_method_name(key, m).as_str()),
                             None,
                         ) {
                             for ov in crate::api::lang::jnigen::jni::render_param_overloads(
@@ -614,7 +614,7 @@ impl JniGen {
     }
 
     /// Build the package-level wrapper fragment for the given subpackage.
-    /// One top-level safe wrapper per `MethodEntry` in `pkg_cfg.functions`.
+    /// One top-level safe wrapper per `FunctionEntry` in `pkg_cfg.functions`.
     /// Wrappers delegate to the centralized Native object (see
     /// [`Self::write_jni_native`]). Opaque-handle parameters become
     /// `NativeHandle`; the wrapper body nests `withPtr` / `consume` per
@@ -685,7 +685,7 @@ impl JniGen {
             .map(|el| TypeKey::from_type(el).to_string())
             .collect();
 
-        // Walk every declared function — free `.fun`s AND class members
+        // Walk every declared function — free `.fun`s AND class methods/factories
         // (`.method`/`.accessor`/`.constructor`): a method can also need a
         // generated interface (e.g. a `Vec<T>` whole-element folder). The `uses`
         // map dedups, so an identity shared across positions emits once.
@@ -982,13 +982,7 @@ impl JniGen {
         subpackage: &str,
         pkg_cfg: &crate::api::lang::jnigen::jni::PackageConfig,
     ) -> kt::KtFile {
-        let package = if self.package.is_empty() {
-            subpackage.to_string()
-        } else if subpackage.is_empty() {
-            self.package.clone()
-        } else {
-            format!("{}.{}", self.package, subpackage)
-        };
+        let package = self.package_name(subpackage);
         let mut file = kt::KtFile::new(&package);
         let mut imports: BTreeSet<String> = BTreeSet::new();
         for entry in &pkg_cfg.functions {
@@ -1003,12 +997,13 @@ impl JniGen {
                         entry.rust_ident,
                     )
                 });
+            let kotlin_name = self.effective_function_name(subpackage, entry);
             if let Some(f) = render_wrapper_fn(
                 self,
                 item_fn,
                 registry,
                 &mut imports,
-                entry.kotlin_name_override.as_deref(),
+                Some(&kotlin_name),
                 None,
             ) {
                 // #52: idiomatic typed overloads for `.split_on_param`
@@ -1033,6 +1028,7 @@ impl JniGen {
             reject_handle_const(self, item_const);
             if let Some((helper, prop)) = render_const_val(
                 self,
+                &package,
                 item_const,
                 registry,
                 &mut imports,
@@ -1060,6 +1056,7 @@ impl JniGen {
             validate_constant_fn(self, item_fn);
             if let Some((helper, prop)) = render_constant_fn_val(
                 self,
+                &package,
                 item_fn,
                 registry,
                 &mut imports,
@@ -1074,7 +1071,8 @@ impl JniGen {
         // evaluated Rust-side (`prerequisites`).
         for decl in &pkg_cfg.constant_exprs {
             validate_constant_expr(self, &decl.kotlin_name, &decl.ty);
-            if let Some((helper, prop)) = render_const_expr_val(self, decl, registry, &mut imports)
+            if let Some((helper, prop)) =
+                render_const_expr_val(self, &package, decl, registry, &mut imports)
             {
                 file = file.decl(helper).decl(prop);
             }
@@ -1088,8 +1086,8 @@ impl JniGen {
 
     /// Emit the centralized Native-object Kotlin file under `output_dir`
     /// (class name from [`JniGen::jni_native_class_name`]). Holds one
-    /// `external fun` per `#[prebindgen]` function — names mangled via
-    /// [`JniGen::set_fun_name_mangle`], parameter and return types rendered at
+    /// `external fun` per `#[prebindgen]` function — names mangled as methods
+    /// via [`JniGen::set_method_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
     /// symbols generated under
     /// `Java_<package>_<jni_native_class>_<name>`. Every generated native
@@ -1201,7 +1199,8 @@ impl JniGen {
 
     /// Emit one Kotlin file per entry in `handles` — each becomes a
     /// `public class <ClassName>(initialPtr: Long) : NativeHandle(initialPtr)`
-    /// with the standard `free()` + `private external fun <mangle_fun("freePtr")>(ptr: Long)`
+    /// with the standard `free()` + package/class-aware mangled
+    /// `private external fun freePtr(ptr: Long)`
     /// destructor pair, plus one instance method per `#[prebindgen]` fn
     /// listed in [`TypedHandle::functions`]. The promoted method's first
     /// opaque parameter matching the handle's Rust type is dropped — the
@@ -1276,13 +1275,14 @@ impl JniGen {
     /// default: append `"Api"`). Asserted to differ from the class name.
     pub(crate) fn interface_short_name(
         &self,
+        package: &str,
         class_short: &str,
         override_: Option<&str>,
     ) -> String {
         let name = match override_ {
             Some(n) => n.to_string(),
             None => match &self.interface_name_mangle {
-                Some(f) => f(class_short),
+                Some(f) => f(package, class_short),
                 None => format!("{class_short}Api"),
             },
         };
@@ -1324,7 +1324,11 @@ impl JniGen {
             return None;
         }
 
-        let iface_name = self.interface_short_name(class_short, name_override.as_deref());
+        let class_fqn = self
+            .kotlin_fqn(key.as_str())
+            .unwrap_or_else(|| class_short.to_string());
+        let package = class_fqn.rsplit_once('.').map(|(p, _)| p).unwrap_or("");
+        let iface_name = self.interface_short_name(package, class_short, name_override.as_deref());
         let mut iface =
             kt::KtClass::new(kt::ClassKind::Interface, &iface_name).vis(kt::Vis::Public);
         for s in extra_supers {

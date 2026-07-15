@@ -105,11 +105,11 @@ pub(crate) fn vec_build_helpers(
 }
 
 /// Kotlin `external fun` short name for a vec helper (`payloadVecNew`), routed
-/// through [`JniGen::mangle_fun`] like every other extern. The Rust JNI symbol
+/// through the method mangler like every other `JNINative` extern. The Rust JNI symbol
 /// (see [`vec_helper_symbol`]) and the Kotlin call site both use this, so they
 /// agree.
 pub(crate) fn vec_helper_method_name(ext: &JniGen, base: &str, suffix: &str) -> String {
-    ext.mangle_fun(&format!("{base}{suffix}"))
+    ext.mangle_jni_method(&format!("{base}{suffix}"))
 }
 
 /// Full Rust JNI symbol for a vec helper — `<jni_class_path>_<method>` (the same

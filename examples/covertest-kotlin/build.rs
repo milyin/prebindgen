@@ -16,7 +16,7 @@
 //! | `JniGen::set_package_prefix`       | `io.prebindgen.covertest` |
 //! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
 //! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
-//! | 5 name-mangle closures               | harness (`Cov*`) + the four per-kind hooks |
+//! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (NESTED field + `Option<prim>`/`Option<enum>` fields) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
@@ -26,13 +26,13 @@
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
 //! | `convert!` sources `.with(path!)`/`.error(ty!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
-//! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
+//! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
-//! | namespace-relative member names (C1)  | `storage_len`→`len`, `stamp_secs`→`secs`, … (no `.name()`); `summary_new`→`.name("of")` still overrides |
+//! | contextual method names               | method hook strips `storage`/`stamp` class prefixes; `summary_new`→`.name("of")` still overrides |
 //! | per-class `.name()`                  | `Archive` → Kotlin `SummaryVault` (literal, bypasses mangles) |
 //! | `.interface()` + `.implements(…)`      | `Storage`/`Payload` emit an Api interface; `CovResource`/`Timestamped` extend it (#54) |
 //! | `.interface_name(…)`                  | `Priority` → generated `PriorityKind` interface (#54) |
@@ -89,6 +89,20 @@ use prebindgen::{
     from, fun, into, lang::JniGen, matching, package, path, ptr_class, try_from, ty, value_class,
 };
 
+fn strip_flat_class_prefix(class: &str, name: &str) -> String {
+    if name
+        .get(..class.len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(class))
+    {
+        let rest = &name[class.len()..];
+        let mut chars = rest.chars();
+        if let Some(first) = chars.next() {
+            return first.to_lowercase().chain(chars).collect();
+        }
+    }
+    name.to_string()
+}
+
 fn main() {
     // Two prebindgen sources: the flat crate plus the binding-side helper
     // crate (conversion fns for `convert!`). The registry records each fn's
@@ -107,19 +121,19 @@ fn main() {
     let jni = JniGen::new()
         .set_package_prefix("io.prebindgen.covertest")
         .set_jni_native_init("io.prebindgen.covertest.NativeLibrary.ensureLoaded()")
-        // All six name-mangle hooks are registered. The harness hook is a
+        // Every naming tier used here is configured. The harness hook is a
         // real transform: it receives the derived default `JNINative` and
         // replaces it wholesale with `CovNative` (an internal symbol, so no
-        // Kotlin-side coordination is needed); the other five are the identity
+        // Kotlin-side coordination is needed); four hooks are identity
         // (the domain names are already the desired Kotlin names) — registering
-        // them still exercises the customization API and its `Some(closure)`
-        // path.
+        // closures, and the method hook strips the flat class prefix. The
+        // generated-interface hook deliberately keeps its `ClassApi` default.
         .set_harness_name_mangle(|_| "CovNative".to_string())
-        .set_fun_name_mangle(|n| n.to_string())
-        .set_ptr_class_name_mangle(|n| n.to_string())
-        .set_data_class_name_mangle(|n| n.to_string())
-        .set_enum_name_mangle(|n| n.to_string())
-        .set_member_name_mangle(|n| n.to_string())
+        .set_fun_name_mangle(|_, n| n.to_string())
+        .set_ptr_class_name_mangle(|_, n| n.to_string())
+        .set_data_class_name_mangle(|_, n| n.to_string())
+        .set_enum_name_mangle(|_, n| n.to_string())
+        .set_method_name_mangle(|_, class, n| strip_flat_class_prefix(class, n))
         // `Millis` newtype: a canonical single-value conversion to a bare
         // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
         // defined in the SEPARATE `covertest-helpers` source crate, proving
@@ -164,7 +178,7 @@ fn main() {
                 data_class!(Payload)
                     .interface()
                     .implements("io.prebindgen.covertest.Timestamped")
-                    .fun(fun!(payload_label_len)),
+                    .method(fun!(payload_label_len)),
             ),
         )
         // ── Subpackage `model`: enum + value class + nested data class ──────
@@ -189,15 +203,15 @@ fn main() {
                 // surfaces as `List<ByteArray>`.
                 .class(
                     value_class!(Stamp)
-                        .fun(fun!(stamp_secs))
-                        .fun(fun!(stamp_nanos)),
+                        .method(fun!(stamp_secs))
+                        .method(fun!(stamp_nanos)),
                 ),
         )
         // ── Subpackage `errors`: the Result error channel ───────────────────
         .package(package!("errors").class(
             // `StorageError` is the `E` of a fallible `Result`; its
             // boundary shape is declared with `expand_return!` below.
-            ptr_class!(StorageError).fun(fun!(storage_error_message)),
+            ptr_class!(StorageError).method(fun!(storage_error_message)),
         ))
         // `StorageError`'s default return fields make the generated `onError`
         // handler receive the decomposed error: the `message` string (name
@@ -219,9 +233,9 @@ fn main() {
                 .class(
                     ptr_class!(Summary)
                         .constructor(fun!(summary_new).name("of"))
-                        .fun(fun!(summary_count))
-                        .fun(fun!(summary_total))
-                        .fun(fun!(summary_scaled)),
+                        .method(fun!(summary_count))
+                        .method(fun!(summary_total))
+                        .method(fun!(summary_scaled)),
                 )
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -285,8 +299,8 @@ fn main() {
                         // generated code.
                         .interface()
                         .implements("io.prebindgen.covertest.CovResource")
-                        .fun(fun!(storage_len))
-                        .fun(fun!(storage_contains))
+                        .method(fun!(storage_len))
+                        .method(fun!(storage_contains))
                         .constructor(fun!(storage_with_payload)),
                 )
                 // The callback-handler handles (single payload / whole batch / owned

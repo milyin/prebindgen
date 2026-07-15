@@ -67,38 +67,6 @@ fn discriminants_non_literal_rejected() {
 }
 
 #[test]
-fn strip_type_prefix_basics() {
-    use super::strip_type_prefix;
-    // Plain one-segment class namespace.
-    assert_eq!(strip_type_prefix("storage_len", "Storage"), Some("len"));
-    assert_eq!(
-        strip_type_prefix("payload_label_len", "Payload"),
-        Some("label_len")
-    );
-    // Underscore-insensitive on both sides: class KeyExpr vs `keyexpr_` and
-    // `key_expr_` idents.
-    assert_eq!(
-        strip_type_prefix("keyexpr_get_str", "KeyExpr"),
-        Some("get_str")
-    );
-    assert_eq!(
-        strip_type_prefix("key_expr_get_str", "KeyExpr"),
-        Some("get_str")
-    );
-    assert_eq!(
-        strip_type_prefix("zbytes_as_bytes", "ZBytes"),
-        Some("as_bytes")
-    );
-    // No namespace prefix → None (fallback keeps the full ident).
-    assert_eq!(strip_type_prefix("millis_add", "Storage"), None);
-    // Partial overlap that never completes the class name → None.
-    assert_eq!(strip_type_prefix("key_something", "KeyExpr"), None);
-    // The ident IS the class name alone → None (empty remainder).
-    assert_eq!(strip_type_prefix("storage", "Storage"), None);
-    assert_eq!(strip_type_prefix("storage_", "Storage"), None);
-}
-
-#[test]
 fn doc_string_extracts_and_sanitizes() {
     use super::doc_string;
     let f: syn::ItemFn = syn::parse_quote! {

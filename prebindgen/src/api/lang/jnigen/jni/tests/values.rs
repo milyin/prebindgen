@@ -732,7 +732,7 @@ fn data_class_members_reenter_as_field_leaves() {
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!().class(
             crate::data_class!(Point)
-                .fun(crate::fun!(point_norm).name("norm"))
+                .method(crate::fun!(point_norm).name("norm"))
                 .constructor(crate::fun!(point_origin).name("origin")),
         ),
     );

@@ -96,23 +96,23 @@ pub(crate) struct OpaqueConfig {}
 #[derive(Clone, Default)]
 pub(crate) struct EnumConfig {}
 
-/// One registered `.fun(...)` entry. The Rust identifier is captured
+/// One registered package-level `.fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
 /// optional override sets the Kotlin-side name when the default
 /// `snake_to_camel(rust_ident)` derivation isn't what the user wants.
 #[derive(Clone, Debug)]
-pub struct MethodEntry {
+pub struct FunctionEntry {
     /// Rust function ident — must match a `#[prebindgen]`-marked free
     /// function in the registered source module. Looked up by
     /// `registry.functions[ident]`.
     pub rust_ident: syn::Ident,
     /// Kotlin-side name override, set by chaining `.name("...")` after
     /// the entry's registration. `None` = derive from `rust_ident` via
-    /// `snake_to_camel`.
+    /// `snake_to_camel`, then apply the target package's function hook.
     pub kotlin_name_override: Option<String>,
 }
 
-impl MethodEntry {
+impl FunctionEntry {
     pub fn new(rust_ident: syn::Ident) -> Self {
         Self {
             rust_ident,
@@ -175,18 +175,18 @@ pub(crate) struct TypeConfig {
 pub(crate) struct PackageConfig {
     /// `#[prebindgen]` fns declared as free-standing wrappers under this
     /// subpackage via [`JniGen::fun`].
-    pub functions: Vec<MethodEntry>,
+    pub functions: Vec<FunctionEntry>,
     /// `#[prebindgen]` consts declared under this subpackage via
     /// [`PackageDecl::constant`] — each surfaces as a top-level Kotlin `val`
-    /// initialized through a generated nullary JNI getter. `MethodEntry`
+    /// initialized through a generated nullary JNI getter. `FunctionEntry`
     /// is reused as-is (rust ident + Kotlin-name override).
-    pub constants: Vec<MethodEntry>,
+    pub constants: Vec<FunctionEntry>,
     /// Fn-sourced constants declared via [`ConstDecl::fun`]:
     /// nullary `#[prebindgen]` fns whose result surfaces as a top-level
     /// Kotlin `val` (eagerly initialized through the fn's ordinary generated
     /// wrapper) instead of a callable `fun`. Rust-side emission and the
     /// `JNINative` extern are the plain declared-function ones.
-    pub constant_functions: Vec<MethodEntry>,
+    pub constant_functions: Vec<FunctionEntry>,
     /// Expression-backed constants declared via
     /// [`ConstDecl::expr`](super::jni::decl::ConstDecl::expr):
     /// binding-defined expressions evaluated once inside a generated nullary
@@ -204,7 +204,7 @@ pub(crate) enum MemberKind {
     /// normally (a zero-extra-param fn is just the receiver-only case — no
     /// separate arity tracking needed, since there's nothing left to
     /// compose once the receiver is skipped).
-    Fun,
+    Method,
     /// `f(…) -> T` / `Result<T,E>`: a factory emitted as a companion-object
     /// member returning the class; never output-flattened; referenceable by a
     /// a `expand_param!` `.variant(fun!(...))` arm.
@@ -212,9 +212,9 @@ pub(crate) enum MemberKind {
 }
 
 /// One `#[prebindgen]` function attached to a declared class (`ptr_class` /
-/// `enum_class` / `value_class` / `data_class`) via [`JniGen::fun`] /
-/// [`JniGen::constructor`]. Funs become **instance methods** (receiver
-/// dropped→`this`); constructors become **companion factory** members. Each
+/// `value_class` / `data_class`) via a declaration's `.method(...)` /
+/// `.constructor(...)`. Methods become **instance methods** (receiver
+/// dropped→`this`); constructors become **companion factory** methods. Each
 /// is also a real `#[prebindgen]` wrapper (Rust extern + `JNINative` extern +
 /// JSONL).
 #[derive(Clone, Debug)]
@@ -222,14 +222,14 @@ pub(crate) struct ClassMember {
     /// Rust function ident (`registry.functions[ident]`).
     pub rust_ident: syn::Ident,
     /// Per-member `.name()` override, stored RAW — the effective Kotlin
-    /// name is derived at point of use by [`JniGen::member_kotlin_name`]
-    /// (override, else member-mangle over the namespace-stripped camelCase
-    /// ident), keeping `set_member_name_mangle` order-independent. An
+    /// name is derived at point of use by [`JniGen::class_method_kotlin_name`]
+    /// (override, else the package/class-aware method hook over the full
+    /// camelCase ident), keeping `set_method_name_mangle` order-independent. An
     /// `expand_return!` `.field` referencing the same underlying function
     /// inherits the effective name unless it sets its own `.name()`;
     /// `expand_param!` variants reference the fn by ident only.
     pub kotlin_name_override: Option<String>,
-    /// Member kind (fun / constructor).
+    /// Member kind (method / constructor).
     pub kind: MemberKind,
 }
 
@@ -263,11 +263,22 @@ pub(crate) type WrapperFn = Arc<
         + Sync,
 >;
 
-/// Closure that transforms a Kotlin short name. Installed via [`JniGen`]'s
-/// per-kind `set_*_name_mangle` setters; the framework calls the matching
-/// closure wherever it needs to derive a Kotlin/JNI short name for a
-/// generated element. Closure-unset = identity.
-pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
+/// Closure that transforms a Kotlin short name with the fully-qualified
+/// package in which the named object is emitted. Installed via [`JniGen`]'s
+/// per-kind `set_*_name_mangle` setters. Closure-unset = identity.
+pub(crate) type NameMangle = Arc<dyn Fn(&str, &str) -> String + Send + Sync>;
+
+/// Closure that transforms the centralized JNI harness class short name.
+/// The harness always lives in the configured base package, so no placement
+/// context is needed. Closure-unset = identity.
+pub(crate) type HarnessNameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
+
+/// Closure that transforms a Kotlin method name with both its containing
+/// package and final class short name. This is distinct from [`NameMangle`]
+/// because flat Rust APIs conventionally encode the class namespace in the
+/// function identifier (`z_session_put`), while a Kotlin method already lives
+/// inside that class.
+pub(crate) type MethodNameMangle = Arc<dyn Fn(&str, &str, &str) -> String + Send + Sync>;
 
 /// JNI back-end. Global settings are applied with the order-insensitive
 /// `set_*` methods; declarations are accepted as pre-built objects
@@ -283,7 +294,7 @@ pub(crate) type NameMangle = Arc<dyn Fn(&str) -> String + Send + Sync>;
 ///     .package(
 ///         prebindgen::package!("keyexpr")
 ///             .class(prebindgen::ptr_class!(KeyExpr)
-///                 .fun(prebindgen::fun!(keyexpr_get_str).name("getStr"))
+///                 .method(prebindgen::fun!(keyexpr_get_str).name("getStr"))
 ///                 .constructor(prebindgen::fun!(keyexpr_new_try_from).name("tryFrom"))),
 ///     )
 ///     // A KeyExpr param accepts EITHER a String (built via tryFrom) OR an
@@ -307,11 +318,8 @@ pub struct JniGen {
     /// whose trimming a direct field write would bypass.
     pub(crate) package: String,
 
-    /// Mangler for function names (scanned `#[prebindgen]` free fns and
-    /// the synthetic `freePtr` destructor). Default = identity; in
-    /// zenoh-jni the closure returns `format!("{name}ViaJNI")` so the
-    /// generated JNI extern symbols and matching Kotlin `external fun`s
-    /// both pick up the `ViaJNI` suffix.
+    /// Mangler for top-level package function names. Receives the destination
+    /// package and camelCase Rust function name; default = identity.
     pub(crate) fun_name_mangle: Option<NameMangle>,
     /// Mangler for Kotlin ptr-class names declared via a
     /// `PtrClassDecl`. Default = identity.
@@ -322,18 +330,17 @@ pub struct JniGen {
     /// Mangler for `EnumClassDecl`-declared C-like enum class
     /// names. Default = identity.
     pub(crate) enum_name_mangle: Option<NameMangle>,
-    /// Member-name mangle hook ([`JniGen::set_member_name_mangle`]) —
-    /// applied to the namespace-stripped camelCase default of every class
-    /// member without a per-member `.name()`.
-    pub(crate) member_name_mangle: Option<NameMangle>,
-    /// Mangler for the framework "harness" class name —
-    /// `"Native"` (the centralized JNI extern holder). Default when
-    /// unset = prepend `"JNI"`, so you get `JNINative`. Override to
-    /// plug in a different convention.
-    pub(crate) harness_name_mangle: Option<NameMangle>,
+    /// Method-name mangle hook ([`JniGen::set_method_name_mangle`]) — applied
+    /// to the camelCase Rust function name of every class method/factory
+    /// without a per-method `.name()`, with package and class context.
+    pub(crate) method_name_mangle: Option<MethodNameMangle>,
+    /// Mangler for the framework `JNINative` harness class name. Receives its
+    /// default class name; unset = identity.
+    pub(crate) harness_name_mangle: Option<HarnessNameMangle>,
     /// Mangler turning a class name into its generated `.interface()` name.
-    /// Receives the final class name; identity is forbidden (a class and its
-    /// interface can't share a name). Default when unset = append `"Api"`.
+    /// Receives the target package and final class name; identity is forbidden
+    /// (a class and its interface can't share a name). Default when unset =
+    /// append `"Api"`.
     pub(crate) interface_name_mangle: Option<NameMangle>,
 
     /// Structured per-type configuration keyed by canonical Rust type.
@@ -432,7 +439,7 @@ pub struct JniGen {
     pub(crate) fn_split_params: Vec<(syn::Ident, String)>,
 
     /// Class members (funs / constructors) attached to a declared class via
-    /// its decl's `.fun()`/`.constructor()`, keyed by the class's canonical
+    /// its decl's `.method()`/`.constructor()`, keyed by the class's canonical
     /// Rust type. Supplies the instance-method / companion-factory emission
     /// and the receiver-skip set for input-flattening (see [`ClassMember`]).
     /// Insertion order within a class is preserved (the Vec); class emission

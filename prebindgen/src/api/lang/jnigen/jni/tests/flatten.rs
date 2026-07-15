@@ -27,8 +27,8 @@ fn inline_output_gets_own_builder() {
             crate::package!("thing")
                 .class(
                     crate::ptr_class!(ZThing)
-                        .fun(crate::fun!(z_thing_name).name("name"))
-                        .fun(crate::fun!(z_thing_size).name("size")),
+                        .method(crate::fun!(z_thing_name).name("name"))
+                        .method(crate::fun!(z_thing_size).name("size")),
                 )
                 .fun(crate::fun!(z_make_a))
                 // Per-fn inline fields: name + size + name again (different shape). The
@@ -121,11 +121,11 @@ fn error_unwrap_universal_records() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("errors")
-                .class(crate::ptr_class!(ZDetail).fun(crate::fun!(z_detail_code).name("code")))
+                .class(crate::ptr_class!(ZDetail).method(crate::fun!(z_detail_code).name("code")))
                 .class(
                     crate::ptr_class!(ZErr)
-                        .fun(crate::fun!(z_err_message).name("message"))
-                        .fun(crate::fun!(z_err_detail).name("detail")),
+                        .method(crate::fun!(z_err_message).name("message"))
+                        .method(crate::fun!(z_err_detail).name("detail")),
                 )
                 .fun(crate::fun!(z_fallible)),
         )
@@ -214,7 +214,7 @@ fn error_unwrap_universal_records() {
     assert!(!all.contains("?:\"\""), "{all}");
 }
 
-/// `.fun(f)` binds the `&Class` receiver to `this` (dropped from the
+/// `.method(f)` binds the `&Class` receiver to `this` (dropped from the
 /// signature, its handle locked) while keeping the non-receiver params; the
 /// fn delegates to the same `JNINative` extern. `.constructor(f)` emits a
 /// companion-object factory returning the class. Per-fn
@@ -241,9 +241,9 @@ fn method_constructor_and_inline_field_self() {
         crate::package!("thing")
             .class(
                 crate::ptr_class!(ZThing)
-                    .fun(crate::fun!(z_thing_name).name("name"))
-                    // A fun with extra params: `&ZThing` receiver + a `name: String` param.
-                    .fun(crate::fun!(z_thing_rename).name("rename"))
+                    .method(crate::fun!(z_thing_name).name("name"))
+                    // A method with extra params: `&ZThing` receiver + a `name: String` param.
+                    .method(crate::fun!(z_thing_rename).name("rename"))
                     // A constructor: factory returning ZThing.
                     .constructor(crate::fun!(z_thing_make).name("make")),
             )
@@ -504,7 +504,7 @@ fn fn_expand_return_type_mismatch_rejected() {
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().package(
         crate::package!("ops")
-            .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
+            .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
             .class(crate::ptr_class!(ZOther))
             // Wrong type: z_make returns ZThing, not ZOther.
             .fun(crate::fun!(z_make).expand_return(crate::expand_return!(ZOther).field_self())),
@@ -693,11 +693,11 @@ fn expand_return_field_with_name_accepted() {
     let _ = crate::expand_return!(ZThing).field(crate::fun!(z_thing_name).name("label"));
 }
 
-/// N5: a `.fun()` member whose target has no parameter of the class type
+/// N5: a `.method()` whose target has no parameter of the class type
 /// is a hard `AdapterInvariant` error at resolve — previously it silently
 /// emitted a method that ignored `this`.
 #[test]
-fn member_fun_without_receiver_rejected() {
+fn method_without_receiver_rejected() {
     let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_thing_free_standing(v: i64) -> i64 { unimplemented!() }",
@@ -714,14 +714,14 @@ fn member_fun_without_receiver_rejected() {
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(
             crate::ptr_class!(ZThing)
-                .fun(crate::fun!(z_thing_free_standing))
+                .method(crate::fun!(z_thing_free_standing))
                 .constructor(crate::fun!(z_make)),
         ),
     );
     let err = registry.resolve(jni).expect_err("receiver-less member");
     let msg = format!("{err}");
     assert!(
-        msg.contains("member fun `z_thing_free_standing`") && msg.contains("`ZThing`"),
+        msg.contains("method `z_thing_free_standing`") && msg.contains("`ZThing`"),
         "{msg}"
     );
 }
@@ -745,7 +745,7 @@ fn constructor_with_wrong_return_rejected() {
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
         crate::package!("t").class(
             crate::ptr_class!(ZThing)
-                .fun(crate::fun!(z_thing_len))
+                .method(crate::fun!(z_thing_len))
                 .constructor(crate::fun!(z_make_number)),
         ),
     );

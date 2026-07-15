@@ -265,7 +265,7 @@ macro_rules! expand_return {
 /// [`PackageDecl`], and hand that to [`JniGen::package`].
 ///
 /// A `PtrClassDecl` defines the **Kotlin class only** — its name
-/// ([`name`](Self::name)), its instance methods ([`fun`](Self::fun)), and its
+/// ([`name`](Self::name)), its instance methods ([`method`](Self::method)), and its
 /// companion-object factories ([`constructor`](Self::constructor)). How the
 /// type crosses the FFI boundary by default — accepted as which parameter
 /// variants, returned as which field set — is declared separately with
@@ -276,7 +276,7 @@ macro_rules! expand_return {
 /// ```
 /// // A KeyExpr handle exposing `str()` as an instance method.
 /// let _ = prebindgen::ptr_class!(KeyExpr)
-///     .fun(prebindgen::fun!(keyexpr_get_str).name("str"));
+///     .method(prebindgen::fun!(keyexpr_get_str).name("str"));
 /// ```
 /// Deliberately has no verbatim type mapping: the generated typed-handle
 /// class OWNS a lifecycle contract — the `NativeHandle` base, the `ptr`
@@ -402,8 +402,8 @@ impl PtrClassDecl {
     /// become the method's arguments. Name it with
     /// `fun!(rust_name).name("kotlinName")` (default: the Rust name
     /// camel-cased).
-    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        self.members.push((rust_fun, MemberKind::Fun));
+    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
+        self.members.push((rust_fun, MemberKind::Method));
         self
     }
 
@@ -581,7 +581,7 @@ impl ExpandReturnDecl {
     /// Add one field: the named `#[prebindgen]` reader's (`f(&Self) -> Field`)
     /// value. The Kotlin field name is, in order of precedence: an explicit
     /// `.name(...)` on `accessor`; the Kotlin name of the class member if the
-    /// same function is declared via [`PtrClassDecl::fun`] on this type (so a
+    /// same function is declared via [`PtrClassDecl::method`] on this type (so a
     /// getter that is both a method and a field is named once); else the
     /// camel-cased Rust name.
     ///
@@ -644,7 +644,7 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// unit-variant only and `#[repr(i32)]`-style with explicit discriminants,
 /// so both sides agree on the numbers.
 ///
-/// Has no `.fun`/`.constructor` by rule, not omission: members belong to
+/// Has no `.method`/`.constructor` by rule, not omission: members belong to
 /// class kinds whose instances can re-enter Rust as an object (handle /
 /// blob / field leaves). An enum value is a bare scalar with no object
 /// identity — a "method" on it is just a free function taking the enum.
@@ -714,11 +714,11 @@ impl DataClassDecl {
     class_interface_methods!("data_class");
 
     /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
-    /// method on the generated data class (see [`PtrClassDecl::fun`]) — the
+    /// method on the generated data class (see [`PtrClassDecl::method`]) — the
     /// receiver crosses as `this`'s field leaves, exactly like a data-class
     /// parameter.
-    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        self.members.push((rust_fun, MemberKind::Fun));
+    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
+        self.members.push((rust_fun, MemberKind::Method));
         self
     }
 
@@ -740,7 +740,7 @@ impl From<syn::Type> for DataClassDecl {
 /// raw bytes in a `ByteArray` — rather than as a heap handle. The
 /// lightweight peer of [`PtrClassDecl`] for things like ids and timestamps
 /// that have no lifecycle to manage. The type must be `Copy` (the generator
-/// asserts it at compile time). Readers added with [`fun`](Self::fun) become
+/// asserts it at compile time). Readers added with [`method`](Self::method) become
 /// instance methods on the Kotlin value class.
 pub struct ValueClassDecl {
     pub(crate) key: TypeKey,
@@ -768,9 +768,9 @@ impl ValueClassDecl {
     class_interface_methods!("value_class");
 
     /// Expose a `#[prebindgen]` reader (`f(&Self) -> R`) as an instance
-    /// method on the Kotlin value class (see [`PtrClassDecl::fun`]).
-    pub fn fun(mut self, rust_fun: FunctionDecl) -> Self {
-        self.members.push((rust_fun, MemberKind::Fun));
+    /// method on the Kotlin value class (see [`PtrClassDecl::method`]).
+    pub fn method(mut self, rust_fun: FunctionDecl) -> Self {
+        self.members.push((rust_fun, MemberKind::Method));
         self
     }
 
@@ -829,7 +829,7 @@ impl From<ValueClassDecl> for ClassDecl {
 
 /// Declares one `#[prebindgen]` function to export. Add it to a package with
 /// [`PackageDecl::fun`], or attach it to a class as a method/factory with
-/// [`PtrClassDecl::fun`] / [`PtrClassDecl::constructor`].
+/// [`PtrClassDecl::method`] / [`PtrClassDecl::constructor`].
 ///
 /// Build it from a bare Rust name with [`fun!`](crate::fun) and chain
 /// [`name`](Self::name) to set its Kotlin name.

@@ -65,7 +65,7 @@ impl JniGen {
             ptr_class_name_mangle: None,
             data_class_name_mangle: None,
             enum_name_mangle: None,
-            member_name_mangle: None,
+            method_name_mangle: None,
             harness_name_mangle: None,
             interface_name_mangle: None,
             types: HashMap::new(),
@@ -113,53 +113,47 @@ impl JniGen {
         jni
     }
 
-    /// Apply the fun-name mangle closure to `name`, returning the closure
-    /// result or `name` verbatim when unset. Called everywhere the framework
-    /// derives a function-shaped Kotlin/JNI short name — scanned
-    /// `#[prebindgen]` extern symbols, the synthetic `freePtr` destructor,
-    /// and the Kotlin-side `external fun` that pairs with each.
-    pub(crate) fn mangle_fun(&self, name: &str) -> String {
+    /// Apply the package-level function-name mangle closure to `name`.
+    pub(crate) fn mangle_fun(&self, package: &str, name: &str) -> String {
         match &self.fun_name_mangle {
-            Some(f) => f(name),
+            Some(f) => f(package, name),
+            None => name.to_string(),
+        }
+    }
+    /// Apply the method-name mangle closure to `name`, providing the package
+    /// and final class name that contain the method.
+    pub(crate) fn mangle_method(&self, package: &str, class: &str, name: &str) -> String {
+        match &self.method_name_mangle {
+            Some(f) => f(package, class, name),
             None => name.to_string(),
         }
     }
     /// Apply the ptr-class mangle closure to `name`, returning the closure
     /// result or `name` verbatim when unset.
-    pub(crate) fn mangle_ptr_class(&self, name: &str) -> String {
+    pub(crate) fn mangle_ptr_class(&self, package: &str, name: &str) -> String {
         match &self.ptr_class_name_mangle {
-            Some(f) => f(name),
+            Some(f) => f(package, name),
             None => name.to_string(),
         }
     }
     /// Apply the data-class mangle closure to `name`, returning the closure
     /// result or `name` verbatim when unset.
-    pub(crate) fn mangle_data_class(&self, name: &str) -> String {
+    pub(crate) fn mangle_data_class(&self, package: &str, name: &str) -> String {
         match &self.data_class_name_mangle {
-            Some(f) => f(name),
+            Some(f) => f(package, name),
             None => name.to_string(),
         }
     }
     /// Apply the enum mangle closure to `name`, returning the closure result
     /// or `name` verbatim when unset.
-    pub(crate) fn mangle_enum(&self, name: &str) -> String {
+    pub(crate) fn mangle_enum(&self, package: &str, name: &str) -> String {
         match &self.enum_name_mangle {
-            Some(f) => f(name),
-            None => name.to_string(),
-        }
-    }
-    /// Apply the member mangle closure to `name` (the namespace-stripped
-    /// camelCase default), returning the closure result or `name` verbatim
-    /// when unset.
-    pub(crate) fn mangle_member(&self, name: &str) -> String {
-        match &self.member_name_mangle {
-            Some(f) => f(name),
+            Some(f) => f(package, name),
             None => name.to_string(),
         }
     }
     /// Apply the harness mangle closure to `name`, returning the closure
-    /// result or `name` verbatim when unset — identity default, same
-    /// contract as the other five hooks.
+    /// result or `name` verbatim when unset.
     pub(crate) fn mangle_harness(&self, name: &str) -> String {
         match &self.harness_name_mangle {
             Some(f) => f(name),
@@ -175,6 +169,20 @@ impl JniGen {
         self.mangle_harness("JNINative")
     }
 
+    /// Mangle a method emitted on the centralized JNI extern harness.
+    pub(crate) fn mangle_jni_method(&self, name: &str) -> String {
+        self.mangle_method(&self.package, &self.jni_native_class_name(), name)
+    }
+
+    /// Resolve a relative subpackage against the configured base package.
+    pub(crate) fn package_name(&self, subpackage: &str) -> String {
+        match (&self.package, subpackage) {
+            (p, sub) if !sub.is_empty() && !p.is_empty() => format!("{p}.{sub}"),
+            (_, sub) if !sub.is_empty() => sub.to_string(),
+            (p, _) => p.clone(),
+        }
+    }
+
     /// Resolve a relative class name against [`Self::package`] +
     /// `subpackage` (dot-separated; empty `subpackage` = the base package).
     /// Panics if `name` contains a `.` (a check that catches accidental FQNs
@@ -187,11 +195,7 @@ impl JniGen {
              package + subpackage",
             name
         );
-        let base: String = match (&self.package, subpackage) {
-            (p, sub) if !sub.is_empty() && !p.is_empty() => format!("{}.{}", p, sub),
-            (p, sub) if !sub.is_empty() && p.is_empty() => sub.to_string(),
-            (p, _) => p.clone(),
-        };
+        let base = self.package_name(subpackage);
         if base.is_empty() {
             name.to_string()
         } else {
@@ -234,12 +238,12 @@ impl JniGen {
             let pkg = self.packages.entry(name.clone()).or_default();
             match c.source {
                 super::decl::ConstSource::Item => {
-                    let mut entry = MethodEntry::new(c.rust_ident);
+                    let mut entry = FunctionEntry::new(c.rust_ident);
                     entry.kotlin_name_override = c.kotlin_name_override;
                     pkg.constants.push(entry);
                 }
                 super::decl::ConstSource::Fun(ref fn_ident) => {
-                    let mut entry = MethodEntry::new(fn_ident.clone());
+                    let mut entry = FunctionEntry::new(fn_ident.clone());
                     entry.kotlin_name_override = Some(c.val_name());
                     pkg.constant_functions.push(entry);
                 }
@@ -443,7 +447,7 @@ impl JniGen {
     }
 
     fn accept_function(&mut self, subpackage: &str, decl: FunctionDecl) {
-        let mut entry = MethodEntry::new(decl.rust_ident.clone());
+        let mut entry = FunctionEntry::new(decl.rust_ident.clone());
         entry.kotlin_name_override = decl.kotlin_name_override.clone();
         self.packages
             .entry(subpackage.to_string())
@@ -523,34 +527,50 @@ impl JniGen {
         self
     }
 
-    /// The Kotlin name of `func` as a declared member (`.fun`/`.constructor`)
+    /// The Kotlin name of `func` as a declared member (`.method`/`.constructor`)
     /// of the class keyed by `key`, if it is one — the name-inheritance
     /// source for [`ExpandReturnDecl::field`].
-    fn member_kotlin_name(&self, key: &TypeKey, func: &syn::Ident) -> Option<String> {
+    fn class_method_kotlin_name(&self, key: &TypeKey, func: &syn::Ident) -> Option<String> {
         self.class_members
             .get(key)?
             .iter()
             .find(|m| &m.rust_ident == func)
-            .map(|m| self.effective_member_name(key, m))
+            .map(|m| self.effective_method_name(key, m))
     }
 
-    /// The effective Kotlin name of a class member, derived at point of
-    /// use (order-independent w.r.t. `set_member_name_mangle`): the
-    /// per-member `.name()` override verbatim, else the member-mangle hook
-    /// over the **namespace-relative** camelCase default — the class's
-    /// Rust-name prefix is stripped from the fn ident first
-    /// ([`strip_type_prefix`]), because a flat crate spells the type
-    /// namespace inside the ident while a Kotlin member already lives in
-    /// its class. No prefix match ⇒ the full ident camel-cases as before.
-    pub(crate) fn effective_member_name(&self, key: &TypeKey, m: &ClassMember) -> String {
+    /// The effective Kotlin name of a class method/factory, derived at point
+    /// of use: a per-method `.name()` override verbatim, else the method
+    /// hook over the full camelCase Rust identifier with its final package
+    /// and class context. Consumers can therefore remove flat namespace
+    /// prefixes without the generator guessing their source convention.
+    pub(crate) fn effective_method_name(&self, key: &TypeKey, m: &ClassMember) -> String {
         if let Some(name) = &m.kotlin_name_override {
             return name.clone();
         }
-        let ident = m.rust_ident.to_string();
-        let short = rust_short_name(key);
-        let base = crate::api::lang::jnigen::util::strip_type_prefix(&ident, &short)
-            .unwrap_or(ident.as_str());
-        self.mangle_member(&snake_to_camel(base))
+        let spec = self
+            .types
+            .get(key)
+            .and_then(|cfg| cfg.name_spec.as_ref())
+            .unwrap_or_else(|| panic!("class member `{}` has no class name", m.rust_ident));
+        let fqn = self.fqn_of(spec);
+        let (package, class) = fqn.rsplit_once('.').unwrap_or(("", fqn.as_str()));
+        self.mangle_method(package, class, &snake_to_camel(&m.rust_ident.to_string()))
+    }
+
+    /// The effective Kotlin name of a package-level function. Explicit
+    /// `.name()` wins; otherwise the package-aware function hook receives
+    /// the full camelCase Rust identifier.
+    pub(crate) fn effective_function_name(
+        &self,
+        subpackage: &str,
+        entry: &FunctionEntry,
+    ) -> String {
+        entry.kotlin_name_override.clone().unwrap_or_else(|| {
+            self.mangle_fun(
+                &self.package_name(subpackage),
+                &snake_to_camel(&entry.rust_ident.to_string()),
+            )
+        })
     }
 
     /// Whether `key` was declared as a class in some package (any of the four
@@ -651,7 +671,7 @@ impl JniGen {
                     LocalField::Named(func, name_override) => {
                         let name = name_override
                             .clone()
-                            .or_else(|| self.member_kotlin_name(&decl.key, func))
+                            .or_else(|| self.class_method_kotlin_name(&decl.key, func))
                             .unwrap_or_else(|| snake_to_camel(&func.to_string()));
                         dec.add_deconstructor_record(func.clone(), name);
                     }
@@ -680,7 +700,7 @@ impl JniGen {
                     LocalField::Named(afunc, name_override) => {
                         let name = name_override
                             .clone()
-                            .or_else(|| self.member_kotlin_name(&decl.key, afunc))
+                            .or_else(|| self.class_method_kotlin_name(&decl.key, afunc))
                             .unwrap_or_else(|| snake_to_camel(&afunc.to_string()));
                         dec.push_inline_field(afunc.clone(), name);
                     }
@@ -743,7 +763,7 @@ impl JniGen {
     /// gate requires every named record's function to be in this set
     /// (`RecordNotAccessor` otherwise), and `core/expand.rs` excludes them
     /// from parameter composition. Derived from *usage* — a function need not
-    /// also be a `.fun()` class member to be referenced this way.
+    /// also be a `.method()` class member to be referenced this way.
     pub(crate) fn field_accessor_fns(&self) -> std::collections::HashSet<syn::Ident> {
         self.return_expand_decls
             .iter()
