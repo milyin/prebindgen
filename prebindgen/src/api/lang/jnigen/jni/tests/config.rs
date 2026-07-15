@@ -31,7 +31,7 @@ fn ptr_class_implements_adds_interface_supertypes() {
                 crate::ptr_class!(ZThing)
                     .implements("io.other.Resource")
                     .implements("LocalIface")
-                    .fun(crate::fun!(z_thing_size)),
+                    .method(crate::fun!(z_thing_size)),
             )
             .fun(crate::fun!(z_thing_new)),
     );
@@ -55,8 +55,8 @@ fn ptr_class_implements_adds_interface_supertypes() {
     assert!(thing.contains("import io.other.Resource"), "{thing}");
     // No generated interface, no `override` on the declared member.
     assert!(!thing.contains("interface ZThingApi"), "{thing}");
-    assert!(thing.contains("public fun size("), "{thing}");
-    assert!(!thing.contains("override fun size("), "{thing}");
+    assert!(thing.contains("public fun zThingSize("), "{thing}");
+    assert!(!thing.contains("override fun zThingSize("), "{thing}");
 }
 
 /// #54: `.interface()` — the generated `<Name>Api` interface mirrors the
@@ -81,7 +81,7 @@ fn ptr_class_interface_emits_generated_api() {
                 crate::ptr_class!(ZThing)
                     .interface()
                     .implements("io.other.Resource")
-                    .fun(crate::fun!(z_thing_size)),
+                    .method(crate::fun!(z_thing_size)),
             )
             .fun(crate::fun!(z_thing_new)),
     );
@@ -102,14 +102,14 @@ fn ptr_class_interface_emits_generated_api() {
     assert!(tc.contains("interfaceZThingApi:AutoCloseable{"), "{thing}");
     assert!(tc.contains("funpeek():Long"), "{thing}");
     assert!(tc.contains("funisClosed():Boolean"), "{thing}");
-    assert!(tc.contains("funsize("), "{thing}");
+    assert!(tc.contains("funzThingSize("), "{thing}");
     // Class implements the generated interface + the user one; members override.
     assert!(
         tc.contains("classZThing(initialPtr:Long):NativeHandle(initialPtr),ZThingApi,Resource{"),
         "{thing}"
     );
     assert!(tc.contains("publicoverridefuntake():ZThing"), "{thing}");
-    assert!(tc.contains("publicoverridefunsize("), "{thing}");
+    assert!(tc.contains("publicoverridefunzThingSize("), "{thing}");
 }
 
 /// A duplicate interface on one decl is a decl-time hard error.
@@ -121,7 +121,7 @@ fn ptr_class_duplicate_implements_rejected() {
         .implements("io.other.Resource");
 }
 
-/// The `set_interface_name_mangle` hook receives the final class name and
+/// The `set_interface_name_mangle` hook receives the class package and final name and
 /// its result must differ (identity is a hard error).
 #[test]
 #[should_panic(expected = "must differ from the class name")]
@@ -133,7 +133,10 @@ fn interface_name_mangle_identity_rejected() {
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .set_interface_name_mangle(|n| n.to_string())
+        .set_interface_name_mangle(|package, n| {
+            assert_eq!(package, "io.test.jni.thing");
+            n.to_string()
+        })
         .package(
             crate::package!("thing")
                 .class(crate::ptr_class!(ZThing).interface())
@@ -147,7 +150,7 @@ fn interface_name_mangle_identity_rejected() {
 }
 
 /// A per-decl `.interface_name(...)` pins the interface name (and implies
-/// `.interface()`); `set_interface_name_mangle` receives the class name.
+/// `.interface()`); `set_interface_name_mangle` receives package + class name.
 #[test]
 fn interface_name_override_and_hook() {
     let loc = myflat_loc();
@@ -173,7 +176,8 @@ fn interface_name_override_and_hook() {
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .set_interface_name_mangle(|n| {
+        .set_interface_name_mangle(|package, n| {
+            assert_eq!(package, "io.test.jni.m", "hook receives the target package");
             assert_eq!(n, "Mode", "hook receives the class name");
             format!("{n}Contract")
         })
@@ -235,7 +239,7 @@ fn value_class_interface_emits_generated_api() {
         crate::package!("t").class(
             crate::value_class!(ZStamp)
                 .interface()
-                .fun(crate::fun!(z_stamp_secs).name("secs")),
+                .method(crate::fun!(z_stamp_secs).name("secs")),
         ),
     );
     let dir = unique_test_dir("jnigen_value_iface");
@@ -299,7 +303,10 @@ fn per_class_name_and_base_package_fun() {
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         // Rename the handle class; the mangle closures do NOT apply to it.
-        .set_ptr_class_name_mangle(|n| format!("JNI{n}"))
+        .set_ptr_class_name_mangle(|package, n| {
+            assert_eq!(package, "io.test.jni");
+            format!("JNI{n}")
+        })
         .package(
             crate::package!()
                 .class(crate::ptr_class!(ZThing).name("Gadget"))
@@ -377,7 +384,10 @@ fn setters_after_declarations_apply() {
                 .fun(crate::fun!(thing_new)),
         )
         .set_package_prefix("io.late.jni")
-        .set_ptr_class_name_mangle(|n| n.strip_prefix('Z').unwrap_or(n).to_string());
+        .set_ptr_class_name_mangle(|package, n| {
+            assert_eq!(package, "io.late.jni.things");
+            n.strip_prefix('Z').unwrap_or(n).to_string()
+        });
 
     let dir = unique_test_dir("jnigen_setters_after_decls");
     let _ = std::fs::remove_dir_all(&dir);
@@ -450,12 +460,11 @@ fn generation_writes_are_order_free() {
     assert_eq!(kt1, kt2);
 }
 
-/// C1: the default member name is namespace-relative — the class's Rust-name
-/// prefix is stripped from the fn ident (underscore-insensitively), the rest
-/// camel-cases. `.name()` stays verbatim; a no-prefix member falls back to
-/// the full camelCase ident.
+/// The method hook can use package + class context to strip a flat API's
+/// encoded class namespace. `.name()` stays verbatim; an unmatched method
+/// keeps its full camelCase ident.
 #[test]
-fn member_names_default_to_namespace_relative() {
+fn method_hook_can_strip_flat_class_prefix() {
     let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn key_expr_get_str(k: &KeyExpr) -> String { unimplemented!() }",
@@ -471,19 +480,36 @@ fn member_names_default_to_namespace_relative() {
         })
         .collect();
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
-        crate::package!("ke").class(
-            crate::ptr_class!(KeyExpr)
-                // Underscore-insensitive strip: `key_expr_` and `keyexpr_`
-                // both spell the class namespace.
-                .fun(crate::fun!(key_expr_get_str))
-                .fun(crate::fun!(keyexpr_intersects))
-                // No class prefix → full camelCase fallback.
-                .fun(crate::fun!(shared_helper))
-                // `.name()` is verbatim and wins over the derivation.
-                .fun(crate::fun!(keyexpr_to_string).name("toStr")),
-        ),
-    );
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .set_method_name_mangle(|package, class, name| {
+            if class == "JNINative" {
+                return name.to_string();
+            }
+            assert_eq!(package, "io.test.jni.ke");
+            assert_eq!(class, "KeyExpr");
+            if name
+                .get(..class.len())
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(class))
+            {
+                let rest = &name[class.len()..];
+                let mut chars = rest.chars();
+                if let Some(first) = chars.next() {
+                    return first.to_lowercase().chain(chars).collect();
+                }
+            }
+            name.to_string()
+        })
+        .package(
+            crate::package!("ke").class(
+                crate::ptr_class!(KeyExpr)
+                    .method(crate::fun!(key_expr_get_str))
+                    .method(crate::fun!(keyexpr_intersects))
+                    .method(crate::fun!(shared_helper))
+                    // `.name()` is verbatim and wins over the hook.
+                    .method(crate::fun!(keyexpr_to_string).name("toStr")),
+            ),
+        );
     let dir = unique_test_dir("jnigen_member_names");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -514,11 +540,11 @@ fn member_names_default_to_namespace_relative() {
     assert!(ac.contains("externalfunkeyExprGetStr("), "{all}");
 }
 
-/// C1: `set_member_name_mangle` — the sixth hook — receives the
-/// namespace-stripped camelCase default, skips `.name()`d members, and is
+/// The method hook receives package, final class, and the full camelCase Rust
+/// name, skips `.name()`d methods, and is
 /// order-independent (registered AFTER the `.package(...)` declaration).
 #[test]
-fn member_name_mangle_hook_applies_order_independently() {
+fn method_name_mangle_hook_applies_order_independently() {
     let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn thing_size(t: &ZThing) -> i64 { unimplemented!() }",
@@ -538,14 +564,21 @@ fn member_name_mangle_hook_applies_order_independently() {
             crate::package!("t").class(
                 crate::ptr_class!(ZThing)
                     .name("Thing")
-                    .fun(crate::fun!(thing_size))
-                    .fun(crate::fun!(thing_label).name("label")),
+                    .method(crate::fun!(thing_size))
+                    .method(crate::fun!(thing_label).name("label")),
             ),
         )
         // Registered AFTER the declaration — must still apply (settings are
         // order-independent by construction).
-        .set_member_name_mangle(|n| format!("{n}Native"));
-    let dir = unique_test_dir("jnigen_member_mangle");
+        .set_method_name_mangle(|package, class, n| {
+            if class == "JNINative" {
+                return n.to_string();
+            }
+            assert_eq!(package, "io.test.jni.t");
+            assert_eq!(class, "Thing");
+            format!("{n}Native")
+        });
+    let dir = unique_test_dir("jnigen_method_mangle");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = registry.resolve(jni).expect("resolve");
@@ -557,18 +590,15 @@ fn member_name_mangle_hook_applies_order_independently() {
         .collect::<Vec<_>>()
         .join("\n");
     let ac: String = all.split_whitespace().collect();
-    // Hook over the stripped default (`thing_size` → `size` → `sizeNative`);
-    // note the strip matched the RUST short name ZThing? No — `thing_size`
-    // has no `zthing` prefix, so the fallback full ident applies first:
-    // `thingSize` → `thingSizeNative`.
+    // The hook receives the full default (`thing_size` → `thingSize`).
     assert!(ac.contains("funthingSizeNative("), "{all}");
     // `.name("label")` bypasses the hook entirely.
     assert!(ac.contains("funlabel("), "{all}");
     assert!(!ac.contains("funlabelNative("), "{all}");
 }
 
-/// #56: the harness hook follows the same contract as the other five —
-/// it receives the DERIVED DEFAULT for its tier (`"JNINative"`, an explicit
+/// #56: the harness hook receives the package and DERIVED DEFAULT for its tier
+/// (`"JNINative"`, an explicit
 /// default value, not a hidden `JNI`-prepend) and replaces it wholesale;
 /// the unset default is identity.
 #[test]
@@ -580,7 +610,8 @@ fn harness_hook_receives_derived_default() {
         Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
-        .set_harness_name_mangle(|n| {
+        .set_harness_name_mangle(|package, n| {
+            assert_eq!(package, "io.test.jni");
             assert_eq!(n, "JNINative", "hook must receive the derived default");
             "MyNative".to_string()
         })
@@ -602,6 +633,49 @@ fn harness_hook_receives_derived_default() {
         .join("\n");
     assert!(all.contains("object MyNative"), "{all}");
     assert!(!all.contains("JNINative"), "{all}");
+}
+
+/// Top-level functions and class methods are separate naming tiers. The
+/// former sees its destination subpackage; the JNI extern sees the base
+/// package plus its generated harness class.
+#[test]
+fn function_and_native_method_hooks_receive_placement() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn =
+        syn::parse_str("pub fn z_session_ping(v: i64) -> i64 { unimplemented!() }").unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .set_fun_name_mangle(|package, name| {
+            assert_eq!(package, "io.test.jni.session");
+            assert_eq!(name, "zSessionPing");
+            "ping".to_string()
+        })
+        .set_method_name_mangle(|package, class, name| {
+            assert_eq!(package, "io.test.jni");
+            assert_eq!(class, "JNINative");
+            assert_eq!(name, "zSessionPing");
+            format!("{name}Native")
+        })
+        .package(crate::package!("session").fun(crate::fun!(z_session_ping)));
+    let dir = unique_test_dir("jnigen_placement_mangles");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(gen.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(all.contains("public fun ping("), "{all}");
+    assert!(all.contains("external fun zSessionPingNative("), "{all}");
+    assert!(
+        rust.contains("Java_io_test_jni_JNINative_zSessionPingNative"),
+        "{rust}"
+    );
 }
 
 /// C4: the Kotlin root is generator-owned — `write_kotlin` deletes and
@@ -668,8 +742,8 @@ fn report_explains_the_resolved_surface() {
             crate::package!("ops")
                 .class(
                     crate::ptr_class!(Summary)
-                        .fun(crate::fun!(summary_count))
-                        .fun(crate::fun!(summary_total)),
+                        .method(crate::fun!(summary_count))
+                        .method(crate::fun!(summary_total)),
                 )
                 .fun(crate::fun!(storage_summary))
                 .fun(crate::fun!(z_plain)),
@@ -689,7 +763,9 @@ fn report_explains_the_resolved_surface() {
         "{report}"
     );
     assert!(
-        report.contains("return `Summary` decomposed → [count, total] (Callback delivery)"),
+        report.contains(
+            "return `Summary` decomposed → [summaryCount, summaryTotal] (Callback delivery)"
+        ),
         "{report}"
     );
     // The plain fn appears with no `shaped by:` after it.
@@ -703,12 +779,12 @@ fn report_explains_the_resolved_surface() {
         !after_plain[..next_entry].contains("shaped by:"),
         "{report}"
     );
-    // Class members appear under the class heading with C1-derived names.
+    // Class methods appear under the class heading with their effective names.
     assert!(
         report.contains("## class `io.test.jni.ops.Summary` (ptr_class, Rust `Summary`)"),
         "{report}"
     );
-    assert!(report.contains("fun count("), "{report}");
+    assert!(report.contains("fun summaryCount("), "{report}");
     // Types table with the jlong wire.
     assert!(
         report.contains("- `Summary`: ptr_class → `io.test.jni.ops.Summary`"),
@@ -782,8 +858,8 @@ fn docs_become_kdoc_with_shape_notes() {
             crate::package!("ops")
                 .class(
                     crate::ptr_class!(Summary)
-                        .fun(crate::fun!(summary_count))
-                        .fun(crate::fun!(summary_total)),
+                        .method(crate::fun!(summary_count))
+                        .method(crate::fun!(summary_total)),
                 )
                 .fun(crate::fun!(storage_summary))
                 .fun(crate::fun!(z_plain))
@@ -812,7 +888,7 @@ fn docs_become_kdoc_with_shape_notes() {
         all.contains("The Rust `Summary` result is delivered decomposed"),
         "{all}"
     );
-    assert!(all.contains("(`count`, `total`)"), "{all}");
+    assert!(all.contains("(`summaryCount`, `summaryTotal`)"), "{all}");
     // Member method carries the fn's doc (name derived by C1).
     assert!(all.contains("Count of aggregated entries."), "{all}");
     // Class kdoc: author prose FIRST, framework line after.

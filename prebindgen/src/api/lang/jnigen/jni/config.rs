@@ -13,27 +13,26 @@
 //!
 //! # Name-mangle hooks
 //!
-//! One uniform contract for the six name hooks: **the hook receives the
-//! derived default name for its tier** — exactly what the generator would use
-//! if no hook were set — **and returns the final name; every default is the
-//! identity.** The input *domain* differs per tier (a fn name is camelCase,
-//! a class name is a Rust short name); the table states each:
+//! Every name hook receives the fully-qualified Kotlin **package where the
+//! named object is emitted**, followed by the derived default name for its
+//! tier. The method hook additionally receives the final containing class
+//! short name. Hooks return the final short name; unset hooks are identity.
 //!
 //! | hook | names | input (the derived default) | default |
 //! |---|---|---|---|
-//! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | `"JNINative"` | identity |
-//! | [`set_fun_name_mangle`](JniGen::set_fun_name_mangle) | JNI extern short names (scanned fns, synthetic `freePtr`) | camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
-//! | [`set_ptr_class_name_mangle`](JniGen::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | Rust type short name (`"KeyExpr"`) | identity |
-//! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` + `value_class` Kotlin classes | Rust type short name | identity |
-//! | [`set_enum_name_mangle`](JniGen::set_enum_name_mangle) | `enum_class` Kotlin classes | Rust type short name | identity |
-//! | [`set_member_name_mangle`](JniGen::set_member_name_mangle) | class members without a per-member `.name()` | namespace-stripped camelCase (`storage_len` on `Storage` → `"len"`) | identity |
+//! | [`set_harness_name_mangle`](JniGen::set_harness_name_mangle) | the centralized externs object | package, `"JNINative"` | identity |
+//! | [`set_fun_name_mangle`](JniGen::set_fun_name_mangle) | top-level package functions | package, camelCased Rust fn name (`put_publisher` → `"putPublisher"`) | identity |
+//! | [`set_ptr_class_name_mangle`](JniGen::set_ptr_class_name_mangle) | `ptr_class` Kotlin classes | package, Rust type short name (`"KeyExpr"`) | identity |
+//! | [`set_data_class_name_mangle`](JniGen::set_data_class_name_mangle) | `data_class` + `value_class` Kotlin classes | package, Rust type short name | identity |
+//! | [`set_enum_name_mangle`](JniGen::set_enum_name_mangle) | `enum_class` Kotlin classes | package, Rust type short name | identity |
+//! | [`set_method_name_mangle`](JniGen::set_method_name_mangle) | class methods/factories and JNI extern methods | package, final class name, full camelCase Rust fn name | identity |
 //!
 //! One further hook does NOT follow the identity rule, because its input and
 //! output are two names that must differ:
 //!
 //! | hook | names | input | default |
 //! |---|---|---|---|
-//! | [`set_interface_name_mangle`](JniGen::set_interface_name_mangle) | the generated `.interface()` interface | the final **class** name (`"Storage"`) | append `"Api"` (`"StorageApi"`); identity is a hard error |
+//! | [`set_interface_name_mangle`](JniGen::set_interface_name_mangle) | the generated `.interface()` interface | package, final **class** name (`"Storage"`) | append `"Api"` (`"StorageApi"`); identity is a hard error |
 //!
 //! A per-decl `.name()` / `.interface_name()` override is always verbatim and
 //! **bypasses** the hooks entirely.
@@ -55,7 +54,8 @@ pub(crate) enum NameKind {
 #[derive(Clone)]
 pub(crate) struct NameSpec {
     pub(crate) subpackage: String,
-    /// `rust_short_name(&key)` — the mangle hook's input.
+    /// `rust_short_name(&key)` — the name part of the mangle hook's input;
+    /// `subpackage` supplies its package part.
     pub(crate) short: String,
     /// Per-decl `.name()` — resolved against package + subpackage,
     /// bypasses the mangle hook.
@@ -89,35 +89,34 @@ impl JniGen {
     }
 
     /// Set the closure that renames the framework "harness" class (the
-    /// centralized extern holder). Receives the derived default
+    /// centralized extern holder). Receives its package and the derived default
     /// `"JNINative"` and replaces it wholesale
-    /// (`|_| "MyNative".to_string()`); default = identity (see the
+    /// (`|_, _| "MyNative".to_string()`); default = identity (see the
     /// module-level table). Affects the generated Kotlin class name and
     /// the derived JNI extern symbol path on the Rust side.
     pub fn set_harness_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
         self.harness_name_mangle = Some(Arc::new(f));
         self
     }
 
-    /// Set the closure that mangles function names. Called for every scanned
-    /// `#[prebindgen]` free function and the synthetic `freePtr` destructor;
-    /// receives the camelCased Kotlin-side name and returns the final form
-    /// (e.g. `"putPublisher"` → `"putPublisherViaJNI"`). Default = identity
-    /// (see the module-level table).
+    /// Set the closure that mangles top-level package function names. It
+    /// receives the fully-qualified target package and camelCased Rust name.
+    /// JNI externs are methods of the generated harness and therefore use
+    /// [`set_method_name_mangle`](Self::set_method_name_mangle) instead.
     pub fn set_fun_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
         self.fun_name_mangle = Some(Arc::new(f));
         self
     }
 
     /// Set the closure that turns a class name into the name of its generated
-    /// `.interface()` interface. Receives the **final class name** and must
-    /// return a DIFFERENT name — identity is a hard error (a class and its
+    /// `.interface()` interface. Receives its package and the **final class
+    /// name**, and must return a DIFFERENT name — identity is a hard error (a class and its
     /// interface cannot share a name in one package), the one deviation from
     /// the uniform hook contract in the module-level table. Default when
     /// unset = append `"Api"` (`Storage` → `StorageApi`). A per-decl
@@ -125,18 +124,18 @@ impl JniGen {
     /// the hook.
     pub fn set_interface_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
         self.interface_name_mangle = Some(Arc::new(f));
         self
     }
 
     /// Set the closure that mangles Kotlin ptr-class names declared via a
-    /// `PtrClassDecl`. Receives the Rust short name. Default = identity
-    /// (see the module-level table).
+    /// `PtrClassDecl`. Receives the target package and Rust short name.
+    /// Default = identity (see the module-level table).
     pub fn set_ptr_class_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
         self.ptr_class_name_mangle = Some(Arc::new(f));
         self
@@ -144,39 +143,37 @@ impl JniGen {
 
     /// Set the closure that mangles Kotlin data-class names declared via a
     /// `DataClassDecl` (and value classes, which reuse this hook). Receives
-    /// the Rust short name. Default = identity (see the module-level table).
+    /// the target package and Rust short name. Default = identity (see the
+    /// module-level table).
     pub fn set_data_class_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
         self.data_class_name_mangle = Some(Arc::new(f));
         self
     }
 
     /// Set the closure that mangles enum-class names declared via an
-    /// `EnumClassDecl`. Receives the Rust short name. Default = identity
-    /// (see the module-level table).
+    /// `EnumClassDecl`. Receives the target package and Rust short name.
+    /// Default = identity (see the module-level table).
     pub fn set_enum_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str) -> String + Send + Sync + 'static,
     {
         self.enum_name_mangle = Some(Arc::new(f));
         self
     }
 
-    /// Set the closure that mangles **class member** names (instance
-    /// methods and companion factories). Receives the derived camelCase
-    /// name AFTER the class-namespace prefix was stripped from the fn
-    /// ident (`storage_len` on class `Storage` arrives as `"len"`); runs
-    /// only for members without a per-member `.name()` (which is always
-    /// verbatim). Default = identity (see the module-level table). The
-    /// sixth hook of the name-mangle family, covering the one name tier
-    /// the other five don't.
-    pub fn set_member_name_mangle<F>(mut self, f: F) -> Self
+    /// Set the closure that mangles methods and companion factories. Receives
+    /// the fully-qualified target package, final containing class short name,
+    /// and the full camelCase Rust function name. It is also used for methods
+    /// of generated infrastructure classes (`JNINative`, handle `freePtr`,
+    /// vector helpers). Per-method `.name()` remains verbatim.
+    pub fn set_method_name_mangle<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> String + Send + Sync + 'static,
+        F: Fn(&str, &str, &str) -> String + Send + Sync + 'static,
     {
-        self.member_name_mangle = Some(Arc::new(f));
+        self.method_name_mangle = Some(Arc::new(f));
         self
     }
 
@@ -213,10 +210,11 @@ impl JniGen {
         if let Some(n) = name_override {
             return self.resolve_class_fqn(subpackage, n);
         }
+        let package = self.package_name(subpackage);
         let mangled = match kind {
-            NameKind::Ptr => self.mangle_ptr_class(short),
-            NameKind::Enum => self.mangle_enum(short),
-            NameKind::DataOrValue => self.mangle_data_class(short),
+            NameKind::Ptr => self.mangle_ptr_class(&package, short),
+            NameKind::Enum => self.mangle_enum(&package, short),
+            NameKind::DataOrValue => self.mangle_data_class(&package, short),
         };
         self.resolve_class_fqn(subpackage, &mangled)
     }

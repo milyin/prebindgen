@@ -38,7 +38,7 @@ fn callback_snapshot_pipeline() -> (String, std::collections::BTreeMap<String, S
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
-                .class(crate::ptr_class!(ZThing).fun(crate::fun!(z_thing_name).name("name")))
+                .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
                 // ZOther: plain ptr_class, no canonical output ⇒ whole-handle fallback.
                 .class(crate::ptr_class!(ZOther))
                 .fun(crate::fun!(z_thing_sub))
@@ -223,8 +223,8 @@ fn callback_root_identity_moved_after_nested_borrow() {
         .set_package_prefix("io.test.jni")
         .package(
             crate::package!("thing")
-                .class(crate::ptr_class!(ZChild).fun(crate::fun!(z_child_name).name("name")))
-                .class(crate::ptr_class!(ZParent).fun(crate::fun!(z_parent_child).name("child")))
+                .class(crate::ptr_class!(ZChild).method(crate::fun!(z_child_name).name("name")))
+                .class(crate::ptr_class!(ZParent).method(crate::fun!(z_parent_child).name("child")))
                 .fun(crate::fun!(z_parent_sub)),
         )
         // Child handle: canonical output = identity (clone) + its name string.
@@ -308,20 +308,22 @@ fn callback_double_option_unwrap_pipeline() {
         .package(
             crate::package!("query")
                 .class(crate::value_class!(ZId))
-                .class(crate::ptr_class!(ZKeyExpr).fun(crate::fun!(z_keyexpr_as_str).name("asStr")))
-                .class(crate::ptr_class!(ZTs).fun(crate::fun!(z_ts_ntp64).name("ntp64")))
+                .class(
+                    crate::ptr_class!(ZKeyExpr).method(crate::fun!(z_keyexpr_as_str).name("asStr")),
+                )
+                .class(crate::ptr_class!(ZTs).method(crate::fun!(z_ts_ntp64).name("ntp64")))
                 .class(
                     crate::ptr_class!(ZSample)
-                        .fun(crate::fun!(z_sample_key_expr).name("keyExpr"))
-                        .fun(crate::fun!(z_sample_timestamp).name("timestamp")),
+                        .method(crate::fun!(z_sample_key_expr).name("keyExpr"))
+                        .method(crate::fun!(z_sample_timestamp).name("timestamp")),
                 )
-                .class(crate::ptr_class!(ZErr).fun(crate::fun!(z_err_payload).name("payload")))
+                .class(crate::ptr_class!(ZErr).method(crate::fun!(z_err_payload).name("payload")))
                 .class(
                     crate::ptr_class!(ZReply)
-                        .fun(crate::fun!(z_reply_zid).name("zid"))
-                        .fun(crate::fun!(z_reply_is_ok).name("isOk"))
-                        .fun(crate::fun!(z_reply_sample).name("sample"))
-                        .fun(crate::fun!(z_reply_err).name("err")),
+                        .method(crate::fun!(z_reply_zid).name("zid"))
+                        .method(crate::fun!(z_reply_is_ok).name("isOk"))
+                        .method(crate::fun!(z_reply_sample).name("sample"))
+                        .method(crate::fun!(z_reply_err).name("err")),
                 )
                 .fun(crate::fun!(z_get)),
         )

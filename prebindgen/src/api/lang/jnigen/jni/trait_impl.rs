@@ -445,11 +445,11 @@ pub(crate) fn build_signal_error_item() -> syn::Item {
 /// runs (e.g. `Publisher` network-undeclare) with no special casing.
 ///
 /// The symbol follows the documented scheme
-/// `Java_<package_underscores>_<class_short>_<mangle_fun("freePtr")>`,
+/// `Java_<package_underscores>_<class_short>_<mangled-freePtr>`,
 /// where `class_short` is the last segment of the typed-handle FQN
 /// (`TypeConfig::kotlin_name`) and the `freePtr` name passes through
-/// [`JniGen::mangle_fun`] — exact symmetry with the Kotlin
-/// `external fun <mangle_fun("freePtr")>` declaration in
+/// the package/class-aware method hook — exact symmetry with the Kotlin
+/// `external fun <mangled-freePtr>` declaration in
 /// [`render_typed_handle_source`]. `ext.types` is a `HashMap`, so the
 /// items are sorted by symbol to keep generated output deterministic.
 ///
@@ -463,7 +463,6 @@ pub(crate) fn build_handle_destructor_items(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
 ) -> Vec<syn::Item> {
-    let free_ptr = ext.mangle_fun("freePtr");
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
         if cfg.opaque.is_none() {
@@ -487,11 +486,9 @@ pub(crate) fn build_handle_destructor_items(
                 )
             });
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
-        let class_pkg = class_fqn
-            .rsplit_once('.')
-            .map(|(pkg, _)| pkg)
-            .unwrap_or("")
-            .replace('.', "_");
+        let class_package = class_fqn.rsplit_once('.').map(|(pkg, _)| pkg).unwrap_or("");
+        let free_ptr = ext.mangle_method(class_package, class_short, "freePtr");
+        let class_pkg = class_package.replace('.', "_");
         let symbol = if class_pkg.is_empty() {
             format!("Java_{class_short}_{free_ptr}")
         } else {
@@ -1005,21 +1002,21 @@ impl Prebindgen for JniGen {
 
     /// Functions ever referenced as a named `.field(fun!(...))` in any
     /// `expand_return!` decl, type-level or per-fn — see
-    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.fun()`
+    /// [`JniGen::field_accessor_fns`]. Usage-derived, not tied to `.method()`
     /// class-member declarations: a function need not also be exposed as an
     /// instance method to be referenced this way.
     fn accessor_functions(&self) -> std::collections::HashSet<syn::Ident> {
         self.field_accessor_fns()
     }
 
-    /// Fun members (`.fun`) — their fn ident mapped to the owning class's
+    /// Methods (`.method`) — their fn ident mapped to the owning class's
     /// `TypeKey`, so input-flattening can skip the receiver parameter.
     fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {
         self.class_members
             .iter()
             .flat_map(|(key, ms)| {
                 ms.iter()
-                    .filter(|m| m.kind == MemberKind::Fun)
+                    .filter(|m| m.kind == MemberKind::Method)
                     .map(move |m| (m.rust_ident.clone(), key.clone()))
             })
             .collect()
@@ -1067,7 +1064,7 @@ impl Prebindgen for JniGen {
     }
 
     /// Member-shape invariants (N5), checked against registry signatures —
-    /// the earliest possible moment. Without this, a receiver-less `.fun()`
+    /// the earliest possible moment. Without this, a receiver-less `.method()`
     /// member would silently emit a method that ignores `this`, and a
     /// wrong-return `.constructor()` a factory of the wrong type.
     fn validate(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
@@ -1078,7 +1075,7 @@ impl Prebindgen for JniGen {
                     continue;
                 };
                 match m.kind {
-                    MemberKind::Fun => {
+                    MemberKind::Method => {
                         let has_receiver = item_fn.sig.inputs.iter().any(|input| {
                             matches!(input, syn::FnArg::Typed(pt)
                                 if &peel_receiver_key(&pt.ty) == key)
@@ -1096,7 +1093,7 @@ impl Prebindgen for JniGen {
                                 })
                                 .collect();
                             return Err(format!(
-                                "class `{}` member fun `{}`: no parameter of type `{}` — an \
+                                "class `{}` method `{}`: no parameter of type `{}` — an \
                                  instance method's receiver must appear in the signature \
                                  (took: {})",
                                 key.as_str(),

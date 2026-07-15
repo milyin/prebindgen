@@ -227,9 +227,8 @@ pub(crate) fn build_data_class(
     (class, imports)
 }
 
-/// Render one typed-handle Kotlin source file. Pure-shell form (with
-/// the closure `|n| format!("{n}ViaJNI")` installed via
-/// [`JniGen::set_fun_name_mangle`]):
+/// Render one typed-handle Kotlin source file. Pure-shell form (with a
+/// method hook that appends `ViaJNI` to methods of the handle class):
 ///
 /// ```kotlin
 /// public class JNIFoo(initialPtr: Long) : NativeHandle(initialPtr) {
@@ -245,8 +244,8 @@ pub(crate) fn build_data_class(
 /// inherited [`NativeHandle`] scope.
 ///
 /// The free-pointer extern name is built as
-/// `<mangle_fun("freePtr")>`. Kotlin/JVM's JNI name mangler binds it
-/// to the matching `Java_<pkg>_<class>_<mangle_fun("freePtr")>`
+/// `<mangle_method(package, class, "freePtr")>`. Kotlin/JVM's JNI name mangler binds it
+/// to the matching `Java_<pkg>_<class>_<mangled-freePtr>`
 /// extern on the Rust side (the auto-generated destructor).
 pub(crate) fn build_typed_handle(
     ext: &JniGen,
@@ -265,7 +264,16 @@ pub(crate) fn build_typed_handle(
     // supertype is what lets `render_wrapper_fn` collect a `List<NativeHandle>`
     // and lock it in one pointer-sorted, deadlock-safe pass. The subclass keeps
     // its own type-specific `close()`/`take()`/`freePtr`.
-    let free_extern = ext.mangle_fun("freePtr");
+    let class_fqn = ext
+        .types
+        .get(key)
+        .and_then(|cfg| cfg.name_spec.as_ref())
+        .map(|spec| ext.fqn_of(spec))
+        .unwrap_or_else(|| class_name.to_string());
+    let (class_package, final_class_name) = class_fqn
+        .rsplit_once('.')
+        .unwrap_or(("", class_fqn.as_str()));
+    let free_extern = ext.mangle_method(class_package, final_class_name, "freePtr");
     let base_fqn = if ext.package.is_empty() {
         "NativeHandle".to_string()
     } else {
@@ -292,7 +300,7 @@ pub(crate) fn build_typed_handle(
                 item_fn,
                 registry,
                 imports,
-                Some(ext.effective_member_name(key, m).as_str()),
+                Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
                 for ov in render_param_overloads(ext, item_fn, registry, &f) {
@@ -346,17 +354,17 @@ pub(crate) fn build_typed_handle(
         )
         .companion(companion);
 
-    // Promoted instance methods: each `.fun(f)` becomes an instance method
+    // Promoted instance methods: each `.method(f)` becomes an instance method
     // (receiver bound to `this`), delegating to the same centralized
     // `JNINative` extern as a free wrapper would.
-    for m in members.iter().filter(|m| m.kind == MemberKind::Fun) {
+    for m in members.iter().filter(|m| m.kind == MemberKind::Method) {
         if let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) {
             if let Some(f) = render_wrapper_fn(
                 ext,
                 item_fn,
                 registry,
                 imports,
-                Some(ext.effective_member_name(key, m).as_str()),
+                Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
                 for ov in render_param_overloads(ext, item_fn, registry, &f) {
@@ -369,7 +377,7 @@ pub(crate) fn build_typed_handle(
     class
 }
 
-/// Render one `external fun <mangle_fun(name)>(…): <wire-return>` line
+/// Render one `external fun <mangle_method(package, JNINative, name)>(…): <wire-return>` line
 /// at the JNI **wire** level (matches what the Rust extern receives):
 ///   * opaque-handle (Borrow/Consume) → jlong → `Long`
 ///   * `enum_class`                  → jint  → `Int` (call passes `.value`)
@@ -429,7 +437,7 @@ pub(crate) fn render_extern_decl(
 ) -> Option<kt::Code> {
     let rust_name = f.sig.ident.to_string();
     let kt_name = kt_snake_to_camel(&rust_name);
-    let jni_call = ext.mangle_fun(&kt_name);
+    let jni_call = ext.mangle_jni_method(&kt_name);
 
     let mut params: Vec<(String, String)> = Vec::new();
     for (eff_ident, eff_ty) in effective_inputs(registry, f) {
@@ -720,7 +728,7 @@ pub(crate) fn render_wrapper_fn(
 ) -> Option<kt::KtFun> {
     let rust_name = f.sig.ident.to_string();
     // The Kotlin extern in `JNINative` is keyed on the Rust ident
-    // (`kt_snake_to_camel(rust_name)` → `ext.mangle_fun`). The per-entry
+    // (`kt_snake_to_camel(rust_name)` → the `JNINative` method mangler). The per-entry
     // `.name("...")` override only changes the *user-facing* Kotlin
     // wrapper name; the JNI call still has to hit the one extern that
     // the Rust extern actually emits.
@@ -729,7 +737,7 @@ pub(crate) fn render_wrapper_fn(
         Some(n) => n.to_string(),
         None => default_kt_name.clone(),
     };
-    let jni_call = ext.mangle_fun(&default_kt_name);
+    let jni_call = ext.mangle_jni_method(&default_kt_name);
 
     let (params, receiver_idx) = classify_params(ext, f, registry, imports, receiver_key)?;
     let out = classify_output(ext, f, registry, imports)?;
@@ -745,7 +753,7 @@ pub(crate) fn render_wrapper_fn(
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
     // KDoc: the Rust fn's `///` prose first, then generated notes for every
     // position an expansion reshaped away from the Rust signature (N1).
-    if let Some(doc) = wrapper_kdoc(ext, f, registry) {
+    if let Some(doc) = wrapper_kdoc(f, registry) {
         fun = fun.kdoc(doc);
     }
     if let Some(g) = &out.generic {
@@ -791,13 +799,16 @@ pub(crate) fn render_wrapper_fn(
 /// that calls it once, on first use (see [`render_val_over_helper`]).
 pub(crate) fn render_const_val(
     ext: &JniGen,
+    package: &str,
     c: &syn::ItemConst,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
     let getter = const_getter_fn(c);
-    let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
+    let default = kt_snake_to_camel(&getter.sig.ident.to_string());
+    let helper_name = ext.mangle_fun(package, &default);
+    let helper = render_wrapper_fn(ext, &getter, registry, imports, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| c.ident.to_string());
@@ -819,12 +830,15 @@ pub(crate) fn render_const_val(
 /// (one JNI call, exactly like a const getter).
 pub(crate) fn render_constant_fn_val(
     ext: &JniGen,
+    package: &str,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
-    let helper = render_wrapper_fn(ext, f, registry, imports, None, None)?;
+    let default = kt_snake_to_camel(&f.sig.ident.to_string());
+    let helper_name = ext.mangle_fun(package, &default);
+    let helper = render_wrapper_fn(ext, f, registry, imports, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| f.sig.ident.to_string());
@@ -846,12 +860,15 @@ pub(crate) fn render_constant_fn_val(
 /// the generated getter.
 pub(crate) fn render_const_expr_val(
     ext: &JniGen,
+    package: &str,
     decl: &crate::api::lang::jnigen::jni::decl::ConstExprDecl,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
-    let helper = render_wrapper_fn(ext, &getter, registry, imports, None, None)?;
+    let default = kt_snake_to_camel(&getter.sig.ident.to_string());
+    let helper_name = ext.mangle_fun(package, &default);
+    let helper = render_wrapper_fn(ext, &getter, registry, imports, Some(&helper_name), None)?;
     let expr = decl.expr.to_token_stream();
     let kdoc = format!(
         "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
@@ -2101,9 +2118,9 @@ pub(crate) fn kt_param_name(rust_ident: &str) -> String {
 /// documenting the REAL prototype after all expansions — one note per
 /// position a plan reshaped, phrased for the caller. `None` for an
 /// undocumented, unshaped fn.
-fn wrapper_kdoc(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
+fn wrapper_kdoc(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
     let prose = crate::api::lang::jnigen::util::doc_string(&f.attrs);
-    let notes = shape_notes(ext, f, registry);
+    let notes = shape_notes(f, registry);
     match (prose, notes) {
         (Some(p), Some(n)) => Some(format!("{p}\n\n{n}")),
         (Some(p), None) => Some(p),
@@ -2117,7 +2134,7 @@ fn wrapper_kdoc(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) 
 /// returns (what the builder/fold receives), and error decompositions
 /// (what `onError` receives). Reads the same resolved plan maps the C7
 /// report uses.
-fn shape_notes(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
+fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<String> {
     let fn_ident = &f.sig.ident;
     let mut notes: Vec<String> = Vec::new();
 
@@ -2141,7 +2158,7 @@ fn shape_notes(ext: &JniGen, f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -
         let leaf_names: Vec<String> = plan
             .leaves
             .iter()
-            .map(|l| ext.mangle_member(&snake_to_camel(&l.name.to_string())))
+            .map(|l| snake_to_camel(&l.name.to_string()))
             .collect();
         let how = if plan.selector.is_some() {
             format!(

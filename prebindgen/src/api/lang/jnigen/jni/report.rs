@@ -47,23 +47,13 @@ impl crate::api::core::Generation<JniGen> {
             if pkg_cfg.functions.is_empty() && !has_consts {
                 continue;
             }
-            let full = if subpackage.is_empty() {
-                ext.package.clone()
-            } else if ext.package.is_empty() {
-                subpackage.clone()
-            } else {
-                format!("{}.{}", ext.package, subpackage)
-            };
+            let full = ext.package_name(subpackage);
             out.push_str(&format!("\n## package `{full}`\n\n"));
-            let mut entries: Vec<&MethodEntry> = pkg_cfg.functions.iter().collect();
+            let mut entries: Vec<&FunctionEntry> = pkg_cfg.functions.iter().collect();
             entries.sort_by_key(|m| m.rust_ident.to_string());
             for m in entries {
-                self.report_fn(
-                    &mut out,
-                    &m.rust_ident,
-                    m.kotlin_name_override.as_deref(),
-                    None,
-                );
+                let name = ext.effective_function_name(subpackage, m);
+                self.report_fn(&mut out, &m.rust_ident, Some(&name), None);
             }
             let mut consts: Vec<String> = pkg_cfg
                 .constants
@@ -119,9 +109,9 @@ impl crate::api::core::Generation<JniGen> {
             let mut ms: Vec<&ClassMember> = members.iter().collect();
             ms.sort_by_key(|m| m.rust_ident.to_string());
             for m in ms {
-                let name = ext.effective_member_name(key, m);
+                let name = ext.effective_method_name(key, m);
                 let receiver = match m.kind {
-                    MemberKind::Fun => Some(key),
+                    MemberKind::Method => Some(key),
                     MemberKind::Constructor => None,
                 };
                 self.report_fn(&mut out, &m.rust_ident, Some(&name), receiver);
