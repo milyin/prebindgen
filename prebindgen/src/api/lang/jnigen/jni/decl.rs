@@ -438,13 +438,24 @@ impl From<syn::Type> for PtrClassDecl {
 /// [`variant`](Self::variant) / [`variant_self`](Self::variant_self), and hand
 /// it to [`JniGen::expand`].
 ///
-/// **Generated shape** — this is a WIRE-level dispatch, not overloads: with
+/// **Generated shape** — at the wire tier this is a selector dispatch: with
 /// more than one arm the parameter crosses as a selector `Int` plus one
 /// nullable slot per arm (`keyExprSel: Int, keyExpr0: String?,
-/// keyExpr1: KeyExpr?`), and the call site passes `(0, "key", null)`-style
-/// tuples. Idiomatic overloads / sealed types are a hand-written SDK tier's
-/// job on top; the wrapper's generated KDoc shape-notes document the exact
-/// slots per function.
+/// keyExpr1: KeyExpr?`), and the raw call site passes `(0, "key", null)`-style
+/// tuples. That selector form is always emitted; the wrapper's generated KDoc
+/// shape-notes document the exact slots per function.
+///
+/// **Splittability (checked)** — a multi-variant declaration must be
+/// *splittable*: its arms must surface as **distinct JVM signatures**, so a
+/// function can request idiomatic typed **overloads** on top of the selector
+/// form (`f(key: String, …)` / `f(key: KeyExpr, …)`) via
+/// [`FunctionDecl::split_on_param`](crate::fun). This is verified up front —
+/// two arms with the same erased parameter types are a hard build error.
+/// [`.no_split()`](Self::no_split) suppresses that check for a variant set that
+/// will only ever be used as the selector form. The type-level declaration
+/// itself emits no overloads; emission is per-function via `.split_on_param`.
+/// The selector form always stays public, so consumers can also add their own
+/// same-named overloads by hand.
 ///
 /// The type does **not** have to be declared in any package. A boundary decl
 /// on an undeclared type makes it **rust-side-only**: the value is always
@@ -464,6 +475,10 @@ impl From<syn::Type> for PtrClassDecl {
 pub struct ExpandParamDecl {
     pub(crate) key: TypeKey,
     pub(crate) variants: Vec<LocalVariant>,
+    /// `.no_split()` — suppress the proactive splittability check for this
+    /// variant set (it will only ever be used as the selector form). See
+    /// [`Self::no_split`].
+    pub(crate) no_split: bool,
 }
 
 impl ExpandParamDecl {
@@ -471,6 +486,7 @@ impl ExpandParamDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             variants: Vec::new(),
+            no_split: false,
         }
     }
 
@@ -503,6 +519,20 @@ impl ExpandParamDecl {
     /// alone changes nothing; it earns its place next to build variants.
     pub fn variant_self(mut self) -> Self {
         self.variants.push(LocalVariant::SelfIdentity);
+        self
+    }
+
+    /// **Suppress the splittability check.** A multi-variant expansion is
+    /// verified up front to be *splittable* (its arms surface as distinct JVM
+    /// signatures) so that [`FunctionDecl::split_on_param`](crate::fun) can emit
+    /// idiomatic typed overloads. `.no_split()` opts this variant set out of
+    /// that check — declare it when two arms genuinely share a JVM signature and
+    /// you only ever want the selector form (a function that then tries to
+    /// `.split_on_param` such a parameter gets the concrete ambiguity error).
+    ///
+    /// A no-op on a single-variant declaration (nothing to check).
+    pub fn no_split(mut self) -> Self {
+        self.no_split = true;
         self
     }
 }
@@ -813,6 +843,7 @@ pub struct FunctionDecl {
     pub(crate) kotlin_name_override: Option<String>,
     pub(crate) param_expands: Vec<(String, ExpandParamDecl)>,
     pub(crate) return_expand: Option<ExpandReturnDecl>,
+    pub(crate) split_on_params: Vec<String>,
 }
 
 impl FunctionDecl {
@@ -822,6 +853,7 @@ impl FunctionDecl {
             kotlin_name_override: None,
             param_expands: Vec::new(),
             return_expand: None,
+            split_on_params: Vec::new(),
         }
     }
 
@@ -854,6 +886,40 @@ impl FunctionDecl {
             param
         );
         self.param_expands.push((param, decl));
+        self
+    }
+
+    /// **Emit idiomatic typed Kotlin overloads for this parameter.** By default
+    /// a multi-variant expanded parameter crosses only as the selector tuple
+    /// (`expectedSel: Int, expected0: …, expected1: …`). `.split_on_param("p")`
+    /// additionally emits, alongside the selector wrapper, one typed overload
+    /// per variant of `p` — `f(count: Long, total: Double, …)` for a
+    /// `summary_new(count, total)` arm, `f(expected: Summary, …)` for
+    /// `variant_self()` — each delegating to the selector form.
+    ///
+    /// The parameter's variant set must be *splittable* (its arms surface as
+    /// distinct JVM signatures) — enforced up front on the
+    /// [`expand_param!`](crate::expand_param) declaration unless it opted out
+    /// with [`.no_split()`](ExpandParamDecl::no_split).
+    ///
+    /// Call again for **several** parameters: the generated overloads are then
+    /// the **cartesian product** of the named parameters' arms. That concrete
+    /// product must have no two combinations sharing a JVM signature — a hard
+    /// build error if it does.
+    ///
+    /// `param` is the Rust parameter name; it must be an expanded,
+    /// multi-variant parameter of this function (unknown / single-variant /
+    /// `Option<T>` / recursively-built ⇒ a hard error). Declaring the same
+    /// parameter twice is a hard error.
+    pub fn split_on_param(mut self, param: impl AsRef<str>) -> Self {
+        let param = param.as_ref().to_string();
+        assert!(
+            !self.split_on_params.contains(&param),
+            "fun!({}).split_on_param(\"{}\"): parameter is already split",
+            self.rust_ident,
+            param
+        );
+        self.split_on_params.push(param);
         self
     }
 

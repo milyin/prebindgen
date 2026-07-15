@@ -91,6 +91,7 @@ impl JniGen {
             return_expand_decls: Vec::new(),
             fn_param_expands: Vec::new(),
             fn_return_expands: Vec::new(),
+            fn_split_params: Vec::new(),
             class_members: HashMap::new(),
             ignored_fns: std::collections::HashSet::new(),
             ignored_name_predicates: Vec::new(),
@@ -466,6 +467,7 @@ impl JniGen {
             kotlin_name_override: _,
             param_expands,
             return_expand,
+            split_on_params,
         } = decl;
         for (param, pdecl) in param_expands {
             self.fn_param_expands
@@ -473,6 +475,9 @@ impl JniGen {
         }
         if let Some(rdecl) = return_expand {
             self.fn_return_expands.push((rust_ident.clone(), rdecl));
+        }
+        for param in split_on_params {
+            self.fn_split_params.push((rust_ident.clone(), param));
         }
     }
 }

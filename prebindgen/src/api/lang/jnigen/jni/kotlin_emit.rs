@@ -76,6 +76,9 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
+        // #52: verify every multi-variant expand_param! is splittable up front,
+        // before any per-function `.split_on_param` emission.
+        self.validate_split_declarations(registry);
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
@@ -333,6 +336,11 @@ impl JniGen {
                         Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
+                        for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                            self, item_fn, registry, &f,
+                        ) {
+                            class = class.member(ov);
+                        }
                         class = class.member(f);
                     }
                 }
@@ -354,6 +362,11 @@ impl JniGen {
                             Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
+                            for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                                self, item_fn, registry, &f,
+                            ) {
+                                companion = companion.member(ov);
+                            }
                             companion = companion.member(f);
                         }
                     }
@@ -531,6 +544,11 @@ impl JniGen {
                         Some(self.effective_member_name(key, m).as_str()),
                         Some(key),
                     ) {
+                        for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                            self, item_fn, registry, &f,
+                        ) {
+                            class = class.member(ov);
+                        }
                         class = class.member(f);
                     }
                 }
@@ -557,6 +575,11 @@ impl JniGen {
                             Some(self.effective_member_name(key, m).as_str()),
                             None,
                         ) {
+                            for ov in crate::api::lang::jnigen::jni::render_param_overloads(
+                                self, item_fn, registry, &f,
+                            ) {
+                                companion = companion.member(ov);
+                            }
                             companion = companion.member(f);
                         }
                     }
@@ -988,6 +1011,11 @@ impl JniGen {
                 entry.kotlin_name_override.as_deref(),
                 None,
             ) {
+                // #52: idiomatic typed overloads for `.split_on_param`
+                // parameters, delegating to this selector wrapper.
+                for ov in render_param_overloads(self, item_fn, registry, &f) {
+                    file = file.decl(ov);
+                }
                 file = file.decl(f);
             }
         }

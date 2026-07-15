@@ -6335,6 +6335,314 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    primary_sel: jni::sys::jint,
+    primary_0_0_present: jni::sys::jboolean,
+    primary_0_0_value: jni::sys::jlong,
+    primary_0_1_present: jni::sys::jboolean,
+    primary_0_1_value: jni::sys::jdouble,
+    primary_1: jni::sys::jlong,
+    fallback_sel: jni::sys::jint,
+    fallback_0_0_present: jni::sys::jboolean,
+    fallback_0_0_value: jni::sys::jlong,
+    fallback_0_1_present: jni::sys::jboolean,
+    fallback_0_1_value: jni::sys::jdouble,
+    fallback_1: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __exp_primary_sel = match jint_to_i32_a3e3b6ef(&mut env, &primary_sel) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_primary_0_0: Option<i64> = if primary_0_0_present != 0u8 {
+        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &primary_0_0_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                let __zd = __ze_defaults(&mut env);
+                signal_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    ::core::option::Option::Some(&__e.to_string()),
+                    &__zd,
+                );
+                return 0 as jni::sys::jlong;
+            }
+        };
+        ::core::option::Option::Some(__v)
+    } else {
+        ::core::option::Option::None
+    };
+    let __exp_primary_0_1: Option<f64> = if primary_0_1_present != 0u8 {
+        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &primary_0_1_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                let __zd = __ze_defaults(&mut env);
+                signal_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    ::core::option::Option::Some(&__e.to_string()),
+                    &__zd,
+                );
+                return 0 as jni::sys::jlong;
+            }
+        };
+        ::core::option::Option::Some(__v)
+    } else {
+        ::core::option::Option::None
+    };
+    let __exp_primary_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &primary_1) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __folded_primary = match {
+        match __exp_primary_sel {
+            0i32 => {
+                match (__exp_primary_0_0, __exp_primary_0_1) {
+                    (
+                        ::core::option::Option::Some(__p0),
+                        ::core::option::Option::Some(__p1),
+                    ) => {
+                        ::core::result::Result::Ok(
+                            perftest_flat::summary_new(__p0, __p1),
+                        )
+                    }
+                    _ => {
+                        ::core::result::Result::Err(
+                            ::std::string::String::from(
+                                "constructor variant input missing",
+                            ),
+                        )
+                    }
+                }
+            }
+            1i32 => {
+                match __exp_primary_1 {
+                    ::core::option::Option::Some(__v) => ::core::result::Result::Ok(__v),
+                    ::core::option::Option::None => {
+                        ::core::result::Result::Err(
+                            ::std::string::String::from("identity variant value missing"),
+                        )
+                    }
+                }
+            }
+            __sel => {
+                ::core::result::Result::Err(
+                    ::std::format!("invalid constructor selector: {}", __sel),
+                )
+            }
+        }
+    } {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __je = <__JniErr as ::core::convert::From<
+                ::std::string::String,
+            >>::from(__e);
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__je.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_fallback_sel = match jint_to_i32_a3e3b6ef(&mut env, &fallback_sel) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __exp_fallback_0_0: Option<i64> = if fallback_0_0_present != 0u8 {
+        let __v = match jlong_to_i64_fbf9a9bc(&mut env, &fallback_0_0_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                let __zd = __ze_defaults(&mut env);
+                signal_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    ::core::option::Option::Some(&__e.to_string()),
+                    &__zd,
+                );
+                return 0 as jni::sys::jlong;
+            }
+        };
+        ::core::option::Option::Some(__v)
+    } else {
+        ::core::option::Option::None
+    };
+    let __exp_fallback_0_1: Option<f64> = if fallback_0_1_present != 0u8 {
+        let __v = match jdouble_to_f64_9e4a8f70(&mut env, &fallback_0_1_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                let __zd = __ze_defaults(&mut env);
+                signal_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    ::core::option::Option::Some(&__e.to_string()),
+                    &__zd,
+                );
+                return 0 as jni::sys::jlong;
+            }
+        };
+        ::core::option::Option::Some(__v)
+    } else {
+        ::core::option::Option::None
+    };
+    let __exp_fallback_1 = match jlong_to_Option_Summary_252ef2ba(
+        &mut env,
+        &fallback_1,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __folded_fallback = match {
+        match __exp_fallback_sel {
+            0i32 => {
+                match (__exp_fallback_0_0, __exp_fallback_0_1) {
+                    (
+                        ::core::option::Option::Some(__p0),
+                        ::core::option::Option::Some(__p1),
+                    ) => {
+                        ::core::result::Result::Ok(
+                            perftest_flat::summary_new(__p0, __p1),
+                        )
+                    }
+                    _ => {
+                        ::core::result::Result::Err(
+                            ::std::string::String::from(
+                                "constructor variant input missing",
+                            ),
+                        )
+                    }
+                }
+            }
+            1i32 => {
+                match __exp_fallback_1 {
+                    ::core::option::Option::Some(__v) => ::core::result::Result::Ok(__v),
+                    ::core::option::Option::None => {
+                        ::core::result::Result::Err(
+                            ::std::string::String::from("identity variant value missing"),
+                        )
+                    }
+                }
+            }
+            __sel => {
+                ::core::result::Result::Err(
+                    ::std::format!("invalid constructor selector: {}", __sel),
+                )
+            }
+        }
+    } {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __je = <__JniErr as ::core::convert::From<
+                ::std::string::String,
+            >>::from(__e);
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__je.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = cov_helpers::summary_prefer(__folded_primary, __folded_fallback);
+    match i64_to_jlong_fbf9a9bc(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,

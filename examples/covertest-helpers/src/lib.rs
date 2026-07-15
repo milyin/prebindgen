@@ -18,7 +18,7 @@
 //! small helper crate like this one, consumed as both a normal and a build
 //! dependency (exactly like the flat crate).
 
-use perftest_flat::Millis;
+use perftest_flat::{summary_total, Millis, Summary};
 use prebindgen_proc_macro::{features, prebindgen};
 
 /// Output directory with the prebindgen data of this crate.
@@ -42,4 +42,19 @@ pub fn millis_from_long(v: i64) -> Millis {
 #[prebindgen]
 pub fn millis_value(m: &Millis) -> i64 {
     m.0 as i64
+}
+
+/// Two-`Summary`-parameter function exercising #52's **cartesian-product**
+/// overloads: covertest declares `.split_on_param("primary")
+/// .split_on_param("fallback")`, so each parameter is independently split into
+/// its (count, total)-build / handle arms and the generator emits the 2×2
+/// product (all four combinations distinct). Returns `1` when `primary` has the
+/// larger total, else `0`.
+#[prebindgen]
+pub fn summary_prefer(primary: Summary, fallback: Summary) -> i64 {
+    if summary_total(&primary) >= summary_total(&fallback) {
+        1
+    } else {
+        0
+    }
 }

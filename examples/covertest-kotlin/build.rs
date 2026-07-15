@@ -27,7 +27,8 @@
 //! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
 //! | `convert!` sources `.with(path!)`/`.error(ty!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
 //! | `.fun()` / `.constructor()`          | `Storage` + `Summary` + `Stamp` members |
-//! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input |
+//! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
+//! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
@@ -230,7 +231,11 @@ fn main() {
                 .class(ptr_class!(Archive).name("SummaryVault")),
         )
         // `Summary` default input: rebuilt from the `of` constructor's
-        // ingredients OR passed as an existing handle (runtime-selected).
+        // ingredients OR passed as an existing handle (runtime-selected). This
+        // 2-variant set is verified *splittable* up front (#52): its arms
+        // `(count, total)` vs `Summary` surface as distinct JVM signatures, so
+        // functions may `.split_on_param(...)` it into typed overloads (see
+        // `archive_store` / `storage_matches_summary` / `summary_prefer`).
         .expand(
             expand_param!(Summary)
                 .variant(fun!(summary_new))
@@ -320,7 +325,9 @@ fn main() {
         .package(
             package!("analytics")
                 .fun(fun!(storage_summary))
-                .fun(fun!(storage_matches_summary))
+                // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
+                // `storageMatchesSummary(count, total, …)` / `(expected, …)`.
+                .fun(fun!(storage_matches_summary).split_on_param("expected"))
                 .fun(
                     fun!(storage_summary_handle)
                         .expand_return(expand_return!(Summary).field_self()),
@@ -337,19 +344,35 @@ fn main() {
                             .field_self(),
                     ),
                 )
+                // Per-fn split (#52): a per-fn `.expand_param` variant override
+                // (demoing the override) whose `expected` param is then split
+                // into typed overloads `storageExpectSummary(count, total, …)` /
+                // `(expected, …)` on top of the selector form (which Test.kt
+                // still calls directly).
                 .fun(
-                    fun!(storage_expect_summary).expand_param(
-                        "expected",
-                        expand_param!(Summary)
-                            .variant(fun!(summary_new))
-                            .variant_self(),
-                    ),
+                    fun!(storage_expect_summary)
+                        .expand_param(
+                            "expected",
+                            expand_param!(Summary)
+                                .variant(fun!(summary_new))
+                                .variant_self(),
+                        )
+                        .split_on_param("expected"),
+                )
+                // Cartesian-product split (#52): TWO `Summary` params each split
+                // → the 2×2 product of typed overloads (all combinations
+                // distinct: build/build, build/handle, handle/build, handle/handle).
+                .fun(
+                    fun!(summary_prefer)
+                        .split_on_param("primary")
+                        .split_on_param("fallback"),
                 )
                 // The borrowed-accessor trio. `archive_latest` suppresses the default
                 // Summary return-field default so the BORROWED handle path (clone into a
                 // fresh owned handle, null when absent) is what crosses.
                 .fun(fun!(archive_new))
-                .fun(fun!(archive_store))
+                // Single split (#52) on the CLASS-DEFAULT variants, consuming arm.
+                .fun(fun!(archive_store).split_on_param("s"))
                 .fun(fun!(archive_latest).expand_return(expand_return!(Summary).field_self())),
         )
         // storage: the perf surface (handles, callbacks, Vec, Option) plus the
