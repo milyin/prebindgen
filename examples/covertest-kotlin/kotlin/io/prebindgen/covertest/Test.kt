@@ -613,5 +613,59 @@ fun main() {
         s.close()
     }
 
+    // ── .gc_managed() lifecycle: release ticket + Cleaner backstop ───────────
+    // Summary is gc_managed: its pointer lives in an atomic cell and every
+    // release path (close / take / by-value consumption / the GC action)
+    // settles the once-only untagged→tagged CAS ticket. The explicit paths
+    // must behave exactly like a plain handle's; a use-after-free by any
+    // double-settled ticket would crash the JVM in the churn loop below.
+    section(".gc_managed() lifecycle (ticket + Cleaner backstop)") {
+        // Explicit close stays primary and is idempotent.
+        val a = Summary.of(2L, 40.0, boom)
+        check(a.total(boom) == 40.0)
+        a.close()
+        check(a.isClosed())
+        a.close() // double close: ticket already settled — no double free
+        var closedErr: String? = null
+        a.total { je -> closedErr = je; -1.0 }
+        check(closedErr != null && closedErr!!.contains("closed native handle"))
+
+        // take(): ticket moves into the fresh wrapper; the source is closed.
+        val b = Summary.of(3L, 60.0, boom)
+        val c = b.take()
+        check(b.isClosed() && !c.isClosed())
+        check(c.total(boom) == 60.0)
+        b.close() // settled ticket: no-op
+        c.close()
+
+        // By-value consumption settles the ticket (markConsumed): the summary
+        // is freed by Rust, and neither close nor the Cleaner may free again.
+        val d = Summary.of(2L, 40.0, boom)
+        check(summaryTotalRaw(d, boom) == 40.0)
+        check(d.isClosed())
+        d.close()
+
+        // Cleaner backstop: churn unreachable handles through every state —
+        // never-released (GC action must free), explicitly closed, consumed —
+        // then force GC so the cleaner thread settles the survivors. Any
+        // double free or free-under-use aborts the JVM here.
+        repeat(2_000) { i ->
+            val s = Summary.of(i.toLong(), i.toDouble(), boom)
+            when (i % 3) {
+                0 -> {} // dropped live: the Cleaner frees it
+                1 -> s.close()
+                2 -> check(summaryTotalRaw(s, boom) == i.toDouble())
+            }
+        }
+        repeat(3) {
+            System.gc()
+            Thread.sleep(50)
+        }
+        // The world is still sane after the cleaner ran.
+        val e = Summary.of(5L, 50.0, boom)
+        check(e.count(boom) == 5L)
+        e.close()
+    }
+
     println("PASS - $sectionCount sections, every JniGen feature exercised")
 }

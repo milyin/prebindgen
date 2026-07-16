@@ -80,7 +80,13 @@ pub(crate) use crate::api::{
 /// Kotlin emitter writes a typed-handle `.kt` file (and the Rust side its
 /// `freePtr` destructor) for every opaque type.
 #[derive(Clone, Default)]
-pub(crate) struct OpaqueConfig {}
+pub(crate) struct OpaqueConfig {
+    /// `ptr_class!(X).gc_managed()`: the typed handle stores its pointer in
+    /// a separate atomic cell and registers a `Cleaner` action that frees the
+    /// native box if no other release path (close/take/consumption) won the
+    /// untagged→tagged CAS ticket first.
+    pub gc_managed: bool,
+}
 
 /// Per-enum configuration (driven by `JniGen::enum_class`).
 ///

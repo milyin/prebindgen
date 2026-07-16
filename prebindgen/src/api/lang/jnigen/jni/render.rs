@@ -274,10 +274,20 @@ pub(crate) fn build_typed_handle(
         .rsplit_once('.')
         .unwrap_or(("", class_fqn.as_str()));
     let free_extern = ext.mangle_method(class_package, final_class_name, "freePtr");
-    let base_fqn = if ext.package.is_empty() {
-        "NativeHandle".to_string()
+    let gc_managed = ext
+        .types
+        .get(key)
+        .and_then(|cfg| cfg.opaque.as_ref())
+        .is_some_and(|o| o.gc_managed);
+    let base_short = if gc_managed {
+        "GcNativeHandle"
     } else {
-        format!("{}.NativeHandle", ext.package)
+        "NativeHandle"
+    };
+    let base_fqn = if ext.package.is_empty() {
+        base_short.to_string()
+    } else {
+        format!("{}.{base_short}", ext.package)
     };
     let members = ext.class_members.get(key).map(Vec::as_slice).unwrap_or(&[]);
     if !members.is_empty() && !ext.package.is_empty() {
@@ -322,37 +332,83 @@ pub(crate) fn build_typed_handle(
     let mut class = kt::KtClass::new(kt::ClassKind::Plain, class_name)
         .vis(kt::Vis::Public)
         .kdoc(class_kdoc)
-        .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()))
-        .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
-        .member(
-            kt::KtFun::new("close")
-                .annotation("Synchronized")
-                .modifier("override")
-                .body(
-                    kt::Code::new()
-                        .line("val p = ptr")
-                        .blk("if (p != 0L && (p and 1L) == 0L) {", |c| {
-                            c.line("ptr = p or 1L").line(format!("{free_extern}(p)"))
-                        }),
-                ),
-        )
-        // Transfer ownership of the native pointer into a fresh handle,
-        // leaving this one empty. Lets a callback receiver retain a handle
-        // that the framework would otherwise `close()` when the callback
-        // returns.
-        .member(
-            kt::KtFun::new("take")
-                .vis(kt::Vis::Public)
-                .annotation("Synchronized")
-                .returns(kt::KtType::cls(class_name))
-                .body(
-                    kt::Code::new()
-                        .line("val p = ptr")
-                        .line("ptr = p or 1L")
-                        .line(format!("return {class_name}(p)")),
-                ),
-        )
-        .companion(companion);
+        .ctor_param(kt::KtCtorParam::new("initialPtr", kt::KtType::long()));
+    class = if gc_managed {
+        // GC-managed lifecycle: the pointer lives in the inherited atomic
+        // cell; every release path settles the once-only untagged→tagged
+        // ticket via `releaseCell`, and the registered Cleaner action frees
+        // the box only if no other path won first. `clean()` on the explicit
+        // paths is eager deregistration (the action then no-ops on the
+        // already-tagged cell).
+        if !ext.package.is_empty() {
+            imports.insert(format!("{}.releaseCell", ext.package));
+            imports.insert(format!("{}.registerGcHandle", ext.package));
+        }
+        class
+            .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
+            .member(
+                kt::KtProperty::val("__cleanable")
+                    .vis(kt::Vis::Private)
+                    .initializer(format!("registerGcHandle(this) {{ {free_extern}(it) }}")),
+            )
+            .member(
+                kt::KtFun::new("close")
+                    .annotation("Synchronized")
+                    .modifier("override")
+                    .body(
+                        kt::Code::new()
+                            .line("val p = releaseCell(cell)")
+                            .line(format!("if (p != 0L) {free_extern}(p)"))
+                            .line("__cleanable?.clean()"),
+                    ),
+            )
+            .member(
+                kt::KtFun::new("take")
+                    .vis(kt::Vis::Public)
+                    .annotation("Synchronized")
+                    .returns(kt::KtType::cls(class_name))
+                    .body(
+                        kt::Code::new()
+                            .line("val p = releaseCell(cell)")
+                            .line("__cleanable?.clean()")
+                            .line(format!(
+                                "return {class_name}(if (p != 0L) p else cell.get())"
+                            )),
+                    ),
+            )
+    } else {
+        class
+            .supertype(kt::KtType::cls(base_fqn), Some("initialPtr"))
+            .member(
+                kt::KtFun::new("close")
+                    .annotation("Synchronized")
+                    .modifier("override")
+                    .body(
+                        kt::Code::new()
+                            .line("val p = ptr")
+                            .blk("if (p != 0L && (p and 1L) == 0L) {", |c| {
+                                c.line("ptr = p or 1L").line(format!("{free_extern}(p)"))
+                            }),
+                    ),
+            )
+            // Transfer ownership of the native pointer into a fresh handle,
+            // leaving this one empty. Lets a callback receiver retain a handle
+            // that the framework would otherwise `close()` when the callback
+            // returns.
+            .member(
+                kt::KtFun::new("take")
+                    .vis(kt::Vis::Public)
+                    .annotation("Synchronized")
+                    .returns(kt::KtType::cls(class_name))
+                    .body(
+                        kt::Code::new()
+                            .line("val p = ptr")
+                            .line("ptr = p or 1L")
+                            .line(format!("return {class_name}(p)")),
+                    ),
+            )
+    };
+    let mut class = class.companion(companion);
 
     // Promoted instance methods: each `.method(f)` becomes an instance method
     // (receiver bound to `this`), delegating to the same centralized
@@ -1484,17 +1540,14 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
                 ParamMode::Borrow => (p.kt_name.clone(), None, false),
                 ParamMode::Consume => (
                     p.kt_name.clone(),
-                    Some(format!("{n}.ptr = {n}.ptr or 1L", n = p.kt_name)),
+                    Some(format!("{n}.markConsumed()", n = p.kt_name)),
                     false,
                 ),
                 ParamMode::BorrowNullable => (p.kt_name.clone(), None, true),
                 // Nullable consume: tag the slot only when present (null-safe).
                 ParamMode::ConsumeNullable => (
                     p.kt_name.clone(),
-                    Some(format!(
-                        "{n}?.let {{ it.ptr = it.ptr or 1L }}",
-                        n = p.kt_name
-                    )),
+                    Some(format!("{n}?.markConsumed()", n = p.kt_name)),
                     true,
                 ),
                 _ => return None,

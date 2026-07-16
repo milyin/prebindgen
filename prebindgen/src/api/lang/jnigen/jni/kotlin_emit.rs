@@ -121,49 +121,168 @@ impl JniGen {
         // `body: () -> R` — a zero-param function type.
         let body_param = || KtParam::new("body", KtType::lambda([], KtType::var_r()));
 
-        let mut file = kt::KtFile::new(&self.package).decl(
-            KtClass::new(ClassKind::Abstract, "NativeHandle")
-                .vis(Vis::Public)
-                .kdoc(
-                    "Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
-                     slot and its monitor. Subclasses add their type-specific `close()` /\n\
-                     `take()` / `freePtr`.\n\
-                     \n\
-                     Lifecycle is a tag bit: `Box` pointers are at least 2-aligned (asserted\n\
-                     on the Rust side), so bit 0 is free — closing/consuming sets `ptr = p or 1`\n\
-                     instead of zeroing. The address bits (`ptr and -2`) are therefore\n\
-                     write-once for the object's whole lifetime, which is what makes them a\n\
-                     sound lock-ordering key (a mutable key could reorder concurrent lock\n\
-                     acquisition and deadlock). All `ptr` writes happen under this handle's\n\
-                     monitor.",
-                )
-                .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
-                .supertype(KtType::cls("AutoCloseable"), None)
-                .member(
-                    KtProperty::var("ptr")
-                        .ty(KtType::long())
-                        .initializer("initialPtr")
-                        .vis(Vis::Internal)
-                        .annotation("Volatile"),
-                )
-                .member(
-                    KtFun::new("peek")
-                        .vis(Vis::Public)
-                        .kdoc("The live pointer, or `0` if this handle is closed.")
-                        .returns(KtType::long())
-                        .body(
-                            Code::new()
-                                .line("val p = ptr")
-                                .line("return if (p == 0L || (p and 1L) != 0L) 0L else p"),
-                        ),
-                )
-                .member(
-                    KtFun::new("isClosed")
-                        .vis(Vis::Public)
-                        .returns(KtType::boolean())
-                        .expr_body(Code::new().line("ptr == 0L || (ptr and 1L) != 0L")),
-                ),
-        );
+        let mut file = kt::KtFile::new(&self.package)
+            .import("java.lang.ref.Cleaner")
+            .import("java.util.concurrent.atomic.AtomicLong")
+            .decl(
+                KtClass::new(ClassKind::Abstract, "NativeHandle")
+                    .vis(Vis::Public)
+                    .kdoc(
+                        "Base class for every typed native handle: owns the raw `Box<T>` pointer\n\
+                         slot and its monitor. Subclasses add their type-specific `close()` /\n\
+                         `take()` / `freePtr`.\n\
+                         \n\
+                         Lifecycle is a tag bit: `Box` pointers are at least 2-aligned (asserted\n\
+                         on the Rust side), so bit 0 is free — closing/consuming sets `ptr = p or 1`\n\
+                         instead of zeroing. The address bits (`ptr and -2`) are therefore\n\
+                         write-once for the object's whole lifetime, which is what makes them a\n\
+                         sound lock-ordering key (a mutable key could reorder concurrent lock\n\
+                         acquisition and deadlock). All `ptr` writes happen under this handle's\n\
+                         monitor.\n\
+                         \n\
+                         A `gc_managed` class extends [GcNativeHandle] instead, which redirects\n\
+                         `ptr` into a separate atomic cell so a GC [Cleaner] action can settle\n\
+                         the release after the handle object itself is unreachable.",
+                    )
+                    .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
+                    .supertype(KtType::cls("AutoCloseable"), None)
+                    .member(
+                        KtProperty::var("ptr")
+                            .ty(KtType::long())
+                            .initializer("initialPtr")
+                            .vis(Vis::Internal)
+                            .modifier("open")
+                            .annotation("Volatile"),
+                    )
+                    .member(
+                        KtFun::new("markConsumed")
+                            .vis(Vis::Internal)
+                            .modifier("open")
+                            .kdoc(
+                                "Mark this handle consumed by value — the native side now owns\n\
+                                 (and frees) the box; only the closed tag is recorded here. A\n\
+                                 GC-managed handle also settles its release ticket.",
+                            )
+                            .body(Code::new().line("ptr = ptr or 1L")),
+                    )
+                    .member(
+                        KtFun::new("peek")
+                            .vis(Vis::Public)
+                            .kdoc("The live pointer, or `0` if this handle is closed.")
+                            .returns(KtType::long())
+                            .body(
+                                Code::new()
+                                    .line("val p = ptr")
+                                    .line("return if (p == 0L || (p and 1L) != 0L) 0L else p"),
+                            ),
+                    )
+                    .member(
+                        KtFun::new("isClosed")
+                            .vis(Vis::Public)
+                            .returns(KtType::boolean())
+                            .expr_body(Code::new().line("ptr == 0L || (ptr and 1L) != 0L")),
+                    ),
+            )
+            .decl(
+                KtClass::new(ClassKind::Abstract, "GcNativeHandle")
+                    .vis(Vis::Public)
+                    .kdoc(
+                        "Storage variant for `gc_managed` handle classes: the pointer (tag bit\n\
+                         and all) lives in a separate [cell], so the [Cleaner] action the\n\
+                         concrete class registers (see [registerGcHandle]) can settle the\n\
+                         release after this handle object is unreachable — the action must\n\
+                         never reference the handle itself, or it would keep it alive forever.\n\
+                         \n\
+                         The untagged→tagged CAS transition ([releaseCell]) is the once-only\n\
+                         free ticket: explicit `close()` frees eagerly, `take()`/by-value\n\
+                         consumption void the ticket (ownership moved), and the GC action\n\
+                         frees only if it wins. Address bits still never change, so the\n\
+                         lock-ordering key stays immutable; `isClosed()` and the Rust-side\n\
+                         tagged-pointer guards behave exactly as for a plain handle. The GC\n\
+                         action needs no monitor: it can only fire when the handle is\n\
+                         unreachable, and an in-flight native call holds the handle on its\n\
+                         stack.",
+                    )
+                    .ctor_param(KtCtorParam::new("initialPtr", KtType::long()))
+                    .supertype(KtType::cls("NativeHandle"), Some("initialPtr"))
+                    .member(
+                        KtProperty::val("cell")
+                            .ty(KtType::cls("AtomicLong"))
+                            .initializer("AtomicLong(initialPtr)")
+                            .vis(Vis::Internal),
+                    )
+                    .member(
+                        KtProperty::var("ptr")
+                            .ty(KtType::long())
+                            .vis(Vis::Internal)
+                            .modifier("final override")
+                            .accessors(
+                                Code::new()
+                                    .line("get() = cell.get()")
+                                    .line("set(v) { cell.set(v) }"),
+                            ),
+                    )
+                    .member(
+                        KtFun::new("markConsumed")
+                            .vis(Vis::Internal)
+                            .modifier("final override")
+                            .body(Code::new().line("releaseCell(cell)")),
+                    ),
+            )
+            .decl(
+                KtFun::new("releaseCell")
+                    .vis(Vis::Internal)
+                    .kdoc(
+                        "Win the untagged→tagged release transition of a gc_managed handle's\n\
+                         cell: returns the untagged address if the caller now owns the\n\
+                         release, else `0` (empty or already tagged — someone else settled\n\
+                         it).",
+                    )
+                    .param(KtParam::new("cell", KtType::cls("AtomicLong")))
+                    .returns(KtType::long())
+                    .body(
+                        Code::new()
+                            .line("while (true) {")
+                            .line("    val v = cell.get()")
+                            .line("    if (v == 0L || (v and 1L) != 0L) return 0L")
+                            .line("    if (cell.compareAndSet(v, v or 1L)) return v")
+                            .line("}"),
+                    ),
+            )
+            .decl(
+                KtClass::object_("NativeCleaner")
+                    .vis(Vis::Internal)
+                    .kdoc("Shared [Cleaner] settling gc_managed handles' release tickets.")
+                    .member(
+                        KtProperty::val("CLEANER")
+                            .ty(KtType::cls("Cleaner"))
+                            .initializer("Cleaner.create()")
+                            .annotation("JvmField"),
+                    ),
+            )
+            .decl(
+                KtFun::new("registerGcHandle")
+                    .vis(Vis::Internal)
+                    .kdoc(
+                        "Register [handle]'s GC release action, capturing only its cell and\n\
+                         the class's `freePtr` (never the handle — that would keep it\n\
+                         reachable forever). Returns `null` for a handle born closed.",
+                    )
+                    .param(KtParam::new("handle", KtType::cls("GcNativeHandle")))
+                    .param(KtParam::new(
+                        "free",
+                        KtType::lambda([("raw".to_string(), KtType::long())], KtType::unit()),
+                    ))
+                    .returns(KtType::cls("java.lang.ref.Cleaner.Cleanable").nullable())
+                    .body(
+                        Code::new()
+                            .line("if (handle.isClosed()) return null")
+                            .line("val c = handle.cell")
+                            .line(
+                                "return NativeCleaner.CLEANER.register(handle) { val p = releaseCell(c); if (p != 0L) free(p) }",
+                            ),
+                    ),
+            );
 
         // The N-ary locking helper is only referenced when wrappers are
         // emitted with locking on; skip it under `set_emit_handle_locks(false)`

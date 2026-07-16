@@ -456,6 +456,10 @@ fn render_property(p: &KtProperty, level: usize, imports: &mut ImportSet, out: &
         out.push_str(&format!("@{a} "));
     }
     out.push_str(p.vis.prefix());
+    for m in &p.modifiers {
+        out.push_str(m);
+        out.push(' ');
+    }
     out.push_str(if p.mutable { "var " } else { "val " });
     out.push_str(&p.name);
     if let Some(ty) = &p.ty {

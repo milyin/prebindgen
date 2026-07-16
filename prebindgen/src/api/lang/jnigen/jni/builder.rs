@@ -350,11 +350,13 @@ impl JniGen {
                 kind: NameKind::Ptr,
             },
         );
-        self.types
+        let opaque = self
+            .types
             .get_mut(&key)
             .expect("register_class_name created the entry")
             .opaque
             .get_or_insert_with(OpaqueConfig::default);
+        opaque.gc_managed |= decl.gc_managed;
         self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }

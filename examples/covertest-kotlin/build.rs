@@ -230,9 +230,13 @@ fn main() {
                 // `Summary` is an opaque handle; its default boundary shape —
                 // decomposed `(count, total)` leaves out, rebuilt via the `of`
                 // constructor (or an existing handle) in — is declared with
-                // `expand_param!` / `expand_return!` below.
+                // `expand_param!` / `expand_return!` below. It is also the
+                // `.gc_managed()` exercise: unreachable Summary handles are
+                // freed by the shared Cleaner; close/take/by-value consumption
+                // settle the release ticket first (see the Test.kt section).
                 .class(
                     ptr_class!(Summary)
+                        .gc_managed()
                         .constructor(fun!(summary_new).name("of"))
                         .method(fun!(summary_count))
                         .method(fun!(summary_total))
