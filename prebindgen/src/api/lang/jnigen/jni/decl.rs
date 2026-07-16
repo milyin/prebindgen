@@ -907,10 +907,17 @@ impl FunctionDecl {
     /// product must have no two combinations sharing a JVM signature — a hard
     /// build error if it does.
     ///
+    /// An `Option<…>` parameter splits through its **single-leaf** arms only
+    /// (nullable-arm rule): the overload keeps the arm's nullable type and
+    /// `null` selects absence — `f(encoding: Encoding?, …)` for a
+    /// `variant_self()` arm of an `Option<&Encoding>` parameter. Multi-leaf
+    /// arms stay selector-only; an optional parameter with no single-leaf arm
+    /// is a hard error.
+    ///
     /// `param` is the Rust parameter name; it must be an expanded,
     /// multi-variant parameter of this function (unknown / single-variant /
-    /// `Option<T>` / recursively-built ⇒ a hard error). Declaring the same
-    /// parameter twice is a hard error.
+    /// recursively-built ⇒ a hard error). Declaring the same parameter twice
+    /// is a hard error.
     pub fn split_on_param(mut self, param: impl AsRef<str>) -> Self {
         let param = param.as_ref().to_string();
         assert!(

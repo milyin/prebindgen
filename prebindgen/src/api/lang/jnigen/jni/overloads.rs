@@ -15,9 +15,19 @@
 //!   their arms as typed overloads, each delegating to the selector form. The
 //!   concrete product must have no two combinations sharing a JVM signature.
 //!
-//! Only flat, non-optional arms are splittable; an explicit `.split_on_param` on
-//! an `Option<T>` / recursively-built / single-variant / unknown parameter is a
-//! hard error.
+//! Only flat arms are splittable; an explicit `.split_on_param` on a
+//! recursively-built / single-variant / unknown parameter is a hard error.
+//!
+//! **Optional params (nullable-arm rule)** — an `Option<…>` parameter is
+//! splittable through its **single-leaf** arms only (the identity arm, or a
+//! build arm with exactly one constructor input): the overload keeps the arm's
+//! nullable type (`T?`) and `null` selects absence (selector `-1`), mirroring
+//! the "one nullable leaf decides presence" convention of optional single-ctor
+//! expansion. Multi-leaf arms have no nullable single type and stay
+//! selector-only; an optional param with no single-leaf arm is a hard error.
+//! With two qualifying nullable arms a bare `null` argument is ambiguous at
+//! Kotlin call sites (both mean absent) and needs a cast — signatures are
+//! still pairwise-distinct per the checks above.
 
 use super::*;
 use crate::api::core::expand::{FoldArg, FoldPlan};
@@ -163,11 +173,11 @@ fn erased(ext: &JniGen, ty: &kt::KtType) -> String {
 }
 
 /// Whether `plan` is a multi-variant expansion that can be turned into
-/// overloads: a selector (≥2 arms), a plain (non-`Option`) outer shape, and no
-/// recursively-built arm.
+/// overloads: a selector (≥2 arms) and no recursively-built arm. An `Option`
+/// outer shape is in scope — its arms are filtered to single-leaf ones by
+/// [`resolve_split`] (nullable-arm rule, see module docs).
 fn plan_in_scope(plan: &FoldPlan) -> bool {
     plan.selector.is_some()
-        && !plan.produces_option()
         && !plan
             .variants
             .iter()
@@ -186,8 +196,13 @@ struct Split<'a> {
     len: usize,
     /// Selector-leaf index within the block.
     sel_idx: usize,
-    /// Per-variant typed params: `(param, leaf-index-within-block)`.
-    arms: Vec<Vec<(kt::KtParam, usize)>>,
+    /// `Option<…>` parameter — overload arms keep their nullable type and the
+    /// delegated selector is conditional (`null` = absent = `-1`).
+    optional: bool,
+    /// Overloadable arms: original variant index (the selector value) plus the
+    /// arm's typed params as `(param, leaf-index-within-block)`. For an
+    /// optional param this is the single-leaf subset of the variants.
+    arms: Vec<(usize, Vec<(kt::KtParam, usize)>)>,
 }
 
 /// Camel-cased Kotlin names of a `#[prebindgen]` constructor's parameters.
@@ -237,13 +252,16 @@ fn is_option(ty: &syn::Type) -> bool {
 /// The typed overload params of one variant arm, paired with the leaf index
 /// each fills. `origin`/`multi` drive name disambiguation (build-arm params are
 /// prefixed with the origin parameter name when the function splits more than
-/// one parameter). Returns `None` if any input is not a flat leaf.
+/// one parameter). `optional_plan` keeps every slot's rendered nullability —
+/// for an `Option<…>` parameter `null` encodes absence (nullable-arm rule).
+/// Returns `None` if any input is not a flat leaf.
 fn variant_typed_params(
     registry: &Registry<KotlinMeta>,
     variant: &crate::api::core::expand::FoldVariant,
     origin: &syn::Ident,
     block: &[kt::KtParam],
     multi: bool,
+    optional_plan: bool,
 ) -> Option<Vec<(kt::KtParam, usize)>> {
     let origin_kt = kt_param_name(&origin.to_string());
     let (names, optional): (Vec<String>, Vec<bool>) = match &variant.ctor {
@@ -276,7 +294,7 @@ fn variant_typed_params(
         } else {
             base
         };
-        let ty = if optional.get(m).copied().unwrap_or(false) {
+        let ty = if optional_plan || optional.get(m).copied().unwrap_or(false) {
             slot.ty.clone()
         } else {
             non_null(slot.ty.clone())
@@ -328,12 +346,6 @@ fn resolve_split<'a>(
         f.sig.ident
     );
     assert!(
-        !plan.produces_option(),
-        "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is an `Option<_>` / `Vec<_>` \
-         parameter — its overload has no clean single type; keep the selector form",
-        f.sig.ident
-    );
-    assert!(
         plan_in_scope(plan),
         "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` has a recursively-built arm — \
          it cannot be overloaded; keep the selector form",
@@ -354,25 +366,41 @@ fn resolve_split<'a>(
     });
     let block = &sel_fun.params[start..start + len];
     let sel_idx = plan.selector.expect("selector present");
-    let arms: Vec<Vec<(kt::KtParam, usize)>> = plan
+    // Nullable-arm rule: an `Option<…>` param is overloadable through its
+    // single-leaf arms only — the arm's one nullable param doubles as the
+    // presence flag (`null` = absent). Multi-leaf arms stay selector-only.
+    let optional = plan.produces_option();
+    let arms: Vec<(usize, Vec<(kt::KtParam, usize)>)> = plan
         .variants
         .iter()
-        .map(|v| {
-            variant_typed_params(registry, v, &param, block, multi).unwrap_or_else(|| {
-                panic!(
-                    "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
-                     it cannot be overloaded",
-                    f.sig.ident
-                )
-            })
+        .enumerate()
+        .filter(|(_, v)| !optional || v.inputs.len() == 1)
+        .map(|(vi, v)| {
+            let typed = variant_typed_params(registry, v, &param, block, multi, optional)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "fun!({}).split_on_param(\"{param_name}\"): an arm has a non-flat input; \
+                         it cannot be overloaded",
+                        f.sig.ident
+                    )
+                });
+            (vi, typed)
         })
         .collect();
+    assert!(
+        !arms.is_empty(),
+        "fun!({}).split_on_param(\"{param_name}\"): `{param_name}` is an `Option<_>` parameter \
+         and none of its arms is a single leaf — its overload has no clean nullable type; keep \
+         the selector form",
+        f.sig.ident
+    );
     Split {
         param,
         plan,
         start,
         len,
         sel_idx,
+        optional,
         arms,
     }
 }
@@ -441,7 +469,7 @@ pub(crate) fn render_param_overloads(
                 .iter()
                 .zip(combo)
                 .flat_map(|(s, &ai)| {
-                    let ctor = s.plan.variants[ai].ctor.as_ref();
+                    let ctor = s.plan.variants[s.arms[ai].0].ctor.as_ref();
                     arm_erased_sig(ext, registry, &s.plan.target, ctor)
                 })
                 .collect()
@@ -475,10 +503,15 @@ pub(crate) fn render_param_overloads(
             if let Some((si, s)) = splits.iter().enumerate().find(|(_, s)| s.start == pos) {
                 // Replace this param's whole leaf block with the chosen arm's
                 // typed params; fill the block's delegation slots.
-                let ai = combo[si];
-                let typed = &s.arms[ai];
+                let (vi, typed) = &s.arms[combo[si]];
                 let mut leaf_arg: Vec<String> = vec!["null".to_string(); s.len];
-                leaf_arg[s.sel_idx] = ai.to_string();
+                leaf_arg[s.sel_idx] = if s.optional {
+                    // Nullable-arm rule: the arm's single param doubles as the
+                    // presence flag — `null` delegates absence (selector -1).
+                    format!("if ({} != null) {vi} else -1", typed[0].0.name)
+                } else {
+                    vi.to_string()
+                };
                 for (p, lidx) in typed {
                     params.push(p.clone());
                     leaf_arg[*lidx] = p.name.clone();
@@ -549,7 +582,7 @@ fn combo_label(splits: &[Split], combo: &[usize]) -> String {
         .iter()
         .zip(combo)
         .map(|(s, &ai)| {
-            let v = match &s.plan.variants[ai].ctor {
+            let v = match &s.plan.variants[s.arms[ai].0].ctor {
                 Some(c) => c.to_string(),
                 None => "variant_self()".to_string(),
             };
@@ -594,6 +627,7 @@ mod tests {
             &variant,
             &syn::parse_quote!(expected),
             &block,
+            false,
             false,
         )
         .expect("flat arm");
