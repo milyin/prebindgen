@@ -289,6 +289,7 @@ pub struct PtrClassDecl {
     pub(crate) name_override: Option<String>,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
     pub(crate) iface: IfaceOpts,
+    pub(crate) gc_managed: bool,
 }
 
 /// The interface-related options every class decl carries (see
@@ -382,7 +383,31 @@ impl PtrClassDecl {
             name_override: None,
             members: Vec::new(),
             iface: IfaceOpts::default(),
+            gc_managed: false,
         }
+    }
+
+    /// Make instances of this handle class **GC-managed**: an unreachable
+    /// handle whose native box was not otherwise released is freed by a
+    /// shared [`java.lang.ref.Cleaner`].
+    ///
+    /// The pointer of a GC-managed handle lives in a separate atomic cell
+    /// (tag bit and all) so the cleaner action can settle the release after
+    /// the handle object itself is gone; the untagged→tagged transition is a
+    /// CAS and doubles as the once-only free ticket — explicit `close()`
+    /// frees eagerly, `take()`/by-value consumption void the ticket, the GC
+    /// action frees only if it wins. Address bits still never change, so the
+    /// lock-ordering key stays immutable, and `isClosed()`/Rust-side
+    /// tagged-pointer guards are unchanged.
+    ///
+    /// Opt in for handles whose owner may never close them — value-like
+    /// types (an `Encoding`) and long-lived resources where GC is the leak
+    /// backstop behind an explicit `close()`. Leave hot-path per-message
+    /// handles opted out: registration costs a few small allocations per
+    /// instance.
+    pub fn gc_managed(mut self) -> Self {
+        self.gc_managed = true;
+        self
     }
 
     /// Rename the generated Kotlin class. By default it is named after the

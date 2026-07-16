@@ -2,10 +2,13 @@
 package io.prebindgen.covertest.analytics
 
 import io.prebindgen.covertest.CovNative
+import io.prebindgen.covertest.GcNativeHandle
 import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.NativeHandle
 import io.prebindgen.covertest.Storage
+import io.prebindgen.covertest.registerGcHandle
+import io.prebindgen.covertest.releaseCell
 import io.prebindgen.covertest.withSortedHandleLocks
 
 /** Typed handle for a native Zenoh `Archive`. */
@@ -33,21 +36,21 @@ public class SummaryVault(initialPtr: Long) : NativeHandle(initialPtr) {
 }
 
 /** Typed handle for a native Zenoh `Summary`. */
-public class Summary(initialPtr: Long) : NativeHandle(initialPtr) {
+public class Summary(initialPtr: Long) : GcNativeHandle(initialPtr) {
+    private val __cleanable = registerGcHandle(this) { freePtr(it) }
+
     @Synchronized
     override fun close() {
-        val p = ptr
-        if (p != 0L && (p and 1L) == 0L) {
-            ptr = p or 1L
-            freePtr(p)
-        }
+        val p = releaseCell(cell)
+        if (p != 0L) freePtr(p)
+        __cleanable?.clean()
     }
 
     @Synchronized
     public fun take(): Summary {
-        val p = ptr
-        ptr = p or 1L
-        return Summary(p)
+        val p = releaseCell(cell)
+        __cleanable?.clean()
+        return Summary(if (p != 0L) p else cell.get())
     }
 
     /** Number of payloads (flatten-output **field** / **accessor**). */
@@ -197,7 +200,7 @@ public fun storageMatchesSummary(
                     __cap,
                 )
             } finally {
-                expected1?.let { it.ptr = it.ptr or 1L }
+                expected1?.markConsumed()
             }
         }
     }
@@ -232,7 +235,7 @@ public fun summaryTotalRaw(s: Summary, onError: JniErrorHandler<Double>): Double
         try {
             CovNative.summaryTotalRaw(s_ptr, __cap)
         } finally {
-            s.ptr = s.ptr or 1L
+            s.markConsumed()
         }
     }
     if (__cap.failed) return onError.run(__cap.je)
@@ -313,7 +316,7 @@ public fun storageExpectSummary(
                     __cap,
                 )
             } finally {
-                expected1?.let { it.ptr = it.ptr or 1L }
+                expected1?.markConsumed()
             }
         }
     }
@@ -398,8 +401,8 @@ public fun summaryPrefer(
                     __cap,
                 )
             } finally {
-                primary1?.let { it.ptr = it.ptr or 1L }
-                fallback1?.let { it.ptr = it.ptr or 1L }
+                primary1?.markConsumed()
+                fallback1?.markConsumed()
             }
         }
     }
@@ -492,7 +495,7 @@ public fun archiveStore(
                     __cap,
                 )
             } finally {
-                s1?.let { it.ptr = it.ptr or 1L }
+                s1?.markConsumed()
             }
         }
     }

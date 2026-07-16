@@ -757,6 +757,107 @@ fn constructor_with_wrong_return_rejected() {
     );
 }
 
+/// `.gc_managed()`: the typed handle extends `GcNativeHandle` (pointer in a
+/// separate atomic cell), registers a Cleaner action capturing only the cell,
+/// and every release path settles the once-only untagged→tagged CAS ticket —
+/// `close()` frees eagerly, `take()` and by-value consumption void it, the GC
+/// action frees only if it wins. A plain class keeps the field-backed
+/// lifecycle; by-value consumption is routed through `markConsumed()` for
+/// both.
+#[test]
+fn gc_managed_handle_lifecycle() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThing {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZOther {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let fns: &[&str] = &[
+        "pub fn z_thing_new() -> ZThing { unimplemented!() }",
+        "pub fn z_thing_use(t: ZThing) -> bool { unimplemented!() }",
+        "pub fn z_other_new() -> ZOther { unimplemented!() }",
+        "pub fn z_other_use(t: ZOther) -> bool { unimplemented!() }",
+    ];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("t")
+            .class(
+                crate::ptr_class!(ZThing)
+                    .gc_managed()
+                    .constructor(crate::fun!(z_thing_new)),
+            )
+            .class(crate::ptr_class!(ZOther).constructor(crate::fun!(z_other_new)))
+            .fun(crate::fun!(z_thing_use))
+            .fun(crate::fun!(z_other_use)),
+    );
+    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_gc_managed");
+    let all: String = raw.split_whitespace().collect();
+
+    // Shared harness: cell-backed base, CAS helper, shared Cleaner, register fn.
+    assert!(all.contains("abstractclassGcNativeHandle"), "{raw}");
+    assert!(all.contains("internalfunreleaseCell"), "{raw}");
+    assert!(all.contains("internalobjectNativeCleaner"), "{raw}");
+    assert!(all.contains("internalfunregisterGcHandle"), "{raw}");
+
+    // The gc class extends GcNativeHandle and self-registers via the cell.
+    assert!(
+        all.contains("classZThing(initialPtr:Long):GcNativeHandle(initialPtr)"),
+        "{raw}"
+    );
+    assert!(
+        all.contains("privateval__cleanable=registerGcHandle(this){freePtr(it)}"),
+        "{raw}"
+    );
+    // close(): CAS ticket, eager free + eager deregistration.
+    assert!(
+        all.contains("valp=releaseCell(cell)if(p!=0L)freePtr(p)__cleanable?.clean()"),
+        "{raw}"
+    );
+    // take(): ticket voided, ownership moves into the fresh wrapper.
+    assert!(
+        all.contains(
+            "valp=releaseCell(cell)__cleanable?.clean()returnZThing(if(p!=0L)pelsecell.get())"
+        ),
+        "{raw}"
+    );
+
+    // The plain class keeps the field-backed lifecycle.
+    assert!(
+        all.contains("classZOther(initialPtr:Long):NativeHandle(initialPtr)"),
+        "{raw}"
+    );
+    assert!(all.contains("ptr=por1L"), "{raw}");
+    assert!(
+        !all.contains("classZOther(initialPtr:Long):GcNativeHandle"),
+        "{raw}"
+    );
+
+    // By-value consumption goes through markConsumed() for BOTH classes —
+    // for the gc class that settles the ticket, for the plain one it is
+    // exactly the old tag write.
+    assert!(all.contains("t.markConsumed()"), "{raw}");
+    assert!(!all.contains("t.ptr=t.ptror1L"), "{raw}");
+}
+
 /// #52 shared fixture: a `ZSummary` ptr class, its `(count, total)` builder, a
 /// splittable 2-variant type-level `expand_param!`, and functions taking one or
 /// two `ZSummary` params. `extra` fns are appended before indexing.

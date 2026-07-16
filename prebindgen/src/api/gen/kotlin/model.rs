@@ -428,6 +428,9 @@ pub struct KtProperty {
     pub vis: Vis,
     /// Inline annotations rendered before the keyword: `@Volatile internal var …`.
     pub annotations: Vec<String>,
+    /// Keyword modifiers rendered between visibility and `val`/`var`
+    /// (`open`, `final override`, …).
+    pub modifiers: Vec<String>,
     pub kdoc: Option<String>,
     /// Raw accessor text rendered indented under the property (e.g. a
     /// custom getter `get() = …`).
@@ -444,6 +447,7 @@ impl KtProperty {
             mutable: false,
             vis: Vis::Default,
             annotations: Vec::new(),
+            modifiers: Vec::new(),
             kdoc: None,
             accessors: None,
         }
@@ -472,6 +476,10 @@ impl KtProperty {
     }
     pub fn annotation(mut self, a: impl Into<String>) -> Self {
         self.annotations.push(a.into());
+        self
+    }
+    pub fn modifier(mut self, m: impl Into<String>) -> Self {
+        self.modifiers.push(m.into());
         self
     }
     pub fn kdoc(mut self, d: impl Into<String>) -> Self {
