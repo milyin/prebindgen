@@ -1025,11 +1025,13 @@ fn split_on_unknown_param_rejected() {
     let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_typo");
 }
 
-/// #52: `.split_on_param` on an `Option<T>` parameter is a hard error — the
-/// overload has no clean single type; the selector form must be kept.
+/// Nullable-arm rule: `.split_on_param` on an `Option<T>` parameter emits
+/// overloads for its **single-leaf** arms only — here the `variant_self()`
+/// arm, typed nullable (`ZSummary?`) with `null` = absent, delegating a
+/// conditional selector (`-1` when null). The multi-leaf `(count, total)`
+/// build arm stays selector-only.
 #[test]
-#[should_panic(expected = "Option")]
-fn split_on_option_param_rejected() {
+fn split_on_option_param_emits_nullable_arm() {
     let registry =
         split_fixture(&["pub fn z_maybe(opt: Option<ZSummary>) -> bool { unimplemented!() }"]);
     let jni = JniGen::new()
@@ -1044,7 +1046,93 @@ fn split_on_option_param_rejected() {
                 .variant(crate::fun!(z_summary_new))
                 .variant_self(),
         );
-    let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_opt");
+    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_opt");
+    let all: String = raw.split_whitespace().collect();
+    // Selector form retained; single nullable overload for the identity arm.
+    assert!(all.contains("optSel:Int"), "{raw}");
+    assert!(all.contains("funzMaybe(opt:ZSummary?,"), "{raw}");
+    assert!(
+        all.contains("zMaybe(if(opt!=null)1else-1,null,null,opt,"),
+        "{raw}"
+    );
+    // No overload for the multi-leaf build arm.
+    assert!(!all.contains("funzMaybe(count:"), "{raw}");
+}
+
+/// Nullable-arm rule: an `Option<T>` parameter whose expansion has **no**
+/// single-leaf arm (two multi-arg build arms, no identity) cannot be split —
+/// hard error, keep the selector form.
+#[test]
+#[should_panic(expected = "none of its arms is a single leaf")]
+fn split_on_option_param_without_single_leaf_arm_rejected() {
+    let registry = split_fixture(&[
+        "pub fn z_summary_scaled(units: String, factor: f64) -> ZSummary { unimplemented!() }",
+        "pub fn z_maybe(opt: Option<ZSummary>) -> bool { unimplemented!() }",
+    ]);
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZSummary))
+                .fun(crate::fun!(z_maybe).split_on_param("opt")),
+        )
+        .expand(
+            crate::expand_param!(ZSummary)
+                .variant(crate::fun!(z_summary_new))
+                .variant(crate::fun!(z_summary_scaled)),
+        );
+    let _ = write_all(
+        registry.resolve(jni).expect("resolve"),
+        "jnigen_split_opt_no_arm",
+    );
+}
+
+/// Nullable-arm rule × cartesian product: a non-optional split param (all
+/// arms) combines with an optional one (single-leaf arms only) — each combo
+/// fills its own block, constant selector for the former, conditional for the
+/// latter.
+#[test]
+fn split_on_param_optional_cartesian_with_plain() {
+    let registry = split_fixture(&[
+        "pub fn z_mixed(primary: ZSummary, fallback: Option<&ZSummary>) -> i64 { unimplemented!() }",
+    ]);
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZSummary))
+                .fun(
+                    crate::fun!(z_mixed)
+                        .split_on_param("primary")
+                        .split_on_param("fallback"),
+                ),
+        )
+        .expand(
+            crate::expand_param!(ZSummary)
+                .variant(crate::fun!(z_summary_new))
+                .variant_self(),
+        );
+    let raw = write_all(
+        registry.resolve(jni).expect("resolve"),
+        "jnigen_split_opt_prod",
+    );
+    let all: String = raw.split_whitespace().collect();
+    // 2 (primary arms) × 1 (fallback single-leaf arm) overloads.
+    assert!(
+        all.contains("funzMixed(primaryCount:Long,primaryTotal:Double,fallback:ZSummary?,"),
+        "{raw}"
+    );
+    assert!(
+        all.contains("funzMixed(primary:ZSummary,fallback:ZSummary?,"),
+        "{raw}"
+    );
+    // Constant selector for the plain block, conditional for the optional one.
+    assert!(
+        all.contains(
+            "zMixed(0,primaryCount,primaryTotal,null,if(fallback!=null)1else-1,null,null,fallback,"
+        ),
+        "{raw}"
+    );
 }
 
 /// Optional combined-selector expansion: an `Option<&T>` param with a
