@@ -266,7 +266,7 @@ fn variant_typed_params(
     };
     let mut out = Vec::new();
     for (m, arg) in variant.inputs.iter().enumerate() {
-        let FoldArg::Leaf(idx) = arg else {
+        let FoldArg::Leaf(idx, _) = arg else {
             return None;
         };
         let slot = block.get(*idx)?;
@@ -580,7 +580,7 @@ mod tests {
             ctor: Some(syn::parse_quote!(z_summary_optional)),
             fallible: false,
             clone: false,
-            inputs: vec![FoldArg::Leaf(0), FoldArg::Leaf(1)],
+            inputs: vec![FoldArg::Leaf(0, false), FoldArg::Leaf(1, false)],
         };
         // Both slots are nullable in the selector wrapper. Only the first is
         // nullable in the constructor's actual signature.

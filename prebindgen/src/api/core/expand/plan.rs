@@ -30,7 +30,9 @@ pub struct FoldPlan {
     /// Flattened wire leaves, in foreign-signature order.
     pub leaves: Vec<FoldLeaf>,
     /// Index into [`Self::leaves`] of the selector leaf; `None` for a single
-    /// constructor (the sole variant is applied unconditionally).
+    /// constructor (the sole variant is applied unconditionally). Under an
+    /// [`Optional`](FoldShape::Optional) shape the selector also encodes
+    /// **absence**: `-1` = `None`, `0..n-1` = the taken arm.
     pub selector: Option<usize>,
     /// Index into [`Self::leaves`] of the explicit presence-flag (`bool`) leaf
     /// for a **multi-argument** `Optional` shape (`Option<T>` built from a
@@ -87,7 +89,15 @@ pub struct FoldVariant {
 #[derive(Clone)]
 pub enum FoldArg {
     /// Decode the flat wire leaf at this index into [`FoldPlan::leaves`].
-    Leaf(usize),
+    ///
+    /// The `bool` is the **passthrough** marker for selector-dispatched arms:
+    /// `false` = the leaf is `Option`-wrapped by selector presence and is
+    /// unwrapped before the constructor call (a missing input is an error);
+    /// `true` = the constructor argument is itself an `Option<…>`, so the leaf
+    /// keeps the argument's own type and passes through unwrapped (`None` is a
+    /// legitimate value for the taken arm — arm-taken-ness is decided by the
+    /// selector alone). Always `false` outside dispatched arms.
+    Leaf(usize, bool),
     /// Build this parameter by recursively folding its own default
     /// constructor (the parameter's type is itself a ptr_class with a default
     /// input). Its leaves live in the shared flat [`FoldPlan::leaves`].

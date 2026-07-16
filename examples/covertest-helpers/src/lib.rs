@@ -44,6 +44,16 @@ pub fn millis_value(m: &Millis) -> i64 {
     m.0 as i64
 }
 
+/// Optionally-supplied summary total — exercises the **Optional
+/// combined-selector expansion**: `Summary`'s dual-arm type default (build
+/// from `(count, total)` OR pass a handle) applies to this `Option<&Summary>`
+/// parameter, so the selector also encodes absence (`-1` = `None`). Returns
+/// `-1.0` when absent.
+#[prebindgen]
+pub fn summary_total_opt(s: Option<&Summary>) -> f64 {
+    s.map(summary_total).unwrap_or(-1.0)
+}
+
 /// Two-`Summary`-parameter function exercising #52's **cartesian-product**
 /// overloads: covertest declares `.split_on_param("primary")
 /// .split_on_param("fallback")`, so each parameter is independently split into

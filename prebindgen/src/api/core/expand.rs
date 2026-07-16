@@ -466,18 +466,41 @@ fn build_plan<M>(
     let param = &ed.param;
     let mut leaves: Vec<FoldLeaf> = Vec::new();
 
-    // Optional (`Option<T>`/`Option<&T>`) param: a single (never
-    // selector-dispatched) constructor. No recursion under `Optional`.
-    //  * single-arg ctor → one nullable leaf (`Option<arg>`) decides presence.
-    //  * multi-arg ctor  → an explicit leading `present: bool` flag + one plain
-    //    (non-`Option`) leaf per arg. The flag keeps nullable primitive args
-    //    (e.g. an `Option<i32>` id) from boxing on the wire.
+    // Optional (`Option<T>`/`Option<&T>`) param. No recursion under `Optional`.
+    //  * single single-arg ctor → one nullable leaf (`Option<arg>`) decides
+    //    presence.
+    //  * single multi-arg ctor  → an explicit leading `present: bool` flag +
+    //    one plain (non-`Option`) leaf per arg. The flag keeps nullable
+    //    primitive args (e.g. an `Option<i32>` id) from boxing on the wire.
+    //  * combined (≥2 variants) → the same selector dispatch as a non-optional
+    //    param, with the selector ALSO encoding absence: `-1` = `None`,
+    //    `0..n-1` = the taken arm (no separate present flag — not-taken arms'
+    //    leaves are null exactly as in the non-optional selector case).
     if optional {
         let [Variant::Ctor(func)] = variants else {
-            return Err(ExpandError::UnsupportedOptional {
-                func: ed.func.clone(),
-                param: ed.param.clone(),
-                reason: "selector-dispatched constructors cannot be optional",
+            // Combined-selector dispatch under `Optional`.
+            visited.insert(TypeKey::from_type(target));
+            let prefix = param.to_string();
+            let (selector, fold_variants) = build_core(
+                exp,
+                registry,
+                ed,
+                target,
+                variants,
+                by_ref,
+                &prefix,
+                &mut leaves,
+                visited,
+            )?;
+            visited.remove(&TypeKey::from_type(target));
+            return Ok(FoldPlan {
+                target: target.clone(),
+                by_ref,
+                shape: FoldShape::Optional((), Box::new(FoldShape::Base)),
+                leaves,
+                selector,
+                present: None,
+                variants: fold_variants,
             });
         };
         let sig = ctor_signature(registry, func)?;
@@ -499,7 +522,7 @@ fn build_plan<M>(
                     ctor: Some(func.clone()),
                     fallible: sig.fallible,
                     clone: false,
-                    inputs: vec![FoldArg::Leaf(0)],
+                    inputs: vec![FoldArg::Leaf(0, false)],
                 }],
             });
         }
@@ -666,7 +689,7 @@ fn build_core<M>(
                         ctor: None,
                         fallible: false,
                         clone: by_ref,
-                        inputs: vec![FoldArg::Leaf(idx)],
+                        inputs: vec![FoldArg::Leaf(idx, false)],
                     });
                 }
             }
@@ -743,11 +766,21 @@ fn build_arg<M>(
         })))
     } else {
         let idx = leaves.len();
+        // A dispatched (selector-presence) arm `Option`-wraps its leaves — but
+        // an argument that is itself `Option<…>` passes through with its own
+        // type: `None` is a legitimate value for the taken arm, and the wire
+        // cannot represent the double `Option` anyway. Marked `passthrough` so
+        // the emit side skips the selector-presence unwrap.
+        let passthrough = dispatched && popt;
         leaves.push(FoldLeaf {
             name,
-            ty: if dispatched { opt(pty) } else { pty.clone() },
+            ty: if dispatched && !passthrough {
+                opt(pty)
+            } else {
+                pty.clone()
+            },
         });
-        Ok(FoldArg::Leaf(idx))
+        Ok(FoldArg::Leaf(idx, passthrough))
     }
 }
 
@@ -802,7 +835,19 @@ fn fold_shape(
     match shape {
         FoldShape::Base => emit_core_construct(plan, leaf_locals, bound, qualify),
         FoldShape::Optional((), inner) => {
-            if let Some(pidx) = plan.present {
+            if let Some(sidx) = plan.selector {
+                // Combined-selector dispatch under `Optional`: the selector
+                // ALSO encodes absence — `-1` = `None`, `0..n-1` = the taken
+                // arm (dispatched by the shared construct core; an out-of-range
+                // selector still hits its `Err` default arm).
+                let sel_local = &leaf_locals[sidx];
+                let inner_expr = emit_core_construct(plan, leaf_locals, None, qualify);
+                syn::parse_quote!(if #sel_local < 0 {
+                    ::core::result::Result::Ok(::core::option::Option::None)
+                } else {
+                    (#inner_expr).map(::core::option::Option::Some)
+                })
+            } else if let Some(pidx) = plan.present {
                 // Multi-arg: an explicit `present: bool` flag decides presence;
                 // the construct reads its plain arg leaves directly (`bound =
                 // None`), the flag leaf is consumed only by this `if`.
@@ -937,7 +982,7 @@ fn variant_result_expr(
     // constructor — `build_arg` rejects nesting under a dispatched variant).
     let leaf = |a: &FoldArg| -> &syn::Ident {
         match a {
-            FoldArg::Leaf(i) => &leaf_locals[*i],
+            FoldArg::Leaf(i, _) => &leaf_locals[*i],
             FoldArg::Build(_) => {
                 unreachable!("recursive Build arg only in a non-dispatched single constructor")
             }
@@ -976,36 +1021,54 @@ fn variant_result_expr(
         Some(func) => {
             let path = qualify(func);
             if dispatched {
-                // Combined arm — Leaf-only inputs, `Option`-wrapped (selector
-                // presence); unwrap or yield `Err`.
-                let input_locals: Vec<&syn::Ident> = v.inputs.iter().map(&leaf).collect();
-                let bind: Vec<syn::Ident> = (0..input_locals.len())
-                    .map(|i| ident(&format!("__p{}", i)))
-                    .collect();
-                let call = ctor_call_result(&path, &bind, v.fallible);
+                // Combined arm — Leaf-only inputs. Selector-presence-wrapped
+                // inputs are unwrapped (missing ⇒ `Err`); **passthrough**
+                // inputs (constructor args that are themselves `Option<…>`)
+                // pass their decoded local directly — `None` is a legitimate
+                // value for the taken arm.
+                let mut wrapped_locals: Vec<&syn::Ident> = Vec::new();
+                let mut wrapped_binds: Vec<syn::Ident> = Vec::new();
+                let mut call_args: Vec<syn::Expr> = Vec::new();
+                for (i, a) in v.inputs.iter().enumerate() {
+                    let loc = leaf(a);
+                    if matches!(a, FoldArg::Leaf(_, true)) {
+                        call_args.push(syn::parse_quote!(#loc));
+                    } else {
+                        let b = ident(&format!("__p{}", i));
+                        wrapped_locals.push(loc);
+                        wrapped_binds.push(b.clone());
+                        call_args.push(syn::parse_quote!(#b));
+                    }
+                }
+                let call = ctor_call_result(&path, &call_args, v.fallible);
                 let missing = quote!(::core::result::Result::Err(::std::string::String::from(
                     "constructor variant input missing"
                 )));
-                if input_locals.len() == 1 {
-                    // `match a { Some(p0) => <call>, None => Err }`
-                    let loc = input_locals[0];
-                    let p0 = &bind[0];
-                    syn::parse_quote!(match #loc {
-                        ::core::option::Option::Some(#p0) => #call,
-                        ::core::option::Option::None => #missing,
-                    })
-                } else {
-                    // `match (a, b, …) { (Some(p0), Some(p1), …) => <call>, _ => Err }`
-                    let some_pats: Vec<TokenStream> = bind
-                        .iter()
-                        .map(|b| quote!(::core::option::Option::Some(#b)))
-                        .collect();
-                    syn::parse_quote!(match ( #(#input_locals),* ) {
-                        ( #(#some_pats),* ) => #call,
-                        _ => #missing,
-                    })
+                match wrapped_locals.len() {
+                    // All-passthrough arm: the selector alone decides; call directly.
+                    0 => call,
+                    1 => {
+                        // `match a { Some(p0) => <call>, None => Err }`
+                        let loc = wrapped_locals[0];
+                        let p0 = &wrapped_binds[0];
+                        syn::parse_quote!(match #loc {
+                            ::core::option::Option::Some(#p0) => #call,
+                            ::core::option::Option::None => #missing,
+                        })
+                    }
+                    _ => {
+                        // `match (a, b, …) { (Some(p0), Some(p1), …) => <call>, _ => Err }`
+                        let some_pats: Vec<TokenStream> = wrapped_binds
+                            .iter()
+                            .map(|b| quote!(::core::option::Option::Some(#b)))
+                            .collect();
+                        syn::parse_quote!(match ( #(#wrapped_locals),* ) {
+                            ( #(#some_pats),* ) => #call,
+                            _ => #missing,
+                        })
+                    }
                 }
-            } else if v.inputs.iter().all(|a| matches!(a, FoldArg::Leaf(_))) {
+            } else if v.inputs.iter().all(|a| matches!(a, FoldArg::Leaf(..))) {
                 // Non-dispatched, flat (no recursion): call directly — identical
                 // to the pre-recursion form.
                 let args: Vec<&syn::Ident> = v.inputs.iter().map(&leaf).collect();
@@ -1019,7 +1082,7 @@ fn variant_result_expr(
                 for (i, a) in v.inputs.iter().enumerate() {
                     let ai = ident(&format!("__a{}", i));
                     match a {
-                        FoldArg::Leaf(li) => {
+                        FoldArg::Leaf(li, _) => {
                             let loc = &leaf_locals[*li];
                             stmts.push(quote!(let #ai = #loc;));
                             args.push(quote!(#ai));

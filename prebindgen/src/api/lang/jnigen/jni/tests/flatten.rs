@@ -1046,3 +1046,77 @@ fn split_on_option_param_rejected() {
         );
     let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_opt");
 }
+
+/// Optional combined-selector expansion: an `Option<&T>` param with a
+/// build-from arm AND an identity arm crosses as a selector tuple whose
+/// selector also encodes absence (`-1` = `None`). The ctor's own
+/// `Option<String>` arg passes through un-double-wrapped, and the identity
+/// arm is a nullable typed handle.
+#[test]
+fn optional_selector_dispatch_end_to_end() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZEnc {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_enc_from_id(id: i32, schema: Option<String>) -> ZEnc {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_put(encoding: Option<&ZEnc>) -> bool {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZEnc).constructor(crate::fun!(z_enc_from_id)))
+                .fun(crate::fun!(z_put)),
+        )
+        .expand(
+            crate::expand_param!(ZEnc)
+                .variant(crate::fun!(z_enc_from_id))
+                .variant_self(),
+        );
+    let dir = unique_test_dir("jnigen_opt_selector");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // Rust side: the selector gates absence before the dispatch.
+    assert!(rc.contains("<0"), "{rust}");
+    assert!(rc.contains("Option::None"), "{rust}");
+    assert!(rc.contains("z_enc_from_id"), "{rust}");
+
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let raw = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all: String = raw.split_whitespace().collect();
+    // Selector Int + nullable build-arm leaves + nullable identity handle.
+    assert!(all.contains("encodingSel:Int"), "{raw}");
+    assert!(all.contains("encoding1:ZEnc?"), "{raw}");
+    // The already-Option schema arg stays a single-level String?.
+    assert!(all.contains("encoding01:String?"), "{raw}");
+    assert!(!all.contains("String??"), "{raw}");
+}

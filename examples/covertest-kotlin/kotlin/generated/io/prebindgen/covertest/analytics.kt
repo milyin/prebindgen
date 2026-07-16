@@ -407,6 +407,44 @@ public fun summaryPrefer(
     return __ret
 }
 
+/**
+ * Optionally-supplied summary total — exercises the **Optional
+ * combined-selector expansion**: `Summary`'s dual-arm type default (build
+ * from `(count, total)` OR pass a handle) applies to this `Option<&Summary>`
+ * parameter, so the selector also encodes absence (`-1` = `None`). Returns
+ * `-1.0` when absent.
+ *
+ * Parameter `s` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm, `-1` = absent (crosses as `sSel`, `s00`, `s01`, `s1`).
+ */
+public fun summaryTotalOpt(
+    sSel: Int,
+    s00: Long?,
+    s01: Double?,
+    s1: Summary?,
+    onError: JniErrorHandler<Double>,
+): Double {
+    if (s1 != null && s1.isClosed()) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        s1?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val s1_ptr = s1?.ptr ?: 0L
+            CovNative.summaryTotalOpt(
+                sSel,
+                s00 != null,
+                s00 ?: 0L,
+                s01 != null,
+                s01 ?: 0.0,
+                s1_ptr,
+                __cap,
+            )
+        }
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
 /** Create an empty archive. */
 public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     val __cap = JniErrorHandlerCapture.acquire()

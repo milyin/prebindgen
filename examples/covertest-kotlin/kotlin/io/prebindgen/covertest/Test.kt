@@ -11,6 +11,7 @@ import io.prebindgen.covertest.analytics.storageSummary
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryPrefer
+import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.model.Annotated
@@ -296,6 +297,16 @@ fun main() {
         check(
             summaryPrefer(Summary.of(1L, 1.0, boom), Summary.of(3L, 99.0, boom), boom) == 0L,
         )                                                                          // handle / handle
+
+        // Optional combined-selector expansion: `Option<&Summary>` under the
+        // dual-arm type default. The selector also encodes absence (-1 = None);
+        // the borrow-identity arm CLONES, so the handle survives the call.
+        check(summaryTotalOpt(-1, null, null, null, boom) == -1.0)     // absent
+        check(summaryTotalOpt(0, 2L, 40.0, null, boom) == 40.0)        // build arm
+        val hOpt = Summary.of(3L, 99.0, boom)
+        check(summaryTotalOpt(1, null, null, hOpt, boom) == 99.0)      // borrow-identity arm
+        check(hOpt.total(boom) == 99.0)                                // handle still live
+        hOpt.close()
 
         // Auto-generated overloads coexist with a HAND-WRITTEN same-named one
         // (issue #52's manual path): `ManualOverloads.kt` adds another

@@ -2161,10 +2161,17 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
             .map(|l| snake_to_camel(&l.name.to_string()))
             .collect();
         let how = if plan.selector.is_some() {
-            format!(
-                "pass EITHER {} — the selector chooses the arm",
-                arms.join(" OR ")
-            )
+            if plan.produces_option() {
+                format!(
+                    "pass EITHER {} — the selector chooses the arm, `-1` = absent",
+                    arms.join(" OR ")
+                )
+            } else {
+                format!(
+                    "pass EITHER {} — the selector chooses the arm",
+                    arms.join(" OR ")
+                )
+            }
         } else {
             arms.join(" / ").to_string()
         };
