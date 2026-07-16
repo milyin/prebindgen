@@ -659,6 +659,15 @@ internal object CovNative {
     ): Long
     external fun summaryScaled(s: Long, factor: Double, errorSink: Any): Double
     external fun summaryTotal(s: Long, errorSink: Any): Double
+    external fun summaryTotalOpt(
+        sSel: Int,
+        s00Present: Boolean,
+        s00Value: Long,
+        s01Present: Boolean,
+        s01Value: Double,
+        s1: Long,
+        errorSink: Any,
+    ): Double
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
     external fun constGetCoverMagic(errorSink: Any): Long
     external fun constGetCoverTag(errorSink: Any): String

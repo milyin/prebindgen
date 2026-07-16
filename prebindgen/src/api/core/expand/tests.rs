@@ -263,30 +263,87 @@ fn optional_byref_multi_arg_ctor() {
 }
 
 #[test]
-fn optional_combined_rejected() {
+fn optional_combined_selector_encodes_absence() {
+    // `encoding: Option<&ZEncoding>` with TWO variants — build-from
+    // `z_encoding_from_id(i32, Option<String>)` OR identity — composes the
+    // selector dispatch under `Optional`: the selector leaf also encodes
+    // absence (`-1` = `None`). The ctor's own `Option<String>` arg is a
+    // PASSTHROUGH leaf (kept as `Option<String>`, not double-wrapped —
+    // `None` is a legitimate value for the taken arm).
     let mut reg = reg_with(&[
-        "fn z_keyexpr_try_from(s: String) -> Result<ZKeyExpr, Error> { todo!() }",
-        "fn z_session_get(s: &ZSession, ke: Option<ZKeyExpr>) -> bool { todo!() }",
+        "fn z_encoding_from_id(id: i32, schema: Option<String>) -> ZEncoding { todo!() }",
+        "fn z_session_put(s: &ZSession, encoding: Option<&ZEncoding>) -> bool { todo!() }",
     ]);
     let mut exp = Expansions::default();
     exp.begin_subset(
-        ident("z_session_get"),
-        ident("ke"),
-        syn::parse_quote!(ZKeyExpr),
+        ident("z_session_put"),
+        ident("encoding"),
+        syn::parse_quote!(ZEncoding),
     );
-    exp.push_subset_variant(ident("z_keyexpr_try_from"));
+    exp.push_subset_variant(ident("z_encoding_from_id"));
     exp.push_subset_self();
 
-    match apply(
+    apply(
         &mut reg,
         &exp,
         &Default::default(),
         &Default::default(),
         &Default::default(),
-    ) {
-        Err(ExpandError::UnsupportedOptional { .. }) => {}
-        other => panic!("expected UnsupportedOptional, got {:?}", other.err()),
-    }
+    )
+    .expect("apply optional combined");
+    let plan = reg
+        .expansion_plans
+        .get(&(ident("z_session_put"), ident("encoding")))
+        .unwrap();
+    assert!(matches!(plan.shape, FoldShape::Optional((), _)));
+    assert!(plan.produces_option());
+    assert!(plan.by_ref, "Option<&T> ⇒ by_ref");
+    assert_eq!(plan.selector, Some(0), "selector at leaf 0");
+    assert_eq!(plan.present, None, "absence rides the selector, no flag");
+    // leaves: sel:i32, id:Option<i32> (wrapped), schema:Option<String>
+    // (passthrough), identity:Option<&ZEncoding>.
+    assert_eq!(plan.leaves.len(), 4);
+    assert_eq!(plan.leaves[0].name.to_string(), "encoding_sel");
+    assert_eq!(plan.leaves[0].ty.to_token_stream().to_string(), "i32");
+    assert_eq!(
+        plan.leaves[1].ty.to_token_stream().to_string(),
+        "Option < i32 >"
+    );
+    assert_eq!(
+        plan.leaves[2].ty.to_token_stream().to_string(),
+        "Option < String >",
+        "already-Option ctor arg is NOT double-wrapped"
+    );
+    assert_eq!(
+        plan.leaves[3].ty.to_token_stream().to_string(),
+        "Option < & ZEncoding >"
+    );
+    assert!(
+        matches!(plan.variants[0].inputs[1], FoldArg::Leaf(2, true)),
+        "schema input marked passthrough"
+    );
+    assert!(plan.variants[1].clone, "borrowed identity arm clones");
+
+    let locals = vec![ident("sel"), ident("id"), ident("schema"), ident("enc")];
+    let s = emit_fold(plan, &locals, &src_qualify)
+        .to_token_stream()
+        .to_string();
+    assert!(s.contains("if sel < 0"), "selector absence gate: {}", s);
+    assert!(
+        s.contains("z_encoding_from_id (__p0 , schema)"),
+        "wrapped id unwrapped, passthrough schema passed directly: {}",
+        s
+    );
+    assert!(
+        s.contains("Clone :: clone"),
+        "identity arm clones the borrow: {}",
+        s
+    );
+    assert!(
+        s.contains("Some") && s.contains("None"),
+        "maps Option: {}",
+        s
+    );
 }
 
 #[test]
@@ -309,7 +366,7 @@ fn iterable_emit_shape() {
             ctor: Some(ident("z_keyexpr_try_from")),
             fallible: true,
             clone: false,
-            inputs: vec![FoldArg::Leaf(0)],
+            inputs: vec![FoldArg::Leaf(0, false)],
         }],
     };
     let locals = vec![ident("kes")];

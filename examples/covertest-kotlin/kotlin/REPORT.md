@@ -29,6 +29,8 @@ Base package: `io.prebindgen.covertest`
 - `summary_prefer` — `fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
   - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
   - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]
+- `summary_total_opt` — `fun summaryTotalOpt(sSel: Int, s00: Long?, s01: Double?, s1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`
+  - shaped by: param `s` expanded from `Summary` — variants [summary_new, self]
 - `summary_total_raw` — `fun summaryTotalRaw(s: Summary, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`
 
 ## package `io.prebindgen.covertest.model`
