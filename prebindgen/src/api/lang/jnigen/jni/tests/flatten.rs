@@ -757,6 +757,237 @@ fn constructor_with_wrong_return_rejected() {
     );
 }
 
+/// Binding-local output field (`field!("name").with(ty, path)`): the accessor
+/// lives in the BINDING crate — the generated Rust calls it by its declared
+/// path — and a self-typed `Option<&T>` return degrades to a nullable typed
+/// handle leaf instead of a splice cycle: the conditional-handle idiom
+/// ("deliver the handle only when the binding says it's worth having").
+#[test]
+fn binding_local_field_conditional_handle() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_enc_get_id(e: &ZEnc) -> i32 { unimplemented!() }",
+        "pub fn z_enc_make() -> ZEnc { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZEnc {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("enc")
+                .class(crate::ptr_class!(ZEnc).method(crate::fun!(z_enc_get_id)))
+                .fun(crate::fun!(z_enc_make)),
+        )
+        .expand(
+            crate::expand_return!(ZEnc)
+                .field(crate::fun!(z_enc_get_id))
+                .field(crate::field!("handle").with(
+                    crate::ty!(Option<&ZEnc>),
+                    crate::path!(crate::enc_if_custom),
+                )),
+        );
+    let dir = unique_test_dir("jnigen_local_field");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // The generated Rust calls the binding-local accessor by its DECLARED
+    // path (the generated file compiles inside the binding crate).
+    assert!(rc.contains("crate::enc_if_custom("), "{rust}");
+    // The registry accessor stays source-qualified.
+    assert!(rc.contains("myflat::z_enc_get_id("), "{rust}");
+
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let raw = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all: String = raw.split_whitespace().collect();
+    // Builder callback: the id leaf + the NULLABLE conditional handle leaf
+    // (self-splice degraded to a plain converter leaf).
+    assert!(all.contains("zEncGetId:Int,handle:ZEnc?"), "{raw}");
+}
+
+/// A binding-local field's callable must be crate-qualified: the generated
+/// file calls it by path, so a bare single-segment name is a hard error.
+#[test]
+fn binding_local_field_bare_path_rejected() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZEnc {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    items.push((
+        syn::Item::Fn(syn::parse_str("pub fn z_enc_make() -> ZEnc { unimplemented!() }").unwrap()),
+        loc.clone(),
+    ));
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("enc")
+                .class(crate::ptr_class!(ZEnc))
+                .fun(crate::fun!(z_enc_make)),
+        )
+        .expand(crate::expand_return!(ZEnc).field(
+            crate::field!("handle").with(crate::ty!(Option<&ZEnc>), crate::path!(enc_if_custom)),
+        ));
+    let err = registry
+        .resolve(jni)
+        .expect_err("bare path must be rejected");
+    let msg = format!("{err}");
+    assert!(msg.contains("crate::"), "{msg}");
+}
+
+/// A binding-local fn name colliding with a `#[prebindgen]` item is a hard
+/// error — the emitted call is `<prefix>::<name>`, so the name must denote
+/// exactly the binding-local fn.
+#[test]
+fn binding_local_field_name_collision_rejected() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_enc_get_id(e: &ZEnc) -> i32 { unimplemented!() }",
+        "pub fn z_enc_make() -> ZEnc { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZEnc {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("enc")
+                .class(crate::ptr_class!(ZEnc))
+                .fun(crate::fun!(z_enc_make)),
+        )
+        .expand(
+            // `z_enc_get_id` names a real #[prebindgen] fn — a binding-local
+            // field may not shadow it.
+            crate::expand_return!(ZEnc).field(
+                crate::field!("id").with(crate::ty!(i32), crate::path!(crate::z_enc_get_id)),
+            ),
+        );
+    let err = registry
+        .resolve(jni)
+        .expect_err("collision must be rejected");
+    let msg = format!("{err}");
+    assert!(msg.contains("collides"), "{msg}");
+}
+
+/// A binding-local field spliced through a PARENT decomposition: the child's
+/// conditional-handle leaf arrives prefixed (`enc__handle`) and nullable, and
+/// the generated Rust composes the source accessor with the binding-local
+/// one (`crate::enc_if_custom(myflat::z_msg_enc(&v))`).
+#[test]
+fn binding_local_field_splices_through_parent() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_enc_get_id(e: &ZEnc) -> i32 { unimplemented!() }",
+        "pub fn z_msg_enc(m: &ZMsg) -> &ZEnc { unimplemented!() }",
+        "pub fn z_msg_len(m: &ZMsg) -> i64 { unimplemented!() }",
+        "pub fn z_msg_make() -> ZMsg { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZEnc {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZMsg {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("msg")
+                .class(crate::ptr_class!(ZEnc).method(crate::fun!(z_enc_get_id)))
+                .class(crate::ptr_class!(ZMsg))
+                .fun(crate::fun!(z_msg_make)),
+        )
+        .expand(
+            crate::expand_return!(ZEnc)
+                .field(crate::fun!(z_enc_get_id))
+                .field(crate::field!("handle").with(
+                    crate::ty!(Option<&ZEnc>),
+                    crate::path!(crate::enc_if_custom),
+                )),
+        )
+        .expand(
+            crate::expand_return!(ZMsg)
+                .field(crate::fun!(z_msg_len).name("len"))
+                .field(crate::fun!(z_msg_enc).name("enc")),
+        );
+    let dir = unique_test_dir("jnigen_local_field_splice");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("crate::enc_if_custom(myflat::z_msg_enc("),
+        "{rust}"
+    );
+
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let raw = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all: String = raw.split_whitespace().collect();
+    // Spliced child leaves: prefixed id + prefixed NULLABLE handle.
+    assert!(all.contains("enc__zEncGetId:Int"), "{raw}");
+    assert!(all.contains("enc__handle:ZEnc?"), "{raw}");
+}
+
 /// `.gc_managed()`: the typed handle extends `GcNativeHandle` (pointer in a
 /// separate atomic cell), registers a Cleaner action capturing only the cell,
 /// and every release path settles the once-only untagged→tagged CAS ticket —

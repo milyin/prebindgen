@@ -678,6 +678,9 @@ impl JniGen {
                         dec.add_deconstructor_record(func.clone(), name);
                     }
                     LocalField::SelfField => dec.add_deconstructor_record_id(),
+                    LocalField::Local { name, ty, path } => {
+                        dec.add_deconstructor_record_local(path.clone(), ty.clone(), name.clone());
+                    }
                 }
             }
         }
@@ -707,6 +710,9 @@ impl JniGen {
                         dec.push_inline_field(afunc.clone(), name);
                     }
                     LocalField::SelfField => dec.push_inline_field_self(),
+                    LocalField::Local { name, ty, path } => {
+                        dec.push_inline_field_local(path.clone(), ty.clone(), name.clone());
+                    }
                 }
             }
         }
@@ -754,7 +760,7 @@ impl JniGen {
             .flatten()
             .filter_map(|f| match f {
                 LocalField::Named(func, _) => Some(func.clone()),
-                LocalField::SelfField => None,
+                LocalField::SelfField | LocalField::Local { .. } => None,
             });
         ctors.chain(accessors)
     }
@@ -774,7 +780,7 @@ impl JniGen {
             .flatten()
             .filter_map(|f| match f {
                 LocalField::Named(func, _) => Some(func.clone()),
-                LocalField::SelfField => None,
+                LocalField::SelfField | LocalField::Local { .. } => None,
             })
             .collect()
     }
