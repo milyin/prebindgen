@@ -46,9 +46,9 @@
 //! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
-//! | binding-local field `field!` `.with(ty!, path!)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
+//! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
-//! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean`; `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
+//! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -90,7 +90,7 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    field, from, fun, into, lang::JniGen, matching, package, path, ptr_class, sig, try_from, ty,
+    from, fun, into, lang::JniGen, matching, package, path, ptr_class, sig, try_from, ty,
     value_class,
 };
 
@@ -245,19 +245,18 @@ fn main() {
                         // CONSTRUCTOR (`fun!(crate::…).sig(sig!(…))`): fns
                         // defined in THIS crate (src/lib.rs), no source-crate
                         // item — same member machinery as registry fns.
-                        .method(
-                            fun!(crate::summary_mean)
-                                .sig(sig!((s: &Summary) -> f64))
-                                .name("mean"),
-                        )
+                        // NO .name(): the strip-class-prefix method hook
+                        // derives `mean` from the path's LAST segment
+                        // (`summary_mean` on `Summary` → strip → `mean`) —
+                        // automatic mangling covers binding-local fns too.
+                        .method(fun!(crate::summary_mean).sig(sig!((s: &Summary) -> f64)))
                         // FALLIBLE binding-local constructor: the sig's
                         // `Result<Summary, String>` return is the error
                         // channel — a negative count routes the Err message
                         // to onError, exactly like a registry fn's Result.
                         .constructor(
                             fun!(crate::summary_from_mean)
-                                .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>))
-                                .name("fromMean"),
+                                .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
                         ),
                 )
                 // `Archive` holds the latest `Summary` and returns it BORROWED
@@ -402,8 +401,9 @@ fn main() {
                             .field(fun!(summary_count).name("count"))
                             .field(fun!(summary_total).name("total"))
                             .field(
-                                field!("handle")
-                                    .with(ty!(Option<&Summary>), path!(crate::summary_if_nonempty)),
+                                fun!(crate::summary_if_nonempty)
+                                    .sig(sig!((s: &Summary) -> Option<&Summary>))
+                                    .name("handle"),
                             ),
                     ),
                 )

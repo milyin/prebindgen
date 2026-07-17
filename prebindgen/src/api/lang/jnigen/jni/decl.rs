@@ -41,14 +41,15 @@ pub(crate) enum LocalField {
     Named(syn::Ident, Option<String>),
     /// Include the handle itself as a field.
     SelfField,
-    /// Include a **binding-local** accessor's value: a callable in the
-    /// binding crate (`path`) with a stated return type (`ty`) — no
-    /// `#[prebindgen]` registry entry behind it. Built via
-    /// [`field!`](crate::field) + [`FieldDecl::with`].
+    /// Include a **custom, locally-defined** accessor's value: any fn the
+    /// binding crate defines, declared with the one binding-local vocabulary
+    /// (`fun!(crate::f).sig(sig!((v: &Self) -> Ret))`) — no `#[prebindgen]`
+    /// item behind it, so the full signature (receiver explicit) is stated.
+    /// `name_override` follows the uniform field-name precedence.
     Local {
-        name: String,
-        ty: syn::Type,
         path: syn::Path,
+        sig: syn::Signature,
+        name_override: Option<String>,
     },
 }
 
@@ -197,20 +198,6 @@ macro_rules! expr {
     };
 }
 
-/// Build a [`FieldDecl`] for a **custom, locally-defined** `expand_return!`
-/// field: a field computed by any fn the binding crate defines, rather than
-/// by a `#[prebindgen]` accessor. `field!("handle")` names the leaf
-/// LITERALLY (there is no item to inherit a name from), then
-/// [`FieldDecl::with`] states the accessor's return type and callable.
-///
-/// The function-position peer is a path-built [`fun!`](crate::fun) +
-/// [`.sig(…)`](crate::lang::FunctionDecl::sig).
-#[macro_export]
-macro_rules! field {
-    ($name:literal) => {
-        $crate::lang::FieldDecl::named($name)
-    };
-}
 
 /// Build a [`ConvertDecl`] directly from a bare Rust type:
 /// `convert!(Millis)` is `ConvertDecl::new(<Millis as syn::Type>)`.
@@ -650,106 +637,6 @@ impl ExpandParamDecl {
 ///     .field(prebindgen::fun!(sample_get_payload))
 ///     .field(prebindgen::fun!(sample_get_kind));
 /// ```
-/// One field source for [`ExpandReturnDecl::field`]: a `#[prebindgen]`
-/// accessor (`fun!`, converted implicitly) or a **custom, locally-defined**
-/// accessor ([`field!`](crate::field) + [`with`](Self::with)) — any fn the
-/// binding crate defines, computing whatever field the binding surface needs
-/// without touching the source crate.
-///
-/// A binding-local field is the output-field peer of [`ConvertSourceDecl::with`]
-/// and [`ConstDecl::with`] (and of the function-position path-built
-/// [`fun!`](crate::fun) + [`sig`](FunctionDecl::sig)): the callable lives in
-/// the binding crate (the generated file compiles inside it, so
-/// `path!(crate::…)` resolves), and — a path carrying no signature — its
-/// exact Rust return type is stated with `ty!`. Shape: `fn(&T) -> Ret` for a
-/// field of `expand_return!(T)`.
-///
-/// One use among many — a *conditional* handle, delivered only when a
-/// binding-side predicate holds (`Option<&T>` return ⇒ nullable leaf):
-///
-/// ```
-/// // Deliver the Encoding handle only when a schema makes it worth having:
-/// let _ = prebindgen::expand_return!(Encoding)
-///     .field(prebindgen::fun!(encoding_get_id))
-///     .field(prebindgen::field!("handle").with(
-///         prebindgen::ty!(Option<&Encoding>),
-///         prebindgen::path!(crate::encoding_if_schema),
-///     ));
-/// ```
-pub struct FieldDecl {
-    pub(crate) kind: FieldSourceKind,
-}
-
-pub(crate) enum FieldSourceKind {
-    /// `fun!(f)` — a `#[prebindgen]` accessor; signature read from the
-    /// registry, name derivable from class members.
-    Fun(FunctionDecl),
-    /// `field!("name")` — binding-local; `ty`/`path` filled by
-    /// [`FieldDecl::with`], both required by acceptance time.
-    Local {
-        name: String,
-        ty: Option<syn::Type>,
-        path: Option<syn::Path>,
-    },
-}
-
-impl FieldDecl {
-    pub fn named(name: impl Into<String>) -> Self {
-        let name = name.into();
-        assert!(
-            !name.trim().is_empty(),
-            "field!(...): the field name is empty"
-        );
-        Self {
-            kind: FieldSourceKind::Local {
-                name,
-                ty: None,
-                path: None,
-            },
-        }
-    }
-
-    /// State the binding-local accessor: its exact Rust return type and the
-    /// callable path. The callable takes the expanded type by reference
-    /// (`fn(&T) -> Ret`); a `Ret` of `Option<&T>`/`&F`/owned `F` follows the
-    /// same output rules as a `#[prebindgen]` accessor's return.
-    pub fn with(mut self, ty: syn::Type, path: syn::Path) -> Self {
-        assert!(
-            path.segments.len() >= 2,
-            "field!(...).with(..., path!({p})): a binding-local accessor is called QUALIFIED \
-             from the generated file — give at least a `crate::`-rooted path",
-            p = quote::quote!(#path)
-        );
-        match &mut self.kind {
-            FieldSourceKind::Fun(f) => panic!(
-                "fun!({}).with(...): a `#[prebindgen]` accessor's signature is read from \
-                 the registry — .with() applies to field!(\"name\") sources",
-                f.rust_ident
-            ),
-            FieldSourceKind::Local {
-                ty: t,
-                path: p,
-                name,
-            } => {
-                assert!(
-                    t.is_none() && p.is_none(),
-                    "field!(\"{name}\").with(...): the accessor is already stated"
-                );
-                *t = Some(ty);
-                *p = Some(path);
-            }
-        }
-        self
-    }
-}
-
-impl From<FunctionDecl> for FieldDecl {
-    fn from(f: FunctionDecl) -> Self {
-        Self {
-            kind: FieldSourceKind::Fun(f),
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct ExpandReturnDecl {
@@ -765,56 +652,52 @@ impl ExpandReturnDecl {
         }
     }
 
-    /// Add one field, from either source:
+    /// Add one field — a reader whose value crosses as this leaf:
     ///
-    /// * `fun!(f)` — the named `#[prebindgen]` reader's (`f(&Self) -> Field`)
-    ///   value. The Kotlin field name is, in order of precedence: an explicit
-    ///   `.name(...)` on the `fun!`; the Kotlin name of the class member if
-    ///   the same function is declared via [`PtrClassDecl::method`] on this
-    ///   type (so a getter that is both a method and a field is named once);
-    ///   else the camel-cased Rust name.
-    /// * [`field!("name")`](crate::field)[`.with(ty, path)`](FieldDecl::with)
-    ///   — a **binding-local** accessor: a callable in the binding crate with
-    ///   a stated return type, for boundary policy that has no place in the
-    ///   `#[prebindgen]` source crate (e.g. "deliver the handle only when
-    ///   re-sending needs it").
+    /// * `fun!(f)` — a `#[prebindgen]` reader (`f(&Self) -> Field`), its
+    ///   signature read from the registry.
+    /// * `fun!(crate::f).sig(sig!((v: &Self) -> Field))` — a **custom,
+    ///   locally-defined** reader: any fn the binding crate defines, its
+    ///   signature stated (the receiver explicit — it must take `&Self`).
+    ///   One use among many: conditional delivery, an `Option<&Self>` return
+    ///   becoming a nullable handle leaf that is null when the binding-side
+    ///   predicate declines.
     ///
-    /// Only the accessor's name is used from a `fun!`: expand overrides on it
+    /// The Kotlin field name is uniform for both: an explicit `.name(...)`
+    /// on the `fun!`; else the Kotlin name of the class member if the same
+    /// fn is declared via [`PtrClassDecl::method`] on this type (so a getter
+    /// that is both a method and a field is named once); else the
+    /// camel-cased fn ident (a path's LAST segment).
+    ///
+    /// Only the accessor's name is used here: expand overrides on the `fun!`
     /// are a hard error rather than a silent discard (the field's own
     /// decomposition comes from ITS type's boundary decl, not from the
     /// accessor).
-    pub fn field(mut self, source: impl Into<FieldDecl>) -> Self {
-        let decl = source.into();
-        self.fields.push(match decl.kind {
-            FieldSourceKind::Fun(accessor) => {
-                assert!(
-                    accessor.param_expands.is_empty() && accessor.return_expand.is_none(),
-                    "expand_return!({}).field(fun!({})): expand overrides don't apply to a \
-                     field accessor — only .name() is honored",
-                    self.key.as_str(),
-                    accessor.rust_ident
-                );
-                assert!(
-                    accessor.local.is_none(),
-                    "expand_return!({}).field(fun!(…::{f})): a fun! field only NAMES an \
-                     accessor — use field!(\"name\").with(ty, path) for a binding-local \
-                     field, or declare the fn via .fun/.method/.constructor first and \
-                     reference it here by ident: fun!({f})",
-                    self.key.as_str(),
-                    f = accessor.rust_ident
-                );
-                LocalField::Named(accessor.rust_ident, accessor.kotlin_name_override)
-            }
-            FieldSourceKind::Local { name, ty, path } => {
-                let (Some(ty), Some(path)) = (ty, path) else {
+    pub fn field(mut self, accessor: FunctionDecl) -> Self {
+        assert!(
+            accessor.param_expands.is_empty() && accessor.return_expand.is_none(),
+            "expand_return!({}).field(fun!({})): expand overrides don't apply to a \
+             field accessor — only .name() is honored",
+            self.key.as_str(),
+            accessor.rust_ident
+        );
+        self.fields.push(match accessor.local {
+            None => LocalField::Named(accessor.rust_ident, accessor.kotlin_name_override),
+            Some((path, sig)) => {
+                let Some(sig) = sig else {
                     panic!(
-                        "expand_return!({}).field(field!(\"{name}\")): a binding-local field \
-                         states its accessor with .with(ty!(RetTy), path!(crate::f)) — a bare \
-                         name carries no signature",
-                        self.key.as_str()
+                        "expand_return!({}).field(fun!({p})): a binding-local field states \
+                         its accessor's signature — chain .sig(sig!((v: &{k}) -> Ret))",
+                        self.key.as_str(),
+                        p = quote::quote!(#path),
+                        k = self.key.as_str()
                     );
                 };
-                LocalField::Local { name, ty, path }
+                LocalField::Local {
+                    path,
+                    sig,
+                    name_override: accessor.kotlin_name_override,
+                }
             }
         });
         self

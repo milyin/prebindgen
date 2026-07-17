@@ -694,9 +694,14 @@ impl JniGen {
                         dec.add_deconstructor_record(func.clone(), name);
                     }
                     LocalField::SelfField => dec.add_deconstructor_record_id(),
-                    LocalField::Local { name, ty, path } => {
-                        self.check_local_field_ty(&decl.key, name, ty);
-                        dec.add_deconstructor_record_local(path.clone(), name.clone());
+                    LocalField::Local {
+                        path,
+                        sig,
+                        name_override,
+                    } => {
+                        let name = self.local_field_name(&decl.key, path, name_override);
+                        self.check_local_field_ty(&decl.key, &name, sig);
+                        dec.add_deconstructor_record_local(path.clone(), name);
                     }
                 }
             }
@@ -727,14 +732,36 @@ impl JniGen {
                         dec.push_inline_field(afunc.clone(), name);
                     }
                     LocalField::SelfField => dec.push_inline_field_self(),
-                    LocalField::Local { name, ty, path } => {
-                        self.check_local_field_ty(&decl.key, name, ty);
-                        dec.push_inline_field_local(path.clone(), name.clone());
+                    LocalField::Local {
+                        path,
+                        sig,
+                        name_override,
+                    } => {
+                        let name = self.local_field_name(&decl.key, path, name_override);
+                        self.check_local_field_ty(&decl.key, &name, sig);
+                        dec.push_inline_field_local(path.clone(), name);
                     }
                 }
             }
         }
         dec
+    }
+
+    /// The resolved Kotlin name of a binding-local field — the UNIFORM
+    /// field-name precedence over the path's LAST segment: explicit
+    /// `.name()`; else the class member's Kotlin name if the same fn is a
+    /// `.method()` of the type; else the camel-cased fn ident.
+    fn local_field_name(
+        &self,
+        key: &TypeKey,
+        path: &syn::Path,
+        name_override: &Option<String>,
+    ) -> String {
+        let ident = &path.segments.last().expect("non-empty path").ident;
+        name_override
+            .clone()
+            .or_else(|| self.class_method_kotlin_name(key, ident))
+            .unwrap_or_else(|| snake_to_camel(&ident.to_string()))
     }
 
     /// Synthesize the registry items for every binding-local fn declared on
@@ -787,16 +814,17 @@ impl JniGen {
             .fn_return_expands
             .iter()
             .map(|(_, d)| (d.key.clone(), &d.fields));
-        for (key, fields) in type_level.chain(per_fn) {
+        for (_key, fields) in type_level.chain(per_fn) {
             for f in fields {
-                let LocalField::Local { ty, path, .. } = f else {
+                let LocalField::Local { path, sig, .. } = f else {
                     continue;
                 };
                 let origin = local_path_prefix(path);
                 let ident = path.segments.last().expect("non-empty path").ident.clone();
-                let target = key.to_type();
+                let mut sig = sig.clone();
+                sig.ident = ident;
                 let item_fn: syn::ItemFn = syn::parse_quote! {
-                    fn #ident(v: &#target) -> #ty {
+                    #sig {
                         unimplemented!()
                     }
                 };
@@ -812,8 +840,11 @@ impl JniGen {
     /// must be a declared `ptr_class`. Owned returns — `Option<String>`,
     /// scalars, handles — carry their nullability in their own converters and
     /// pass through unchecked.
-    fn check_local_field_ty(&self, decl_key: &TypeKey, name: &str, ty: &syn::Type) {
-        let syn::Type::Path(p) = ty else { return };
+    fn check_local_field_ty(&self, decl_key: &TypeKey, name: &str, sig: &syn::Signature) {
+        let syn::ReturnType::Type(_, ty) = &sig.output else {
+            return;
+        };
+        let syn::Type::Path(p) = &**ty else { return };
         if p.path.segments.last().is_none_or(|s| s.ident != "Option") {
             return;
         }
@@ -830,7 +861,7 @@ impl JniGen {
             self.types
                 .get(&inner_key)
                 .is_some_and(|c| c.opaque.is_some()),
-            "expand_return!({}).field(field!(\"{name}\")): an `Option<&T>` binding-local field \
+            "expand_return!({}).field(… .name(\"{name}\")): an `Option<&T>` binding-local field \
              delivers a nullable typed HANDLE, so `T` must be a declared ptr_class — `{}` is \
              not; return an owned `Option<{}>` instead",
             decl_key.as_str(),

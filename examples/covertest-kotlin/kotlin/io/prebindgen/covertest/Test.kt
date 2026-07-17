@@ -265,15 +265,16 @@ fun main() {
         s.close()
     }
 
-    // ── binding-local field: field!("handle").with(ty!, path!) ──────────────
+    // ── binding-local field: fun!(crate::…).sig(sig!).name("handle") ────────
     // A CUSTOM field computed by a fn defined in THIS binding crate
     // (crate::summary_if_nonempty, src/lib.rs) — no source-crate item behind
-    // it. This exercise uses it for CONDITIONAL delivery (one use among
+    // it, declared with the same fun!+sig! vocabulary as every binding-local
+    // fn. This exercise uses it for CONDITIONAL delivery (one use among
     // many): the handle leaf is gated by the binding-side predicate — the
     // zenoh "Encoding handle only when schema-carrying" idiom. Condition
     // fails ⇒ the leaf is null (no native clone, no wrapper); holds ⇒ a live
     // owned handle arrives with the values.
-    section("binding-local field (field! + .with)") {
+    section("binding-local field (fun! + sig!)") {
         val s = storageNew(boom)
 
         // Empty storage: count == 0 ⇒ the predicate fails ⇒ null handle.
@@ -303,6 +304,9 @@ fun main() {
     // param carries the Summary selector form), members and naming all apply
     // exactly as for #[prebindgen] fns.
     section("binding-local functions (fun!(crate::…) + sig!)") {
+        // `mean` and `fromMean` carry NO .name(): the strip-class-prefix
+        // method hook derives them from each path's LAST segment — automatic
+        // mangling covers binding-local fns exactly like registry fns.
         // FALLIBLE companion constructor: the sig's `Result<Summary, String>`
         // return is the error channel — happy path first…
         val m = Summary.fromMean(4L, 2.5, boom)

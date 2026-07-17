@@ -757,11 +757,12 @@ fn constructor_with_wrong_return_rejected() {
     );
 }
 
-/// Binding-local output field (`field!("name").with(ty, path)`): the accessor
-/// lives in the BINDING crate — the generated Rust calls it by its declared
-/// path — and a self-typed `Option<&T>` return degrades to a nullable typed
-/// handle leaf instead of a splice cycle: the conditional-handle idiom
-/// ("deliver the handle only when the binding says it's worth having").
+/// Binding-local output field (`fun!(crate::…).sig(sig!(…)).name(…)`): the
+/// accessor lives in the BINDING crate — the generated Rust calls it by its
+/// declared path — and a self-typed `Option<&T>` return degrades to a
+/// nullable typed handle leaf instead of a splice cycle: the
+/// conditional-handle idiom ("deliver the handle only when the binding says
+/// it's worth having").
 #[test]
 fn binding_local_field_conditional_handle() {
     let loc = myflat_loc();
@@ -794,10 +795,11 @@ fn binding_local_field_conditional_handle() {
         .expand(
             crate::expand_return!(ZEnc)
                 .field(crate::fun!(z_enc_get_id))
-                .field(crate::field!("handle").with(
-                    crate::ty!(Option<&ZEnc>),
-                    crate::path!(crate::enc_if_custom),
-                )),
+                .field(
+                    crate::fun!(crate::enc_if_custom)
+                        .sig(crate::sig!((e: &ZEnc) -> Option<&ZEnc>))
+                        .name("handle"),
+                ),
         );
     let dir = unique_test_dir("jnigen_local_field");
     let _ = std::fs::remove_dir_all(&dir);
@@ -833,37 +835,13 @@ fn binding_local_field_conditional_handle() {
     assert!(all.contains("zEncGetId:Int,handle:ZEnc?"), "{raw}");
 }
 
-/// A binding-local field's callable must be crate-qualified: the generated
-/// file calls it by path, so a bare single-segment name is a hard error —
-/// at DECLARATION time (`FieldDecl::with`), like every other decl typo.
+/// A binding-local callable must be crate-qualified: `fun!`'s ident arm
+/// catches single segments (declaring a registry fn), and `new_local`
+/// rejects a degenerate single-segment path outright.
 #[test]
 #[should_panic(expected = "crate::")]
 fn binding_local_field_bare_path_rejected() {
-    let loc = myflat_loc();
-    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
-        syn::Item::Struct(syn::parse_quote!(
-            pub struct ZEnc {
-                _p: u8,
-            }
-        )),
-        loc.clone(),
-    )];
-    items.push((
-        syn::Item::Fn(syn::parse_str("pub fn z_enc_make() -> ZEnc { unimplemented!() }").unwrap()),
-        loc.clone(),
-    ));
-    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
-    let jni = JniGen::new()
-        .set_package_prefix("io.test.jni")
-        .package(
-            crate::package!("enc")
-                .class(crate::ptr_class!(ZEnc))
-                .fun(crate::fun!(z_enc_make)),
-        )
-        .expand(crate::expand_return!(ZEnc).field(
-            crate::field!("handle").with(crate::ty!(Option<&ZEnc>), crate::path!(enc_if_custom)),
-        ));
-    let _ = registry.resolve(jni);
+    let _ = crate::lang::FunctionDecl::new_local(syn::parse_quote!(enc_if_custom));
 }
 
 /// A binding-local fn name colliding with a `#[prebindgen]` item is a hard
@@ -902,7 +880,9 @@ fn binding_local_field_name_collision_rejected() {
             // `z_enc_get_id` names a real #[prebindgen] fn — a binding-local
             // field may not shadow it.
             crate::expand_return!(ZEnc).field(
-                crate::field!("id").with(crate::ty!(i32), crate::path!(crate::z_enc_get_id)),
+                crate::fun!(crate::z_enc_get_id)
+                    .sig(crate::sig!((e: &ZEnc) -> i32))
+                    .name("id"),
             ),
         );
     let err = registry
@@ -961,10 +941,11 @@ fn binding_local_field_splices_through_parent() {
         .expand(
             crate::expand_return!(ZEnc)
                 .field(crate::fun!(z_enc_get_id))
-                .field(crate::field!("handle").with(
-                    crate::ty!(Option<&ZEnc>),
-                    crate::path!(crate::enc_if_custom),
-                )),
+                .field(
+                    crate::fun!(crate::enc_if_custom)
+                        .sig(crate::sig!((e: &ZEnc) -> Option<&ZEnc>))
+                        .name("handle"),
+                ),
         )
         .expand(
             crate::expand_return!(ZMsg)
@@ -1091,6 +1072,88 @@ fn binding_local_functions_all_positions() {
     // The variant arm built from the local ctor: selector slot named after
     // its single param.
     assert!(all.contains("primarySel:Int"), "{raw}");
+}
+
+/// Naming rule for binding-local fns: `.name()` is NEVER obligatory — the
+/// default derivation feeds the manglers the camel-cased LAST PATH SEGMENT
+/// (`crate::sub::z_thing_ratio` → hook sees `zThingRatio`), with the same
+/// package/class context as a registry fn, and the hook's output names the
+/// Kotlin member. A local field without `.name()` defaults the same way.
+#[test]
+fn binding_local_fn_names_flow_through_manglers() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZThing {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in [
+        "pub fn z_thing_make() -> ZThing { unimplemented!() }",
+        // A PLAIN fn returning ZThing — the field decomposition applies here
+        // (constructors are excluded from output decomposition by design).
+        "pub fn z_thing_query() -> ZThing { unimplemented!() }",
+    ] {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).unwrap()),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        // Custom hooks: prefix every derived name — proof the hook RAN and
+        // received the camel-cased last segment with its context.
+        .set_fun_name_mangle(|pkg, name| {
+            assert!(pkg.ends_with("t"), "fun hook package: {pkg}");
+            format!("pkg_{name}")
+        })
+        .set_method_name_mangle(|_pkg, class, name| {
+            if class == "ZThing" {
+                format!("cls_{name}")
+            } else {
+                name.to_string()
+            }
+        })
+        .package(
+            crate::package!("t")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .constructor(crate::fun!(z_thing_make))
+                        // local METHOD, no .name(): hook sees `zThingRatio`.
+                        .method(
+                            crate::fun!(crate::sub::z_thing_ratio)
+                                .sig(crate::sig!((t: &ZThing, scale: f64) -> f64)),
+                        ),
+                )
+                // local FREE FN, no .name(): fun hook sees `zThingTag`.
+                .fun(
+                    crate::fun!(crate::sub::z_thing_tag)
+                        .sig(crate::sig!((t: &ZThing) -> i64)),
+                )
+                .fun(crate::fun!(z_thing_query)),
+        )
+        // local FIELD, no .name(): defaults to camel(last segment). A second
+        // field (the handle) keeps the decomposition on the builder path —
+        // a single leaf would deliver by direct return, hiding the name.
+        .expand(
+            crate::expand_return!(ZThing)
+                .field(
+                    crate::fun!(crate::sub::z_thing_len)
+                        .sig(crate::sig!((t: &ZThing) -> i64)),
+                )
+                .field_self(),
+        );
+    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_local_mangle");
+    let all: String = raw.split_whitespace().collect();
+    // Method named by the class hook over the camel-cased last segment.
+    assert!(all.contains("funcls_zThingRatio(scale:Double,"), "{raw}");
+    // Free fn named by the package hook.
+    assert!(all.contains("funpkg_zThingTag("), "{raw}");
+    // Field leaf defaulted to camel(last segment) — builder param name.
+    assert!(all.contains("zThingLen:Long"), "{raw}");
 }
 
 /// A path-built `fun!` without `.sig(…)` is a hard error at acceptance —

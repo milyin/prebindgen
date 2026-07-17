@@ -286,9 +286,8 @@ pub mod lang {
             box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
             matching, null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl,
             ConvertDecl, ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl,
-            ExpandParamDecl, ExpandReturnDecl, FieldDecl, FunctionDecl, IgnoreDecl,
-            JniBindingError, JniGen, KotlinFile, PackageDecl, PtrClassDecl, ValueClassDecl,
-            WriteKotlinError,
+            ExpandParamDecl, ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError,
+            JniGen, KotlinFile, PackageDecl, PtrClassDecl, ValueClassDecl, WriteKotlinError,
         },
     };
 }
