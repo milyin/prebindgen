@@ -25,7 +25,7 @@
 //! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
-//! | `convert!` sources `.with(path!)`/`.error(ty!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
+//! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
@@ -48,7 +48,7 @@
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
 //! | binding-local field `field!` `.with(ty!, path!)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
-//! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean`; `Summary.fromMean` ← `crate::summary_from_mean` |
+//! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean`; `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -157,18 +157,14 @@ fn main() {
         // from the JVM route the impl's Error to onError); infallible output.
         .convert(convert!(Percent).input(try_from!(i32)).output(into!(i32)))
         // `Label`: conversions are plain fns in THIS binding crate (see
-        // src/lib.rs) — no #[prebindgen], no helper crate. The input is
-        // FALLIBLE (`fn(String) -> Result<Label, String>`; the error type is
-        // stated — a bare path carries no signature to read); empty labels
-        // route the Err to onError.
+        // src/lib.rs) — no #[prebindgen], no helper crate — declared with
+        // the ONE binding-local vocabulary, `fun!(crate::…).sig(sig!(…))`.
+        // The input is FALLIBLE: the sig's `Result<Label, String>` return IS
+        // the error channel (empty labels route the Err to onError).
         .convert(
             convert!(Label)
-                .input(
-                    try_from!(String)
-                        .with(path!(crate::label_in))
-                        .error(ty!(String)),
-                )
-                .output(into!(String).with(path!(crate::label_out))),
+                .input(fun!(crate::label_in).sig(sig!((s: String) -> Result<Label, String>)))
+                .output(fun!(crate::label_out).sig(sig!((l: Label) -> String))),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
@@ -254,9 +250,13 @@ fn main() {
                                 .sig(sig!((s: &Summary) -> f64))
                                 .name("mean"),
                         )
+                        // FALLIBLE binding-local constructor: the sig's
+                        // `Result<Summary, String>` return is the error
+                        // channel — a negative count routes the Err message
+                        // to onError, exactly like a registry fn's Result.
                         .constructor(
                             fun!(crate::summary_from_mean)
-                                .sig(sig!((count: i64, mean: f64) -> Summary))
+                                .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>))
                                 .name("fromMean"),
                         ),
                 )

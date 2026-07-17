@@ -880,9 +880,24 @@ impl JniGen {
             .flatten()
             .filter_map(|f| match f {
                 LocalField::Named(func, _) => Some(func.clone()),
-                LocalField::SelfField | LocalField::Local { .. } => None,
+                // A binding-local field's synthesized fn is helper-only too:
+                // called by the generated code, never externed, and its
+                // synthesized registry entry must not trip the warning.
+                LocalField::Local { path, .. } => Some(
+                    path.segments
+                        .last()
+                        .expect("validated non-empty at decl time")
+                        .ident
+                        .clone(),
+                ),
+                LocalField::SelfField => None,
             });
-        ctors.chain(accessors)
+        // Synthesized binding-local fns from every entry form (path-built
+        // fun! at fun/method/constructor/convert sites): their registry
+        // entries exist only for signature reads — helper-only unless also
+        // declared (the declared set is subtracted by the caller).
+        let locals = self.local_fns.iter().map(|(ident, _, _)| ident.clone());
+        ctors.chain(accessors).chain(locals)
     }
 
     /// Every function referenced as a named field in any `expand_return!`
@@ -900,7 +915,17 @@ impl JniGen {
             .flatten()
             .filter_map(|f| match f {
                 LocalField::Named(func, _) => Some(func.clone()),
-                LocalField::SelfField | LocalField::Local { .. } => None,
+                // A binding-local field's synthesized fn IS an accessor —
+                // excluded from parameter composition, and acknowledged so
+                // the registry's "skipping undeclared" warning stays quiet.
+                LocalField::Local { path, .. } => Some(
+                    path.segments
+                        .last()
+                        .expect("validated non-empty at decl time")
+                        .ident
+                        .clone(),
+                ),
+                LocalField::SelfField => None,
             })
             .collect()
     }
@@ -917,13 +942,17 @@ impl JniGen {
     /// `data_class` fields). Applies wherever the type appears; not tied to
     /// any package. See [`ConvertDecl`] for the relation to the
     /// [`expand`](Self::expand) boundary decls.
-    pub fn convert(mut self, decl: ConvertDecl) -> Self {
+    pub fn convert(mut self, mut decl: ConvertDecl) -> Self {
         assert!(
             decl.input.is_some() || decl.output.is_some(),
             "convert!({}) declares no conversions — add .input(fun!(...)) and/or \
              .output(fun!(...))",
             decl.key.as_str()
         );
+        // Binding-local fn sources (`fun!(crate::f).sig(…)`) join the same
+        // synthesis list as fun/method/constructor sites — after the
+        // pre-pass they lower exactly like `#[prebindgen]` fn sources.
+        self.local_fns.append(&mut decl.locals);
         self.convert_decls.push(decl);
         self
     }
@@ -997,15 +1026,10 @@ impl JniGen {
                     );
                     Some((repr.clone(), None, body))
                 }
-            }
-            // Binding-local callable: emitted verbatim (multi-segment paths
-            // pass the qualification visitor untouched). With a declared
-            // error type the fn returns `Result<T, E>` — emitted as-is, `E`
-            // riding the standard exc slot.
-            ConvertSpec::LocalFn { repr, path, error } => {
-                let body: syn::Expr = syn::parse_quote!(#path(v));
-                Some((repr.clone(), error.clone(), body))
-            }
+            } // Binding-local callable: emitted verbatim (multi-segment paths
+              // pass the qualification visitor untouched). With a declared
+              // error type the fn returns `Result<T, E>` — emitted as-is, `E`
+              // riding the standard exc slot.
         }
     }
 
@@ -1063,10 +1087,6 @@ impl JniGen {
                     );
                     Some((repr.clone(), None, body))
                 }
-            }
-            ConvertSpec::LocalFn { repr, path, error } => {
-                let body: syn::Expr = syn::parse_quote!(#path(v));
-                Some((repr.clone(), error.clone(), body))
             }
         }
     }

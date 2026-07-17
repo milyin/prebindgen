@@ -575,8 +575,9 @@ fn convert_via_try_from_is_fallible() {
     );
 }
 
-/// `from!(…).with(…)`/`into!(…).with(…)`: the callable path is emitted verbatim —
-/// binding-local `crate::…` fns need no `#[prebindgen]` marking.
+/// Binding-local conversion fns via the ONE vocabulary —
+/// `fun!(crate::…).sig(sig!(…))`: synthesized into the registry, lowered
+/// through the ordinary `#[prebindgen]`-fn path, called by the declared path.
 #[test]
 fn convert_via_local_fns() {
     let loc = myflat_loc();
@@ -588,8 +589,8 @@ fn convert_via_local_fns() {
         .set_package_prefix("io.test.jni")
         .convert(
             crate::convert!(Label)
-                .input(crate::from!(String).with(crate::path!(crate::conv::label_in)))
-                .output(crate::into!(String).with(crate::path!(crate::conv::label_out))),
+                .input(crate::fun!(crate::conv::label_in).sig(crate::sig!((s: String) -> Label)))
+                .output(crate::fun!(crate::conv::label_out).sig(crate::sig!((l: Label) -> String))),
         )
         .package(crate::package!("m").fun(crate::fun!(label_id)));
     let dir = unique_test_dir("jnigen_convert_local");
@@ -599,8 +600,8 @@ fn convert_via_local_fns() {
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
-    assert!(rc.contains("crate::conv::label_in(v)"), "{rust}");
-    assert!(rc.contains("crate::conv::label_out(v)"), "{rust}");
+    assert!(rc.contains("crate::conv::label_in("), "{rust}");
+    assert!(rc.contains("crate::conv::label_out("), "{rust}");
 }
 
 /// Two input conversions on one decl are contradictory — decl-time panic.
@@ -609,7 +610,7 @@ fn convert_via_local_fns() {
 fn convert_duplicate_input_rejected() {
     let _ = crate::convert!(Widget)
         .input(crate::from!(i32))
-        .input(crate::from!(String).with(crate::path!(crate::widget_in)));
+        .input(crate::fun!(crate::widget_in).sig(crate::sig!((v: String) -> Widget)));
 }
 
 /// The source macros state their direction; the acceptor cross-checks it.
@@ -625,30 +626,13 @@ fn convert_output_from_direction_rejected() {
     let _ = crate::convert!(Widget).output(crate::from!(i32));
 }
 
-/// `.error` is only meaningful on a fallible source.
+/// A binding-local conversion source must state its signature — a path
+/// carries nothing to read (the sig's `Result<_, E>` is the error channel,
+/// replacing the former `.error(ty!)`).
 #[test]
-#[should_panic(expected = "an infallible source has no error channel")]
-fn convert_error_on_infallible_source_rejected() {
-    let _ = crate::from!(String)
-        .with(crate::path!(crate::widget_in))
-        .error(crate::ty!(String));
-}
-
-/// `.error` states a `.with(...)` callable's Err type — a bare trait
-/// source's error is its associated type.
-#[test]
-#[should_panic(expected = "chain .with first")]
-fn convert_error_on_trait_source_rejected() {
-    let _ = crate::try_from!(String).error(crate::ty!(String));
-}
-
-/// A fallible local callable must state its error type — a path carries no
-/// signature to read.
-#[test]
-#[should_panic(expected = "state its Err type via .error(...)")]
-fn convert_try_with_missing_error_rejected() {
-    let _ = crate::convert!(Widget)
-        .input(crate::try_from!(String).with(crate::path!(crate::widget_in)));
+#[should_panic(expected = ".sig(sig!(")]
+fn convert_local_source_missing_sig_rejected() {
+    let _ = crate::convert!(Widget).input(crate::fun!(crate::widget_in));
 }
 
 /// A `fun!` conversion source is never surfaced in Kotlin — decorations are
@@ -659,9 +643,9 @@ fn convert_source_fun_with_decorations_rejected() {
     let _ = crate::convert!(Widget).input(crate::fun!(widget_in).name("widgetIn"));
 }
 
-/// `try_from!(…).with(…).error(…)`: the fallible binding-local form — the converter's
-/// error type is the decl-stated one and the fn's `Result` is emitted
-/// verbatim (no `Ok(...)` wrap).
+/// The fallible binding-local form: the sig's `Result<_, E>` IS the error
+/// channel — `E` lands in the converter signature and `Err` routes to the
+/// caller's error handler, exactly like a `#[prebindgen]` conversion fn's.
 #[test]
 fn convert_via_local_try_fn_is_fallible() {
     let loc = myflat_loc();
@@ -674,11 +658,10 @@ fn convert_via_local_try_fn_is_fallible() {
         .convert(
             crate::convert!(Label)
                 .input(
-                    crate::try_from!(String)
-                        .with(crate::path!(crate::conv::label_in))
-                        .error(crate::ty!(String)),
+                    crate::fun!(crate::conv::label_in)
+                        .sig(crate::sig!((s: String) -> Result<Label, String>)),
                 )
-                .output(crate::into!(String).with(crate::path!(crate::conv::label_out))),
+                .output(crate::fun!(crate::conv::label_out).sig(crate::sig!((l: Label) -> String))),
         )
         .package(crate::package!("m").fun(crate::fun!(label_id)));
     let dir = unique_test_dir("jnigen_convert_local_try");
@@ -688,9 +671,7 @@ fn convert_via_local_try_fn_is_fallible() {
     let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
-    // Verbatim body (no Ok-wrap) with the stated error in the signature.
-    assert!(rc.contains("crate::conv::label_in(v)"), "{rust}");
-    assert!(!rc.contains("Ok(crate::conv::label_in(v))"), "{rust}");
+    assert!(rc.contains("crate::conv::label_in("), "{rust}");
     assert!(rc.contains("Result<myflat::Label,String>"), "{rust}");
 }
 

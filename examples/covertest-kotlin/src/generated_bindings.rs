@@ -1397,6 +1397,13 @@ pub(crate) unsafe fn Result_Storage_StorageError_to_Storage_7ccce404<'a>(
     v
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Result_Summary_String_to_Summary_dfdf7f9e<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Result<perftest_flat::Summary, String>,
+) -> ::core::result::Result<perftest_flat::Summary, String> {
+    v
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Stamp_to_JByteArray_2fc9bd18<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Stamp,
@@ -6666,7 +6673,23 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
         }
     };
     let __out = crate::summary_from_mean(count, mean);
-    match Summary_to_jlong_3cb103b9(&mut env, __out) {
+    let __out_s0 = match Result_Summary_String_to_Summary_dfdf7f9e(&mut env, __out) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    match Summary_to_jlong_3cb103b9(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
             let __zd = __ze_defaults(&mut env);

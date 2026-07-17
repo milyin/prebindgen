@@ -303,11 +303,20 @@ fun main() {
     // param carries the Summary selector form), members and naming all apply
     // exactly as for #[prebindgen] fns.
     section("binding-local functions (fun!(crate::…) + sig!)") {
-        // Companion constructor: Summary.fromMean(4, 2.5) == of(4, 10.0).
+        // FALLIBLE companion constructor: the sig's `Result<Summary, String>`
+        // return is the error channel — happy path first…
         val m = Summary.fromMean(4L, 2.5, boom)
         check(m.count(boom) == 4L && m.total(boom) == 10.0)
         // Instance method.
         check(m.mean(boom) == 2.5)
+        // …then the Err arm: a negative count routes the Err's Display to
+        // onError (a String error has no domain decomposition, so it arrives
+        // as the je message), exactly like a #[prebindgen] fn's Result.
+        var fromMeanErr: String? = null
+        Summary.fromMean(-1L, 2.5) { je -> fromMeanErr = je; m }
+        check(fromMeanErr == "summary count must be non-negative, got -1") {
+            "unexpected fromMean error: $fromMeanErr"
+        }
         // Free fn, selector form: build-arm (0) and handle-arm (1) both reach
         // the same binding-local Rust fn.
         check(describeSummary(0, 2L, 8.0, null, false, boom) == "2/8")

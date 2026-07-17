@@ -126,6 +126,6 @@ Base package: `io.prebindgen.covertest`
 ## conversions
 
 - `convert!(Celsius)`: input `Into` ⇄ `i32`, output `Into` ⇄ `i32`
-- `convert!(Label)`: input binding-local `crate :: label_in` ⇄ `String` (fallible), output binding-local `crate :: label_out` ⇄ `String`
+- `convert!(Label)`: input `#[prebindgen]` fn `label_in`, output `#[prebindgen]` fn `label_out`
 - `convert!(Millis)`: input `#[prebindgen]` fn `millis_from_long`, output `#[prebindgen]` fn `millis_value`
 - `convert!(Percent)`: input `TryInto` ⇄ `i32`, output `Into` ⇄ `i32`
