@@ -8,6 +8,7 @@ import io.prebindgen.covertest.analytics.archiveStore
 import io.prebindgen.covertest.analytics.storageExpectSummary
 import io.prebindgen.covertest.analytics.storageMatchesSummary
 import io.prebindgen.covertest.analytics.storageSummary
+import io.prebindgen.covertest.analytics.storageSummaryProbe
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryPrefer
@@ -260,6 +261,34 @@ fun main() {
         check(full.first == 2L && full.second == 40.0)
         check(fullHandle!!.total(boom) == 40.0)
         fullHandle!!.close()
+        s.close()
+    }
+
+    // ── binding-local conditional field: field!("handle").with(ty!, path!) ──
+    // storageSummaryProbe's per-fn field set delivers (count, total) plus a
+    // handle leaf gated by the BINDING-side predicate crate::summary_if_nonempty
+    // (covertest-kotlin/src/lib.rs) — the zenoh "Encoding handle only when
+    // schema-carrying" idiom. Condition fails ⇒ the leaf is null (no native
+    // clone, no wrapper); holds ⇒ a live owned handle arrives with the values.
+    section("binding-local conditional field (field! + .with)") {
+        val s = storageNew(boom)
+
+        // Empty storage: count == 0 ⇒ the predicate fails ⇒ null handle.
+        val emptyProbe = storageSummaryProbe(s, boom) { count, total, handle ->
+            Triple(count, total, handle)
+        }
+        check(emptyProbe.first == 0L && emptyProbe.second == 0.0)
+        check(emptyProbe.third == null) { "empty summary must arrive value-only" }
+
+        // Non-empty: the handle arrives live alongside the decomposed values.
+        storagePutSlice(s, listOf(payload(1L, 0, 10.0, false, null), payload(2L, 0, 30.0, false, null)), boom)
+        val probe = storageSummaryProbe(s, boom) { count, total, handle ->
+            Triple(count, total, handle)
+        }
+        check(probe.first == 2L && probe.second == 40.0)
+        val h = probe.third ?: error("non-empty summary must deliver its handle")
+        check(h.count(boom) == 2L && h.total(boom) == 40.0)
+        h.close()
         s.close()
     }
 

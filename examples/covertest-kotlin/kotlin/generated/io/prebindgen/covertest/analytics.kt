@@ -130,6 +130,26 @@ public fun <R> SummaryStorageSummaryFullBuilder<R>.asRaw(): SummaryStorageSummar
         )
     }
 
+public fun interface SummaryStorageSummaryProbeBuilder<out R> {
+    public fun run(count: Long, total: Double, handle: Summary?): R
+}
+
+public fun interface SummaryStorageSummaryProbeBuilderRaw<out R> {
+    public fun run(count: Long, total: Double, handle: Long?): R
+}
+
+public fun <R> SummaryStorageSummaryProbeBuilder<R>.asRaw(): SummaryStorageSummaryProbeBuilderRaw<R> =
+    SummaryStorageSummaryProbeBuilderRaw<R> {
+        count,
+        total,
+        handle ->
+        run(
+            count,
+            total,
+            handle?.let { Summary(it) }
+        )
+    }
+
 /**
  * Summarize a storage (returns a `Summary`; the binding's **default
  * flatten-output** turns it into `(count, total)` leaves).
@@ -259,6 +279,30 @@ public fun <R> storageSummaryFull(
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
         (CovNative.storageSummaryFull(s_ptr, build.asRaw(), __cap) as R)
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/**
+ * Like [`storage_summary`] but the binding's per-fn field set carries a
+ * **binding-local conditional field** (`field!("handle").with(ty!, path!)`):
+ * the handle leaf is delivered only when the binding-side predicate says
+ * re-using the value is worth it (the zenoh conditional-Encoding idiom).
+ *
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`, `handle`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> storageSummaryProbe(
+    s: Storage,
+    onError: JniErrorHandler<R>,
+    build: SummaryStorageSummaryProbeBuilder<R>,
+): R {
+    if (s.isClosed()) return onError.run("Operation on a closed native handle.")
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(s) {
+        val s_ptr = s.ptr
+        (CovNative.storageSummaryProbe(s_ptr, build.asRaw(), __cap) as R)
     }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret

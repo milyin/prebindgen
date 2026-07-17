@@ -26,6 +26,8 @@ Base package: `io.prebindgen.covertest`
 - `storage_summary_full` — `fun <R> storageSummaryFull(s: Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryStorageSummaryFullBuilder<R>): R`
   - shaped by: return `Summary` decomposed → [count, total, handle] (Callback delivery)
 - `storage_summary_handle` — `fun storageSummaryHandle(s: Storage, onError: io.prebindgen.covertest.JniErrorHandler<Summary>): Summary`
+- `storage_summary_probe` — `fun <R> storageSummaryProbe(s: Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryStorageSummaryProbeBuilder<R>): R`
+  - shaped by: return `Summary` decomposed → [count, total, handle] (Callback delivery)
 - `summary_prefer` — `fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
   - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
   - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]

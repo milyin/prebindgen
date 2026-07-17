@@ -704,6 +704,7 @@ internal object CovNative {
     external fun storageSummary(s: Long, build: Any, errorSink: Any): Any?
     external fun storageSummaryFull(s: Long, build: Any, errorSink: Any): Any?
     external fun storageSummaryHandle(s: Long, errorSink: Any): Long
+    external fun storageSummaryProbe(s: Long, build: Any, errorSink: Any): Any?
     external fun storageTotalLen(a: Long, b: Long, c: Long, errorSink: Any): Long
     external fun storageTryWithLabel(label: String, errorSink: Any): Long
     external fun storageWithPayload(

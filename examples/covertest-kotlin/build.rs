@@ -46,6 +46,7 @@
 //! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
+//! | binding-local field `field!` `.with(ty!, path!)` | `storage_summary_probe` — conditional handle via `crate::summary_if_nonempty` |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -87,7 +88,8 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    from, fun, into, lang::JniGen, matching, package, path, ptr_class, try_from, ty, value_class,
+    field, from, fun, into, lang::JniGen, matching, package, path, ptr_class, try_from, ty,
+    value_class,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -361,6 +363,23 @@ fn main() {
                             .field(fun!(summary_count).name("count"))
                             .field(fun!(summary_total).name("total"))
                             .field_self(),
+                    ),
+                )
+                // Binding-local CONDITIONAL field (`field!` + `.with(ty, path)`):
+                // the handle leaf is delivered only when the binding-side
+                // predicate (`crate::summary_if_nonempty`, src/lib.rs) says
+                // re-using the value is worth it — nullable identity leaf,
+                // null when the condition fails. The condition is binding
+                // policy, so it lives in THIS crate, not the source crate.
+                .fun(
+                    fun!(storage_summary_probe).expand_return(
+                        expand_return!(Summary)
+                            .field(fun!(summary_count).name("count"))
+                            .field(fun!(summary_total).name("total"))
+                            .field(
+                                field!("handle")
+                                    .with(ty!(Option<&Summary>), path!(crate::summary_if_nonempty)),
+                            ),
                     ),
                 )
                 // Per-fn split (#52): a per-fn `.expand_param` variant override

@@ -21,6 +21,15 @@ pub fn label_out(l: perftest_flat::Label) -> String {
 
 // Binding-local nullary fn backing the `.with`-sourced constant
 // `COVER_VERSION` (build.rs: `constant!(COVER_VERSION).with(ty!(String),
+// Binding-local CONDITIONAL output field (`expand_return!(Summary)` per-fn
+// set of `storage_summary_probe`: `.field(field!("handle").with(ty!(Option<&
+// Summary>), path!(crate::summary_if_nonempty)))`): deliver the handle leaf
+// only when the summary is non-empty — binding policy with no place in the
+// source crate (the zenoh "Encoding handle only when schema-carrying" idiom).
+pub(crate) fn summary_if_nonempty(s: &perftest_flat::Summary) -> Option<&perftest_flat::Summary> {
+    (perftest_flat::summary_count(s) > 0).then_some(s)
+}
+
 // path!(crate::cover_version))`) — the const analog of convert!'s `_with`.
 pub fn cover_version() -> String {
     format!("cover-{}", env!("CARGO_PKG_VERSION"))
