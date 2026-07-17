@@ -273,6 +273,45 @@ pub fn string_len(s: &String) -> usize {
     s.len()
 }
 
+/// Minimal opaque handle for LIFECYCLE benchmarking: the plain variant of a
+/// twin pair whose only difference is the Kotlin-side `.gc_managed()` flag —
+/// benchmarked head-to-head to price the GC-cleanup machinery (atomic cell,
+/// Cleaner registration, CAS release ticket) per handle. A boxed handle like
+/// [`Storage`] (not `#[prebindgen]`, not `#[repr(C)]`).
+pub struct Token {
+    value: i64,
+}
+
+/// Create a plain benchmark token.
+#[prebindgen]
+pub fn token_new(value: i64) -> Token {
+    Token { value }
+}
+
+/// Read a plain benchmark token.
+#[prebindgen]
+pub fn token_value(t: &Token) -> i64 {
+    t.value
+}
+
+/// GC-managed twin of [`Token`] — identical shape and cost on the Rust side;
+/// the Kotlin binding declares this one `.gc_managed()`.
+pub struct TokenGc {
+    value: i64,
+}
+
+/// Create a gc-managed benchmark token.
+#[prebindgen]
+pub fn token_gc_new(value: i64) -> TokenGc {
+    TokenGc { value }
+}
+
+/// Read a gc-managed benchmark token.
+#[prebindgen]
+pub fn token_gc_value(t: &TokenGc) -> i64 {
+    t.value
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{

@@ -153,11 +153,54 @@ fun main() {
         }
     }
 
+    // Handle-lifecycle rows: twin minimal ptr classes — `Token` (plain) vs
+    // `TokenGc` (`.gc_managed()`) — pricing the GC-cleanup machinery per
+    // handle. Capped iterations bound the plain-drop native leak (that row
+    // deliberately never frees — it measures allocation alone, today's
+    // leak-on-drop behavior) and the Cleaner backlog.
+    val HN = minOf(N, 2_000_000L)
+    fun runHandleLifecycle() {
+        // create + explicit close: plain = tag write + freePtr; gc adds the
+        // cell alloc, Cleaner registration, CAS ticket, clean() deregistration.
+        bench("handle_close", "plain", HN) {
+            Token.tokenNew(1L, onError).close()
+        }
+        bench("handle_close", "gc", HN) {
+            TokenGc.tokenGcNew(1L, onError).close()
+        }
+        // create + drop (no close): plain leaks natively; gc is freed by the
+        // Cleaner as the JVM collects the wrappers.
+        bench("handle_drop", "plain", HN) {
+            Token.tokenNew(1L, onError)
+        }
+        bench("handle_drop", "gc", HN) {
+            TokenGc.tokenGcNew(1L, onError)
+        }
+        // Let the Cleaner backlog settle before the call rows.
+        System.gc()
+        Thread.sleep(200)
+        // method call on a live handle: prices the open `ptr` property
+        // (field-backed vs atomic-cell getter) on the call path.
+        val tp = Token.tokenNew(7L, onError)
+        val tg = TokenGc.tokenGcNew(7L, onError)
+        bench("handle_call", "plain", HN) {
+            sink += tp.tokenValue(onError)
+        }
+        bench("handle_call", "gc", HN) {
+            sink += tg.tokenGcValue(onError)
+        }
+        tp.close()
+        tg.close()
+    }
+
     // Warm up the JIT on all paths so steady-state numbers are fair (capped for a small
-    // `N` smoke run).
+    // `N` smoke run). The token warmup also loads BOTH NativeHandle subtypes up front,
+    // so `ptr` call-site profiles reflect the steady state a mixed app sees.
     val warm = makeBatch("hello, payload")
     storagePutSlice(s, warm, onError)
     val warmN = minOf(VEC_ITERS, 50_000L)
+    val warmTp = Token.tokenNew(3L, onError)
+    val warmTg = TokenGc.tokenGcNew(3L, onError)
     repeat(warmN.toInt()) {
         storagePutByTake(s, warm[0], onError)
         storageGet(s, onError)
@@ -165,13 +208,20 @@ fun main() {
         storagePutSlice(s, warm, onError)
         storageGetVec(s, onError)
         storageCallbackVec(s, vcb, onError)
+        Token.tokenNew(1L, onError).close()
+        TokenGc.tokenGcNew(1L, onError).close()
+        sink += warmTp.tokenValue(onError)
+        sink += warmTg.tokenGcValue(onError)
     }
+    warmTp.close()
+    warmTg.close()
 
     println("BEGIN_PERFTEST lang=kotlin n=$N")
     runCategory("hello, payload", "str")
     runCategory(null, "null")
     runVecCategory("hello, payload", "str")
     runVecCategory(null, "null")
+    runHandleLifecycle()
     println("END_PERFTEST")
 
     cb.close()

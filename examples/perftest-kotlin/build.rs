@@ -47,7 +47,22 @@ fn main() {
                 // `List` is assembled by a **fold**: the trampoline allocates the list and
                 // folds each element's raw leaves through the hoisted folder (Kotlin does
                 // `fromParts` + `add`) — no per-element Java object is built on the Rust side.
-                .class(ptr_class!(PayloadVecHandler)),
+                .class(ptr_class!(PayloadVecHandler))
+                // Twin minimal handles for the LIFECYCLE benchmark: identical Rust
+                // shape, one plain, one `.gc_managed()` — head-to-head rows in
+                // `Bench.kt` price the GC-cleanup machinery (atomic cell, Cleaner
+                // registration, CAS release ticket) per handle create/close/call.
+                .class(
+                    ptr_class!(Token)
+                        .constructor(fun!(token_new))
+                        .method(fun!(token_value)),
+                )
+                .class(
+                    ptr_class!(TokenGc)
+                        .gc_managed()
+                        .constructor(fun!(token_gc_new))
+                        .method(fun!(token_gc_value)),
+                ),
         )
         // Only the value/ref-input put forms map to JNI: `storage_put_by_take`
         // (by-value `Payload`) and `storage_put_by_read` (`&Payload`). The

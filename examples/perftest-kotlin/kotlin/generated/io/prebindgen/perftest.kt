@@ -236,6 +236,94 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr) {
     }
 }
 
+/** Typed handle for a native Zenoh `Token`. */
+public class Token(initialPtr: Long) : NativeHandle(initialPtr) {
+    @Synchronized
+    override fun close() {
+        val p = ptr
+        if (p != 0L && (p and 1L) == 0L) {
+            ptr = p or 1L
+            freePtr(p)
+        }
+    }
+
+    @Synchronized
+    public fun take(): Token {
+        val p = ptr
+        ptr = p or 1L
+        return Token(p)
+    }
+
+    /** Read a plain benchmark token. */
+    public fun tokenValue(onError: JniErrorHandler<Long>): Long {
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
+        val __cap = JniErrorHandlerCapture.acquire()
+        val __ret = withSortedHandleLocks(this) {
+            val this_ptr = this.ptr
+            JNINative.tokenValue(this_ptr, __cap)
+        }
+        if (__cap.failed) return onError.run(__cap.je)
+        return __ret
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+
+        /** Create a plain benchmark token. */
+        public fun tokenNew(value: Long, onError: JniErrorHandler<Token>): Token {
+            val __cap = JniErrorHandlerCapture.acquire()
+            val __ret = Token(JNINative.tokenNew(value, __cap))
+            if (__cap.failed) return onError.run(__cap.je)
+            return __ret
+        }
+    }
+}
+
+/** Typed handle for a native Zenoh `TokenGc`. */
+public class TokenGc(initialPtr: Long) : GcNativeHandle(initialPtr) {
+    private val __cleanable = registerGcHandle(this) { freePtr(it) }
+
+    @Synchronized
+    override fun close() {
+        val p = releaseCell(cell)
+        if (p != 0L) freePtr(p)
+        __cleanable?.clean()
+    }
+
+    @Synchronized
+    public fun take(): TokenGc {
+        val p = releaseCell(cell)
+        __cleanable?.clean()
+        return TokenGc(if (p != 0L) p else cell.get())
+    }
+
+    /** Read a gc-managed benchmark token. */
+    public fun tokenGcValue(onError: JniErrorHandler<Long>): Long {
+        if (this.isClosed()) return onError.run("Operation on a closed native handle.")
+        val __cap = JniErrorHandlerCapture.acquire()
+        val __ret = withSortedHandleLocks(this) {
+            val this_ptr = this.ptr
+            JNINative.tokenGcValue(this_ptr, __cap)
+        }
+        if (__cap.failed) return onError.run(__cap.je)
+        return __ret
+    }
+
+    public companion object {
+        @JvmStatic
+        external fun freePtr(ptr: Long)
+
+        /** Create a gc-managed benchmark token. */
+        public fun tokenGcNew(value: Long, onError: JniErrorHandler<TokenGc>): TokenGc {
+            val __cap = JniErrorHandlerCapture.acquire()
+            val __ret = TokenGc(JNINative.tokenGcNew(value, __cap))
+            if (__cap.failed) return onError.run(__cap.je)
+            return __ret
+        }
+    }
+}
+
 public fun interface PayloadCallback {
     public fun run(payload: Payload)
 }
@@ -350,6 +438,10 @@ internal object JNINative {
         errorSink: Any,
     )
     external fun storagePutSlice(s: Long, payloads: Long, errorSink: Any)
+    external fun tokenGcNew(value: Long, errorSink: Any): Long
+    external fun tokenGcValue(t: Long, errorSink: Any): Long
+    external fun tokenNew(value: Long, errorSink: Any): Long
+    external fun tokenValue(t: Long, errorSink: Any): Long
     external fun payloadVecNew(cap: Int): Long
     external fun payloadVecPush(handle: Long, eId: Long, eSeq: Int, eValue: Double, eFlag: Boolean, eLabel: String?)
     external fun payloadVecFree(handle: Long)
