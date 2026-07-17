@@ -814,7 +814,7 @@ impl JniGen {
     /// pass through unchecked.
     fn check_local_field_ty(&self, decl_key: &TypeKey, name: &str, ty: &syn::Type) {
         let syn::Type::Path(p) = ty else { return };
-        if !p.path.segments.last().is_some_and(|s| s.ident == "Option") {
+        if p.path.segments.last().is_none_or(|s| s.ident != "Option") {
             return;
         }
         let Some(syn::PathArguments::AngleBracketed(args)) =
