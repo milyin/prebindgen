@@ -198,7 +198,6 @@ macro_rules! expr {
     };
 }
 
-
 /// Build a [`ConvertDecl`] directly from a bare Rust type:
 /// `convert!(Millis)` is `ConvertDecl::new(<Millis as syn::Type>)`.
 /// See [`ptr_class!`] for the parsing mechanics.

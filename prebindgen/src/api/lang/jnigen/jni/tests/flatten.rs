@@ -1096,10 +1096,7 @@ fn binding_local_fn_names_flow_through_manglers() {
         // (constructors are excluded from output decomposition by design).
         "pub fn z_thing_query() -> ZThing { unimplemented!() }",
     ] {
-        items.push((
-            syn::Item::Fn(syn::parse_str(src).unwrap()),
-            loc.clone(),
-        ));
+        items.push((syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()));
     }
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new()
@@ -1129,10 +1126,7 @@ fn binding_local_fn_names_flow_through_manglers() {
                         ),
                 )
                 // local FREE FN, no .name(): fun hook sees `zThingTag`.
-                .fun(
-                    crate::fun!(crate::sub::z_thing_tag)
-                        .sig(crate::sig!((t: &ZThing) -> i64)),
-                )
+                .fun(crate::fun!(crate::sub::z_thing_tag).sig(crate::sig!((t: &ZThing) -> i64)))
                 .fun(crate::fun!(z_thing_query)),
         )
         // local FIELD, no .name(): defaults to camel(last segment). A second
@@ -1140,13 +1134,13 @@ fn binding_local_fn_names_flow_through_manglers() {
         // a single leaf would deliver by direct return, hiding the name.
         .expand(
             crate::expand_return!(ZThing)
-                .field(
-                    crate::fun!(crate::sub::z_thing_len)
-                        .sig(crate::sig!((t: &ZThing) -> i64)),
-                )
+                .field(crate::fun!(crate::sub::z_thing_len).sig(crate::sig!((t: &ZThing) -> i64)))
                 .field_self(),
         );
-    let raw = write_all(registry.resolve(jni).expect("resolve"), "jnigen_local_mangle");
+    let raw = write_all(
+        registry.resolve(jni).expect("resolve"),
+        "jnigen_local_mangle",
+    );
     let all: String = raw.split_whitespace().collect();
     // Method named by the class hook over the camel-cased last segment.
     assert!(all.contains("funcls_zThingRatio(scale:Double,"), "{raw}");
