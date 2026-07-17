@@ -1357,13 +1357,40 @@ fn flatten<M>(
                     visited.remove(&child_key);
                 } else {
                     // Leaf: the return value as written (`&str`, enum, `i64`, …).
+                    // One exception: a binding-local field returning an
+                    // OPTIONAL BORROW (`Option<&T>`) is the conditional
+                    // HANDLE-delivery idiom — structurally a spliced identity
+                    // behind an `Option`-returning step (cf. an
+                    // `Option`-returning nesting accessor + the child's
+                    // `field_self`), so it contributes a nullable IDENTITY
+                    // leaf of the borrowed type: the reach path unwraps the
+                    // final `Option` (the synthesized signature keeps the
+                    // full return) and the value clones through its handle
+                    // projection, `None` delivering null. It shares the
+                    // one-identity-per-deconstructor budget with
+                    // `.field_self()` — two handle deliveries of one value
+                    // make no sense.
+                    let cond_handle = local && opt && matches!(core, syn::Type::Reference(_));
+                    if cond_handle {
+                        if seen_identity {
+                            return Err(UnfoldError::MultipleIdentity {
+                                target: source_key.to_string(),
+                            });
+                        }
+                        seen_identity = true;
+                    }
+                    let (out_ty, nullable, identity) = if cond_handle {
+                        (core.clone(), true, true)
+                    } else {
+                        (ret, nullable, false)
+                    };
                     let mut path = path_prefix.to_vec();
                     path.push(func.clone());
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,
-                        out_ty: ret,
-                        identity: false,
+                        out_ty,
+                        identity,
                         nullable,
                         source: LeafSource::Accessor,
                     });

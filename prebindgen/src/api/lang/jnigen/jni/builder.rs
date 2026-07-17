@@ -679,6 +679,7 @@ impl JniGen {
                     }
                     LocalField::SelfField => dec.add_deconstructor_record_id(),
                     LocalField::Local { name, ty, path } => {
+                        self.check_local_field_ty(&decl.key, name, ty);
                         dec.add_deconstructor_record_local(path.clone(), ty.clone(), name.clone());
                     }
                 }
@@ -711,12 +712,46 @@ impl JniGen {
                     }
                     LocalField::SelfField => dec.push_inline_field_self(),
                     LocalField::Local { name, ty, path } => {
+                        self.check_local_field_ty(&decl.key, name, ty);
                         dec.push_inline_field_local(path.clone(), ty.clone(), name.clone());
                     }
                 }
             }
         }
         dec
+    }
+
+    /// Guard for binding-local fields returning an OPTIONAL BORROW: the
+    /// `Option<&T>` conditional-delivery leaf rides the opaque-handle
+    /// projection (nullable typed handle / boxed `Long?` on the wire), so `T`
+    /// must be a declared `ptr_class`. Owned returns — `Option<String>`,
+    /// scalars, handles — carry their nullability in their own converters and
+    /// pass through unchecked.
+    fn check_local_field_ty(&self, decl_key: &TypeKey, name: &str, ty: &syn::Type) {
+        let syn::Type::Path(p) = ty else { return };
+        if !p.path.segments.last().is_some_and(|s| s.ident == "Option") {
+            return;
+        }
+        let Some(syn::PathArguments::AngleBracketed(args)) =
+            p.path.segments.last().map(|s| &s.arguments)
+        else {
+            return;
+        };
+        let Some(syn::GenericArgument::Type(syn::Type::Reference(r))) = args.args.first() else {
+            return;
+        };
+        let inner_key = TypeKey::from_type(&r.elem);
+        assert!(
+            self.types
+                .get(&inner_key)
+                .is_some_and(|c| c.opaque.is_some()),
+            "expand_return!({}).field(field!(\"{name}\")): an `Option<&T>` binding-local field \
+             delivers a nullable typed HANDLE, so `T` must be a declared ptr_class — `{}` is \
+             not; return an owned `Option<{}>` instead",
+            decl_key.as_str(),
+            inner_key.as_str(),
+            inner_key.as_str(),
+        );
     }
 
     /// Type keys of boundary decls (`expand_param!` / `expand_return!`,

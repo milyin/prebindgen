@@ -811,6 +811,15 @@ fn binding_local_field_conditional_handle() {
     assert!(rc.contains("crate::enc_if_custom("), "{rust}");
     // The registry accessor stays source-qualified.
     assert!(rc.contains("myflat::z_enc_get_id("), "{rust}");
+    // Wire shape: the conditional handle is an Option-unwrapped IDENTITY leaf
+    // — present clones through the handle projection and BOXES the jlong
+    // (matching the `Long?` slot of the raw interface), absent delivers JVM
+    // null. A raw primitive `jvalue { j }` here would desync the descriptor.
+    assert!(rc.contains("box_jlong"), "{rust}");
+    assert!(
+        rc.contains("Option::None=>jni::objects::JObject::null()"),
+        "{rust}"
+    );
 
     let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
     let raw = paths
