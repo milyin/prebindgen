@@ -25,7 +25,7 @@
 //! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
-//! | `convert!` sources `.with(path!)`/`.error(ty!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); empty label → `onError` |
+//! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
@@ -46,6 +46,9 @@
 //! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
+//! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
+//! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
+//! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -87,7 +90,8 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    from, fun, into, lang::JniGen, matching, package, path, ptr_class, try_from, ty, value_class,
+    from, fun, into, lang::JniGen, matching, package, path, ptr_class, sig, try_from, ty,
+    value_class,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -153,18 +157,14 @@ fn main() {
         // from the JVM route the impl's Error to onError); infallible output.
         .convert(convert!(Percent).input(try_from!(i32)).output(into!(i32)))
         // `Label`: conversions are plain fns in THIS binding crate (see
-        // src/lib.rs) — no #[prebindgen], no helper crate. The input is
-        // FALLIBLE (`fn(String) -> Result<Label, String>`; the error type is
-        // stated — a bare path carries no signature to read); empty labels
-        // route the Err to onError.
+        // src/lib.rs) — no #[prebindgen], no helper crate — declared with
+        // the ONE binding-local vocabulary, `fun!(crate::…).sig(sig!(…))`.
+        // The input is FALLIBLE: the sig's `Result<Label, String>` return IS
+        // the error channel (empty labels route the Err to onError).
         .convert(
             convert!(Label)
-                .input(
-                    try_from!(String)
-                        .with(path!(crate::label_in))
-                        .error(ty!(String)),
-                )
-                .output(into!(String).with(path!(crate::label_out))),
+                .input(fun!(crate::label_in).sig(sig!((s: String) -> Result<Label, String>)))
+                .output(fun!(crate::label_out).sig(sig!((l: Label) -> String))),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
@@ -240,7 +240,24 @@ fn main() {
                         .constructor(fun!(summary_new).name("of"))
                         .method(fun!(summary_count))
                         .method(fun!(summary_total))
-                        .method(fun!(summary_scaled)),
+                        .method(fun!(summary_scaled))
+                        // Binding-local INSTANCE METHOD and COMPANION
+                        // CONSTRUCTOR (`fun!(crate::…).sig(sig!(…))`): fns
+                        // defined in THIS crate (src/lib.rs), no source-crate
+                        // item — same member machinery as registry fns.
+                        // NO .name(): the strip-class-prefix method hook
+                        // derives `mean` from the path's LAST segment
+                        // (`summary_mean` on `Summary` → strip → `mean`) —
+                        // automatic mangling covers binding-local fns too.
+                        .method(fun!(crate::summary_mean).sig(sig!((s: &Summary) -> f64)))
+                        // FALLIBLE binding-local constructor: the sig's
+                        // `Result<Summary, String>` return is the error
+                        // channel — a negative count routes the Err message
+                        // to onError, exactly like a registry fn's Result.
+                        .constructor(
+                            fun!(crate::summary_from_mean)
+                                .sig(sig!((count: i64, mean: f64) -> Result<Summary, String>)),
+                        ),
                 )
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -344,6 +361,15 @@ fn main() {
         .package(
             package!("analytics")
                 .fun(fun!(storage_summary))
+                // Binding-local FREE FUNCTION: exported like any package fn;
+                // its `&Summary` param resolves through the ordinary borrow
+                // converter, its String return through the ordinary output
+                // converter.
+                .fun(
+                    fun!(crate::summary_describe)
+                        .sig(sig!((s: &Summary, verbose: bool) -> String))
+                        .name("describeSummary"),
+                )
                 // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
                 // `storageMatchesSummary(count, total, …)` / `(expected, …)`.
                 .fun(fun!(storage_matches_summary).split_on_param("expected"))
@@ -361,6 +387,24 @@ fn main() {
                             .field(fun!(summary_count).name("count"))
                             .field(fun!(summary_total).name("total"))
                             .field_self(),
+                    ),
+                )
+                // Binding-local CONDITIONAL field (`field!` + `.with(ty, path)`):
+                // the handle leaf is delivered only when the binding-side
+                // predicate (`crate::summary_if_nonempty`, src/lib.rs) says
+                // re-using the value is worth it — nullable identity leaf,
+                // null when the condition fails. The condition is binding
+                // policy, so it lives in THIS crate, not the source crate.
+                .fun(
+                    fun!(storage_summary_probe).expand_return(
+                        expand_return!(Summary)
+                            .field(fun!(summary_count).name("count"))
+                            .field(fun!(summary_total).name("total"))
+                            .field(
+                                fun!(crate::summary_if_nonempty)
+                                    .sig(sig!((s: &Summary) -> Option<&Summary>))
+                                    .name("handle"),
+                            ),
                     ),
                 )
                 // Per-fn split (#52): a per-fn `.expand_param` variant override

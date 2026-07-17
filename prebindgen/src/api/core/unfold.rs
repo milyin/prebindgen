@@ -46,6 +46,10 @@ pub use self::{
 
 /// One record (field) of a deconstructor. A deconstructor is a product: every
 /// record contributes a leaf.
+// large_enum_variant: a handful of records exist per binding, held while
+// declarations replay — boxing the syn payloads would only complicate the
+// arms (same trade-off as `ConvertSourceKind`).
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 enum DeconRecord {
     /// Read this field by calling the accessor function `f(&T) -> &F`. `name`
@@ -54,10 +58,33 @@ enum DeconRecord {
     /// An accessor whose return type has its own deconstructor splices that
     /// child's records with the leaf names prefixed `name__<child>`.
     Acc { func: syn::Ident, name: String },
+    /// Read this field by calling a **custom, locally-defined** accessor: any
+    /// callable in the binding crate (`path`) with a STATED return type
+    /// (`ty`) — there is no `#[prebindgen]` item behind it, so the signature
+    /// cannot be looked up. The adapter's `local_functions()` pre-pass
+    /// synthesizes a registry entry from the stated signature (so call
+    /// qualification and `Option`-nesting checks work unchanged); splicing
+    /// follows [`Self::Acc`] rules except that a self-referential field (its
+    /// type already being decomposed) degrades to a plain converter leaf
+    /// instead of a cycle error — that is what lets such a field re-deliver
+    /// (part of) the value itself, e.g. under a binding-defined condition.
+    LocalAcc { path: syn::Path, name: String },
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
     /// moved for an owned `T`, copied for a `Copy` value_blob). At most one per
     /// deconstructor.
     Identity,
+}
+
+impl DeconRecord {
+    /// The fn ident of a [`Self::LocalAcc`] — its path's last segment (the
+    /// name the emitted call resolves to under the path-prefix origin).
+    fn local_ident(path: &syn::Path) -> syn::Ident {
+        path.segments
+            .last()
+            .expect("field!(...).with(...): empty accessor path")
+            .ident
+            .clone()
+    }
 }
 
 #[derive(Clone)]
@@ -193,6 +220,18 @@ impl Deconstructors {
         self.deconstructors[i].records.push(DeconRecord::Identity);
     }
 
+    /// `expand_return!` `.field(field!(name).with(ty, path))` — add a
+    /// **binding-local** accessor record (stated return type + callable).
+    pub fn add_deconstructor_record_local(&mut self, path: syn::Path, name: impl Into<String>) {
+        let i = self
+            .cur_deconstructor
+            .expect(".field called without a current deconstructor");
+        self.deconstructors[i].records.push(DeconRecord::LocalAcc {
+            path,
+            name: name.into(),
+        });
+    }
+
     /// Begin a per-fn inline output override (`.expand_return(expand_return!(T)…)`):
     /// decompose `func`'s return via an incrementally-built record list
     /// (accessor fields via [`Self::push_inline_field`] and/or the identity/self
@@ -237,6 +276,20 @@ impl Deconstructors {
             records.push(DeconRecord::Identity);
         }
     }
+
+    /// `.expand_return` `.field(field!(name).with(ty, path))` — append a
+    /// **binding-local** accessor field to the current per-fn inline output.
+    pub fn push_inline_field_local(&mut self, path: syn::Path, name: impl Into<String>) {
+        let i = self
+            .cur_output
+            .expect(".field called without a current deconstructor");
+        if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
+            records.push(DeconRecord::LocalAcc {
+                path,
+                name: name.into(),
+            });
+        }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -261,12 +314,20 @@ pub fn apply<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
+    // Binding-local accessors (`LocalAcc` records) resolve through registry
+    // entries synthesized by the adapter's `local_functions()` pre-pass in
+    // `Registry::resolve` — by this point they read exactly like
+    // `#[prebindgen]` accessors.
+
     // Gate: every accessor-function record of every declared deconstructor must
     // be a `.fun_accessor` (the single source of truth for "accessor").
+    // Binding-local records skip the gate — there is no `#[prebindgen]` item
+    // behind them — but keep the reserved-separator name check.
     for d in &acc.deconstructors {
         for rec in &d.records {
             let (func, name) = match rec {
-                DeconRecord::Acc { func, name } => (func, name),
+                DeconRecord::Acc { func, name } => (Some(func), name),
+                DeconRecord::LocalAcc { name, .. } => (None, name),
                 DeconRecord::Identity => continue,
             };
             // `"__"` is the reserved nesting/chain separator — author leaf names
@@ -274,8 +335,10 @@ pub fn apply<M>(
             if name.contains("__") {
                 return Err(UnfoldError::ReservedSeparator { name: name.clone() });
             }
-            if !accessor_fns.contains(func) {
-                return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+            if let Some(func) = func {
+                if !accessor_fns.contains(func) {
+                    return Err(UnfoldError::RecordNotAccessor { func: func.clone() });
+                }
             }
         }
     }
@@ -1139,9 +1202,18 @@ fn flatten<M>(
                     source: LeafSource::Accessor,
                 });
             }
-            DeconRecord::Acc { func, name } => {
-                let (takes, ret) = accessor_signature(registry, func)?;
-                check_takes(func, &takes, source)?;
+            DeconRecord::Acc { name, .. } | DeconRecord::LocalAcc { name, .. } => {
+                // A binding-local record resolves through its synthesized
+                // registry entry (see `synthesize_local_accessors`), so both
+                // kinds read one signature source; only the cycle rule below
+                // differs.
+                let (func, local) = match rec {
+                    DeconRecord::Acc { func, .. } => (func.clone(), false),
+                    DeconRecord::LocalAcc { path, .. } => (DeconRecord::local_ident(path), true),
+                    DeconRecord::Identity => unreachable!(),
+                };
+                let (takes, ret) = accessor_signature(registry, &func)?;
+                check_takes(&func, &takes, source)?;
                 // Default unwrap: if the return type has its own deconstructor,
                 // splice it (recurse); otherwise the return is one leaf. Peel an
                 // `Option` (value may be absent) + leading `&` to reach the child.
@@ -1154,12 +1226,23 @@ fn flatten<M>(
                     other => other.clone(),
                 };
                 let child_key = TypeKey::from_type(&child_ty);
-                if let Some(child_decl) = find_deconstructor_by_type(acc, &child_key) {
-                    if !visited.insert(child_key.clone()) {
+                // A child already on the nesting chain: for a `#[prebindgen]`
+                // accessor that is an authoring cycle (hard error); a
+                // binding-local field re-delivering (part of) its own type
+                // under a binding-defined condition is the POINT — degrade to
+                // a plain converter leaf instead of splicing.
+                let splice = match find_deconstructor_by_type(acc, &child_key) {
+                    Some(child_decl) if !visited.contains(&child_key) => Some(child_decl),
+                    Some(_) if local => None,
+                    Some(_) => {
                         return Err(UnfoldError::Cycle {
                             target: child_key.to_string(),
                         });
                     }
+                    None => None,
+                };
+                if let Some(child_decl) = splice {
+                    visited.insert(child_key.clone());
                     let child_records = child_decl.records.clone();
                     let mut child_path = path_prefix.to_vec();
                     child_path.push(func.clone());
@@ -1178,13 +1261,40 @@ fn flatten<M>(
                     visited.remove(&child_key);
                 } else {
                     // Leaf: the return value as written (`&str`, enum, `i64`, …).
+                    // One exception: a binding-local field returning an
+                    // OPTIONAL BORROW (`Option<&T>`) is the conditional
+                    // HANDLE-delivery idiom — structurally a spliced identity
+                    // behind an `Option`-returning step (cf. an
+                    // `Option`-returning nesting accessor + the child's
+                    // `field_self`), so it contributes a nullable IDENTITY
+                    // leaf of the borrowed type: the reach path unwraps the
+                    // final `Option` (the synthesized signature keeps the
+                    // full return) and the value clones through its handle
+                    // projection, `None` delivering null. It shares the
+                    // one-identity-per-deconstructor budget with
+                    // `.field_self()` — two handle deliveries of one value
+                    // make no sense.
+                    let cond_handle = local && opt && matches!(core, syn::Type::Reference(_));
+                    if cond_handle {
+                        if seen_identity {
+                            return Err(UnfoldError::MultipleIdentity {
+                                target: source_key.to_string(),
+                            });
+                        }
+                        seen_identity = true;
+                    }
+                    let (out_ty, nullable, identity) = if cond_handle {
+                        (core.clone(), true, true)
+                    } else {
+                        (ret, nullable, false)
+                    };
                     let mut path = path_prefix.to_vec();
                     path.push(func.clone());
                     leaves.push(UnfoldLeaf {
                         name: seg_name(name).join("__"),
                         path,
-                        out_ty: ret,
-                        identity: false,
+                        out_ty,
+                        identity,
                         nullable,
                         source: LeafSource::Accessor,
                     });

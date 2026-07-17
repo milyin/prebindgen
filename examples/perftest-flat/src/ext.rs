@@ -230,6 +230,15 @@ pub fn storage_summary_full(s: &Storage) -> Summary {
     storage_summary(s)
 }
 
+/// Like [`storage_summary`] but the binding's per-fn field set carries a
+/// **binding-local conditional field** (`field!("handle").with(ty!, path!)`):
+/// the handle leaf is delivered only when the binding-side predicate says
+/// re-using the value is worth it (the zenoh conditional-Encoding idiom).
+#[prebindgen]
+pub fn storage_summary_probe(s: &Storage) -> Summary {
+    storage_summary(s)
+}
+
 /// Set the storage's "expected" summary, accepting a `Summary` built via an
 /// explicit per-fn **flatten-input-with** variant list. Returns whether it
 /// matched the live summary before being consumed.

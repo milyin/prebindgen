@@ -8,6 +8,8 @@ import io.prebindgen.covertest.analytics.archiveStore
 import io.prebindgen.covertest.analytics.storageExpectSummary
 import io.prebindgen.covertest.analytics.storageMatchesSummary
 import io.prebindgen.covertest.analytics.storageSummary
+import io.prebindgen.covertest.analytics.storageSummaryProbe
+import io.prebindgen.covertest.analytics.describeSummary
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryPrefer
@@ -261,6 +263,69 @@ fun main() {
         check(fullHandle!!.total(boom) == 40.0)
         fullHandle!!.close()
         s.close()
+    }
+
+    // ── binding-local field: fun!(crate::…).sig(sig!).name("handle") ────────
+    // A CUSTOM field computed by a fn defined in THIS binding crate
+    // (crate::summary_if_nonempty, src/lib.rs) — no source-crate item behind
+    // it, declared with the same fun!+sig! vocabulary as every binding-local
+    // fn. This exercise uses it for CONDITIONAL delivery (one use among
+    // many): the handle leaf is gated by the binding-side predicate — the
+    // zenoh "Encoding handle only when schema-carrying" idiom. Condition
+    // fails ⇒ the leaf is null (no native clone, no wrapper); holds ⇒ a live
+    // owned handle arrives with the values.
+    section("binding-local field (fun! + sig!)") {
+        val s = storageNew(boom)
+
+        // Empty storage: count == 0 ⇒ the predicate fails ⇒ null handle.
+        val emptyProbe = storageSummaryProbe(s, boom) { count, total, handle ->
+            Triple(count, total, handle)
+        }
+        check(emptyProbe.first == 0L && emptyProbe.second == 0.0)
+        check(emptyProbe.third == null) { "empty summary must arrive value-only" }
+
+        // Non-empty: the handle arrives live alongside the decomposed values.
+        storagePutSlice(s, listOf(payload(1L, 0, 10.0, false, null), payload(2L, 0, 30.0, false, null)), boom)
+        val probe = storageSummaryProbe(s, boom) { count, total, handle ->
+            Triple(count, total, handle)
+        }
+        check(probe.first == 2L && probe.second == 40.0)
+        val h = probe.third ?: error("non-empty summary must deliver its handle")
+        check(h.count(boom) == 2L && h.total(boom) == 40.0)
+        h.close()
+        s.close()
+    }
+
+    // ── binding-local FUNCTIONS: fun!(crate::…).sig(sig!(…)) ─────────────────
+    // Full fns defined in the BINDING crate (covertest-kotlin/src/lib.rs),
+    // exported through the ordinary FunctionDecl surface — free package fn,
+    // instance method, companion constructor. No source-crate item exists for
+    // any of them, yet converters, expansion defaults (describeSummary's `s`
+    // param carries the Summary selector form), members and naming all apply
+    // exactly as for #[prebindgen] fns.
+    section("binding-local functions (fun!(crate::…) + sig!)") {
+        // `mean` and `fromMean` carry NO .name(): the strip-class-prefix
+        // method hook derives them from each path's LAST segment — automatic
+        // mangling covers binding-local fns exactly like registry fns.
+        // FALLIBLE companion constructor: the sig's `Result<Summary, String>`
+        // return is the error channel — happy path first…
+        val m = Summary.fromMean(4L, 2.5, boom)
+        check(m.count(boom) == 4L && m.total(boom) == 10.0)
+        // Instance method.
+        check(m.mean(boom) == 2.5)
+        // …then the Err arm: a negative count routes the Err's Display to
+        // onError (a String error has no domain decomposition, so it arrives
+        // as the je message), exactly like a #[prebindgen] fn's Result.
+        var fromMeanErr: String? = null
+        Summary.fromMean(-1L, 2.5) { je -> fromMeanErr = je; m }
+        check(fromMeanErr == "summary count must be non-negative, got -1") {
+            "unexpected fromMean error: $fromMeanErr"
+        }
+        // Free fn, selector form: build-arm (0) and handle-arm (1) both reach
+        // the same binding-local Rust fn.
+        check(describeSummary(0, 2L, 8.0, null, false, boom) == "2/8")
+        check(describeSummary(1, null, null, m, true, boom) == "summary of 4 payloads totalling 10")
+        m.close()
     }
 
     // ── flatten input on Summary: default + with, both selectors ─────────────

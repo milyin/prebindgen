@@ -159,6 +159,18 @@ pub mod __macro_support {
     pub fn parse_expr(s: &str) -> ::syn::Expr {
         ::syn::parse_str(s).unwrap_or_else(|e| panic!("prebindgen: invalid expression `{s}`: {e}"))
     }
+
+    /// Parse a `sig!((params) -> Ret)` body: `s` is the token text between
+    /// the macro's outer parens plus the optional `-> Ret` tail, e.g.
+    /// `"(s: & Summary, verbose: bool) -> String"`. Wrapped into a full fn
+    /// item signature under a placeholder name (replaced by the declaring
+    /// decl's fn ident at synthesis time).
+    pub fn parse_signature(s: &str) -> ::syn::Signature {
+        let full = format!("fn __sig {s}");
+        ::syn::parse_str::<::syn::ItemFn>(&format!("{full} {{ unimplemented!() }}"))
+            .map(|f| f.sig)
+            .unwrap_or_else(|e| panic!("prebindgen: invalid signature `sig!({s})`: {e}"))
+    }
 }
 
 /// Build a `syn::Ident` from a bare identifier token. Unlike

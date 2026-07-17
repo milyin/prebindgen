@@ -261,6 +261,20 @@ pub trait Prebindgen {
         HashSet::new()
     }
 
+    /// **Binding-local functions** to synthesize into the registry before
+    /// scanning: `(item, origin module path)` pairs built from
+    /// adapter-declared signatures (there is no `#[prebindgen]` item behind
+    /// them — the fn lives in the binding crate and the generated code calls
+    /// it qualified by `origin`). The item's body is never emitted; only its
+    /// signature is read. A synthesized ident colliding with a real
+    /// `#[prebindgen]` item is a hard resolve error. Adapters without the
+    /// concept return empty.
+    ///
+    /// Default: empty.
+    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+        Vec::new()
+    }
+
     /// `#[prebindgen]` functions declared as **methods** of a class, mapping the
     /// fn ident to its class's canonical [`TypeKey`]. A method's first parameter
     /// of that class type is the receiver and is excluded from input-flattening

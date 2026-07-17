@@ -757,6 +757,449 @@ fn constructor_with_wrong_return_rejected() {
     );
 }
 
+/// Binding-local output field (`fun!(crate::…).sig(sig!(…)).name(…)`): the
+/// accessor lives in the BINDING crate — the generated Rust calls it by its
+/// declared path — and a self-typed `Option<&T>` return degrades to a
+/// nullable typed handle leaf instead of a splice cycle: the
+/// conditional-handle idiom ("deliver the handle only when the binding says
+/// it's worth having").
+#[test]
+fn binding_local_field_conditional_handle() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_enc_get_id(e: &ZEnc) -> i32 { unimplemented!() }",
+        "pub fn z_enc_make() -> ZEnc { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZEnc {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("enc")
+                .class(crate::ptr_class!(ZEnc).method(crate::fun!(z_enc_get_id)))
+                .fun(crate::fun!(z_enc_make)),
+        )
+        .expand(
+            crate::expand_return!(ZEnc)
+                .field(crate::fun!(z_enc_get_id))
+                .field(
+                    crate::fun!(crate::enc_if_custom)
+                        .sig(crate::sig!((e: &ZEnc) -> Option<&ZEnc>))
+                        .name("handle"),
+                ),
+        );
+    let dir = unique_test_dir("jnigen_local_field");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // The generated Rust calls the binding-local accessor by its DECLARED
+    // path (the generated file compiles inside the binding crate).
+    assert!(rc.contains("crate::enc_if_custom("), "{rust}");
+    // The registry accessor stays source-qualified.
+    assert!(rc.contains("myflat::z_enc_get_id("), "{rust}");
+    // Wire shape: the conditional handle is an Option-unwrapped IDENTITY leaf
+    // — present clones through the handle projection and BOXES the jlong
+    // (matching the `Long?` slot of the raw interface), absent delivers JVM
+    // null. A raw primitive `jvalue { j }` here would desync the descriptor.
+    assert!(rc.contains("box_jlong"), "{rust}");
+    assert!(
+        rc.contains("Option::None=>jni::objects::JObject::null()"),
+        "{rust}"
+    );
+
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let raw = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all: String = raw.split_whitespace().collect();
+    // Builder callback: the id leaf + the NULLABLE conditional handle leaf
+    // (self-splice degraded to a plain converter leaf).
+    assert!(all.contains("zEncGetId:Int,handle:ZEnc?"), "{raw}");
+}
+
+/// A binding-local callable must be crate-qualified: `fun!`'s ident arm
+/// catches single segments (declaring a registry fn), and `new_local`
+/// rejects a degenerate single-segment path outright.
+#[test]
+#[should_panic(expected = "crate::")]
+fn binding_local_field_bare_path_rejected() {
+    let _ = crate::lang::FunctionDecl::new_local(syn::parse_quote!(enc_if_custom));
+}
+
+/// A binding-local fn name colliding with a `#[prebindgen]` item is a hard
+/// error — the emitted call is `<prefix>::<name>`, so the name must denote
+/// exactly the binding-local fn.
+#[test]
+fn binding_local_field_name_collision_rejected() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_enc_get_id(e: &ZEnc) -> i32 { unimplemented!() }",
+        "pub fn z_enc_make() -> ZEnc { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZEnc {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("enc")
+                .class(crate::ptr_class!(ZEnc))
+                .fun(crate::fun!(z_enc_make)),
+        )
+        .expand(
+            // `z_enc_get_id` names a real #[prebindgen] fn — a binding-local
+            // field may not shadow it.
+            crate::expand_return!(ZEnc).field(
+                crate::fun!(crate::z_enc_get_id)
+                    .sig(crate::sig!((e: &ZEnc) -> i32))
+                    .name("id"),
+            ),
+        );
+    let err = registry
+        .resolve(jni)
+        .expect_err("collision must be rejected");
+    let msg = format!("{err}");
+    assert!(msg.contains("collides"), "{msg}");
+}
+
+/// A binding-local field spliced through a PARENT decomposition: the child's
+/// conditional-handle leaf arrives prefixed (`enc__handle`) and nullable, and
+/// the generated Rust composes the source accessor with the binding-local
+/// one (`crate::enc_if_custom(myflat::z_msg_enc(&v))`).
+#[test]
+fn binding_local_field_splices_through_parent() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_enc_get_id(e: &ZEnc) -> i32 { unimplemented!() }",
+        "pub fn z_msg_enc(m: &ZMsg) -> &ZEnc { unimplemented!() }",
+        "pub fn z_msg_len(m: &ZMsg) -> i64 { unimplemented!() }",
+        "pub fn z_msg_make() -> ZMsg { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZEnc {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZMsg {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("msg")
+                .class(crate::ptr_class!(ZEnc).method(crate::fun!(z_enc_get_id)))
+                .class(crate::ptr_class!(ZMsg))
+                .fun(crate::fun!(z_msg_make)),
+        )
+        .expand(
+            crate::expand_return!(ZEnc)
+                .field(crate::fun!(z_enc_get_id))
+                .field(
+                    crate::fun!(crate::enc_if_custom)
+                        .sig(crate::sig!((e: &ZEnc) -> Option<&ZEnc>))
+                        .name("handle"),
+                ),
+        )
+        .expand(
+            crate::expand_return!(ZMsg)
+                .field(crate::fun!(z_msg_len).name("len"))
+                .field(crate::fun!(z_msg_enc).name("enc")),
+        );
+    let dir = unique_test_dir("jnigen_local_field_splice");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(
+        rc.contains("crate::enc_if_custom(myflat::z_msg_enc("),
+        "{rust}"
+    );
+
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let raw = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all: String = raw.split_whitespace().collect();
+    // Spliced child leaves: prefixed id + prefixed NULLABLE handle.
+    assert!(all.contains("enc__zEncGetId:Int"), "{raw}");
+    assert!(all.contains("enc__handle:ZEnc?"), "{raw}");
+}
+
+/// Binding-local FUNCTIONS (`fun!(crate::f).sig(sig!(…))`): a fn defined in
+/// the binding crate exported through the full `FunctionDecl` surface — free
+/// package fn, instance method, companion constructor (also referenced by
+/// ident as an `expand_param!` variant arm). After synthesis it IS a registry
+/// fn: converters, receiver rule, name mangling, expansion defaults all apply;
+/// the generated Rust calls it by its declared path.
+#[test]
+fn binding_local_functions_all_positions() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_len(t: &ZThing) -> i64 { unimplemented!() }",
+        "pub fn z_use(primary: ZThing) -> bool { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZThing {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in fns {
+        items.push((
+            syn::Item::Fn(syn::parse_str(src).expect("parse fn")),
+            loc.clone(),
+        ));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("t")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .method(crate::fun!(z_thing_len))
+                        // binding-local INSTANCE METHOD (receiver &Self first)
+                        .method(
+                            crate::fun!(crate::z_thing_ratio)
+                                .sig(crate::sig!((t: &ZThing, scale: f64) -> f64)),
+                        )
+                        // binding-local COMPANION CONSTRUCTOR
+                        .constructor(
+                            crate::fun!(crate::z_thing_from_len)
+                                .sig(crate::sig!((len: i64) -> ZThing)),
+                        ),
+                )
+                // binding-local FREE FUNCTION, fallible (Result -> onError)
+                .fun(
+                    crate::fun!(crate::z_thing_describe)
+                        .sig(crate::sig!((t: &ZThing, verbose: bool) -> Result<String, String>)),
+                )
+                .fun(crate::fun!(z_use)),
+        )
+        // The local constructor also serves as an expand_param! variant arm,
+        // referenced by IDENT like any registry fn.
+        .expand(
+            crate::expand_param!(ZThing)
+                .variant(crate::fun!(z_thing_from_len))
+                .variant_self(),
+        );
+    let dir = unique_test_dir("jnigen_local_funs");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    // Every binding-local call is qualified by its declared path; registry
+    // fns keep their source qualification.
+    assert!(rc.contains("crate::z_thing_ratio("), "{rust}");
+    assert!(rc.contains("crate::z_thing_from_len("), "{rust}");
+    assert!(rc.contains("crate::z_thing_describe("), "{rust}");
+    assert!(rc.contains("myflat::z_thing_len("), "{rust}");
+
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let raw = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let all: String = raw.split_whitespace().collect();
+    // Method on the class (receiver dropped, stated param names surface).
+    assert!(all.contains("funzThingRatio(scale:Double,"), "{raw}");
+    // Companion factory returning the class.
+    assert!(all.contains("funzThingFromLen(len:Long,"), "{raw}");
+    // Free fn with the Result error routed to onError; its ZThing param
+    // picked up the TYPE-LEVEL expand default (selector form) — expansion
+    // defaults apply to binding-local fns exactly as to registry fns.
+    assert!(all.contains("funzThingDescribe("), "{raw}");
+    assert!(
+        all.contains("tSel:Int,t0:Long?,t1:ZThing?,verbose:Boolean,"),
+        "{raw}"
+    );
+    // The variant arm built from the local ctor: selector slot named after
+    // its single param.
+    assert!(all.contains("primarySel:Int"), "{raw}");
+}
+
+/// Naming rule for binding-local fns: `.name()` is NEVER obligatory — the
+/// default derivation feeds the manglers the camel-cased LAST PATH SEGMENT
+/// (`crate::sub::z_thing_ratio` → hook sees `zThingRatio`), with the same
+/// package/class context as a registry fn, and the hook's output names the
+/// Kotlin member. A local field without `.name()` defaults the same way.
+#[test]
+fn binding_local_fn_names_flow_through_manglers() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZThing {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for src in [
+        "pub fn z_thing_make() -> ZThing { unimplemented!() }",
+        // A PLAIN fn returning ZThing — the field decomposition applies here
+        // (constructors are excluded from output decomposition by design).
+        "pub fn z_thing_query() -> ZThing { unimplemented!() }",
+    ] {
+        items.push((syn::Item::Fn(syn::parse_str(src).unwrap()), loc.clone()));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        // Custom hooks: prefix every derived name — proof the hook RAN and
+        // received the camel-cased last segment with its context.
+        .set_fun_name_mangle(|pkg, name| {
+            assert!(pkg.ends_with("t"), "fun hook package: {pkg}");
+            format!("pkg_{name}")
+        })
+        .set_method_name_mangle(|_pkg, class, name| {
+            if class == "ZThing" {
+                format!("cls_{name}")
+            } else {
+                name.to_string()
+            }
+        })
+        .package(
+            crate::package!("t")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .constructor(crate::fun!(z_thing_make))
+                        // local METHOD, no .name(): hook sees `zThingRatio`.
+                        .method(
+                            crate::fun!(crate::sub::z_thing_ratio)
+                                .sig(crate::sig!((t: &ZThing, scale: f64) -> f64)),
+                        ),
+                )
+                // local FREE FN, no .name(): fun hook sees `zThingTag`.
+                .fun(crate::fun!(crate::sub::z_thing_tag).sig(crate::sig!((t: &ZThing) -> i64)))
+                .fun(crate::fun!(z_thing_query)),
+        )
+        // local FIELD, no .name(): defaults to camel(last segment). A second
+        // field (the handle) keeps the decomposition on the builder path —
+        // a single leaf would deliver by direct return, hiding the name.
+        .expand(
+            crate::expand_return!(ZThing)
+                .field(crate::fun!(crate::sub::z_thing_len).sig(crate::sig!((t: &ZThing) -> i64)))
+                .field_self(),
+        );
+    let raw = write_all(
+        registry.resolve(jni).expect("resolve"),
+        "jnigen_local_mangle",
+    );
+    let all: String = raw.split_whitespace().collect();
+    // Method named by the class hook over the camel-cased last segment.
+    assert!(all.contains("funcls_zThingRatio(scale:Double,"), "{raw}");
+    // Free fn named by the package hook.
+    assert!(all.contains("funpkg_zThingTag("), "{raw}");
+    // Field leaf defaulted to camel(last segment) — builder param name.
+    assert!(all.contains("zThingLen:Long"), "{raw}");
+}
+
+/// A path-built `fun!` without `.sig(…)` is a hard error at acceptance —
+/// a path carries no signature to read.
+#[test]
+#[should_panic(expected = ".sig(sig!(")]
+fn binding_local_fun_missing_sig_rejected() {
+    let _ = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("t").fun(crate::fun!(crate::z_no_sig)));
+}
+
+/// `.sig(…)` on an ident-built (registry) `fun!` is a hard error — the
+/// signature is read from the registry.
+#[test]
+#[should_panic(expected = "read from the")]
+fn sig_on_registry_fun_rejected() {
+    let _ = crate::fun!(z_thing_len).sig(crate::sig!((t: &ZThing) -> i64));
+}
+
+/// A binding-local fn name colliding with a `#[prebindgen]` item is a hard
+/// resolve error — the emitted call would resolve the wrong fn.
+#[test]
+fn binding_local_fun_name_collision_rejected() {
+    let loc = myflat_loc();
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZThing {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    items.push((
+        syn::Item::Fn(
+            syn::parse_str("pub fn z_thing_len(t: &ZThing) -> i64 { unimplemented!() }").unwrap(),
+        ),
+        loc.clone(),
+    ));
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("t").class(crate::ptr_class!(ZThing)).fun(
+            // shadows the #[prebindgen] fn of the same name
+            crate::fun!(crate::z_thing_len).sig(crate::sig!((t: &ZThing) -> i64)),
+        ),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("collision must be rejected");
+    assert!(format!("{err}").contains("collides"), "{err}");
+}
+
 /// `.gc_managed()`: the typed handle extends `GcNativeHandle` (pointer in a
 /// separate atomic cell), registers a Cleaner action capturing only the cell,
 /// and every release path settles the once-only untagged→tagged CAS ticket —
