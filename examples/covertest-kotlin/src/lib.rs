@@ -21,6 +21,33 @@ pub fn label_out(l: perftest_flat::Label) -> String {
 
 // Binding-local nullary fn backing the `.with`-sourced constant
 // `COVER_VERSION` (build.rs: `constant!(COVER_VERSION).with(ty!(String),
+// Binding-local FUNCTIONS (`fun!(crate::…).sig(sig!(…))`): full fns defined
+// in THIS crate and exported through the ordinary FunctionDecl surface —
+// free package fn, instance method, companion constructor. No source-crate
+// item exists for any of them.
+pub(crate) fn summary_describe(s: &perftest_flat::Summary, verbose: bool) -> String {
+    let count = perftest_flat::summary_count(s);
+    let total = perftest_flat::summary_total(s);
+    if verbose {
+        format!("summary of {count} payloads totalling {total}")
+    } else {
+        format!("{count}/{total}")
+    }
+}
+
+pub(crate) fn summary_mean(s: &perftest_flat::Summary) -> f64 {
+    let count = perftest_flat::summary_count(s);
+    if count == 0 {
+        0.0
+    } else {
+        perftest_flat::summary_total(s) / count as f64
+    }
+}
+
+pub(crate) fn summary_from_mean(count: i64, mean: f64) -> perftest_flat::Summary {
+    perftest_flat::summary_new(count, mean * count as f64)
+}
+
 // Binding-local CONDITIONAL output field (`expand_return!(Summary)` per-fn
 // set of `storage_summary_probe`: `.field(field!("handle").with(ty!(Option<&
 // Summary>), path!(crate::summary_if_nonempty)))`): deliver the handle leaf

@@ -46,7 +46,9 @@
 //! | per-fn `.expand_return(…)` identity-only | `storage_summary_handle` / `archive_latest` (raw handle return) |
 //! | per-fn `.expand_param(name, …)` variants | `storage_expect_summary` |
 //! | per-fn `.expand_return(…)` fields+self | `storage_summary_full` |
-//! | binding-local field `field!` `.with(ty!, path!)` | `storage_summary_probe` — conditional handle via `crate::summary_if_nonempty` |
+//! | binding-local field `field!` `.with(ty!, path!)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
+//! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
+//! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean`; `Summary.fromMean` ← `crate::summary_from_mean` |
 //! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
@@ -88,7 +90,7 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    field, from, fun, into, lang::JniGen, matching, package, path, ptr_class, try_from, ty,
+    field, from, fun, into, lang::JniGen, matching, package, path, ptr_class, sig, try_from, ty,
     value_class,
 };
 
@@ -242,7 +244,21 @@ fn main() {
                         .constructor(fun!(summary_new).name("of"))
                         .method(fun!(summary_count))
                         .method(fun!(summary_total))
-                        .method(fun!(summary_scaled)),
+                        .method(fun!(summary_scaled))
+                        // Binding-local INSTANCE METHOD and COMPANION
+                        // CONSTRUCTOR (`fun!(crate::…).sig(sig!(…))`): fns
+                        // defined in THIS crate (src/lib.rs), no source-crate
+                        // item — same member machinery as registry fns.
+                        .method(
+                            fun!(crate::summary_mean)
+                                .sig(sig!((s: &Summary) -> f64))
+                                .name("mean"),
+                        )
+                        .constructor(
+                            fun!(crate::summary_from_mean)
+                                .sig(sig!((count: i64, mean: f64) -> Summary))
+                                .name("fromMean"),
+                        ),
                 )
                 // `Archive` holds the latest `Summary` and returns it BORROWED
                 // (`Option<&Summary>`) — the JVM binding clones it into a fresh owned
@@ -346,6 +362,15 @@ fn main() {
         .package(
             package!("analytics")
                 .fun(fun!(storage_summary))
+                // Binding-local FREE FUNCTION: exported like any package fn;
+                // its `&Summary` param resolves through the ordinary borrow
+                // converter, its String return through the ordinary output
+                // converter.
+                .fun(
+                    fun!(crate::summary_describe)
+                        .sig(sig!((s: &Summary, verbose: bool) -> String))
+                        .name("describeSummary"),
+                )
                 // Single split (#52) on the CLASS-DEFAULT `Summary` variants:
                 // `storageMatchesSummary(count, total, …)` / `(expected, …)`.
                 .fun(fun!(storage_matches_summary).split_on_param("expected"))

@@ -64,17 +64,6 @@ pub enum UnfoldError {
         declared: String,
         actual: String,
     },
-    /// A binding-local field's callable path has a single segment — the
-    /// generated file calls it qualified, so at least `crate::` is required.
-    LocalAccessorBarePath {
-        path: String,
-    },
-    /// A binding-local field's fn name collides with a `#[prebindgen]` item
-    /// (or another binding-local field with a different signature) — the
-    /// emitted call is `<prefix>::<name>`, so the name must be unambiguous.
-    LocalAccessorCollision {
-        name: syn::Ident,
-    },
 }
 
 impl std::fmt::Display for UnfoldError {
@@ -105,18 +94,6 @@ impl std::fmt::Display for UnfoldError {
                 f,
                 "output expansion: no deconstructor registered for `{}` (return of `{}`)",
                 target, func
-            ),
-            UnfoldError::LocalAccessorBarePath { path } => write!(
-                f,
-                "field!(...).with(..., path!({path})): a binding-local accessor is called \
-                 QUALIFIED from the generated file — give at least a `crate::`-rooted path",
-            ),
-            UnfoldError::LocalAccessorCollision { name } => write!(
-                f,
-                "field!(...).with(...): the binding-local fn name `{name}` collides with a \
-                 `#[prebindgen]` item (or another binding-local field with a different \
-                 signature) — the emitted call is `<prefix>::{name}`, so rename the \
-                 binding-local fn",
             ),
             UnfoldError::AccessorTargetMismatch {
                 accessor,

@@ -1158,6 +1158,26 @@ impl<M> Registry<M> {
         E: Prebindgen<Metadata = M>,
         M: Clone + Default,
     {
+        // Synthesis pre-pass: adapter-declared BINDING-LOCAL fns become
+        // ordinary registry entries (signature read from the synthesized
+        // item, calls qualified by the recorded origin), so every downstream
+        // stage treats them exactly like `#[prebindgen]` fns.
+        for (item_fn, origin) in adapter.local_functions() {
+            let ident = item_fn.sig.ident.clone();
+            if self.functions.contains_key(&ident) {
+                return Err(ScanError::AdapterInvariant {
+                    message: format!(
+                        "binding-local fn `{ident}` collides with a `#[prebindgen]` item — \
+                         the generated call would resolve the wrong fn; rename the \
+                         binding-local fn"
+                    ),
+                }
+                .into());
+            }
+            self.functions
+                .insert(ident.clone(), (item_fn, crate::SourceLocation::default()));
+            self.item_origins.insert(ident, origin);
+        }
         let declared = DeclaredItems::from_adapter(&adapter)?;
         self.scan_declared_items(&declared)?;
         adapter

@@ -471,6 +471,11 @@ pub struct JniGen {
     /// `#[prebindgen]` consts the binding deliberately does NOT declare,
     /// via [`JniGen::ignore_const`]. Backs [`Prebindgen::ignored_consts`].
     pub(crate) ignored_const_idents: std::collections::HashSet<syn::Ident>,
+    /// Binding-local fns declared via path-built [`fun!`](crate::fun) +
+    /// [`FunctionDecl::sig`]: `(fn ident = path last segment, declared path,
+    /// stated signature)`. Synthesized into registry entries by the
+    /// [`Prebindgen::local_functions`] pre-pass.
+    pub(crate) local_fns: Vec<(syn::Ident, syn::Path, syn::Signature)>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

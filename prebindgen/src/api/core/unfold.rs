@@ -58,21 +58,17 @@ enum DeconRecord {
     /// An accessor whose return type has its own deconstructor splices that
     /// child's records with the leaf names prefixed `name__<child>`.
     Acc { func: syn::Ident, name: String },
-    /// Read this field by calling a **binding-local** accessor: a callable in
-    /// the binding crate (`path`, e.g. `crate::encoding_if_schema`) with a
-    /// STATED return type (`ty`) — there is no `#[prebindgen]` item behind
-    /// it, so the signature cannot be looked up. [`apply`] synthesizes a
-    /// registry entry from the stated signature (so call qualification and
-    /// `Option`-nesting checks work unchanged); splicing follows [`Self::Acc`]
-    /// rules except that a self-referential field (its type already being
-    /// decomposed) degrades to a plain converter leaf instead of a cycle
-    /// error — the very point of such a field is to re-deliver (part of) the
-    /// value under a binding-defined condition.
-    LocalAcc {
-        path: syn::Path,
-        ty: syn::Type,
-        name: String,
-    },
+    /// Read this field by calling a **custom, locally-defined** accessor: any
+    /// callable in the binding crate (`path`) with a STATED return type
+    /// (`ty`) — there is no `#[prebindgen]` item behind it, so the signature
+    /// cannot be looked up. The adapter's `local_functions()` pre-pass
+    /// synthesizes a registry entry from the stated signature (so call
+    /// qualification and `Option`-nesting checks work unchanged); splicing
+    /// follows [`Self::Acc`] rules except that a self-referential field (its
+    /// type already being decomposed) degrades to a plain converter leaf
+    /// instead of a cycle error — that is what lets such a field re-deliver
+    /// (part of) the value itself, e.g. under a binding-defined condition.
+    LocalAcc { path: syn::Path, name: String },
     /// The value itself — the handle/identity leaf (cloned for a `&T` return,
     /// moved for an owned `T`, copied for a `Copy` value_blob). At most one per
     /// deconstructor.
@@ -88,23 +84,6 @@ impl DeconRecord {
             .expect("field!(...).with(...): empty accessor path")
             .ident
             .clone()
-    }
-
-    /// The origin-module prefix of a [`Self::LocalAcc`] path (`crate::sub::f`
-    /// → `"crate::sub"`); a single-segment path has no prefix and resolves
-    /// bare — reject it instead (a binding-local callable is qualified from
-    /// the generated file, so at least `crate::` is required).
-    fn local_prefix(path: &syn::Path) -> Option<String> {
-        if path.segments.len() < 2 {
-            return None;
-        }
-        let segs: Vec<String> = path
-            .segments
-            .iter()
-            .take(path.segments.len() - 1)
-            .map(|s| s.ident.to_string())
-            .collect();
-        Some(segs.join("::"))
     }
 }
 
@@ -243,18 +222,12 @@ impl Deconstructors {
 
     /// `expand_return!` `.field(field!(name).with(ty, path))` — add a
     /// **binding-local** accessor record (stated return type + callable).
-    pub fn add_deconstructor_record_local(
-        &mut self,
-        path: syn::Path,
-        ty: syn::Type,
-        name: impl Into<String>,
-    ) {
+    pub fn add_deconstructor_record_local(&mut self, path: syn::Path, name: impl Into<String>) {
         let i = self
             .cur_deconstructor
             .expect(".field called without a current deconstructor");
         self.deconstructors[i].records.push(DeconRecord::LocalAcc {
             path,
-            ty,
             name: name.into(),
         });
     }
@@ -306,19 +279,13 @@ impl Deconstructors {
 
     /// `.expand_return` `.field(field!(name).with(ty, path))` — append a
     /// **binding-local** accessor field to the current per-fn inline output.
-    pub fn push_inline_field_local(
-        &mut self,
-        path: syn::Path,
-        ty: syn::Type,
-        name: impl Into<String>,
-    ) {
+    pub fn push_inline_field_local(&mut self, path: syn::Path, name: impl Into<String>) {
         let i = self
             .cur_output
             .expect(".field called without a current deconstructor");
         if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
             records.push(DeconRecord::LocalAcc {
                 path,
-                ty,
                 name: name.into(),
             });
         }
@@ -347,12 +314,10 @@ pub fn apply<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
-    // Materialize binding-local accessors: each `LocalAcc` record synthesizes
-    // a registry fn entry from its STATED signature (`fn <ident>(v: &Target)
-    // -> Ty`) with the path prefix as its origin module — downstream
-    // (splicing, call qualification, `Option`-nesting checks, converter
-    // resolution) then reads it exactly like a `#[prebindgen]` accessor's.
-    synthesize_local_accessors(registry, acc)?;
+    // Binding-local accessors (`LocalAcc` records) resolve through registry
+    // entries synthesized by the adapter's `local_functions()` pre-pass in
+    // `Registry::resolve` — by this point they read exactly like
+    // `#[prebindgen]` accessors.
 
     // Gate: every accessor-function record of every declared deconstructor must
     // be a `.fun_accessor` (the single source of truth for "accessor").
@@ -1015,67 +980,6 @@ fn process_decl<M>(
 /// The identity of a found declaration — the type's default deconstructor.
 fn decl_id(type_key: &TypeKey, _decl: &DeconstructorDecl) -> DeconId {
     DeconId::Default(type_key.to_string())
-}
-
-/// Insert a synthetic registry entry for every [`DeconRecord::LocalAcc`]:
-/// signature `fn <path-last-segment>(v: &Target) -> Ty` keyed by the fn
-/// ident, origin = the path's module prefix (`crate::sub::f` → `crate::sub`),
-/// so [`Registry::origin_module`]-driven call qualification emits the exact
-/// declared path. The same fn may back fields of several types ONLY with an
-/// identical stated signature; colliding with a real `#[prebindgen]` item is
-/// a hard error (the emitted call would resolve the wrong fn).
-fn synthesize_local_accessors<M>(
-    registry: &mut Registry<M>,
-    acc: &Deconstructors,
-) -> Result<(), UnfoldError> {
-    let mut synthesized: std::collections::HashMap<syn::Ident, String> = Default::default();
-    let mut synth = |registry: &mut Registry<M>,
-                     records: &[DeconRecord],
-                     target: &syn::Type|
-     -> Result<(), UnfoldError> {
-        for rec in records {
-            let DeconRecord::LocalAcc { path, ty, .. } = rec else {
-                continue;
-            };
-            let ident = DeconRecord::local_ident(path);
-            let Some(prefix) = DeconRecord::local_prefix(path) else {
-                return Err(UnfoldError::LocalAccessorBarePath {
-                    path: quote::quote!(#path).to_string(),
-                });
-            };
-            let sig = format!("{prefix}::{ident}({}) -> {}", quote::quote!(&#target), {
-                quote::quote!(#ty)
-            });
-            match synthesized.get(&ident) {
-                Some(prev) if *prev == sig => continue, // same fn, same shape — fine
-                Some(_) => return Err(UnfoldError::LocalAccessorCollision { name: ident }),
-                None => {}
-            }
-            if registry.functions.contains_key(&ident) {
-                return Err(UnfoldError::LocalAccessorCollision { name: ident });
-            }
-            let item_fn: syn::ItemFn = syn::parse_quote! {
-                fn #ident(v: &#target) -> #ty {
-                    unimplemented!()
-                }
-            };
-            registry
-                .functions
-                .insert(ident.clone(), (item_fn, crate::SourceLocation::default()));
-            registry.item_origins.insert(ident.clone(), prefix);
-            synthesized.insert(ident, sig);
-        }
-        Ok(())
-    };
-    for d in &acc.deconstructors {
-        synth(registry, &d.records, &d.target)?;
-    }
-    for ed in &acc.outputs {
-        if let (DeconSel::Inline(records), Some(target)) = (&ed.sel, &ed.declared_source) {
-            synth(registry, records, target)?;
-        }
-    }
-    Ok(())
 }
 
 /// Register the declaration-default [`DeconSpec`] for `decon` (no-op when

@@ -1009,6 +1009,15 @@ impl Prebindgen for JniGen {
         self.field_accessor_fns()
     }
 
+    /// Binding-local fns to synthesize into the registry, from both entry
+    /// forms — path-built `fun!(crate::f).sig(…)` decls (full stated
+    /// signature) and `field!("name").with(ty, path)` output fields
+    /// (signature `fn f(v: &Target) -> Ty`). One fn may back several
+    /// declarations only with an identical synthesized signature.
+    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+        self.collect_local_functions()
+    }
+
     /// Methods (`.method`) — their fn ident mapped to the owning class's
     /// `TypeKey`, so input-flattening can skip the receiver parameter.
     fn method_receivers(&self) -> std::collections::HashMap<syn::Ident, TypeKey> {

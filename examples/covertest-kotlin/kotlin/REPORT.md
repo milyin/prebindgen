@@ -28,6 +28,8 @@ Base package: `io.prebindgen.covertest`
 - `storage_summary_handle` — `fun storageSummaryHandle(s: Storage, onError: io.prebindgen.covertest.JniErrorHandler<Summary>): Summary`
 - `storage_summary_probe` — `fun <R> storageSummaryProbe(s: Storage, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryStorageSummaryProbeBuilder<R>): R`
   - shaped by: return `Summary` decomposed → [count, total, handle] (Callback delivery)
+- `summary_describe` — `fun describeSummary(sSel: Int, s00: Long?, s01: Double?, s1: Summary?, verbose: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<String>): String`
+  - shaped by: param `s` expanded from `Summary` — variants [summary_new, self]
 - `summary_prefer` — `fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
   - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
   - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]
@@ -101,6 +103,8 @@ Base package: `io.prebindgen.covertest`
 ## class `io.prebindgen.covertest.analytics.Summary` (ptr_class, Rust `Summary`)
 
 - `summary_count` — `fun count(onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
+- `summary_from_mean` — `fun fromMean(count: Long, mean: Double, onError: io.prebindgen.covertest.JniErrorHandler<Summary>): Summary`
+- `summary_mean` — `fun mean(onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`
 - `summary_new` — `fun of(count: Long, total: Double, onError: io.prebindgen.covertest.JniErrorHandler<Summary>): Summary`
 - `summary_scaled` — `fun scaled(factor: Double, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`
 - `summary_total` — `fun total(onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`

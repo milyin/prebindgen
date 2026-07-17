@@ -717,6 +717,18 @@ internal object CovNative {
     ): Long
     external fun stringNew(s: String, errorSink: Any): String
     external fun summaryCount(s: Long, errorSink: Any): Long
+    external fun summaryDescribe(
+        sSel: Int,
+        s00Present: Boolean,
+        s00Value: Long,
+        s01Present: Boolean,
+        s01Value: Double,
+        s1: Long,
+        verbose: Boolean,
+        errorSink: Any,
+    ): String
+    external fun summaryFromMean(count: Long, mean: Double, errorSink: Any): Long
+    external fun summaryMean(s: Long, errorSink: Any): Double
     external fun summaryNew(count: Long, total: Double, errorSink: Any): Long
     external fun summaryPrefer(
         primarySel: Int,

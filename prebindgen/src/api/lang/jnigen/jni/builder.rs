@@ -97,6 +97,7 @@ impl JniGen {
             ignored_name_predicates: Vec::new(),
             ignored_class_types: std::collections::HashSet::new(),
             ignored_const_idents: std::collections::HashSet::new(),
+            local_fns: Vec::new(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. The rank tables are
@@ -474,7 +475,22 @@ impl JniGen {
             param_expands,
             return_expand,
             split_on_params,
+            local,
         } = decl;
+        // A path-built decl (`fun!(crate::f)`) declares a BINDING-LOCAL fn:
+        // record its stated signature for the synthesis pre-pass
+        // ([`Self::local_functions`]). The signature is mandatory — a path
+        // carries nothing to read.
+        if let Some((path, sig)) = local {
+            let Some(sig) = sig else {
+                panic!(
+                    "fun!({p}): a binding-local fn states its signature — chain \
+                     .sig(sig!((params) -> Ret))",
+                    p = quote::quote!(#path)
+                );
+            };
+            self.local_fns.push((rust_ident.clone(), path, sig));
+        }
         for (param, pdecl) in param_expands {
             self.fn_param_expands
                 .push((rust_ident.clone(), param, pdecl));
@@ -680,7 +696,7 @@ impl JniGen {
                     LocalField::SelfField => dec.add_deconstructor_record_id(),
                     LocalField::Local { name, ty, path } => {
                         self.check_local_field_ty(&decl.key, name, ty);
-                        dec.add_deconstructor_record_local(path.clone(), ty.clone(), name.clone());
+                        dec.add_deconstructor_record_local(path.clone(), name.clone());
                     }
                 }
             }
@@ -713,12 +729,81 @@ impl JniGen {
                     LocalField::SelfField => dec.push_inline_field_self(),
                     LocalField::Local { name, ty, path } => {
                         self.check_local_field_ty(&decl.key, name, ty);
-                        dec.push_inline_field_local(path.clone(), ty.clone(), name.clone());
+                        dec.push_inline_field_local(path.clone(), name.clone());
                     }
                 }
             }
         }
         dec
+    }
+
+    /// Synthesize the registry items for every binding-local fn declared on
+    /// this generator (see [`Prebindgen::local_functions`]): path-built
+    /// `fun!(crate::f).sig(…)` decls contribute their full stated signature;
+    /// `field!("name").with(ty, path)` output fields contribute
+    /// `fn <ident>(v: &Target) -> Ty`. The item body is `unimplemented!()`
+    /// — never emitted, only the signature is read; the origin is the path's
+    /// module prefix, so generated calls qualify exactly as declared. One fn
+    /// ident may back several declarations only with an IDENTICAL
+    /// synthesized signature (panic otherwise — the emitted call could not
+    /// distinguish them).
+    pub(crate) fn collect_local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+        use quote::ToTokens;
+        let mut out: Vec<(syn::ItemFn, String)> = Vec::new();
+        let mut seen: HashMap<syn::Ident, String> = HashMap::new();
+        let mut push = |item_fn: syn::ItemFn, origin: String, out: &mut Vec<_>| {
+            let ident = item_fn.sig.ident.clone();
+            let sig_str = format!("{origin}::{}", item_fn.sig.to_token_stream());
+            match seen.get(&ident) {
+                Some(prev) if *prev == sig_str => {} // same fn, same shape
+                Some(_) => panic!(
+                    "binding-local fn `{ident}` is declared with two different signatures — \
+                     the emitted call is `<origin>::{ident}`, so one fn = one signature"
+                ),
+                None => {
+                    seen.insert(ident, sig_str);
+                    out.push((item_fn, origin));
+                }
+            }
+        };
+        // Path-built fun! decls: the stated signature, renamed to the ident.
+        for (ident, path, sig) in &self.local_fns {
+            let origin = local_path_prefix(path);
+            let mut sig = sig.clone();
+            sig.ident = ident.clone();
+            let item_fn: syn::ItemFn = syn::parse_quote! {
+                #sig {
+                    unimplemented!()
+                }
+            };
+            push(item_fn, origin, &mut out);
+        }
+        // field! output fields: `fn <ident>(v: &Target) -> Ty`.
+        let type_level = self
+            .return_expand_decls
+            .iter()
+            .map(|d| (d.key.clone(), &d.fields));
+        let per_fn = self
+            .fn_return_expands
+            .iter()
+            .map(|(_, d)| (d.key.clone(), &d.fields));
+        for (key, fields) in type_level.chain(per_fn) {
+            for f in fields {
+                let LocalField::Local { ty, path, .. } = f else {
+                    continue;
+                };
+                let origin = local_path_prefix(path);
+                let ident = path.segments.last().expect("non-empty path").ident.clone();
+                let target = key.to_type();
+                let item_fn: syn::ItemFn = syn::parse_quote! {
+                    fn #ident(v: &#target) -> #ty {
+                        unimplemented!()
+                    }
+                };
+                push(item_fn, origin, &mut out);
+            }
+        }
+        out
     }
 
     /// Guard for binding-local fields returning an OPTIONAL BORROW: the
@@ -1395,6 +1480,19 @@ pub(crate) fn is_wire_type(ty: &syn::Type) -> bool {
 /// `Result<T, E>` return instead binds its own raw `E` (see
 /// [`JniGen::lookup_output`]); the extern's `Err` arm funnels both to the
 /// per-call `signal_error` sink via `E: Display`.
+/// The origin-module prefix of a binding-local fn's declared path
+/// (`crate::sub::f` → `"crate::sub"`). Paths are validated ≥2 segments at
+/// decl time (`fun!` path arm / `FieldDecl::with`), so the prefix is
+/// always non-empty.
+pub(crate) fn local_path_prefix(path: &syn::Path) -> String {
+    path.segments
+        .iter()
+        .take(path.segments.len() - 1)
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<_>>()
+        .join("::")
+}
+
 pub(crate) fn default_err_type() -> syn::Type {
     syn::parse_quote!(__JniErr)
 }

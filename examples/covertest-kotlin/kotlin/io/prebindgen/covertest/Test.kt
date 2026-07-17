@@ -9,6 +9,7 @@ import io.prebindgen.covertest.analytics.storageExpectSummary
 import io.prebindgen.covertest.analytics.storageMatchesSummary
 import io.prebindgen.covertest.analytics.storageSummary
 import io.prebindgen.covertest.analytics.storageSummaryProbe
+import io.prebindgen.covertest.analytics.describeSummary
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryPrefer
@@ -264,13 +265,15 @@ fun main() {
         s.close()
     }
 
-    // ── binding-local conditional field: field!("handle").with(ty!, path!) ──
-    // storageSummaryProbe's per-fn field set delivers (count, total) plus a
-    // handle leaf gated by the BINDING-side predicate crate::summary_if_nonempty
-    // (covertest-kotlin/src/lib.rs) — the zenoh "Encoding handle only when
-    // schema-carrying" idiom. Condition fails ⇒ the leaf is null (no native
-    // clone, no wrapper); holds ⇒ a live owned handle arrives with the values.
-    section("binding-local conditional field (field! + .with)") {
+    // ── binding-local field: field!("handle").with(ty!, path!) ──────────────
+    // A CUSTOM field computed by a fn defined in THIS binding crate
+    // (crate::summary_if_nonempty, src/lib.rs) — no source-crate item behind
+    // it. This exercise uses it for CONDITIONAL delivery (one use among
+    // many): the handle leaf is gated by the binding-side predicate — the
+    // zenoh "Encoding handle only when schema-carrying" idiom. Condition
+    // fails ⇒ the leaf is null (no native clone, no wrapper); holds ⇒ a live
+    // owned handle arrives with the values.
+    section("binding-local field (field! + .with)") {
         val s = storageNew(boom)
 
         // Empty storage: count == 0 ⇒ the predicate fails ⇒ null handle.
@@ -290,6 +293,26 @@ fun main() {
         check(h.count(boom) == 2L && h.total(boom) == 40.0)
         h.close()
         s.close()
+    }
+
+    // ── binding-local FUNCTIONS: fun!(crate::…).sig(sig!(…)) ─────────────────
+    // Full fns defined in the BINDING crate (covertest-kotlin/src/lib.rs),
+    // exported through the ordinary FunctionDecl surface — free package fn,
+    // instance method, companion constructor. No source-crate item exists for
+    // any of them, yet converters, expansion defaults (describeSummary's `s`
+    // param carries the Summary selector form), members and naming all apply
+    // exactly as for #[prebindgen] fns.
+    section("binding-local functions (fun!(crate::…) + sig!)") {
+        // Companion constructor: Summary.fromMean(4, 2.5) == of(4, 10.0).
+        val m = Summary.fromMean(4L, 2.5, boom)
+        check(m.count(boom) == 4L && m.total(boom) == 10.0)
+        // Instance method.
+        check(m.mean(boom) == 2.5)
+        // Free fn, selector form: build-arm (0) and handle-arm (1) both reach
+        // the same binding-local Rust fn.
+        check(describeSummary(0, 2L, 8.0, null, false, boom) == "2/8")
+        check(describeSummary(1, null, null, m, true, boom) == "summary of 4 payloads totalling 10")
+        m.close()
     }
 
     // ── flatten input on Summary: default + with, both selectors ─────────────

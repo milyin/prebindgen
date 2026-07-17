@@ -101,12 +101,37 @@ macro_rules! value_class {
     };
 }
 
-/// Build a [`FunctionDecl`] directly from a bare function ident: `fun!(foo)`
-/// is `FunctionDecl::new(prebindgen::ident!(foo))`.
+/// Build a [`FunctionDecl`] from a bare function ident or a path:
+///
+/// * `fun!(foo)` — a `#[prebindgen]` fn; its signature is read from the
+///   registry.
+/// * `fun!(crate::foo)` — a **binding-local** fn: any fn the binding crate
+///   defines, exported through the same machinery as a `#[prebindgen]` one.
+///   A path carries no signature to read, so chain
+///   [`.sig(sig!(…))`](crate::lang::FunctionDecl::sig). The generated file
+///   calls it by the declared path (it compiles inside the binding crate,
+///   so `crate::`-rooted paths resolve).
 #[macro_export]
 macro_rules! fun {
     ($name:ident) => {
         $crate::lang::FunctionDecl::new($crate::ident!($name))
+    };
+    ($path:path) => {
+        $crate::lang::FunctionDecl::new_local($crate::__macro_support::parse_path(stringify!(
+            $path
+        )))
+    };
+}
+
+/// State a binding-local fn's exact Rust signature, with **named parameters**
+/// (they become the foreign-side parameter names): `sig!((s: &Summary,
+/// verbose: bool) -> String)`; the `-> Ret` tail is optional (unit). The
+/// signature argument of [`FunctionDecl::sig`](crate::lang::FunctionDecl::sig)
+/// for a path-built [`fun!`](crate::fun).
+#[macro_export]
+macro_rules! sig {
+    (($($params:tt)*) $(-> $ret:ty)?) => {
+        $crate::__macro_support::parse_signature(stringify!(($($params)*) $(-> $ret)?))
     };
 }
 
@@ -172,10 +197,14 @@ macro_rules! expr {
     };
 }
 
-/// Build a [`FieldDecl`] for a **binding-local** `expand_return!` field:
-/// `field!("handle")` names the leaf LITERALLY (it cannot inherit from a
-/// class member — there is no `#[prebindgen]` item behind it), then
+/// Build a [`FieldDecl`] for a **custom, locally-defined** `expand_return!`
+/// field: a field computed by any fn the binding crate defines, rather than
+/// by a `#[prebindgen]` accessor. `field!("handle")` names the leaf
+/// LITERALLY (there is no item to inherit a name from), then
 /// [`FieldDecl::with`] states the accessor's return type and callable.
+///
+/// The function-position peer is a path-built [`fun!`](crate::fun) +
+/// [`.sig(…)`](crate::lang::FunctionDecl::sig).
 #[macro_export]
 macro_rules! field {
     ($name:literal) => {
@@ -614,14 +643,21 @@ impl ExpandParamDecl {
 ///     .field(prebindgen::fun!(sample_get_kind));
 /// ```
 /// One field source for [`ExpandReturnDecl::field`]: a `#[prebindgen]`
-/// accessor (`fun!`, converted implicitly) or a **binding-local** accessor
-/// ([`field!`](crate::field) + [`with`](Self::with)).
+/// accessor (`fun!`, converted implicitly) or a **custom, locally-defined**
+/// accessor ([`field!`](crate::field) + [`with`](Self::with)) — any fn the
+/// binding crate defines, computing whatever field the binding surface needs
+/// without touching the source crate.
 ///
 /// A binding-local field is the output-field peer of [`ConvertSourceDecl::with`]
-/// and [`ConstDecl::with`]: the callable lives in the binding crate (the
-/// generated file compiles inside it, so `path!(crate::…)` resolves), and —
-/// a path carrying no signature — its exact Rust return type is stated with
-/// `ty!`. Shape: `fn(&T) -> Ret` for a field of `expand_return!(T)`.
+/// and [`ConstDecl::with`] (and of the function-position path-built
+/// [`fun!`](crate::fun) + [`sig`](FunctionDecl::sig)): the callable lives in
+/// the binding crate (the generated file compiles inside it, so
+/// `path!(crate::…)` resolves), and — a path carrying no signature — its
+/// exact Rust return type is stated with `ty!`. Shape: `fn(&T) -> Ret` for a
+/// field of `expand_return!(T)`.
+///
+/// One use among many — a *conditional* handle, delivered only when a
+/// binding-side predicate holds (`Option<&T>` return ⇒ nullable leaf):
 ///
 /// ```
 /// // Deliver the Encoding handle only when a schema makes it worth having:
@@ -670,6 +706,12 @@ impl FieldDecl {
     /// (`fn(&T) -> Ret`); a `Ret` of `Option<&T>`/`&F`/owned `F` follows the
     /// same output rules as a `#[prebindgen]` accessor's return.
     pub fn with(mut self, ty: syn::Type, path: syn::Path) -> Self {
+        assert!(
+            path.segments.len() >= 2,
+            "field!(...).with(..., path!({p})): a binding-local accessor is called QUALIFIED \
+             from the generated file — give at least a `crate::`-rooted path",
+            p = quote::quote!(#path)
+        );
         match &mut self.kind {
             FieldSourceKind::Fun(f) => panic!(
                 "fun!({}).with(...): a `#[prebindgen]` accessor's signature is read from \
@@ -1001,6 +1043,10 @@ pub struct FunctionDecl {
     pub(crate) param_expands: Vec<(String, ExpandParamDecl)>,
     pub(crate) return_expand: Option<ExpandReturnDecl>,
     pub(crate) split_on_params: Vec<String>,
+    /// `fun!(crate::f)` — a **binding-local** fn: the declared path plus the
+    /// stated signature ([`sig`](Self::sig), required by acceptance time).
+    /// `None` = an ordinary `#[prebindgen]` registry fn.
+    pub(crate) local: Option<(syn::Path, Option<syn::Signature>)>,
 }
 
 impl FunctionDecl {
@@ -1011,7 +1057,47 @@ impl FunctionDecl {
             param_expands: Vec::new(),
             return_expand: None,
             split_on_params: Vec::new(),
+            local: None,
         }
+    }
+
+    /// `fun!(crate::f)` — declare a **binding-local** fn by path. The fn
+    /// ident (the path's last segment) names it everywhere a registry fn's
+    /// ident would; chain [`sig`](Self::sig) to state its signature.
+    pub fn new_local(path: syn::Path) -> Self {
+        assert!(
+            path.segments.len() >= 2,
+            "fun!({}): a binding-local fn is called QUALIFIED from the generated file — \
+             give at least a `crate::`-rooted path (a bare ident declares a `#[prebindgen]` fn)",
+            quote::quote!(#path)
+        );
+        let ident = path.segments.last().expect("non-empty path").ident.clone();
+        Self {
+            local: Some((path, None)),
+            ..Self::new(ident)
+        }
+    }
+
+    /// State a binding-local fn's exact Rust signature (build it with
+    /// [`sig!`](crate::sig)) — a path carries no signature to read. The
+    /// parameter names become the foreign-side parameter names. Required for
+    /// a path-built [`fun!`](crate::fun); a hard error on a registry fn
+    /// (its signature is read from the registry).
+    pub fn sig(mut self, signature: syn::Signature) -> Self {
+        let Some((_, slot)) = &mut self.local else {
+            panic!(
+                "fun!({}).sig(...): a `#[prebindgen]` fn's signature is read from the \
+                 registry — .sig() applies to path-built binding-local fns (fun!(crate::f))",
+                self.rust_ident
+            );
+        };
+        assert!(
+            slot.is_none(),
+            "fun!({}).sig(...): the signature is already stated",
+            self.rust_ident
+        );
+        *slot = Some(signature);
+        self
     }
 
     /// Set the Kotlin-side name. Default: the Rust name camel-cased
