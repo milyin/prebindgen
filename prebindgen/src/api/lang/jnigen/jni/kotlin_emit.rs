@@ -56,9 +56,10 @@ impl crate::api::core::Generation<JniGen> {
     /// alongside [`write_rust`](Self::write_rust). Each per-kind emitter
     /// builds in-memory [`kt::KtFile`] model fragments; they are merged
     /// into one file per package, rendered, and written under
-    /// `kotlin_root` — which is **generator-owned**: deleted and recreated
-    /// on every run (point it at a dedicated directory like
-    /// `kotlin/generated/`, never at hand-written sources). Pure emission
+    /// `kotlin_root`. The initial write accepts a missing or empty directory
+    /// and marks it generator-owned; later writes replace only marked output
+    /// (point it at a dedicated directory like `kotlin/generated/`, never at
+    /// hand-written sources). Pure emission
     /// over the resolved registry — order-free with respect to
     /// `write_rust`. Returns every path written (one per non-empty
     /// package).

@@ -677,8 +677,8 @@ fn function_and_native_method_hooks_receive_placement() {
     );
 }
 
-/// C4: the Kotlin root is generator-owned — `write_kotlin` deletes and
-/// recreates it on every run, so stale files from a previous generation
+/// C4: after `write_kotlin` creates its ownership marker, later runs replace
+/// the entire generated tree, so stale files from a previous generation
 /// (renamed package, removed declaration) never linger and consumers need
 /// no cleanup boilerplate. Repeat runs are idempotent.
 #[test]
@@ -696,8 +696,9 @@ fn write_kotlin_owns_and_resets_the_root() {
     let dir = unique_test_dir("jnigen_owned_root");
     let _ = std::fs::remove_dir_all(&dir);
     let root = dir.join("kotlin");
-    // A stale file from a "previous run" at a path this generation won't
-    // write — wiped with the rest of the owned root.
+    // Bootstrap the generator-owned root, then leave a stale file from a
+    // previous generation at a path this generation won't write.
+    gen.write_kotlin(&root).expect("initial write_kotlin");
     let stale_dir = root.join("io/test/jni/old");
     std::fs::create_dir_all(&stale_dir).unwrap();
     let stale = stale_dir.join("stale.kt");

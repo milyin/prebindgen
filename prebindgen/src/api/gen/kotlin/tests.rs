@@ -1,6 +1,9 @@
 //! Golden-string tests: one per Kotlin construct the jnigen back-end emits.
 
+use std::fs;
+
 use super::{types::ImportSet, *};
+use crate::api::test_util::unique_test_dir;
 
 fn body_of(src: &str) -> &str {
     // Strip banner + package + imports + the separating blank line.
@@ -549,6 +552,46 @@ fn merged_file_path_is_flattened() {
     let empty = KtFile::new("");
     let p2 = file::merged_file_path(std::path::Path::new("/root"), &empty, "NativeHandle");
     assert_eq!(p2, std::path::PathBuf::from("/root/NativeHandle.kt"));
+}
+
+#[test]
+fn write_files_refuses_nonempty_unowned_root() {
+    let dir = unique_test_dir("kotlin_unowned_root");
+    let root = dir.join("generated");
+    fs::create_dir_all(&root).unwrap();
+    let handwritten = root.join("Main.kt");
+    fs::write(&handwritten, "fun main() = Unit\n").unwrap();
+
+    let err = write_files(&[KtFile::new("io.test")], &root).unwrap_err();
+    assert!(err.to_string().contains("ownership marker"), "{err}");
+    assert_eq!(
+        fs::read_to_string(&handwritten).unwrap(),
+        "fun main() = Unit\n"
+    );
+
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn write_files_replaces_marked_root_and_preserves_it_on_staging_failure() {
+    let dir = unique_test_dir("kotlin_owned_root");
+    let root = dir.join("generated");
+    let initial = KtFile::new("io.test").decl(KtFun::new("first").body(Code::new()));
+    write_files(&[initial], &root).unwrap();
+    let stale = root.join("stale.kt");
+    fs::write(&stale, "stale\n").unwrap();
+
+    let replacement = KtFile::new("io.test").decl(KtFun::new("second").body(Code::new()));
+    write_files(&[replacement], &root).unwrap();
+    assert!(!stale.exists());
+    assert!(root.join(".prebindgen-kotlin-output").exists());
+    assert!(root.join("io/test.kt").exists());
+
+    let escaping_output = KtFile::new("../outside").decl(KtFun::new("one").body(Code::new()));
+    assert!(write_files(&[escaping_output], &root).is_err());
+    assert!(root.join("io/test.kt").exists());
+
+    let _ = fs::remove_dir_all(dir);
 }
 
 #[test]
