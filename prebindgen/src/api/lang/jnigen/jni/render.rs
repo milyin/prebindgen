@@ -458,17 +458,14 @@ pub(crate) fn render_extern_decl(
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<kt::Code> {
-    let rust_name = f.sig.ident.to_string();
-    let kt_name = kt_snake_to_camel(&rust_name);
-    let jni_call = ext.mangle_jni_method(&kt_name);
-
-    // The wire params come straight off the lowered plan — the same
-    // classification the Rust extern and the Kotlin call site consume, so
-    // the three sites agree on arity and types by construction.
+    // The name and wire params come straight off the lowered plan — the
+    // same classification the Rust extern and the Kotlin call site consume,
+    // so the three sites agree on arity, types, and symbol by construction.
     let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
+    let jni_call = &fplan.jni_method;
     let mut params: Vec<(String, String)> = Vec::new();
     for leaf in fplan.leaves() {
-        let name = kt_param_name(&leaf.ident.to_string());
+        let name = leaf.kt_name.clone();
         match &leaf.kind {
             // Flattenable data_class param → its leaf wire params.
             InputKind::FlattenStruct(plan) => {
@@ -726,20 +723,16 @@ pub(crate) fn render_wrapper_fn(
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<kt::KtFun> {
-    let rust_name = f.sig.ident.to_string();
-    // The Kotlin extern in `JNINative` is keyed on the Rust ident
-    // (`kt_snake_to_camel(rust_name)` → the `JNINative` method mangler). The per-entry
-    // `.name("...")` override only changes the *user-facing* Kotlin
-    // wrapper name; the JNI call still has to hit the one extern that
-    // the Rust extern actually emits.
-    let default_kt_name = kt_snake_to_camel(&rust_name);
+    let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
+    // The Kotlin extern in `JNINative` is keyed on the Rust ident (the
+    // plan's `jni_method`). The per-entry `.name("...")` override only
+    // changes the *user-facing* Kotlin wrapper name; the JNI call still has
+    // to hit the one extern that the Rust extern actually emits.
     let kt_name = match kotlin_name_override {
         Some(n) => n.to_string(),
-        None => default_kt_name.clone(),
+        None => kt_snake_to_camel(&f.sig.ident.to_string()),
     };
-    let jni_call = ext.mangle_jni_method(&default_kt_name);
-
-    let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
+    let jni_call = fplan.jni_method.clone();
     let (params, receiver_idx) = classify_params(ext, &fplan, registry, imports, receiver_key)?;
     let out = classify_output(ext, f, &fplan, registry, imports)?;
     let body_expr = build_native_call(ext, &jni_call, &params, &out);
@@ -749,7 +742,7 @@ pub(crate) fn render_wrapper_fn(
     let opaques = collect_opaques(&params);
     let is_unit = out.kt_return.is_none();
     let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
-    let sink = error_sink_parts(ext, f, registry, imports, &r_ty)?;
+    let sink = error_sink_parts(ext, f, &fplan, registry, imports, &r_ty)?;
 
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
     // KDoc: the Rust fn's `///` prose first, then generated notes for every
@@ -965,7 +958,7 @@ fn classify_params(
     let mut receiver_idx: Option<usize> = None;
     let mut params: Vec<Param> = Vec::new();
     for leaf in fplan.leaves() {
-        let mut name = kt_param_name(&leaf.ident.to_string());
+        let mut name = leaf.kt_name.clone();
         let arg_ty = &leaf.ty;
 
         // Instance-method receiver: the first parameter whose peeled Rust type
@@ -988,8 +981,8 @@ fn classify_params(
         // calls the typed `run` — value-blob leaves surface as their raw
         // `ByteArray` wire (the SDK wraps), so no call-site adapter exists.
         // Lambda-literal call sites SAM-convert unchanged.
-        if let InputKind::Callback { args: cb_args } = &leaf.kind {
-            let spec = callback_iface_spec(ext, registry, cb_args)?;
+        if let InputKind::Callback { iface, .. } = &leaf.kind {
+            let spec = iface.as_deref()?;
             let kt_type = spec.kt_ref(vec![]);
             // The extern receives the RAW twin: the generated `asRaw()`
             // proxy (built once per registration) wraps raw leaves into the
@@ -1157,7 +1150,7 @@ fn classify_output(
         // / handle) `plan.source` (e.g. `String`) has no class FQN, so take the
         // element's typed view from the folder interface's element param instead.
         let class_ty = if u.whole_element {
-            let spec = folder_iface_for_plan(ext, registry, plan)?;
+            let spec = u.iface.as_deref()?;
             register_kt_type(&spec.params[1].typed, imports)
         } else {
             let class_fqn = ext
@@ -1172,7 +1165,7 @@ fn classify_output(
             // the threaded accumulator as `List<Class>` (`?`-nullable for an
             // `Option<Vec<…>>` return — `None` yields a null list). Per element
             // only the raw leaves cross — no Java object is built on the Rust side.
-            let spec = folder_iface_for_plan(ext, registry, plan)?;
+            let spec = u.iface.as_deref()?;
             let holder = spec.singleton_holder_name();
             let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
             imports.insert(spec.singleton_holder_fqn());
@@ -1188,11 +1181,7 @@ fn classify_output(
         } else {
             // Scalar: the hoisted `__<Name>Builder` singleton calls `fromParts`;
             // the wrapper returns the concrete class (`?`-nullable for `Option`).
-            let decon = plan
-                .decon
-                .as_ref()
-                .expect("synthesized plan carries its DeconId");
-            let spec = builder_iface_spec(ext, registry, decon)?;
+            let spec = u.iface.as_deref()?;
             let singleton = format!("__{}", spec.raw_name());
             imports.insert(format!("{}.{singleton}", spec.package));
             unfold_call_args.push(singleton);
@@ -1213,7 +1202,7 @@ fn classify_output(
         // A **bare** `Iterable` folds with `<A>`; an `Optional`-wrapped
         // iterable takes the scalar-builder surface below.
         if u.generic == Some("A") {
-            let spec = folder_iface_for_plan(ext, registry, plan)?;
+            let spec = u.iface.as_deref()?;
             builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
             builder_param = Some(("fold".to_string(), spec.kt_ref(vec![kt::KtType::var_("A")])));
             unfold_call_args.push("acc".to_string());
@@ -1225,11 +1214,22 @@ fn classify_output(
             }
             (Some(kt::KtType::var_("A")), None)
         } else {
-            let decon = plan
-                .decon
-                .as_ref()
-                .expect("record-built plan carries its DeconId");
-            let spec = builder_iface_spec(ext, registry, decon)?;
+            // A non-fixed `Optional(Iterable)` historically typed its surface
+            // with the BUILDER spec here while the Rust delivery folds — the
+            // plan stores the folder twin for that shape, so keep the local
+            // builder derivation to preserve the (latent, pre-existing)
+            // divergence rather than silently retype the surface.
+            let local_spec;
+            let spec = if u.iterable_fold {
+                let decon = plan
+                    .decon
+                    .as_ref()
+                    .expect("record-built plan carries its DeconId");
+                local_spec = builder_iface_spec(ext, registry, decon)?;
+                &local_spec
+            } else {
+                u.iface.as_deref()?
+            };
             builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
             if spec.needs_raw() {
                 imports.insert(format!("{}.asRaw", spec.package));
@@ -1444,11 +1444,12 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
 fn error_sink_parts(
     ext: &JniGen,
     f: &syn::ItemFn,
+    fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     r_ty: &kt::KtType,
 ) -> Option<ErrorSink> {
-    let sink_spec = onerror_iface_spec(ext, registry, &f.sig.ident)?;
+    let sink_spec = fplan.onerror_iface.as_ref()?;
     let error_plan = registry.error_plans.get(&f.sig.ident);
     // Per ze leaf: (raw capture Kotlin type, raw default literal, raw→typed
     // wrap) — off the handler interface spec (its first param is the fixed

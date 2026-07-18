@@ -113,8 +113,8 @@ pub(crate) fn vec_helper_method_name(ext: &JniGen, base: &str, suffix: &str) -> 
 }
 
 /// Full Rust JNI symbol for a vec helper — the same spec-escaped
-/// `Java_<pkg>_<JNINative>_…` scheme function wrappers use via
-/// [`mangle_jni_name`] (see `symbol`, #86); these helpers live on the
+/// `Java_<pkg>_<JNINative>_…` scheme function wrappers use via the plan's
+/// `native_symbol` (see `symbol`, #86); these helpers live on the
 /// `JNINative` object, so they share its class path.
 fn vec_helper_symbol(ext: &JniGen, base: &str, suffix: &str) -> String {
     ext.native_method_symbol(&vec_helper_method_name(ext, base, suffix))
