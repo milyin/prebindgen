@@ -433,6 +433,15 @@ pub(crate) fn build_typed_handle(
     class
 }
 
+/// True for an `Iterable` fold delivery, including one wrapped in a single
+/// `Optional` layer (`Option<Vec<T>>` → a nullable `List`). Selects the fold
+/// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
+pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) -> bool {
+    use crate::api::core::unfold::UnfoldShape;
+    matches!(shape, UnfoldShape::Iterable(_))
+        || matches!(shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)))
+}
+
 /// Render one `external fun <mangle_method(package, JNINative, name)>(…): <wire-return>` line
 /// at the JNI **wire** level (matches what the Rust extern receives):
 ///   * opaque-handle (Borrow/Consume) → jlong → `Long`
@@ -443,48 +452,6 @@ pub(crate) fn build_typed_handle(
 /// Opaque returns become `Long`; every other return uses
 /// [`classify_return`]'s `kt_return` (Unit is empty string).
 /// Returns `None` if any parameter's input converter isn't resolved.
-///
-/// Expand a function's inputs into the effective parameter list seen by the
-/// Kotlin wrapper + extern declaration: a parameter carrying a
-/// constructor-expansion [`FoldPlan`] is replaced by its flattened leaves
-/// (each a normal `(name, type)`); every other parameter passes through. The
-/// Rust extern (`emit_jni_function_wrapper`) folds the leaves back into the
-/// built value separately.
-pub(crate) fn effective_inputs(
-    registry: &Registry<KotlinMeta>,
-    f: &syn::ItemFn,
-) -> Vec<(syn::Ident, syn::Type)> {
-    let mut out = Vec::new();
-    for input in &f.sig.inputs {
-        let syn::FnArg::Typed(pt) = input else {
-            continue;
-        };
-        let syn::Pat::Ident(pid) = &*pt.pat else {
-            continue;
-        };
-        if let Some(plan) = registry
-            .expansion_plans
-            .get(&(f.sig.ident.clone(), pid.ident.clone()))
-        {
-            for leaf in &plan.leaves {
-                out.push((leaf.name.clone(), leaf.ty.clone()));
-            }
-        } else {
-            out.push((pid.ident.clone(), (*pt.ty).clone()));
-        }
-    }
-    out
-}
-
-/// True for an `Iterable` fold delivery, including one wrapped in a single
-/// `Optional` layer (`Option<Vec<T>>` → a nullable `List`). Selects the fold
-/// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
-pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) -> bool {
-    use crate::api::core::unfold::UnfoldShape;
-    matches!(shape, UnfoldShape::Iterable(_))
-        || matches!(shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)))
-}
-
 pub(crate) fn render_extern_decl(
     ext: &JniGen,
     f: &syn::ItemFn,
@@ -495,76 +462,63 @@ pub(crate) fn render_extern_decl(
     let kt_name = kt_snake_to_camel(&rust_name);
     let jni_call = ext.mangle_jni_method(&kt_name);
 
+    // The wire params come straight off the lowered plan — the same
+    // classification the Rust extern and the Kotlin call site consume, so
+    // the three sites agree on arity and types by construction.
+    let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
     let mut params: Vec<(String, String)> = Vec::new();
-    for (eff_ident, eff_ty) in effective_inputs(registry, f) {
-        let name = kt_param_name(&eff_ident.to_string());
-        let arg_ty = &eff_ty;
-
-        // Flattenable data_class param → expand into its leaf wire params
-        // (same plan the native wrapper + call site use).
-        if let Some(plan) = crate::api::lang::jnigen::jni::build_flat_input_plan(
-            ext, registry, &eff_ident, arg_ty, "",
-        ) {
-            for leaf in &plan.leaves {
-                let short = register_fqn(&leaf.kt_wire_ty, imports);
-                params.push((leaf.kt_name.clone(), short));
+    for leaf in fplan.leaves() {
+        let name = kt_param_name(&leaf.ident.to_string());
+        match &leaf.kind {
+            // Flattenable data_class param → its leaf wire params.
+            InputKind::FlattenStruct(plan) => {
+                for l in &plan.leaves {
+                    let short = register_fqn(&l.kt_wire_ty, imports);
+                    params.push((l.kt_name.clone(), short));
+                }
             }
-            continue;
+            // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
+            // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire).
+            InputKind::OptionScalar(sp) => {
+                let pshort = register_fqn("Boolean", imports);
+                params.push((sp.present_kt.clone(), pshort));
+                let vshort = register_fqn(&sp.value_kt_type, imports);
+                params.push((sp.value_kt.clone(), vshort));
+            }
+            // Slice/Vec of a flattenable data_class → a single `jlong`
+            // Vec-handle param (the Rust extern decodes the boxed `Vec<T>`).
+            // Elements cross through the synthetic `…VecPush` extern, not
+            // this one.
+            InputKind::VecBuild { .. } => {
+                let short = register_kt_type(&kt::KtType::long(), imports).to_string();
+                params.push((name, short));
+            }
+            // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`,
+            // or by-value `Option<T>`) crosses the JNI wire as a primitive
+            // `jlong` with `0` encoding `None` — so the extern param is a
+            // non-null `Long`, and the `?` lives only on the typed-wrapper
+            // surface. (`value_blob` projections are NOT handles; they keep
+            // their erased wire and can be nullable.)
+            InputKind::Handle { .. } => {
+                let short = register_kt_type(&kt::KtType::long(), imports).to_string();
+                params.push((name, short));
+            }
+            InputKind::Callback { .. } | InputKind::ValueUnwrap { .. } | InputKind::Plain => {
+                let kt_type_raw = if leaf.as_enum_value {
+                    // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
+                    // `Int`; the wrapper passes `.value` / `?.value`. The Rust
+                    // converter unboxes a `java.lang.Integer`, so the extern
+                    // must declare `Int`/`Int?`, never the enum object.
+                    kt::KtType::int()
+                } else {
+                    leaf.kt_meta.clone()?
+                };
+                // The extern block is raw text — render the shortened type.
+                let short = register_kt_type(&kt_type_raw, imports).to_string();
+                let suffix = if leaf.optional { "?" } else { "" };
+                params.push((name, format!("{short}{suffix}")));
+            }
         }
-
-        // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
-        // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire). Same plan
-        // the native wrapper + Kotlin call site use.
-        if let Some(sp) = crate::api::lang::jnigen::jni::build_option_scalar_input_plan(
-            ext, registry, &eff_ident, arg_ty,
-        ) {
-            let pshort = register_fqn("Boolean", imports);
-            params.push((sp.present_kt.clone(), pshort));
-            let vshort = register_fqn(&sp.value_kt_type, imports);
-            params.push((sp.value_kt.clone(), vshort));
-            continue;
-        }
-
-        // Slice/Vec of a flattenable data_class → a single `jlong` Vec-handle
-        // param (the Rust extern decodes the boxed `Vec<T>`). Elements cross
-        // through the synthetic `…VecPush` extern, not this one. Must match the
-        // `jlong` wire emitted by `emit_input_param`'s VecBuild branch.
-        if crate::api::lang::jnigen::jni::vec_build_elem(ext, registry, arg_ty).is_some() {
-            params.push((name, "Long".to_string()));
-            continue;
-        }
-
-        let entry = registry.input_entry(arg_ty)?;
-
-        // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`, or
-        // by-value `Option<T>`) crosses the JNI wire as a primitive `jlong`
-        // with `0` encoding `None` — so the extern param is a non-null `Long`,
-        // and the `?` lives only on the typed-wrapper surface. (`value_blob`
-        // projections are NOT handles; they keep their `ByteArray` wire and
-        // can be nullable.)
-        let proj_is_handle = entry
-            .metadata
-            .projection
-            .as_ref()
-            .map(|p| p.kind == crate::api::lang::jnigen::jni::ProjectionKind::Handle)
-            .unwrap_or(false);
-        let optional = is_option_type(arg_ty) && !proj_is_handle;
-
-        let kt_type_raw = if proj_is_handle {
-            kt::KtType::long()
-        } else if ext.is_kotlin_enum(&enum_probe_type(arg_ty)) {
-            // Enum (incl. `Option<enum>`) crosses as jint → Kotlin `Int`; the
-            // wrapper passes `.value` / `?.value`. The Rust converter unboxes a
-            // `java.lang.Integer`, so the extern must declare `Int`/`Int?`, never
-            // the enum object.
-            kt::KtType::int()
-        } else {
-            entry.metadata.kotlin_name.clone()?
-        };
-        // The extern block is raw text — render the registered/shortened type.
-        let short = register_kt_type(&kt_type_raw, imports).to_string();
-        let suffix = if optional { "?" } else { "" };
-        params.push((name, format!("{short}{suffix}")));
     }
     // Output (data) expansion: a **callback** delivery (`deconstruct_output`)
     // appends the lambda(s) before the error sink and returns the erased result
@@ -795,7 +749,8 @@ pub(crate) fn render_wrapper_fn(
     };
     let jni_call = ext.mangle_jni_method(&default_kt_name);
 
-    let (params, receiver_idx) = classify_params(ext, f, registry, imports, receiver_key)?;
+    let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
+    let (params, receiver_idx) = classify_params(ext, &fplan, registry, imports, receiver_key)?;
     let out = classify_output(ext, f, registry, imports)?;
     let body_expr = build_native_call(ext, &jni_call, &params, &out);
 
@@ -1003,22 +958,25 @@ struct ErrorSink {
     guard_args: String,
 }
 
-/// Classify every effective input into a [`Param`] (Kotlin name/type +
-/// call-site [`ParamMode`]). Returns the params plus the index of the
+/// Type every effective input of the lowered [`JniFunctionPlan`] into a
+/// [`Param`] (Kotlin name/type + call-site [`ParamMode`]). The crossing-form
+/// classification comes from the plan — the same decision the Rust extern and
+/// `external fun` renderers consume — this site only maps each [`InputKind`]
+/// to its Kotlin surface. Returns the params plus the index of the
 /// instance-method receiver (the first param whose peeled type matches
 /// `receiver_key`), which is bound to `this` and dropped from the signature.
 fn classify_params(
     ext: &JniGen,
-    f: &syn::ItemFn,
+    fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<(Vec<Param>, Option<usize>)> {
     let mut receiver_idx: Option<usize> = None;
     let mut params: Vec<Param> = Vec::new();
-    for (eff_ident, eff_ty) in effective_inputs(registry, f) {
-        let mut name = kt_param_name(&eff_ident.to_string());
-        let arg_ty = &eff_ty;
+    for leaf in fplan.leaves() {
+        let mut name = kt_param_name(&leaf.ident.to_string());
+        let arg_ty = &leaf.ty;
 
         // Instance-method receiver: the first parameter whose peeled Rust type
         // is the owning class binds to `this` (so `this_ptr`/`this.ptr`/lock or
@@ -1040,8 +998,8 @@ fn classify_params(
         // calls the typed `run` — value-blob leaves surface as their raw
         // `ByteArray` wire (the SDK wraps), so no call-site adapter exists.
         // Lambda-literal call sites SAM-convert unchanged.
-        if let Some(cb_args) = extract_fn_trait_args(arg_ty) {
-            let spec = callback_iface_spec(ext, registry, &cb_args)?;
+        if let InputKind::Callback { args: cb_args } = &leaf.kind {
+            let spec = callback_iface_spec(ext, registry, cb_args)?;
             let kt_type = spec.kt_ref(vec![]);
             // The extern receives the RAW twin: the generated `asRaw()`
             // proxy (built once per registration) wraps raw leaves into the
@@ -1061,168 +1019,84 @@ fn classify_params(
             continue;
         }
 
-        // Strip leading reference for the type-map lookup; the registry's
-        // input entry is keyed by the param as-written.
-        let entry = registry.input_entry(arg_ty)?;
-        // Opaque-handle params surface as their typed-handle FQN — every
-        // handle is self-contained (its own ptr slot + monitor), so the
-        // wrapper body inlines synchronized blocks directly on the typed
-        // receiver. Detection flows from the folded `Projection` — present
-        // for both `&T` and by-value `T` (the `owned` flag is orthogonal
-        // to presence) — so it's the same source of truth the typed-surface
-        // emitters use.
-        let is_opaque = entry.metadata.projection.is_some();
+        // Typed surface: the projection's Kotlin FQN for opaque handles /
+        // value projections (any `Option<_>` layer is nullable purely on the
+        // typed-wrapper surface — the handle wire stays `jlong` with `0` =
+        // absent), else the resolved entry's Kotlin name. `None` (unresolved
+        // name) skips the wrapper — the escape-hatch path.
+        let kt_type_raw = leaf.kt_public.clone()?;
 
-        // `Option<&T>` / `Option<&mut T>` for opaque T marks the param
-        // nullable; the wrapper body branches on null before lock selection.
-        let is_opt_ref_opaque = is_opaque && is_option_ref(arg_ty);
-        let (kt_type_raw, optional) = if is_opaque {
-            let h = entry.metadata.projection.as_ref()?;
-            let fqn = ext.kotlin_fqn(&h.leaf_key).map(|v| v.to_string())?;
-            // Any `Option<_>` opaque param (borrowed `Option<&T>` or by-value
-            // `Option<T>`) is nullable; value projections likewise. The handle
-            // wire stays `jlong` with `0` = absent, so the `?` is purely the
-            // typed-wrapper surface.
-            (kt::KtType::cls(fqn), is_option_type(arg_ty))
-        } else {
-            // Read the Kotlin name straight off the resolved entry's
-            // metadata — the rank-N handler that built this converter
-            // is also the one that derived the Kotlin name (primitives
-            // from `kotlin_for_wire`, wrappers inherit from inner,
-            // user-declared decoders from `with_kotlin_name`).
-            let kt = entry.metadata.kotlin_name.clone()?;
-            let opt = is_option_type(arg_ty);
-            (kt, opt)
-        };
-
-        // A projection can be a lockable opaque **handle** or a non-lockable
-        // **value projection** (`value_blob` — an inline value class). Only
-        // handles participate in the lock scaffold and pass a `_ptr`; value
-        // projections pass their unwrapped inner field.
-        let proj_kind = entry.metadata.projection.as_ref().map(|p| p.kind.clone());
-        let is_handle = matches!(
-            proj_kind,
-            Some(crate::api::lang::jnigen::jni::ProjectionKind::Handle)
-        );
-        let is_value_proj = matches!(
-            proj_kind,
-            Some(crate::api::lang::jnigen::jni::ProjectionKind::ValueBlob)
-        );
-
-        // Mode: handle → Borrow/Consume by Rust syntactic shape (locked).
-        // Value projection → ValueUnwrap (inline-class field, no lock).
-        // Everything else (primitives, callbacks, data classes) passes through.
-        //
-        // Flattenable data_class params are detected first: the high-level
-        // signature keeps the typed object (`kt_type_raw`), but the
-        // `JNINative` call destructures it into leaf args (same plan the
-        // native wrapper + extern decl consume). The decision is purely
-        // type-based so all three sites agree.
-        let flat_plan = crate::api::lang::jnigen::jni::build_flat_input_plan(
-            ext,
-            registry,
-            &eff_ident,
-            arg_ty,
-            name.as_str(),
-        );
-        let mode = if let Some((elem, _by_ref)) =
-            crate::api::lang::jnigen::jni::vec_build_elem(ext, registry, arg_ty)
-        {
-            // Slice/Vec of a flattenable data_class: build the Rust-side Vec by
-            // pushing each element's leaves, pass the handle (see the body
-            // assembly + `build_vec_build_helper_items`). High-level signature
-            // stays `List<T>` (kt_type_raw, registered below).
-            let h = crate::api::lang::jnigen::jni::vec_build_helpers(ext, registry, &elem)
-                .expect("vec_build_elem Some ⇒ vec_build_helpers Some");
-            let elem_accesses = h
-                .plan
-                .leaves
-                .iter()
-                .filter(|l| !l.is_present_flag)
-                .map(|l| l.kt_access.clone())
-                .collect();
-            ParamMode::VecBuild {
-                base: h.base,
-                elem_accesses,
+        // Map the plan's crossing form to the Kotlin call-site mode.
+        let mode = match &leaf.kind {
+            InputKind::VecBuild { elem, .. } => {
+                // Slice/Vec of a flattenable data_class: build the Rust-side
+                // Vec by pushing each element's leaves, pass the handle (see
+                // the body assembly + `build_vec_build_helper_items`). The
+                // high-level signature stays `List<T>` (registered below).
+                let h = crate::api::lang::jnigen::jni::vec_build_helpers(ext, registry, elem)
+                    .expect("vec_build_elem Some ⇒ vec_build_helpers Some");
+                let elem_accesses = h
+                    .plan
+                    .leaves
+                    .iter()
+                    .filter(|l| !l.is_present_flag)
+                    .map(|l| l.kt_access("__e"))
+                    .collect();
+                ParamMode::VecBuild {
+                    base: h.base,
+                    elem_accesses,
+                }
             }
-        } else if let Some(sp) = crate::api::lang::jnigen::jni::build_option_scalar_input_plan(
-            ext, registry, &eff_ident, arg_ty,
-        ) {
-            // Bare `Option<primitive>` / `Option<enum>`: cross as a `(present,
-            // value)` pair (no boxed object). The high-level signature keeps
-            // `T?` (computed below); only the call-site args split in two.
-            let present_expr = format!("{name} != null");
-            let value_expr = if sp.is_enum {
-                format!("{name}?.value ?: {}", sp.value_kt_zero)
-            } else {
-                format!("{name} ?: {}", sp.value_kt_zero)
-            };
-            ParamMode::OptionScalar {
-                present_expr,
-                value_expr,
+            InputKind::OptionScalar(sp) => {
+                // Bare `Option<primitive>` / `Option<enum>`: cross as a
+                // `(present, value)` pair (no boxed object). The high-level
+                // signature keeps `T?`; only the call-site args split in two.
+                let present_expr = format!("{name} != null");
+                let value_expr = if sp.is_enum {
+                    format!("{name}?.value ?: {}", sp.value_kt_zero)
+                } else {
+                    format!("{name} ?: {}", sp.value_kt_zero)
+                };
+                ParamMode::OptionScalar {
+                    present_expr,
+                    value_expr,
+                }
             }
-        } else if let Some(plan) = flat_plan {
-            ParamMode::FlattenStruct {
-                accesses: plan.leaves.iter().map(|l| l.kt_access.clone()).collect(),
+            InputKind::FlattenStruct(plan) => ParamMode::FlattenStruct {
+                accesses: plan.leaves.iter().map(|l| l.kt_access(&name)).collect(),
+            },
+            InputKind::Handle { .. } => {
+                // Handle → Borrow/Consume by Rust syntactic shape (locked);
+                // `Option<&T>` / by-value `Option<T>` mark the param nullable
+                // and the wrapper body branches on null before lock selection.
+                if is_option_ref(arg_ty) {
+                    ParamMode::BorrowNullable
+                } else if is_option_type(arg_ty) {
+                    // by-value `Option<T>` opaque → nullable consume
+                    ParamMode::ConsumeNullable
+                } else if matches!(arg_ty, syn::Type::Reference(_)) {
+                    ParamMode::Borrow
+                } else {
+                    ParamMode::Consume
+                }
             }
-        } else if is_handle {
-            let borrow = matches!(arg_ty, syn::Type::Reference(_));
-            if is_opt_ref_opaque {
-                ParamMode::BorrowNullable
-            } else if is_option_type(arg_ty) {
-                // by-value `Option<T>` opaque → nullable consume
-                ParamMode::ConsumeNullable
-            } else if borrow {
-                ParamMode::Borrow
-            } else {
-                ParamMode::Consume
-            }
-        } else if is_value_proj {
-            // `@JvmInline value class` (value_blob) param: pass the erased inner
-            // field (`<name>.bytes`, or `<name>?.bytes` when Option) to the
-            // extern, no lock. Supports the Direct (`T` / `&T`) and Nullable
-            // (`Option<T>`) shapes; a collection layer (`Vec<value-blob>`,
-            // i.e. an `Iterable` projection) still needs array codegen and is a
-            // loud build-time error. The inline field is resolved off the
-            // folded projection's `leaf_key`, so `Option<_>` wrappers around the
-            // value blob resolve correctly.
-            let proj = entry.metadata.projection.as_ref()?;
-            if matches!(
-                proj.strategy,
-                crate::api::lang::jnigen::jni::FoldStrategy::Iterable(_)
-            ) {
-                panic!(
-                    "render_wrapper_fn: value-blob `Vec<_>` params aren't \
-                     supported yet (param `{name}`); add array codegen to lift this guard."
-                );
-            }
-            let field =
-                crate::api::lang::jnigen::jni::value_projection_field_for_leaf(ext, &proj.leaf_key)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "render_wrapper_fn: cannot determine inline-class field for value \
-                     projection param `{name}`"
-                        )
-                    });
-            ParamMode::ValueUnwrap { field }
-        } else {
-            ParamMode::PassThrough
+            // `@JvmInline value class` (value_blob) param: pass the erased
+            // inner field (`<name>.bytes`, or `<name>?.bytes` when Option) to
+            // the extern, no lock.
+            InputKind::ValueUnwrap { field } => ParamMode::ValueUnwrap {
+                field: field.clone(),
+            },
+            InputKind::Plain => ParamMode::PassThrough,
+            InputKind::Callback { .. } => unreachable!("callback params handled above"),
         };
 
         let ty = register_kt_type(&kt_type_raw, imports);
-        let kt_type = if optional { ty.nullable() } else { ty };
-        // Strip a leading `&` before the enum check — the `&Priority`
-        // input converter shares Priority's converter (see the rank-1
-        // `& _` arm), and the same `.value` projection applies either
-        // way at the call site.
-        // Detect enums through a leading `&` and through `Option<…>`, so a
-        // nullable enum param passes `?.value` to the (Int?-typed) extern.
-        let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(arg_ty));
+        let kt_type = if leaf.optional { ty.nullable() } else { ty };
         params.push(Param {
             kt_name: name,
             kt_type,
             mode,
-            as_enum_value,
+            as_enum_value: leaf.as_enum_value,
         });
     }
     Some((params, receiver_idx))
