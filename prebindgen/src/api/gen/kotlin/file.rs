@@ -167,12 +167,16 @@ fn inspect_root(kotlin_root: &Path) -> Result<RootState, WriteKotlinError> {
     }
 
     let marker = kotlin_root.join(OWNERSHIP_MARKER);
-    let marker_metadata = fs::symlink_metadata(&marker).map_err(|_| {
-        WriteKotlinError::Other(format!(
-            "refusing to replace non-empty Kotlin output root `{}` without a prebindgen ownership marker",
-            kotlin_root.display()
-        ))
-    })?;
+    let marker_metadata = match fs::symlink_metadata(&marker) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(WriteKotlinError::Other(format!(
+                "refusing to replace non-empty Kotlin output root `{}` without a prebindgen ownership marker",
+                kotlin_root.display()
+            )));
+        }
+        Err(error) => return Err(error.into()),
+    };
     if marker_metadata.file_type().is_symlink() || !marker_metadata.is_file() {
         return Err(WriteKotlinError::Other(format!(
             "refusing to replace non-empty Kotlin output root `{}` without a prebindgen ownership marker",
