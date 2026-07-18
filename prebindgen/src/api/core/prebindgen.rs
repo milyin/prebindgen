@@ -438,6 +438,20 @@ pub trait Prebindgen {
         Ok(())
     }
 
+    /// Post-**resolve** validation boundary — the counterpart of
+    /// [`Self::validate`] that sees the fully resolved registry (converters,
+    /// plans, metadata). Every artifact writer calls it before writing
+    /// anything, so an invalid binding fails cleanly — with every problem
+    /// reported at once — instead of panicking midway after a sibling
+    /// artifact already reached disk. Deterministic over `(self, registry)`;
+    /// it runs once per write call, which keeps artifact writes
+    /// order-independent.
+    ///
+    /// Default: no checks.
+    fn validate_resolved(&self, _registry: &Registry<Self::Metadata>) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Absolute path under which the source crate's items are reachable
     /// from the generated file (e.g. `zenoh_flat`), for adapters that
     /// qualify emitted references against one. Drives the default

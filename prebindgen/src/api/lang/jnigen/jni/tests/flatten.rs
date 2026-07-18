@@ -1570,6 +1570,60 @@ fn split_declaration_colliding_variants_rejected() {
     let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_decl");
 }
 
+/// #90: the validation boundary is cross-artifact — a colliding split
+/// declaration (a Kotlin-side concern) fails `write_rust` too, as a clean
+/// `Err` BEFORE the Rust file is written, so no half-written binding can
+/// exist regardless of write order.
+#[test]
+fn split_declaration_collision_fails_write_rust_before_writing() {
+    let loc = myflat_loc();
+    let srcs: &[&str] = &[
+        "pub fn z_name_from_text(text: String) -> ZName { unimplemented!() }",
+        "pub fn z_name_from_label(label: String) -> ZName { unimplemented!() }",
+        "pub fn z_use_name(name: ZName) -> bool { unimplemented!() }",
+    ];
+    let mut items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Struct(syn::parse_quote!(
+            pub struct ZName {
+                _p: u8,
+            }
+        )),
+        loc.clone(),
+    )];
+    for s in srcs {
+        items.push((syn::Item::Fn(syn::parse_str(s).unwrap()), loc.clone()));
+    }
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZName))
+                .fun(crate::fun!(z_use_name)),
+        )
+        .expand(
+            crate::expand_param!(ZName)
+                .variant(crate::fun!(z_name_from_text))
+                .variant(crate::fun!(z_name_from_label)),
+        );
+    let generation = registry.resolve(jni).expect("resolve");
+    let dir = unique_test_dir("jnigen_split_decl_rust_err");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("gen.rs");
+    let err = generation
+        .write_rust(&out)
+        .expect_err("colliding split declaration must fail write_rust");
+    assert!(
+        err.to_string().contains("same JVM signature"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        !out.exists(),
+        "write_rust must not write on validation failure"
+    );
+}
+
 /// #52: `.no_split()` suppresses the proactive splittability check for a
 /// genuinely non-splittable variant set (used only as the selector form).
 #[test]

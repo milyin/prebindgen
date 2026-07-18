@@ -150,23 +150,10 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // renders the Rust decode/encode for each kind. The output is classified
     // first (inside `build`) so the per-input `match`-arms can splice the
     // function's sentinel into their early-`return` path.
-    let plan = JniFunctionPlan::build(ext, registry, f).unwrap_or_else(|e| match e {
-        PlanError::Unresolved { ty } => panic!(
-            "JniGen::on_function: input type `{}` for `{}` is unresolved",
-            ty, original_ident,
-        ),
-        PlanError::UnresolvedLeaf { ty, param } => panic!(
-            "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-            ty, param,
-        ),
-        PlanError::UnresolvedOutput { ty } => panic!(
-            "JniGen::on_function: return type `{}` of `{}` has no registered output \
-             converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
-             (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
-              to bind a domain exception)",
-            ty, original_ident,
-        ),
-    });
+    // Backstop only — `validate_resolved` reports every plan failure before
+    // any writer runs, so this panic is unreachable through the write paths.
+    let plan = JniFunctionPlan::build(ext, registry, f)
+        .unwrap_or_else(|e| panic!("{}", e.message(original_ident)));
     let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
     // Output (data) expansion: when output expansion was declared for this
     // function, the return value is decomposed by the deconstructor. Two
