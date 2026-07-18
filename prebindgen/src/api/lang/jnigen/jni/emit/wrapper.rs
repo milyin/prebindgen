@@ -136,7 +136,6 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     callee: Option<syn::Expr>,
 ) -> TokenStream {
     let original_ident = &f.sig.ident;
-    let wrapper_ident = mangle_jni_name(ext, original_ident);
 
     let mut wire_params: Vec<TokenStream> = Vec::new();
     // Each entry is a per-input decode statement. Fallible decodes are
@@ -168,6 +167,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             ty, original_ident,
         ),
     });
+    let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
     // Output (data) expansion: when output expansion was declared for this
     // function, the return value is decomposed by the deconstructor. Two
     // deliveries:
@@ -310,7 +310,14 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // Decompose/Optional: a single `__builder` callback.
         let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
         builder_param = Some(unfold_builder_param(u.iterable_fold));
-        emit_unfold_delivery(ext, registry, uplan, &call_expr, &on_err)
+        emit_unfold_delivery(
+            ext,
+            registry,
+            uplan,
+            u.iface.as_deref(),
+            &call_expr,
+            &on_err,
+        )
     } else {
         let output_entry = output_entry.expect("normal path has an output entry");
         let mut phase: TokenStream = quote! { let __out = #call_expr; };
@@ -360,7 +367,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // interface; its `run` method ID is resolved once per process on the
     // interface class (the sink instance differs per call). The trio is in
     // scope for every `signal_error` call the prelude/output phases emit.
-    let sink_spec = onerror_iface_spec(ext, registry, original_ident).unwrap_or_else(|| {
+    let sink_spec = plan.onerror_iface.as_ref().unwrap_or_else(|| {
         panic!(
             "jnigen: cannot derive the onError handler interface for `{}`",
             original_ident

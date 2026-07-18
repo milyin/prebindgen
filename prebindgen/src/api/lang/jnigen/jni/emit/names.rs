@@ -61,12 +61,6 @@ impl syn::visit_mut::VisitMut for QualifyEmittedTypes<'_> {
     }
 }
 
-pub(crate) fn mangle_jni_name(ext: &JniGen, ident: &syn::Ident) -> syn::Ident {
-    let camel = snake_to_camel(&ident.to_string());
-    let mangled = ext.mangle_jni_method(&camel);
-    syn::Ident::new(&ext.native_method_symbol(&mangled), Span::call_site())
-}
-
 /// If `ty` is a `&T` borrow with no explicit lifetime, splice in `'<life>`.
 /// Otherwise return `ty` unchanged.
 pub(crate) fn annotate_borrow_with_lifetime(ty: &syn::Type, life: &str) -> syn::Type {

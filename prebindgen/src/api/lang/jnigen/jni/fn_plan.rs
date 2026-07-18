@@ -17,6 +17,22 @@ use super::*;
 /// patterns — are skipped, mirroring every prior walk), plus the classified
 /// output side.
 pub(crate) struct JniFunctionPlan {
+    /// The mangled `JNINative` extern method name — the one name the Rust
+    /// export symbol, the Kotlin `external fun` declaration, and the wrapper
+    /// call target all key on. Computed ONCE as
+    /// `ext.mangle_jni_method(&kt_snake_to_camel(rust_ident))`, so the three
+    /// tiers agree by construction (previously the Rust symbol camelCased
+    /// with a different helper — a silent mismatch for non-snake idents).
+    pub jni_method: String,
+    /// The spec-escaped JNI export symbol (`Java_<pkg>_<JNINative>_<method>`,
+    /// see `symbol`, #86), derived from [`Self::jni_method`].
+    pub native_symbol: String,
+    /// The onError sink interface — the typed `<Err>Handler` when an error
+    /// plan exists, the global `JniErrorHandler` otherwise. One spec feeds
+    /// the Rust `__SINK_*` statics and the Kotlin `onError` wiring, so the
+    /// FQN/descriptor pair of the cached `run` lookup cannot drift. `None` =
+    /// underivable (the Rust emitter panics, the Kotlin renderer skips).
+    pub onerror_iface: Option<IfaceSpec>,
     pub params: Vec<PlanParam>,
     pub output: FnOutputPlan,
 }
@@ -44,8 +60,11 @@ pub(crate) enum ParamForm {
 
 /// One classified effective parameter (a source param, or one expansion leaf).
 pub(crate) struct PlanLeaf {
-    pub ident: syn::Ident,
     pub ty: syn::Type,
+    /// Kotlin parameter name (`kt_param_name(ident)`: camelCase +
+    /// hard-keyword escaping) — shared by the wrapper signature and the
+    /// `external fun` declaration.
+    pub kt_name: String,
     /// Typed-wrapper surface type: the projection's Kotlin FQN for
     /// handle/value projections, else the resolved entry's Kotlin name.
     /// `None` when the metadata lacks a name (the Kotlin wrapper renderer
@@ -70,9 +89,11 @@ pub(crate) struct PlanLeaf {
 /// construction (each probe rejects the shapes the others accept), so the
 /// probe order is canonical, not load-bearing.
 pub(crate) enum InputKind {
-    /// `impl Fn(args)` callback: erased `Any` on the wire; the typed
-    /// interface spec is derived at render time ([`callback_iface_spec`]).
-    Callback { args: Vec<syn::Type> },
+    /// `impl Fn(args)` callback: erased `Any` on the wire. `iface` is the
+    /// typed `fun interface` spec ([`callback_iface_spec`], keyed on the arg
+    /// types); `None` = underivable, the Kotlin wrapper renderer skips.
+    /// Boxed — an [`IfaceSpec`] would dominate the variant sizes.
+    Callback { iface: Option<Box<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
     VecBuild { elem: syn::Type, by_ref: bool },
@@ -119,6 +140,14 @@ pub(crate) struct UnfoldOutputPlan {
     /// `"A"` for a **bare** `Iterable` fold (an `Optional`-wrapped iterable
     /// takes the scalar-builder surface, hence `"R"`), `"R"` otherwise.
     pub generic: Option<&'static str>,
+    /// The builder/folder `fun interface` spec the delivery calls into —
+    /// [`folder_iface_for_plan`] for an iterable fold (incl. the fixed
+    /// whole-element form), [`builder_iface_spec`] otherwise. One spec feeds
+    /// the Rust upcall statics and every Kotlin surface read, so the cached
+    /// `run` FQN/descriptor pair cannot drift. `None` = underivable (the
+    /// Rust emitter keeps its historical `expect`s, the Kotlin renderer
+    /// skips). Boxed to keep the variant small.
+    pub iface: Option<Box<IfaceSpec>>,
 }
 
 /// Value-return facts: the resolved conversion target and wire on the Rust
@@ -202,6 +231,9 @@ impl JniFunctionPlan {
         registry: &Registry<KotlinMeta>,
         f: &syn::ItemFn,
     ) -> Result<Self, PlanError> {
+        let jni_method = ext.mangle_jni_method(&kt_snake_to_camel(&f.sig.ident.to_string()));
+        let native_symbol = ext.native_method_symbol(&jni_method);
+        let onerror_iface = onerror_iface_spec(ext, registry, &f.sig.ident);
         // Output first: the Rust emitter historically resolved the output
         // before the inputs, so an unresolved-output failure takes precedence
         // over an unresolved-input one.
@@ -235,7 +267,13 @@ impl JniFunctionPlan {
             };
             params.push(PlanParam { ident, ty, form });
         }
-        Ok(Self { params, output })
+        Ok(Self {
+            jni_method,
+            native_symbol,
+            onerror_iface,
+            params,
+            output,
+        })
     }
 
     /// The flattened effective-parameter view (expansion leaves inline) —
@@ -263,20 +301,22 @@ fn classify_leaf(
 ) -> Result<PlanLeaf, PlanError> {
     let optional = is_option_type(ty);
     let as_enum_value = ext.is_kotlin_enum(&enum_probe_type(ty));
+    let kt_name = kt_param_name(&ident.to_string());
 
     // `impl Fn(args)` first: typed entirely from the interface spec — the
     // erased entry exists but its metadata carries no surface type.
     if let Some(args) = extract_fn_trait_args(ty) {
+        let iface = callback_iface_spec(ext, registry, &args).map(Box::new);
         return Ok(PlanLeaf {
-            ident: ident.clone(),
             ty: ty.clone(),
+            kt_name,
             kt_public: None,
             kt_meta: registry
                 .input_entry(ty)
                 .and_then(|e| e.metadata.kotlin_name.clone()),
             optional,
             as_enum_value,
-            kind: InputKind::Callback { args },
+            kind: InputKind::Callback { iface },
         });
     }
 
@@ -316,16 +356,14 @@ fn classify_leaf(
                 if matches!(proj.strategy, FoldStrategy::Iterable(_)) {
                     panic!(
                         "render_wrapper_fn: value-blob `Vec<_>` params aren't \
-                         supported yet (param `{}`); add array codegen to lift this guard.",
-                        kt_param_name(&ident.to_string())
+                         supported yet (param `{kt_name}`); add array codegen to lift this guard."
                     );
                 }
                 let field =
                     value_projection_field_for_leaf(ext, &proj.leaf_key).unwrap_or_else(|| {
                         panic!(
                             "render_wrapper_fn: cannot determine inline-class field for value \
-                     projection param `{}`",
-                            kt_param_name(&ident.to_string())
+                     projection param `{kt_name}`"
                         )
                     });
                 InputKind::ValueUnwrap { field }
@@ -343,8 +381,8 @@ fn classify_leaf(
     };
 
     Ok(PlanLeaf {
-        ident: ident.clone(),
         ty: ty.clone(),
+        kt_name,
         kt_public,
         kt_meta,
         optional,
@@ -386,12 +424,22 @@ fn build_output(
         } else {
             Some("R")
         };
+        let iface = if iterable_fold {
+            folder_iface_for_plan(ext, registry, plan).map(Box::new)
+        } else {
+            let decon = plan
+                .decon
+                .as_ref()
+                .expect("record-built plan carries its DeconId");
+            builder_iface_spec(ext, registry, decon).map(Box::new)
+        };
         return Ok(FnOutputPlan::Unfold(UnfoldOutputPlan {
             iterable_fold,
             optional,
             fixed_builder,
             whole_element: plan.element.is_some(),
             generic,
+            iface,
         }));
     }
 

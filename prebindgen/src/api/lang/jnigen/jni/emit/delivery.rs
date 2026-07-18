@@ -127,6 +127,7 @@ pub(crate) fn emit_unfold_delivery(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::unfold::UnfoldPlan,
+    iface: Option<&IfaceSpec>,
     call_expr: &TokenStream,
     on_err: &TokenStream,
 ) -> TokenStream {
@@ -211,10 +212,8 @@ pub(crate) fn emit_unfold_delivery(
         _ => None,
     };
     if let Some(optional) = opt_iterable {
-        let statics = iface_statics(
-            &folder_iface_for_plan(ext, registry, plan)
-                .expect("folder interface spec derivable for a resolved plan"),
-        );
+        let statics =
+            iface_statics(iface.expect("folder interface spec derivable for a resolved plan"));
         let fold_invoke = |arg_exprs: &[TokenStream]| -> TokenStream {
             quote! {
                 __acc = match __CB_MID.call_object(
@@ -317,13 +316,8 @@ pub(crate) fn emit_unfold_delivery(
 
     match &plan.shape {
         UnfoldShape::Base => {
-            let decon = plan
-                .decon
-                .as_ref()
-                .expect("record-built plan carries its DeconId");
             let statics = iface_statics(
-                &builder_iface_spec(ext, registry, decon)
-                    .expect("builder interface spec derivable for a registered declaration"),
+                iface.expect("builder interface spec derivable for a registered declaration"),
             );
             let body = emit_decompose(&quote!(__out));
             quote! {
@@ -340,13 +334,8 @@ pub(crate) fn emit_unfold_delivery(
                      Iterable (`Option<Vec<T>>`, handled above)"
                 ),
             }
-            let decon = plan
-                .decon
-                .as_ref()
-                .expect("record-built plan carries its DeconId");
             let statics = iface_statics(
-                &builder_iface_spec(ext, registry, decon)
-                    .expect("builder interface spec derivable for a registered declaration"),
+                iface.expect("builder interface spec derivable for a registered declaration"),
             );
             // `None` ⇒ null result (builder skipped); `Some` ⇒ decompose inner.
             let body = emit_decompose(&quote!(__inner));
