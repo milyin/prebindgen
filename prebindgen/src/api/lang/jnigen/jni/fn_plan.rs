@@ -26,10 +26,12 @@ pub(crate) struct PlanParam {
     pub form: ParamForm,
 }
 
-/// How a source parameter crosses the boundary.
+/// How a source parameter crosses the boundary. The single leaf is boxed to
+/// keep the variants near the same size (a [`PlanLeaf`] embeds whole
+/// sub-plans; the `Expanded` payload is just a `Vec` header).
 pub(crate) enum ParamForm {
     /// Ordinary parameter — one classified leaf.
-    Single(PlanLeaf),
+    Single(Box<PlanLeaf>),
     /// Constructor-expansion ([`FoldPlan`] declared for this `(fn, param)`):
     /// the wire form is the plan's flattened leaves, classified individually;
     /// the Rust wrapper folds them back into the built value. Leaves use the
@@ -129,9 +131,9 @@ impl JniFunctionPlan {
                 }
                 ParamForm::Expanded(leaves)
             } else {
-                ParamForm::Single(classify_leaf(
+                ParamForm::Single(Box::new(classify_leaf(
                     ext, registry, &ident, &ty, /*expanded=*/ false, &ident,
-                )?)
+                )?))
             };
             params.push(PlanParam { ident, ty, form });
         }
@@ -142,7 +144,7 @@ impl JniFunctionPlan {
     /// the sequence the Kotlin wrapper and `external fun` declare, in order.
     pub fn leaves(&self) -> impl Iterator<Item = &PlanLeaf> {
         self.params.iter().flat_map(|p| match &p.form {
-            ParamForm::Single(l) => std::slice::from_ref(l).iter(),
+            ParamForm::Single(l) => std::slice::from_ref(&**l).iter(),
             ParamForm::Expanded(ls) => ls.iter(),
         })
     }

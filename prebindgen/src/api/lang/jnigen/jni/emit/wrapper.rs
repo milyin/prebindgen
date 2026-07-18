@@ -494,7 +494,7 @@ fn emit_input_param(
                 .expect("ParamForm::Expanded ⇒ expansion plan present");
             return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err);
         }
-        ParamForm::Single(leaf) => leaf,
+        ParamForm::Single(leaf) => &**leaf,
     };
     let arg_ident = &param.ident;
     let arg_ty = &param.ty;
@@ -622,7 +622,7 @@ fn emit_input_param(
                     original_ident,
                 )
             });
-            emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
+            emit_plain_decode(entry, arg_ident, arg_ty, on_err)
         }
     }
 }
