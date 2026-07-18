@@ -30,7 +30,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 29 sections, every JniGen feature exercised
+PASS - 30 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it

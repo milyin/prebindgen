@@ -3,6 +3,7 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.analytics.SummaryVault
+import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
@@ -606,6 +607,8 @@ internal object CovNative {
     )
     external fun celsiusDouble(c: Int, errorSink: Any): Int
     external fun coverTagRuntime(errorSink: Any): String
+    external fun escapeProbeNew(value: Long, errorSink: Any): Long
+    external fun escape_probe_value(p: Long, errorSink: Any): Long
     external fun labelReverse(l: String, errorSink: Any): String
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
