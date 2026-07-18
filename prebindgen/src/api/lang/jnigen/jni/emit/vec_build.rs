@@ -35,8 +35,8 @@ pub(crate) fn vec_build_elem(
     arg_ty: &syn::Type,
 ) -> Option<(syn::Type, bool)> {
     let (elem, by_ref) = slice_or_vec_elem(arg_ty)?;
-    // The element must flatten; the probe ident/base are irrelevant here.
-    build_flat_input_plan(ext, registry, &format_ident!("e"), &elem, "__e")?;
+    // The element must flatten; the probe ident is irrelevant here.
+    build_flat_input_plan(ext, registry, &format_ident!("e"), &elem)?;
     Some((elem, by_ref))
 }
 
@@ -85,7 +85,7 @@ pub(crate) fn vec_build_helpers(
     registry: &Registry<KotlinMeta>,
     elem: &syn::Type,
 ) -> Option<VecBuildHelpers> {
-    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem, "__e")?;
+    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)?;
     let key = TypeKey::from_type(elem);
     let kt_fqn = ext
         .types

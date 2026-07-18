@@ -243,8 +243,11 @@ pub(crate) struct FlatLeaf {
     pub kt_name: String,
     /// Kotlin `external fun` parameter type (incl. a trailing `?`).
     pub kt_wire_ty: String,
-    /// Kotlin call-site destructure expression feeding this leaf.
-    pub kt_access: String,
+    /// Call-site destructure expression **tail** — everything after the
+    /// object expression (`.field ?: 0`, `?.seq != null`, ` != null`). The
+    /// full access is composed per site via [`Self::kt_access`], so the plan
+    /// itself stays independent of the call form (`payload`, `this`, `__e`).
+    pub kt_access_tail: String,
     /// Per-field input converter ident (`None` for the synthetic present flag).
     pub conv: Option<syn::Ident>,
     /// Struct field this leaf populates. `None` for the struct-level present
@@ -259,6 +262,16 @@ pub(crate) struct FlatLeaf {
     /// field — its `field`'s reconstruct is `if <field>_present { Some(conv(v)) }
     /// else { None }`, gated by the matching per-field present leaf. (Phase 5.)
     pub opt_scalar: bool,
+}
+
+impl FlatLeaf {
+    /// Kotlin call-site destructure expression feeding this leaf, rooted at
+    /// `base` — the object expression at this call site (the camelCase param
+    /// name, `this` for a promoted receiver, `__e` for the vec-build loop
+    /// variable).
+    pub fn kt_access(&self, base: &str) -> String {
+        format!("{base}{}", self.kt_access_tail)
+    }
 }
 
 /// A flattened plan for one struct input parameter. Built once by
@@ -337,16 +350,14 @@ pub(crate) fn kt_leaf_default(sig: &str, nullable: bool) -> Option<String> {
 /// `(<field>_present: Boolean, <field>_value: <prim>)` [`FlatLeaf`] pair, or
 /// `None` to keep the boxed-`JObject` decline. The field-level dual of
 /// [`build_option_scalar_input_plan`]: same boxed-fallback condition (primitive
-/// inner wire, no niche, no projection, no pre-stages). `kt_param` is the call
-/// object expression and `optional` whether the enclosing struct param is itself
-/// `Option<struct>` — when so, the access safe-navigates (`obj?.field`), so an
-/// absent struct yields `present = false` for every field.
-#[allow(clippy::too_many_arguments)]
+/// inner wire, no niche, no projection, no pre-stages). `optional` is whether
+/// the enclosing struct param is itself `Option<struct>` — when so, the access
+/// tail safe-navigates (`?.field`), so an absent struct yields
+/// `present = false` for every field.
 pub(crate) fn option_scalar_field_leaves(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
-    kt_param: &str,
     optional: bool,
     fident: &syn::Ident,
     fcamel: &str,
@@ -366,14 +377,14 @@ pub(crate) fn option_scalar_field_leaves(
         return None;
     }
     let is_enum = ext.is_kotlin_enum(&inner);
-    // `obj.field` / `obj?.field` (safe-nav under an absent `Option<struct>`).
+    // `.field` / `?.field` (safe-nav under an absent `Option<struct>`).
     let field_ref = if optional {
-        format!("{kt_param}?.{fcamel}")
+        format!("?.{fcamel}")
     } else {
-        format!("{kt_param}.{fcamel}")
+        format!(".{fcamel}")
     };
-    let present_access = format!("{field_ref} != null");
-    let value_access = if is_enum {
+    let present_tail = format!("{field_ref} != null");
+    let value_tail = if is_enum {
         format!("{field_ref}?.value ?: {}", prim.kotlin_zero())
     } else {
         format!("{field_ref} ?: {}", prim.kotlin_zero())
@@ -386,7 +397,7 @@ pub(crate) fn option_scalar_field_leaves(
             native_wire_ty: quote!(jni::sys::jboolean),
             kt_name: snake_to_camel(&format!("{}_{}_present", param_name, fident)),
             kt_wire_ty: "Boolean".to_string(),
-            kt_access: present_access,
+            kt_access_tail: present_tail,
             conv: None,
             field: Some(fident.clone()),
             is_present_flag: true,
@@ -397,7 +408,7 @@ pub(crate) fn option_scalar_field_leaves(
             native_wire_ty: quote!(#value_wire),
             kt_name: snake_to_camel(&format!("{}_{}_value", param_name, fident)),
             kt_wire_ty: prim.kotlin_type().to_string(),
-            kt_access: value_access,
+            kt_access_tail: value_tail,
             conv: Some(ie.function.sig.ident.clone()),
             field: Some(fident.clone()),
             is_present_flag: false,
@@ -418,7 +429,6 @@ pub(crate) fn build_flat_input_plan(
     registry: &Registry<KotlinMeta>,
     param_name: &syn::Ident,
     arg_ty: &syn::Type,
-    kt_base: &str,
 ) -> Option<FlatInputPlan> {
     // 1. Resolve the struct target through `&`, `Option<…>`, and `impl Into<S>`.
     let (by_ref, t1) = match arg_ty {
@@ -473,11 +483,6 @@ pub(crate) fn build_flat_input_plan(
 
     // 3. Classify every field as a simple leaf, else fall back.
     let struct_module = struct_module_path(ext, registry, st);
-    // `kt_base` is the Kotlin expression for the object at the call site —
-    // normally the camelCase param name, or `this` for a promoted instance
-    // receiver. The native param idents / extern names stay keyed on
-    // `param_name` so the wire signature is independent of the call form.
-    let kt_param = kt_base.to_string();
     let mut leaves: Vec<FlatLeaf> = Vec::new();
 
     // Present gate for `Option<struct>` (first leaf, mirrors the output
@@ -489,7 +494,7 @@ pub(crate) fn build_flat_input_plan(
             native_wire_ty: quote!(jni::sys::jboolean),
             kt_name: snake_to_camel(&format!("{}_present", param_name)),
             kt_wire_ty: "Boolean".to_string(),
-            kt_access: format!("{kt_param} != null"),
+            kt_access_tail: " != null".to_string(),
             conv: None,
             field: None,
             is_present_flag: true,
@@ -512,7 +517,7 @@ pub(crate) fn build_flat_input_plan(
         // from the two raw scalars (no `intValue()` unbox). Detected before the
         // enum-decline guard below so `Option<enum>` fields take this path too.
         if let Some(pair) = option_scalar_field_leaves(
-            ext, registry, param_name, &kt_param, optional, &fident, &fcamel, &field.ty,
+            ext, registry, param_name, optional, &fident, &fcamel, &field.ty,
         ) {
             leaves.extend(pair);
             continue;
@@ -538,17 +543,17 @@ pub(crate) fn build_flat_input_plan(
         let native_wire_ty = annotate_jobject_with_lifetime(wire, "a").to_token_stream();
         let kt_name = snake_to_camel(&format!("{}_{}", param_name, fident));
 
-        // Destructure expression. Under an absent `Option<struct>` parent the
+        // Destructure tail. Under an absent `Option<struct>` parent the
         // leaf still needs a value on the wire (`present` makes Rust ignore
         // it): nullable leaves ride JVM null, non-null leaves a typed default.
-        let kt_access = if optional {
-            let base = format!("{kt_param}?.{fcamel}");
+        let kt_access_tail = if optional {
+            let base = format!("?.{fcamel}");
             match kt_leaf_default(sig, f_opt) {
                 Some(def) => format!("{base} ?: {def}"),
                 None => base,
             }
         } else {
-            format!("{kt_param}.{fcamel}")
+            format!(".{fcamel}")
         };
 
         leaves.push(FlatLeaf {
@@ -556,7 +561,7 @@ pub(crate) fn build_flat_input_plan(
             native_wire_ty,
             kt_name,
             kt_wire_ty,
-            kt_access,
+            kt_access_tail,
             conv: Some(fentry.function.sig.ident.clone()),
             field: Some(fident),
             is_present_flag: false,

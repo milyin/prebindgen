@@ -186,17 +186,26 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let wire_return = output.wire_return;
     let on_err = output.on_err;
 
-    // Input parameters: look up converter for the param type AS WRITTEN.
-    // No strip — a `&T` param looks up `&T`'s entry (which the `& _`
-    // rank-1 handler resolved by sharing `T`'s function). Call site adds
-    // `&decoded` only for `&T`-shaped originals; that's a Rust call-
-    // convention concern, not a converter concern.
-    for input in &f.sig.inputs {
-        let Some((wp, pre, call_arg)) =
-            emit_input_param(ext, registry, original_ident, input, &on_err)
-        else {
-            continue;
-        };
+    // Input parameters: the lowered plan classifies each param ONCE — the
+    // same classification the Kotlin wrapper and `external fun` renderers
+    // consume — and this site renders the Rust decode for each kind. The
+    // converter is looked up for the param type AS WRITTEN. No strip — a
+    // `&T` param looks up `&T`'s entry (which the `& _` rank-1 handler
+    // resolved by sharing `T`'s function). Call site adds `&decoded` only
+    // for `&T`-shaped originals; that's a Rust call-convention concern, not
+    // a converter concern.
+    let plan = JniFunctionPlan::build(ext, registry, f).unwrap_or_else(|e| match e {
+        PlanError::Unresolved { ty } => panic!(
+            "JniGen::on_function: input type `{}` for `{}` is unresolved",
+            ty, original_ident,
+        ),
+        PlanError::UnresolvedLeaf { ty, param } => panic!(
+            "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
+            ty, param,
+        ),
+    });
+    for param in &plan.params {
+        let (wp, pre, call_arg) = emit_input_param(ext, registry, original_ident, param, &on_err);
         wire_params.extend(wp);
         prelude.extend(pre);
         call_args.push(call_arg);
@@ -462,129 +471,173 @@ fn unfold_builder_param(plan: &crate::api::core::unfold::UnfoldPlan) -> TokenStr
     }
 }
 
-/// Decode one source-fn input parameter: look up its converter for the type AS
-/// WRITTEN (no strip — a `&T` param looks up `&T`'s entry, which the `& _`
-/// rank-1 handler resolved by sharing `T`'s function), then emit its wire
-/// params, prelude decode statements, and the call argument. Returns `None` for
-/// a non-`Typed`/non-`Ident` arg (`self`, patterns), which the caller skips.
-///
-/// Reads only `ext`/`registry`/`original_ident`/`on_err` — independent of any
-/// other input — so the per-input handling stays a self-contained unit.
+/// Render the Rust-side decode for one source-fn parameter from its lowered
+/// [`PlanParam`]: the wire params, prelude decode statements, and the call
+/// argument. The classification (which crossing form) lives in the plan; this
+/// site only renders each [`InputKind`]'s decode.
 #[allow(clippy::type_complexity)]
 fn emit_input_param(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     original_ident: &syn::Ident,
-    input: &syn::FnArg,
+    param: &PlanParam,
     on_err: &TokenStream,
-) -> Option<(Vec<TokenStream>, Vec<TokenStream>, TokenStream)> {
-    let syn::FnArg::Typed(pt) = input else {
-        return None;
+) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    // Constructor-expansion: this parameter's wire form is the fold plan's
+    // flattened leaves. Decode each leaf with its own converter, run the
+    // (pure-Rust) fold to build the value, then pass it to the call.
+    let leaf = match &param.form {
+        ParamForm::Expanded(leaves) => {
+            let fold = registry
+                .expansion_plans
+                .get(&(original_ident.clone(), param.ident.clone()))
+                .expect("ParamForm::Expanded ⇒ expansion plan present");
+            return emit_expanded_param(ext, registry, fold, leaves, &param.ident, on_err);
+        }
+        ParamForm::Single(leaf) => leaf,
     };
-    let syn::Pat::Ident(pat_id) = &*pt.pat else {
-        return None;
-    };
-    let arg_ident = &pat_id.ident;
-    let arg_ty = &*pt.ty;
+    let arg_ident = &param.ident;
+    let arg_ty = &param.ty;
 
     let mut wire_params: Vec<TokenStream> = Vec::new();
     let mut prelude: Vec<TokenStream> = Vec::new();
 
-    // Constructor-expansion: this parameter's wire form is the fold plan's
-    // flattened leaves. Decode each leaf with its own converter, run the
-    // (pure-Rust) fold to build the value, then pass it to the call.
-    if let Some(plan) = registry
-        .expansion_plans
-        .get(&(original_ident.clone(), arg_ident.clone()))
-    {
-        let (wp, pre, call_arg) = emit_expanded_param(ext, registry, plan, arg_ident, on_err);
-        wire_params.extend(wp);
-        prelude.extend(pre);
-        return Some((wire_params, prelude, call_arg));
-    }
-
-    let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
-        panic!(
-            "JniGen::on_function: input type `{}` for `{}` is unresolved",
-            TypeKey::from_type(arg_ty),
-            original_ident,
-        )
-    });
-
-    // Flattenable data_class param: cross its fields as separate wire
-    // params and reconstruct the struct inline — no per-call
-    // `env.get_field(...)` reflection. Falls back (None) to the
-    // single-`JObject` path for any shape outside the conservative leaf
-    // set (handles, nested structs, enums, …). The `JNINative` extern and
-    // the Kotlin call-site destructure read the same plan so the three
-    // sites can't drift.
-    if let Some(plan) = build_flat_input_plan(ext, registry, arg_ident, arg_ty, "") {
-        for leaf in &plan.leaves {
-            let pid = &leaf.native_ident;
-            let pty = &leaf.native_wire_ty;
-            wire_params.push(quote!(#pid: #pty));
+    match &leaf.kind {
+        // Flattenable data_class param: cross its fields as separate wire
+        // params and reconstruct the struct inline — no per-call
+        // `env.get_field(...)` reflection. The `JNINative` extern and the
+        // Kotlin call-site destructure read the same plan so the three
+        // sites can't drift.
+        InputKind::FlattenStruct(plan) => {
+            for leaf in &plan.leaves {
+                let pid = &leaf.native_ident;
+                let pty = &leaf.native_wire_ty;
+                wire_params.push(quote!(#pid: #pty));
+            }
+            let (decode, call_arg) = render_flat_input_decode(plan, arg_ident, on_err);
+            prelude.push(decode);
+            (wire_params, prelude, call_arg)
         }
-        let (decode, call_arg) = render_flat_input_decode(&plan, arg_ident, on_err);
-        prelude.push(decode);
-        return Some((wire_params, prelude, call_arg));
-    }
 
-    // Bare `Option<primitive>` / `Option<enum>` param: cross as a
-    // `(present: jboolean, value: <wire>)` pair instead of a boxed
-    // `java.lang.*` `JObject`. The Rust side rebuilds the `Option` from two
-    // raw scalars — no `env.call_method("intValue", …)` unbox. The `JNINative`
-    // extern decl and the Kotlin call site read the same plan (see
-    // `ParamMode::OptionScalar`), so the three sites can't drift.
-    if let Some(sp) = build_option_scalar_input_plan(ext, registry, arg_ident, arg_ty) {
-        let pid = &sp.present_ident;
-        let vid = &sp.value_ident;
-        let vwire = &sp.value_wire;
-        wire_params.push(quote!(#pid: jni::sys::jboolean));
-        wire_params.push(quote!(#vid: #vwire));
-        let conv = &sp.inner_conv;
-        let tmp = format_ident!("__{}_val", arg_ident);
-        prelude.push(quote! {
-            let #arg_ident = if #pid != 0u8 {
-                let #tmp = match #conv(&mut env, &#vid) {
-                    ::core::result::Result::Ok(__v) => __v,
-                    ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
-                        return #on_err;
-                    }
+        // Bare `Option<primitive>` / `Option<enum>` param: cross as a
+        // `(present: jboolean, value: <wire>)` pair instead of a boxed
+        // `java.lang.*` `JObject`. The Rust side rebuilds the `Option` from
+        // two raw scalars — no `env.call_method("intValue", …)` unbox.
+        InputKind::OptionScalar(sp) => {
+            let pid = &sp.present_ident;
+            let vid = &sp.value_ident;
+            let vwire = &sp.value_wire;
+            wire_params.push(quote!(#pid: jni::sys::jboolean));
+            wire_params.push(quote!(#vid: #vwire));
+            let conv = &sp.inner_conv;
+            let tmp = format_ident!("__{}_val", arg_ident);
+            prelude.push(quote! {
+                let #arg_ident = if #pid != 0u8 {
+                    let #tmp = match #conv(&mut env, &#vid) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                            return #on_err;
+                        }
+                    };
+                    ::core::option::Option::Some(#tmp)
+                } else {
+                    ::core::option::Option::None
                 };
-                ::core::option::Option::Some(#tmp)
-            } else {
-                ::core::option::Option::None
-            };
-        });
-        return Some((wire_params, prelude, quote!(#arg_ident)));
-    }
-
-    // Slice / `Vec` of a flattenable data_class: the param crosses as a single
-    // `jlong` handle to a Rust-side `Vec<T>` that the Kotlin wrapper builds by
-    // pushing each element's decoupled leaves in a loop (see
-    // `build_vec_build_helper_items` + `ParamMode::VecBuild`) — no per-element
-    // `env.get_field(...)`. `&[T]` borrows the boxed Vec; by-value `Vec<T>`
-    // moves it out with `mem::take` (leaving an empty Vec the Kotlin `finally`
-    // frees). Decode is infallible, like the by-value-handle consume below.
-    if let Some((elem, by_ref)) = vec_build_elem(ext, registry, arg_ty) {
-        let handle_ident = format_ident!("{}_handle", arg_ident);
-        wire_params.push(quote!(#handle_ident: jni::sys::jlong));
-        if by_ref {
-            prelude.push(quote!(
-                let #arg_ident: &[#elem] =
-                    unsafe { &*(#handle_ident as *const Vec<#elem>) };
-            ));
-        } else {
-            prelude.push(quote!(
-                let #arg_ident: Vec<#elem> =
-                    unsafe { ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>)) };
-            ));
+            });
+            (wire_params, prelude, quote!(#arg_ident))
         }
-        return Some((wire_params, prelude, quote!(#arg_ident)));
-    }
 
+        // Slice / `Vec` of a flattenable data_class: the param crosses as a
+        // single `jlong` handle to a Rust-side `Vec<T>` that the Kotlin
+        // wrapper builds by pushing each element's decoupled leaves in a loop
+        // (see `build_vec_build_helper_items` + `ParamMode::VecBuild`) — no
+        // per-element `env.get_field(...)`. `&[T]` borrows the boxed Vec;
+        // by-value `Vec<T>` moves it out with `mem::take` (leaving an empty
+        // Vec the Kotlin `finally` frees). Decode is infallible, like the
+        // by-value-handle consume below.
+        InputKind::VecBuild { elem, by_ref } => {
+            let handle_ident = format_ident!("{}_handle", arg_ident);
+            wire_params.push(quote!(#handle_ident: jni::sys::jlong));
+            if *by_ref {
+                prelude.push(quote!(
+                    let #arg_ident: &[#elem] =
+                        unsafe { &*(#handle_ident as *const Vec<#elem>) };
+                ));
+            } else {
+                prelude.push(quote!(
+                    let #arg_ident: Vec<#elem> =
+                        unsafe { ::core::mem::take(&mut *(#handle_ident as *mut Vec<#elem>)) };
+                ));
+            }
+            (wire_params, prelude, quote!(#arg_ident))
+        }
+
+        // By-value `T` opaque-handle parameter: emit the consume
+        // converter inline, bypassing `OwnedObject`. The Java side
+        // holds the handle's monitor and passes the pointer here;
+        // `Box::from_raw` reconstructs the unique owner and `*box`
+        // moves `T` out, dropping the heap allocation. The
+        // unique-ownership invariant is upheld by the Kotlin wrapper
+        // (monitor + tag-bit close in `finally`), which ensures the
+        // same live pointer cannot be passed twice. No `T: Clone`
+        // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
+        // A null or tagged (closed) pointer — a close that raced past
+        // the pre-lock guard — is rejected before any dereference.
+        InputKind::Handle { direct: true } if !matches!(arg_ty, syn::Type::Reference(_)) => {
+            let entry = registry
+                .input_entry(arg_ty)
+                .expect("plan classified Handle ⇒ entry present");
+            let wire_ident = if matches!(&entry.destination, syn::Type::Ptr(_)) {
+                format_ident!("{}_ptr", arg_ident)
+            } else {
+                arg_ident.clone()
+            };
+            wire_params.push(quote!(#wire_ident: jni::sys::jlong));
+            prelude.push(quote!(
+                if #wire_ident == 0 || (#wire_ident & 1) == 1 {
+                    let __zd = __ze_defaults(&mut env);
+                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some("Operation on a closed native handle."), &__zd);
+                    return #on_err;
+                }
+                let #arg_ident: #arg_ty = unsafe {
+                    *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
+                };
+            ));
+            (wire_params, prelude, quote!(#arg_ident))
+        }
+
+        // Everything else — borrowed/composed handles, value projections,
+        // callbacks, plain types — decodes through the resolved entry's
+        // ordinary converter chain.
+        InputKind::Callback { .. }
+        | InputKind::Handle { .. }
+        | InputKind::ValueUnwrap { .. }
+        | InputKind::Plain => {
+            let entry = registry.input_entry(arg_ty).unwrap_or_else(|| {
+                panic!(
+                    "JniGen::on_function: input type `{}` for `{}` is unresolved",
+                    TypeKey::from_type(arg_ty),
+                    original_ident,
+                )
+            });
+            emit_plain_decode(&entry, arg_ident, arg_ty, on_err)
+        }
+    }
+}
+
+/// The ordinary converter-chain decode shared by every pass-through kind:
+/// wire param + staged decode prelude + the call argument (`&decoded` /
+/// `.as_deref()` per the source param's Rust shape).
+fn emit_plain_decode(
+    entry: &crate::api::core::registry::TypeEntry<KotlinMeta>,
+    arg_ident: &syn::Ident,
+    arg_ty: &syn::Type,
+    on_err: &TokenStream,
+) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
+    let mut wire_params: Vec<TokenStream> = Vec::new();
+    let mut prelude: Vec<TokenStream> = Vec::new();
     let wire = &entry.destination;
     let conv = entry.converter_ident().clone();
     let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {
@@ -592,34 +645,6 @@ fn emit_input_param(
     } else {
         arg_ident.clone()
     };
-
-    // By-value `T` opaque-handle parameter: emit the consume
-    // converter inline, bypassing `OwnedObject`. The Java side
-    // holds the handle's monitor and passes the pointer here;
-    // `Box::from_raw` reconstructs the unique owner and `*box`
-    // moves `T` out, dropping the heap allocation. The
-    // unique-ownership invariant is upheld by the Kotlin wrapper
-    // (monitor + tag-bit close in `finally`), which ensures the
-    // same live pointer cannot be passed twice. No `T: Clone`
-    // bound, so non-Clone handles (e.g. `Publisher<'a>`) work too.
-    // A null or tagged (closed) pointer — a close that raced past
-    // the pre-lock guard — is rejected before any dereference.
-    let is_consume =
-        !matches!(arg_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
-    if is_consume {
-        wire_params.push(quote!(#wire_ident: jni::sys::jlong));
-        prelude.push(quote!(
-            if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some("Operation on a closed native handle."), &__zd);
-                return #on_err;
-            }
-            let #arg_ident: #arg_ty = unsafe {
-                *std::boxed::Box::from_raw(#wire_ident as *mut #arg_ty)
-            };
-        ));
-        return Some((wire_params, prelude, quote!(#arg_ident)));
-    }
 
     let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
     wire_params.push(quote!(#wire_ident: #wire_with_lifetime));
@@ -712,13 +737,13 @@ fn emit_input_param(
         }
         _ => quote!(#arg_ident),
     };
-    Some((wire_params, prelude, call_arg))
+    (wire_params, prelude, call_arg)
 }
 
 /// Emit the wire params, decode prelude, and call argument for one
-/// constructor-expanded parameter. Each leaf is decoded with its own resolved
-/// input converter (reusing the by-value-handle consume fast path where the
-/// leaf is a direct owned handle); the leaves then feed
+/// constructor-expanded parameter. Each classified leaf is decoded with its
+/// own resolved input converter (reusing the by-value-handle consume fast
+/// path where the leaf is a direct owned handle); the leaves then feed
 /// [`crate::api::core::expand::emit_fold`], whose `Result<_, String>` is routed
 /// through the same error sink as any fallible input. The returned call
 /// argument is the built value (`&value` when the original parameter was `&T`).
@@ -726,6 +751,7 @@ pub(crate) fn emit_expanded_param(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &crate::api::core::expand::FoldPlan,
+    leaves: &[PlanLeaf],
     orig_param: &syn::Ident,
     on_err: &TokenStream,
 ) -> (Vec<TokenStream>, Vec<TokenStream>, TokenStream) {
@@ -733,26 +759,28 @@ pub(crate) fn emit_expanded_param(
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut leaf_locals: Vec<syn::Ident> = Vec::new();
 
-    for leaf in &plan.leaves {
+    debug_assert_eq!(plan.leaves.len(), leaves.len());
+    for (leaf, classified) in plan.leaves.iter().zip(leaves) {
         let leaf_ty = &leaf.ty;
-        let entry = registry.input_entry(leaf_ty).unwrap_or_else(|| {
-            panic!(
-                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
-                TypeKey::from_type(leaf_ty),
-                orig_param,
-            )
-        });
+        let lookup_entry = || {
+            registry.input_entry(leaf_ty).unwrap_or_else(|| {
+                panic!(
+                    "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
+                    TypeKey::from_type(leaf_ty),
+                    orig_param,
+                )
+            })
+        };
         let local = format_ident!("__exp_{}", leaf.name);
 
         // `Option<scalar>` / `Option<enum>` leaf (only produced by a
         // selector-dispatched constructor variant, where each arm's args are
         // `Option`-wrapped by presence): cross as a decoupled
         // `(present: jboolean, value: <wire>)` pair instead of a boxed
-        // `java.lang.*` `JObject`. This matches the Kotlin extern — which
-        // applies the same `build_option_scalar_input_plan` per expanded leaf in
-        // `render_extern_decl` — and the bare top-level `Option<scalar>` param
-        // path, so the JNI arity/types agree on both sides of the wire.
-        if let Some(sp) = build_option_scalar_input_plan(ext, registry, &leaf.name, leaf_ty) {
+        // `java.lang.*` `JObject`. The Kotlin extern and call site consume
+        // the same classified plan, so the JNI arity/types agree on both
+        // sides of the wire.
+        if let InputKind::OptionScalar(sp) = &classified.kind {
             let present_ident = &sp.present_ident;
             let value_ident = &sp.value_ident;
             let value_wire = &sp.value_wire;
@@ -781,8 +809,8 @@ pub(crate) fn emit_expanded_param(
         // Direct owned-handle leaf (e.g. an identity-variant `T`): consume the
         // jlong handle inline, mirroring the normal by-value-handle path —
         // including its null/tagged (closed) pointer guard.
-        let is_consume =
-            !matches!(leaf_ty, syn::Type::Reference(_)) && entry.metadata.is_direct_handle();
+        let is_consume = matches!(classified.kind, InputKind::Handle { direct: true })
+            && !matches!(leaf_ty, syn::Type::Reference(_));
         if is_consume {
             let wire_ident = format_ident!("{}_ptr", leaf.name);
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
@@ -800,6 +828,7 @@ pub(crate) fn emit_expanded_param(
             continue;
         }
 
+        let entry = lookup_entry();
         let wire = &entry.destination;
         let conv = entry.function.sig.ident.clone();
         let wire_ident = if matches!(wire, syn::Type::Ptr(_)) {

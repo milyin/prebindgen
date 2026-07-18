@@ -491,6 +491,7 @@ mod selector;
 mod tests;
 mod trait_impl;
 
+mod fn_plan;
 mod fold;
 mod kotlin_emit;
 mod overloads;
@@ -504,6 +505,7 @@ pub(crate) use classify::*;
 pub(crate) use config::*;
 pub use decl::*;
 pub(crate) use emit::*;
+pub(crate) use fn_plan::*;
 pub(crate) use fold::*;
 pub(crate) use iface::*;
 pub(crate) use overloads::*;
