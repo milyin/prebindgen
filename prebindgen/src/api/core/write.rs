@@ -30,6 +30,10 @@ pub enum WriteError {
         phase: &'static str,
         source: syn::Error,
     },
+    /// The adapter's post-resolve validation
+    /// ([`Prebindgen::validate_resolved`]) rejected the binding — nothing
+    /// was written.
+    Validation(String),
 }
 
 impl std::fmt::Display for WriteError {
@@ -42,6 +46,7 @@ impl std::fmt::Display for WriteError {
                     phase, source
                 )
             }
+            WriteError::Validation(msg) => write!(f, "binding validation failed: {}", msg),
         }
     }
 }
@@ -57,6 +62,12 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     ext: &E,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
+    // Post-resolve validation boundary: every artifact writer runs it first,
+    // so an invalid binding fails cleanly before ANY file is written —
+    // regardless of which artifact is written first.
+    ext.validate_resolved(registry)
+        .map_err(WriteError::Validation)?;
+
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,

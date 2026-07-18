@@ -198,8 +198,10 @@ pub(crate) enum ReturnSurface {
     Plain { kt: kt::KtType },
 }
 
-/// Plan construction failure. The Rust emitter maps each variant to its
-/// historical panic; the Kotlin renderers map to `None` (skip).
+/// Plan construction failure. The validation boundary
+/// ([`validate_bindings`]) reports every failure before any artifact is
+/// written; the Rust emitter keeps the same messages as panic backstops and
+/// the Kotlin renderers map to `None` (skip).
 pub(crate) enum PlanError {
     /// `registry.input_entry` has no converter for a source param type.
     Unresolved { ty: TypeKey },
@@ -207,6 +209,104 @@ pub(crate) enum PlanError {
     UnresolvedLeaf { ty: TypeKey, param: syn::Ident },
     /// `registry.output_entry` has no converter for the output target type.
     UnresolvedOutput { ty: TypeKey },
+}
+
+impl PlanError {
+    /// The historical emission-panic message for this failure, shared by the
+    /// validation boundary and the Rust emitter's backstop panics so the
+    /// wording cannot drift.
+    pub fn message(&self, fn_ident: &syn::Ident) -> String {
+        match self {
+            PlanError::Unresolved { ty } => format!(
+                "JniGen::on_function: input type `{}` for `{}` is unresolved",
+                ty, fn_ident,
+            ),
+            PlanError::UnresolvedLeaf { ty, param } => format!(
+                "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
+                ty, param,
+            ),
+            PlanError::UnresolvedOutput { ty } => format!(
+                "JniGen::on_function: return type `{}` of `{}` has no registered output \
+                 converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
+                 (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
+                  to bind a domain exception)",
+                ty, fn_ident,
+            ),
+        }
+    }
+}
+
+/// The post-resolve validation boundary (issue #90): build the lowered plan
+/// for every bound function — declared functions, declared-const getters,
+/// and expression-constant getters — and check the split declarations,
+/// collecting every failure. Called by every artifact writer (via
+/// [`Prebindgen::validate_resolved`]) before anything reaches disk, so an
+/// invalid binding can no longer leave one artifact written and its sibling
+/// missing.
+///
+/// [`Prebindgen::validate_resolved`]: crate::api::core::prebindgen::Prebindgen::validate_resolved
+pub(crate) fn validate_bindings(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+) -> Result<(), String> {
+    let mut errors: Vec<String> = Vec::new();
+
+    if let Err(e) = ext.validate_split_declarations(registry) {
+        errors.push(e);
+    }
+
+    // Declared functions (incl. binding-local synthetics and fn-backed
+    // constants), in deterministic ident order.
+    let declared = ext.declared_functions();
+    let mut fn_idents: Vec<&syn::Ident> = registry.functions.keys().collect();
+    fn_idents.sort();
+    for ident in fn_idents {
+        if !declared.contains(ident) {
+            continue;
+        }
+        let (item_fn, _) = &registry.functions[ident];
+        if let Err(e) = JniFunctionPlan::build(ext, registry, item_fn) {
+            errors.push(e.message(ident));
+        }
+    }
+
+    // Declared consts: their synthetic nullary getters run through the same
+    // plan machinery (`JniGen::on_const`).
+    if let Some(declared_consts) = ext.declared_consts() {
+        let mut const_idents: Vec<&syn::Ident> = registry.consts.keys().collect();
+        const_idents.sort();
+        for ident in const_idents {
+            if *ident == "_" || !declared_consts.contains(ident) {
+                continue;
+            }
+            let (item_const, _) = &registry.consts[ident];
+            let getter = const_getter_fn(item_const);
+            if let Err(e) = JniFunctionPlan::build(ext, registry, &getter) {
+                errors.push(e.message(&getter.sig.ident));
+            }
+        }
+    }
+
+    // Expression constants: same synthetic `const_get_*` getter shape,
+    // seeded from the val name.
+    let mut expr_decls: Vec<_> = ext
+        .packages
+        .values()
+        .flat_map(|p| &p.constant_exprs)
+        .collect();
+    expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
+    for decl in expr_decls {
+        let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
+        if let Err(e) = JniFunctionPlan::build(ext, registry, &getter) {
+            errors.push(e.message(&getter.sig.ident));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
 
 impl FnOutputPlan {

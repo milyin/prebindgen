@@ -53,8 +53,15 @@ impl JniGen {
     /// [`FunctionDecl::split_on_param`](crate::fun) can emit unambiguous
     /// overloads. Runs regardless of whether any function actually splits the
     /// type, so authorship errors surface early. `.no_split()` opts a decl out.
-    /// A collision panics with a message attributed to the declaration.
-    pub(crate) fn validate_split_declarations(&self, registry: &Registry<KotlinMeta>) {
+    /// A collision errors with a message attributed to the declaration
+    /// (surfaced through the [`validate_resolved`] boundary before any
+    /// artifact is written).
+    ///
+    /// [`validate_resolved`]: crate::api::core::prebindgen::Prebindgen::validate_resolved
+    pub(crate) fn validate_split_declarations(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Result<(), String> {
         let type_level = self
             .param_expand_decls
             .iter()
@@ -86,7 +93,7 @@ impl JniGen {
             for i in 0..sigs.len() {
                 for j in (i + 1)..sigs.len() {
                     if sigs[i].1 == sigs[j].1 {
-                        panic!(
+                        return Err(format!(
                             "expand_param!({t}) [{site}]: variants {a} and {b} both surface as \
                              `({sig})` — a split would emit two overloads with the same JVM \
                              signature; disambiguate the constructors or add .no_split()",
@@ -94,11 +101,12 @@ impl JniGen {
                             a = sigs[i].0,
                             b = sigs[j].0,
                             sig = sigs[i].1.join(", "),
-                        );
+                        ));
                     }
                 }
             }
         }
+        Ok(())
     }
 }
 

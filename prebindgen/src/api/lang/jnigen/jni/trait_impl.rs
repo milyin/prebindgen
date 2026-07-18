@@ -1137,6 +1137,14 @@ impl Prebindgen for JniGen {
         Ok(())
     }
 
+    /// The post-resolve validation boundary (issue #90): every bound
+    /// function's lowered plan must build, and the split declarations must
+    /// be unambiguous, before ANY artifact writer touches disk — see
+    /// [`validate_bindings`].
+    fn validate_resolved(&self, registry: &Registry<KotlinMeta>) -> Result<(), String> {
+        validate_bindings(self, registry)
+    }
+
     /// Consts acknowledged-but-unexposed via [`JniGen::ignore`].
     fn ignored_consts(&self) -> std::collections::HashSet<syn::Ident> {
         self.ignored_const_idents.clone()

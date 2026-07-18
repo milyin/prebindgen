@@ -77,9 +77,11 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // #52: verify every multi-variant expand_param! is splittable up front,
-        // before any per-function `.split_on_param` emission.
-        self.validate_split_declarations(registry);
+        // Post-resolve validation boundary — same pass `write_rust` runs
+        // (plans + #52 split declarations), so whichever artifact is written
+        // first fails before anything reaches disk.
+        self.validate_resolved(registry)
+            .map_err(WriteKotlinError::Other)?;
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
