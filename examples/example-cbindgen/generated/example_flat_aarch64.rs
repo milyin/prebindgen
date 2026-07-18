@@ -52,7 +52,7 @@ pub unsafe extern "C" fn calculator_drop(this_: *mut calculator_t) {
 pub struct foo_t {
     pub id: u64,
     pub aarch64_field: u64,
-    pub unstable_field: u64,
+    pub stable_field: u64,
 }
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -97,7 +97,7 @@ pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     example_flat::Foo {
         id: v.id,
         aarch64_field: v.aarch64_field,
-        unstable_field: v.unstable_field,
+        stable_field: v.stable_field,
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -208,7 +208,7 @@ pub(crate) fn __cbg_out_Foo(v: example_flat::Foo) -> foo_t {
     foo_t {
         id: v.id,
         aarch64_field: v.aarch64_field,
-        unstable_field: v.unstable_field,
+        stable_field: v.stable_field,
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -429,17 +429,6 @@ pub unsafe extern "C" fn calculator_new_from_str(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-pub unsafe extern "C" fn calculator_reset(c: *mut calculator_t) {
-    let c = match __cbg_in___mut_Calculator(c) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__msg) => {
-            panic!("{}", __msg);
-        }
-    };
-    example_flat::calculator_reset(c);
-}
-#[no_mangle]
-#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn calculator_to_string(
     c: *const calculator_t,
 ) -> *mut ::core::ffi::c_char {
@@ -491,7 +480,7 @@ pub unsafe extern "C" fn inside_foo_value(x: inside_foo_t) -> i32 {
 }
 const _: () = {
     konst::assertc_eq!(
-        example_flat::FEATURES, "example-flat/internal example-flat/unstable",
+        example_flat::FEATURES, "",
         "prebindgen: features mismatch between source crate and prebindgen generated file.\n\
                         This usually happens if source crate is compiled with different feature set\n\
                         for build dependencies and for library usage. You may need to explicitly set\n\

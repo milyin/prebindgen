@@ -30,6 +30,7 @@
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
 //! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
+//! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
@@ -427,6 +428,14 @@ fn main() {
                 // distinct: build/build, build/handle, handle/build, handle/handle).
                 .fun(
                     fun!(summary_prefer)
+                        .split_on_param("primary")
+                        .split_on_param("fallback"),
+                )
+                // Split × builder-delivered return (#87): both params split AND
+                // the `Summary` return crosses via the decomposed builder, so
+                // the wrapper is generic — every overload must re-declare `<R>`.
+                .fun(
+                    fun!(summary_merge)
                         .split_on_param("primary")
                         .split_on_param("fallback"),
                 )

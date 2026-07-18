@@ -504,6 +504,91 @@ public fun summaryPrefer(
     return __ret
 }
 
+@Suppress("UNCHECKED_CAST")
+public fun <R> summaryMerge(
+    primaryCount: Long,
+    primaryTotal: Double,
+    fallbackCount: Long,
+    fallbackTotal: Double,
+    onError: JniErrorHandler<R>,
+    build: SummaryBuilder<R>,
+): R = summaryMerge(0, primaryCount, primaryTotal, null, 0, fallbackCount, fallbackTotal, null, onError, build)
+
+@Suppress("UNCHECKED_CAST")
+public fun <R> summaryMerge(
+    primaryCount: Long,
+    primaryTotal: Double,
+    fallback: Summary,
+    onError: JniErrorHandler<R>,
+    build: SummaryBuilder<R>,
+): R = summaryMerge(0, primaryCount, primaryTotal, null, 1, null, null, fallback, onError, build)
+
+@Suppress("UNCHECKED_CAST")
+public fun <R> summaryMerge(
+    primary: Summary,
+    fallbackCount: Long,
+    fallbackTotal: Double,
+    onError: JniErrorHandler<R>,
+    build: SummaryBuilder<R>,
+): R = summaryMerge(1, null, null, primary, 0, fallbackCount, fallbackTotal, null, onError, build)
+
+@Suppress("UNCHECKED_CAST")
+public fun <R> summaryMerge(
+    primary: Summary,
+    fallback: Summary,
+    onError: JniErrorHandler<R>,
+    build: SummaryBuilder<R>,
+): R = summaryMerge(1, null, null, primary, 1, null, null, fallback, onError, build)
+
+/**
+ * Combine two summaries (#87 regression: BOTH parameters are splittable under
+ * the `Summary` flatten-input default AND the `Summary` return is delivered
+ * through the decomposed builder — the wrapper is generic over `<R>`, and
+ * every split overload must re-declare it).
+ *
+ * Parameter `fallback` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `fallbackSel`, `fallback00`, `fallback01`, `fallback1`).
+ * Parameter `primary` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `primarySel`, `primary00`, `primary01`, `primary1`).
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <R> summaryMerge(
+    primarySel: Int,
+    primary00: Long?,
+    primary01: Double?,
+    primary1: Summary?,
+    fallbackSel: Int,
+    fallback00: Long?,
+    fallback01: Double?,
+    fallback1: Summary?,
+    onError: JniErrorHandler<R>,
+    build: SummaryBuilder<R>,
+): R {
+    if (primary1 != null && primary1.isClosed()) return onError.run(
+        "Operation on a closed native handle.",
+    )
+    if (fallback1 != null && fallback1.isClosed()) return onError.run(
+        "Operation on a closed native handle.",
+    )
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = run {
+        val __locks = ArrayList<NativeHandle>()
+        primary1?.let { __locks.add(it) }
+        fallback1?.let { __locks.add(it) }
+        withSortedHandleLocks(__locks) {
+            val primary1_ptr = primary1?.ptr ?: 0L
+            val fallback1_ptr = fallback1?.ptr ?: 0L
+            try {
+                (CovNative.summaryMerge(primarySel, primary00 != null, primary00 ?: 0L, primary01 != null, primary01 ?: 0.0, primary1_ptr, fallbackSel, fallback00 != null, fallback00 ?: 0L, fallback01 != null, fallback01 ?: 0.0, fallback1_ptr, build, __cap) as R)
+            } finally {
+                primary1?.markConsumed()
+                fallback1?.markConsumed()
+            }
+        }
+    }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
 /**
  * Optionally-supplied summary total — exercises the **Optional
  * combined-selector expansion**: `Summary`'s dual-arm type default (build
