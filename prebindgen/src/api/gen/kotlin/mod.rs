@@ -23,7 +23,7 @@ mod tests;
 pub use code::Code;
 pub use file::{merge_files, write_files, WriteKotlinError};
 pub use model::{
-    ClassKind, KtClass, KtCtorParam, KtDecl, KtEnumEntry, KtFile, KtFun, KtFunInterface, KtParam,
-    KtProperty, Vis,
+    ClassKind, KtBody, KtClass, KtCtorParam, KtDecl, KtEnumEntry, KtFile, KtFun, KtFunInterface,
+    KtParam, KtProperty, Vis,
 };
 pub use types::KtType;

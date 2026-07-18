@@ -540,21 +540,27 @@ pub(crate) fn render_param_overloads(
             );
         }
 
-        let mut ov = kt::KtFun::new(&sel_fun.name).vis(kt::Vis::Public);
-        for p in params {
-            ov = ov.param(p);
-        }
-        if let Some(rt) = &sel_fun.ret {
-            ov = ov.returns(rt.clone());
-        }
-        ov = ov.expr_body(kt::Code::new().line(format!(
-            "{}({})",
-            sel_fun.name,
-            call_args.join(", ")
-        )));
-        out.push(ov);
+        out.push(overload_shell(
+            sel_fun,
+            params,
+            kt::Code::new().line(format!("{}({})", sel_fun.name, call_args.join(", "))),
+        ));
     }
     out
+}
+
+/// An overload derived from the selector wrapper by a signature-preserving
+/// transform: generics, annotations, modifiers, visibility, and return type
+/// carry over unchanged (a wrapper generic over `R`/`A` — builder/fold
+/// delivery — keeps its `fun <R> …` declaration, #87); only the parameter
+/// list and the delegating body are replaced. Kdoc stays on the selector
+/// form — overloads are bare.
+fn overload_shell(sel_fun: &kt::KtFun, params: Vec<kt::KtParam>, body: kt::Code) -> kt::KtFun {
+    let mut ov = sel_fun.clone();
+    ov.params = params;
+    ov.kdoc = None;
+    ov.body = kt::KtBody::Expr(body);
+    ov
 }
 
 /// Cartesian product of index ranges `0..counts[k]`, as a list of index
@@ -634,5 +640,42 @@ mod tests {
 
         assert_eq!(params[0].0.ty.to_string(), "Long?");
         assert_eq!(params[1].0.ty.to_string(), "Double");
+    }
+
+    /// #87: an overload preserves the selector wrapper's signature metadata —
+    /// generics (`fun <R> …`), annotations, modifiers, visibility, and return
+    /// type — replacing only the parameter list and body; kdoc stays on the
+    /// selector form.
+    #[test]
+    fn overload_shell_preserves_signature_metadata() {
+        let sel_fun = kt::KtFun::new("storageSummary")
+            .vis(kt::Vis::Public)
+            .kdoc("Selector-form docs.")
+            .generic("R")
+            .annotation("Suppress(\"UNCHECKED_CAST\")")
+            .modifier("inline")
+            .param(kt::KtParam::new("sSel", kt::KtType::int()))
+            .returns(kt::KtType::cls("R"))
+            .body(kt::Code::new().line("TODO()"));
+
+        let ov = overload_shell(
+            &sel_fun,
+            vec![kt::KtParam::new("count", kt::KtType::long())],
+            kt::Code::new().line("storageSummary(0, count)"),
+        );
+
+        assert_eq!(ov.name, sel_fun.name);
+        assert_eq!(ov.generics, vec!["R".to_string()]);
+        assert_eq!(ov.annotations, sel_fun.annotations);
+        assert_eq!(ov.modifiers, sel_fun.modifiers);
+        assert!(matches!(ov.vis, kt::Vis::Public));
+        assert_eq!(
+            ov.ret.as_ref().map(|t| t.to_string()),
+            Some("R".to_string())
+        );
+        assert_eq!(ov.kdoc, None);
+        assert_eq!(ov.params.len(), 1);
+        assert_eq!(ov.params[0].name, "count");
+        assert!(matches!(ov.body, kt::KtBody::Expr(_)));
     }
 }

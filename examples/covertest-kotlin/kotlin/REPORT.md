@@ -30,6 +30,10 @@ Base package: `io.prebindgen.covertest`
   - shaped by: return `Summary` decomposed → [count, total, handle] (Callback delivery)
 - `summary_describe` — `fun describeSummary(sSel: Int, s00: Long?, s01: Double?, s1: Summary?, verbose: Boolean, onError: io.prebindgen.covertest.JniErrorHandler<String>): String`
   - shaped by: param `s` expanded from `Summary` — variants [summary_new, self]
+- `summary_merge` — `fun <R> summaryMerge(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<R>, build: io.prebindgen.covertest.analytics.SummaryBuilder<R>): R`
+  - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
+  - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]
+  - shaped by: return `Summary` decomposed → [count, total] (Callback delivery)
 - `summary_prefer` — `fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
   - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
   - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]

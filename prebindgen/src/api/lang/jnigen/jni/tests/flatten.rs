@@ -1425,6 +1425,69 @@ fn split_on_param_cartesian_product() {
     );
 }
 
+/// #87: a split parameter on a function whose return is **builder-delivered**
+/// (decomposed `expand_return!` fields ⇒ generic `<R>` wrapper) keeps the
+/// wrapper's generic declaration on every overload — including the full
+/// cartesian product — instead of referencing an undeclared `R`.
+#[test]
+fn split_on_param_preserves_wrapper_generics() {
+    let registry = split_fixture(&[
+        "pub fn z_summary_count(s: &ZSummary) -> i64 { unimplemented!() }",
+        "pub fn z_summary_total(s: &ZSummary) -> f64 { unimplemented!() }",
+        "pub fn z_summarize(primary: ZSummary, fallback: ZSummary) -> ZSummary { unimplemented!() }",
+    ]);
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(crate::ptr_class!(ZSummary))
+                .fun(
+                    crate::fun!(z_summarize)
+                        .split_on_param("primary")
+                        .split_on_param("fallback"),
+                ),
+        )
+        .expand(
+            crate::expand_param!(ZSummary)
+                .variant(crate::fun!(z_summary_new))
+                .variant_self(),
+        )
+        .expand(
+            crate::expand_return!(ZSummary)
+                .field(crate::fun!(z_summary_count))
+                .field(crate::fun!(z_summary_total)),
+        );
+    let raw = write_all(
+        registry.resolve(jni).expect("resolve"),
+        "jnigen_split_generic",
+    );
+    let all: String = raw.split_whitespace().collect();
+    // The selector wrapper is generic (builder-delivered return)…
+    assert!(all.contains("fun<R>zSummarize(primarySel:Int"), "{raw}");
+    // …and every cartesian overload re-declares `<R>`.
+    assert!(
+        all.contains(
+            "fun<R>zSummarize(primaryCount:Long,primaryTotal:Double,fallbackCount:Long,fallbackTotal:Double,"
+        ),
+        "{raw}"
+    );
+    assert!(
+        all.contains("fun<R>zSummarize(primaryCount:Long,primaryTotal:Double,fallback:ZSummary,"),
+        "{raw}"
+    );
+    assert!(
+        all.contains("fun<R>zSummarize(primary:ZSummary,fallbackCount:Long,fallbackTotal:Double,"),
+        "{raw}"
+    );
+    assert!(
+        all.contains("fun<R>zSummarize(primary:ZSummary,fallback:ZSummary,"),
+        "{raw}"
+    );
+    // No wrapper form may reference `R` without declaring it (the only
+    // non-generic `fun zSummarize` is the `external` JNINative extern).
+    assert!(!all.contains("publicfunzSummarize("), "{raw}");
+}
+
 /// #52: a `.split_on_param` product whose two combinations erase to the same
 /// JVM signature is a hard, per-function error. `from_one(Long)` /
 /// `from_two(Long,Long)` on two params collide at (one,two) vs (two,one).

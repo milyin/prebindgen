@@ -209,6 +209,18 @@ pub fn storage_matches_summary(s: &Storage, expected: Summary) -> bool {
     live.count == expected.count && (live.total - expected.total).abs() < f64::EPSILON
 }
 
+/// Combine two summaries (#87 regression: BOTH parameters are splittable under
+/// the `Summary` flatten-input default AND the `Summary` return is delivered
+/// through the decomposed builder — the wrapper is generic over `<R>`, and
+/// every split overload must re-declare it).
+#[prebindgen]
+pub fn summary_merge(primary: Summary, fallback: Summary) -> Summary {
+    Summary {
+        count: primary.count + fallback.count,
+        total: primary.total + fallback.total,
+    }
+}
+
 /// Like [`storage_summary`] but the binding keeps the result as a raw opaque
 /// handle (per-fn **flatten-output-suppress**).
 #[prebindgen]

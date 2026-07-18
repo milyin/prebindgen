@@ -12,6 +12,7 @@ import io.prebindgen.covertest.analytics.storageSummaryProbe
 import io.prebindgen.covertest.analytics.describeSummary
 import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
+import io.prebindgen.covertest.analytics.summaryMerge
 import io.prebindgen.covertest.analytics.summaryPrefer
 import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
@@ -361,6 +362,28 @@ fun main() {
         check(summaryPrefer(Summary.of(3L, 99.0, boom), 1L, 1.0, boom) == 1L)     // handle / build
         check(
             summaryPrefer(Summary.of(1L, 1.0, boom), Summary.of(3L, 99.0, boom), boom) == 0L,
+        )                                                                          // handle / handle
+
+        // #87: split × builder-delivered return. `summaryMerge` returns a
+        // `Summary` decomposed through the trailing builder lambda, so its
+        // wrapper — and EVERY split overload — is generic over `<R>`; before
+        // the fix the overloads referenced `R` without declaring it and the
+        // generated Kotlin did not compile.
+        check(
+            summaryMerge(2L, 40.0, 1L, 2.0, boom) { count, total -> count to total } ==
+                (3L to 42.0),
+        )                                                                          // build / build
+        check(
+            summaryMerge(2L, 40.0, Summary.of(1L, 2.0, boom), boom) { count, _ -> count } == 3L,
+        )                                                                          // build / handle
+        check(
+            summaryMerge(Summary.of(2L, 40.0, boom), 1L, 2.0, boom) { _, total -> total } == 42.0,
+        )                                                                          // handle / build
+        check(
+            summaryMerge(Summary.of(2L, 40.0, boom), Summary.of(1L, 2.0, boom), boom) {
+                count, total ->
+                count to total
+            } == (3L to 42.0),
         )                                                                          // handle / handle
 
         // Optional combined-selector expansion: `Option<&Summary>` under the
