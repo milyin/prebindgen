@@ -4,12 +4,6 @@
 use super::*;
 use crate::api::core::types_util::result_ok_type;
 
-struct OutputLowering<'a> {
-    entry: Option<&'a crate::api::core::registry::TypeEntry<KotlinMeta>>,
-    wire_return: TokenStream,
-    on_err: TokenStream,
-}
-
 pub(crate) fn emit_jni_function_wrapper(
     ext: &JniGen,
     f: &syn::ItemFn,
@@ -152,48 +146,11 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     let mut prelude: Vec<TokenStream> = Vec::new();
     let mut call_args: Vec<TokenStream> = Vec::new();
 
-    // Output is resolved first so the per-input `match`-arms can splice
-    // the function's sentinel into their early-`return` path.
-    let return_ty = fn_return_type(f);
-    // Output (data) expansion: when output expansion was declared for this
-    // function, the return value is decomposed by the deconstructor. Two
-    // deliveries:
-    //   * `Callback` (`deconstruct_output`): the leaves are delivered to a
-    //     foreign builder/fold lambda — the wrapper's wire return is the
-    //     lambda's `JObject` result (no `output_entry`; see `emit_unfold_delivery`).
-    //   * `Return` (`convert_output`): the single decomposed value is **returned**
-    //     directly through its ordinary output converter — the wrapper behaves
-    //     exactly like a normal function whose return type is `convert_out_ty`.
-    use crate::api::core::unfold::Delivery;
-    let unfold_plan = registry.unfold_plans.get(original_ident);
-    let is_convert = unfold_plan.is_some_and(|p| p.delivery == Delivery::Return);
-    // Error-position expansion: when the fn returns `Result<T, E>` and an error
-    // plan is declared, the **`?`** is applied here — the extern peels the
-    // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
-    // error callback), and the success path uses `T`'s converter (not the
-    // `Result<T, E>` rank-2 wrapper). `n_ze` = the error leaf count (the callback
-    // arity after the fixed `je`).
-    let error_plan = registry.error_plans.get(original_ident);
-    let n_ze = error_plan.map_or(0, |p| p.leaves.len());
-    let output = lower_output(
-        registry,
-        original_ident,
-        &return_ty,
-        unfold_plan,
-        error_plan,
-    );
-    let output_entry = output.entry;
-    let wire_return = output.wire_return;
-    let on_err = output.on_err;
-
-    // Input parameters: the lowered plan classifies each param ONCE — the
-    // same classification the Kotlin wrapper and `external fun` renderers
-    // consume — and this site renders the Rust decode for each kind. The
-    // converter is looked up for the param type AS WRITTEN. No strip — a
-    // `&T` param looks up `&T`'s entry (which the `& _` rank-1 handler
-    // resolved by sharing `T`'s function). Call site adds `&decoded` only
-    // for `&T`-shaped originals; that's a Rust call-convention concern, not
-    // a converter concern.
+    // The lowered plan classifies both sides ONCE — the same classification
+    // the Kotlin wrapper and `external fun` renderers consume; this site
+    // renders the Rust decode/encode for each kind. The output is classified
+    // first (inside `build`) so the per-input `match`-arms can splice the
+    // function's sentinel into their early-`return` path.
     let plan = JniFunctionPlan::build(ext, registry, f).unwrap_or_else(|e| match e {
         PlanError::Unresolved { ty } => panic!(
             "JniGen::on_function: input type `{}` for `{}` is unresolved",
@@ -203,7 +160,50 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             "JniGen expand: leaf type `{}` (parameter `{}`) is unresolved",
             ty, param,
         ),
+        PlanError::UnresolvedOutput { ty } => panic!(
+            "JniGen::on_function: return type `{}` of `{}` has no registered output \
+             converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
+             (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
+              to bind a domain exception)",
+            ty, original_ident,
+        ),
     });
+    // Output (data) expansion: when output expansion was declared for this
+    // function, the return value is decomposed by the deconstructor. Two
+    // deliveries:
+    //   * `Callback` (`deconstruct_output`, `FnOutputPlan::Unfold`): the
+    //     leaves are delivered to a foreign builder/fold lambda — the
+    //     wrapper's wire return is the lambda's `JObject` result (no
+    //     `output_entry`; see `emit_unfold_delivery`).
+    //   * `Return` (`convert_output`, `is_convert`): the single decomposed
+    //     value is **returned** directly through its ordinary output
+    //     converter — the wrapper behaves exactly like a normal function
+    //     whose return type is `convert_out_ty`.
+    let unfold_plan = registry.unfold_plans.get(original_ident);
+    // Error-position expansion: when the fn returns `Result<T, E>` and an error
+    // plan is declared, the **`?`** is applied here — the extern peels the
+    // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
+    // error callback), and the success path uses `T`'s converter (not the
+    // `Result<T, E>` rank-2 wrapper). `n_ze` = the error leaf count (the callback
+    // arity after the fixed `je`).
+    let error_plan = registry.error_plans.get(original_ident);
+    let n_ze = error_plan.map_or(0, |p| p.leaves.len());
+    let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
+    // The output converter entry (`None` for callback delivery). The lookup
+    // was validated at plan build; re-resolving here keeps the plan free of
+    // registry borrows for the future build-once stage.
+    let output_entry = match &plan.output {
+        FnOutputPlan::Value(v) => Some(
+            registry
+                .output_entry(&v.target_ty)
+                .expect("output entry validated at plan build"),
+        ),
+        FnOutputPlan::Unfold(_) => None,
+    };
+    let wire_ty = plan.output.wire_ty();
+    let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
+    let on_err = sentinel_for_wire(&wire_ty);
+
     for param in &plan.params {
         let (wp, pre, call_arg) = emit_input_param(ext, registry, original_ident, param, &on_err);
         wire_params.extend(wp);
@@ -225,9 +225,9 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // `Optional` ⇒ `raw.map(|inner| acc(inner))`.
     let call_expr: TokenStream = if is_convert {
         use crate::api::core::unfold::UnfoldShape;
-        let plan = unfold_plan.expect("is_convert ⇒ plan");
-        let leaf = &plan.leaves[0];
-        let by_ref = plan.by_ref;
+        let uplan = unfold_plan.expect("is_convert ⇒ plan");
+        let leaf = &uplan.leaves[0];
+        let by_ref = uplan.by_ref;
         let compose = |base: TokenStream, base_is_ref: bool| -> TokenStream {
             let mut e = if base_is_ref { base } else { quote!(&#base) };
             for a in &leaf.path {
@@ -236,7 +236,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             }
             e
         };
-        match &plan.shape {
+        match &uplan.shape {
             UnfoldShape::Optional((), _) => {
                 let inner = compose(quote!(__inner), by_ref);
                 quote!({
@@ -305,11 +305,12 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     //     wire-facing converter, routing each `Err` through `signal_error`. (For
     //     convert, `call_expr` above already deconstructed the value.)
     let mut builder_param: Option<TokenStream> = None;
-    let output_phase: TokenStream = if let (Some(plan), false) = (unfold_plan, is_convert) {
+    let output_phase: TokenStream = if let FnOutputPlan::Unfold(u) = &plan.output {
         // Iterable folds: two params (`__acc` accumulator + `__fold` callback).
         // Decompose/Optional: a single `__builder` callback.
-        builder_param = Some(unfold_builder_param(plan));
-        emit_unfold_delivery(ext, registry, plan, &call_expr, &on_err)
+        let uplan = unfold_plan.expect("Unfold output ⇒ unfold plan present");
+        builder_param = Some(unfold_builder_param(u.iterable_fold));
+        emit_unfold_delivery(ext, registry, uplan, &call_expr, &on_err)
     } else {
         let output_entry = output_entry.expect("normal path has an output entry");
         let mut phase: TokenStream = quote! { let __out = #call_expr; };
@@ -399,72 +400,10 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     }
 }
 
-fn fn_return_type(f: &syn::ItemFn) -> syn::Type {
-    match &f.sig.output {
-        syn::ReturnType::Default => syn::parse_quote!(()),
-        syn::ReturnType::Type(_, ty) => (**ty).clone(),
-    }
-}
-
-fn lower_output<'a>(
-    registry: &'a Registry<KotlinMeta>,
-    original_ident: &syn::Ident,
-    return_ty: &syn::Type,
-    unfold_plan: Option<&crate::api::core::unfold::UnfoldPlan>,
-    error_plan: Option<&crate::api::core::unfold::UnfoldPlan>,
-) -> OutputLowering<'a> {
-    let ok_ty = error_plan.and_then(|_| result_ok_type(return_ty));
-    // The output converter to route through: the converted single value for
-    // `Return`, the `Result` Ok type when peeling, the function's own return for
-    // a normal fn, none for `Callback`.
-    let target_ty = output_target_type(return_ty, unfold_plan, ok_ty.as_ref());
-    let entry = target_ty.as_ref().map(|ty| {
-        registry.output_entry(ty).unwrap_or_else(|| {
-            panic!(
-                "JniGen::on_function: return type `{}` of `{}` has no registered output \
-                 converter — register one via `JniGen::output_wrapper(pat, |…| Some((ty, exc, body)))` \
-                 (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
-                  to bind a domain exception)",
-                TypeKey::from_type(ty),
-                original_ident,
-            )
-        })
-    });
-    let wire_ty = match entry {
-        Some(e) => e.destination.clone(),
-        None => syn::parse_quote!(jni::objects::JObject),
-    };
-    let wire_return = annotate_jobject_with_lifetime(&wire_ty, "a").to_token_stream();
-    let on_err = sentinel_for_wire(&wire_ty);
-    OutputLowering {
-        entry,
-        wire_return,
-        on_err,
-    }
-}
-
-fn output_target_type(
-    return_ty: &syn::Type,
-    unfold_plan: Option<&crate::api::core::unfold::UnfoldPlan>,
-    ok_ty: Option<&syn::Type>,
-) -> Option<syn::Type> {
-    use crate::api::core::unfold::Delivery;
-
-    match unfold_plan {
-        Some(p) if p.delivery == Delivery::Return => Some(
-            p.convert_out_ty
-                .clone()
-                .expect("Return delivery carries convert_out_ty"),
-        ),
-        Some(_) => None,
-        None => Some(ok_ty.cloned().unwrap_or_else(|| return_ty.clone())),
-    }
-}
-
-fn unfold_builder_param(plan: &crate::api::core::unfold::UnfoldPlan) -> TokenStream {
+fn unfold_builder_param(iterable_fold: bool) -> TokenStream {
     // An `Iterable` fold (incl. `Option<Vec<T>>`) takes `(acc, fold)`; every
     // other delivery takes a single `build`.
-    if super::render::is_iterable_fold(&plan.shape) {
+    if iterable_fold {
         quote!(__acc: jni::objects::JObject<'a>, __fold: jni::objects::JObject<'a>,)
     } else {
         quote!(__builder: jni::objects::JObject<'a>,)

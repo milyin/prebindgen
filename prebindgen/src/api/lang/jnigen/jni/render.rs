@@ -524,12 +524,9 @@ pub(crate) fn render_extern_decl(
     // appends the lambda(s) before the error sink and returns the erased result
     // (`Any?`). A **return** delivery (`convert_output`) appends nothing and
     // returns the real converted wire (handled in `wire_return` below, keyed on
-    // `convert_out_ty`).
-    use crate::api::core::unfold::Delivery;
-    let unfold = registry.unfold_plans.get(&f.sig.ident);
-    let callback_unfold = unfold.filter(|p| p.delivery == Delivery::Callback);
-    if let Some(plan) = callback_unfold {
-        if is_iterable_fold(&plan.shape) {
+    // the plan's `Value` classification over `convert_out_ty`).
+    if let FnOutputPlan::Unfold(u) = &fplan.output {
+        if u.iterable_fold {
             // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
             // `fold` is the non-null adapter callback.
             params.push(("acc".to_string(), "Any?".to_string()));
@@ -543,31 +540,24 @@ pub(crate) fn render_extern_decl(
     // (JObject); the wrapper passes an `ErrorSink` instance.
     params.push(("errorSink".to_string(), "Any".to_string()));
 
-    let wire_return = if callback_unfold.is_some() {
-        "Any?".to_string()
-    } else {
-        // For a `convert_output` (Return) the wire is the converted single
-        // value's; otherwise the function's own return.
-        let ret_decl: syn::ReturnType = match unfold.and_then(|p| p.convert_out_ty.clone()) {
-            Some(cv) => syn::parse_quote!(-> #cv),
-            None => f.sig.output.clone(),
-        };
-        let (kt_return, projection) = classify_return(ext, &ret_decl, registry, imports)?;
-        // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
-        // The public wrapper converts back using `EnumType.fromInt(Int)`.
-        let is_enum_return = return_is_kotlin_enum(ext, &ret_decl, registry);
-        // `Option<enum>` returns cross as the boxed discriminant → `Int?`.
-        let is_option_enum_return = return_is_kotlin_option_enum(ext, &ret_decl, registry);
-        // JNI extern's wire return: handle projections wire as `Long` (the boxed
-        // jlong gets wrapped); value-class projections wire as their inner
-        // converter's Kotlin type folded through the projection's strategy (the
-        // value class is erased to that inner). Enums wire as `Int` (`Int?`
-        // under `Option`); everything else is the declared return.
-        match &projection {
-            Some(p) => projection_wire_return(p),
-            None if is_enum_return => "Int".to_string(),
-            None if is_option_enum_return => "Int?".to_string(),
-            None => kt_return.map(|t| t.to_string()).unwrap_or_default(),
+    let wire_return = match &fplan.output {
+        FnOutputPlan::Unfold(_) => "Any?".to_string(),
+        FnOutputPlan::Value(v) => {
+            // The plan classified the declared surface once — `convert_out_ty`
+            // for a `convert_output` (Return), else the function's own return.
+            let (kt_return, projection) = render_return_surface(&v.surface, imports)?;
+            // JNI extern's wire return: handle projections wire as `Long` (the
+            // boxed jlong gets wrapped); value-class projections wire as their
+            // inner converter's Kotlin type folded through the projection's
+            // strategy (the value class is erased to that inner). Enums wire as
+            // `Int` (`Int?` under `Option`); everything else is the declared
+            // return.
+            match &projection {
+                Some(p) => projection_wire_return(p),
+                None if v.is_enum => "Int".to_string(),
+                None if v.is_option_enum => "Int?".to_string(),
+                None => kt_return.map(|t| t.to_string()).unwrap_or_default(),
+            }
         }
     };
 
@@ -751,7 +741,7 @@ pub(crate) fn render_wrapper_fn(
 
     let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
     let (params, receiver_idx) = classify_params(ext, &fplan, registry, imports, receiver_key)?;
-    let out = classify_output(ext, f, registry, imports)?;
+    let out = classify_output(ext, f, &fplan, registry, imports)?;
     let body_expr = build_native_call(ext, &jni_call, &params, &out);
 
     // Collect the opaque-handle params so we can scaffold pointer-ordered
@@ -1119,12 +1109,11 @@ fn classify_params(
 fn classify_output(
     ext: &JniGen,
     f: &syn::ItemFn,
+    fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
 ) -> Option<OutputPlan> {
-    use crate::api::core::unfold::{Delivery, UnfoldShape};
     let unfold = registry.unfold_plans.get(&f.sig.ident);
-    let is_convert = unfold.is_some_and(|p| p.delivery == Delivery::Return);
     // `builder_param` is the trailing **lambda** param (build / fold) as a
     // `(name, function-type)` pair. For the `Iterable` shape, the non-lambda
     // accumulator (`acc: A`) goes in `builder_lead` — it must precede
@@ -1137,21 +1126,24 @@ fn classify_output(
     // `acc` + the fold callback/adapter for `Iterable`).
     let mut unfold_call_args: Vec<String> = Vec::new();
 
-    let (kt_return, projection) = if let Some(plan) =
-        unfold.filter(|p| p.delivery == Delivery::Return)
+    let (kt_return, projection) = if let FnOutputPlan::Value(v) = &fplan.output {
+        // `convert_output` (Return) and plain returns: the wrapper returns
+        // the value directly — the plan classified the declared surface once
+        // (`convert_out_ty` for a convert, the signature's own output
+        // otherwise). No callback param, no generic, no extra call args; the
+        // extern returns the real wire and `build_call` applies the
+        // projection wrap (value_blob/handle) below.
+        render_return_surface(&v.surface, imports)?
+    } else if let (
+        FnOutputPlan::Unfold(
+            u @ UnfoldOutputPlan {
+                fixed_builder: true,
+                ..
+            },
+        ),
+        Some(plan),
+    ) = (&fplan.output, unfold)
     {
-        // `convert_output` (Return): the wrapper returns the single converted
-        // value directly — classify it exactly like a normal function whose
-        // return type is `convert_out_ty`. No callback param, no generic, no
-        // extra call args; the extern returns the real wire and `build_call`
-        // applies the projection wrap (value_blob/handle) below.
-        let cv = plan
-            .convert_out_ty
-            .clone()
-            .expect("Return delivery carries convert_out_ty");
-        let rt: syn::ReturnType = syn::parse_quote!(-> #cv);
-        classify_return(ext, &rt, registry, imports)?
-    } else if let Some(plan) = unfold.filter(|p| p.fixed_builder) {
         // Synthesized by-value `data_class` delivery via a **fixed, hoisted
         // singleton** — the wrapper takes no caller `build`/`fold` param and is
         // not generic over `R`/`A`. The native side still receives the singleton
@@ -1164,7 +1156,7 @@ fn classify_output(
         // a **whole-element leaf** fold (`plan.element` set — String / value blob
         // / handle) `plan.source` (e.g. `String`) has no class FQN, so take the
         // element's typed view from the folder interface's element param instead.
-        let class_ty = if plan.element.is_some() {
+        let class_ty = if u.whole_element {
             let spec = folder_iface_for_plan(ext, registry, plan)?;
             register_kt_type(&spec.params[1].typed, imports)
         } else {
@@ -1173,7 +1165,7 @@ fn classify_output(
                 .map(|s| s.to_string())?;
             register_kt_type(&kt::KtType::cls(class_fqn), imports)
         };
-        if is_iterable_fold(&plan.shape) {
+        if u.iterable_fold {
             // `Vec<data_class>` fold: allocate an `ArrayList<Class>` accumulator,
             // pass the hoisted **folder-appender** singleton as `fold` (it
             // rebuilds each element via `fromParts` and appends it), and return
@@ -1187,7 +1179,7 @@ fn classify_output(
             unfold_call_args.push(format!("ArrayList<{class_ty}>()"));
             unfold_call_args.push(format!("{holder}.{field}"));
             let list_ty = kt::KtType::generic("List", [class_ty]);
-            let kt = if matches!(plan.shape, UnfoldShape::Optional((), _)) {
+            let kt = if u.optional {
                 list_ty.nullable()
             } else {
                 list_ty
@@ -1204,22 +1196,24 @@ fn classify_output(
             let singleton = format!("__{}", spec.raw_name());
             imports.insert(format!("{}.{singleton}", spec.package));
             unfold_call_args.push(singleton);
-            let kt = match &plan.shape {
-                UnfoldShape::Optional((), _) => class_ty.nullable(),
-                _ => class_ty,
+            let kt = if u.optional {
+                class_ty.nullable()
+            } else {
+                class_ty
             };
             (Some(kt), None)
         }
-    } else if let Some(plan) = unfold {
+    } else if let (FnOutputPlan::Unfold(u), Some(plan)) = (&fplan.output, unfold) {
         // The builder / fold params are generated typed `fun interface`s
         // (`<Source>Builder<out R>` / `<Element>Folder<A>`); the native side
         // calls their typed `run` with raw jvalues (value-blob leaves surface
         // as `ByteArray` — no call-site adapter). Lambda-literal call sites
         // SAM-convert unchanged.
-        let is_iterable = matches!(plan.shape, UnfoldShape::Iterable(_));
-        if is_iterable {
+        generic = u.generic.map(str::to_string);
+        // A **bare** `Iterable` folds with `<A>`; an `Optional`-wrapped
+        // iterable takes the scalar-builder surface below.
+        if u.generic == Some("A") {
             let spec = folder_iface_for_plan(ext, registry, plan)?;
-            generic = Some("A".to_string());
             builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
             builder_param = Some(("fold".to_string(), spec.kt_ref(vec![kt::KtType::var_("A")])));
             unfold_call_args.push("acc".to_string());
@@ -1236,7 +1230,6 @@ fn classify_output(
                 .as_ref()
                 .expect("record-built plan carries its DeconId");
             let spec = builder_iface_spec(ext, registry, decon)?;
-            generic = Some("R".to_string());
             builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
             if spec.needs_raw() {
                 imports.insert(format!("{}.asRaw", spec.package));
@@ -1244,22 +1237,25 @@ fn classify_output(
             } else {
                 unfold_call_args.push("build".to_string());
             }
-            let kt = match &plan.shape {
-                UnfoldShape::Optional((), _) => kt::KtType::var_r().nullable(),
-                _ => kt::KtType::var_r(),
+            let kt = if u.optional {
+                kt::KtType::var_r().nullable()
+            } else {
+                kt::KtType::var_r()
             };
             (Some(kt), None)
         }
     } else {
-        classify_return(ext, &f.sig.output, registry, imports)?
+        unreachable!("FnOutputPlan is either Value or Unfold-with-plan")
     };
-    // enum_class returns cross the JNI wire as jint → Kotlin `Int`.
-    // Detect this so `build_call` can wrap the result with `fromInt`.
-    let is_enum_return = unfold.is_none() && return_is_kotlin_enum(ext, &f.sig.output, registry);
-    // `Option<enum>` returns cross as the boxed discriminant (`Int?`);
-    // `build_call` maps back with `?.let { EnumType.fromInt(it) }`.
-    let is_option_enum_return =
-        unfold.is_none() && return_is_kotlin_option_enum(ext, &f.sig.output, registry);
+    // enum_class returns cross the JNI wire as jint → Kotlin `Int` (`Int?`
+    // boxed for `Option<enum>`) — so `build_call` can wrap the result with
+    // `fromInt`. The plan's probes run over the convert-peeled declared type;
+    // the wrapper surface keeps the historical `unfold.is_none()` mask
+    // (`Value` ∧ ¬`is_convert` ⟺ no unfold plan).
+    let (is_enum_return, is_option_enum_return) = match &fplan.output {
+        FnOutputPlan::Value(v) if !v.is_convert => (v.is_enum, v.is_option_enum),
+        _ => (false, false),
+    };
 
     Some(OutputPlan {
         kt_return,
@@ -1268,7 +1264,7 @@ fn classify_output(
         builder_lead,
         generic,
         unfold_call_args,
-        cast_return: unfold.is_some() && !is_convert,
+        cast_return: matches!(&fplan.output, FnOutputPlan::Unfold(_)),
         is_enum_return,
         is_option_enum_return,
     })
@@ -1891,95 +1887,49 @@ pub(crate) fn classify_return(
     Option<kt::KtType>,
     Option<crate::api::lang::jnigen::jni::Projection>,
 )> {
-    let ty = match output {
-        syn::ReturnType::Default => return Some((None, None)),
-        syn::ReturnType::Type(_, t) => &**t,
-    };
-    let outer_meta = registry.output_entry(ty).map(|e| e.metadata.clone());
-    // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-    // `value_rust_key`) declare no Kotlin return type.
-    let inner_canon = outer_meta
-        .as_ref()
-        .and_then(|m| m.value_rust_key.clone())
-        .unwrap_or_else(|| ty.to_token_stream().to_string());
-    let inner: syn::Type = syn::parse_str(&inner_canon).unwrap_or_else(|_| ty.clone());
-    if crate::api::lang::jnigen::util::is_unit(&inner) {
-        return Some((None, None));
-    }
-    // Projection return (opaque handle or value class): read the folded
-    // `Projection` the type-unfolding mechanism propagated onto this return
-    // type's converter metadata — one source of truth, no shape-specific
-    // peeling. The declared return type is the concrete projection class
-    // folded through `Nullable`/`Iterable`; callers fold the wrap and pick
-    // the wire return based on `kind`.
-    if let Some(h) = outer_meta.as_ref().and_then(|m| m.projection.clone()) {
-        let fqn = ext
-            .kotlin_fqn(&h.leaf_key)
-            .map(|v| v.to_string())
-            .unwrap_or_else(|| {
+    let (surface, _canonical) = ReturnSurface::classify(ext, registry, output);
+    render_return_surface(&surface, imports)
+}
+
+/// Map a classified [`ReturnSurface`] back to the historical
+/// `(kt_return, projection)` pair, registering/shortening the Kotlin names
+/// against `imports` at render time (the plan stores unshortened types, so
+/// import registration stays identical across all consumers). Panics on an
+/// unregistered projection FQN — the same Kotlin-render-time failure
+/// `classify_return` always had.
+pub(crate) fn render_return_surface(
+    surface: &ReturnSurface,
+    imports: &mut BTreeSet<String>,
+) -> Option<(
+    Option<kt::KtType>,
+    Option<crate::api::lang::jnigen::jni::Projection>,
+)> {
+    match surface {
+        ReturnSurface::Skip => None,
+        ReturnSurface::Unit => Some((None, None)),
+        ReturnSurface::Projected {
+            projection,
+            leaf_fqn,
+        } => {
+            let fqn = leaf_fqn.clone().unwrap_or_else(|| {
                 panic!(
                     "classify_return: projection return type `{}` has no Kotlin FQN registered \
                      — every opaque/value class must be declared via `JniGen::ptr_class(...)` \
                      / `JniGen::value_class(...)`.",
-                    h.leaf_key
+                    projection.leaf_key
                 )
             });
-        let short = register_fqn(&fqn, imports);
-        return Some((
-            Some(handle_kt_type(&h.strategy, &kt::KtType::cls(short))),
-            Some(h),
-        ));
-    }
-    // Non-opaque: read the Kotlin type straight off the resolved
-    // output entry's metadata — the rank-N handler propagates
-    // `ZResult<T>` / `Option<T>` / `Vec<T>` derivations alongside the
-    // wire, so no peel-and-fallback chain is needed at the use site.
-    if let Some(out_entry) = registry.output_entry(ty) {
-        if let Some(kt) = out_entry.metadata.kotlin_name.clone() {
-            return Some((Some(register_kt_type(&kt, imports)), None));
+            let short = register_fqn(&fqn, imports);
+            Some((
+                Some(handle_kt_type(
+                    &projection.strategy,
+                    &kt::KtType::cls(short),
+                )),
+                Some(projection.clone()),
+            ))
         }
+        ReturnSurface::Plain { kt } => Some((Some(register_kt_type(kt, imports)), None)),
     }
-    None
-}
-
-/// Returns `true` when the function's return type resolves to a type registered
-/// via [`JniGen::enum_class`]. Enum returns cross the JNI wire as `jint` (Kotlin
-/// `Int`); the public wrapper must call `EnumType.fromInt(Int)` to convert back.
-pub(crate) fn return_is_kotlin_enum(
-    ext: &JniGen,
-    output: &syn::ReturnType,
-    registry: &Registry<KotlinMeta>,
-) -> bool {
-    ext.is_kotlin_enum(&canonical_return_ty(output, registry))
-}
-
-/// Returns `true` when the function's return type resolves to `Option<E>` with
-/// `E` a [`JniGen::enum_class`] enum. The native side delivers the discriminant
-/// `box_jint`-boxed (null for `None`), so the extern returns `Int?` and the
-/// public wrapper converts back with `?.let { EnumType.fromInt(it) }`.
-pub(crate) fn return_is_kotlin_option_enum(
-    ext: &JniGen,
-    output: &syn::ReturnType,
-    registry: &Registry<KotlinMeta>,
-) -> bool {
-    crate::api::core::types_util::option_inner_type(&canonical_return_ty(output, registry))
-        .map(|inner| ext.is_kotlin_enum(&inner))
-        .unwrap_or(false)
-}
-
-/// The return type with the error channel peeled: the resolved output entry's
-/// canonical value key (`Result<T, E>` → `T`) when present, else the declared
-/// type verbatim.
-fn canonical_return_ty(output: &syn::ReturnType, registry: &Registry<KotlinMeta>) -> syn::Type {
-    let ty = match output {
-        syn::ReturnType::Default => return syn::parse_quote!(()),
-        syn::ReturnType::Type(_, t) => &**t,
-    };
-    registry
-        .output_entry(ty)
-        .and_then(|e| e.metadata.value_rust_key.clone())
-        .and_then(|canon| syn::parse_str(&canon).ok())
-        .unwrap_or_else(|| ty.clone())
 }
 
 pub(crate) fn kt_snake_to_camel(s: &str) -> String {
