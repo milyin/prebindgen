@@ -85,6 +85,11 @@ Base package: `io.prebindgen.covertest`
 - `storage_try_with_label` — `fun storageTryWithLabel(label: String, onError: io.prebindgen.covertest.errors.StorageErrorHandler<Storage>): Storage`
   - shaped by: error `StorageError` decomposed → [je, message, handle]
 
+## class `io.prebindgen.covertest.esc_pkg.Esc_Probe` (ptr_class, Rust `EscapeProbe`)
+
+- `escape_probe_new` — `fun escapeProbeNew(value: Long, onError: io.prebindgen.covertest.JniErrorHandler<Esc_Probe>): Esc_Probe`
+- `escape_probe_value` — `fun escapeProbeValue(onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
+
 ## class `io.prebindgen.covertest.Payload` (data_class, Rust `Payload`)
 
 - `payload_label_len` — `fun labelLen(onError: io.prebindgen.covertest.JniErrorHandler<Long?>): Long?`
@@ -117,6 +122,7 @@ Base package: `io.prebindgen.covertest`
 
 - `Annotated`: data_class → `io.prebindgen.covertest.model.Annotated` (wire `jni :: objects :: JObject`)
 - `Archive`: ptr_class → `io.prebindgen.covertest.analytics.SummaryVault` (wire `jni :: sys :: jlong`)
+- `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
 - `Payload`: data_class → `io.prebindgen.covertest.Payload` (wire `jni :: objects :: JObject`)
 - `PayloadHandler`: ptr_class → `io.prebindgen.covertest.PayloadHandler` (wire `jni :: sys :: jlong`)
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)

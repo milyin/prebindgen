@@ -588,6 +588,33 @@ pub fn cover_tag_runtime() -> String {
     format!("{COVER_TAG}-runtime")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EscapeProbe — JNI native-symbol escaping probe (#86).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A tiny opaque handle whose covertest declaration puts underscores in every
+/// symbol component (#86): it lives in the underscored `esc_pkg` subpackage
+/// under the underscored Kotlin name `Esc_Probe`, and its accessor's harness
+/// extern is mangled to an underscored method name — so its `freePtr`
+/// destructor and accessor symbols only resolve at runtime if the generator
+/// applies the JNI spec's `_1` escaping.
+pub struct EscapeProbe {
+    value: i64,
+}
+
+/// Construct an [`EscapeProbe`] (its covertest constructor).
+#[prebindgen]
+pub fn escape_probe_new(value: i64) -> EscapeProbe {
+    EscapeProbe { value }
+}
+
+/// Read the probe's value (mangled to an underscored harness extern in
+/// covertest, #86).
+#[prebindgen]
+pub fn escape_probe_value(p: &EscapeProbe) -> i64 {
+    p.value
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

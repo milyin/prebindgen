@@ -112,16 +112,12 @@ pub(crate) fn vec_helper_method_name(ext: &JniGen, base: &str, suffix: &str) -> 
     ext.mangle_jni_method(&format!("{base}{suffix}"))
 }
 
-/// Full Rust JNI symbol for a vec helper — `<jni_class_path>_<method>` (the same
+/// Full Rust JNI symbol for a vec helper — the same spec-escaped
 /// `Java_<pkg>_<JNINative>_…` scheme function wrappers use via
-/// [`mangle_jni_name`]); these helpers live on the `JNINative` object, so they
-/// share its class path.
+/// [`mangle_jni_name`] (see `symbol`, #86); these helpers live on the
+/// `JNINative` object, so they share its class path.
 fn vec_helper_symbol(ext: &JniGen, base: &str, suffix: &str) -> String {
-    format!(
-        "{}_{}",
-        ext.jni_class_path(),
-        vec_helper_method_name(ext, base, suffix)
-    )
+    ext.native_method_symbol(&vec_helper_method_name(ext, base, suffix))
 }
 
 /// One `#[no_mangle] extern "C"` `…VecNew/Push/Free` trio per flattenable

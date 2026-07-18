@@ -31,6 +31,7 @@
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
 //! | `FunctionDecl::split_on_param` (#52)  | single: `archiveStore`/`storageMatchesSummary` (class-default) + `storageExpectSummary` (per-fn); cartesian product: `summaryPrefer` (2 params); manual same-named overload in `ManualOverloads.kt` |
 //! | split × builder-delivered return (#87) | `summaryMerge` — cartesian split + generic `<R>` wrapper; every overload re-declares `<R>` |
+//! | JNI native-symbol escaping (#86)      | `esc_pkg.Esc_Probe` — underscored subpackage + class (escaped `freePtr` symbol) + hook-mangled `escape_probe_value` harness extern |
 //! | `expand_return!` `.field()` (+`_self`) | `Summary` fields + `StorageError` `message` + self (error handle → `onError`) |
 //! | `PackageDecl::fun` / `FunctionDecl::name`| every free function; `.name` renames `millis_add` → `addMillis` |
 //! | `Generation::report()` (C7)           | `kotlin/REPORT.md` — the resolved surface, committed next to the regen |
@@ -139,7 +140,16 @@ fn main() {
         .set_ptr_class_name_mangle(|_, n| n.to_string())
         .set_data_class_name_mangle(|_, n| n.to_string())
         .set_enum_name_mangle(|_, n| n.to_string())
-        .set_method_name_mangle(|_, class, n| strip_flat_class_prefix(class, n))
+        .set_method_name_mangle(|_, class, n| {
+            // #86: force an underscored method name onto ONE harness extern —
+            // the Kotlin `external fun` keeps this verbatim name while the
+            // Rust export symbol needs the JNI `_1` escape
+            // (`…_escape_1probe_1value`) to resolve at runtime.
+            if class == "CovNative" && n == "escapeProbeValue" {
+                return "escape_probe_value".to_string();
+            }
+            strip_flat_class_prefix(class, n)
+        })
         // `Millis` newtype: a canonical single-value conversion to a bare
         // `Long` (no generated class) via two ordinary `#[prebindgen]` fns —
         // defined in the SEPARATE `covertest-helpers` source crate, proving
@@ -334,6 +344,21 @@ fn main() {
                 // proxy wraps it into a typed `Storage` and closes it after `run`.
                 .class(ptr_class!(StorageHandler))
                 .class(ptr_class!(PayloadVecHandler)),
+        )
+        // ── JNI native-symbol escaping probe (#86) ──────────────────────────
+        // Underscores in EVERY symbol component: the `esc_pkg` subpackage and
+        // the `Esc_Probe` class name put `_1` escapes into the `freePtr`
+        // destructor symbol (`Java_…_esc_1pkg_Esc_1Probe_freePtr`), and the
+        // method-mangle hook above puts one into the accessor's harness
+        // extern (`…_escape_1probe_1value`). Kotlin names stay verbatim; the
+        // JVM only resolves these if the generator escapes per the JNI spec.
+        .package(
+            package!("esc_pkg").class(
+                ptr_class!(EscapeProbe)
+                    .name("Esc_Probe")
+                    .constructor(fun!(escape_probe_new))
+                    .method(fun!(escape_probe_value)),
+            ),
         )
         // ── Free functions, grouped by subpackage ───────────────────────────
         // model: enum return/param/option + value-class return + Vec<value> +

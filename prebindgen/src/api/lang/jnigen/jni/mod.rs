@@ -497,6 +497,7 @@ mod overloads;
 mod render;
 mod report;
 mod struct_plan;
+mod symbol;
 
 pub(crate) use builder::*;
 pub(crate) use classify::*;

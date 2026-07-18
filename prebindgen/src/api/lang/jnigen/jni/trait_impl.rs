@@ -488,12 +488,7 @@ pub(crate) fn build_handle_destructor_items(
         let class_short = class_fqn.rsplit('.').next().unwrap_or(&class_fqn);
         let class_package = class_fqn.rsplit_once('.').map(|(pkg, _)| pkg).unwrap_or("");
         let free_ptr = ext.mangle_method(class_package, class_short, "freePtr");
-        let class_pkg = class_package.replace('.', "_");
-        let symbol = if class_pkg.is_empty() {
-            format!("Java_{class_short}_{free_ptr}")
-        } else {
-            format!("Java_{class_pkg}_{class_short}_{free_ptr}")
-        };
+        let symbol = super::symbol::native_symbol(class_package, class_short, &free_ptr);
         let ident = syn::Ident::new(&symbol, Span::call_site());
         // Bit 0 of the jlong is the Kotlin-side closed tag, so every handle
         // type must leave it free: `Box` pointers to `T` are `align_of::<T>()`

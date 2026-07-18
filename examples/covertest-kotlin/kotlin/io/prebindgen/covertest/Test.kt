@@ -17,6 +17,7 @@ import io.prebindgen.covertest.analytics.summaryPrefer
 import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
+import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
@@ -753,6 +754,17 @@ fun main() {
         val e = Summary.of(5L, 50.0, boom)
         check(e.count(boom) == 5L)
         e.close()
+    }
+
+    // ── JNI native-symbol escaping (#86) ─────────────────────────────────────
+    section("JNI native-symbol escaping (esc_pkg / Esc_Probe / snake extern)") {
+        // Every call here resolves a Rust export whose symbol needs the JNI
+        // spec's `_1` escaping — `esc_1pkg` + `Esc_1Probe` in the freePtr
+        // destructor, `escape_1probe_1value` on the harness extern. A raw
+        // dot-to-underscore symbol would throw UnsatisfiedLinkError.
+        val p = Esc_Probe.escapeProbeNew(7L, boom)
+        check(p.escapeProbeValue(boom) == 7L)
+        p.close()
     }
 
     println("PASS - $sectionCount sections, every JniGen feature exercised")
