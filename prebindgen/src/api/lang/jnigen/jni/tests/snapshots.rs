@@ -449,6 +449,102 @@ fn slice_input_builds_vec_handle() {
     );
 }
 
+/// #86: every native-export family — function wrappers, typed-handle
+/// destructors, vec build helpers — routes through the spec-compliant JNI
+/// symbol encoder, so underscores in package segments, the harness class,
+/// class names, and method names escape to `_1` (the issue's acceptance
+/// fixture: package `io.example.my_pkg`, class `Native_Harness`, method
+/// `do_work`). Kotlin-side names stay verbatim.
+#[test]
+fn native_symbols_are_jni_escaped() {
+    use crate::SourceLocation;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ZThing {
+                    _p: u8,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Foo {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn do_work() -> ZThing {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn put_slice(v: &[Foo]) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+
+    let jni = JniGen::new()
+        .set_package_prefix("io.example.my_pkg")
+        .set_harness_name_mangle(|_| "Native_Harness".to_string())
+        .package(
+            crate::package!("sub_pkg")
+                .class(crate::ptr_class!(ZThing).name("Z_Thing"))
+                .class(crate::data_class!(Foo))
+                .fun(crate::fun!(do_work))
+                .fun(crate::fun!(put_slice)),
+        );
+
+    let dir = unique_test_dir("jnigen_symbol_escaping");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    let kdir = dir.join("kotlin");
+    let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
+    let kotlin: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // Wrapper extern: escaped package + harness + camelized method.
+    assert!(
+        rc.contains("fnJava_io_example_my_1pkg_Native_1Harness_doWork"),
+        "{rust}"
+    );
+    // Handle destructor: the class's own (sub)package and underscored name.
+    assert!(
+        rc.contains("fnJava_io_example_my_1pkg_sub_1pkg_Z_1Thing_freePtr"),
+        "{rust}"
+    );
+    // Vec build helper trio: shares the harness class path.
+    assert!(
+        rc.contains("fnJava_io_example_my_1pkg_Native_1Harness_fooVecNew"),
+        "{rust}"
+    );
+    // No symbol may carry the raw (unescaped) package spelling.
+    assert!(!rc.contains("fnJava_io_example_my_pkg_"), "{rust}");
+    // Kotlin-side names stay verbatim: the harness object and the class.
+    assert!(kc.contains("objectNative_Harness"), "{kotlin}");
+    assert!(kc.contains("classZ_Thing"), "{kotlin}");
+}
+
 /// `.set_jni_native_init(code)` injects an `init { code }` block into the generated
 /// centralized externs object (`JNINative`) — the single static-init point a
 /// consumer uses to trigger native-library loading. Unset (the `snapshot_*`

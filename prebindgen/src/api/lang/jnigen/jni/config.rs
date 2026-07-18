@@ -236,15 +236,11 @@ impl JniGen {
         self.package.replace('.', "/")
     }
 
-    /// Derived on demand: `"Java_" + package.replace('.', "_") + "_" +
-    /// jni_native_class_name()` — the JNI extern symbol path of the
-    /// centralized Native object every emitted wrapper hangs off.
-    pub(crate) fn jni_class_path(&self) -> String {
-        let native_class = self.jni_native_class_name();
-        if self.package.is_empty() {
-            format!("Java_{}", native_class)
-        } else {
-            format!("Java_{}_{}", self.package.replace('.', "_"), native_class)
-        }
+    /// Derived on demand: the spec-escaped JNI export symbol
+    /// `Java_<package>_<jni_native_class_name()>_<method>` for a method on
+    /// the centralized Native object every emitted wrapper hangs off
+    /// (see [`super::symbol`], #86).
+    pub(crate) fn native_method_symbol(&self, method: &str) -> String {
+        super::symbol::native_symbol(&self.package, &self.jni_native_class_name(), method)
     }
 }

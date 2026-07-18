@@ -1209,8 +1209,8 @@ impl JniGen {
     /// `external fun` per `#[prebindgen]` function — names mangled as methods
     /// via [`JniGen::set_method_name_mangle`], parameter and return types rendered at
     /// the JNI **wire** level so the declarations match the Rust extern
-    /// symbols generated under
-    /// `Java_<package>_<jni_native_class>_<name>`. Every generated native
+    /// symbols generated under the spec-escaped
+    /// `Java_<package>_<jni_native_class>_<name>` (see `symbol`, #86). Every generated native
     /// call routes through this object, so its static initializer is the
     /// single point at which native-library loading can be triggered: when
     /// [`JniGen::jni_native_init`] is set, its Kotlin statement(s) are emitted
