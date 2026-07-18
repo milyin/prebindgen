@@ -26,6 +26,7 @@ fn myflat_loc() -> crate::SourceLocation {
 mod callbacks;
 mod config;
 mod consts;
+mod cross_artifact;
 mod flatten;
 mod niches;
 mod snapshots;
