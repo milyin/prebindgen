@@ -1160,7 +1160,7 @@ fn classify_output(
             register_kt_type(&spec.params[1].typed, imports)
         } else {
             let class_fqn = ext
-                .kotlin_fqn(&TypeKey::from_type(&plan.source).to_string())
+                .kotlin_fqn(&TypeKey::from_type(&plan.source))
                 .map(|s| s.to_string())?;
             register_kt_type(&kt::KtType::cls(class_fqn), imports)
         };
@@ -1362,7 +1362,7 @@ fn build_native_call(ext: &JniGen, jni_call: &str, params: &[Param], out: &Outpu
         // the `Niche+primitive` arm of `fold_projection_wrap`.
         let leaf_fqn = ext
             .kotlin_fqn(&p.leaf_key)
-            .unwrap_or_else(|| p.leaf_key.clone());
+            .unwrap_or_else(|| p.leaf_key.to_string());
         let short = leaf_fqn.rsplit('.').next().unwrap_or(&leaf_fqn).to_string();
         let sentinel = projection_leaf_sentinel(p);
         call = fold_projection_wrap(&p.strategy, &call, &short, sentinel.as_deref());
@@ -1764,7 +1764,7 @@ pub(crate) fn unfold_leaf_kt(
         // leak the `?` into the constructor call).
         let leaf_fqn = ext
             .kotlin_fqn(&p.leaf_key)
-            .unwrap_or_else(|| p.leaf_key.clone());
+            .unwrap_or_else(|| p.leaf_key.to_string());
         let short = leaf_fqn.rsplit('.').next().unwrap_or(&leaf_fqn).to_string();
         let sentinel = projection_leaf_sentinel(p);
         let mut wrap = fold_projection_wrap(&p.strategy, pk, &short, sentinel.as_deref());

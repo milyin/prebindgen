@@ -1370,7 +1370,7 @@ impl JniGen {
                 let (kotlin_name, value_rust_key) = if rank >= 1 {
                     (
                         inner.metadata.kotlin_name.clone(),
-                        Some(TypeKey::from_type(&args[0]).as_str().to_string()),
+                        Some(TypeKey::from_type(&args[0])),
                     )
                 } else {
                     (inner.metadata.kotlin_name.clone(), None)
@@ -1454,7 +1454,7 @@ impl JniGen {
                         .map(|e| {
                             (
                                 e.metadata.kotlin_name.clone(),
-                                Some(TypeKey::from_type(&args[0]).as_str().to_string()),
+                                Some(TypeKey::from_type(&args[0])),
                             )
                         })
                         .unwrap_or((None, None))
@@ -1500,7 +1500,7 @@ impl JniGen {
                 let (kotlin_name, value_rust_key) = if rank >= 1 {
                     (
                         inner.metadata.kotlin_name.clone(),
-                        Some(TypeKey::from_type(&args[0]).as_str().to_string()),
+                        Some(TypeKey::from_type(&args[0])),
                     )
                 } else {
                     (inner.metadata.kotlin_name.clone(), None)

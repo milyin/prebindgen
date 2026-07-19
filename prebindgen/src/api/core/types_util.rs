@@ -6,6 +6,15 @@
 use proc_macro2::Span;
 use quote::ToTokens;
 
+/// The single-segment path type for a bare item ident (`Foo` → `Foo`) —
+/// direct construction, no string round trip, cannot fail.
+pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
+    syn::Type::Path(syn::TypePath {
+        qself: None,
+        path: syn::Path::from(ident.clone()),
+    })
+}
+
 /// Normalize a type to its canonical flat-namespace spelling (issue #95).
 /// The COMPLETE equivalence rule set — any spelling not listed is preserved
 /// verbatim:

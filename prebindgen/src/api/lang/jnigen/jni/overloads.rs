@@ -151,7 +151,7 @@ fn rust_type_erased(ext: &JniGen, registry: &Registry<KotlinMeta>, ty: &syn::Typ
             if cfg.value_blob {
                 return "ByteArray".to_string();
             }
-            if let Some(fqn) = ext.kotlin_fqn(key.as_str()) {
+            if let Some(fqn) = ext.kotlin_fqn(&key) {
                 return fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
             }
         }

@@ -613,8 +613,7 @@ fn subject_short(ty: &syn::Type) -> String {
 /// Package a subject type's interface lives in: the package of the type's
 /// registered Kotlin FQN, the root `ext.package` otherwise.
 fn subject_package(ext: &JniGen, subject: &syn::Type) -> String {
-    let key =
-        TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject)).to_string();
+    let key = TypeKey::from_type(&crate::api::core::types_util::peel_ref_option_vec(subject));
     ext.kotlin_fqn(&key)
         .and_then(|fqn| fqn.rsplit_once('.').map(|(p, _)| p.to_string()))
         .unwrap_or_else(|| ext.package.clone())
@@ -725,7 +724,7 @@ fn leaf_iface_param(
     // no `asRaw` proxy is generated.
     if let kt::KtType::Named { fqn: bk_fqn, .. } = &builder_kt {
         if !bk_fqn.contains('.') {
-            if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty).to_string()) {
+            if let Some(reg_fqn) = ext.kotlin_fqn(&TypeKey::from_type(out_ty)) {
                 let reg_short = reg_fqn.rsplit('.').next().unwrap_or(&reg_fqn);
                 if reg_fqn.contains('.') && reg_short == bk_fqn {
                     let raw = kt::KtType::cls(reg_fqn.to_string());
@@ -784,17 +783,18 @@ pub(crate) fn owned_handle_iface_param(
 /// resolve-time trampoline, the per-function plan, and the declaration
 /// emitter (formerly `write_callback_ifaces`' local `Use` enum). `Ord` so
 /// declaration emission iterates deterministically. Type-shaped identities
-/// store the canonical [`TypeKey`] string; the derivation round-trips it
-/// back to a `syn::Type`, so a key alone fully determines its spec.
+/// store the [`TypeKey`] itself — the derivation reads the key's stored
+/// normalized type, so a key alone fully determines its spec with no
+/// string round trip.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum SpecKey {
     /// impl-Fn delivery — the args' canonical type keys (each arg either
     /// decomposes via its type's canonical plan or crosses whole).
-    Callback(Vec<String>),
+    Callback(Vec<TypeKey>),
     Builder(DeconId),
     Folder(DeconId),
     /// Whole-element fold — no declaration; keyed by element type.
-    WholeFolder(String),
+    WholeFolder(TypeKey),
     Handler(DeconId),
     JniErrorHandler,
 }
@@ -802,16 +802,12 @@ pub(crate) enum SpecKey {
 impl SpecKey {
     /// The impl-Fn identity for a callback's arg types.
     pub fn callback(args: &[syn::Type]) -> Self {
-        SpecKey::Callback(
-            args.iter()
-                .map(|t| TypeKey::from_type(t).to_string())
-                .collect(),
-        )
+        SpecKey::Callback(args.iter().map(TypeKey::from_type).collect())
     }
 
     /// The whole-element fold identity for an element type.
     pub fn whole_folder(element: &syn::Type) -> Self {
-        SpecKey::WholeFolder(TypeKey::from_type(element).to_string())
+        SpecKey::WholeFolder(TypeKey::from_type(element))
     }
 }
 
@@ -838,22 +834,22 @@ pub(crate) fn fixed_decon_ids(
 /// by the declaration emitter for the hoisted appender singleton.
 pub(crate) fn fixed_leaf_element_keys(
     registry: &Registry<KotlinMeta>,
-) -> std::collections::HashSet<String> {
+) -> std::collections::HashSet<TypeKey> {
     registry
         .unfold_plans
         .values()
         .chain(registry.callback_arg_plans.values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.element.as_ref())
-        .map(|el| TypeKey::from_type(el).to_string())
+        .map(TypeKey::from_type)
         .collect()
 }
 
 /// Derive the spec for one identity — the SINGLE construction point behind
-/// [`JniGen::iface_spec`]. Reconstructs any `syn` context from the key's
-/// canonical type strings ([`TypeKey::to_type`] round-trip). A `Folder`
-/// derivation folds the fixed-builder typed-group view in per `DeconId`
-/// (see [`fixed_decon_ids`]).
+/// [`JniGen::iface_spec`]. Any `syn` context comes from the key's stored
+/// normalized type ([`TypeKey::to_type`] — a clone, not a reparse). A
+/// `Folder` derivation folds the fixed-builder typed-group view in per
+/// `DeconId` (see [`fixed_decon_ids`]).
 fn derive_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -861,14 +857,7 @@ fn derive_iface_spec(
 ) -> Option<IfaceSpec> {
     match key {
         SpecKey::Callback(arg_keys) => {
-            let args: Vec<syn::Type> = arg_keys
-                .iter()
-                .map(|k| {
-                    TypeKey::parse(k)
-                        .expect("SpecKey stores canonical type strings")
-                        .to_type()
-                })
-                .collect();
+            let args: Vec<syn::Type> = arg_keys.iter().map(TypeKey::to_type).collect();
             callback_iface_spec(ext, registry, &args)
         }
         SpecKey::Builder(d) => builder_iface_spec(ext, registry, d),
@@ -879,13 +868,7 @@ fn derive_iface_spec(
             }
             Some(spec)
         }
-        SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(
-            ext,
-            registry,
-            &TypeKey::parse(el_key)
-                .expect("SpecKey stores canonical type strings")
-                .to_type(),
-        ),
+        SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(ext, registry, &el_key.to_type()),
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }
@@ -977,7 +960,7 @@ pub(crate) fn callback_iface_spec(
                     syn::Type::Reference(r) => (*r.elem).clone(),
                     other => other.clone(),
                 };
-                let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core).to_string())?;
+                let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
                 let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
@@ -1207,7 +1190,7 @@ pub(crate) fn fixed_folder_typed_groups(
     decon: &DeconId,
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans.get(decon)?;
-    let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source).to_string())?;
+    let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source))?;
     let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
     Some(vec![
         TypedGroup {

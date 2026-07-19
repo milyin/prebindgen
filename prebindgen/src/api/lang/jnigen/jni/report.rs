@@ -99,7 +99,7 @@ impl crate::api::core::Generation<JniGen> {
                 continue;
             }
             let fqn = ext
-                .kotlin_fqn(key.as_str())
+                .kotlin_fqn(key)
                 .unwrap_or_else(|| key.as_str().to_string());
             out.push_str(&format!(
                 "\n## class `{fqn}` ({}, Rust `{}`)\n\n",
@@ -128,7 +128,7 @@ impl crate::api::core::Generation<JniGen> {
                 continue;
             }
             let fqn = ext
-                .kotlin_fqn(key.as_str())
+                .kotlin_fqn(key)
                 .unwrap_or_else(|| key.as_str().to_string());
             let wire = registry
                 .output_entry(&key.to_type())

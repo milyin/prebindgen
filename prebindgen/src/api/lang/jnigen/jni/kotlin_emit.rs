@@ -923,7 +923,7 @@ impl JniGen {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source).to_string())
+            .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
                 panic!(
                     "value-struct builder: no Kotlin FQN for {}",
@@ -966,7 +966,7 @@ impl JniGen {
     ) -> kt::KtDecl {
         let source = &registry.decon_plans[decon].source;
         let class_fqn = self
-            .kotlin_fqn(&TypeKey::from_type(source).to_string())
+            .kotlin_fqn(&TypeKey::from_type(source))
             .unwrap_or_else(|| {
                 panic!(
                     "value-struct folder: no Kotlin FQN for {}",
@@ -1389,7 +1389,7 @@ impl JniGen {
         }
 
         let class_fqn = self
-            .kotlin_fqn(key.as_str())
+            .kotlin_fqn(key)
             .unwrap_or_else(|| class_short.to_string());
         let package = class_fqn.rsplit_once('.').map(|(p, _)| p).unwrap_or("");
         let iface_name = self.interface_short_name(package, class_short, name_override.as_deref());

@@ -614,12 +614,14 @@ impl ReturnSurface {
         };
         let outer_meta = registry.output_entry(ty).map(|e| e.metadata.clone());
         // Unit returns (incl. `ZResult<()>`, whose inner identity rides
-        // `value_rust_key`) declare no Kotlin return type.
-        let inner_canon = outer_meta
+        // `value_rust_key`) declare no Kotlin return type. The peeled type
+        // comes straight off the stored key — no reparse, no silent
+        // fallback.
+        let canonical: syn::Type = outer_meta
             .as_ref()
-            .and_then(|m| m.value_rust_key.clone())
-            .unwrap_or_else(|| ty.to_token_stream().to_string());
-        let canonical: syn::Type = syn::parse_str(&inner_canon).unwrap_or_else(|_| ty.clone());
+            .and_then(|m| m.value_rust_key.as_ref())
+            .map(TypeKey::to_type)
+            .unwrap_or_else(|| ty.clone());
         if crate::api::lang::jnigen::util::is_unit(&canonical) {
             return (Self::Unit, canonical);
         }

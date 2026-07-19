@@ -54,6 +54,16 @@ impl std::hash::Hash for TypeKey {
         self.canon.hash(state)
     }
 }
+impl PartialOrd for TypeKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for TypeKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.canon.cmp(&other.canon)
+    }
+}
 // Keep the historical single-field tuple rendering (`TypeKey("Vec < u8 >")`)
 // — error text and test expectations format keys through it.
 impl fmt::Debug for TypeKey {
@@ -97,6 +107,12 @@ impl TypeKey {
             canon: t.to_token_stream().to_string().into(),
             ty: std::rc::Rc::new(t),
         }
+    }
+
+    /// Build a key for a bare item ident — infallible by construction (an
+    /// ident IS a single-segment path type; nothing to parse or normalize).
+    pub fn from_ident(ident: &syn::Ident) -> Self {
+        Self::from_type(&crate::api::core::types_util::type_from_ident(ident))
     }
 
     /// The canonical string form.
@@ -922,7 +938,7 @@ impl<M> Registry<M> {
         };
         for ident in self.structs.keys().chain(self.enums.keys()) {
             let name = ident.to_string();
-            let key = TypeKey::parse(&name).expect("item idents parse as types");
+            let key = TypeKey::from_ident(ident);
             if !type_acknowledged(&key) && !pred_ignored(&name) {
                 skipped_types.push(name);
             }
@@ -1145,7 +1161,7 @@ impl<M> Registry<M> {
 
     fn scan_struct(&mut self, s: &syn::ItemStruct, loc: &SourceLocation) -> Result<(), ScanError> {
         // The struct itself can appear in either direction.
-        let ty: syn::Type = syn::parse_str(&s.ident.to_string()).expect("ident is a valid type");
+        let ty: syn::Type = crate::api::core::types_util::type_from_ident(&s.ident);
         self.ensure_entry(Direction::Input, &ty, false, loc);
         self.ensure_entry(Direction::Output, &ty, false, loc);
 
@@ -1159,7 +1175,7 @@ impl<M> Registry<M> {
     }
 
     fn scan_enum(&mut self, e: &syn::ItemEnum, loc: &SourceLocation) -> Result<(), ScanError> {
-        let ty: syn::Type = syn::parse_str(&e.ident.to_string()).expect("ident is a valid type");
+        let ty: syn::Type = crate::api::core::types_util::type_from_ident(&e.ident);
         self.ensure_entry(Direction::Input, &ty, false, loc);
         self.ensure_entry(Direction::Output, &ty, false, loc);
 
