@@ -8,12 +8,12 @@ build = "build.rs"
 crate-type = ["staticlib", "cdylib"]
 
 [dependencies]
-prebindgen = { workspace = true }
+prebindgen = { workspace = true, features = ["unstable-cbindgen"] }
 perftest-flat = { path = "../perftest-flat" }
 konst = "0.3.0"
 
 [build-dependencies]
-prebindgen = { workspace = true }
+prebindgen = { workspace = true, features = ["unstable-cbindgen"] }
 syn = { workspace = true }
 cbindgen = "=0.29.4"
 perftest-flat = { path = "../perftest-flat" }

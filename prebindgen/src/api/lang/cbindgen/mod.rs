@@ -1,5 +1,12 @@
 //! `Cbindgen` — the C / cbindgen language adapter.
 //!
+//! # Experimental API
+//!
+//! This module is a proof of concept. Enable it with the non-default
+//! `prebindgen/unstable-cbindgen` feature. Its Rust builder API and generated C
+//! ABI conventions may change in a minor release; do not rely on them as part
+//! of the stable 0.5 API.
+//!
 //! A [`Prebindgen`] back-end that turns a "flat" `#[prebindgen]` library into a
 //! Rust file suitable for [`cbindgen`](https://github.com/mozilla/cbindgen) to
 //! parse into a C header plus a static / dynamic library.

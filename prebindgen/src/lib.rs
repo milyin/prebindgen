@@ -17,10 +17,13 @@
 //!
 //! ## Solution
 //!
-//! `prebindgen` solves this by generating `#[no_mangle] extern "C"` Rust proxy source code from a common
-//! Rust library crate.
-//! Language-specific binding crates can then compile this generated code and pass it to their respective
-//! binding generators (such as cbindgen, csbindgen, etc.).
+//! `prebindgen` solves this by generating language-specific proxy code from a common
+//! Rust library crate. The supported 0.5 surface is the language-neutral
+//! [`core`] pipeline and the JNI/Kotlin [`lang::JniGen`] adapter.
+//!
+//! The C / cbindgen adapter is an experimental proof of concept. It is available
+//! only with the non-default `unstable-cbindgen` feature and is not covered by
+//! the 0.5 semver guarantee.
 //!
 //! ## Usage example
 //!
@@ -28,6 +31,13 @@
 //!
 //! See also the prebindgen-proc-macro documentation for details on how to use the `#[prebindgen]` macro:
 //! <https://docs.rs/prebindgen-proc-macro/latest/prebindgen_proc_macro/>
+//!
+//! ### Stable core and JNI/Kotlin path
+//!
+//! The supported workflow reads captured items with [`Source`], resolves them
+//! through [`core::Registry`], and configures [`lang::JniGen`] to emit Rust JNI
+//! wrappers plus Kotlin sources. The `covertest-kotlin` and `perftest-kotlin`
+//! workspace examples are the maintained references for that path.
 //!
 //! ### 1. In the Common FFI Library Crate (e.g., `example_flat`)
 //!
@@ -61,21 +71,21 @@
 //! prebindgen::init_prebindgen_out_dir();
 //! ```
 //!
-//! ### 2. In a Language-Specific Binding Crate (e.g. `example-cbindgen`)
+//! ### 2. Experimental C binding crate (`unstable-cbindgen`)
 //!
 //! Depend on the common FFI library (as both a normal and a build dependency) and
-//! drive the [`lang::Cbindgen`] adapter from `build.rs`:
+//! drive the experimental `lang::Cbindgen` adapter from `build.rs`:
 //!
 //! ```toml
 //! # example-cbindgen/Cargo.toml
 //! [dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.5"
+//! prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
 //! konst = "0.3"      # the generated file emits a konst feature guard
 //!
 //! [build-dependencies]
 //! example-flat = { path = "../example-flat" }
-//! prebindgen = "0.5"
+//! prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
 //! cbindgen = "0.29"
 //! syn = { version = "2", features = ["full"] }
 //! ```
@@ -248,8 +258,9 @@ macro_rules! ident {
 ///   carry fallible steps whose `Err` arms throw JVM exceptions (the exception
 ///   info lives in that back-end's `Metadata`).
 ///
-/// Both adapters ship in [`mod@lang`]: the C / cbindgen back-end
-/// ([`lang::Cbindgen`]) and the JNI / Kotlin back-end ([`lang::JniGen`]).
+/// The supported JNI / Kotlin adapter ships in [`mod@lang`] as
+/// [`lang::JniGen`]. The C / cbindgen proof of concept is available separately
+/// with the `unstable-cbindgen` feature.
 pub mod core {
     pub use crate::api::core::{
         ConverterImpl, Direction, Generation, Gravestone, NicheSlot, Niches, Prebindgen, Registry,
@@ -259,8 +270,9 @@ pub mod core {
 
 /// Runtime traits implemented by inline-opaque (`value_opaque`) FFI counterpart
 /// types; see [`core::Transmute`] / [`core::Gravestone`]. Re-exported at the crate
-/// root because the `extern "C"` converters emitted by [`lang::Cbindgen`]
-/// reference them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
+/// root because the experimental C adapter's generated converters reference
+/// them as `::prebindgen::Transmute` / `::prebindgen::Gravestone`.
+#[cfg(feature = "unstable-cbindgen")]
 pub use crate::api::core::gravestone::{Gravestone, Transmute};
 /// Root re-export of [`lang::matching`] so the ignore-predicate constructor
 /// sits next to the decl macros it composes with
@@ -269,26 +281,24 @@ pub use crate::api::lang::jnigen::matching;
 
 /// Destination-language adapters implementing [`core::Prebindgen`].
 ///
-/// [`lang::Cbindgen`] is the C / cbindgen adapter: it turns a flat
-/// `#[prebindgen]` library into a Rust file ready for `cbindgen` to parse into
-/// a C header plus a static / dynamic library. Items are opt-in via its
-/// declaration builder.
+/// With the non-default `unstable-cbindgen` feature, `Cbindgen` is an
+/// experimental C / cbindgen adapter. Its API is not covered by the 0.5 semver
+/// guarantee.
 ///
 /// [`lang::JniGen`] is the JNI / Kotlin adapter: it turns a flat
 /// `#[prebindgen]` library into a Rust file of JNI `extern "C"` wrappers plus
 /// a fan-out of generated Kotlin sources (typed-handle classes, data/enum
 /// classes, exception classes).
 pub mod lang {
-    pub use crate::api::lang::{
-        cbindgen::{snake_case, Cbindgen},
-        jnigen::{
-            box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
-            box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string,
-            matching, null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl,
-            ConvertDecl, ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl,
-            ExpandParamDecl, ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen,
-            KotlinFile, PackageDecl, PtrClassDecl, ValueClassDecl, WriteKotlinError,
-        },
+    #[cfg(feature = "unstable-cbindgen")]
+    pub use crate::api::lang::cbindgen::{snake_case, Cbindgen};
+    pub use crate::api::lang::jnigen::{
+        box_jboolean, box_jbyte, box_jchar, box_jdouble, box_jfloat, box_jint, box_jlong,
+        box_jshort, decode_byte_array, decode_string, encode_byte_array, encode_string, matching,
+        null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
+        ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
+        ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, KotlinFile,
+        PackageDecl, PtrClassDecl, ValueClassDecl, WriteKotlinError,
     };
 }
 
