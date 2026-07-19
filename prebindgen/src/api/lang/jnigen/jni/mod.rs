@@ -459,6 +459,16 @@ pub struct JniGen {
     /// stated signature)`. Synthesized into registry entries by the
     /// [`Prebindgen::local_functions`] pre-pass.
     pub(crate) local_fns: Vec<(syn::Ident, syn::Path, syn::Signature)>,
+
+    /// Memoized callback-interface specs, one per [`SpecKey`] identity —
+    /// populated lazily via [`JniGen::iface_spec`] (first touch may be the
+    /// resolve-time trampoline, which runs before any function plan exists)
+    /// and shared by every later consumer, so the FQN/descriptor pair cannot
+    /// drift between the Rust, Kotlin-wrapper, and interface-declaration
+    /// tiers (issue #107). Not a setting: derived state, keyed entirely by
+    /// `(self, registry)` — cloning the builder just clones the cache.
+    pub(crate) iface_specs:
+        std::cell::RefCell<std::collections::BTreeMap<SpecKey, std::sync::Arc<IfaceSpec>>>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────

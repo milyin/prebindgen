@@ -755,24 +755,10 @@ impl JniGen {
     pub(crate) fn write_callback_ifaces(&self, registry: &Registry<KotlinMeta>) -> Vec<kt::KtFile> {
         use crate::api::core::unfold::{DeconId, Delivery};
 
-        /// One distinct interface identity in use. Ordered so emission is
-        /// deterministic.
-        #[derive(PartialEq, Eq, PartialOrd, Ord)]
-        enum Use {
-            /// impl-Fn delivery — identified by the args' canonical type keys
-            /// (each arg uses its type's canonical decomposition or crosses
-            /// whole; the spec carries the arg types).
-            Callback(Vec<String>),
-            Builder(DeconId),
-            Folder(DeconId),
-            /// Whole-element fold — no declaration; keyed by element type.
-            WholeFolder(String),
-            Handler(DeconId),
-            JniErrorHandler,
-        }
-        // Identity → the syn-typed context the spec constructor needs (arg
-        // types for Callback, the element type for WholeFolder).
-        let mut uses: BTreeMap<Use, Vec<syn::Type>> = BTreeMap::new();
+        // Distinct interface identities in use — [`SpecKey`] (`Ord`, so
+        // emission is deterministic). The memo derives each spec from the
+        // key alone, so no side context is carried.
+        let mut uses: BTreeSet<SpecKey> = BTreeSet::new();
 
         /// A hoisted-singleton request emitted alongside an interface: the
         /// `fromParts` builder / folder for a synthesized `data_class`, or the
@@ -784,28 +770,12 @@ impl JniGen {
             LeafFolder,
         }
 
-        // DeconIds whose builder is a synthesized by-value `data_class`
-        // (`fixed_builder`): these get a hoisted `__<Name>Builder` singleton
-        // (the `fromParts` factory) emitted alongside the interface, so the
-        // wrapper references it instead of taking a caller `build` param.
-        let fixed_decons: std::collections::HashSet<DeconId> = registry
-            .unfold_plans
-            .values()
-            .chain(registry.callback_arg_plans.values())
-            .filter(|p| p.fixed_builder)
-            .filter_map(|p| p.decon.clone())
-            .collect();
-        // Element type keys whose whole-element fold is fixed (a synthesized
-        // single-leaf `Vec<T>` fold): these get a hoisted `__<Elem>FolderRaw`
-        // appender singleton, the leaf dual of `fixed_decons`.
-        let fixed_leaf_elements: std::collections::HashSet<String> = registry
-            .unfold_plans
-            .values()
-            .chain(registry.callback_arg_plans.values())
-            .filter(|p| p.fixed_builder)
-            .filter_map(|p| p.element.as_ref())
-            .map(|el| TypeKey::from_type(el).to_string())
-            .collect();
+        // Fixedness sets shared with the memo derivation (`iface.rs`): a
+        // fixed DeconId gets a hoisted `__<Name>Builder` / folder-appender
+        // singleton emitted alongside its interface; a fixed whole-element
+        // key gets the `__<Elem>FolderRaw` appender, the leaf dual.
+        let fixed_decons = fixed_decon_ids(registry);
+        let fixed_leaf_elements = fixed_leaf_element_keys(registry);
 
         // Walk every declared function — free `.fun`s AND class methods/factories
         // (`.method`/`.accessor`/`.constructor`): a method can also need a
@@ -832,11 +802,7 @@ impl JniGen {
                         continue;
                     };
                     if let Some(cb_args) = extract_fn_trait_args(&pt.ty) {
-                        let key = cb_args
-                            .iter()
-                            .map(|t| TypeKey::from_type(t).to_string())
-                            .collect();
-                        uses.insert(Use::Callback(key), cb_args);
+                        uses.insert(SpecKey::callback(&cb_args));
                     }
                 }
                 if let Some(plan) = registry
@@ -847,16 +813,13 @@ impl JniGen {
                     let iterable = is_iterable_fold(&plan.shape);
                     match (iterable, &plan.element, &plan.decon) {
                         (true, Some(el), _) => {
-                            uses.insert(
-                                Use::WholeFolder(TypeKey::from_type(el).to_string()),
-                                vec![el.clone()],
-                            );
+                            uses.insert(SpecKey::whole_folder(el));
                         }
                         (true, None, Some(d)) => {
-                            uses.insert(Use::Folder(d.clone()), vec![]);
+                            uses.insert(SpecKey::Folder(d.clone()));
                         }
                         (false, _, Some(d)) => {
-                            uses.insert(Use::Builder(d.clone()), vec![]);
+                            uses.insert(SpecKey::Builder(d.clone()));
                         }
                         _ => {}
                     }
@@ -867,69 +830,48 @@ impl JniGen {
                             .decon
                             .clone()
                             .expect("error plans are always record-built (decon is Some)");
-                        uses.insert(Use::Handler(d), vec![]);
+                        uses.insert(SpecKey::Handler(d));
                     }
                     None => {
-                        uses.insert(Use::JniErrorHandler, vec![]);
+                        uses.insert(SpecKey::JniErrorHandler);
                     }
                 }
             }
         }
 
         uses.into_iter()
-            .filter_map(|(u, tys)| {
-                // `is_error` ⇒ also emit the zero-alloc capture holder used by
-                // the generated wrappers' error channel. `fixed` carries the
-                // builder's DeconId when it is a synthesized `data_class`, so a
-                // hoisted `__<Name>Builder` singleton is emitted with it.
-                // `fixed` carries a hoisted-singleton request: `(decon, is_folder)`.
-                // `is_folder` picks the folder-appender singleton (`Vec<data_class>`
-                // fold) over the scalar `fromParts` builder.
-                let (spec, is_error, fixed) = match u {
-                    Use::Callback(_) => (callback_iface_spec(self, registry, &tys), false, None),
-                    Use::Builder(d) => {
-                        let fixed = fixed_decons
-                            .contains(&d)
-                            .then(|| FixedSingleton::StructBuilder(d.clone()));
-                        (builder_iface_spec(self, registry, &d), false, fixed)
-                    }
-                    Use::Folder(d) => {
-                        // A fixed-builder fold groups the leaves into a typed
-                        // `(acc, element)` view (raw twin keeps the leaves) so the
-                        // emitted interface matches the wrapper's
-                        // `folder_iface_for_plan`; an explicit-accessor fold keeps
-                        // its 1:1 leaf view unchanged.
-                        let is_fixed = fixed_decons.contains(&d);
-                        let spec = folder_iface_spec(self, registry, &d).map(|mut s| {
-                            if is_fixed {
-                                s.typed_groups = fixed_folder_typed_groups(self, registry, &d)
-                                    .unwrap_or_default();
-                            }
-                            s
-                        });
-                        (
-                            spec,
-                            false,
-                            is_fixed.then(|| FixedSingleton::StructFolder(d.clone())),
-                        )
-                    }
-                    Use::WholeFolder(_) => {
-                        // A synthesized single-leaf `Vec<T>` fold gets a hoisted
-                        // appender singleton; an explicit caller-fold whole-element
-                        // deconstruction (not `fixed_builder`) does not.
-                        let fixed = fixed_leaf_elements
-                            .contains(&TypeKey::from_type(&tys[0]).to_string())
-                            .then_some(FixedSingleton::LeafFolder);
-                        (
-                            whole_folder_iface_spec(self, registry, &tys[0]),
-                            false,
-                            fixed,
-                        )
-                    }
-                    Use::Handler(d) => (error_handler_iface_spec(self, registry, &d), true, None),
-                    Use::JniErrorHandler => (Some(jni_error_handler_iface_spec(self)), true, None),
+            .filter_map(|u| {
+                // Every spec comes from the SAME memo the wrappers and the
+                // resolve-time trampoline read ([`JniGen::iface_spec`]) —
+                // this site only classifies the extras: `is_error` ⇒ also
+                // emit the zero-alloc capture holder used by the generated
+                // wrappers' error channel; `fixed` carries a
+                // hoisted-singleton request (the `fromParts` builder /
+                // folder-appender for a synthesized `data_class`, or the
+                // single-leaf appender for a fixed whole-element fold).
+                let (is_error, fixed) = match &u {
+                    SpecKey::Callback(_) => (false, None),
+                    SpecKey::Builder(d) => (
+                        false,
+                        fixed_decons
+                            .contains(d)
+                            .then(|| FixedSingleton::StructBuilder(d.clone())),
+                    ),
+                    SpecKey::Folder(d) => (
+                        false,
+                        fixed_decons
+                            .contains(d)
+                            .then(|| FixedSingleton::StructFolder(d.clone())),
+                    ),
+                    SpecKey::WholeFolder(el_key) => (
+                        false,
+                        fixed_leaf_elements
+                            .contains(el_key)
+                            .then_some(FixedSingleton::LeafFolder),
+                    ),
+                    SpecKey::Handler(_) | SpecKey::JniErrorHandler => (true, None),
                 };
-                spec.map(|s| (s, is_error, fixed))
+                self.iface_spec(registry, &u).map(|s| (s, is_error, fixed))
             })
             .map(|(s, is_error, fixed)| {
                 // Typed (user-facing) interface; when any leaf's raw view

@@ -431,3 +431,94 @@ fn callback_double_option_unwrap_pipeline() {
 // differently-decomposed functions get distinct interfaces instead of
 // colliding on one type-keyed name.
 // ────────────────────────────────────────────────────────────────────────
+
+// ────────────────────────────────────────────────────────────────────────
+// Spec memo (issue #107): every consumer — resolve-time trampoline,
+// per-function plan, declaration emitter — reads ONE derivation per
+// interface identity through `JniGen::iface_spec`.
+// ────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn iface_spec_memo_shares_one_derivation() {
+    use crate::SourceLocation;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_name(this_: &ZThing) -> String {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_things_all() -> Vec<ZThing> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_sub(cb: impl Fn(ZThing) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
+                .fun(crate::fun!(z_things_all))
+                .fun(crate::fun!(z_thing_sub)),
+        )
+        .expand(
+            crate::expand_return!(ZThing)
+                .field_self()
+                .field(crate::fun!(z_thing_name)),
+        );
+    let gen = registry.resolve(jni).expect("resolve");
+    let (ext, registry) = (gen.adapter(), gen.registry());
+
+    // Same key twice ⇒ the same allocation (resolve already populated the
+    // memo through the trampoline — a hit also exercises the debug-build
+    // re-derivation assert).
+    let a = ext
+        .iface_spec(registry, &SpecKey::JniErrorHandler)
+        .expect("global handler spec");
+    let b = ext
+        .iface_spec(registry, &SpecKey::JniErrorHandler)
+        .expect("global handler spec");
+    assert!(Arc::ptr_eq(&a, &b), "one derivation per identity");
+
+    // The plan-facing dispatcher and a direct key lookup share one
+    // allocation — the wrapper surface and the interface declaration cannot
+    // diverge from the fold upcall's descriptor.
+    let plan = registry
+        .unfold_plans
+        .get(&syn::parse_str::<syn::Ident>("z_things_all").unwrap())
+        .expect("fold plan");
+    let via_plan = folder_iface_for_plan(ext, registry, plan).expect("folder spec");
+    let decon = plan.decon.clone().expect("record-built fold");
+    let direct = ext
+        .iface_spec(registry, &SpecKey::Folder(decon))
+        .expect("folder spec");
+    assert!(Arc::ptr_eq(&via_plan, &direct), "folder identity shared");
+
+    // The impl-Fn identity: the trampoline (resolve time) and the wrapper
+    // surface key on the same canonical arg types.
+    let args: Vec<syn::Type> = vec![syn::parse_quote!(ZThing)];
+    let cb1 = ext
+        .iface_spec(registry, &SpecKey::callback(&args))
+        .expect("callback spec");
+    let cb2 = ext
+        .iface_spec(registry, &SpecKey::callback(&args))
+        .expect("callback spec");
+    assert!(Arc::ptr_eq(&cb1, &cb2), "callback identity shared");
+    assert_eq!(cb1.descr, "(JLjava/lang/String;)V");
+}
