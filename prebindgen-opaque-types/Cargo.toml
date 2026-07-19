@@ -21,7 +21,7 @@ toml = { workspace = true }
 # `cargo workspace-root-patch install`, so it can discover the destination
 # project's root at build time. Pin the helper's source while the C proof of
 # concept remains outside the normal release set.
-workspace-root-patch = { git = "https://github.com/milyin/workspace-root-patch", rev = "4d4c8a5" }
+workspace-root-patch = { git = "https://github.com/milyin/workspace-root-patch", rev = "c9064f6" }
 anyhow = "1"
 
 [dev-dependencies]
