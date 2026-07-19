@@ -29,8 +29,8 @@ jni = "0.21.1"
 
 [features]
 debug = []
-# Experimental C / cbindgen adapter. Its API and generated ABI conventions are
-# not covered by the 0.5 semver guarantee.
+# Experimental C / cbindgen adapter. Its API is not covered by the 0.5 semver
+# guarantee.
 unstable-cbindgen = []
 
 [dev-dependencies]

@@ -6,8 +6,8 @@ A tool for separating the implementation of FFI interfaces from language-specifi
 
 The language-neutral `core` pipeline and the JNI/Kotlin `lang::JniGen` adapter
 are supported public APIs in 0.5. The C / cbindgen adapter is a proof of concept:
-enable it explicitly with `features = ["unstable-cbindgen"]`. Its API and generated
-C ABI conventions may change in a minor release.
+enable it explicitly with `features = ["unstable-cbindgen"]`. Its API may change
+in a minor release.
 
 ## Problem
 
