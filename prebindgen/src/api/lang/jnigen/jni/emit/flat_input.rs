@@ -118,7 +118,7 @@ pub(crate) fn struct_input_body(
         let f_inner = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
         if ext.is_kotlin_enum(&f_inner) {
             if let Some(fqn) = bare_path_ident(&f_inner)
-                .and_then(|n| ext.kotlin_fqn(&n.to_string()))
+                .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
                 .map(|v| v.to_string())
             {
                 let sig = format!("L{};", fqn.replace('.', "/"));
@@ -193,7 +193,7 @@ pub(crate) fn struct_input_body(
                     })
                     .or_else(|| {
                         bare_path_ident(&slot_ty).and_then(|name| {
-                            ext.kotlin_fqn(&name.to_string())
+                            ext.kotlin_fqn(&TypeKey::from_ident(&name))
                                 .map(|v| format!("L{};", v.replace('.', "/")))
                         })
                     })

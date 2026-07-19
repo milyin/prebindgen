@@ -235,7 +235,7 @@ impl JniGen {
     fn opaque_leaf_meta(&self, ty: &syn::Type) -> KotlinMeta {
         KotlinMeta {
             projection: Some(Projection {
-                leaf_key: TypeKey::from_type(ty).as_str().to_string(),
+                leaf_key: TypeKey::from_type(ty),
                 owned: true,
                 strategy: FoldStrategy::Base,
                 kind: ProjectionKind::Handle,
@@ -1428,7 +1428,7 @@ impl JniGen {
                 niches,
                 metadata: KotlinMeta {
                     projection: Some(Projection {
-                        leaf_key: key.as_str().to_string(),
+                        leaf_key: key.clone(),
                         owned: false,
                         strategy: FoldStrategy::Base,
                         kind: ProjectionKind::ValueBlob,
@@ -1633,7 +1633,7 @@ impl JniGen {
                 niches,
                 metadata: KotlinMeta {
                     projection: Some(Projection {
-                        leaf_key: key.as_str().to_string(),
+                        leaf_key: key.clone(),
                         owned: false,
                         strategy: FoldStrategy::Base,
                         kind: ProjectionKind::ValueBlob,

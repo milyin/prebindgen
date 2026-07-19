@@ -221,12 +221,13 @@ impl JniGen {
     }
 
     /// The registered Kotlin FQN for a canonical Rust type key, derived on
-    /// demand from the type's stored [`NameSpec`].
-    pub(crate) fn kotlin_fqn(&self, rust_canon: &str) -> Option<String> {
+    /// demand from the type's stored [`NameSpec`]. A typed direct lookup —
+    /// declaration keys and probe keys share the [`TypeKey`] constructor, so
+    /// the former linear string scan is gone (issue #95).
+    pub(crate) fn kotlin_fqn(&self, key: &TypeKey) -> Option<String> {
         self.types
-            .iter()
-            .find(|(k, _)| k.as_str() == rust_canon)
-            .and_then(|(_, cfg)| cfg.name_spec.as_ref())
+            .get(key)
+            .and_then(|cfg| cfg.name_spec.as_ref())
             .map(|spec| self.fqn_of(spec))
     }
 

@@ -64,10 +64,10 @@ pub enum ProjectionKind {
 /// source of truth instead of a parallel ad-hoc decision tree.
 #[derive(Clone, Debug)]
 pub struct Projection {
-    /// Canonical [`TypeKey`](crate::api::core::registry::TypeKey) string of the
-    /// leaf type (e.g. `"ZKeyExpr"`, `"ZenohId"`); derive the typed Kotlin
-    /// FQN via `JniGen::kotlin_fqn`.
-    pub leaf_key: String,
+    /// Canonical key of the leaf type (e.g. `ZKeyExpr`, `ZenohId`); derive
+    /// the typed Kotlin FQN via `JniGen::kotlin_fqn` — a typed key, so the
+    /// lookup cannot drift from the declaration table's constructor.
+    pub leaf_key: crate::api::core::registry::TypeKey,
     /// `false` for `&T` borrows of a handle — still a projection (param
     /// classification needs this), but not the holder's to close, so
     /// `close()` emission skips it. Always `false` for [`ProjectionKind::ValueBlob`].
@@ -103,8 +103,9 @@ pub struct KotlinMeta {
     /// Populated with `args[0]`'s canonical key for arity-1 wrappers, and
     /// inherited by the built-in `Option<_>` / `Vec<_>` / `&_` wrappers from
     /// their inner type's metadata. `None` for plain values and arity-0
-    /// converters.
-    pub value_rust_key: Option<String>,
+    /// converters. A typed key — readers get the type via `to_type()`, no
+    /// reparse.
+    pub value_rust_key: Option<crate::api::core::registry::TypeKey>,
     /// Present iff this (possibly wrapped) value is an opaque native handle. Set
     /// at the opaque-handle leaf and folded outward by the `&_` / `Option<_>`
     /// wrappers and the `lookup_*` composed branches. The single source of truth

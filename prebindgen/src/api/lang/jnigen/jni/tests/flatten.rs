@@ -628,7 +628,7 @@ fn ignore_matching_acknowledges_naming_family() {
         assert!(preds[0]("detail_const_a") && !preds[0]("z_len"));
         assert!(jni
             .ignored_types()
-            .contains(&TypeKey::parse("ZUnusedThing")));
+            .contains(&TypeKey::parse("ZUnusedThing").expect("test type")));
     }
     // …and the full pipeline runs clean, emitting only the declared fn.
     let dir = unique_test_dir("jnigen_ignore_funs_where");
@@ -1925,5 +1925,59 @@ fn constructor_member_skips_default_output_expand() {
             proc_macro2::Span::call_site()
         )),
         "constructor member must skip the default output expansion"
+    );
+}
+
+// ── issue #95: qualified signature spellings + bare declarations ─────────
+
+#[test]
+fn qualified_signature_spelling_matches_bare_ptr_class() {
+    // The source crate spells its own types with `myflat::`/`crate::` and a
+    // std-prelude path; ingest normalizes them to the bare flat spelling,
+    // so the bare `ptr_class!(ZThing)` declaration (and the whole
+    // kotlin_fqn / leaf_key chain behind the wrapper) matches.
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_get() -> myflat::ZThing {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_name(this_: &crate::things::ZThing) -> std::string::String {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
+            .fun(crate::fun!(z_thing_get)),
+    );
+    let dir = unique_test_dir("jnigen_q95");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("qualified spellings resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let all: String = paths
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .collect();
+    let ac: String = all.split_whitespace().collect();
+    // The typed handle class with its instance method, and the typed factory
+    // wrapper returning the class — the full declaration↔signature chain.
+    assert!(ac.contains("classZThing(initialPtr:Long)"), "{all}");
+    assert!(ac.contains("funname(onError:"), "{all}");
+    assert!(
+        ac.contains("funzThingGet(onError:JniErrorHandler<ZThing>):ZThing"),
+        "{all}"
     );
 }

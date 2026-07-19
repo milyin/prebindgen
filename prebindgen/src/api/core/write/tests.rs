@@ -23,7 +23,7 @@ impl Prebindgen for IdentityExt {
     fn declared_types(&self) -> HashSet<TypeKey> {
         ["AEnum", "AStruct", "BEnum", "BStruct"]
             .into_iter()
-            .map(TypeKey::parse)
+            .map(|s| TypeKey::parse(s).expect("test type"))
             .collect()
     }
 
@@ -59,8 +59,8 @@ impl Prebindgen for IdentityExt {
 #[test]
 fn dedup_and_sort() {
     let mut reg: Registry<()> = Registry::default();
-    let key_a = TypeKey::parse("u64");
-    let key_b = TypeKey::parse("Sample");
+    let key_a = TypeKey::parse("u64").expect("test type");
+    let key_b = TypeKey::parse("Sample").expect("test type");
     let wire: syn::Type = syn::parse_quote!(i64);
     let wire2: syn::Type = syn::parse_quote!(*const u8);
 

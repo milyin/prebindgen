@@ -6,6 +6,137 @@
 use proc_macro2::Span;
 use quote::ToTokens;
 
+/// The single-segment path type for a bare item ident (`Foo` → `Foo`) —
+/// direct construction, no string round trip, cannot fail.
+pub fn type_from_ident(ident: &syn::Ident) -> syn::Type {
+    syn::Type::Path(syn::TypePath {
+        qself: None,
+        path: syn::Path::from(ident.clone()),
+    })
+}
+
+/// Normalize a type to its canonical flat-namespace spelling (issue #95).
+/// The COMPLETE equivalence rule set — any spelling not listed is preserved
+/// verbatim:
+///
+/// 1. `Type::Group` / `Type::Paren` wrappers unwrap (`(Foo)` ≡ `Foo`).
+/// 2. A multi-segment path headed by `crate` / `self` reduces to its final
+///    segment, keeping that segment's generic arguments (`crate::a::Foo<T>`
+///    ≡ `Foo<T>`). Sound because the flat namespace indexes at most one
+///    item per bare ident, and a `crate::` path in a captured item can only
+///    denote the source crate's own item.
+/// 3. A multi-segment path headed by a name in `source_modules` (the
+///    `#[prebindgen]` source crates chained into the registry,
+///    hyphens-as-underscores) reduces the same way (`myflat::Foo` ≡ `Foo`).
+///    Pure callers pass `&[]`.
+/// 4. The std prelude whitelist reduces to its bare form — exactly
+///    `std|core|alloc :: vec::Vec | option::Option | result::Result |
+///    string::String | boxed::Box` (with or without a leading `::`).
+///    Nothing else: `std::ffi::CString` stays qualified, and unknown crate
+///    paths (`zenoh::KeyExpr`) are NEVER touched — the registry has no
+///    index of a foreign namespace, so `a::KeyExpr` and `b::KeyExpr` may be
+///    genuinely distinct types and their spelling is their identity.
+/// 5. Lifetimes are NOT normalized (`&'a T` ≠ `&T`, `Foo<'static>` ≠ `Foo`)
+///    — [`match_pattern`] treats lifetimes as fixed structure and
+///    foreign-type declarations (`ptr_class!(ZKeyExpr<'static>)`) rely on
+///    the verbatim spelling.
+///
+/// Idempotent; recurses through references, slices, tuples, pointers,
+/// generic arguments, and `impl Trait` bounds. Paths with a qualified self
+/// (`<T as Trait>::Assoc`) are left untouched.
+pub fn normalize_type(ty: &mut syn::Type, source_modules: &[String]) {
+    use syn::visit_mut::VisitMut;
+    struct Normalizer<'a> {
+        modules: &'a [String],
+    }
+    impl VisitMut for Normalizer<'_> {
+        fn visit_type_mut(&mut self, ty: &mut syn::Type) {
+            // Unwrap (possibly nested) group/paren wrappers in place.
+            loop {
+                match ty {
+                    syn::Type::Group(g) => *ty = (*g.elem).clone(),
+                    syn::Type::Paren(p) => *ty = (*p.elem).clone(),
+                    _ => break,
+                }
+            }
+            if let syn::Type::Path(tp) = ty {
+                if tp.qself.is_none() {
+                    reduce_flat_path(&mut tp.path, self.modules);
+                }
+            }
+            syn::visit_mut::visit_type_mut(self, ty);
+        }
+    }
+    Normalizer {
+        modules: source_modules,
+    }
+    .visit_type_mut(ty);
+}
+
+/// Apply [`normalize_type`] to every type position inside an item — fn
+/// signatures, struct fields, enum variants, const types. The ingest-time
+/// pass ([`crate::api::core::registry::Registry::from_items`]) that makes
+/// captured spellings canonical before any key is formed, so every
+/// downstream `TypeKey::from_type` sees the flat spelling.
+pub fn normalize_item_types(item: &mut syn::Item, source_modules: &[String]) {
+    use syn::visit_mut::VisitMut;
+    struct ItemNormalizer<'a> {
+        modules: &'a [String],
+    }
+    impl VisitMut for ItemNormalizer<'_> {
+        fn visit_type_mut(&mut self, ty: &mut syn::Type) {
+            // Normalizes the whole subtree; no further descent needed.
+            normalize_type(ty, self.modules);
+        }
+    }
+    ItemNormalizer {
+        modules: source_modules,
+    }
+    .visit_item_mut(item);
+}
+
+/// The path-reduction step of [`normalize_type`]: collapse a reducible
+/// multi-segment path to its final segment. See the rule list there.
+fn reduce_flat_path(path: &mut syn::Path, source_modules: &[String]) {
+    if path.segments.len() < 2 {
+        return;
+    }
+    let head = path
+        .segments
+        .first()
+        .expect("len checked")
+        .ident
+        .to_string();
+    let reduce = match head.as_str() {
+        "crate" | "self" => true,
+        "std" | "core" | "alloc" => {
+            let tail: Vec<String> = path
+                .segments
+                .iter()
+                .skip(1)
+                .map(|s| s.ident.to_string())
+                .collect();
+            matches!(
+                tail.iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                ["vec", "Vec"]
+                    | ["option", "Option"]
+                    | ["result", "Result"]
+                    | ["string", "String"]
+                    | ["boxed", "Box"]
+            )
+        }
+        other => source_modules.iter().any(|m| m == other),
+    };
+    if reduce {
+        let last = path.segments.last().expect("len checked").clone();
+        path.leading_colon = None;
+        path.segments = std::iter::once(last).collect();
+    }
+}
+
 /// Structurally match a concrete type `ty` against a wildcard `pattern` (a
 /// `syn::Type` whose `_` placeholders are [`syn::Type::Infer`]). On success,
 /// returns the subtrees of `ty` captured at each wildcard, in left-to-right

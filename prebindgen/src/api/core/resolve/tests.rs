@@ -23,14 +23,14 @@ fn final_invariant_reports_unresolved_field_of_unresolved_struct() {
     );
 
     // `Outer` is a required INPUT, unresolved (slot stays `None`).
-    let outer_key = TypeKey::parse("Outer");
+    let outer_key = TypeKey::parse("Outer").expect("test type");
     reg.input_types.insert(outer_key.clone(), None);
     reg.required_inputs_scan.insert(outer_key.clone());
 
     // `ZKeyExpr` is also in the type table (scan recursed into the
     // field) but unresolved and NOT marked required at scan time —
     // exactly the case the BFS is here to catch.
-    let zke_key = TypeKey::parse("ZKeyExpr");
+    let zke_key = TypeKey::parse("ZKeyExpr").expect("test type");
     reg.input_types.insert(zke_key.clone(), None);
 
     let err = final_invariant_check(&reg).expect_err("must surface unresolved");
@@ -72,9 +72,9 @@ fn final_invariant_stops_at_resolved_nodes() {
 
     // `Outer` required & unresolved; `Inner` RESOLVED (with a dummy
     // entry); `Unrelated` unresolved but only reachable through Inner.
-    let outer_key = TypeKey::parse("Outer");
-    let inner_key = TypeKey::parse("Inner");
-    let unrelated_key = TypeKey::parse("Unrelated");
+    let outer_key = TypeKey::parse("Outer").expect("test type");
+    let inner_key = TypeKey::parse("Inner").expect("test type");
+    let unrelated_key = TypeKey::parse("Unrelated").expect("test type");
 
     reg.input_types.insert(outer_key.clone(), None);
     reg.required_inputs_scan.insert(outer_key.clone());

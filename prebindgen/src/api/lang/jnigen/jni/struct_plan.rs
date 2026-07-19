@@ -206,7 +206,7 @@ pub(crate) fn build_struct_plan(
                     })
                     .or_else(|| {
                         bare_path_ident(&slot_ty).and_then(|name| {
-                            ext.kotlin_fqn(&name.to_string())
+                            ext.kotlin_fqn(&TypeKey::from_ident(&name))
                                 .map(|v| format!("L{};", v.replace('.', "/")))
                         })
                     })
