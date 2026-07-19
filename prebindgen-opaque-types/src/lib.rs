@@ -58,8 +58,8 @@ impl OpaqueType {
 ///
 /// Sensible defaults for the `build.rs` use case: `build_dir` =
 /// `$OUT_DIR/opaque_probe`, `cargo_lock` = the destination workspace's `Cargo.lock`
-/// (via [`workspace-root-patch`]; the consumer must run
-/// `cargo workspace-root-patch install`), default features on. Typical use:
+/// (via [`project-root-patch`]; the consumer must run
+/// `cargo project-root-patch install`), default features on. Typical use:
 ///
 /// ```ignore
 /// let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
@@ -127,7 +127,7 @@ impl OpaqueTypes {
     }
 
     /// Override the `Cargo.lock` copied into the probe crate (default: the
-    /// destination workspace's lock, located via [`workspace-root-patch`]).
+    /// destination workspace's lock, located via [`project-root-patch`]).
     pub fn cargo_lock(mut self, path: impl Into<PathBuf>) -> Self {
         self.cargo_lock = Some(path.into());
         self
@@ -220,15 +220,15 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
 /// The **destination project's** `Cargo.lock`, so the probe resolves dependencies
 /// identically to the cdylib build.
 ///
-/// The workspace root comes from [`workspace_root_patch::get_project_root`] —
+/// The workspace root comes from [`project_root_patch::get_project_root`] —
 /// correct even for a consumer installed from crates.io, because
-/// `workspace-root-patch` is patched into the *destination* workspace, so every
+/// `project-root-patch` is patched into the *destination* workspace, so every
 /// copy in the graph (including this library's dependency on it) resolves to that
 /// member copy and reports the destination root. The consumer must have run
-/// `cargo workspace-root-patch install` (otherwise `get_project_root` panics
+/// `cargo project-root-patch install` (otherwise `get_project_root` panics
 /// with guidance — there is intentionally no silent fallback).
 fn default_cargo_lock() -> PathBuf {
-    workspace_root_patch::get_project_root().join("Cargo.lock")
+    project_root_patch::get_project_root().join("Cargo.lock")
 }
 
 /// Read the `[package].name` of the crate whose manifest dir is `manifest_dir`.

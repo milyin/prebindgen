@@ -18,10 +18,10 @@ syn = { workspace = true }
 quote = { workspace = true }
 toml = { workspace = true }
 # This crate must be patched into the destination workspace by
-# `cargo workspace-root-patch install`, so it can discover the destination
+# `cargo project-root-patch install`, so it can discover the destination
 # project's root at build time. Pin the helper's source while the C proof of
 # concept remains outside the normal release set.
-workspace-root-patch = { git = "https://github.com/milyin/project-root-patch", rev = "4d4c8a5" }
+project-root-patch = { git = "https://github.com/milyin/project-root-patch", rev = "8590eaa" }
 anyhow = "1"
 
 [dev-dependencies]
