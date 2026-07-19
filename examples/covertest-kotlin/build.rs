@@ -56,6 +56,7 @@
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
 //! | `Vec<handle>` / `Option<Vec<handle>>`| `storage_shards` / `storage_shards_opt` (Kotlin-side handle fold) |
+//! | record-built `<A>` fold (bare + `Option`) | `summary_series` / `summary_series_opt` (caller `acc`/`fold`; `A?` return, null = `None`) |
 //! | borrowed-opaque return (`Option<&T>`)| `archive_latest` (clone → fresh owned handle) |
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
@@ -469,6 +470,14 @@ fn main() {
                 // (`-1` = `None`); the borrow-identity arm clones, so the
                 // caller's handle survives the call.
                 .fun(fun!(summary_total_opt))
+                // Record-built generic folds (#105): `Vec<Summary>` and
+                // `Option<Vec<Summary>>` returns cross as the caller-supplied
+                // `<A>(acc, fold)` surface — decomposed `(count, total)`
+                // leaves per element. The `Option` form returns `A?`: null =
+                // `None` (the fold never invoked), `Some(empty)` = the
+                // untouched accumulator.
+                .fun(fun!(summary_series))
+                .fun(fun!(summary_series_opt))
                 // The borrowed-accessor trio. `archive_latest` suppresses the default
                 // Summary return-field default so the BORROWED handle path (clone into a
                 // fresh owned handle, null when absent) is what crosses.

@@ -37,6 +37,18 @@ impl<N> Shape<N> {
     pub fn iterable(inner: Shape<N>) -> Self {
         Shape::Iterable(Box::new(inner))
     }
+
+    /// True when any layer of the stack is `Iterable`. This is the
+    /// fold-delivery discriminator: a fold surface (accumulator + per-element
+    /// callback) is selected whether or not `Optional` layers wrap the
+    /// iterable, and an iterable-shaped value has no single return.
+    pub fn has_iterable_layer(&self) -> bool {
+        match self {
+            Shape::Base => false,
+            Shape::Optional(_, inner) => inner.has_iterable_layer(),
+            Shape::Iterable(_) => true,
+        }
+    }
 }
 
 /// Bottom-up fold over the layer stack: compute the leaf value with `on_base`,

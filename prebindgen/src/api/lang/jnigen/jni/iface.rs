@@ -20,7 +20,7 @@
 //! sites independently derive identical specs.
 
 use super::*;
-use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan, UnfoldShape};
+use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan};
 
 /// The JVM-visible single method name of every generated callback interface.
 pub(crate) const IFACE_METHOD: &str = "run";
@@ -1025,8 +1025,7 @@ pub(crate) fn folder_iface_for_plan(
     plan: &UnfoldPlan,
 ) -> Option<IfaceSpec> {
     debug_assert!(
-        matches!(plan.shape, UnfoldShape::Iterable(_))
-            || matches!(&plan.shape, UnfoldShape::Optional((), i) if matches!(**i, UnfoldShape::Iterable(_))),
+        plan.shape.has_iterable_layer(),
         "folder_iface_for_plan requires an Iterable (or Option<Iterable>) plan"
     );
     match (&plan.element, &plan.decon) {

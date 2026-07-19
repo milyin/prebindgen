@@ -765,6 +765,14 @@ internal object CovNative {
         errorSink: Any,
     ): Long
     external fun summaryScaled(s: Long, factor: Double, errorSink: Any): Double
+    external fun summarySeries(count: Long, start: Long, acc: Any?, fold: Any, errorSink: Any): Any?
+    external fun summarySeriesOpt(
+        count: Long,
+        start: Long,
+        acc: Any?,
+        fold: Any,
+        errorSink: Any,
+    ): Any?
     external fun summaryTotal(s: Long, errorSink: Any): Double
     external fun summaryTotalOpt(
         sSel: Int,

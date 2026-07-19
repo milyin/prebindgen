@@ -37,6 +37,10 @@ Base package: `io.prebindgen.covertest`
 - `summary_prefer` — `fun summaryPrefer(primarySel: Int, primary00: Long?, primary01: Double?, primary1: Summary?, fallbackSel: Int, fallback00: Long?, fallback01: Double?, fallback1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Long>): Long`
   - shaped by: param `fallback` expanded from `Summary` — variants [summary_new, self]
   - shaped by: param `primary` expanded from `Summary` — variants [summary_new, self]
+- `summary_series` — `fun <A> summarySeries(count: Long, start: Long, acc: A, onError: io.prebindgen.covertest.JniErrorHandler<A>, fold: io.prebindgen.covertest.analytics.SummaryFolder<A>): A`
+  - shaped by: return `Summary` decomposed → [count, total] (Callback delivery)
+- `summary_series_opt` — `fun <A> summarySeriesOpt(count: Long, start: Long, acc: A, onError: io.prebindgen.covertest.JniErrorHandler<A?>, fold: io.prebindgen.covertest.analytics.SummaryFolder<A>): A?`
+  - shaped by: return `Summary` decomposed → [count, total] (Callback delivery)
 - `summary_total_opt` — `fun summaryTotalOpt(sSel: Int, s00: Long?, s01: Double?, s1: Summary?, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`
   - shaped by: param `s` expanded from `Summary` — variants [summary_new, self]
 - `summary_total_raw` — `fun summaryTotalRaw(s: Summary, onError: io.prebindgen.covertest.JniErrorHandler<Double>): Double`

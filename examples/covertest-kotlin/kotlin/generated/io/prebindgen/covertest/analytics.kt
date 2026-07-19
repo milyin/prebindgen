@@ -168,6 +168,10 @@ public fun <R> SummaryStorageSummaryProbeBuilder<R>.asRaw(): SummaryStorageSumma
         )
     }
 
+public fun interface SummaryFolder<A> {
+    public fun run(acc: A, count: Long, total: Double): A
+}
+
 /**
  * Summarize a storage (returns a `Summary`; the binding's **default
  * flatten-output** turns it into `(count, total)` leaves).
@@ -623,6 +627,49 @@ public fun summaryTotalOpt(
             )
         }
     }
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/**
+ * A series of `count` summaries starting at `start`: element `i` is
+ * `(start + i, (start + i) * 10.0)`. A **record-built iterable fold** at the
+ * boundary: the caller supplies the accumulator and a per-element `fold`
+ * lambda receiving the decomposed `(count, total)` leaves.
+ *
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <A> summarySeries(
+    count: Long,
+    start: Long,
+    acc: A,
+    onError: JniErrorHandler<A>,
+    fold: SummaryFolder<A>,
+): A {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = (CovNative.summarySeries(count, start, acc, fold, __cap) as A)
+    if (__cap.failed) return onError.run(__cap.je)
+    return __ret
+}
+
+/**
+ * Like [`summary_series`] but `None` when `count < 0` — the record-built
+ * `Optional(Iterable)` shape (#105): `None` skips the fold and the JVM
+ * wrapper returns null; `Some(vec![])` returns the untouched accumulator.
+ *
+ * The Rust `Summary` result is delivered decomposed: the builder callback receives (`count`, `total`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun <A> summarySeriesOpt(
+    count: Long,
+    start: Long,
+    acc: A,
+    onError: JniErrorHandler<A?>,
+    fold: SummaryFolder<A>,
+): A? {
+    val __cap = JniErrorHandlerCapture.acquire()
+    val __ret = (CovNative.summarySeriesOpt(count, start, acc, fold, __cap) as A?)
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }
