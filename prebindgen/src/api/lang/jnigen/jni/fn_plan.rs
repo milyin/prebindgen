@@ -28,11 +28,13 @@ pub(crate) struct JniFunctionPlan {
     /// see `symbol`, #86), derived from [`Self::jni_method`].
     pub native_symbol: String,
     /// The onError sink interface — the typed `<Err>Handler` when an error
-    /// plan exists, the global `JniErrorHandler` otherwise. One spec feeds
-    /// the Rust `__SINK_*` statics and the Kotlin `onError` wiring, so the
-    /// FQN/descriptor pair of the cached `run` lookup cannot drift. `None` =
-    /// underivable (the Rust emitter panics, the Kotlin renderer skips).
-    pub onerror_iface: Option<IfaceSpec>,
+    /// plan exists, the global `JniErrorHandler` otherwise. Shared from the
+    /// [`JniGen::iface_spec`] memo: one derivation feeds the Rust `__SINK_*`
+    /// statics, the Kotlin `onError` wiring, and the interface declaration,
+    /// so the FQN/descriptor pair of the cached `run` lookup cannot drift.
+    /// `None` = underivable (the Rust emitter panics, the Kotlin renderer
+    /// skips).
+    pub onerror_iface: Option<Arc<IfaceSpec>>,
     pub params: Vec<PlanParam>,
     pub output: FnOutputPlan,
 }
@@ -90,10 +92,10 @@ pub(crate) struct PlanLeaf {
 /// probe order is canonical, not load-bearing.
 pub(crate) enum InputKind {
     /// `impl Fn(args)` callback: erased `Any` on the wire. `iface` is the
-    /// typed `fun interface` spec ([`callback_iface_spec`], keyed on the arg
-    /// types); `None` = underivable, the Kotlin wrapper renderer skips.
-    /// Boxed — an [`IfaceSpec`] would dominate the variant sizes.
-    Callback { iface: Option<Box<IfaceSpec>> },
+    /// typed `fun interface` spec (memoized under [`SpecKey::Callback`] —
+    /// the same allocation the trampoline and the declaration emitter read);
+    /// `None` = underivable, the Kotlin wrapper renderer skips.
+    Callback { iface: Option<Arc<IfaceSpec>> },
     /// `&[T]` / `Vec<T>` of a flattenable data_class: a single `jlong`
     /// Vec-handle on the wire, built by pushing element leaves.
     VecBuild { elem: syn::Type, by_ref: bool },
@@ -144,12 +146,13 @@ pub(crate) struct UnfoldOutputPlan {
     pub generic: Option<&'static str>,
     /// The builder/folder `fun interface` spec the delivery calls into —
     /// [`folder_iface_for_plan`] for an iterable fold (incl. the fixed
-    /// whole-element form), [`builder_iface_spec`] otherwise. One spec feeds
-    /// the Rust upcall statics and every Kotlin surface read, so the cached
-    /// `run` FQN/descriptor pair cannot drift. `None` = underivable (the
-    /// Rust emitter keeps its historical `expect`s, the Kotlin renderer
-    /// skips). Boxed to keep the variant small.
-    pub iface: Option<Box<IfaceSpec>>,
+    /// whole-element form), the memoized [`SpecKey::Builder`] spec
+    /// otherwise. Shared from the [`JniGen::iface_spec`] memo: one
+    /// derivation feeds the Rust upcall statics, every Kotlin surface read,
+    /// and the interface declaration, so the cached `run` FQN/descriptor
+    /// pair cannot drift. `None` = underivable (the Rust emitter keeps its
+    /// historical `expect`s, the Kotlin renderer skips).
+    pub iface: Option<Arc<IfaceSpec>>,
 }
 
 /// Value-return facts: the resolved conversion target and wire on the Rust
@@ -408,7 +411,7 @@ fn classify_leaf(
     // `impl Fn(args)` first: typed entirely from the interface spec — the
     // erased entry exists but its metadata carries no surface type.
     if let Some(args) = extract_fn_trait_args(ty) {
-        let iface = callback_iface_spec(ext, registry, &args).map(Box::new);
+        let iface = ext.iface_spec(registry, &SpecKey::callback(&args));
         return Ok(PlanLeaf {
             ty: ty.clone(),
             kt_name,
@@ -528,13 +531,13 @@ fn build_output(
             Some("R")
         };
         let iface = if iterable_fold {
-            folder_iface_for_plan(ext, registry, plan).map(Box::new)
+            folder_iface_for_plan(ext, registry, plan)
         } else {
             let decon = plan
                 .decon
-                .as_ref()
+                .clone()
                 .expect("record-built plan carries its DeconId");
-            builder_iface_spec(ext, registry, decon).map(Box::new)
+            ext.iface_spec(registry, &SpecKey::Builder(decon))
         };
         return Ok(FnOutputPlan::Unfold(UnfoldOutputPlan {
             iterable_fold,

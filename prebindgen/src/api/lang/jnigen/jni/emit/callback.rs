@@ -249,9 +249,10 @@ pub(crate) fn callback_input(
         total += 1;
     }
 
-    // Typed `run` descriptor of the generated callback interface — derived
-    // from the same plans/leaf classification as the jvalues above.
-    let spec = callback_iface_spec(ext, registry, args)?;
+    // Typed `run` descriptor of the generated callback interface — the SAME
+    // memoized spec (`SpecKey::Callback`) the wrapper surface and the
+    // interface declaration read, so it cannot drift from the jvalues above.
+    let spec = ext.iface_spec(registry, &SpecKey::callback(args))?;
     let descr_lit = syn::LitStr::new(&spec.descr, Span::call_site());
     // Local-frame capacity: roughly an encoded wire + a wrapped object per
     // delivered leaf, plus call temporaries.

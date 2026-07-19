@@ -812,7 +812,7 @@ pub(crate) fn render_const_val(
     let kdoc = crate::api::lang::jnigen::util::doc_string(&c.attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    render_val_over_helper(ext, helper, val_name, kdoc, imports)
+    render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
 }
 
 /// Render one fn-sourced constant (see `ConstDecl::fun`):
@@ -842,7 +842,7 @@ pub(crate) fn render_constant_fn_val(
     let kdoc = crate::api::lang::jnigen::util::doc_string(&f.attrs)
         .map(|d| format!("{d}\n\n{framework_line}"))
         .unwrap_or(framework_line);
-    render_val_over_helper(ext, helper, val_name, kdoc, imports)
+    render_val_over_helper(ext, registry, helper, val_name, kdoc, imports)
 }
 
 /// Render one expression-backed constant (see `ConstDecl::expr`):
@@ -866,7 +866,14 @@ pub(crate) fn render_const_expr_val(
         "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
          the generated JNI getter on first use)."
     );
-    render_val_over_helper(ext, helper, decl.kotlin_name.clone(), kdoc, imports)
+    render_val_over_helper(
+        ext,
+        registry,
+        helper,
+        decl.kotlin_name.clone(),
+        kdoc,
+        imports,
+    )
 }
 
 /// Shared val-rendering core for both constant kinds (`ConstDecl` /
@@ -878,6 +885,7 @@ pub(crate) fn render_const_expr_val(
 /// not fire one JNI call per `val` at class-load (issue #58).
 fn render_val_over_helper(
     ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
     mut helper: kt::KtFun,
     val_name: String,
     kdoc: String,
@@ -888,7 +896,7 @@ fn render_val_over_helper(
     // A constant always carries a value type; a helper with no return would
     // mean the type never resolved — skip like an unresolvable fn.
     let val_ty = helper.ret.clone()?;
-    let spec = jni_error_handler_iface_spec(ext);
+    let spec = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
     imports.insert(spec.fqn());
     let init = format!(
         "{helper_name}(JniErrorHandler {{ je -> error(je ?: \"const {val_name}: JNI getter failed\") }})"

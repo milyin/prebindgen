@@ -16,8 +16,12 @@
 //! `run` with raw typed `jvalue`s: no per-leaf boxing upcalls, no erased
 //! `FunctionN`.
 //!
-//! All constructors are deterministic over `(ext, registry)`, so the three
-//! sites independently derive identical specs.
+//! Each identity's spec is derived ONCE, through the [`JniGen::iface_spec`]
+//! memo keyed by [`SpecKey`], and shared by all three sites — the
+//! FQN/descriptor pair cannot drift between the artifact tiers (issue #107).
+//! The constructors stay deterministic over `(ext, registry)`; in debug
+//! builds every memo hit re-derives and asserts equality, so the
+//! determinism is a checked invariant rather than a convention.
 
 use super::*;
 use crate::api::core::unfold::{dedup_names, DeconId, UnfoldPlan};
@@ -772,6 +776,149 @@ pub(crate) fn owned_handle_iface_param(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Spec identities + the per-generator memo (issue #107)
+// ──────────────────────────────────────────────────────────────────────
+
+/// One distinct generated-interface identity — the memo key shared by the
+/// resolve-time trampoline, the per-function plan, and the declaration
+/// emitter (formerly `write_callback_ifaces`' local `Use` enum). `Ord` so
+/// declaration emission iterates deterministically. Type-shaped identities
+/// store the canonical [`TypeKey`] string; the derivation round-trips it
+/// back to a `syn::Type`, so a key alone fully determines its spec.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum SpecKey {
+    /// impl-Fn delivery — the args' canonical type keys (each arg either
+    /// decomposes via its type's canonical plan or crosses whole).
+    Callback(Vec<String>),
+    Builder(DeconId),
+    Folder(DeconId),
+    /// Whole-element fold — no declaration; keyed by element type.
+    WholeFolder(String),
+    Handler(DeconId),
+    JniErrorHandler,
+}
+
+impl SpecKey {
+    /// The impl-Fn identity for a callback's arg types.
+    pub fn callback(args: &[syn::Type]) -> Self {
+        SpecKey::Callback(
+            args.iter()
+                .map(|t| TypeKey::from_type(t).to_string())
+                .collect(),
+        )
+    }
+
+    /// The whole-element fold identity for an element type.
+    pub fn whole_folder(element: &syn::Type) -> Self {
+        SpecKey::WholeFolder(TypeKey::from_type(element).to_string())
+    }
+}
+
+/// DeconIds whose builder/folder is a synthesized by-value `data_class`
+/// (`fixed_builder` plans). Fixedness is a property of the DECLARATION
+/// identity — the JVM resolves calls against the single declared interface —
+/// so it is computed per `DeconId` over all plans, shared by the memo
+/// derivation ([`SpecKey::Folder`]'s typed groups) and the declaration
+/// emitter (the hoisted `fromParts`/appender singletons).
+pub(crate) fn fixed_decon_ids(
+    registry: &Registry<KotlinMeta>,
+) -> std::collections::HashSet<DeconId> {
+    registry
+        .unfold_plans
+        .values()
+        .chain(registry.callback_arg_plans.values())
+        .filter(|p| p.fixed_builder)
+        .filter_map(|p| p.decon.clone())
+        .collect()
+}
+
+/// Element type keys whose whole-element fold is fixed (a synthesized
+/// single-leaf `Vec<T>` fold) — the leaf dual of [`fixed_decon_ids`], used
+/// by the declaration emitter for the hoisted appender singleton.
+pub(crate) fn fixed_leaf_element_keys(
+    registry: &Registry<KotlinMeta>,
+) -> std::collections::HashSet<String> {
+    registry
+        .unfold_plans
+        .values()
+        .chain(registry.callback_arg_plans.values())
+        .filter(|p| p.fixed_builder)
+        .filter_map(|p| p.element.as_ref())
+        .map(|el| TypeKey::from_type(el).to_string())
+        .collect()
+}
+
+/// Derive the spec for one identity — the SINGLE construction point behind
+/// [`JniGen::iface_spec`]. Reconstructs any `syn` context from the key's
+/// canonical type strings ([`TypeKey::to_type`] round-trip). A `Folder`
+/// derivation folds the fixed-builder typed-group view in per `DeconId`
+/// (see [`fixed_decon_ids`]).
+fn derive_iface_spec(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    key: &SpecKey,
+) -> Option<IfaceSpec> {
+    match key {
+        SpecKey::Callback(arg_keys) => {
+            let args: Vec<syn::Type> = arg_keys
+                .iter()
+                .map(|k| TypeKey::parse(k).to_type())
+                .collect();
+            callback_iface_spec(ext, registry, &args)
+        }
+        SpecKey::Builder(d) => builder_iface_spec(ext, registry, d),
+        SpecKey::Folder(d) => {
+            let mut spec = folder_iface_spec(ext, registry, d)?;
+            if fixed_decon_ids(registry).contains(d) {
+                spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)?;
+            }
+            Some(spec)
+        }
+        SpecKey::WholeFolder(el_key) => {
+            whole_folder_iface_spec(ext, registry, &TypeKey::parse(el_key).to_type())
+        }
+        SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
+        SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
+    }
+}
+
+impl JniGen {
+    /// The memoized spec for one interface identity: derived once per
+    /// generator run and shared by every consumer — the resolve-time
+    /// trampoline, the per-function plan, and the declaration emitter — so
+    /// the FQN/descriptor pair cannot drift between artifact tiers (issue
+    /// #107). `None` (not yet derivable — e.g. leaf converters still
+    /// unresolved) is NOT cached: the resolve-time caller defers and
+    /// retries. In debug builds a cache hit re-derives and asserts equality,
+    /// so any nondeterminism in the constructors fails loudly under test
+    /// instead of shipping descriptor drift.
+    pub(crate) fn iface_spec(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        key: &SpecKey,
+    ) -> Option<std::sync::Arc<IfaceSpec>> {
+        let hit = self.iface_specs.borrow().get(key).cloned();
+        if let Some(hit) = hit {
+            #[cfg(debug_assertions)]
+            {
+                let fresh = derive_iface_spec(self, registry, key);
+                debug_assert_eq!(
+                    fresh.as_ref().map(|s| format!("{s:?}")),
+                    Some(format!("{:?}", *hit)),
+                    "IfaceSpec derivation drifted for {key:?}"
+                );
+            }
+            return Some(hit);
+        }
+        let spec = std::sync::Arc::new(derive_iface_spec(self, registry, key)?);
+        self.iface_specs
+            .borrow_mut()
+            .insert(key.clone(), spec.clone());
+        Some(spec)
+    }
+}
+
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
 /// flattened leaf of each arg's callback plan (the arg whole when plan-less),
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
@@ -1017,26 +1164,22 @@ pub(crate) fn whole_folder_iface_spec(
 }
 
 /// The folder spec for an `Iterable` plan: declaration-keyed when the
-/// element decomposes, whole-element otherwise. Thin dispatch — the
-/// derivation itself is keyed.
+/// element decomposes, whole-element otherwise. Thin KEY dispatch into the
+/// [`JniGen::iface_spec`] memo — the fixed-builder typed-group view is
+/// applied there per `DeconId` (the declaration identity the JVM resolves
+/// against), not per this plan's own `fixed_builder` flag.
 pub(crate) fn folder_iface_for_plan(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     plan: &UnfoldPlan,
-) -> Option<IfaceSpec> {
+) -> Option<std::sync::Arc<IfaceSpec>> {
     debug_assert!(
         plan.shape.has_iterable_layer(),
         "folder_iface_for_plan requires an Iterable (or Option<Iterable>) plan"
     );
     match (&plan.element, &plan.decon) {
-        (Some(el), _) => whole_folder_iface_spec(ext, registry, el),
-        (None, Some(d)) => {
-            let mut spec = folder_iface_spec(ext, registry, d)?;
-            if plan.fixed_builder {
-                spec.typed_groups = fixed_folder_typed_groups(ext, registry, d)?;
-            }
-            Some(spec)
-        }
+        (Some(el), _) => ext.iface_spec(registry, &SpecKey::whole_folder(el)),
+        (None, Some(d)) => ext.iface_spec(registry, &SpecKey::Folder(d.clone())),
         (None, None) => None,
     }
 }
@@ -1142,21 +1285,21 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
 }
 
 /// The onError handler spec for a declared function: its error plan's
-/// declaration-keyed typed handler, or the shared
-/// [`jni_error_handler_iface_spec`].
+/// declaration-keyed typed handler, or the shared global
+/// `JniErrorHandler`. Thin KEY dispatch into the [`JniGen::iface_spec`]
+/// memo.
 pub(crate) fn onerror_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     fn_ident: &syn::Ident,
-) -> Option<IfaceSpec> {
-    match registry.error_plans.get(fn_ident) {
-        Some(plan) => error_handler_iface_spec(
-            ext,
-            registry,
+) -> Option<std::sync::Arc<IfaceSpec>> {
+    let key = match registry.error_plans.get(fn_ident) {
+        Some(plan) => SpecKey::Handler(
             plan.decon
-                .as_ref()
+                .clone()
                 .expect("error plans are always record-built (decon is Some)"),
         ),
-        None => Some(jni_error_handler_iface_spec(ext)),
-    }
+        None => SpecKey::JniErrorHandler,
+    };
+    ext.iface_spec(registry, &key)
 }
