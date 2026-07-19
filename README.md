@@ -2,6 +2,13 @@
 
 A tool for separating the implementation of FFI interfaces from language-specific binding generation, allowing each to reside in different crates.
 
+## Stability in 0.5
+
+The language-neutral `core` pipeline and the JNI/Kotlin `lang::JniGen` adapter
+are supported public APIs in 0.5. The C / cbindgen adapter is a proof of concept:
+enable it explicitly with `features = ["unstable-cbindgen"]`. Its API may change
+in a minor release.
+
 ## Problem
 
 Making FFI (Foreign Function Interface) for a Rust library is not an easy task. This involves a large amount of boilerplate code that wraps the Rust API in `extern "C"` functions and `#[repr(C)]` structures.
@@ -58,6 +65,17 @@ It's important to keep in mind that `[build-dependencies]` and `[dependencies]` 
 
 ## Usage
 
+### Stable core and JNI/Kotlin path
+
+Use `Source` + `core::Registry` to collect and resolve annotated items, then
+configure `lang::JniGen` to emit Rust JNI wrappers and Kotlin sources. The
+[`covertest-kotlin`](examples/covertest-kotlin) example is the maintained,
+comprehensive reference for that supported flow; the smaller
+[`perftest-kotlin`](examples/perftest-kotlin) consumer shows a lean production
+configuration. A dedicated introductory JniGen guide is tracked in [#57].
+
+[#57]: https://github.com/milyin/prebindgen/issues/57
+
 ### 1. In the Common FFI Library Crate (e.g., `example-flat`)
 
 Mark the types and functions that form your FFI surface with the `prebindgen` macro and export the prebindgen output directory path. The source crate stays **plain idiomatic Rust** — opaque handles are ordinary types returned by value, fallible calls return `Result<T, E>`; the language adapter does the C-ABI lowering, so there is no `#[repr(C)]` here.
@@ -99,20 +117,21 @@ fn main() {
 }
 ```
 
-### 2. In the Language-Specific FFI Binding Crate (e.g., `example-cbindgen`)
+### 2. Experimental C Binding Crate (e.g., `example-cbindgen`)
 
-Add the source FFI library to both dependencies and build-dependencies, and drive the `lang::Cbindgen` adapter from `build.rs`:
+Add the source FFI library to both dependencies and build-dependencies, and drive
+the experimental `lang::Cbindgen` adapter from `build.rs`:
 
 ```toml
 # example-cbindgen/Cargo.toml
 [dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.5"
+prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
 konst = "0.3"      # the generated file emits a konst feature guard
 
 [build-dependencies]
 example-flat = { path = "../example-flat" }
-prebindgen = "0.5"
+prebindgen = { version = "0.5", features = ["unstable-cbindgen"] }
 cbindgen = "0.29"
 syn = { version = "2", features = ["full"] }
 ```
@@ -162,7 +181,7 @@ include!(concat!(env!("OUT_DIR"), "/example_flat.rs"));
 See example projects in the [examples directory](https://github.com/milyin/prebindgen/tree/main/examples):
 
 - **example-flat**: Common FFI library (plain Rust, `#[prebindgen]`-annotated) demonstrating prebindgen usage
-- **example-cbindgen**: Language-specific binding using `lang::Cbindgen` + cbindgen for C headers
+- **example-cbindgen**: experimental C proof of concept using `lang::Cbindgen` + cbindgen for C headers
 - **perftest-flat** / **perftest-c** / **perftest-kotlin**: A shared flat library and its performance-oriented C and Kotlin/JNI bindings
 - **covertest-kotlin**: A Kotlin/JNI binding that exercises *every* `lang::JniGen` feature and verifies behavior with `check(...)` asserts (see its [README](https://github.com/milyin/prebindgen/tree/main/examples/covertest-kotlin))
 
