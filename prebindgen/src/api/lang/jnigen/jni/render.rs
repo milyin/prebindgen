@@ -1602,6 +1602,14 @@ fn render_core_stmt(
         // Pass the handles positionally to the allocation-free fixed-arity
         // `withSortedHandleLocks` overload. Otherwise build a `List` and use
         // the recursive overload.
+        //
+        // Deliberate trade-off (#68): ANY nullable handle takes the `List`
+        // path, even when the present/absent split could reach a fixed-arity
+        // overload (`if (h != null) withSortedHandleLocks(a, h) {…} else …`).
+        // The small-list allocation is benchmark-noise, and the branch would
+        // duplicate the whole call body per arm — longer generated code for
+        // no measured gain. All three overloads stay: each is exercised by
+        // all-non-null wrappers (the common case).
         let fixed_arity = !opaques.iter().any(|o| o.nullable) && (1..=3).contains(&opaques.len());
         if !ext.package.is_empty() {
             imports.insert(format!("{}.withSortedHandleLocks", ext.package));
