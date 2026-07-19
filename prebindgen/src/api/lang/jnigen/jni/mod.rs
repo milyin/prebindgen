@@ -401,23 +401,6 @@ pub struct JniGen {
     /// init block — loading stays the consumer's responsibility.
     pub(crate) jni_native_init: Option<String>,
 
-    /// Per-fn constructor-expansion overrides (`.expand_param` on a
-    /// [`FunctionDecl`]), replayed eagerly at accept time. The type-level
-    /// defaults live raw in [`Self::param_expand_decls`]; the two merge on
-    /// demand in [`JniGen::build_expansions`], resolved into
-    /// [`crate::api::core::expand::FoldPlan`]s on the registry during
-    /// `write_rust` and consumed at the parameter-emission site.
-    pub(crate) expansions: crate::api::core::expand::Expansions,
-
-    /// Per-fn output-expansion overrides (`.expand_return` on a
-    /// [`FunctionDecl`]) plus constructor-member skip-defaults, replayed
-    /// eagerly at accept time. The type-level defaults live raw in
-    /// [`Self::return_expand_decls`]; the two merge on demand in
-    /// [`JniGen::build_deconstructors`], resolved into
-    /// [`crate::api::core::unfold::UnfoldPlan`]s on the registry during
-    /// `write_rust` and consumed at the return-emission site.
-    pub(crate) deconstructors: crate::api::core::unfold::Deconstructors,
-
     /// Type-level default input boundaries ([`ExpandParamDecl`], accepted by
     /// [`JniGen::expand`]), stored raw — merged into the expansion set
     /// at the point of use so declarations stay order-independent.

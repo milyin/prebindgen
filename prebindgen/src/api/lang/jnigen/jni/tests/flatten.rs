@@ -1869,3 +1869,61 @@ fn optional_selector_dispatch_end_to_end() {
     assert!(all.contains("encoding01:String?"), "{raw}");
     assert!(!all.contains("String??"), "{raw}");
 }
+
+/// #96: a `.constructor()` member's return is a factory — it must be
+/// excluded from the type-level `expand_return!` default auto-apply even
+/// though its return type matches. Pins the `skip_output` derivation from
+/// `class_members` (previously an eagerly-mutated accumulator).
+#[test]
+fn constructor_member_skips_default_output_expand() {
+    let loc = myflat_loc();
+    let fns: &[&str] = &[
+        "pub fn z_thing_make() -> ZThing { unimplemented!() }",
+        "pub fn z_thing_name(t: &ZThing) -> String { unimplemented!() }",
+        "pub fn z_thing_get(s: i64) -> ZThing { unimplemented!() }",
+    ];
+    let items: Vec<(syn::Item, SourceLocation)> = fns
+        .iter()
+        .map(|src| {
+            let f: syn::ItemFn = syn::parse_str(src).expect("parse fn");
+            (syn::Item::Fn(f), loc.clone())
+        })
+        .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("ops")
+                .class(
+                    crate::ptr_class!(ZThing)
+                        .constructor(crate::fun!(z_thing_make).name("make"))
+                        .method(crate::fun!(z_thing_name).name("name")),
+                )
+                .fun(crate::fun!(z_thing_get)),
+        )
+        // Canonical output for ZThing: any ZThing-returning declared fn gets
+        // callback delivery by default…
+        .expand(
+            crate::expand_return!(ZThing)
+                .field_self()
+                .field(crate::fun!(z_thing_name)),
+        );
+    let gen = registry.resolve(jni).expect("resolve");
+    let registry = gen.registry();
+    // …the free fn is decomposed…
+    assert!(
+        registry.unfold_plans.contains_key(&syn::Ident::new(
+            "z_thing_get",
+            proc_macro2::Span::call_site()
+        )),
+        "free fn gets the default output expansion"
+    );
+    // …but the constructor member is NOT (its return is the factory value).
+    assert!(
+        !registry.unfold_plans.contains_key(&syn::Ident::new(
+            "z_thing_make",
+            proc_macro2::Span::call_site()
+        )),
+        "constructor member must skip the default output expansion"
+    );
+}

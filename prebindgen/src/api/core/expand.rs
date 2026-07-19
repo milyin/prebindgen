@@ -38,7 +38,7 @@ mod error;
 mod plan;
 
 pub use self::{
-    error::ExpandError,
+    error::{ExpandDeclError, ExpandError},
     plan::{FoldArg, FoldBuild, FoldLeaf, FoldPlan, FoldShape, FoldVariant},
 };
 
@@ -51,25 +51,29 @@ pub use self::{
 /// `Identity`) is the degenerate "single" form: applied unconditionally with no
 /// selector. Two or more variants (or an `Identity` arm) get a runtime selector.
 #[derive(Clone)]
-enum Variant {
+pub enum Variant {
     /// Build the target by calling this constructor function.
     Ctor(syn::Ident),
     /// Pass an already-built target value straight through.
     Identity,
 }
 
+/// A type-level constructor declaration (`expand_param!(T).variant*`): the
+/// complete, ordered variant list for building `target` from flattened
+/// leaves. An immutable record — the variant order is the declaration order
+/// of the `variants` vector.
 #[derive(Clone)]
-struct ConstructorDecl {
-    target: syn::Type,
-    variants: Vec<Variant>,
+pub struct ConstructorDecl {
+    pub target: syn::Type,
+    pub variants: Vec<Variant>,
     /// Auto-`construct` every matching param of every declared fn. Always
     /// `true` for type-level default (`expand_param!` `.variant*`) declarations.
-    default: bool,
+    pub default: bool,
 }
 
 /// How a construct declaration chooses the variants for a parameter.
 #[derive(Clone)]
-enum ExpandSel {
+pub enum ExpandSel {
     /// Use the target type's default constructor (error if none/ambiguous).
     TopLevel,
     /// Per-fn override (`.expand_param`): use exactly these build-from
@@ -77,131 +81,84 @@ enum ExpandSel {
     Subset(Vec<Variant>),
 }
 
+/// A per-fn input expansion (`.expand_param(param, expand_param!(T)…)`) —
+/// construct `param` of `func` from the explicit variant list. Recorded as
+/// an explicit decl so the auto-`default` skips it; an identity-only list
+/// lowers to the skip-default plain form in [`apply`]. Not related to the
+/// jnigen declaration-DSL type of the same name — this is the lowered core
+/// record.
 #[derive(Clone)]
-struct ExpandDecl {
-    func: syn::Ident,
-    param: syn::Ident,
+pub struct ExpandDecl {
+    pub func: syn::Ident,
+    pub param: syn::Ident,
     /// The type the per-fn decl was declared for (`expand_param!(T)`) —
     /// cross-checked against the named param's peeled type in [`apply`].
     /// `None` for the internal `TopLevel` form (the type comes from the
     /// param itself).
-    declared_target: Option<syn::Type>,
-    sel: ExpandSel,
+    pub declared_target: Option<syn::Type>,
+    pub sel: ExpandSel,
 }
 
-/// Constructor / expansion declarations gathered from a language builder.
-/// Embedded in each adapter that supports expansion and handed to [`apply`]
-/// via [`crate::api::core::prebindgen::Prebindgen::expansions`].
+/// Constructor / expansion declarations gathered from a language builder —
+/// an immutable record set: complete values, no build protocol. Declaration
+/// order is the vector order. Handed to [`apply`] via
+/// [`crate::api::core::prebindgen::Prebindgen::expansions`]; empty or
+/// duplicate declarations are diagnosed there (collected), not at
+/// construction.
 #[derive(Clone, Default)]
 pub struct Expansions {
-    constructors: Vec<ConstructorDecl>,
-    expands: Vec<ExpandDecl>,
-    /// Cursor for the constructor builder (`.constructor_variant*` / `.default`).
-    cur_constructor: Option<usize>,
-    /// Cursor for an in-progress per-fn input subset (`.expand_param(...)`
-    /// → `.variant`/`.variant_self`): index into [`Self::expands`].
-    cur_expand: Option<usize>,
+    pub constructors: Vec<ConstructorDecl>,
+    pub expands: Vec<ExpandDecl>,
     /// `.skip_default_construct(param)` opt-outs: `(fn, param)` excluded from a
-    /// constructor `.default()` auto-apply.
-    skip_construct: std::collections::HashSet<(syn::Ident, syn::Ident)>,
-}
-
-impl Expansions {
-    /// Find-or-create the default (always-`default`) constructor for `target`
-    /// and set the cursor to it. Idempotent across a `.variant*` chain —
-    /// the first call creates it, subsequent ones reuse it so variants accumulate.
-    pub fn ensure_default_constructor(&mut self, target: syn::Type) {
-        let key = TypeKey::from_type(&target);
-        if let Some(i) = self
-            .constructors
-            .iter()
-            .position(|c| TypeKey::from_type(&c.target) == key)
-        {
-            self.cur_constructor = Some(i);
-        } else {
-            self.constructors.push(ConstructorDecl {
-                target,
-                variants: Vec::new(),
-                default: true,
-            });
-            self.cur_constructor = Some(self.constructors.len() - 1);
-        }
-    }
-
-    /// Exclude `(func, param)` from constructor default auto-apply — the
-    /// lowered form of an identity-only per-fn variant set (the plain
-    /// handle, no selector).
-    pub fn add_skip_default_construct(&mut self, func: syn::Ident, param: syn::Ident) {
-        self.skip_construct.insert((func, param));
-    }
-
-    /// `expand_param!` `.variant(fun)` — add a constructor-function arm.
-    pub fn add_constructor_variant(&mut self, func: syn::Ident) {
-        let i = self
-            .cur_constructor
-            .expect(".variant called without a current constructor");
-        self.constructors[i].variants.push(Variant::Ctor(func));
-    }
-
-    /// `expand_param!` `.variant_self()` — add the identity arm
-    /// (pass the target value straight through).
-    pub fn add_constructor_variant_id(&mut self) {
-        let i = self
-            .cur_constructor
-            .expect(".variant_self called without a current constructor");
-        self.constructors[i].variants.push(Variant::Identity);
-    }
-
-    /// Begin a per-fn input override (`.expand_param(param, expand_param!(T)…)`):
-    /// construct `param` from an explicit, incrementally-built variant list
-    /// (constructor arms via [`Self::push_subset_variant`] and/or the
-    /// identity/self arm via [`Self::push_subset_self`]). `declared_target`
-    /// is the decl's `T`, cross-checked against the param's peeled type in
-    /// [`apply`]. Recorded as an explicit decl so the auto-`default` skips
-    /// it, and leaves the expand cursor on it. An identity-only list lowers
-    /// to the skip-default plain form in [`apply`].
-    pub fn begin_subset(
-        &mut self,
-        func: syn::Ident,
-        param: syn::Ident,
-        declared_target: syn::Type,
-    ) {
-        self.expands.push(ExpandDecl {
-            func,
-            param,
-            declared_target: Some(declared_target),
-            sel: ExpandSel::Subset(Vec::new()),
-        });
-        self.cur_constructor = None;
-        self.cur_expand = Some(self.expands.len() - 1);
-    }
-
-    /// `.expand_param` `.variant(fun)` — append a build-from
-    /// constructor arm to the current per-fn input subset.
-    pub fn push_subset_variant(&mut self, func: syn::Ident) {
-        let i = self
-            .cur_expand
-            .expect(".variant called without a current constructor");
-        if let ExpandSel::Subset(v) = &mut self.expands[i].sel {
-            v.push(Variant::Ctor(func));
-        }
-    }
-
-    /// `.expand_param` `.variant_self()` — append the identity
-    /// (pass-the-handle-through) arm to the current per-fn subset.
-    pub fn push_subset_self(&mut self) {
-        let i = self
-            .cur_expand
-            .expect(".variant_self called without a current constructor");
-        if let ExpandSel::Subset(v) = &mut self.expands[i].sel {
-            v.push(Variant::Identity);
-        }
-    }
+    /// constructor `.default()` auto-apply — the lowered form of an
+    /// identity-only per-fn variant set (the plain handle, no selector).
+    pub skip_construct: std::collections::HashSet<(syn::Ident, syn::Ident)>,
 }
 
 // ──────────────────────────────────────────────────────────────────────
 // apply
 // ──────────────────────────────────────────────────────────────────────
+
+/// Structural validation of the declaration records — empty variant lists
+/// and duplicate targets. Collects EVERY offender before failing, so a
+/// build surfaces all declaration problems at once.
+fn validate_declarations(exp: &Expansions) -> Result<(), ExpandError> {
+    let mut entries: Vec<ExpandDeclError> = Vec::new();
+    let mut ctor_targets: HashSet<String> = HashSet::new();
+    for c in &exp.constructors {
+        let target = TypeKey::from_type(&c.target).as_str().to_string();
+        if c.variants.is_empty() {
+            entries.push(ExpandDeclError::EmptyConstructor {
+                target: target.clone(),
+            });
+        }
+        if !ctor_targets.insert(target.clone()) {
+            entries.push(ExpandDeclError::DuplicateConstructor { target });
+        }
+    }
+    let mut expand_keys: HashSet<(String, String)> = HashSet::new();
+    for ed in &exp.expands {
+        if let ExpandSel::Subset(v) = &ed.sel {
+            if v.is_empty() {
+                entries.push(ExpandDeclError::EmptySubset {
+                    func: ed.func.clone(),
+                    param: ed.param.clone(),
+                });
+            }
+        }
+        if !expand_keys.insert((ed.func.to_string(), ed.param.to_string())) {
+            entries.push(ExpandDeclError::DuplicateExpand {
+                func: ed.func.clone(),
+                param: ed.param.clone(),
+            });
+        }
+    }
+    if entries.is_empty() {
+        Ok(())
+    } else {
+        Err(ExpandError::InvalidDeclarations { entries })
+    }
+}
 
 /// Resolve every `.construct` declaration (explicit + `.default()`
 /// auto-applied) into a [`FoldPlan`], register each plan's leaf types as required
@@ -218,6 +175,7 @@ pub fn apply<M>(
     accessor_fns: &std::collections::HashSet<syn::Ident>,
     method_receivers: &std::collections::HashMap<syn::Ident, TypeKey>,
 ) -> Result<(), ExpandError> {
+    validate_declarations(exp)?;
     let mut done: HashSet<(String, String)> = HashSet::new();
     let mut skip_construct = exp.skip_construct.clone();
     for ed in &exp.expands {

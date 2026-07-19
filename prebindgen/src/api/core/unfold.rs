@@ -36,7 +36,7 @@ mod error;
 mod plan;
 
 pub use self::{
-    error::UnfoldError,
+    error::{UnfoldDeclError, UnfoldError},
     plan::{DeconId, DeconSpec, LeafSource, UnfoldLeaf, UnfoldPlan, UnfoldShape},
 };
 
@@ -46,12 +46,12 @@ pub use self::{
 
 /// One record (field) of a deconstructor. A deconstructor is a product: every
 /// record contributes a leaf.
-// large_enum_variant: a handful of records exist per binding, held while
-// declarations replay — boxing the syn payloads would only complicate the
-// arms (same trade-off as `ConvertSourceKind`).
+// large_enum_variant: a handful of records exist per binding — boxing the
+// syn payloads would only complicate the arms (same trade-off as
+// `ConvertSourceKind`).
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
-enum DeconRecord {
+pub enum DeconRecord {
     /// Read this field by calling the accessor function `f(&T) -> &F`. `name`
     /// is the author-supplied leaf name, used **literally** (no casing /
     /// stripping); it may not contain the reserved `"__"` chain separator.
@@ -87,21 +87,24 @@ impl DeconRecord {
     }
 }
 
+/// A type-level deconstructor declaration (`expand_return!(T).field*`): the
+/// complete, ordered record list decomposing `target`. An immutable record —
+/// the leaf order is the declaration order of the `records` vector.
 #[derive(Clone)]
-struct DeconstructorDecl {
-    target: syn::Type,
-    records: Vec<DeconRecord>,
+pub struct DeconstructorDecl {
+    pub target: syn::Type,
+    pub records: Vec<DeconRecord>,
     /// Auto-apply this deconstructor to every matching declared fn (`Some`
     /// carries the inferred `(target-position, delivery)` to use). Always
     /// `Some` for type-level default (`expand_return!`) declarations.
-    default: Option<(DeconTarget, Delivery)>,
+    pub default: Option<(DeconTarget, Delivery)>,
 }
 
 /// How an output expansion chooses the deconstructor for a function's return
 /// type: the type's default (`expand_return!`-declared) or a per-fn
 /// inline record list (`.expand_return`).
 #[derive(Clone)]
-enum DeconSel {
+pub enum DeconSel {
     /// Use the return type's unique deconstructor (error if ambiguous).
     TopLevel,
     /// Per-fn override (`.expand_return`): use exactly these
@@ -130,171 +133,73 @@ pub enum Delivery {
     Return,
 }
 
+/// A per-fn output expansion (`.expand_return(expand_return!(T)…)`) —
+/// decompose `func`'s return (or error position) via the record list.
+/// Recorded as an explicit decl so the auto-`default` skips it; an
+/// identity-only record list lowers to the raw whole-value return in
+/// [`apply`].
 #[derive(Clone)]
-struct OutputDecl {
-    func: syn::Ident,
-    sel: DeconSel,
-    target: DeconTarget,
-    delivery: Delivery,
+pub struct OutputDecl {
+    pub func: syn::Ident,
+    pub sel: DeconSel,
+    pub target: DeconTarget,
+    pub delivery: Delivery,
     /// The type the per-fn decl was declared for (`expand_return!(T)`) —
     /// cross-checked against the fn's peeled return type in [`apply`].
     /// `None` for internally-synthesized decls (the type comes from the
     /// return itself).
-    declared_source: Option<syn::Type>,
+    pub declared_source: Option<syn::Type>,
 }
 
-/// Deconstructor / converter / output-expansion declarations gathered from a
-/// language builder. Embedded in each adapter that supports output expansion
-/// and handed to [`apply`] via
-/// [`crate::api::core::prebindgen::Prebindgen::deconstructors`].
+/// Deconstructor / output-expansion declarations gathered from a language
+/// builder — an immutable record set: complete values, no build protocol.
+/// Declaration order is the vector order; leaf order is each record
+/// vector's order. Handed to [`apply`] via
+/// [`crate::api::core::prebindgen::Prebindgen::deconstructors`]; empty or
+/// duplicate declarations are diagnosed there (collected), not at
+/// construction.
 #[derive(Clone, Default)]
 pub struct Deconstructors {
-    deconstructors: Vec<DeconstructorDecl>,
-    outputs: Vec<OutputDecl>,
-    /// Cursor for the type-level default builder (`expand_return!` →
-    /// `.field`/`.field_self`).
-    cur_deconstructor: Option<usize>,
-    /// Cursor for an in-progress per-fn inline output override
-    /// (`.expand_return`): index into
-    /// [`Self::outputs`].
-    cur_output: Option<usize>,
+    pub deconstructors: Vec<DeconstructorDecl>,
+    pub outputs: Vec<OutputDecl>,
     /// Identity-only per-fn field-set opt-outs: fns excluded from the
-    /// default auto-apply.
-    skip_output: std::collections::HashSet<syn::Ident>,
-}
-
-impl Deconstructors {
-    /// Find-or-create the default (always-`default`) deconstructor for `target`
-    /// and set the cursor to it. Idempotent across a `.field*` chain.
-    /// Delivery is derived from leaf count at emit time (1 ⇒ return, N ⇒ callback),
-    /// so the stored `Delivery` is just a marker.
-    pub fn ensure_default_deconstructor(&mut self, target: syn::Type) {
-        let key = TypeKey::from_type(&target);
-        // Already building a deconstructor of this type — keep the cursor so
-        // records append to it.
-        if let Some(i) = self.cur_deconstructor {
-            if TypeKey::from_type(&self.deconstructors[i].target) == key {
-                return;
-            }
-        }
-        if let Some(i) = self
-            .deconstructors
-            .iter()
-            .position(|d| TypeKey::from_type(&d.target) == key)
-        {
-            self.cur_deconstructor = Some(i);
-        } else {
-            self.deconstructors.push(DeconstructorDecl {
-                target,
-                records: Vec::new(),
-                default: Some((DeconTarget::Output, Delivery::Callback)),
-            });
-            self.cur_deconstructor = Some(self.deconstructors.len() - 1);
-        }
-    }
-
-    /// Exclude `func` from output-position default auto-apply — the lowered
-    /// form of an identity-only per-fn field set (the raw whole-value return).
-    pub fn add_skip_default_output(&mut self, func: syn::Ident) {
-        self.skip_output.insert(func);
-    }
-
-    /// `expand_return!` `.field(fun)` — add an accessor-function
-    /// record with the resolved (literal) leaf `name`.
-    pub fn add_deconstructor_record(&mut self, func: syn::Ident, name: impl Into<String>) {
-        let i = self
-            .cur_deconstructor
-            .expect(".field called without a current deconstructor");
-        self.deconstructors[i].records.push(DeconRecord::Acc {
-            func,
-            name: name.into(),
-        });
-    }
-
-    /// `expand_return!` `.field_self()` — add the identity record
-    /// (the value itself).
-    pub fn add_deconstructor_record_id(&mut self) {
-        let i = self
-            .cur_deconstructor
-            .expect(".field_self called without a current deconstructor");
-        self.deconstructors[i].records.push(DeconRecord::Identity);
-    }
-
-    /// `expand_return!` `.field(field!(name).with(ty, path))` — add a
-    /// **binding-local** accessor record (stated return type + callable).
-    pub fn add_deconstructor_record_local(&mut self, path: syn::Path, name: impl Into<String>) {
-        let i = self
-            .cur_deconstructor
-            .expect(".field called without a current deconstructor");
-        self.deconstructors[i].records.push(DeconRecord::LocalAcc {
-            path,
-            name: name.into(),
-        });
-    }
-
-    /// Begin a per-fn inline output override (`.expand_return(expand_return!(T)…)`):
-    /// decompose `func`'s return via an incrementally-built record list
-    /// (accessor fields via [`Self::push_inline_field`] and/or the identity/self
-    /// field via [`Self::push_inline_field_self`]). `declared_source` is the
-    /// decl's `T`, cross-checked against the fn's peeled return type in
-    /// [`apply`]. Recorded as an explicit decl so the auto-`default` skips it,
-    /// and leaves the output cursor on it. An identity-only field list lowers
-    /// to the raw whole-value return in [`apply`].
-    pub fn begin_inline_output(&mut self, func: syn::Ident, declared_source: syn::Type) {
-        self.outputs.push(OutputDecl {
-            func,
-            sel: DeconSel::Inline(Vec::new()),
-            target: DeconTarget::Output,
-            delivery: Delivery::Callback,
-            declared_source: Some(declared_source),
-        });
-        self.cur_deconstructor = None;
-        self.cur_output = Some(self.outputs.len() - 1);
-    }
-
-    /// `.expand_return` `.field(fun)` — append an
-    /// accessor-function field (named `name`) to the current per-fn inline output.
-    pub fn push_inline_field(&mut self, func: syn::Ident, name: impl Into<String>) {
-        let i = self
-            .cur_output
-            .expect(".field called without a current deconstructor");
-        if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
-            records.push(DeconRecord::Acc {
-                func,
-                name: name.into(),
-            });
-        }
-    }
-
-    /// `.expand_return` `.field_self()` — append the identity
-    /// (the handle itself) field to the current per-fn inline output.
-    pub fn push_inline_field_self(&mut self) {
-        let i = self
-            .cur_output
-            .expect(".field_self called without a current deconstructor");
-        if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
-            records.push(DeconRecord::Identity);
-        }
-    }
-
-    /// `.expand_return` `.field(field!(name).with(ty, path))` — append a
-    /// **binding-local** accessor field to the current per-fn inline output.
-    pub fn push_inline_field_local(&mut self, path: syn::Path, name: impl Into<String>) {
-        let i = self
-            .cur_output
-            .expect(".field called without a current deconstructor");
-        if let DeconSel::Inline(records) = &mut self.outputs[i].sel {
-            records.push(DeconRecord::LocalAcc {
-                path,
-                name: name.into(),
-            });
-        }
-    }
+    /// default auto-apply (the raw whole-value return).
+    pub skip_output: std::collections::HashSet<syn::Ident>,
 }
 
 // ──────────────────────────────────────────────────────────────────────
 // apply
 // ──────────────────────────────────────────────────────────────────────
+
+/// Structural validation of the declaration records — duplicate targets,
+/// collected (EVERY offender before failing) so a build surfaces all
+/// declaration problems at once. Empty record lists are NOT diagnosed:
+/// an empty inline list is the valid whole-element delivery form.
+fn validate_declarations(acc: &Deconstructors) -> Result<(), UnfoldError> {
+    let mut entries: Vec<UnfoldDeclError> = Vec::new();
+    let mut decon_targets: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for d in &acc.deconstructors {
+        let target = TypeKey::from_type(&d.target).as_str().to_string();
+        if !decon_targets.insert(target.clone()) {
+            entries.push(UnfoldDeclError::DuplicateDeconstructor { target });
+        }
+    }
+    let mut output_keys: std::collections::HashSet<(String, DeconTarget)> =
+        std::collections::HashSet::new();
+    for od in &acc.outputs {
+        if !output_keys.insert((od.func.to_string(), od.target)) {
+            entries.push(UnfoldDeclError::DuplicateOutput {
+                func: od.func.clone(),
+                target: od.target,
+            });
+        }
+    }
+    if entries.is_empty() {
+        Ok(())
+    } else {
+        Err(UnfoldError::InvalidDeclarations { entries })
+    }
+}
 
 /// Resolve every output-expansion declaration (explicit + `.default()`
 /// auto-applied) into an [`UnfoldPlan`], register each leaf's `out_ty` as a
@@ -314,6 +219,7 @@ pub fn apply<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
     accessor_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
+    validate_declarations(acc)?;
     // Binding-local accessors (`LocalAcc` records) resolve through registry
     // entries synthesized by the adapter's `local_functions()` pre-pass in
     // `Registry::resolve` — by this point they read exactly like

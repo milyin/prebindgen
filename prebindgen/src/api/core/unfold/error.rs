@@ -64,6 +64,41 @@ pub enum UnfoldError {
         declared: String,
         actual: String,
     },
+    /// Structurally invalid declaration records — empty record lists or
+    /// duplicate targets. All offenders are collected before failing
+    /// (mirrors `ScanError::DeclaredNotFound`).
+    InvalidDeclarations {
+        entries: Vec<UnfoldDeclError>,
+    },
+}
+
+/// One structurally invalid output-expansion declaration (see
+/// [`UnfoldError::InvalidDeclarations`]). Note that EMPTY record lists are
+/// deliberately not diagnosed here — an empty inline list is the valid
+/// whole-element (`Vec<T>` per-element) delivery form.
+#[derive(Debug)]
+pub enum UnfoldDeclError {
+    /// Two deconstructor declarations for the same target type.
+    DuplicateDeconstructor { target: String },
+    /// Two per-fn output expansions for the same fn and position.
+    DuplicateOutput {
+        func: syn::Ident,
+        target: super::DeconTarget,
+    },
+}
+
+impl std::fmt::Display for UnfoldDeclError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnfoldDeclError::DuplicateDeconstructor { target } => {
+                write!(f, "duplicate deconstructor declaration for `{target}`")
+            }
+            UnfoldDeclError::DuplicateOutput { func, target } => write!(
+                f,
+                "duplicate output expansion for `{func}` ({target:?} position)"
+            ),
+        }
+    }
 }
 
 impl std::fmt::Display for UnfoldError {
@@ -150,6 +185,13 @@ impl std::fmt::Display for UnfoldError {
                  non-compiling Rust. Declare the `_self` field last.",
                 target
             ),
+            UnfoldError::InvalidDeclarations { entries } => {
+                writeln!(f, "output expansion: invalid declarations:")?;
+                for e in entries {
+                    writeln!(f, "  - {e}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

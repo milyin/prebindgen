@@ -84,8 +84,6 @@ impl JniGen {
             ],
             emit_handle_locks: true,
             jni_native_init: None,
-            expansions: crate::api::core::expand::Expansions::default(),
-            deconstructors: crate::api::core::unfold::Deconstructors::default(),
             convert_decls: Vec::new(),
             param_expand_decls: Vec::new(),
             return_expand_decls: Vec::new(),
@@ -434,10 +432,9 @@ impl JniGen {
             let rust_ident = decl.rust_ident.clone();
             let kotlin_name_override = decl.kotlin_name_override.clone();
             self.accept_fn_expands(decl);
-            if kind == MemberKind::Constructor {
-                self.deconstructors
-                    .add_skip_default_output(rust_ident.clone());
-            }
+            // A constructor member's return is a factory, never
+            // output-flattened — derived from `class_members` in
+            // `build_deconstructors` (`skip_output`), not stored separately.
             self.class_members
                 .entry(key.clone())
                 .or_default()
@@ -601,14 +598,20 @@ impl JniGen {
         self.types.get(key).is_some_and(|c| c.class_decl)
     }
 
-    /// Assemble the full [`Expansions`] set at the point of use: the eagerly
-    /// accumulated per-fn overrides plus the raw type-level
-    /// [`ExpandParamDecl`]s. Building on demand keeps declarations
+    /// Lower the raw [`ExpandParamDecl`]s into the core's immutable
+    /// [`Expansions`] record set at the point of use — a pure declaration →
+    /// record mapping. Building on demand keeps declarations
     /// order-independent — a `param_expand` may precede or follow the
     /// `package` that declares its constructors (which is also why the
     /// rust-side-only `_self` check lives here and not at accept time).
+    /// Duplicate targets pass through unmerged; core `apply` diagnoses them.
     pub(crate) fn build_expansions(&self) -> crate::api::core::expand::Expansions {
-        let mut exp = self.expansions.clone();
+        use crate::api::core::expand::{ExpandDecl, ExpandSel, Expansions, Variant};
+        let lower = |v: &LocalVariant| match v {
+            LocalVariant::Ctor(f) => Variant::Ctor(f.clone()),
+            LocalVariant::SelfIdentity => Variant::Identity,
+        };
+        let mut exp = Expansions::default();
         for decl in &self.param_expand_decls {
             assert!(
                 self.is_class_declared(&decl.key)
@@ -628,13 +631,12 @@ impl JniGen {
             if matches!(decl.variants.as_slice(), [LocalVariant::SelfIdentity]) {
                 continue;
             }
-            exp.ensure_default_constructor(decl.key.to_type());
-            for v in &decl.variants {
-                match v {
-                    LocalVariant::Ctor(f) => exp.add_constructor_variant(f.clone()),
-                    LocalVariant::SelfIdentity => exp.add_constructor_variant_id(),
-                }
-            }
+            exp.constructors
+                .push(crate::api::core::expand::ConstructorDecl {
+                    target: decl.key.to_type(),
+                    variants: decl.variants.iter().map(lower).collect(),
+                    default: true,
+                });
         }
         // Per-fn overrides: same decl shape, complete-set semantics; the
         // param-name/type cross-check and the identity-only lowering happen
@@ -651,26 +653,78 @@ impl JniGen {
                  .variant_self() (the type is rust-side-only) or declare the type in a package",
                 k = decl.key.as_str()
             );
-            let param_ident = syn::Ident::new(param, Span::call_site());
-            exp.begin_subset(func.clone(), param_ident, decl.key.to_type());
-            for v in &decl.variants {
-                match v {
-                    LocalVariant::Ctor(f) => exp.push_subset_variant(f.clone()),
-                    LocalVariant::SelfIdentity => exp.push_subset_self(),
-                }
-            }
+            exp.expands.push(ExpandDecl {
+                func: func.clone(),
+                param: syn::Ident::new(param, Span::call_site()),
+                declared_target: Some(decl.key.to_type()),
+                sel: ExpandSel::Subset(decl.variants.iter().map(lower).collect()),
+            });
         }
         exp
     }
 
-    /// Assemble the full [`Deconstructors`] set at the point of use — the
-    /// output-side peer of [`Self::build_expansions`]. Field names resolve
-    /// here, against the complete declaration set: explicit `.name()` first,
-    /// then the class member's Kotlin name (a getter that is both a method
-    /// and a field is named once, on the member), else the camel-cased Rust
-    /// name.
+    /// Lower one raw [`LocalField`] list into core [`DeconRecord`]s with the
+    /// UNIFORM field-name precedence resolved against the complete
+    /// declaration set: explicit `.name()` first, then the class member's
+    /// Kotlin name (a getter that is both a method and a field is named
+    /// once, on the member), else the camel-cased Rust name.
+    fn lower_fields(
+        &self,
+        key: &TypeKey,
+        fields: &[LocalField],
+    ) -> Vec<crate::api::core::unfold::DeconRecord> {
+        use crate::api::core::unfold::DeconRecord;
+        fields
+            .iter()
+            .map(|f| match f {
+                LocalField::Named(func, name_override) => {
+                    let name = name_override
+                        .clone()
+                        .or_else(|| self.class_method_kotlin_name(key, func))
+                        .unwrap_or_else(|| snake_to_camel(&func.to_string()));
+                    DeconRecord::Acc {
+                        func: func.clone(),
+                        name,
+                    }
+                }
+                LocalField::SelfField => DeconRecord::Identity,
+                LocalField::Local {
+                    path,
+                    sig,
+                    name_override,
+                } => {
+                    let name = self.local_field_name(key, path, name_override);
+                    self.check_local_field_ty(key, &name, sig);
+                    DeconRecord::LocalAcc {
+                        path: path.clone(),
+                        name,
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// Lower the raw [`ExpandReturnDecl`]s into the core's immutable
+    /// [`Deconstructors`] record set — the output-side peer of
+    /// [`Self::build_expansions`], a pure declaration → record mapping.
+    /// Duplicate targets pass through unmerged; core `apply` diagnoses
+    /// them. `skip_output` is derived from the class members: a
+    /// `.constructor()` member's return is a factory, never
+    /// output-flattened.
     pub(crate) fn build_deconstructors(&self) -> crate::api::core::unfold::Deconstructors {
-        let mut dec = self.deconstructors.clone();
+        use crate::api::core::unfold::{
+            DeconSel, DeconTarget, DeconstructorDecl, Deconstructors, Delivery, OutputDecl,
+        };
+        let mut dec = Deconstructors {
+            skip_output: self
+                .class_members
+                .values()
+                .flatten()
+                .filter(|m| m.kind == MemberKind::Constructor)
+                .map(|m| m.rust_ident.clone())
+                .collect(),
+            ..Deconstructors::default()
+        };
         for decl in &self.return_expand_decls {
             assert!(
                 self.is_class_declared(&decl.key)
@@ -683,28 +737,11 @@ impl JniGen {
                  or declare the type in a package",
                 k = decl.key.as_str()
             );
-            dec.ensure_default_deconstructor(decl.key.to_type());
-            for f in &decl.fields {
-                match f {
-                    LocalField::Named(func, name_override) => {
-                        let name = name_override
-                            .clone()
-                            .or_else(|| self.class_method_kotlin_name(&decl.key, func))
-                            .unwrap_or_else(|| snake_to_camel(&func.to_string()));
-                        dec.add_deconstructor_record(func.clone(), name);
-                    }
-                    LocalField::SelfField => dec.add_deconstructor_record_id(),
-                    LocalField::Local {
-                        path,
-                        sig,
-                        name_override,
-                    } => {
-                        let name = self.local_field_name(&decl.key, path, name_override);
-                        self.check_local_field_ty(&decl.key, &name, sig);
-                        dec.add_deconstructor_record_local(path.clone(), name);
-                    }
-                }
-            }
+            dec.deconstructors.push(DeconstructorDecl {
+                target: decl.key.to_type(),
+                records: self.lower_fields(&decl.key, &decl.fields),
+                default: Some((DeconTarget::Output, Delivery::Callback)),
+            });
         }
         // Per-fn overrides: same decl shape and name inheritance; the
         // return-type cross-check and the identity-only lowering happen in
@@ -721,28 +758,13 @@ impl JniGen {
                  .field_self() (the type is rust-side-only) or declare the type in a package",
                 k = decl.key.as_str()
             );
-            dec.begin_inline_output(func.clone(), decl.key.to_type());
-            for f in &decl.fields {
-                match f {
-                    LocalField::Named(afunc, name_override) => {
-                        let name = name_override
-                            .clone()
-                            .or_else(|| self.class_method_kotlin_name(&decl.key, afunc))
-                            .unwrap_or_else(|| snake_to_camel(&afunc.to_string()));
-                        dec.push_inline_field(afunc.clone(), name);
-                    }
-                    LocalField::SelfField => dec.push_inline_field_self(),
-                    LocalField::Local {
-                        path,
-                        sig,
-                        name_override,
-                    } => {
-                        let name = self.local_field_name(&decl.key, path, name_override);
-                        self.check_local_field_ty(&decl.key, &name, sig);
-                        dec.push_inline_field_local(path.clone(), name);
-                    }
-                }
-            }
+            dec.outputs.push(OutputDecl {
+                func: func.clone(),
+                sel: DeconSel::Inline(self.lower_fields(&decl.key, &decl.fields)),
+                target: DeconTarget::Output,
+                delivery: Delivery::Callback,
+                declared_source: Some(decl.key.to_type()),
+            });
         }
         dec
     }
