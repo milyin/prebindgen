@@ -45,6 +45,47 @@ pub enum ExpandError {
         func: syn::Ident,
         reason: &'static str,
     },
+    /// Structurally invalid declaration records — empty variant lists or
+    /// duplicate targets. All offenders are collected before failing
+    /// (mirrors `ScanError::DeclaredNotFound`).
+    InvalidDeclarations {
+        entries: Vec<ExpandDeclError>,
+    },
+}
+
+/// One structurally invalid expansion declaration (see
+/// [`ExpandError::InvalidDeclarations`]).
+#[derive(Debug)]
+pub enum ExpandDeclError {
+    /// A constructor declaration with no variants.
+    EmptyConstructor { target: String },
+    /// A per-fn expand with an empty variant subset.
+    EmptySubset { func: syn::Ident, param: syn::Ident },
+    /// Two constructor declarations for the same target type.
+    DuplicateConstructor { target: String },
+    /// Two per-fn expands for the same `(fn, param)`.
+    DuplicateExpand { func: syn::Ident, param: syn::Ident },
+}
+
+impl std::fmt::Display for ExpandDeclError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExpandDeclError::EmptyConstructor { target } => {
+                write!(f, "constructor for `{target}` declares no variants")
+            }
+            ExpandDeclError::EmptySubset { func, param } => write!(
+                f,
+                "expand for parameter `{param}` of `{func}` declares no variants"
+            ),
+            ExpandDeclError::DuplicateConstructor { target } => {
+                write!(f, "duplicate constructor declaration for `{target}`")
+            }
+            ExpandDeclError::DuplicateExpand { func, param } => write!(
+                f,
+                "duplicate expand declaration for parameter `{param}` of `{func}`"
+            ),
+        }
+    }
 }
 
 impl std::fmt::Display for ExpandError {
@@ -119,6 +160,13 @@ impl std::fmt::Display for ExpandError {
                 "expand: optional parameter `{}` of `{}` is not supported: {}",
                 param, func, reason
             ),
+            ExpandError::InvalidDeclarations { entries } => {
+                writeln!(f, "expand: invalid declarations:")?;
+                for e in entries {
+                    writeln!(f, "  - {e}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

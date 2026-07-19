@@ -57,8 +57,16 @@ fn accessor_optional_primitive() {
         "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
-    acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZTimestamp),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // `z_sample_key_expr(&ZSample) -> &ZKeyExpr` decomposed into the keyexpr
+    // handle (identity) + its string form (`z_keyexpr_as_str`).
 
     apply(
         &mut reg,
@@ -96,9 +104,24 @@ fn accessor_plan_byref() {
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Identity leaf: out_ty `&ZKeyExpr`, empty path, emitted last.
+    // Accessor leaf: out_ty `&str`, path `[z_keyexpr_as_str]`.
+    // Leaf out_tys registered as required outputs so the resolver builds
+    // their converters.
+    // Owned return: the root `.field_self()` MOVES the value, a nested
+    // identity (spliced ZKeyExpr handle) borrows it — id-first is the
+    // order that would generate non-compiling Rust, caught at apply time.
 
     apply(
         &mut reg,
@@ -149,11 +172,23 @@ fn root_identity_before_nested_identity_errors() {
     let accessors: std::collections::HashSet<syn::Ident> =
         ["z_query_key_expr"].iter().map(|s| ident(s)).collect();
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZQuery));
-    acc.add_deconstructor_record_id(); // root identity FIRST — wrong
-    acc.add_deconstructor_record(ident("z_query_key_expr"), "key_expr");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![DeconRecord::Identity],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZQuery),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_query_key_expr"),
+                name: "key_expr".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // root identity FIRST — wrong
     let err = apply(
         &mut reg,
         &acc,
@@ -169,11 +204,22 @@ fn root_identity_before_nested_identity_errors() {
         "fn z_query_key_expr(q: &ZQuery) -> &ZKeyExpr { todo!() }",
     ]);
     let mut acc2 = Deconstructors::default();
-    acc2.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc2.add_deconstructor_record_id();
-    acc2.ensure_default_deconstructor(syn::parse_quote!(ZQuery));
-    acc2.add_deconstructor_record(ident("z_query_key_expr"), "key_expr");
-    acc2.add_deconstructor_record_id(); // root identity last — ok
+    acc2.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![DeconRecord::Identity],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc2.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZQuery),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_query_key_expr"),
+                name: "key_expr".into(),
+            },
+            DeconRecord::Identity,
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    }); // root identity last — ok
     apply(
         &mut reg2,
         &acc2,
@@ -191,8 +237,14 @@ fn accessor_target_mismatch_errors() {
         "fn wrong(x: &ZSample) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record(ident("wrong"), "wrong");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![DeconRecord::Acc {
+            func: ident("wrong"),
+            name: "wrong".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
     let err = apply(
         &mut reg,
         &acc,
@@ -207,9 +259,12 @@ fn accessor_target_mismatch_errors() {
 fn multiple_identity_errors() {
     let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record_id();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![DeconRecord::Identity, DeconRecord::Identity],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A deconstructor record referencing a non-`.fun_accessor` fn errors.
     let err = apply(
         &mut reg,
         &acc,
@@ -228,9 +283,21 @@ fn record_must_be_fun_accessor() {
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
+    // With it declared as an accessor, the gate passes.
+    // Two records of one deconstructor given the same literal name ⇒ hard
+    // error (names are emitted verbatim; never auto-disambiguated).
     // Empty accessor set ⇒ z_keyexpr_as_str is not a fun_accessor ⇒ error.
     let err = apply(
         &mut reg,
@@ -256,9 +323,21 @@ fn duplicate_leaf_name_errors() {
         "fn z_sample_payload(s: &ZSample) -> Vec<u8> { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_key_expr"), "field");
-    acc.add_deconstructor_record(ident("z_sample_payload"), "field");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "field".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_payload"),
+                name: "field".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A record name containing the reserved `"__"` chain separator ⇒ error.
     let err = apply(
         &mut reg,
         &acc,
@@ -280,8 +359,19 @@ fn reserved_separator_in_name_errors() {
         "fn z_sample_key_expr(s: &ZSample) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_key_expr"), "key__expr");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_sample_key_expr"),
+            name: "key__expr".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // M3: `z_reply_sample -> Option<&ZSample>` whose ZSample combined
+    // accessor nests ZKeyExpr (handle+string), ZZBytes (bytes), and a
+    // nullable ZTimestamp (Option<&ZTimestamp> → ntp64), plus a direct enum
+    // leaf. Verifies path prefixes + nullable propagation.
+    // Child accessors (reused via nesting).
     let err = apply(
         &mut reg,
         &acc,
@@ -313,19 +403,68 @@ fn nested_accessor_flatten() {
     ]);
     let mut acc = Deconstructors::default();
     // Child accessors (reused via nesting).
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZZBytes));
-    acc.add_deconstructor_record(ident("z_zbytes_to_bytes"), "z_zbytes_to_bytes");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
-    acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZZBytes),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zbytes_to_bytes"),
+            name: "z_zbytes_to_bytes".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZTimestamp),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
     // Parent accessor with nested + direct records.
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
-    acc.add_deconstructor_record(ident("z_sample_payload"), "z_sample_payload");
-    acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
-    acc.add_deconstructor_record(ident("z_sample_timestamp"), "z_sample_timestamp");
+    // Parent accessor with nested + direct records.
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_payload"),
+                name: "z_sample_payload".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_kind"),
+                name: "z_sample_kind".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_timestamp"),
+                name: "z_sample_timestamp".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // keyexpr identity (path [z_sample_key_expr]) + string + payload bytes
+    // + kind enum + nullable timestamp ntp64.
+    // Only the timestamp leaf (Option nesting accessor) is nullable.
+    // ZReply-shaped product (Result<Sample, ReplyError> decomposed in the
+    // current product model): the root's records include two
+    // `Option<&Child>` nesting accessors (`z_reply_sample`, `z_reply_err`)
+    // whose children themselves contain `Option` nesting steps and a
+    // nested identity — the double-unwrap case — plus an
+    // `Option<ZZenohId>` Acc record with NO default child, which keeps
+    // the full `Option<…>` as its leaf `out_ty` (its own `Option` is the
+    // converter's business, not a nesting step ⇒ NOT nullable).
 
     apply(
         &mut reg,
@@ -394,23 +533,83 @@ fn reply_product_double_option_flatten() {
         "fn z_zbytes_to_bytes(z: &ZZBytes) -> Vec<u8> { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
-    acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZZBytes));
-    acc.add_deconstructor_record(ident("z_zbytes_to_bytes"), "z_zbytes_to_bytes");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
-    acc.add_deconstructor_record(ident("z_sample_timestamp"), "z_sample_timestamp");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZReplyError));
-    acc.add_deconstructor_record(ident("z_reply_error_payload"), "z_reply_error_payload");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZReply));
-    acc.add_deconstructor_record(ident("z_reply_replier_zid"), "z_reply_replier_zid");
-    acc.add_deconstructor_record(ident("z_reply_is_ok"), "z_reply_is_ok");
-    acc.add_deconstructor_record(ident("z_reply_sample"), "z_reply_sample");
-    acc.add_deconstructor_record(ident("z_reply_err"), "z_reply_err");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZTimestamp),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZZBytes),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zbytes_to_bytes"),
+            name: "z_zbytes_to_bytes".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_timestamp"),
+                name: "z_sample_timestamp".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZReplyError),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_reply_error_payload"),
+            name: "z_reply_error_payload".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZReply),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_reply_replier_zid"),
+                name: "z_reply_replier_zid".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_reply_is_ok"),
+                name: "z_reply_is_ok".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_reply_sample"),
+                name: "z_reply_sample".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_reply_err"),
+                name: "z_reply_err".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Acc leaf keeping its full `Option<…>` return — not a nesting step.
+    // Ok-arm leaves: spliced through the `Option`-returning
+    // `z_reply_sample` ⇒ all nullable, incl. the nested keyexpr identity
+    // and the doubly-`Option` timestamp path.
+    // Err-arm leaf: spliced through `z_reply_err`.
+    // A → B → A nesting is rejected.
 
     apply(
         &mut reg,
@@ -475,10 +674,26 @@ fn nested_cycle_errors() {
         "fn b_to_a(b: &ZB) -> &ZA { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZA));
-    acc.add_deconstructor_record(ident("a_to_b"), "a_to_b");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZB));
-    acc.add_deconstructor_record(ident("b_to_a"), "b_to_a");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZA),
+        records: vec![DeconRecord::Acc {
+            func: ident("a_to_b"),
+            name: "a_to_b".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZB),
+        records: vec![DeconRecord::Acc {
+            func: ident("b_to_a"),
+            name: "b_to_a".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // M4: `z_session_peers_zid(&ZSession) -> Vec<ZZenohId>` → Iterable;
+    // each element delivered WHOLE (no accessor, no leaves): a per-fn
+    // flatten with an empty record list on an element type that has no
+    // deconstructor of its own.
     let err = apply(
         &mut reg,
         &acc,
@@ -497,7 +712,17 @@ fn iterable_whole_element_plan() {
     // deconstructor of its own.
     let mut reg = reg_with(&["fn z_session_peers_zid(s: &ZSession) -> Vec<ZZenohId> { todo!() }"]);
     let mut acc = Deconstructors::default();
-    acc.begin_inline_output(ident("z_session_peers_zid"), syn::parse_quote!(ZZenohId));
+    acc.outputs.push(OutputDecl {
+        func: ident("z_session_peers_zid"),
+        sel: DeconSel::Inline(vec![]),
+        target: DeconTarget::Output,
+        delivery: Delivery::Callback,
+        declared_source: Some(syn::parse_quote!(ZZenohId)),
+    });
+    // M5: `z_session_peers_zid -> Vec<ZZenohId>` with a ZZenohId combined
+    // accessor → Iterable with per-element leaves: the string form + the
+    // value itself via `record_id` (a `value_blob` identity, owned at the
+    // root since `Vec<ZZenohId>` owns its elements).
 
     apply(
         &mut reg,
@@ -541,9 +766,22 @@ fn iterable_decomposed_plan() {
         "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZZenohId));
-    acc.add_deconstructor_record(ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
-    acc.add_deconstructor_record_id();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZZenohId),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_zenoh_id_to_string"),
+                name: "z_zenoh_id_to_string".into(),
+            },
+            DeconRecord::Identity,
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Identity leaf: owned value (`ZZenohId`, not `&ZZenohId`) since the Vec
+    // owns its elements (by_ref = false).
+    // `.converter(ZTimestamp, z_timestamp_ntp64)` + `.convert_output()` on
+    // `z_sample_timestamp -> Option<&ZTimestamp>` ⇒ Return delivery, single
+    // leaf, convert_out_ty = Option<i64>.
 
     apply(
         &mut reg,
@@ -584,8 +822,16 @@ fn convert_output_single_value() {
         "fn z_timestamp_ntp64(t: &ZTimestamp) -> i64 { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZTimestamp));
-    acc.add_deconstructor_record(ident("z_timestamp_ntp64"), "z_timestamp_ntp64");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZTimestamp),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_timestamp_ntp64"),
+            name: "z_timestamp_ntp64".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // The shaped convert type is registered as a required output.
+    // A two-record deconstructor (handle + string) ⇒ Callback delivery (>1 leaf).
 
     apply(
         &mut reg,
@@ -621,9 +867,18 @@ fn multi_leaf_output_is_callback() {
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A `Vec` return ⇒ Iterable + Callback (a fold), never a single Return.
     apply(
         &mut reg,
         &acc,
@@ -648,8 +903,28 @@ fn vec_output_is_iterable_callback() {
         "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZZenohId));
-    acc.add_deconstructor_record(ident("z_zenoh_id_to_string"), "z_zenoh_id_to_string");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZZenohId),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zenoh_id_to_string"),
+            name: "z_zenoh_id_to_string".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
+    // `storage_get_vec` contract) synthesizes a FIXED-BUILDER fold wrapped in
+    // an Optional layer: the field leaves cross raw per element and the
+    // foreign folder rebuilds + appends them (no Java object is built on the
+    // Rust side); `None` ⇒ a null list. Closes the data_class→Vec milestone.
+    // An `impl Fn(&[data_class])` callback arg (perftest's
+    // `storage_callback_vec`) synthesizes an Iterable fixed-folder
+    // `callback_arg_plans` entry keyed by the `&[Payload]` arg: the
+    // trampoline folds each element's field leaves into a foreign list, the
+    // user callback still sees the whole `List<Payload>`.
+    // A scalar `&Payload` callback arg must stay a Base fixed builder.
+    // The ZError deconstructor (`z_error_message`) auto-applies to every fn
+    // returning `Result<_, ZError>`, storing the plan in `error_plans`. Error
+    // delivery is always Callback (its leaves are the `ze` callback args).
     apply(
         &mut reg,
         &acc,
@@ -791,8 +1066,20 @@ fn convert_error_decomposes_result_e() {
         "fn z_infallible(s: &ZSample) -> bool { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZError));
-    acc.add_deconstructor_record(ident("z_error_message"), "z_error_message");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZError),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_error_message"),
+            name: "z_error_message".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // The infallible fn gets no error plan.
+    // No output plans created (no ZKeyExpr return among the declared fns; the
+    // ZError deconstructor only matches the Result error position).
+    // Default-everywhere: the ZKeyExpr deconstructor auto-applies to BOTH a
+    // `&ZKeyExpr` (borrow) and an owned `ZKeyExpr` return. (`Result<…>` returns
+    // are excluded — they keep a handle — and `fun_accessor`s are skipped.)
     let declared: std::collections::HashSet<syn::Ident> = ["z_keyexpr_try_from", "z_infallible"]
         .iter()
         .map(|s| ident(s))
@@ -830,9 +1117,21 @@ fn default_output_applies_to_owned_and_borrow_returns() {
         "fn z_keyexpr_as_str(k: &ZKeyExpr) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Only the record fn is an accessor; the two return fns are plain.
+    // An `impl Fn(ZSample)` parameter of a declared fn gets a type-level
+    // plan from ZSample's default deconstructor — same leaves a return of
+    // ZSample would produce, but owned (`by_ref = false`).
     // Only the record fn is an accessor; the two return fns are plain.
     let accset: std::collections::HashSet<syn::Ident> =
         ["z_keyexpr_as_str"].iter().map(|s| ident(s)).collect();
@@ -864,12 +1163,38 @@ fn callback_arg_plan_derived() {
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
-    acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_kind"),
+                name: "z_sample_kind".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // Nested keyexpr identity (borrowed: non-root) + string + direct enum.
+    // Leaf out_tys registered so the resolver builds their converters.
+    // No return-position plan was created for the declaring fn.
+    // A BORROWED `impl Fn(&ZSample)` decomposes through the same default
+    // deconstructor as the by-value case, but with `by_ref = true` (leaves
+    // read through the reference) and keyed under the actual `&ZSample` arg
+    // type — so `callback_input`/`callback_iface_spec` find it.
     let declared: std::collections::HashSet<syn::Ident> =
         ["z_declare_sub"].iter().map(|s| ident(s)).collect();
     apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
@@ -922,12 +1247,35 @@ fn callback_arg_borrowed_decomposed() {
         "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record_id();
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str"), "z_keyexpr_as_str");
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_key_expr"), "z_sample_key_expr");
-    acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![
+            DeconRecord::Identity,
+            DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "z_keyexpr_as_str".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_sample_key_expr"),
+                name: "z_sample_key_expr".into(),
+            },
+            DeconRecord::Acc {
+                func: ident("z_sample_kind"),
+                name: "z_sample_kind".into(),
+            },
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // No plan under the bare `ZSample` key — only under the borrowed arg type.
+    // No deconstructor for ZQuery ⇒ no plan: the arg is delivered whole.
+    // `impl Fn(Vec<ZSample>)`: the arg type key (`Vec<ZSample>`) matches no
+    // deconstructor target ⇒ whole-value fallback, no plan.
     let declared: std::collections::HashSet<syn::Ident> =
         ["z_declare_sub"].iter().map(|s| ident(s)).collect();
     apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
@@ -986,8 +1334,29 @@ fn callback_arg_nonbare_skipped() {
         "fn z_sample_kind(s: &ZSample) -> SampleKind { todo!() }",
     ]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZSample));
-    acc.add_deconstructor_record(ident("z_sample_kind"), "z_sample_kind");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZSample),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_sample_kind"),
+            name: "z_sample_kind".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    // `Vec<String>` / `Option<Vec<ZenohId>>` returns and an `impl Fn(&[String])`
+    // callback arg synthesize FIXED **whole-element** folds (no decon, element
+    // set, no leaves) — the single-leaf dual of the `data_class` Vec fold.
+    // `Vec<String>` return ⇒ Iterable(Base), whole element.
+    // `Option<Vec<ZenohId>>` ⇒ Optional(Iterable(Base)).
+    // `impl Fn(&[String])` callback arg ⇒ Iterable fold keyed by `&[String]`.
+    // An un-nominated element is left on the ArrayList path (no plan); a fn
+    // that already has a plan is never overwritten.
+    // Pre-seed `strings` with a sentinel plan to prove it is preserved.
+    // C5 validation map: a field accessor ident that names no `#[prebindgen]`
+    // fn is a hard `UnknownAccessor` at resolve time — a typo'd
+    // `expand_return!(...).field(fun!(…))` cannot silently vanish. (At the
+    // jnigen level a registry-absent fn is caught even earlier, by the scan's
+    // `DeclaredNotFound` on the helper channel; this is the core-tier guard
+    // that stands on its own for any adapter.)
     let declared: std::collections::HashSet<syn::Ident> =
         ["z_batched"].iter().map(|s| ident(s)).collect();
     apply(&mut reg, &acc, &declared, &acc_set()).expect("apply");
@@ -1099,8 +1468,14 @@ fn leaf_vec_fold_skips_unnominated_and_preexisting() {
 fn unknown_accessor_errors() {
     let mut reg = reg_with(&["fn z_foo() -> ZKeyExpr { todo!() }"]);
     let mut acc = Deconstructors::default();
-    acc.ensure_default_deconstructor(syn::parse_quote!(ZKeyExpr));
-    acc.add_deconstructor_record(ident("z_keyexpr_as_str_typo"), "as_str");
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZKeyExpr),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_keyexpr_as_str_typo"),
+            name: "as_str".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
     let err = apply(
         &mut reg,
         &acc,
@@ -1109,4 +1484,54 @@ fn unknown_accessor_errors() {
     )
     .unwrap_err();
     assert!(matches!(err, UnfoldError::UnknownAccessor(_)), "{err}");
+}
+
+/// #96: duplicate declaration records are rejected with COLLECTED
+/// diagnostics — every offender reported in one error. (Empty record lists
+/// are NOT diagnosed: an empty inline list is the valid whole-element
+/// delivery form.)
+#[test]
+fn duplicate_declarations_collected() {
+    let mut reg = reg_with(&[
+        "fn z_keyexpr_as_str(ke: &ZKeyExpr) -> &str { todo!() }",
+        "fn z_session_key(s: &ZSession) -> ZKeyExpr { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    for _ in 0..2 {
+        acc.deconstructors.push(DeconstructorDecl {
+            target: syn::parse_quote!(ZKeyExpr),
+            records: vec![DeconRecord::Acc {
+                func: ident("z_keyexpr_as_str"),
+                name: "asStr".into(),
+            }],
+            default: Some((DeconTarget::Output, Delivery::Callback)),
+        });
+        acc.outputs.push(OutputDecl {
+            func: ident("z_session_key"),
+            sel: DeconSel::Inline(vec![DeconRecord::Identity]),
+            target: DeconTarget::Output,
+            delivery: Delivery::Callback,
+            declared_source: Some(syn::parse_quote!(ZKeyExpr)),
+        });
+    }
+    let err = apply(
+        &mut reg,
+        &acc,
+        &[ident("z_session_key")].into_iter().collect(),
+        &acc_set(),
+    )
+    .unwrap_err();
+    let UnfoldError::InvalidDeclarations { entries } = &err else {
+        panic!("expected InvalidDeclarations, got {err}");
+    };
+    assert_eq!(entries.len(), 2, "{err}");
+    let text = err.to_string();
+    assert!(
+        text.contains("duplicate deconstructor declaration for `ZKeyExpr`"),
+        "{text}"
+    );
+    assert!(
+        text.contains("duplicate output expansion for `z_session_key`"),
+        "{text}"
+    );
 }
