@@ -774,21 +774,53 @@ fn process_decl<M>(
             }
         };
 
-        // `Vec<T>` return → `Iterable`. Two element-delivery modes:
+        // Peel an outer `Option` off the success return BEFORE probing for a
+        // `Vec`, so `Option<Vec<T>>` composes as `Optional(Iterable)` — the
+        // fold is skipped and a null result delivered for `None` (issue
+        // #105). The scalar arm below reuses this peel. Error targets keep
+        // the historical probe order (the `Vec` probe runs on `E` itself), so
+        // an `Option<Vec<E>>` error stays whole.
+        let (optional, after_opt) = match ed.target {
+            DeconTarget::Output => match option_inner_type(&ret_ty) {
+                Some(inner) => (true, inner),
+                None => (false, ret_ty.clone()),
+            },
+            DeconTarget::Error => (false, ret_ty.clone()),
+        };
+        // `Vec<T>` / `Option<Vec<T>>` return → `Iterable` (± an `Optional`
+        // layer). Two element-delivery modes:
         //   * **decomposed** (M5): the element type has an accessor →
         //     flatten it into leaves, fold `(acc, leaf0, …) -> acc`.
         //   * **whole** (M4): no accessor → deliver each element whole
         //     via its own output converter + projection, fold `(acc, T) -> acc`.
         // The other shapes (`Option`/scalar) decompose via an accessor
         // (M1–M3). `Vec<Option<…>>` is not supported.
-        let plan = if let Some(inner) = vec_inner_type(&ret_ty) {
+        let plan = if let Some(inner) = vec_inner_type(&after_opt) {
             if option_inner_type(&inner).is_some() {
                 return Err(UnfoldError::Unsupported {
                     func: ed.func.clone(),
                     reason: "Vec<Option<…>> returns",
                 });
             }
-            let shape = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
+            let iterable = UnfoldShape::Iterable(Box::new(UnfoldShape::Base));
+            let shape = if optional {
+                UnfoldShape::Optional((), Box::new(iterable))
+            } else {
+                iterable
+            };
+            // The fold delivers the return element-by-element, so the
+            // whole-collection converter is not needed — and for an
+            // opaque-handle element it cannot resolve at all (a `jlong` wire
+            // isn't JObject-shaped). De-require the scan-time registrations
+            // (the declared return and, under `Option`, the inner `Vec` its
+            // recursive registration also required) — same reasoning as
+            // [`apply_leaf_vec_folds`] for the fixed folds.
+            if ed.target == DeconTarget::Output {
+                registry.unrequire_output(&ret_ty);
+                if optional {
+                    registry.unrequire_output(&after_opt);
+                }
+            }
             // Element type peeled of a leading `&` (accessors take `&Element`).
             let (by_ref, element) = match &inner {
                 syn::Type::Reference(r) => (true, (*r.elem).clone()),
@@ -825,9 +857,16 @@ fn process_decl<M>(
                 }
             }
         } else {
-            let (optional, core_ty) = match option_inner_type(&ret_ty) {
-                Some(inner) => (true, inner),
-                None => (false, ret_ty.clone()),
+            // Scalar/decomposed arm. The `Option` peel already happened above
+            // for `Output` (exactly one layer — `Option<Option<…>>` is NOT
+            // re-peeled and fails as "no deconstructor" for the inner
+            // `Option`); for `Error` it happens here, unchanged.
+            let (optional, core_ty) = match ed.target {
+                DeconTarget::Output => (optional, after_opt.clone()),
+                DeconTarget::Error => match option_inner_type(&after_opt) {
+                    Some(inner) => (true, inner),
+                    None => (false, after_opt.clone()),
+                },
             };
             let (by_ref, source) = match &core_ty {
                 syn::Type::Reference(r) => (true, (*r.elem).clone()),
@@ -850,11 +889,13 @@ fn process_decl<M>(
         // Delivery is by **leaf count**, not a per-decl flag:
         //   * Output, single leaf, non-Iterable ⇒ Return (wrapper returns the
         //     value via its ordinary output converter — `convert_out_ty`).
-        //   * Output, multiple leaves or Iterable ⇒ Callback (builder / fold).
+        //   * Output, multiple leaves or Iterable (at any layer — an
+        //     `Optional(Iterable)` fold has no single value to return) ⇒
+        //     Callback (builder / fold).
         //   * Error ⇒ always Callback-shaped: every leaf is a `ze` arg after the
         //     fixed `je` (no return-value path; `convert_out_ty` stays None).
         let single_return = ed.target == DeconTarget::Output
-            && !matches!(plan.shape, UnfoldShape::Iterable(_))
+            && !plan.shape.has_iterable_layer()
             && plan.leaves.len() == 1;
         let plan = if single_return {
             let leaf_ty = plan.leaves[0].out_ty.clone();

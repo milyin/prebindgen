@@ -126,19 +126,21 @@ pub(crate) enum FnOutputPlan {
 /// Rust builder param, the erased extern params, and the typed Kotlin
 /// builder/fold surface all branch on the same booleans.
 pub(crate) struct UnfoldOutputPlan {
-    /// `is_iterable_fold(shape)` — a bare `Iterable` OR one wrapped in a
-    /// single `Optional` layer (`Option<Vec<T>>`). Selects the fold surface
+    /// `is_iterable_fold(shape)` — a bare `Iterable` OR one wrapped in an
+    /// `Optional` layer (`Option<Vec<T>>`). Selects the fold surface
     /// (`acc` + `fold`) over a scalar builder on every tier.
     pub iterable_fold: bool,
-    /// Outer `Optional` layer present — the delivered result is nullable.
+    /// Outer `Optional` layer present — the delivered result is nullable
+    /// (for a fold: `None` skips the fold and delivers null, so the wrapper
+    /// returns `A?`).
     pub optional: bool,
     /// Synthesized fixed-singleton delivery: no caller lambda, not generic.
     pub fixed_builder: bool,
     /// `plan.element.is_some()` — whole-element (M4) vs decomposed (M5) fold.
     pub whole_element: bool,
     /// Kotlin type variable of the wrapper: `None` for a fixed builder,
-    /// `"A"` for a **bare** `Iterable` fold (an `Optional`-wrapped iterable
-    /// takes the scalar-builder surface, hence `"R"`), `"R"` otherwise.
+    /// `"A"` for an `Iterable` fold (bare or `Optional`-wrapped), `"R"`
+    /// otherwise.
     pub generic: Option<&'static str>,
     /// The builder/folder `fun interface` spec the delivery calls into —
     /// [`folder_iface_for_plan`] for an iterable fold (incl. the fixed
@@ -515,11 +517,12 @@ fn build_output(
         let optional = matches!(plan.shape, UnfoldShape::Optional(..));
         let fixed_builder = plan.fixed_builder;
         // The generic-surface rule (see `classify_output`): a fixed builder
-        // is not generic; a **bare** `Iterable` folds with `<A>`; everything
-        // else — including an `Optional`-wrapped iterable — builds with `<R>`.
+        // is not generic; an `Iterable` fold — bare or `Optional`-wrapped —
+        // folds with `<A>` (the wrapped form returns `A?`, null = `None`);
+        // everything else builds with `<R>`.
         let generic = if fixed_builder {
             None
-        } else if iterable_fold && !optional {
+        } else if iterable_fold {
             Some("A")
         } else {
             Some("R")

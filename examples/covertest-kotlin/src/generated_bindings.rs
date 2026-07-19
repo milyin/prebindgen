@@ -7707,6 +7707,291 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    count: jni::sys::jlong,
+    start: jni::sys::jlong,
+    __acc: jni::objects::JObject<'a>,
+    __fold: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let start = match jlong_to_i64_fbf9a9bc(&mut env, &start) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/analytics/SummaryFolder";
+    const __CB_DESCR: &str = "(Ljava/lang/Object;JD)Ljava/lang/Object;";
+    let __vec = perftest_flat::summary_series(count, start);
+    let mut __acc = __acc;
+    for __elem in __vec.into_iter() {
+        let __obj0: jni::sys::jvalue = {
+            let __enc0 = match i64_to_jlong_fbf9a9bc(
+                &mut env,
+                perftest_flat::summary_count(&__elem),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    let __zd = __ze_defaults(&mut env);
+                    signal_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        ::core::option::Option::Some(&__e.to_string()),
+                        &__zd,
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            jni::sys::jvalue { j: __enc0 }
+        };
+        let __obj1: jni::sys::jvalue = {
+            let __enc1 = match f64_to_jdouble_9e4a8f70(
+                &mut env,
+                perftest_flat::summary_total(&__elem),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    let __zd = __ze_defaults(&mut env);
+                    signal_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        ::core::option::Option::Some(&__e.to_string()),
+                        &__zd,
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            jni::sys::jvalue { d: __enc1 }
+        };
+        __acc = match __CB_MID
+            .call_object(
+                &mut env,
+                __CB_FQN,
+                "run",
+                __CB_DESCR,
+                &__fold,
+                &[
+                    jni::sys::jvalue {
+                        l: __acc.as_raw(),
+                    },
+                    __obj0,
+                    __obj1,
+                ],
+            )
+        {
+            ::core::result::Result::Ok(__o) => __o,
+            ::core::result::Result::Err(__e) => {
+                let _ = env.exception_describe();
+                let __e2 = <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string());
+                let __zd = __ze_defaults(&mut env);
+                signal_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    ::core::option::Option::Some(&__e2.to_string()),
+                    &__zd,
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+    }
+    __acc
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    count: jni::sys::jlong,
+    start: jni::sys::jlong,
+    __acc: jni::objects::JObject<'a>,
+    __fold: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(unused_variables)]
+    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
+        ::std::vec![]
+    };
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let start = match jlong_to_i64_fbf9a9bc(&mut env, &start) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            let __zd = __ze_defaults(&mut env);
+            signal_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                ::core::option::Option::Some(&__e.to_string()),
+                &__zd,
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/analytics/SummaryFolder";
+    const __CB_DESCR: &str = "(Ljava/lang/Object;JD)Ljava/lang/Object;";
+    let __out = perftest_flat::summary_series_opt(count, start);
+    match __out {
+        ::core::option::Option::Some(__vec) => {
+            let mut __acc = __acc;
+            for __elem in __vec.into_iter() {
+                let __obj0: jni::sys::jvalue = {
+                    let __enc0 = match i64_to_jlong_fbf9a9bc(
+                        &mut env,
+                        perftest_flat::summary_count(&__elem),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { j: __enc0 }
+                };
+                let __obj1: jni::sys::jvalue = {
+                    let __enc1 = match f64_to_jdouble_9e4a8f70(
+                        &mut env,
+                        perftest_flat::summary_total(&__elem),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            let __zd = __ze_defaults(&mut env);
+                            signal_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                ::core::option::Option::Some(&__e.to_string()),
+                                &__zd,
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    jni::sys::jvalue { d: __enc1 }
+                };
+                __acc = match __CB_MID
+                    .call_object(
+                        &mut env,
+                        __CB_FQN,
+                        "run",
+                        __CB_DESCR,
+                        &__fold,
+                        &[
+                            jni::sys::jvalue {
+                                l: __acc.as_raw(),
+                            },
+                            __obj0,
+                            __obj1,
+                        ],
+                    )
+                {
+                    ::core::result::Result::Ok(__o) => __o,
+                    ::core::result::Result::Err(__e) => {
+                        let _ = env.exception_describe();
+                        let __e2 = <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(__e.to_string());
+                        let __zd = __ze_defaults(&mut env);
+                        signal_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            ::core::option::Option::Some(&__e2.to_string()),
+                            &__zd,
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+            }
+            __acc
+        }
+        ::core::option::Option::None => jni::objects::JObject::null().into(),
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotal<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,

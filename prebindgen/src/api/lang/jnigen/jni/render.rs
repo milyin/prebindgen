@@ -433,13 +433,11 @@ pub(crate) fn build_typed_handle(
     class
 }
 
-/// True for an `Iterable` fold delivery, including one wrapped in a single
-/// `Optional` layer (`Option<Vec<T>>` → a nullable `List`). Selects the fold
+/// True for an `Iterable` fold delivery, including one wrapped in an
+/// `Optional` layer (`Option<Vec<T>>` → a nullable delivery). Selects the fold
 /// surface (`acc` + `fold`) over a scalar `Optional`/`Base` builder.
 pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) -> bool {
-    use crate::api::core::unfold::UnfoldShape;
-    matches!(shape, UnfoldShape::Iterable(_))
-        || matches!(shape, UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Iterable(_)))
+    shape.has_iterable_layer()
 }
 
 /// Render one `external fun <mangle_method(package, JNINative, name)>(…): <wire-return>` line
@@ -1192,15 +1190,17 @@ fn classify_output(
             };
             (Some(kt), None)
         }
-    } else if let (FnOutputPlan::Unfold(u), Some(plan)) = (&fplan.output, unfold) {
+    } else if let (FnOutputPlan::Unfold(u), Some(_)) = (&fplan.output, unfold) {
         // The builder / fold params are generated typed `fun interface`s
         // (`<Source>Builder<out R>` / `<Element>Folder<A>`); the native side
         // calls their typed `run` with raw jvalues (value-blob leaves surface
         // as `ByteArray` — no call-site adapter). Lambda-literal call sites
         // SAM-convert unchanged.
         generic = u.generic.map(str::to_string);
-        // A **bare** `Iterable` folds with `<A>`; an `Optional`-wrapped
-        // iterable takes the scalar-builder surface below.
+        // An `Iterable` fold — bare or `Optional`-wrapped — folds with `<A>`
+        // (`acc` lead + `fold` lambda). The wrapped form returns `A?`: `None`
+        // skips the fold and delivers null (matching the scalar `R?` and the
+        // fixed path's null `List`), `Some(empty)` returns `acc` unchanged.
         if u.generic == Some("A") {
             let spec = u.iface.as_deref()?;
             builder_lead = Some(("acc".to_string(), kt::KtType::var_("A")));
@@ -1212,24 +1212,14 @@ fn classify_output(
             } else {
                 unfold_call_args.push("fold".to_string());
             }
-            (Some(kt::KtType::var_("A")), None)
-        } else {
-            // A non-fixed `Optional(Iterable)` historically typed its surface
-            // with the BUILDER spec here while the Rust delivery folds — the
-            // plan stores the folder twin for that shape, so keep the local
-            // builder derivation to preserve the (latent, pre-existing)
-            // divergence rather than silently retype the surface.
-            let local_spec;
-            let spec = if u.iterable_fold {
-                let decon = plan
-                    .decon
-                    .as_ref()
-                    .expect("record-built plan carries its DeconId");
-                local_spec = builder_iface_spec(ext, registry, decon)?;
-                &local_spec
+            let kt = if u.optional {
+                kt::KtType::var_("A").nullable()
             } else {
-                u.iface.as_deref()?
+                kt::KtType::var_("A")
             };
+            (Some(kt), None)
+        } else {
+            let spec = u.iface.as_deref()?;
             builder_param = Some(("build".to_string(), spec.kt_ref(vec![kt::KtType::var_r()])));
             if spec.needs_raw() {
                 imports.insert(format!("{}.asRaw", spec.package));

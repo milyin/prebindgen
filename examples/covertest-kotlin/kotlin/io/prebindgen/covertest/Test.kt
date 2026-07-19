@@ -14,6 +14,8 @@ import io.prebindgen.covertest.analytics.storageSummaryFull
 import io.prebindgen.covertest.analytics.storageSummaryHandle
 import io.prebindgen.covertest.analytics.summaryMerge
 import io.prebindgen.covertest.analytics.summaryPrefer
+import io.prebindgen.covertest.analytics.summarySeries
+import io.prebindgen.covertest.analytics.summarySeriesOpt
 import io.prebindgen.covertest.analytics.summaryTotalOpt
 import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
@@ -469,6 +471,24 @@ fun main() {
     }
 
     // ── Vec<opaque-handle> return: the Kotlin-side handle fold ───────────────
+    section("record-built <A> fold (summarySeries / summarySeriesOpt)") {
+        // Bare Vec<Summary>: the caller threads the accumulator; each element
+        // arrives as its decomposed (count, total) leaves.
+        val pairs =
+            summarySeries(3L, 10L, mutableListOf<Pair<Long, Double>>(), boom) { acc, count, total ->
+                acc.add(count to total)
+                acc
+            }
+        check(pairs == listOf(10L to 100.0, 11L to 110.0, 12L to 120.0))
+        check(summarySeries(0L, 5L, 0L, boom) { acc, _, _ -> acc + 1 } == 0L)
+        // Option<Vec<Summary>> (#105): null = None (the fold never invoked);
+        // Some(empty) returns the untouched accumulator, distinguishable from
+        // None by the caller.
+        check(summarySeriesOpt(-1L, 0L, 0L, boom) { acc, _, _ -> acc + 1 } == null)
+        check(summarySeriesOpt(0L, 0L, 7L, boom) { acc, _, _ -> acc + 1 } == 7L)
+        check(summarySeriesOpt(2L, 1L, 0.0, boom) { acc, _, total -> acc + total } == 30.0)
+    }
+
     section("Vec<Storage> handle fold (storageShards / storageShardsOpt)") {
         val shards = storageShards(3L, 2L, boom)
         check(shards.size == 3)

@@ -941,6 +941,122 @@ fn vec_output_is_iterable_callback() {
 }
 
 #[test]
+fn option_vec_output_is_optional_iterable_callback() {
+    // An `Option<Vec<T>>` return with `T`'s default deconstructor composes as
+    // a RECORD-BUILT `Optional(Iterable)` fold (issue #105): the auto-apply
+    // peels the `Option` before probing the `Vec`, the elements decompose
+    // into leaves (M5), and `None` skips the fold to deliver a null result.
+    let mut reg = reg_with(&[
+        "fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }",
+        "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZZenohId),
+        records: vec![
+            DeconRecord::Acc {
+                func: ident("z_zenoh_id_to_string"),
+                name: "z_zenoh_id_to_string".into(),
+            },
+            DeconRecord::Identity,
+        ],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_routers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_routers_zid")).expect("plan");
+    assert!(
+        matches!(&plan.shape,
+            UnfoldShape::Optional((), inner)
+                if matches!(&**inner, UnfoldShape::Iterable(i) if matches!(**i, UnfoldShape::Base))),
+        "shape is Optional(Iterable(Base))"
+    );
+    assert!(!plan.fixed_builder, "record-built, not a fixed singleton");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert!(plan.element.is_none(), "decomposed (M5): element not used");
+    assert_eq!(plan.leaves.len(), 2);
+    assert!(!plan.by_ref, "Option<Vec<ZZenohId>> owns its elements");
+}
+
+#[test]
+fn option_vec_single_leaf_stays_callback() {
+    // A SINGLE-leaf `Optional(Iterable)` fold must stay Callback: the
+    // single-Return reclassification is gated on "no Iterable at any layer",
+    // not just a top-level `Iterable` (an `Option<Vec<T>>` fold has no single
+    // value to return through `convert_out_ty`).
+    let mut reg = reg_with(&[
+        "fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }",
+        "fn z_zenoh_id_to_string(z: &ZZenohId) -> String { todo!() }",
+    ]);
+    let mut acc = Deconstructors::default();
+    acc.deconstructors.push(DeconstructorDecl {
+        target: syn::parse_quote!(ZZenohId),
+        records: vec![DeconRecord::Acc {
+            func: ident("z_zenoh_id_to_string"),
+            name: "z_zenoh_id_to_string".into(),
+        }],
+        default: Some((DeconTarget::Output, Delivery::Callback)),
+    });
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_routers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_routers_zid")).expect("plan");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert_eq!(plan.leaves.len(), 1);
+    assert!(plan.convert_out_ty.is_none());
+}
+
+#[test]
+fn option_vec_whole_element_plan() {
+    // M4 dual of the decomposed case: an `Option<Vec<T>>` return with an
+    // inline EMPTY record list delivers each element whole through its own
+    // output converter, wrapped in the `Optional` layer.
+    let mut reg =
+        reg_with(&["fn z_routers_zid(s: &ZSession) -> Option<Vec<ZZenohId>> { todo!() }"]);
+    let mut acc = Deconstructors::default();
+    acc.outputs.push(OutputDecl {
+        func: ident("z_routers_zid"),
+        sel: DeconSel::Inline(vec![]),
+        target: DeconTarget::Output,
+        delivery: Delivery::Callback,
+        declared_source: Some(syn::parse_quote!(ZZenohId)),
+    });
+    apply(
+        &mut reg,
+        &acc,
+        &[ident("z_routers_zid")].into_iter().collect(),
+        &acc_set(),
+    )
+    .expect("apply");
+    let plan = reg.unfold_plans.get(&ident("z_routers_zid")).expect("plan");
+    assert!(
+        matches!(&plan.shape,
+            UnfoldShape::Optional((), inner) if matches!(&**inner, UnfoldShape::Iterable(_))),
+        "shape is Optional(Iterable(Base))"
+    );
+    assert!(!plan.fixed_builder);
+    assert!(
+        plan.leaves.is_empty(),
+        "whole-element: no decomposed leaves"
+    );
+    assert_eq!(
+        plan.element
+            .as_ref()
+            .map(|t| t.to_token_stream().to_string()),
+        Some("ZZenohId".to_string())
+    );
+}
+
+#[test]
 fn value_struct_vec_is_fixed_iterable_fold() {
     // A by-value `data_class` returned as `Option<Vec<T>>` (perftest's
     // `storage_get_vec` contract) synthesizes a FIXED-BUILDER fold wrapped in

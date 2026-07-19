@@ -190,6 +190,25 @@ pub fn summary_scaled(s: &Summary, factor: f64) -> f64 {
     s.total * factor
 }
 
+/// A series of `count` summaries starting at `start`: element `i` is
+/// `(start + i, (start + i) * 10.0)`. A **record-built iterable fold** at the
+/// boundary: the caller supplies the accumulator and a per-element `fold`
+/// lambda receiving the decomposed `(count, total)` leaves.
+#[prebindgen]
+pub fn summary_series(count: i64, start: i64) -> Vec<Summary> {
+    (0..count)
+        .map(|i| summary_new(start + i, ((start + i) * 10) as f64))
+        .collect()
+}
+
+/// Like [`summary_series`] but `None` when `count < 0` — the record-built
+/// `Optional(Iterable)` shape (#105): `None` skips the fold and the JVM
+/// wrapper returns null; `Some(vec![])` returns the untouched accumulator.
+#[prebindgen]
+pub fn summary_series_opt(count: i64, start: i64) -> Option<Vec<Summary>> {
+    (count >= 0).then(|| summary_series(count, start))
+}
+
 /// Summarize a storage (returns a `Summary`; the binding's **default
 /// flatten-output** turns it into `(count, total)` leaves).
 #[prebindgen]
@@ -721,6 +740,18 @@ mod tests {
         assert!(storage_shards(0, 2).is_empty());
         assert!(storage_shards_opt(0, 2).is_none());
         assert_eq!(storage_shards_opt(2, 1).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn summary_series_shapes() {
+        let s = summary_series(3, 10);
+        assert_eq!(s.len(), 3);
+        assert_eq!(summary_count(&s[2]), 12);
+        assert_eq!(summary_total(&s[2]), 120.0);
+        assert!(summary_series(0, 5).is_empty());
+        assert!(summary_series_opt(-1, 0).is_none());
+        assert!(summary_series_opt(0, 0).unwrap().is_empty());
+        assert_eq!(summary_series_opt(2, 1).unwrap().len(), 2);
     }
 
     #[test]

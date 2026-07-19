@@ -451,3 +451,89 @@ fn cross_artifact_flatten_vec_callback_builder_agree() {
     let (rust, kotlin) = run_pipeline("jnigen_xart_shapes", items, jni);
     assert_cross_artifact(&rust, &kotlin);
 }
+
+/// Record-built `Iterable` folds, bare AND `Optional`-wrapped (issue #105):
+/// a `Vec<ZThing>` and an `Option<Vec<ZThing>>` return, both decomposed via
+/// the same `expand_return!`. The extern must take the fold pair
+/// (`__acc`/`__fold` ↔ `acc: Any?`/`fold: Any`) for BOTH shapes, and the
+/// wrapper surface must be the generic fold — `<A>(…, acc: A, fold:
+/// ZThingFolder<A>)` returning `A` (bare) / `A?` (`None` ⇒ null, the fold
+/// never invoked).
+#[test]
+fn cross_artifact_optional_iterable_fold_agrees() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_thing_name(this_: &ZThing) -> String {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_things_all() -> Vec<ZThing> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn z_things_maybe() -> Option<Vec<ZThing>> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!("thing")
+                .class(crate::ptr_class!(ZThing).method(crate::fun!(z_thing_name).name("name")))
+                .fun(crate::fun!(z_things_all))
+                .fun(crate::fun!(z_things_maybe)),
+        )
+        .expand(
+            crate::expand_return!(ZThing)
+                .field_self()
+                .field(crate::fun!(z_thing_name)),
+        );
+    let (rust, kotlin) = run_pipeline("jnigen_xart_opt_fold", items, jni);
+    assert_cross_artifact(&rust, &kotlin);
+
+    // Both externs take the fold pair on the Rust side…
+    let rc: String = rust.chars().filter(|c| !c.is_whitespace()).collect();
+    for sym in ["zThingsAll", "zThingsMaybe"] {
+        assert!(
+            rc.contains(&format!(
+                "{sym}<'a>(mutenv:jni::JNIEnv<'a>,_class:jni::objects::JClass<'a>,\
+                 __acc:jni::objects::JObject<'a>,__fold:jni::objects::JObject<'a>,"
+            )),
+            "extern `{sym}` takes the (__acc, __fold) pair:\n{rust}"
+        );
+    }
+    // …and the Kotlin wrapper surface is the generic fold on both, returning
+    // `A` for the bare shape and `A?` for the `Optional`-wrapped one.
+    let wrappers = kotlin
+        .values()
+        .find(|src| src.contains("fun <A> zThingsAll"))
+        .expect("a generated file declares the fold wrappers");
+    let kc: String = wrappers.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(
+        kc.contains("fun<A>zThingsAll(acc:A,onError:JniErrorHandler<A>,fold:ZThingFolder<A>):A{"),
+        "bare fold wrapper surface:\n{wrappers}"
+    );
+    assert!(
+        kc.contains(
+            "fun<A>zThingsMaybe(acc:A,onError:JniErrorHandler<A?>,fold:ZThingFolder<A>):A?{"
+        ),
+        "optional fold wrapper surface (returns A?, null = None):\n{wrappers}"
+    );
+    assert!(
+        kc.contains("JNINative.zThingsMaybe(acc,fold.asRaw(),__cap)asA?"),
+        "optional fold call site casts the erased result to A?:\n{wrappers}"
+    );
+}
