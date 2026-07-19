@@ -17,12 +17,11 @@ object = { version = "0.36", default-features = false, features = ["read", "std"
 syn = { workspace = true }
 quote = { workspace = true }
 toml = { workspace = true }
-# Version (crates.io) dependency, NOT a path/workspace dep, so a downstream
-# consumer's `[patch.crates-io]` (added by `cargo prebindgen-project-root install`)
-# can redirect it to the consumer's own in-workspace copy — which is how this
-# crate learns the *destination* project's root. Within this workspace the
-# top-level `[patch.crates-io]` supplies the local copy.
-prebindgen-project-root = "0.5"
+# This crate must be patched into the destination workspace by
+# `cargo workspace-root-patch install`, so it can discover the destination
+# project's root at build time. Pin the helper's source while the C proof of
+# concept remains outside the normal release set.
+workspace-root-patch = { git = "https://github.com/milyin/workspace-root-patch", rev = "4d4c8a5" }
 anyhow = "1"
 
 [dev-dependencies]

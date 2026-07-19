@@ -58,8 +58,8 @@ impl OpaqueType {
 ///
 /// Sensible defaults for the `build.rs` use case: `build_dir` =
 /// `$OUT_DIR/opaque_probe`, `cargo_lock` = the destination workspace's `Cargo.lock`
-/// (via [`prebindgen-project-root`]; the consumer must run
-/// `cargo prebindgen-project-root install`), default features on. Typical use:
+/// (via [`workspace-root-patch`]; the consumer must run
+/// `cargo workspace-root-patch install`), default features on. Typical use:
 ///
 /// ```ignore
 /// let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
@@ -73,7 +73,7 @@ pub struct OpaqueTypes {
     features: Vec<String>,
     no_default_features: bool,
     types: Vec<OpaqueType>,
-    cargo_lock: PathBuf,
+    cargo_lock: Option<PathBuf>,
     build_dir: Option<PathBuf>,
 }
 
@@ -88,7 +88,7 @@ impl OpaqueTypes {
             features: Vec::new(),
             no_default_features: false,
             types: Vec::new(),
-            cargo_lock: default_cargo_lock(),
+            cargo_lock: None,
             build_dir,
         }
     }
@@ -127,9 +127,9 @@ impl OpaqueTypes {
     }
 
     /// Override the `Cargo.lock` copied into the probe crate (default: the
-    /// destination workspace's lock, located via [`prebindgen-project-root`]).
+    /// destination workspace's lock, located via [`workspace-root-patch`]).
     pub fn cargo_lock(mut self, path: impl Into<PathBuf>) -> Self {
-        self.cargo_lock = path.into();
+        self.cargo_lock = Some(path.into());
         self
     }
 
@@ -220,15 +220,15 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
 /// The **destination project's** `Cargo.lock`, so the probe resolves dependencies
 /// identically to the cdylib build.
 ///
-/// The workspace root comes from [`prebindgen_project_root::get_project_root`] —
+/// The workspace root comes from [`workspace_root_patch::get_project_root`] —
 /// correct even for a consumer installed from crates.io, because
-/// `prebindgen-project-root` is patched into the *destination* workspace, so every
+/// `workspace-root-patch` is patched into the *destination* workspace, so every
 /// copy in the graph (including this library's dependency on it) resolves to that
 /// member copy and reports the destination root. The consumer must have run
-/// `cargo prebindgen-project-root install` (otherwise `get_project_root` panics
+/// `cargo workspace-root-patch install` (otherwise `get_project_root` panics
 /// with guidance — there is intentionally no silent fallback).
 fn default_cargo_lock() -> PathBuf {
-    prebindgen_project_root::get_project_root().join("Cargo.lock")
+    workspace_root_patch::get_project_root().join("Cargo.lock")
 }
 
 /// Read the `[package].name` of the crate whose manifest dir is `manifest_dir`.
@@ -283,8 +283,9 @@ fn write_probe_crate(b: &OpaqueTypes, build_dir: &Path) -> Result<()> {
     );
     std::fs::write(build_dir.join("Cargo.toml"), manifest)?;
     std::fs::write(src.join("lib.rs"), render_probe_lib(&b.types))?;
-    if b.cargo_lock.exists() {
-        let _ = std::fs::copy(&b.cargo_lock, build_dir.join("Cargo.lock"));
+    let cargo_lock = b.cargo_lock.clone().unwrap_or_else(default_cargo_lock);
+    if cargo_lock.exists() {
+        let _ = std::fs::copy(cargo_lock, build_dir.join("Cargo.lock"));
     }
     Ok(())
 }
