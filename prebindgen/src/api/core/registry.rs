@@ -28,46 +28,92 @@ use crate::{
     SourceLocation,
 };
 
-/// Canonical type-shape key — the `to_token_stream().to_string()` form of a
-/// `syn::Type`. Whitespace-normalised (`"Vec<u8>"` and `"Vec < u8 >"` produce
-/// the same key after parse-and-restringify).
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
-pub struct TypeKey(String);
+/// Canonical type-shape key: identity is the token string of the
+/// **normalized** type ([`crate::api::core::types_util::normalize_type`] —
+/// group/paren unwrap, `crate::`/`self::` and std-prelude path reduction;
+/// the complete equivalence rule set is documented there). The normalized
+/// parsed form is kept alongside the string, so [`Self::to_type`] is an
+/// infallible clone — no core invariant depends on serialize-then-reparse
+/// round trips (issue #95).
+#[derive(Clone)]
+pub struct TypeKey {
+    /// Canonical token string — the identity `Eq`/`Hash` compare.
+    canon: std::rc::Rc<str>,
+    /// The normalized parsed form the string was rendered from.
+    ty: std::rc::Rc<syn::Type>,
+}
+
+impl PartialEq for TypeKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.canon == other.canon
+    }
+}
+impl Eq for TypeKey {}
+impl std::hash::Hash for TypeKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.canon.hash(state)
+    }
+}
+// Keep the historical single-field tuple rendering (`TypeKey("Vec < u8 >")`)
+// — error text and test expectations format keys through it.
+impl fmt::Debug for TypeKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TypeKey").field(&&*self.canon).finish()
+    }
+}
+
+/// Structured failure of [`TypeKey::parse`]: the offending input plus the
+/// underlying `syn` parse error.
+#[derive(Debug)]
+pub struct TypeKeyParseError {
+    pub input: String,
+    pub error: syn::Error,
+}
+
+impl fmt::Display for TypeKeyParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid type `{}`: {}", self.input, self.error)
+    }
+}
+
+impl std::error::Error for TypeKeyParseError {}
 
 impl TypeKey {
-    /// Build a key by parsing the input as a type and re-serialising. Panics
-    /// if the input does not parse as a `syn::Type`.
-    pub fn parse(s: &str) -> Self {
-        let ty: syn::Type = syn::parse_str(s)
-            .unwrap_or_else(|e| panic!("TypeKey::parse: invalid type `{}`: {}", s, e));
-        Self::from_type(&ty)
+    /// Build a key by parsing the input as a type and normalizing.
+    pub fn parse(s: &str) -> Result<Self, TypeKeyParseError> {
+        let ty: syn::Type = syn::parse_str(s).map_err(|error| TypeKeyParseError {
+            input: s.to_string(),
+            error,
+        })?;
+        Ok(Self::from_type(&ty))
     }
 
-    /// Build a key directly from a `syn::Type`.
+    /// Build a key directly from a `syn::Type` (normalizing a clone; the
+    /// input is not modified).
     pub fn from_type(ty: &syn::Type) -> Self {
-        Self(ty.to_token_stream().to_string())
+        let mut t = ty.clone();
+        crate::api::core::types_util::normalize_type(&mut t, &[]);
+        Self {
+            canon: t.to_token_stream().to_string().into(),
+            ty: std::rc::Rc::new(t),
+        }
     }
 
     /// The canonical string form.
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.canon
     }
 
-    /// Parse the key back into a `syn::Type`. Always succeeds because the
-    /// key was originally constructed from a parseable type.
+    /// The normalized parsed form. Infallible — a clone of the stored type,
+    /// never a reparse.
     pub fn to_type(&self) -> syn::Type {
-        syn::parse_str(&self.0).unwrap_or_else(|e| {
-            panic!(
-                "TypeKey::to_type: stored key `{}` no longer parses: {}",
-                self.0, e
-            )
-        })
+        (*self.ty).clone()
     }
 }
 
 impl fmt::Display for TypeKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.canon)
     }
 }
 
@@ -319,6 +365,16 @@ pub enum ScanError {
     DeclaredNotFound {
         entries: Vec<(&'static str, String)>,
     },
+    /// Declared type keys that qualify a source item with its crate path
+    /// (`ptr_class!(myflat::Foo)` where `myflat` is a chained source crate).
+    /// Source items live in one flat namespace and are keyed by their bare
+    /// name — the qualified spelling can never match a captured signature,
+    /// so it is a hard error with a fix-it instead of a silent miss (issue
+    /// #95). All offenders are collected before failing.
+    QualifiedDeclaredTypes {
+        /// `(qualified spelling, bare fix-it name)` pairs.
+        entries: Vec<(String, String)>,
+    },
 }
 
 impl fmt::Display for ScanError {
@@ -375,6 +431,21 @@ impl fmt::Display for ScanError {
                     f,
                     "a declaration names an item that does not exist — typo in build.rs, \
                      or renamed/removed in the source crate?"
+                )
+            }
+            ScanError::QualifiedDeclaredTypes { entries } => {
+                writeln!(
+                    f,
+                    "{} declared type(s) qualify a source item with its crate path:",
+                    entries.len()
+                )?;
+                for (spelled, bare) in entries {
+                    writeln!(f, "  - `{spelled}` — declare it as `{bare}`")?;
+                }
+                write!(
+                    f,
+                    "source items live in one flat namespace keyed by their bare name; \
+                     a crate-qualified spelling never matches captured signatures"
                 )
             }
         }
@@ -546,14 +617,28 @@ impl<M> Registry<M> {
         I: IntoIterator<Item = (syn::Item, SourceLocation)>,
     {
         let mut registry = Registry::default();
-        for (item, loc) in items {
-            let crate_name = loc.crate_name.clone();
-            if let Some(crate_name) = &crate_name {
+        // Pass 1: collect and gather EVERY source module name first, so
+        // cross-source type references (`source_a::TypeA` in a later-chained
+        // source's signature) normalize order-independently in pass 2.
+        let items: Vec<(syn::Item, SourceLocation)> = items.into_iter().collect();
+        for (_, loc) in &items {
+            if let Some(crate_name) = &loc.crate_name {
                 let module = crate_name.replace('-', "_");
                 if !registry.source_modules.contains(&module) {
                     registry.source_modules.push(module);
                 }
             }
+        }
+        // Pass 2: normalize each item's types to the canonical flat spelling
+        // (`crate::`/source-module paths reduce to the bare indexed name —
+        // see `normalize_type`'s rule list), then index. Every downstream
+        // `TypeKey::from_type` over a signature type therefore sees the
+        // normalized form, so bare adapter declarations match qualified
+        // captured spellings (issue #95).
+        let modules = registry.source_modules.clone();
+        for (mut item, loc) in items {
+            crate::api::core::types_util::normalize_item_types(&mut item, &modules);
+            let crate_name = loc.crate_name.clone();
             let named: Option<syn::Ident> = match &item {
                 syn::Item::Fn(f) => Some(f.sig.ident.clone()),
                 syn::Item::Struct(s) => Some(s.ident.clone()),
@@ -640,6 +725,60 @@ impl<M> Registry<M> {
     }
 
     fn scan_declared_items(&mut self, declared: &DeclaredItems) -> Result<(), ScanError> {
+        // Source-qualified declared types are a hard error (issue #95). The
+        // key's own normalization already reduced `crate::`/`self::` and std
+        // prelude spellings, so a remaining multi-segment declared path
+        // either qualifies a SOURCE item with its crate name (can never
+        // match — the flat namespace keys are bare) or names a genuinely
+        // foreign type (supported verbatim; warned about below only when it
+        // shadows a captured item's name — the likely-mistake heuristic).
+        let mut qualified: Vec<(String, String)> = Vec::new();
+        let mut probed: HashSet<&TypeKey> = HashSet::new();
+        for key in declared
+            .types
+            .iter()
+            .chain(declared.ignored_types.iter())
+            .chain(declared.boundary_only_types.iter())
+        {
+            if !probed.insert(key) {
+                continue;
+            }
+            let ty = key.to_type();
+            // Peel one reference level; the qualified head only appears on
+            // path types.
+            let inner = match &ty {
+                syn::Type::Reference(r) => &*r.elem,
+                other => other,
+            };
+            let syn::Type::Path(tp) = inner else { continue };
+            if tp.qself.is_some() || tp.path.segments.len() < 2 {
+                continue;
+            }
+            let head = tp
+                .path
+                .segments
+                .first()
+                .expect("len checked")
+                .ident
+                .to_string();
+            let last = tp.path.segments.last().expect("len checked");
+            if self.source_modules.contains(&head) {
+                qualified.push((key.to_string(), last.to_token_stream().to_string()));
+            } else if self.structs.contains_key(&last.ident) || self.enums.contains_key(&last.ident)
+            {
+                println!(
+                    "cargo:warning=prebindgen: declared type `{}` is path-qualified, but a \
+                     captured #[prebindgen] item `{}` exists — if you meant the source item, \
+                     declare it by its bare name",
+                    key, last.ident
+                );
+            }
+        }
+        if !qualified.is_empty() {
+            qualified.sort();
+            return Err(ScanError::QualifiedDeclaredTypes { entries: qualified });
+        }
+
         // Declared-but-missing items are collected across all three loops and
         // reported together as one hard error (see
         // [`ScanError::DeclaredNotFound`]); stale *ignore* entries below only
@@ -783,7 +922,7 @@ impl<M> Registry<M> {
         };
         for ident in self.structs.keys().chain(self.enums.keys()) {
             let name = ident.to_string();
-            let key = TypeKey::parse(&name);
+            let key = TypeKey::parse(&name).expect("item idents parse as types");
             if !type_acknowledged(&key) && !pred_ignored(&name) {
                 skipped_types.push(name);
             }

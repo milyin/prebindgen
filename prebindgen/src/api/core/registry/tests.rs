@@ -119,10 +119,18 @@ fn scan_declared_marks_types_required_only_for_declared_fns() {
     let mut ext = StubExt::default();
     ext.functions.insert(syn::parse_str("a").unwrap());
     reg.scan_declared(&ext).unwrap();
-    assert!(reg.required_inputs_scan.contains(&TypeKey::parse("u64")));
-    assert!(reg.required_outputs_scan.contains(&TypeKey::parse("u64")));
-    assert!(!reg.required_inputs_scan.contains(&TypeKey::parse("u32")));
-    assert!(!reg.required_outputs_scan.contains(&TypeKey::parse("u32")));
+    assert!(reg
+        .required_inputs_scan
+        .contains(&TypeKey::parse("u64").expect("test type")));
+    assert!(reg
+        .required_outputs_scan
+        .contains(&TypeKey::parse("u64").expect("test type")));
+    assert!(!reg
+        .required_inputs_scan
+        .contains(&TypeKey::parse("u32").expect("test type")));
+    assert!(!reg
+        .required_outputs_scan
+        .contains(&TypeKey::parse("u32").expect("test type")));
 }
 
 #[test]
@@ -163,7 +171,7 @@ fn scan_declared_rejects_type_declared_and_ignored_overlap() {
     let item: syn::ItemStruct = syn::parse_str("struct Thing { value: u64 }").unwrap();
     let items = vec![(syn::Item::Struct(item), SourceLocation::default())];
     let mut reg: Registry<()> = Registry::from_items(items).unwrap();
-    let key = TypeKey::parse("Thing");
+    let key = TypeKey::parse("Thing").expect("test type");
     let mut ext = StubExt::default();
     ext.types.insert(key.clone());
     ext.ignored_types.insert(key.clone());
@@ -292,7 +300,10 @@ fn type_entry_helpers_expose_converter_chain_contract() {
                 metadata: (),
             },
         ],
-        subs: vec![TypeKey::parse("Rust"), TypeKey::parse("Mid")],
+        subs: vec![
+            TypeKey::parse("Rust").expect("test type"),
+            TypeKey::parse("Mid").expect("test type"),
+        ],
         required: true,
         niches: Niches::empty(),
         metadata: (),
@@ -301,7 +312,7 @@ fn type_entry_helpers_expose_converter_chain_contract() {
     assert_eq!(entry.converter_ident(), "__wire");
     assert_eq!(
         TypeKey::from_type(entry.wire_type()),
-        TypeKey::parse("jni::sys::jlong")
+        TypeKey::parse("jni::sys::jlong").expect("test type")
     );
     assert_eq!(
         entry
@@ -448,4 +459,155 @@ fn resolve_surfaces_adapter_invariant_errors() {
         .expect_err("validate Err must abort resolve");
     let msg = format!("{err}");
     assert!(msg.contains("member fun `f` has no receiver"), "{msg}");
+}
+
+// ── issue #95: semantic type identity ───────────────────────────────────
+
+/// A source-crate-stamped location, the way `Source` stamps parsed records.
+fn crate_loc(name: &str) -> SourceLocation {
+    SourceLocation {
+        crate_name: Some(name.to_string()),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn typekey_equivalence_rules() {
+    let k = |s: &str| TypeKey::parse(s).expect("test type");
+    // Group/paren unwrap + whitespace.
+    assert_eq!(k("Foo"), k("(Foo)"));
+    assert_eq!(k("Vec<u8>"), k("Vec < u8 >"));
+    // `crate::` / `self::` reduce to the bare flat name, at any depth and
+    // in nested positions.
+    assert_eq!(k("Foo"), k("crate::Foo"));
+    assert_eq!(k("Foo"), k("crate::a::b::Foo"));
+    assert_eq!(k("Foo"), k("self::Foo"));
+    assert_eq!(k("Option<Foo>"), k("Option<crate::a::Foo>"));
+    assert_eq!(k("&Foo"), k("&crate::Foo"));
+    // The std prelude whitelist.
+    assert_eq!(k("Vec<Foo>"), k("std::vec::Vec<crate::Foo>"));
+    assert_eq!(k("Option<i32>"), k("core::option::Option<i32>"));
+    assert_eq!(k("Result<Foo, Bar>"), k("std::result::Result<Foo, Bar>"));
+    assert_eq!(k("String"), k("std::string::String"));
+    assert_eq!(k("Box<Foo>"), k("alloc::boxed::Box<Foo>"));
+    // Distinctness: unknown crate heads and non-whitelisted std paths keep
+    // their spelling; lifetimes are structure, not spelling.
+    assert_ne!(k("a::Foo"), k("b::Foo"));
+    assert_ne!(k("a::Foo"), k("Foo"));
+    assert_ne!(k("std::ffi::CString"), k("CString"));
+    assert_ne!(k("&Foo"), k("&'a Foo"));
+    assert_ne!(k("Foo<'static>"), k("Foo"));
+    // Idempotence: re-keying a key's own type or string is the identity.
+    let once = k("std::vec::Vec<crate::m::Foo>");
+    assert_eq!(once, TypeKey::from_type(&once.to_type()));
+    assert_eq!(once, k(once.as_str()));
+    assert_eq!(once.as_str(), "Vec < Foo >");
+}
+
+#[test]
+fn typekey_parse_returns_structured_error() {
+    let err = TypeKey::parse("not a type !!").expect_err("must fail");
+    assert_eq!(err.input, "not a type !!");
+    assert!(err.to_string().contains("invalid type"), "{err}");
+}
+
+#[test]
+fn qualified_signature_matches_bare_declaration() {
+    // A captured signature may spell an indexed item with the source
+    // crate's own name or `crate::`; ingest normalizes both to the bare
+    // flat spelling, so bare-declared types and bare sub-positions match.
+    let f: syn::ItemFn =
+        syn::parse_str("fn get(x: &myflat::Thing) -> std::vec::Vec<crate::Thing> { todo!() }")
+            .unwrap();
+    let s: syn::ItemStruct = syn::parse_str("pub struct Thing { pub v: u64 }").unwrap();
+    let items = vec![
+        (syn::Item::Struct(s), crate_loc("myflat")),
+        (syn::Item::Fn(f), crate_loc("myflat")),
+    ];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("get").unwrap());
+    ext.types
+        .insert(TypeKey::parse("Thing").expect("test type"));
+    reg.scan_declared(&ext).unwrap();
+    assert!(reg
+        .required_inputs_scan
+        .contains(&TypeKey::parse("&Thing").expect("test type")));
+    assert!(reg
+        .required_outputs_scan
+        .contains(&TypeKey::parse("Vec<Thing>").expect("test type")));
+    // No spelling-variant duplicate cells survive anywhere.
+    let no_paths = |set: &HashSet<TypeKey>| !set.iter().any(|k| k.as_str().contains("::"));
+    assert!(no_paths(&reg.required_inputs_scan));
+    assert!(no_paths(&reg.required_outputs_scan));
+}
+
+#[test]
+fn multi_source_rename_cross_reference_normalizes() {
+    // Source B (a renamed dependency: crate `cov-helpers` = module
+    // `cov_helpers`) references source A's type by A's crate name. B's
+    // items are chained FIRST, so this also proves pass 1 gathers every
+    // module name before pass 2 normalizes (chain-order independence).
+    let b_fn: syn::ItemFn =
+        syn::parse_str("fn use_a(x: &srca::TypeA) -> cov_helpers::TypeB { todo!() }").unwrap();
+    let b_ty: syn::ItemStruct = syn::parse_str("pub struct TypeB { pub v: u64 }").unwrap();
+    let a_ty: syn::ItemStruct = syn::parse_str("pub struct TypeA { pub v: u64 }").unwrap();
+    let items = vec![
+        (syn::Item::Fn(b_fn), crate_loc("cov-helpers")),
+        (syn::Item::Struct(b_ty), crate_loc("cov-helpers")),
+        (syn::Item::Struct(a_ty), crate_loc("srca")),
+    ];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.functions.insert(syn::parse_str("use_a").unwrap());
+    ext.types
+        .insert(TypeKey::parse("TypeA").expect("test type"));
+    ext.types
+        .insert(TypeKey::parse("TypeB").expect("test type"));
+    reg.scan_declared(&ext).unwrap();
+    assert!(reg
+        .required_inputs_scan
+        .contains(&TypeKey::parse("&TypeA").expect("test type")));
+    assert!(reg
+        .required_outputs_scan
+        .contains(&TypeKey::parse("TypeB").expect("test type")));
+}
+
+#[test]
+fn qualified_declared_type_is_hard_error() {
+    // `ptr_class!(myflat::Thing)`-shaped declaration: the head names a
+    // chained source crate, so the key can never match the flat namespace —
+    // a collected hard error with the bare fix-it, not a silent miss.
+    let s: syn::ItemStruct = syn::parse_str("pub struct Thing { pub v: u64 }").unwrap();
+    let items = vec![(syn::Item::Struct(s), crate_loc("myflat"))];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    ext.types
+        .insert(TypeKey::parse("myflat::Thing").expect("test type"));
+    match reg.scan_declared(&ext) {
+        Err(ScanError::QualifiedDeclaredTypes { entries }) => {
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].0, "myflat :: Thing");
+            assert_eq!(entries[0].1, "Thing");
+            let msg = ScanError::QualifiedDeclaredTypes { entries }.to_string();
+            assert!(msg.contains("declare it as `Thing`"), "{msg}");
+        }
+        other => panic!("expected QualifiedDeclaredTypes, got {:?}", other),
+    }
+}
+
+#[test]
+fn foreign_qualified_declared_type_stays_supported() {
+    // `ptr_class!(zenoh::KeyExpr<'static>)`-style: the head is NOT a source
+    // module, so the declaration passes through verbatim and is marked
+    // required under its own spelling (the no-indexed-body arm).
+    let items = vec![fn_item("fn touch(x: u64) -> u64 { x }")];
+    let mut reg: Registry<()> = Registry::from_items(items).unwrap();
+    let mut ext = StubExt::default();
+    let foreign = TypeKey::parse("zenoh::KeyExpr<'static>").expect("test type");
+    ext.types.insert(foreign.clone());
+    reg.scan_declared(&ext)
+        .expect("foreign qualified declaration is supported");
+    assert!(reg.required_inputs_scan.contains(&foreign));
+    assert!(reg.required_outputs_scan.contains(&foreign));
 }

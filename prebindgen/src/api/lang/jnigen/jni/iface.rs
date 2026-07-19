@@ -863,7 +863,11 @@ fn derive_iface_spec(
         SpecKey::Callback(arg_keys) => {
             let args: Vec<syn::Type> = arg_keys
                 .iter()
-                .map(|k| TypeKey::parse(k).to_type())
+                .map(|k| {
+                    TypeKey::parse(k)
+                        .expect("SpecKey stores canonical type strings")
+                        .to_type()
+                })
                 .collect();
             callback_iface_spec(ext, registry, &args)
         }
@@ -875,9 +879,13 @@ fn derive_iface_spec(
             }
             Some(spec)
         }
-        SpecKey::WholeFolder(el_key) => {
-            whole_folder_iface_spec(ext, registry, &TypeKey::parse(el_key).to_type())
-        }
+        SpecKey::WholeFolder(el_key) => whole_folder_iface_spec(
+            ext,
+            registry,
+            &TypeKey::parse(el_key)
+                .expect("SpecKey stores canonical type strings")
+                .to_type(),
+        ),
         SpecKey::Handler(d) => error_handler_iface_spec(ext, registry, d),
         SpecKey::JniErrorHandler => Some(jni_error_handler_iface_spec(ext)),
     }

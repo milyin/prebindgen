@@ -156,7 +156,7 @@ pub(crate) fn option_inner_ref_mutability(ty: &syn::Type) -> Option<bool> {
 /// value class but the projection still resolves the leaf — so the wrapper
 /// knows which inline field to unwrap (`<name>.bytes`).
 pub(crate) fn value_projection_field_for_leaf(ext: &JniGen, leaf_key: &str) -> Option<String> {
-    let key = TypeKey::parse(leaf_key);
+    let key = TypeKey::parse(leaf_key).expect("leaf keys are stored canonical type strings");
     let cfg = ext.types.get(&key)?;
     if cfg.value_blob {
         return Some("bytes".to_string());

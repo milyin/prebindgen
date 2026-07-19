@@ -196,3 +196,30 @@ fn manglers_generate_all_names() {
     // Return handle rides the return.
     assert!(compact.contains("->*mutz_subscriber_t"), "{src}");
 }
+
+/// Issue #95: a signature spelled with the source crate's own name matches
+/// the bare `opaque_ptr` declaration — ingest normalizes the spelling, and
+/// emission re-qualifies through `.source_module` as before.
+#[test]
+fn qualified_signature_spelling_matches_bare_opaque_ptr() {
+    let loc = SourceLocation {
+        crate_name: Some("zenoh-flat".to_string()),
+        ..Default::default()
+    };
+    let func: syn::ItemFn = syn::parse_quote!(
+        pub fn z_keyexpr_len(k: &zenoh_flat::ZKeyExpr) -> i64 {
+            unimplemented!()
+        }
+    );
+    let reg =
+        Registry::<()>::from_items([(syn::Item::Fn(func), loc.clone())]).expect("index items");
+    let cb = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .opaque_ptr(syn::parse_quote!(ZKeyExpr))
+        .function(syn::parse_quote!(z_keyexpr_len))
+        .panic();
+    let src = write(cb, reg, "q95");
+    let compact: String = src.split_whitespace().collect();
+    assert!(compact.contains("extern\"C\"fnz_keyexpr_len("), "{src}");
+    assert!(compact.contains("zenoh_flat::z_keyexpr_len("), "{src}");
+}

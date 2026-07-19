@@ -62,7 +62,8 @@ fn install_input(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    reg.input_types.insert(TypeKey::parse(ty_str), Some(e));
+    reg.input_types
+        .insert(TypeKey::parse(ty_str).expect("test type"), Some(e));
 }
 
 fn install_output(
@@ -71,5 +72,6 @@ fn install_output(
     _rank: usize,
     e: TypeEntry<KotlinMeta>,
 ) {
-    reg.output_types.insert(TypeKey::parse(ty_str), Some(e));
+    reg.output_types
+        .insert(TypeKey::parse(ty_str).expect("test type"), Some(e));
 }

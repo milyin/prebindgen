@@ -96,14 +96,22 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
         "on_struct",
         sorted_items_by_ident(&registry.structs)
             .into_iter()
-            .filter(|(ident, _)| declared_types.contains(&TypeKey::parse(&ident.to_string())))
+            .filter(|(ident, _)| {
+                declared_types.contains(
+                    &TypeKey::parse(&ident.to_string()).expect("item idents parse as types"),
+                )
+            })
             .map(|(_, (item, _))| ext.on_struct(item, registry)),
     )?);
     items.extend(parse_items_from_tokens(
         "on_enum",
         sorted_items_by_ident(&registry.enums)
             .into_iter()
-            .filter(|(ident, _)| declared_types.contains(&TypeKey::parse(&ident.to_string())))
+            .filter(|(ident, _)| {
+                declared_types.contains(
+                    &TypeKey::parse(&ident.to_string()).expect("item idents parse as types"),
+                )
+            })
             .map(|(_, (item, _))| ext.on_enum(item, registry)),
     )?);
     // Consts: an adapter WITH a const declaration mechanism
