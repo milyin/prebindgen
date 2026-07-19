@@ -220,7 +220,7 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
 /// The **destination project's** `Cargo.lock`, so the probe resolves dependencies
 /// identically to the cdylib build.
 ///
-/// The workspace root comes from [`workspace_root::get_workspace_root`] —
+/// The workspace root comes from [`workspace_root_patch::get_project_root`] —
 /// correct even for a consumer installed from crates.io, because
 /// `workspace-root-patch` is patched into the *destination* workspace, so every
 /// copy in the graph (including this library's dependency on it) resolves to that
@@ -228,7 +228,7 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
 /// `cargo workspace-root-patch install` (otherwise `get_project_root` panics
 /// with guidance — there is intentionally no silent fallback).
 fn default_cargo_lock() -> PathBuf {
-    workspace_root::get_workspace_root().join("Cargo.lock")
+    workspace_root_patch::get_project_root().join("Cargo.lock")
 }
 
 /// Read the `[package].name` of the crate whose manifest dir is `manifest_dir`.
