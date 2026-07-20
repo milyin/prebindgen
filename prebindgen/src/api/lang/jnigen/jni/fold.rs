@@ -359,26 +359,28 @@ pub(crate) fn fold_projection_wrap(
 /// [`NullableKind`] so the declared wire matches the runtime ABI:
 /// `Niche+primitive` keeps the layer non-nullable on the wire (the sentinel
 /// represents null); `Niche+object` and `Boxed` add `?`.
-pub(crate) fn projection_wire_return(proj: &crate::api::lang::jnigen::jni::Projection) -> String {
+pub(crate) fn projection_wire_return(
+    proj: &crate::api::lang::jnigen::jni::Projection,
+) -> kt::KtType {
     use crate::api::lang::jnigen::jni::{FoldStrategy, NullableKind, ProjectionKind};
-    let (inner_wire_name, inner_is_primitive) = match proj.kind {
-        ProjectionKind::Handle => ("Long".to_string(), true),
+    let (inner_wire, inner_is_primitive) = match proj.kind {
+        ProjectionKind::Handle => (kt::KtType::long(), true),
         // Value-blob's inner wire is always `ByteArray` (object-shaped).
-        ProjectionKind::ValueBlob => ("ByteArray".to_string(), false),
+        ProjectionKind::ValueBlob => (kt::KtType::byte_array(), false),
     };
     fold_shape(
         &proj.strategy,
-        &|| inner_wire_name.clone(),
-        &|inner_str, kind, inner_strategy| {
+        &|| inner_wire.clone(),
+        &|inner, kind, inner_strategy| {
             // A niche layer over a primitive wire keeps the wire non-nullable —
             // the sentinel value is the null representation. Object-wired niches
             // and full-boxed Nullables both add `?` (JVM null on the reference).
             match (kind, inner_strategy) {
-                (NullableKind::Niche, FoldStrategy::Base) if inner_is_primitive => inner_str,
-                _ => format!("{inner_str}?"),
+                (NullableKind::Niche, FoldStrategy::Base) if inner_is_primitive => inner,
+                _ => inner.nullable(),
             }
         },
-        &|inner| format!("List<{inner}>"),
+        &|inner| kt::KtType::generic("List", [inner]),
     )
 }
 

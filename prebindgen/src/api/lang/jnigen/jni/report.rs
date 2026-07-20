@@ -266,6 +266,9 @@ impl JniGen {
 /// `fun <generics> name(params): ret` off the public [`kt::KtFun`] fields —
 /// the signature only, no body/annotations (they are emission detail).
 fn signature(f: &kt::KtFun) -> String {
+    // The surface carries full-FQN types; render them through a throwaway
+    // `ImportSet` so the report shows short names (the imports are discarded).
+    let mut imports = kt::ImportSet::new("");
     let generics = if f.generics.is_empty() {
         String::new()
     } else {
@@ -274,10 +277,10 @@ fn signature(f: &kt::KtFun) -> String {
     let params: Vec<String> = f
         .params
         .iter()
-        .map(|p| format!("{}: {}", p.name, p.ty))
+        .map(|p| format!("{}: {}", p.name, p.ty.render(&mut imports)))
         .collect();
     let ret = match &f.ret {
-        Some(t) => format!(": {t}"),
+        Some(t) => format!(": {}", t.render(&mut imports)),
         None => String::new(),
     };
     format!("fun {generics}{}({}){ret}", f.name, params.join(", "))

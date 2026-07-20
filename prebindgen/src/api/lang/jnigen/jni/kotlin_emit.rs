@@ -1165,8 +1165,10 @@ impl JniGen {
         let class_name = self.jni_native_class_name();
         let declared = self.declared_functions();
 
-        let mut imports: BTreeSet<String> = BTreeSet::new();
-        let mut externs = Code::new();
+        // Each extern is a `KtFun` member of the object; the AST renderer
+        // shortens types, collects imports, and wraps long signatures (no
+        // derivation-time import set).
+        let mut externs: Vec<kt::KtFun> = Vec::new();
         let mut idents: Vec<&syn::Ident> = registry.functions.keys().collect();
         idents.sort();
         for ident in idents {
@@ -1174,8 +1176,8 @@ impl JniGen {
                 continue;
             }
             let (item_fn, _loc) = &registry.functions[ident];
-            if let Some(code) = render_extern_decl(self, item_fn, registry, &mut imports) {
-                externs = externs.push(code);
+            if let Some(fun) = render_extern_decl(self, item_fn, registry) {
+                externs.push(fun);
             }
         }
 
@@ -1194,8 +1196,8 @@ impl JniGen {
                 continue; // missing decl already warned by the scan
             };
             let getter = crate::api::lang::jnigen::jni::const_getter_fn(item_const);
-            if let Some(code) = render_extern_decl(self, &getter, registry, &mut imports) {
-                externs = externs.push(code);
+            if let Some(fun) = render_extern_decl(self, &getter, registry) {
+                externs.push(fun);
             }
         }
 
@@ -1209,8 +1211,8 @@ impl JniGen {
         expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
         for decl in expr_decls {
             let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
-            if let Some(code) = render_extern_decl(self, &getter, registry, &mut imports) {
-                externs = externs.push(code);
+            if let Some(fun) = render_extern_decl(self, &getter, registry) {
+                externs.push(fun);
             }
         }
 
@@ -1229,15 +1231,29 @@ impl JniGen {
                 crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Push");
             let free_m =
                 crate::api::lang::jnigen::jni::vec_helper_method_name(self, &h.base, "Free");
-            let mut push_params = vec!["handle: Long".to_string()];
+            // `New(cap: Int): Long`, `Push(handle: Long, <leaves…>)`,
+            // `Free(handle: Long)`.
+            externs.push(
+                kt::KtFun::new(new_m)
+                    .modifier("external")
+                    .param(kt::KtParam::new("cap", kt::KtType::int()))
+                    .returns(kt::KtType::long()),
+            );
+            let mut push = kt::KtFun::new(push_m)
+                .modifier("external")
+                .param(kt::KtParam::new("handle", kt::KtType::long()));
             for leaf in h.plan.leaves.iter().filter(|l| !l.is_present_flag) {
-                let short = register_fqn(&leaf.kt_wire_ty, &mut imports);
-                push_params.push(format!("{}: {}", leaf.kt_name, short));
+                push = push.param(kt::KtParam::new(
+                    leaf.kt_name.clone(),
+                    kt::KtType::cls(leaf.kt_wire_ty.clone()),
+                ));
             }
-            externs = externs
-                .line(format!("external fun {new_m}(cap: Int): Long"))
-                .line(format!("external fun {push_m}({})", push_params.join(", ")))
-                .line(format!("external fun {free_m}(handle: Long)"));
+            externs.push(push);
+            externs.push(
+                kt::KtFun::new(free_m)
+                    .modifier("external")
+                    .param(kt::KtParam::new("handle", kt::KtType::long())),
+            );
         }
 
         let mut obj = KtClass::object_(class_name).vis(Vis::Internal);
@@ -1252,13 +1268,12 @@ impl JniGen {
                     .line("}"),
             });
         }
-        // One compact run of `external fun` lines (no blank lines between
-        // them), kept as a single raw member.
-        obj = obj.member(kt::KtDecl::Raw {
-            name: "externs".to_string(),
-            code: externs,
-        });
-        kt::KtFile::new(&self.package).decl(obj).imports(imports)
+        // Each `external fun` is an object member; the AST renderer collects
+        // their imports from the (full-FQN) parameter/return types.
+        for fun in externs {
+            obj = obj.member(fun);
+        }
+        kt::KtFile::new(&self.package).decl(obj)
     }
 
     /// Emit one Kotlin file per entry in `handles` — each becomes a

@@ -442,147 +442,125 @@ pub(crate) fn is_iterable_fold(shape: &crate::api::core::unfold::UnfoldShape) ->
     shape.has_iterable_layer()
 }
 
-/// Render one `external fun <mangle_method(package, JNINative, name)>(…): <wire-return>` line
-/// at the JNI **wire** level (matches what the Rust extern receives):
+/// The JNINative `external fun <method>(…): <wire-return>` for one bound
+/// function, as a `KtFun` (the AST renderer shortens types + collects imports
+/// + wraps long signatures uniformly). Wire level (matches the Rust extern):
 ///   * opaque-handle (Borrow/Consume) → jlong → `Long`
 ///   * `enum_class`                  → jint  → `Int` (call passes `.value`)
 ///   * `Any` (impl-Into Dispatch)     → JObject → `Any`
-///   * everything else                → entry's high-level Kotlin name
+///   * everything else                → the entry's high-level Kotlin type
 ///
-/// Opaque returns become `Long`; every other return uses
-/// [`classify_return`]'s `kt_return` (Unit is empty string).
-/// Returns `None` if any parameter's input converter isn't resolved.
+/// Opaque returns become `Long`; every other return uses [`classify_return`]'s
+/// `kt_return` (Unit is no return type). `None` if a param's converter isn't
+/// resolved. Full-FQN types throughout — no derivation-time shortening.
 pub(crate) fn render_extern_decl(
     ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
-    imports: &mut BTreeSet<String>,
-) -> Option<kt::Code> {
+) -> Option<kt::KtFun> {
     // The name and wire params come straight off the lowered plan — the
     // same classification the Rust extern and the Kotlin call site consume,
     // so the three sites agree on arity, types, and symbol by construction.
     let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
     let jni_call = &fplan.jni_method;
-    let mut params: Vec<(String, String)> = Vec::new();
+    let mut params: Vec<kt::KtParam> = Vec::new();
     for leaf in fplan.leaves() {
         let name = leaf.kt_name.clone();
         match &leaf.kind {
             // Flattenable data_class param → its leaf wire params.
             InputKind::FlattenStruct(plan) => {
                 for l in &plan.leaves {
-                    let short = register_fqn(&l.kt_wire_ty, imports);
-                    params.push((l.kt_name.clone(), short));
+                    params.push(kt::KtParam::new(
+                        l.kt_name.clone(),
+                        kt::KtType::cls(l.kt_wire_ty.clone()),
+                    ));
                 }
             }
             // Bare `Option<primitive>` / `Option<enum>` param → a `(present:
             // Boolean, value: <Prim>)` pair (no boxed `java.lang.*` wire).
             InputKind::OptionScalar(sp) => {
-                let pshort = register_fqn("Boolean", imports);
-                params.push((sp.present_kt.clone(), pshort));
-                let vshort = register_fqn(&sp.value_kt_type, imports);
-                params.push((sp.value_kt.clone(), vshort));
+                params.push(kt::KtParam::new(
+                    sp.present_kt.clone(),
+                    kt::KtType::boolean(),
+                ));
+                params.push(kt::KtParam::new(
+                    sp.value_kt.clone(),
+                    kt::KtType::cls(sp.value_kt_type.clone()),
+                ));
             }
             // Slice/Vec of a flattenable data_class → a single `jlong`
             // Vec-handle param (the Rust extern decodes the boxed `Vec<T>`).
-            // Elements cross through the synthetic `…VecPush` extern, not
-            // this one.
+            // Elements cross through the synthetic `…VecPush` extern.
             InputKind::VecBuild { .. } => {
-                let short = register_kt_type(&kt::KtType::long(), imports).to_string();
-                params.push((name, short));
+                params.push(kt::KtParam::new(name, kt::KtType::long()));
             }
             // An opaque-**handle** projection (direct `&T`/`T`, `Option<&T>`,
             // or by-value `Option<T>`) crosses the JNI wire as a primitive
-            // `jlong` with `0` encoding `None` — so the extern param is a
-            // non-null `Long`, and the `?` lives only on the typed-wrapper
-            // surface. (`value_blob` projections are NOT handles; they keep
-            // their erased wire and can be nullable.)
+            // `jlong` with `0` encoding `None` — a non-null `Long`; the `?`
+            // lives only on the typed-wrapper surface. (`value_blob`
+            // projections are NOT handles; they keep their erased wire.)
             InputKind::Handle { .. } => {
-                let short = register_kt_type(&kt::KtType::long(), imports).to_string();
-                params.push((name, short));
+                params.push(kt::KtParam::new(name, kt::KtType::long()));
             }
             InputKind::Callback { .. } | InputKind::ValueUnwrap { .. } | InputKind::Plain => {
-                let kt_type_raw = if leaf.as_enum_value {
+                let ty = if leaf.as_enum_value {
                     // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
                     // `Int`; the wrapper passes `.value` / `?.value`. The Rust
                     // converter unboxes a `java.lang.Integer`, so the extern
-                    // must declare `Int`/`Int?`, never the enum object.
+                    // declares `Int`/`Int?`, never the enum object.
                     kt::KtType::int()
                 } else {
                     leaf.kt_meta.clone()?
                 };
-                // The extern block is raw text — render the shortened type.
-                let short = register_kt_type(&kt_type_raw, imports).to_string();
-                let suffix = if leaf.optional { "?" } else { "" };
-                params.push((name, format!("{short}{suffix}")));
+                let ty = if leaf.optional { ty.nullable() } else { ty };
+                params.push(kt::KtParam::new(name, ty));
             }
         }
     }
-    // Output (data) expansion: a **callback** delivery (`deconstruct_output`)
-    // appends the lambda(s) before the error sink and returns the erased result
-    // (`Any?`). A **return** delivery (`convert_output`) appends nothing and
-    // returns the real converted wire (handled in `wire_return` below, keyed on
-    // the plan's `Value` classification over `convert_out_ty`).
+    // Output (data) expansion: a **callback** delivery appends the lambda(s)
+    // before the error sink and returns the erased `Any?`. A **return**
+    // delivery appends nothing and returns the real converted wire below.
     if let FnOutputPlan::Unfold(u) = &fplan.output {
         if u.iterable_fold {
             // `acc` is the unbounded accumulator `A` (may be nullable) → `Any?`;
             // `fold` is the non-null adapter callback.
-            params.push(("acc".to_string(), "Any?".to_string()));
-            params.push(("fold".to_string(), "Any".to_string()));
+            params.push(kt::KtParam::new("acc", kt::KtType::any().nullable()));
+            params.push(kt::KtParam::new("fold", kt::KtType::any()));
         } else {
-            params.push(("build".to_string(), "Any".to_string()));
+            params.push(kt::KtParam::new("build", kt::KtType::any()));
         }
     }
-    // Trailing error-sink callback — every extern accepts one (see
-    // `signal_error` / the wrapper's default sink). `Any` at the wire level
+    // Trailing error-sink callback — every extern accepts one. `Any` wire
     // (JObject); the wrapper passes an `ErrorSink` instance.
-    params.push(("errorSink".to_string(), "Any".to_string()));
+    params.push(kt::KtParam::new("errorSink", kt::KtType::any()));
 
-    let wire_return = match &fplan.output {
-        FnOutputPlan::Unfold(_) => "Any?".to_string(),
+    let wire_return: Option<kt::KtType> = match &fplan.output {
+        FnOutputPlan::Unfold(_) => Some(kt::KtType::any().nullable()),
         FnOutputPlan::Value(v) => {
             // The plan classified the declared surface once — `convert_out_ty`
             // for a `convert_output` (Return), else the function's own return.
-            let (kt_return, projection) = render_return_surface(&v.surface, imports)?;
-            // JNI extern's wire return: handle projections wire as `Long` (the
-            // boxed jlong gets wrapped); value-class projections wire as their
-            // inner converter's Kotlin type folded through the projection's
-            // strategy (the value class is erased to that inner). Enums wire as
-            // `Int` (`Int?` under `Option`); everything else is the declared
-            // return.
+            let (kt_return, projection) = render_return_surface(&v.surface)?;
+            // JNI extern's wire return: handle projections wire as `Long`;
+            // value-class projections wire as their inner converter's type
+            // folded through the projection strategy; enums wire as `Int`
+            // (`Int?` under `Option`); everything else is the declared return.
             match &projection {
-                Some(p) => projection_wire_return(p),
-                None if v.is_enum => "Int".to_string(),
-                None if v.is_option_enum => "Int?".to_string(),
-                None => kt_return.map(|t| t.to_string()).unwrap_or_default(),
+                Some(p) => Some(projection_wire_return(p)),
+                None if v.is_enum => Some(kt::KtType::int()),
+                None if v.is_option_enum => Some(kt::KtType::int().nullable()),
+                None => kt_return,
             }
         }
     };
 
-    let formals: Vec<String> = params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
-    let ret_suffix = if wire_return.is_empty() {
-        String::new()
-    } else {
-        format!(": {wire_return}")
-    };
-    let head = format!("external fun {jni_call}");
-    let single = format!("{head}({}){ret_suffix}", formals.join(", "));
-    // Externs render as members of `object JNINative` at one indent level
-    // (4 columns). Past the shared signature-width budget, wrap to one
-    // parameter per line — the same treatment the model renderer gives the
-    // public wrappers — so long native declarations stay readable.
-    const EXTERN_INDENT_COLS: usize = 4;
-    if !formals.is_empty() && EXTERN_INDENT_COLS + single.len() > kt::render::MAX_SIGNATURE_WIDTH {
-        let opener = format!("{head}(");
-        let closer = format!("){ret_suffix}");
-        Some(kt::Code::new().blk_with(opener, closer, move |mut c| {
-            for f in &formals {
-                c = c.line(format!("{f},"));
-            }
-            c
-        }))
-    } else {
-        Some(kt::Code::new().line(single))
+    let mut fun = kt::KtFun::new(jni_call).modifier("external");
+    for p in params {
+        fun = fun.param(p);
     }
+    if let Some(rt) = wire_return {
+        fun = fun.returns(rt);
+    }
+    Some(fun)
 }
 
 struct Param {
@@ -1136,8 +1114,15 @@ fn classify_params(
             InputKind::Callback { .. } => unreachable!("callback params handled above"),
         };
 
-        let ty = register_kt_type(&kt_type_raw, imports);
-        let kt_type = if leaf.optional { ty.nullable() } else { ty };
+        // Full-FQN surface type — the render-time `ImportSet` shortens it and
+        // collects the import from the AST (issue #89 follow-up: decouple the
+        // signature from the derivation-time import side-effect). No manual
+        // registration here.
+        let kt_type = if leaf.optional {
+            kt_type_raw.nullable()
+        } else {
+            kt_type_raw
+        };
         params.push(Param {
             kt_name: name,
             kt_type,
@@ -1189,7 +1174,7 @@ fn classify_output(
         // otherwise). No callback param, no generic, no extra call args; the
         // extern returns the real wire and `build_call` applies the
         // projection wrap (value_blob/handle) below.
-        render_return_surface(&v.surface, imports)?
+        render_return_surface(&v.surface)?
     } else if let (
         FnOutputPlan::Unfold(
             u @ UnfoldOutputPlan {
@@ -1797,7 +1782,6 @@ pub(crate) fn unfold_leaf_kt(
     out_ty: &syn::Type,
     nullable: bool,
     pk: &str,
-    imports: &mut BTreeSet<String>,
 ) -> Option<(kt::KtType, String, String, bool)> {
     let proj = registry
         .output_entry(out_ty)
@@ -1812,7 +1796,7 @@ pub(crate) fn unfold_leaf_kt(
         kt::KtType::int()
     } else {
         let rt: syn::ReturnType = syn::parse_quote!(-> #out_ty);
-        classify_return(ext, &rt, registry, imports)?.0?
+        classify_return(ext, &rt, registry)?.0?
     };
     let (mut wire_kt, wrap) = if is_vb {
         let p = proj.as_ref().unwrap();
@@ -1836,7 +1820,9 @@ pub(crate) fn unfold_leaf_kt(
         {
             wrap = format!("{pk}?.let {{ {short}(it) }}");
         }
-        (projection_wire_return(p), wrap)
+        // Raw-text wire for the callback/builder descriptor — `KtType`'s
+        // Display matches the historical string (`Long`/`ByteArray`/`List<…>`).
+        (projection_wire_return(p).to_string(), wrap)
     } else {
         (builder_kt.to_string(), pk.to_string())
     };
@@ -1946,24 +1932,22 @@ pub(crate) fn classify_return(
     ext: &JniGen,
     output: &syn::ReturnType,
     registry: &Registry<KotlinMeta>,
-    imports: &mut BTreeSet<String>,
 ) -> Option<(
     Option<kt::KtType>,
     Option<crate::api::lang::jnigen::jni::Projection>,
 )> {
     let (surface, _canonical) = ReturnSurface::classify(ext, registry, output);
-    render_return_surface(&surface, imports)
+    render_return_surface(&surface)
 }
 
-/// Map a classified [`ReturnSurface`] back to the historical
-/// `(kt_return, projection)` pair, registering/shortening the Kotlin names
-/// against `imports` at render time (the plan stores unshortened types, so
-/// import registration stays identical across all consumers). Panics on an
-/// unregistered projection FQN — the same Kotlin-render-time failure
-/// `classify_return` always had.
+/// Map a classified [`ReturnSurface`] to the `(kt_return, projection)` pair,
+/// with **full-FQN** Kotlin types — the render-time `ImportSet` shortens and
+/// collects imports from the AST uniformly (issue #89 follow-up: one import
+/// mechanism, no derivation-layer shortening). Panics on an unregistered
+/// projection FQN — the same Kotlin-render-time failure `classify_return`
+/// always had.
 pub(crate) fn render_return_surface(
     surface: &ReturnSurface,
-    imports: &mut BTreeSet<String>,
 ) -> Option<(
     Option<kt::KtType>,
     Option<crate::api::lang::jnigen::jni::Projection>,
@@ -1983,16 +1967,12 @@ pub(crate) fn render_return_surface(
                     projection.leaf_key
                 )
             });
-            let short = register_fqn(&fqn, imports);
             Some((
-                Some(handle_kt_type(
-                    &projection.strategy,
-                    &kt::KtType::cls(short),
-                )),
+                Some(handle_kt_type(&projection.strategy, &kt::KtType::cls(fqn))),
                 Some(projection.clone()),
             ))
         }
-        ReturnSurface::Plain { kt } => Some((Some(register_kt_type(kt, imports)), None)),
+        ReturnSurface::Plain { kt } => Some((Some(kt.clone()), None)),
     }
 }
 
