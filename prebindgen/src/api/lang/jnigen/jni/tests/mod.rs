@@ -30,6 +30,7 @@ mod cross_artifact;
 mod flatten;
 mod niches;
 mod snapshots;
+mod symbols;
 mod values;
 
 /// Build a `TypeEntry` for use in tests. The function body is not

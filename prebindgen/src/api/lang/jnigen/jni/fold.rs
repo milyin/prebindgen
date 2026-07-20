@@ -154,7 +154,7 @@ fn factory_from_plan(
     let mut parts: Vec<String> = Vec::new();
 
     for f in &plan.fields {
-        let camel = kt_snake_to_camel(&f.fname.to_string());
+        let camel = mangle_kotlin_ident(&kt_snake_to_camel(&f.fname.to_string()));
         let base = if prefix.is_empty() {
             camel.clone()
         } else {

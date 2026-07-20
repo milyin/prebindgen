@@ -20,7 +20,9 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
         crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
             .into_iter()
             .map(|(ident, value)| kt::KtEnumEntry {
-                name: crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()),
+                name: mangle_kotlin_ident(
+                    &crate::api::lang::jnigen::util::camel_to_screaming_snake(&ident.to_string()),
+                ),
                 args: Some(value.to_string()),
             })
             .collect();
@@ -88,7 +90,7 @@ pub(crate) fn build_data_class(
                 item_struct.ident
             )
         });
-        let kotlin_field_name = kt_snake_to_camel(&field_ident.to_string());
+        let kotlin_field_name = mangle_kotlin_ident(&kt_snake_to_camel(&field_ident.to_string()));
 
         // Projection field (opaque handle or value class): the typed Kotlin
         // type (`ZKeyExpr?`, `List<ZKeyExpr>`, `ZenohId`, `List<ZenohId>`, …)
@@ -1955,47 +1957,12 @@ pub(crate) fn kt_snake_to_camel(s: &str) -> String {
     out
 }
 
-/// Camel-case a Rust param ident into a valid Kotlin parameter name. Kotlin
-/// **hard keywords** can't be used as identifiers (not even back-ticked), so a
-/// collision is escaped by appending `_`. Param names don't affect JNI linkage
-/// (only the function name + JVM signature do), so renaming is always safe.
+/// Camel-case a Rust param ident into a valid Kotlin parameter name. Param
+/// names don't affect JNI linkage (only the function name + JVM signature do),
+/// so sanitizing is always safe — this defers to the shared
+/// [`mangle_kotlin_ident`], the single identifier sanitizer (issue #89).
 pub(crate) fn kt_param_name(rust_ident: &str) -> String {
-    let camel = kt_snake_to_camel(rust_ident);
-    const HARD_KEYWORDS: &[&str] = &[
-        "as",
-        "break",
-        "class",
-        "continue",
-        "do",
-        "else",
-        "false",
-        "for",
-        "fun",
-        "if",
-        "in",
-        "interface",
-        "is",
-        "null",
-        "object",
-        "package",
-        "return",
-        "super",
-        "this",
-        "throw",
-        "true",
-        "try",
-        "typealias",
-        "typeof",
-        "val",
-        "var",
-        "when",
-        "while",
-    ];
-    if HARD_KEYWORDS.contains(&camel.as_str()) {
-        format!("{camel}_")
-    } else {
-        camel
-    }
+    mangle_kotlin_ident(&kt_snake_to_camel(rust_ident))
 }
 
 /// A wrapper's KDoc (N1): the Rust fn's `///` prose, then generated notes

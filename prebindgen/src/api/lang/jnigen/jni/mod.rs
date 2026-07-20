@@ -492,6 +492,7 @@ mod render;
 mod report;
 mod struct_plan;
 mod symbol;
+mod symbols;
 
 pub(crate) use builder::*;
 pub(crate) use classify::*;
@@ -505,3 +506,4 @@ pub(crate) use overloads::*;
 pub(crate) use prim::*;
 pub(crate) use render::*;
 pub(crate) use struct_plan::*;
+pub(crate) use symbols::*;
