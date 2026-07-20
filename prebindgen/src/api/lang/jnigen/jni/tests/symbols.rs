@@ -5,24 +5,21 @@
 
 use super::*;
 
-/// Run the pipeline to the `write_rust` boundary and return its result — the
-/// point `validate_resolved` (and thus `validate_symbols`) runs. Also asserts
-/// the Rust artifact is absent on error (nothing reaches disk).
-fn write_result(tag: &str, registry: Registry<KotlinMeta>, jni: JniGen) -> Result<(), String> {
-    let dir = unique_test_dir(tag);
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let gen = registry.resolve(jni).expect("resolve");
-    let out = dir.join("gen.rs");
-    match gen.write_rust(&out) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            assert!(
-                !out.exists(),
-                "no artifact must be written on validation error"
-            );
-            Err(e.to_string())
+/// Resolve the binding and return the result — `validate_resolved` (and thus
+/// `validate_symbols`) now runs inside `resolve`, so an invalid binding fails
+/// here and no `Generation` is produced (nothing can be written). On success,
+/// a real `write_rust` confirms the valid binding also emits.
+fn resolve_result(tag: &str, registry: Registry<KotlinMeta>, jni: JniGen) -> Result<(), String> {
+    match registry.resolve(jni) {
+        Ok(gen) => {
+            let dir = unique_test_dir(tag);
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            gen.write_rust(dir.join("gen.rs"))
+                .expect("valid binding writes");
+            Ok(())
         }
+        Err(e) => Err(e.to_string()),
     }
 }
 
@@ -39,7 +36,7 @@ fn invalid_name_override_is_error() {
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing).name("when")));
-    let err = write_result("jni_sym_name", registry, jni).expect_err("invalid .name()");
+    let err = resolve_result("jni_sym_name", registry, jni).expect_err("invalid .name()");
     assert!(err.contains("`when`"), "{err}");
     assert!(err.contains("not a valid Kotlin identifier"), "{err}");
 }
@@ -53,7 +50,7 @@ fn invalid_hook_output_is_error() {
         .set_package_prefix("io.test.jni")
         .set_fun_name_mangle(|_pkg, _name| "1bad".to_string())
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
-    let err = write_result("jni_sym_hook", registry, jni).expect_err("invalid hook output");
+    let err = resolve_result("jni_sym_hook", registry, jni).expect_err("invalid hook output");
     assert!(err.contains("`1bad`"), "{err}");
     assert!(err.contains("not a valid Kotlin identifier"), "{err}");
 }
@@ -67,7 +64,7 @@ fn valid_default_names_pass() {
     let jni = JniGen::new()
         .set_package_prefix("io.test.jni")
         .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
-    write_result("jni_sym_ok", registry, jni).expect("valid names must pass");
+    resolve_result("jni_sym_ok", registry, jni).expect("valid names must pass");
 }
 
 /// Two functions whose custom method hook collapses them onto one JNINative
@@ -97,7 +94,7 @@ fn duplicate_native_symbol_is_error() {
                 .fun(crate::fun!(z_alpha))
                 .fun(crate::fun!(z_beta)),
         );
-    let err = write_result("jni_sym_dupnative", registry, jni).expect_err("duplicate symbol");
+    let err = resolve_result("jni_sym_dupnative", registry, jni).expect_err("duplicate symbol");
     assert!(err.contains("duplicate native symbol"), "{err}");
     assert!(err.contains("z_alpha") && err.contains("z_beta"), "{err}");
 }
@@ -165,7 +162,7 @@ fn class_interface_collision_is_error() {
                 .class(crate::ptr_class!(ZThing).interface())
                 .fun(crate::fun!(z_thing_new)),
         );
-    let err = write_result("jni_sym_iface", registry, jni).expect_err("iface==class collision");
+    let err = resolve_result("jni_sym_iface", registry, jni).expect_err("iface==class collision");
     assert!(
         err.contains("duplicate top-level Kotlin name `ZThing`"),
         "{err}"
@@ -196,7 +193,7 @@ fn same_name_same_signature_functions_collide() {
             .fun(crate::fun!(z_alpha).name("combine"))
             .fun(crate::fun!(z_beta).name("combine")),
     );
-    let err = write_result("jni_ov_collide", registry, jni).expect_err("overload clash");
+    let err = resolve_result("jni_ov_collide", registry, jni).expect_err("overload clash");
     assert!(err.contains("conflicting Kotlin overload"), "{err}");
     assert!(err.contains("combine"), "{err}");
 }
@@ -222,7 +219,7 @@ fn same_name_distinct_signature_functions_allowed() {
             .fun(crate::fun!(z_alpha).name("combine"))
             .fun(crate::fun!(z_beta).name("combine")),
     );
-    write_result("jni_ov_ok", registry, jni).expect("distinct signatures are valid overloads");
+    resolve_result("jni_ov_ok", registry, jni).expect("distinct signatures are valid overloads");
 }
 
 /// A method and a companion factory are separate JVM scopes, so they may
@@ -248,5 +245,5 @@ fn method_and_factory_same_name_do_not_collide() {
         ),
     );
     // Instance method `of()` and companion factory `of()` are distinct scopes.
-    write_result("jni_ov_scopes", registry, jni).expect("method vs factory don't collide");
+    resolve_result("jni_ov_scopes", registry, jni).expect("method vs factory don't collide");
 }

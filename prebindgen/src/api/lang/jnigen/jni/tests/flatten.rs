@@ -1570,12 +1570,11 @@ fn split_declaration_colliding_variants_rejected() {
     let _ = write_all(registry.resolve(jni).expect("resolve"), "jnigen_split_decl");
 }
 
-/// #90: the validation boundary is cross-artifact — a colliding split
-/// declaration (a Kotlin-side concern) fails `write_rust` too, as a clean
-/// `Err` BEFORE the Rust file is written, so no half-written binding can
-/// exist regardless of write order.
+/// #90: the validation boundary is now in `resolve` — a colliding split
+/// declaration (a Kotlin-side concern) fails `resolve` as a clean `Err`, so
+/// no `Generation` is produced and neither artifact can be written.
 #[test]
-fn split_declaration_collision_fails_write_rust_before_writing() {
+fn split_declaration_collision_fails_resolve() {
     let loc = myflat_loc();
     let srcs: &[&str] = &[
         "pub fn z_name_from_text(text: String) -> ZName { unimplemented!() }",
@@ -1606,21 +1605,12 @@ fn split_declaration_collision_fails_write_rust_before_writing() {
                 .variant(crate::fun!(z_name_from_text))
                 .variant(crate::fun!(z_name_from_label)),
         );
-    let generation = registry.resolve(jni).expect("resolve");
-    let dir = unique_test_dir("jnigen_split_decl_rust_err");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let out = dir.join("gen.rs");
-    let err = generation
-        .write_rust(&out)
-        .expect_err("colliding split declaration must fail write_rust");
+    let err = registry
+        .resolve(jni)
+        .expect_err("colliding split declaration must fail resolve");
     assert!(
         err.to_string().contains("same JVM signature"),
         "unexpected error: {err}"
-    );
-    assert!(
-        !out.exists(),
-        "write_rust must not write on validation failure"
     );
 }
 
