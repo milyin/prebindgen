@@ -54,7 +54,11 @@ pub fn merge_files(fragments: Vec<KtFile>) -> Result<Vec<KtFile>, WriteKotlinErr
         for d in &frag.decls {
             // Functions may overload (same name, different signature) and Raw
             // blocks are opaque; only class-like identities must be unique
-            // within a package's single merged file.
+            // within a package's single merged file. The "valid overloads"
+            // assumption is now CHECKED upstream: jnigen's `validate_symbols`
+            // (issue #89) rejects two functions with the same erased JVM
+            // signature before any file is written, so a same-named function
+            // reaching here is a genuine overload.
             let unique_required = matches!(
                 d,
                 super::model::KtDecl::Class(_)

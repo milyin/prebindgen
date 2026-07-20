@@ -51,6 +51,28 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             }
         };
 
+    // Overload table: (scope, kotlin name, erased JVM signature) → origin.
+    // `scope` separates the independent overload sets — a package's free
+    // functions, one class's instance methods, one class's companion
+    // factories. Two wrappers landing on the same key have an identical
+    // Kotlin/JVM signature and cannot coexist (a "platform declaration
+    // clash"); distinct signatures are legitimate overloads and pass.
+    let mut overloads: BTreeMap<(String, String, JvmSignature), String> = BTreeMap::new();
+    let mut add_overload = |scope: &str, f: &kt::KtFun, origin: &str, errors: &mut Vec<String>| {
+        let sig = jvm_signature(ext, f);
+        let key = (scope.to_string(), f.name.clone(), sig.clone());
+        if let Some(prev) = overloads.insert(key, origin.to_string()) {
+            errors.push(format!(
+                "conflicting Kotlin overload `{}{sig}` in {scope}: {prev} and {origin} \
+                     have the same erased JVM signature — rename one via `.name(...)` or \
+                     change a parameter type",
+                f.name,
+            ));
+        }
+    };
+    // The surface renderers register imports; the validator discards them.
+    let mut imports = std::collections::BTreeSet::<String>::new();
+
     // Classes (ptr / data / value / enum), in deterministic key order.
     let mut class_keys: Vec<&TypeKey> = ext
         .types
@@ -95,15 +117,25 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
     for sub in subpackages {
         let pkg_cfg = &ext.packages[sub];
         let package = ext.package_name(sub);
+        let fn_scope = format!("package `{package}`");
         for entry in &pkg_cfg.functions {
             let name = ext.effective_function_name(sub, entry);
-            check_ident(
-                &name,
-                &format!("function `{}`", entry.rust_ident),
-                &mut errors,
-            );
-            // Functions may overload — not added to the uniqueness table
-            // (overload-signature collisions are Stage 2).
+            let origin = format!("function `{}`", entry.rust_ident);
+            check_ident(&name, &origin, &mut errors);
+            // Same-named free functions may overload if their erased JVM
+            // signatures differ; the overload table rejects clashes. Render
+            // the exact surface wrapper(s) emission produces (base +
+            // `.split_on_param` shells) and erase each.
+            if let Some((item_fn, _)) = registry.functions.get(&entry.rust_ident) {
+                if let Some(f) =
+                    render_wrapper_fn(ext, item_fn, registry, &mut imports, Some(&name), None)
+                {
+                    for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                        add_overload(&fn_scope, &ov, &origin, &mut errors);
+                    }
+                    add_overload(&fn_scope, &f, &origin, &mut errors);
+                }
+            }
         }
         // Const `val`s ARE top-level-unique (a property, not an overloadable fn).
         for entry in pkg_cfg
@@ -126,15 +158,33 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
         }
     }
 
-    // Class members (instance methods / companion factories) — validity only;
-    // same-named members overload, and cross-member signature collisions are
-    // Stage 2.
+    // Class members: instance methods and companion factories are separate
+    // overload sets (distinct JVM scopes), so a method and a constructor may
+    // share a name. Render each exactly as emission does — a method with the
+    // receiver bound (`receiver_key = Some`), a constructor without — and
+    // collect its overload signature under a per-class, per-kind scope.
     let mut member_keys: Vec<&TypeKey> = ext.class_members.keys().collect();
     member_keys.sort_by_key(|k| k.as_str().to_string());
     for key in member_keys {
         for m in &ext.class_members[key] {
             let name = ext.effective_method_name(key, m);
             check_ident(&name, &format!("method `{}`", m.rust_ident), &mut errors);
+            let Some((item_fn, _)) = registry.functions.get(&m.rust_ident) else {
+                continue;
+            };
+            let (scope, receiver) = match m.kind {
+                MemberKind::Method => (format!("class `{key}` methods"), Some(key)),
+                MemberKind::Constructor => (format!("class `{key}` factories"), None),
+            };
+            let origin = format!("member `{}`", m.rust_ident);
+            if let Some(f) =
+                render_wrapper_fn(ext, item_fn, registry, &mut imports, Some(&name), receiver)
+            {
+                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                    add_overload(&scope, &ov, &origin, &mut errors);
+                }
+                add_overload(&scope, &f, &origin, &mut errors);
+            }
         }
     }
 
@@ -308,6 +358,124 @@ pub(crate) fn mangle_package(path: &str) -> String {
         .join(".")
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// JVM erasure model (issue #89 stage 2)
+// ──────────────────────────────────────────────────────────────────────
+
+/// A JVM-erased parameter type token: two parameters collide as overloads
+/// iff their tokens are equal. Human-readable, for the diagnostic.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(crate) struct ErasedJvmType(String);
+
+impl ErasedJvmType {
+    /// A verbatim token — the structural fallback for a type with no
+    /// resolved Kotlin surface (used by the #52 split-arm erasure).
+    pub(crate) fn raw(s: impl Into<String>) -> Self {
+        ErasedJvmType(s.into())
+    }
+}
+
+impl std::fmt::Display for ErasedJvmType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// The JVM overload signature of a generated wrapper: its erased parameter
+/// types in order. The **return type is intentionally absent** — the JVM
+/// (and Kotlin) resolve overloads by name + parameter types only, so two
+/// functions differing only in return type still clash.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(crate) struct JvmSignature(Vec<ErasedJvmType>);
+
+impl std::fmt::Display for JvmSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(")?;
+        for (i, t) in self.0.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{t}")?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// The JVM boxed class of a Kotlin primitive — a nullable primitive crosses
+/// as its box (`Int?` → `java.lang.Integer`), a distinct JVM descriptor from
+/// the unboxed primitive, so `f(x: Int)` and `f(x: Int?)` do NOT clash.
+fn boxed_primitive(simple: &str) -> Option<&'static str> {
+    Some(match simple {
+        "Int" => "java.lang.Integer",
+        "Long" => "java.lang.Long",
+        "Short" => "java.lang.Short",
+        "Byte" => "java.lang.Byte",
+        "Char" => "java.lang.Character",
+        "Boolean" => "java.lang.Boolean",
+        "Float" => "java.lang.Float",
+        "Double" => "java.lang.Double",
+        _ => return None,
+    })
+}
+
+/// Erase a Kotlin surface type to its JVM overload token. Rules (the complete
+/// model — issue #89):
+///
+/// * a type variable declared on the function (`R` / `A`) → `Object`;
+/// * a non-null primitive → itself; a **nullable** primitive → its box
+///   (`Int?` → `java.lang.Integer`) — a distinct descriptor;
+/// * `String` / `ByteArray` / `Any` → their JVM types (object nullability is
+///   irrelevant to the descriptor);
+/// * a `@JvmInline value class` → its underlying wire (`byte[]`), so two
+///   distinct value classes clash;
+/// * a generic type → its raw class (`List<T>` → `List`), arguments erased;
+/// * any other class → its FQN (distinct classes stay distinct);
+/// * a function type → `kotlin.Function<arity>`.
+pub(crate) fn erase_kt_type(ext: &JniGen, generics: &[String], ty: &kt::KtType) -> ErasedJvmType {
+    use kt::KtType;
+    let token = match ty {
+        KtType::Function { params, .. } => format!("kotlin.Function{}", params.len()),
+        KtType::Named { fqn, nullable, .. } => {
+            let simple = ty.simple_name().unwrap_or(fqn);
+            if generics.iter().any(|g| g == fqn) {
+                "java.lang.Object".to_string()
+            } else if ext.is_value_blob_kotlin(simple) {
+                "byte[]".to_string()
+            } else if let Some(boxed) = boxed_primitive(simple) {
+                if *nullable {
+                    boxed.to_string()
+                } else {
+                    simple.to_string()
+                }
+            } else {
+                match simple {
+                    "String" => "java.lang.String".to_string(),
+                    "ByteArray" => "byte[]".to_string(),
+                    "Any" => "java.lang.Object".to_string(),
+                    "Unit" => "void".to_string(),
+                    // Generic container (args erased) or a plain class: the
+                    // declared `fqn` (a generic's `fqn` is its raw name, e.g.
+                    // `List`), so `List<X>` and `List<Y>` share one token.
+                    _ => fqn.clone(),
+                }
+            }
+        }
+    };
+    ErasedJvmType(token)
+}
+
+/// The [`JvmSignature`] of a generated wrapper (`render_wrapper_fn` /
+/// `render_param_overloads` output): each parameter erased through
+/// [`erase_kt_type`] under the function's own generic type variables.
+pub(crate) fn jvm_signature(ext: &JniGen, f: &kt::KtFun) -> JvmSignature {
+    JvmSignature(
+        f.params
+            .iter()
+            .map(|p| erase_kt_type(ext, &f.generics, &p.ty))
+            .collect(),
+    )
+}
+
 /// A native `Java_…` export symbol — charset-guaranteed valid by
 /// [`symbol::native_symbol`](super::symbol::native_symbol). A newtype so the
 /// collision table's key type documents itself and can't be confused with a
@@ -325,7 +493,55 @@ impl NativeSymbol {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_valid_kotlin_ident, mangle_kotlin_ident, mangle_package};
+    use super::{
+        erase_kt_type, is_valid_kotlin_ident, mangle_kotlin_ident, mangle_package, JniGen,
+    };
+    use crate::api::gen::kotlin as kt;
+
+    fn erase(generics: &[&str], ty: kt::KtType) -> String {
+        let ext = JniGen::new();
+        let gs: Vec<String> = generics.iter().map(|s| s.to_string()).collect();
+        erase_kt_type(&ext, &gs, &ty).to_string()
+    }
+
+    #[test]
+    fn jvm_erasure_rules() {
+        // Non-null primitive is itself; nullable primitive boxes → distinct.
+        assert_eq!(erase(&[], kt::KtType::int()), "Int");
+        assert_eq!(
+            erase(&[], kt::KtType::int().nullable()),
+            "java.lang.Integer"
+        );
+        assert_ne!(
+            erase(&[], kt::KtType::int()),
+            erase(&[], kt::KtType::int().nullable()),
+            "Int and Int? must NOT clash"
+        );
+        // Object types: nullability is irrelevant to the descriptor.
+        assert_eq!(erase(&[], kt::KtType::string()), "java.lang.String");
+        assert_eq!(
+            erase(&[], kt::KtType::string().nullable()),
+            "java.lang.String",
+            "String and String? share one descriptor"
+        );
+        assert_eq!(erase(&[], kt::KtType::byte_array()), "byte[]");
+        assert_eq!(erase(&[], kt::KtType::any()), "java.lang.Object");
+        // Generics erased to the raw class: List<Int> and List<String> clash.
+        assert_eq!(
+            erase(&[], kt::KtType::generic("List", [kt::KtType::int()])),
+            erase(&[], kt::KtType::generic("List", [kt::KtType::string()])),
+        );
+        // A function's own type variable erases to Object.
+        assert_eq!(erase(&["A"], kt::KtType::var_("A")), "java.lang.Object");
+        assert_eq!(erase(&["R"], kt::KtType::var_r()), "java.lang.Object");
+        // A single-letter name that is NOT a declared type var stays a class.
+        assert_eq!(erase(&[], kt::KtType::cls("io.test.Foo")), "io.test.Foo");
+        assert_ne!(
+            erase(&[], kt::KtType::cls("io.test.Foo")),
+            erase(&[], kt::KtType::cls("io.other.Foo")),
+            "distinct FQNs stay distinct"
+        );
+    }
 
     #[test]
     fn validity_predicate() {
