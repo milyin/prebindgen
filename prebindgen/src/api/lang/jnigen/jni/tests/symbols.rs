@@ -171,3 +171,82 @@ fn class_interface_collision_is_error() {
         "{err}"
     );
 }
+
+// ── Stage 2: JVM-erasure overload collisions ────────────────────────────
+
+/// Two free functions renamed onto the same Kotlin name with the SAME erased
+/// parameter signature clash — a platform declaration clash the JVM/Kotlin
+/// can't resolve. (Distinct signatures would be valid overloads.)
+#[test]
+fn same_name_same_signature_functions_collide() {
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_str("pub fn z_alpha(x: i64) -> i64 { x }").unwrap()),
+            myflat_loc(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_str("pub fn z_beta(y: i64) -> i64 { y }").unwrap()),
+            myflat_loc(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    // Both forced to Kotlin name `combine`; both take one `Long` → same sig.
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .fun(crate::fun!(z_alpha).name("combine"))
+            .fun(crate::fun!(z_beta).name("combine")),
+    );
+    let err = write_result("jni_ov_collide", registry, jni).expect_err("overload clash");
+    assert!(err.contains("conflicting Kotlin overload"), "{err}");
+    assert!(err.contains("combine"), "{err}");
+}
+
+/// Same Kotlin name but DIFFERENT erased parameter signatures are legitimate
+/// overloads — no error.
+#[test]
+fn same_name_distinct_signature_functions_allowed() {
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_str("pub fn z_alpha(x: i64) -> i64 { x }").unwrap()),
+            myflat_loc(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_str("pub fn z_beta(y: bool) -> i64 { 0 }").unwrap()),
+            myflat_loc(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    // Same name `combine`, but one takes Long and the other Boolean.
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing")
+            .fun(crate::fun!(z_alpha).name("combine"))
+            .fun(crate::fun!(z_beta).name("combine")),
+    );
+    write_result("jni_ov_ok", registry, jni).expect("distinct signatures are valid overloads");
+}
+
+/// A method and a companion factory are separate JVM scopes, so they may
+/// share a name and signature without clashing.
+#[test]
+fn method_and_factory_same_name_do_not_collide() {
+    let items: Vec<(syn::Item, crate::SourceLocation)> = vec![
+        (
+            syn::Item::Fn(syn::parse_str("pub fn thing_size(this_: &Thing) -> i64 { 0 }").unwrap()),
+            myflat_loc(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_str("pub fn thing_make() -> Thing { todo!() }").unwrap()),
+            myflat_loc(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!("thing").class(
+            crate::ptr_class!(Thing)
+                .method(crate::fun!(thing_size).name("of"))
+                .constructor(crate::fun!(thing_make).name("of")),
+        ),
+    );
+    // Instance method `of()` and companion factory `of()` are distinct scopes.
+    write_result("jni_ov_scopes", registry, jni).expect("method vs factory don't collide");
+}

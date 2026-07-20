@@ -715,14 +715,37 @@ pub(crate) fn peel_receiver_key(ty: &syn::Type) -> TypeKey {
 /// (the inherited `NativeHandle` scope for a `ptr_class` — `this.ptr` + lock —
 /// or `this.bytes` for a `value_class` blob). The JNINative extern/call is
 /// unchanged (keyed on the Rust ident), so only the Kotlin wrapper relocates.
-pub(crate) fn render_wrapper_fn(
+/// The Kotlin surface of a wrapper: the assembled `KtFun` with every
+/// parameter/return type in place but **no body**, plus the emission
+/// internals [`render_wrapper_fn`] needs to fill that body. One derivation of
+/// the overload surface, shared by emission (which adds the body) and
+/// [`validate_symbols`](crate::api::lang::jnigen::jni::validate_symbols)
+/// (which erases `fun` to a JVM signature), so the emitted overload and the
+/// validated one cannot drift (issue #89).
+pub(crate) struct WrapperSurface {
+    /// The wrapper with its full signature and an empty body. The validator
+    /// reads this; [`render_wrapper_fn`] fills the body and adds the KDoc.
+    pub fun: kt::KtFun,
+    // Emission-only internals — computed while assembling the signature,
+    // consumed by `render_wrapper_fn`; opaque to the validator.
+    params: Vec<Param>,
+    out: OutputPlan,
+    sink: ErrorSink,
+    jni_call: String,
+}
+
+/// Build the [`WrapperSurface`]: everything [`render_wrapper_fn`] does up to
+/// (but not including) the body render — the single surface-signature
+/// derivation. Validation calls this directly and skips the body work
+/// (`build_native_call` / `render_body` / KDoc / opaque-lock collection).
+pub(crate) fn build_wrapper_surface(
     ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
-) -> Option<kt::KtFun> {
+) -> Option<WrapperSurface> {
     let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident (the
     // plan's `jni_method`). The per-entry `.name("...")` override only
@@ -735,21 +758,10 @@ pub(crate) fn render_wrapper_fn(
     let jni_call = fplan.jni_method.clone();
     let (params, receiver_idx) = classify_params(ext, &fplan, registry, imports, receiver_key)?;
     let out = classify_output(ext, f, &fplan, registry, imports)?;
-    let body_expr = build_native_call(ext, &jni_call, &params, &out);
-
-    // Collect the opaque-handle params so we can scaffold pointer-ordered
-    // synchronized blocks around them.
-    let opaques = collect_opaques(&params);
-    let is_unit = out.kt_return.is_none();
     let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
     let sink = error_sink_parts(ext, f, &fplan, registry, imports, &r_ty)?;
 
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
-    // KDoc: the Rust fn's `///` prose first, then generated notes for every
-    // position an expansion reshaped away from the Rust signature (N1).
-    if let Some(doc) = wrapper_kdoc(f, registry) {
-        fun = fun.kdoc(doc);
-    }
     if let Some(g) = &out.generic {
         fun = fun.generic(g);
     }
@@ -782,6 +794,49 @@ pub(crate) fn render_wrapper_fn(
     if let Some(rt) = &out.kt_return {
         fun = fun.returns(rt.clone());
     }
+    Some(WrapperSurface {
+        fun,
+        params,
+        out,
+        sink,
+        jni_call,
+    })
+}
+
+pub(crate) fn render_wrapper_fn(
+    ext: &JniGen,
+    f: &syn::ItemFn,
+    registry: &Registry<KotlinMeta>,
+    imports: &mut BTreeSet<String>,
+    kotlin_name_override: Option<&str>,
+    receiver_key: Option<&TypeKey>,
+) -> Option<kt::KtFun> {
+    let surface = build_wrapper_surface(
+        ext,
+        f,
+        registry,
+        imports,
+        kotlin_name_override,
+        receiver_key,
+    )?;
+    let WrapperSurface {
+        mut fun,
+        params,
+        out,
+        sink,
+        jni_call,
+    } = surface;
+    // KDoc: the Rust fn's `///` prose first, then generated notes for every
+    // position an expansion reshaped away from the Rust signature (N1).
+    // Emission-only — the validator skips it.
+    if let Some(doc) = wrapper_kdoc(f, registry) {
+        fun = fun.kdoc(doc);
+    }
+    // Collect the opaque-handle params so we can scaffold pointer-ordered
+    // synchronized blocks around them.
+    let opaques = collect_opaques(&params);
+    let is_unit = fun.ret.is_none();
+    let body_expr = build_native_call(ext, &jni_call, &params, &out);
     let body = render_body(ext, &params, &opaques, &sink, &body_expr, is_unit, imports);
     Some(fun.body(body))
 }

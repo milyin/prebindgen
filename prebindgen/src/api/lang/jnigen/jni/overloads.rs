@@ -36,7 +36,7 @@ impl JniGen {
     /// `true` if `simple` is the Kotlin simple name of a `value_blob`
     /// (`@JvmInline value class`) type — which erases to `ByteArray` on the
     /// JVM, so two distinct such classes share one method descriptor.
-    fn is_value_blob_kotlin(&self, simple: &str) -> bool {
+    pub(crate) fn is_value_blob_kotlin(&self, simple: &str) -> bool {
         self.types.values().any(|c| {
             c.value_blob
                 && c.name_spec
@@ -75,7 +75,7 @@ impl JniGen {
                 continue;
             }
             let target = decl.key.to_type();
-            let sigs: Vec<(String, Vec<String>)> = decl
+            let sigs: Vec<(String, Vec<ErasedJvmType>)> = decl
                 .variants
                 .iter()
                 .map(|v| {
@@ -100,7 +100,12 @@ impl JniGen {
                             t = decl.key.as_str(),
                             a = sigs[i].0,
                             b = sigs[j].0,
-                            sig = sigs[i].1.join(", "),
+                            sig = sigs[i]
+                                .1
+                                .iter()
+                                .map(|e| e.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", "),
                         ));
                     }
                 }
@@ -112,12 +117,14 @@ impl JniGen {
 
 /// The JVM-erased type list of one arm: the constructor's parameter types
 /// (build arm), or the single target type (`variant_self`, `ctor == None`).
+/// Uses the shared [`erase_kt_type`] model (issue #89 stage 2) so the split
+/// ambiguity check and the whole-artifact overload table agree on erasure.
 fn arm_erased_sig(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     target: &syn::Type,
     ctor: Option<&syn::Ident>,
-) -> Vec<String> {
+) -> Vec<ErasedJvmType> {
     match ctor {
         Some(cf) => match registry.functions.get(cf) {
             Some((item_fn, _)) => item_fn
@@ -135,49 +142,34 @@ fn arm_erased_sig(
     }
 }
 
-/// The JVM-erased descriptor fragment a Rust type surfaces as: a declared
-/// value-blob class erases to `ByteArray`, another declared class to its simple
-/// Kotlin name, a primitive/`String` to its Kotlin builtin, everything else to
-/// its token string (structural fallback). References are peeled first (a `&T`
-/// handle erases like `T`).
-fn rust_type_erased(ext: &JniGen, registry: &Registry<KotlinMeta>, ty: &syn::Type) -> String {
+/// The [`ErasedJvmType`] a Rust arm type surfaces as: map it to its Kotlin
+/// surface type (a declared class's FQN, else the resolved converter's Kotlin
+/// name) and run the shared [`erase_kt_type`]; a value class folds to `byte[]`
+/// and a plain class to its FQN there. Falls back to the token string for a
+/// type with no resolved surface. References are peeled first (`&T` erases
+/// like `T`).
+fn rust_type_erased(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    ty: &syn::Type,
+) -> ErasedJvmType {
     let peeled = match ty {
         syn::Type::Reference(r) => &*r.elem,
         other => other,
     };
     let key = TypeKey::from_type(peeled);
-    if let Some(cfg) = ext.types.get(&key) {
-        if cfg.name_spec.is_some() {
-            if cfg.value_blob {
-                return "ByteArray".to_string();
-            }
-            if let Some(fqn) = ext.kotlin_fqn(&key) {
-                return fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
-            }
+    if ext.types.get(&key).is_some_and(|c| c.name_spec.is_some()) {
+        if let Some(fqn) = ext.kotlin_fqn(&key) {
+            return erase_kt_type(ext, &[], &kt::KtType::cls(fqn));
         }
     }
     if let Some(kt) = registry
         .input_entry(peeled)
         .and_then(|e| e.metadata.kotlin_name.clone())
     {
-        return erased(ext, &kt);
+        return erase_kt_type(ext, &[], &kt);
     }
-    peeled.to_token_stream().to_string()
-}
-
-/// The JVM-erased descriptor fragment of an already-rendered [`kt::KtType`] —
-/// value classes to `ByteArray`, primitives/`String` to themselves, other
-/// classes to their simple name.
-fn erased(ext: &JniGen, ty: &kt::KtType) -> String {
-    let simple = ty.simple_name().unwrap_or("");
-    if ext.is_value_blob_kotlin(simple) {
-        return "ByteArray".to_string();
-    }
-    match simple {
-        "Int" | "Long" | "Double" | "Float" | "Boolean" | "Byte" | "Short" | "Char" | "String"
-        | "ByteArray" => simple.to_string(),
-        _ => simple.to_string(),
-    }
+    ErasedJvmType::raw(peeled.to_token_stream().to_string())
 }
 
 /// Whether `plan` is a multi-variant expansion that can be turned into
@@ -470,7 +462,7 @@ pub(crate) fn render_param_overloads(
 
     // Product-global JVM-signature collision check (fixed params are identical
     // across every overload, so only the split-arm lists can collide).
-    let sigs: Vec<Vec<String>> = combos
+    let sigs: Vec<Vec<ErasedJvmType>> = combos
         .iter()
         .map(|combo| {
             splits
@@ -493,7 +485,11 @@ pub(crate) fn render_param_overloads(
                     f.sig.ident,
                     combo_label(&splits, &combos[i]),
                     combo_label(&splits, &combos[j]),
-                    sigs[i].join(", "),
+                    sigs[i]
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
                 );
             }
         }
