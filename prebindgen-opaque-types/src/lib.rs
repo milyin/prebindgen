@@ -58,8 +58,8 @@ impl OpaqueType {
 ///
 /// Sensible defaults for the `build.rs` use case: `build_dir` =
 /// `$OUT_DIR/opaque_probe`, `cargo_lock` = the destination workspace's `Cargo.lock`
-/// (via [`project-root-patch`]; the consumer must run
-/// `cargo project-root-patch install`), default features on. Typical use:
+/// (via [`get-cargo-lock`](https://crates.io/crates/get-cargo-lock); the consumer must run
+/// `cargo get-cargo-lock install`), default features on. Typical use:
 ///
 /// ```ignore
 /// let opaque = prebindgen_opaque_types::OpaqueTypes::new(zenoh_flat::MANIFEST_DIR)
@@ -127,7 +127,8 @@ impl OpaqueTypes {
     }
 
     /// Override the `Cargo.lock` copied into the probe crate (default: the
-    /// destination workspace's lock, located via [`project-root-patch`]).
+    /// destination workspace's lock, located via
+    /// [`get-cargo-lock`](https://crates.io/crates/get-cargo-lock)).
     pub fn cargo_lock(mut self, path: impl Into<PathBuf>) -> Self {
         self.cargo_lock = Some(path.into());
         self
@@ -220,15 +221,13 @@ pub fn render_opaque(opaque_name: &str, size: usize, align: usize) -> String {
 /// The **destination project's** `Cargo.lock`, so the probe resolves dependencies
 /// identically to the cdylib build.
 ///
-/// The workspace root comes from [`project_root_patch::get_project_root`] —
-/// correct even for a consumer installed from crates.io, because
-/// `project-root-patch` is patched into the *destination* workspace, so every
-/// copy in the graph (including this library's dependency on it) resolves to that
-/// member copy and reports the destination root. The consumer must have run
-/// `cargo project-root-patch install` (otherwise `get_project_root` panics
-/// with guidance — there is intentionally no silent fallback).
+/// The path comes from [`get_cargo_lock::get_cargo_lock`]. This dependency is
+/// patched to the proxy installed in the destination workspace, allowing this
+/// externally developed crate to obtain that workspace's lockfile. The consumer
+/// must have run `cargo get-cargo-lock install` (otherwise `get_cargo_lock`
+/// panics with guidance — there is intentionally no silent fallback).
 fn default_cargo_lock() -> PathBuf {
-    project_root_patch::get_project_root().join("Cargo.lock")
+    get_cargo_lock::get_cargo_lock()
 }
 
 /// Read the `[package].name` of the crate whose manifest dir is `manifest_dir`.

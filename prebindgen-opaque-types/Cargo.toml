@@ -17,11 +17,10 @@ object = { version = "0.36", default-features = false, features = ["read", "std"
 syn = { workspace = true }
 quote = { workspace = true }
 toml = { workspace = true }
-# This crate must be patched into the destination workspace by
-# `cargo project-root-patch install`, so it can discover the destination
-# project's root at build time. Pin the helper's source while the C proof of
-# concept remains outside the normal release set.
-project-root-patch = { git = "https://github.com/milyin/project-root-patch", rev = "8590eaa" }
+# The destination workspace patches this dependency with the proxy installed by
+# `cargo get-cargo-lock install`, allowing this externally developed crate to
+# use the destination's lockfile.
+get-cargo-lock = "0.1.0"
 anyhow = "1"
 
 [dev-dependencies]
