@@ -2,7 +2,6 @@
 members = [
     "prebindgen",
     "prebindgen-proc-macro",
-    "prebindgen-opaque-types",
     "examples/example-cbindgen",
     "examples/example-flat",
     "examples/perftest-flat",
