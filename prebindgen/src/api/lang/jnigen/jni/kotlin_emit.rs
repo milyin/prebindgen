@@ -77,11 +77,8 @@ impl JniGen {
         registry: &Registry<KotlinMeta>,
         kotlin_root: &Path,
     ) -> Result<Vec<PathBuf>, WriteKotlinError> {
-        // Post-resolve validation boundary — same pass `write_rust` runs
-        // (plans + #52 split declarations), so whichever artifact is written
-        // first fails before anything reaches disk.
-        self.validate_resolved(registry)
-            .map_err(WriteKotlinError::Other)?;
+        // Validation already ran once in `Registry::resolve` — this emitter
+        // is a pure consumer of the resolved, validated registry.
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);

@@ -1340,6 +1340,15 @@ impl<M> Registry<M> {
             .map_err(|message| ScanError::AdapterInvariant { message })?;
         self.apply_adapter_plans(&adapter, &declared)?;
         crate::api::core::resolve::resolve(&mut self, &adapter)?;
+        // Post-resolve validation runs ONCE here, so a `Generation` is valid
+        // by construction and the `write_*` emitters are genuinely pure
+        // (previously each writer re-ran this, validating twice per build).
+        // Sibling of the pre-resolve `validate` above — same adapter-invariant
+        // channel. An invalid binding fails `resolve`; no `Generation` is
+        // produced, so nothing can be written.
+        adapter
+            .validate_resolved(&self)
+            .map_err(|message| ScanError::AdapterInvariant { message })?;
         Ok(Generation {
             registry: self,
             adapter,

@@ -22,6 +22,10 @@ use crate::api::{
 };
 
 /// Errors surfaced by the file-emission phase.
+///
+/// Binding validation is NOT here — it runs once in [`Registry::resolve`]
+/// (see [`Prebindgen::validate_resolved`]), so an invalid binding fails
+/// before a `Generation` exists and never reaches a writer.
 #[derive(Debug)]
 pub enum WriteError {
     /// A `TokenStream` produced by an `on_*` trait method failed to parse
@@ -30,10 +34,6 @@ pub enum WriteError {
         phase: &'static str,
         source: syn::Error,
     },
-    /// The adapter's post-resolve validation
-    /// ([`Prebindgen::validate_resolved`]) rejected the binding — nothing
-    /// was written.
-    Validation(String),
 }
 
 impl std::fmt::Display for WriteError {
@@ -46,7 +46,6 @@ impl std::fmt::Display for WriteError {
                     phase, source
                 )
             }
-            WriteError::Validation(msg) => write!(f, "binding validation failed: {}", msg),
         }
     }
 }
@@ -62,12 +61,9 @@ pub fn write_rust<P: AsRef<Path>, E: Prebindgen>(
     ext: &E,
     out_path: P,
 ) -> Result<PathBuf, WriteError> {
-    // Post-resolve validation boundary: every artifact writer runs it first,
-    // so an invalid binding fails cleanly before ANY file is written —
-    // regardless of which artifact is written first.
-    ext.validate_resolved(registry)
-        .map_err(WriteError::Validation)?;
-
+    // Validation already ran ONCE in `Registry::resolve` — a `Generation`
+    // (the only source of a resolved registry) is valid by construction, so
+    // this writer is a pure emission.
     let mut items: Vec<syn::Item> = Vec::new();
 
     // 0. Adapter prerequisites — runtime-support items (helper structs,
