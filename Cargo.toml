@@ -2,8 +2,6 @@
 members = [
     "prebindgen",
     "prebindgen-proc-macro",
-    "prebindgen-project-root",
-    "prebindgen-opaque-types",
     "examples/example-cbindgen",
     "examples/example-flat",
     "examples/perftest-flat",
@@ -27,7 +25,6 @@ package.categories = ["development-tools", "external-ffi-bindings"]
 [workspace.dependencies]
 prebindgen = { path = "prebindgen", version = "0.5.0" }
 prebindgen-proc-macro = { path = "prebindgen-proc-macro", version = "0.5.0" }
-prebindgen-project-root = { path = "prebindgen-project-root", version = "0.5.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 syn = { version = "2.0", features = ["full", "visit-mut", "extra-traits"] }
@@ -42,10 +39,3 @@ if_rust_version = "1.0"
 konst = "0.3.0" # consumer crates need konst too: the generated file emits a konst::assertc_eq! guard
 toml = "0.9.5"
 rand = "0.9.2"
-
-[patch]
-
-[patch.crates-io]
-
-[patch.crates-io.prebindgen-project-root]
-path = "prebindgen-project-root"
