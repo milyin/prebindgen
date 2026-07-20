@@ -123,17 +123,18 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             let origin = format!("function `{}`", entry.rust_ident);
             check_ident(&name, &origin, &mut errors);
             // Same-named free functions may overload if their erased JVM
-            // signatures differ; the overload table rejects clashes. Render
-            // the exact surface wrapper(s) emission produces (base +
-            // `.split_on_param` shells) and erase each.
+            // signatures differ; the overload table rejects clashes. The
+            // surface signature (base + `.split_on_param` shells) comes from
+            // the SAME `build_wrapper_surface` emission uses — a body-less
+            // prototype, so the validator doesn't pay for body codegen.
             if let Some((item_fn, _)) = registry.functions.get(&entry.rust_ident) {
-                if let Some(f) =
-                    render_wrapper_fn(ext, item_fn, registry, &mut imports, Some(&name), None)
+                if let Some(s) =
+                    build_wrapper_surface(ext, item_fn, registry, &mut imports, Some(&name), None)
                 {
-                    for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                    for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                         add_overload(&fn_scope, &ov, &origin, &mut errors);
                     }
-                    add_overload(&fn_scope, &f, &origin, &mut errors);
+                    add_overload(&fn_scope, &s.fun, &origin, &mut errors);
                 }
             }
         }
@@ -177,13 +178,13 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
                 MemberKind::Constructor => (format!("class `{key}` factories"), None),
             };
             let origin = format!("member `{}`", m.rust_ident);
-            if let Some(f) =
-                render_wrapper_fn(ext, item_fn, registry, &mut imports, Some(&name), receiver)
+            if let Some(s) =
+                build_wrapper_surface(ext, item_fn, registry, &mut imports, Some(&name), receiver)
             {
-                for ov in render_param_overloads(ext, item_fn, registry, &f) {
+                for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                     add_overload(&scope, &ov, &origin, &mut errors);
                 }
-                add_overload(&scope, &f, &origin, &mut errors);
+                add_overload(&scope, &s.fun, &origin, &mut errors);
             }
         }
     }
