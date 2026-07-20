@@ -26,4 +26,4 @@ pub use model::{
     ClassKind, KtBody, KtClass, KtCtorParam, KtDecl, KtEnumEntry, KtFile, KtFun, KtFunInterface,
     KtParam, KtProperty, Vis,
 };
-pub use types::KtType;
+pub use types::{ImportSet, KtType};

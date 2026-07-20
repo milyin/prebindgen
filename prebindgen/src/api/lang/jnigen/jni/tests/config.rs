@@ -770,8 +770,11 @@ fn report_explains_the_resolved_surface() {
 
     // The reshaped fn: exact signature (builder callback form) + provenance.
     assert!(report.contains("`storage_summary`"), "{report}");
+    // The report shortens surface types uniformly (issue #89 follow-up:
+    // rendered through an `ImportSet`), so the builder param shows the short
+    // interface name.
     assert!(
-        report.contains("build: io.test.jni.ops.SummaryBuilder<R>"),
+        report.contains("build: SummaryBuilder<R>"),
         "{report}"
     );
     assert!(

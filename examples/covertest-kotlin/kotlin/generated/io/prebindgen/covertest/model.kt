@@ -105,7 +105,7 @@ internal object __StampFolderRawHolder {
 /** Classify a payload by magnitude of its `value` (enum **return**). */
 public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority {
     val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = Priority.fromInt(
+    val __ret = io.prebindgen.covertest.model.Priority.fromInt(
         CovNative.payloadPriority(p.id, p.seq, p.value, p.flag, p.label, __cap),
     )
     if (__cap.failed) return onError.run(__cap.je)
@@ -127,7 +127,7 @@ public fun priorityOr(
     onError: JniErrorHandler<Priority>,
 ): Priority {
     val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = Priority.fromInt(
+    val __ret = io.prebindgen.covertest.model.Priority.fromInt(
         CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __cap),
     )
     if (__cap.failed) return onError.run(__cap.je)
@@ -227,7 +227,9 @@ public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
 /** The metadata priority (`Option<enum>` **return**). */
 public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
     val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPriority(a, __cap)?.let { Priority.fromInt(it) }
+    val __ret = CovNative.annotatedPriority(a, __cap)?.let {
+        io.prebindgen.covertest.model.Priority.fromInt(it)
+    }
     if (__cap.failed) return onError.run(__cap.je)
     return __ret
 }

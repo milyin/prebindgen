@@ -677,9 +677,8 @@ fn leaf_iface_param(
             out_ty = &peeled;
         }
     }
-    let mut throwaway = BTreeSet::new();
     let (builder_kt, _wire_kt, _wrap, is_vb) =
-        unfold_leaf_kt(ext, registry, out_ty, nullable, "x", &mut throwaway)?;
+        unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
     let proj = registry
         .output_entry(out_ty)
         .and_then(|e| e.metadata.projection.as_ref());

@@ -413,12 +413,19 @@ internal object JNINative {
     }
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
+
     external fun payloadVecHandlerNew(f: Any, errorSink: Any): Long
+
     external fun storageCallback(s: Long, handler: Long, errorSink: Any)
+
     external fun storageCallbackVec(s: Long, handler: Long, errorSink: Any)
+
     external fun storageGet(s: Long, build: Any, errorSink: Any): Any?
+
     external fun storageGetVec(s: Long, acc: Any?, fold: Any, errorSink: Any): Any?
+
     external fun storageNew(errorSink: Any): Long
+
     external fun storagePutByRead(
         s: Long,
         payloadId: Long,
@@ -428,6 +435,7 @@ internal object JNINative {
         payloadLabel: String?,
         errorSink: Any,
     )
+
     external fun storagePutByTake(
         s: Long,
         payloadId: Long,
@@ -437,12 +445,27 @@ internal object JNINative {
         payloadLabel: String?,
         errorSink: Any,
     )
+
     external fun storagePutSlice(s: Long, payloads: Long, errorSink: Any)
+
     external fun tokenGcNew(value: Long, errorSink: Any): Long
+
     external fun tokenGcValue(t: Long, errorSink: Any): Long
+
     external fun tokenNew(value: Long, errorSink: Any): Long
+
     external fun tokenValue(t: Long, errorSink: Any): Long
+
     external fun payloadVecNew(cap: Int): Long
-    external fun payloadVecPush(handle: Long, eId: Long, eSeq: Int, eValue: Double, eFlag: Boolean, eLabel: String?)
+
+    external fun payloadVecPush(
+        handle: Long,
+        eId: Long,
+        eSeq: Int,
+        eValue: Double,
+        eFlag: Boolean,
+        eLabel: String?,
+    )
+
     external fun payloadVecFree(handle: Long)
 }
