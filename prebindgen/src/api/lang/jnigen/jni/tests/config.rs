@@ -121,10 +121,13 @@ fn ptr_class_duplicate_implements_rejected() {
         .implements("io.other.Resource");
 }
 
-/// The `set_interface_name_mangle` hook receives the class package and final name and
-/// its result must differ (identity is a hard error).
+/// The `set_interface_name_mangle` hook receives the class package and final
+/// name and its result must differ from the class name. An identity hook
+/// makes the interface collide with the class in the same package — now a
+/// COLLECTED error from the whole-artifact symbol pass (issue #89), surfaced
+/// by `write_rust`/`write_kotlin` before any file is written, rather than an
+/// emission-time panic.
 #[test]
-#[should_panic(expected = "must differ from the class name")]
 fn interface_name_mangle_identity_rejected() {
     let loc = myflat_loc();
     let f: syn::ItemFn =
@@ -146,7 +149,16 @@ fn interface_name_mangle_identity_rejected() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let gen = registry.resolve(jni).expect("resolve");
-    let _ = gen.write_kotlin(&dir.join("kotlin"));
+    let err = gen
+        .write_rust(dir.join("gen.rs"))
+        .expect_err("interface==class must be a collected error");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("duplicate top-level Kotlin name `ZThing`"),
+        "{msg}"
+    );
+    // The invalid binding must not have written a Rust artifact.
+    assert!(!dir.join("gen.rs").exists());
 }
 
 /// A per-decl `.interface_name(...)` pins the interface name (and implies

@@ -117,7 +117,7 @@ impl JniGen {
     pub(crate) fn mangle_fun(&self, package: &str, name: &str) -> String {
         match &self.fun_name_mangle {
             Some(f) => f(package, name),
-            None => name.to_string(),
+            None => mangle_kotlin_ident(name),
         }
     }
     /// Apply the method-name mangle closure to `name`, providing the package
@@ -125,39 +125,39 @@ impl JniGen {
     pub(crate) fn mangle_method(&self, package: &str, class: &str, name: &str) -> String {
         match &self.method_name_mangle {
             Some(f) => f(package, class, name),
-            None => name.to_string(),
+            None => mangle_kotlin_ident(name),
         }
     }
     /// Apply the ptr-class mangle closure to `name`, returning the closure
-    /// result or `name` verbatim when unset.
+    /// result or the sanitized `name` (issue #89) when unset.
     pub(crate) fn mangle_ptr_class(&self, package: &str, name: &str) -> String {
         match &self.ptr_class_name_mangle {
             Some(f) => f(package, name),
-            None => name.to_string(),
+            None => mangle_kotlin_ident(name),
         }
     }
     /// Apply the data-class mangle closure to `name`, returning the closure
-    /// result or `name` verbatim when unset.
+    /// result or the sanitized `name` (issue #89) when unset.
     pub(crate) fn mangle_data_class(&self, package: &str, name: &str) -> String {
         match &self.data_class_name_mangle {
             Some(f) => f(package, name),
-            None => name.to_string(),
+            None => mangle_kotlin_ident(name),
         }
     }
     /// Apply the enum mangle closure to `name`, returning the closure result
-    /// or `name` verbatim when unset.
+    /// or the sanitized `name` (issue #89) when unset.
     pub(crate) fn mangle_enum(&self, package: &str, name: &str) -> String {
         match &self.enum_name_mangle {
             Some(f) => f(package, name),
-            None => name.to_string(),
+            None => mangle_kotlin_ident(name),
         }
     }
     /// Apply the harness mangle closure to `name`, returning the closure
-    /// result or `name` verbatim when unset.
+    /// result or the sanitized `name` (issue #89) when unset.
     pub(crate) fn mangle_harness(&self, name: &str) -> String {
         match &self.harness_name_mangle {
             Some(f) => f(name),
-            None => name.to_string(),
+            None => mangle_kotlin_ident(name),
         }
     }
     /// The name of the centralized Native object that hosts every JNI

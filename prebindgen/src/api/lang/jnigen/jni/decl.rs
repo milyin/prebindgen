@@ -1342,7 +1342,16 @@ impl PackageDecl {
     /// (`package!("model")` / `package!()`).
     pub fn new(name: impl Into<String>) -> Self {
         let name = name.into();
-        let name = name.trim_matches('.').trim_matches('/').to_string();
+        let trimmed = name.trim_matches('.').trim_matches('/').to_string();
+        // Sanitize each subpackage segment to a valid Kotlin identifier
+        // (issue #89); a no-op for already-legal names.
+        let name = crate::api::lang::jnigen::jni::mangle_package(&trimmed);
+        if name != trimmed {
+            println!(
+                "cargo:warning=prebindgen: subpackage `{trimmed}` sanitized to `{name}` \
+                 (invalid Kotlin package identifier)"
+            );
+        }
         Self {
             name,
             classes: Vec::new(),

@@ -98,7 +98,7 @@ pub(crate) fn synth_value_struct_leaves(
     for field in &named.named {
         let fname = field.ident.as_ref()?.clone();
         let effective_ty = field.ty.clone();
-        let camel = kt_snake_to_camel(&fname.to_string());
+        let camel = mangle_kotlin_ident(&kt_snake_to_camel(&fname.to_string()));
         let leaf_name = if name_prefix.is_empty() {
             camel
         } else {

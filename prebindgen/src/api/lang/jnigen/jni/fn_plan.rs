@@ -260,6 +260,24 @@ pub(crate) fn validate_bindings(
         errors.push(e);
     }
 
+    // Native-symbol collision table (issue #89): every `#[no_mangle]` export
+    // the emitters produce must be unique. Each successfully-built plan
+    // carries its spec-escaped `native_symbol`; a duplicate (two functions
+    // whose name hooks collapse to one JNINative method) is a hard error —
+    // it would otherwise surface only as a duplicate `#[no_mangle]` Rust
+    // symbol at link time. `origin` is the Rust ident that produced it.
+    let mut native: std::collections::BTreeMap<NativeSymbol, String> = Default::default();
+    let mut record_symbol = |sym: &str, origin: String, errors: &mut Vec<String>| {
+        let key = NativeSymbol::new(sym);
+        if let Some(prev) = native.insert(key, origin.clone()) {
+            errors.push(format!(
+                "duplicate native symbol `{sym}`: produced by both `{prev}` and `{origin}` \
+                 — a name mangle hook or `.name()` collapsed two distinct methods onto one \
+                 JNI export",
+            ));
+        }
+    };
+
     // Declared functions (incl. binding-local synthetics and fn-backed
     // constants), in deterministic ident order.
     let declared = ext.declared_functions();
@@ -270,8 +288,9 @@ pub(crate) fn validate_bindings(
             continue;
         }
         let (item_fn, _) = &registry.functions[ident];
-        if let Err(e) = JniFunctionPlan::build(ext, registry, item_fn) {
-            errors.push(e.message(ident));
+        match JniFunctionPlan::build(ext, registry, item_fn) {
+            Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
+            Err(e) => errors.push(e.message(ident)),
         }
     }
 
@@ -286,8 +305,9 @@ pub(crate) fn validate_bindings(
             }
             let (item_const, _) = &registry.consts[ident];
             let getter = const_getter_fn(item_const);
-            if let Err(e) = JniFunctionPlan::build(ext, registry, &getter) {
-                errors.push(e.message(&getter.sig.ident));
+            match JniFunctionPlan::build(ext, registry, &getter) {
+                Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
+                Err(e) => errors.push(e.message(&getter.sig.ident)),
             }
         }
     }
@@ -302,10 +322,14 @@ pub(crate) fn validate_bindings(
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
         let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
-        if let Err(e) = JniFunctionPlan::build(ext, registry, &getter) {
-            errors.push(e.message(&getter.sig.ident));
+        match JniFunctionPlan::build(ext, registry, &getter) {
+            Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
+            Err(e) => errors.push(e.message(&getter.sig.ident)),
         }
     }
+
+    // Kotlin identifier validity + per-package top-level-name collisions.
+    errors.extend(validate_symbols(ext, registry));
 
     if errors.is_empty() {
         Ok(())

@@ -1343,19 +1343,35 @@ impl JniGen {
         class_short: &str,
         override_: Option<&str>,
     ) -> String {
-        let name = match override_ {
-            Some(n) => n.to_string(),
-            None => match &self.interface_name_mangle {
-                Some(f) => f(package, class_short),
-                None => format!("{class_short}Api"),
-            },
-        };
+        let name = self.interface_short_name_unchecked(package, class_short, override_);
+        // The class-vs-interface collision is reported as a collected error
+        // by `validate_symbols` (issue #89) before any file is written, so
+        // this assert is an unreachable backstop for the emission path.
         assert!(
             name != class_short,
             "the generated interface name `{name}` must differ from the class name \
              `{class_short}` (a class and its interface cannot share a name in one package)"
         );
         name
+    }
+
+    /// The interface short name without the class-collision assert — the
+    /// non-panicking core, used by `validate_symbols` to build the
+    /// per-package name table (where the collision surfaces as a collected
+    /// error naming both origins).
+    pub(crate) fn interface_short_name_unchecked(
+        &self,
+        package: &str,
+        class_short: &str,
+        override_: Option<&str>,
+    ) -> String {
+        match override_ {
+            Some(n) => n.to_string(),
+            None => match &self.interface_name_mangle {
+                Some(f) => f(package, class_short),
+                None => format!("{class_short}Api"),
+            },
+        }
     }
 
     /// Attach interface information to a just-built class. The `.implements`

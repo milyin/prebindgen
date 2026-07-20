@@ -71,7 +71,20 @@ impl JniGen {
     /// paths, `_`-mangled JNI extern idents, Kotlin `package` declarations)
     /// are computed from this. Empty = no prefix.
     pub fn set_package_prefix(mut self, p: impl Into<String>) -> Self {
-        self.package = p.into().trim_matches('.').trim_matches('/').to_string();
+        let trimmed = p.into().trim_matches('.').trim_matches('/').to_string();
+        // Sanitize each segment to a valid Kotlin identifier (issue #89); a
+        // no-op for already-legal package names. The base package is read
+        // directly by many emitters, so mangling at this single storage
+        // point keeps every reader consistent; warn here (the raw input is
+        // only available now) when a segment was changed.
+        self.package = mangle_package(&trimmed);
+        if self.package != trimmed {
+            println!(
+                "cargo:warning=prebindgen: package prefix `{trimmed}` sanitized to `{}` \
+                 (invalid Kotlin package identifier)",
+                self.package
+            );
+        }
         self
     }
 
