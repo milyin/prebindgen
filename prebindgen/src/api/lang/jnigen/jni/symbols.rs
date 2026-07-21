@@ -70,8 +70,8 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             ));
         }
     };
-    // The surface renderers register imports; the validator discards them.
-    let mut imports = std::collections::BTreeSet::<String>::new();
+    // `build_wrapper_surface` is pure — no import set to thread; the
+    // validator only reads each surface's `fun.params`.
 
     // Classes (ptr / data / value / enum), in deterministic key order.
     let mut class_keys: Vec<&TypeKey> = ext
@@ -128,9 +128,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             // the SAME `build_wrapper_surface` emission uses — a body-less
             // prototype, so the validator doesn't pay for body codegen.
             if let Some((item_fn, _)) = registry.functions.get(&entry.rust_ident) {
-                if let Some(s) =
-                    build_wrapper_surface(ext, item_fn, registry, &mut imports, Some(&name), None)
-                {
+                if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), None) {
                     for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                         add_overload(&fn_scope, &ov, &origin, &mut errors);
                     }
@@ -178,9 +176,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
                 MemberKind::Constructor => (format!("class `{key}` factories"), None),
             };
             let origin = format!("member `{}`", m.rust_ident);
-            if let Some(s) =
-                build_wrapper_surface(ext, item_fn, registry, &mut imports, Some(&name), receiver)
-            {
+            if let Some(s) = build_wrapper_surface(ext, item_fn, registry, Some(&name), receiver) {
                 for ov in render_param_overloads(ext, item_fn, registry, &s.fun) {
                     add_overload(&scope, &ov, &origin, &mut errors);
                 }

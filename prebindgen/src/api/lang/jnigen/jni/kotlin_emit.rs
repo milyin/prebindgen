@@ -451,7 +451,6 @@ impl JniGen {
                         self,
                         item_fn,
                         registry,
-                        &mut imports,
                         Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
@@ -477,7 +476,6 @@ impl JniGen {
                             self,
                             item_fn,
                             registry,
-                            &mut imports,
                             Some(self.effective_method_name(key, m).as_str()),
                             None,
                         ) {
@@ -659,7 +657,6 @@ impl JniGen {
                         self,
                         item_fn,
                         registry,
-                        &mut imports,
                         Some(self.effective_method_name(key, m).as_str()),
                         Some(key),
                     ) {
@@ -690,7 +687,6 @@ impl JniGen {
                             self,
                             item_fn,
                             registry,
-                            &mut imports,
                             Some(self.effective_method_name(key, m).as_str()),
                             None,
                         ) {
@@ -1059,14 +1055,7 @@ impl JniGen {
                     )
                 });
             let kotlin_name = self.effective_function_name(subpackage, entry);
-            if let Some(f) = render_wrapper_fn(
-                self,
-                item_fn,
-                registry,
-                &mut imports,
-                Some(&kotlin_name),
-                None,
-            ) {
+            if let Some(f) = render_wrapper_fn(self, item_fn, registry, Some(&kotlin_name), None) {
                 // #52: idiomatic typed overloads for `.split_on_param`
                 // parameters, delegating to this selector wrapper.
                 for ov in render_param_overloads(self, item_fn, registry, &f) {
