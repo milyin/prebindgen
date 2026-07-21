@@ -169,9 +169,10 @@ fn factory_from_plan(
                 params.push((base.clone(), wire_ty));
                 parts.push(wrap);
             }
-            // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)`.
+            // Enum leaf → `Int`, rebuilt via `Enum.fromInt(i)` (raw text: the
+            // enum's short name, its FQN collected as a body import).
             PlanFieldKind::Enum { kotlin, .. } => {
-                let short = register_kt_type(kotlin, imports).to_string();
+                let short = register_fqn(kotlin.leaf_name()?, imports);
                 params.push((base.clone(), kt::KtType::int()));
                 parts.push(format!("{short}.fromInt({base})"));
             }
@@ -179,7 +180,7 @@ fn factory_from_plan(
             // `box_jint`-boxed (JVM `Ljava/lang/Integer;`, null for `None`), so
             // the factory takes `Int?` and rebuilds the nullable enum.
             PlanFieldKind::OptionEnum { kotlin, .. } => {
-                let short = register_kt_type(kotlin, imports).to_string();
+                let short = register_fqn(kotlin.leaf_name()?, imports);
                 params.push((base.clone(), kt::KtType::int().nullable()));
                 parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
             }
@@ -230,12 +231,16 @@ fn factory_from_plan(
                 }
             }
             // Leaf primitive / object (string, byte array, Vec, …) — forwarded
-            // unchanged to the constructor.
+            // unchanged to the constructor. Full-FQN param type; the
+            // render-time `ImportSet` shortens it.
             PlanFieldKind::Leaf {
                 kotlin, nullable, ..
             } => {
-                let ty = register_kt_type(kotlin, imports);
-                let ty = if *nullable { ty.nullable() } else { ty };
+                let ty = if *nullable {
+                    kotlin.clone().nullable()
+                } else {
+                    kotlin.clone()
+                };
                 params.push((base.clone(), ty));
                 parts.push(base);
             }
@@ -426,41 +431,18 @@ pub(crate) fn kotlin_null_sentinel(wire: &syn::Type) -> Option<&'static str> {
     })
 }
 
+/// Shorten a class FQN to its simple name for use in **raw body text** (a
+/// `fromParts` reconstruct fragment: `Child.fromParts(…)`, `Enum.fromInt(…)`,
+/// `ZenohId(bytes)`), registering the FQN into `used` — the body `Code`'s own
+/// import list. A non-dotted name (a Kotlin builtin like `String`) needs no
+/// import and passes through. Signature types are NOT shortened this way —
+/// those are full-FQN `KtType`s in the AST, shortened + imported by the
+/// render-time `ImportSet`.
 pub(crate) fn register_fqn(fqn: &str, used: &mut BTreeSet<String>) -> String {
     if fqn.contains('.') {
         used.insert(fqn.to_string());
         fqn.rsplit('.').next().unwrap_or(fqn).to_string()
     } else {
         fqn.to_string()
-    }
-}
-
-/// Structured sibling of [`register_fqn`]: register every dotted FQN leaf of
-/// `t` into the import set and return the type with those leaves shortened —
-/// compositional, so generic arguments and function-type members register
-/// individually instead of the composed text being treated as one name.
-pub(crate) fn register_kt_type(t: &kt::KtType, used: &mut BTreeSet<String>) -> kt::KtType {
-    match t {
-        kt::KtType::Named {
-            fqn,
-            args,
-            nullable,
-        } => kt::KtType::Named {
-            fqn: register_fqn(fqn, used),
-            args: args.iter().map(|a| register_kt_type(a, used)).collect(),
-            nullable: *nullable,
-        },
-        kt::KtType::Function {
-            params,
-            ret,
-            nullable,
-        } => kt::KtType::Function {
-            params: params
-                .iter()
-                .map(|(n, p)| (n.clone(), register_kt_type(p, used)))
-                .collect(),
-            ret: Box::new(register_kt_type(ret, used)),
-            nullable: *nullable,
-        },
     }
 }
