@@ -53,6 +53,7 @@ import io.prebindgen.covertest.storage.storagePutSlice
 import io.prebindgen.covertest.storage.storageShards
 import io.prebindgen.covertest.storage.storageShardsOpt
 import io.prebindgen.covertest.storage.storageTotalLen
+import io.prebindgen.covertest.storage.storageTryFromStamp
 import io.prebindgen.covertest.storage.storageTryWithLabel
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -71,13 +72,14 @@ private val boom = JniErrorHandler<Nothing> { je ->
     throw AssertionError("unexpected native error: $je")
 }
 
-/** Same idea as [boom] for the `Result` error channel's dedicated handler type. */
-private val boomStorage = StorageErrorHandler<Nothing> { je, message, handle ->
+/** Same idea as [boom] for the typed domain `onError` channel (issue #45: the
+ *  domain handler no longer carries `je` — that is the separate binding channel). */
+private val boomStorage = StorageErrorHandler<Nothing> { message, handle ->
     handle.close()
-    throw AssertionError("unexpected storage error: je=$je message=$message")
+    throw AssertionError("unexpected storage error: message=$message")
 }
 
-/** Thrown by the [StorageErrorHandler] used to probe the `Result` error channel. */
+/** Thrown by the [StorageErrorHandler] used to probe the domain error channel. */
 private class LabelError(val detail: String) : RuntimeException(detail)
 
 private var sectionCount = 0
@@ -407,18 +409,19 @@ fun main() {
         s.close()
     }
 
-    // ── Result<_, E> → onError channel (ok + domain error) ───────────────────
+    // ── Result<_, E> → two-caller error split (ok + domain error) ────────────
+    // A fallible-typed wrapper takes TWO handlers: `onBindingError` (the binding
+    // channel) and `onError` (the typed domain channel, no `je`). See #45.
     section("Result error channel storageTryWithLabel") {
-        val ok = storageTryWithLabel("hi", boomStorage)
+        val ok = storageTryWithLabel("hi", boom, boomStorage)
         check(ok.len(boom) == 1L)
         ok.close()
 
-        // Domain error: `je` is null (no JNI exception); the StorageError's
+        // Domain error: `onError` fires (NOT `onBindingError`). The StorageError's
         // flatten delivers its `message` field plus — via the type-level
         // `field_self` — the owned error handle itself, live and queryable.
         try {
-            storageTryWithLabel("", StorageErrorHandler<Storage> { je, message, handle ->
-                check(je == null) { "domain error should have a null jni exception, got $je" }
+            storageTryWithLabel("", boom, StorageErrorHandler<Storage> { message, handle ->
                 check(!handle.isClosed())
                 check(handle.message(boom) == "label must not be empty")
                 handle.close()
@@ -428,6 +431,51 @@ fun main() {
         } catch (e: LabelError) {
             check(e.detail == "label must not be empty")
         }
+    }
+
+    // ── #45: both channels of ONE fallible wrapper, each fires independently ──
+    section("two-caller split storageTryFromStamp") {
+        // Happy path: neither channel fires.
+        val ok = storageTryFromStamp(stampNew(5L, 0L, boom), boom, boomStorage)
+        check(ok.len(boom) == 1L)
+        ok.close()
+
+        // DOMAIN error (well-formed Stamp, rejected value): `onError` fires,
+        // `onBindingError` must NOT. The handler returns a throwaway Storage.
+        var domainMsg: String? = null
+        val domainRet = storageTryFromStamp(
+            stampNew(-1L, 0L, boom),
+            JniErrorHandler<Storage> { je ->
+                throw AssertionError("binding channel must not fire on a domain error: $je")
+            },
+            StorageErrorHandler<Storage> { message, handle ->
+                domainMsg = message
+                check(handle.message(boom) == "stamp secs must be positive")
+                handle.close()
+                storageNew(boom)
+            },
+        )
+        check(domainMsg == "stamp secs must be positive") { "domain onError did not fire: $domainMsg" }
+        domainRet.close()
+
+        // BINDING error (malformed Stamp value-blob): `onBindingError` fires,
+        // the domain `onError` must NOT.
+        var bindingJe: String? = null
+        val bindingRet = storageTryFromStamp(
+            Stamp(ByteArray(3)),   // Stamp is 16 bytes; 3 must be rejected on decode
+            JniErrorHandler<Storage> { je ->
+                bindingJe = je
+                storageNew(boom)
+            },
+            StorageErrorHandler<Storage> { _, handle ->
+                handle.close()
+                throw AssertionError("domain channel must not fire on a binding error")
+            },
+        )
+        check(bindingJe != null && bindingJe!!.contains("wrong byte length")) {
+            "binding onBindingError did not fire: $bindingJe"
+        }
+        bindingRet.close()
     }
 
     // ── input_wrapper / output_wrapper: Millis ⇄ Long ────────────────────────

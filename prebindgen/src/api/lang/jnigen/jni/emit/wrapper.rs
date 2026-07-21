@@ -171,11 +171,9 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // Error-position expansion: when the fn returns `Result<T, E>` and an error
     // plan is declared, the **`?`** is applied here — the extern peels the
     // `Result` (Err arm decomposes `E` into the `ze` leaves and invokes the
-    // error callback), and the success path uses `T`'s converter (not the
-    // `Result<T, E>` rank-2 wrapper). `n_ze` = the error leaf count (the callback
-    // arity after the fixed `je`).
+    // typed DOMAIN handler), and the success path uses `T`'s converter (not the
+    // `Result<T, E>` rank-2 wrapper).
     let error_plan = registry.error_plans.get(original_ident);
-    let n_ze = error_plan.map_or(0, |p| p.leaves.len());
     let is_convert = matches!(&plan.output, FnOutputPlan::Value(v) if v.is_convert);
     // The output converter entry (`None` for callback delivery). The lookup
     // was validated at plan build; re-resolving here keeps the plan free of
@@ -244,23 +242,17 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         // `Result<T, E>` peel (the automatic `?`): success ⇒ `T`; on `Err(e)`,
         // decompose `e` into the `ze` leaves — through the SAME shared leaf
         // encoder every output/callback delivery uses (typed jvalues, handle
-        // wraps, Option-nested accessor unwrap) — and invoke the error
-        // callback with `je = None` (a domain error, not a binding one), then
-        // return the sentinel. A failure while ENCODING the error itself
-        // degrades to a binding error: `je` = message, ze = defaults. The
-        // success `T` flows into the normal output phase.
+        // wraps, Option-nested accessor unwrap) — and invoke the typed DOMAIN
+        // handler (no `je`, no defaults), then return the sentinel. A failure
+        // while ENCODING the error itself degrades to the BINDING channel
+        // (`signal_binding_error`). The success `T` flows into the normal
+        // output phase.
         let eze_idents: Vec<syn::Ident> = (0..ep.leaves.len())
             .map(|i| format_ident!("__eze{}", i))
             .collect();
         let ze_fail = |msg: TokenStream| -> TokenStream {
             quote! {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
-                    &mut env, &__error_sink,
-                    &__SINK_MID, __SINK_FQN, __SINK_DESCR,
-                    ::core::option::Option::Some(&#msg),
-                    &__zd,
-                );
+                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &#msg);
                 return #on_err;
             }
         };
@@ -271,10 +263,9 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__de) => {
                     #ze_stmts
-                    signal_error(
-                        &mut env, &__error_sink,
-                        &__SINK_MID, __SINK_FQN, __SINK_DESCR,
-                        ::core::option::Option::None,
+                    signal_domain_error(
+                        &mut env, &__domain_sink,
+                        &__DSINK_MID, __DSINK_FQN, __DSINK_DESCR,
                         &[#(#ze_args),*],
                     );
                     return #on_err;
@@ -319,7 +310,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
                 let #next_ident = match #stage_fn(&mut env, #prev_out) {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                         return #on_err;
                     }
                 };
@@ -331,7 +322,7 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             match #conv_out(&mut env, #prev_out) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                     #on_err
                 }
             }
@@ -339,45 +330,52 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
         phase
     };
 
-    // `__ze_defaults` — the typed default ze values passed at **binding**
-    // error sites (a `JniError`, where `je` carries the message). The handler
-    // interface types its ze exactly like a builder's leaves, so the defaults
-    // must be valid at those types: zeroed jvalue for raw primitives, `""`,
-    // an empty byte array, a closed (`ptr = 0`) handle instance, JVM null for
-    // plan-nullable leaves. Built LAZILY (the closure runs only on the cold
-    // error path); in scope for the prelude + every helper-generated
-    // `signal_error` call.
-    let ze_default_exprs: Vec<TokenStream> = error_plan
-        .map(|ep| default_ze_jvalues(ext, registry, ep))
-        .unwrap_or_default();
-    debug_assert_eq!(ze_default_exprs.len(), n_ze);
-    // The error sink is a typed `<Err>Handler` / `JniErrorHandler` fun
-    // interface; its `run` method ID is resolved once per process on the
-    // interface class (the sink instance differs per call). The trio is in
-    // scope for every `signal_error` call the prelude/output phases emit.
-    let sink_spec = plan.onerror_iface.as_ref().unwrap_or_else(|| {
+    // Error sinks. Both channels are typed `fun interface`s whose `run` method
+    // ID is resolved once per process on the interface class (the sink instance
+    // differs per call). The BINDING channel (`__error_sink` + `__SINK_*`, the
+    // base `JniErrorHandler`) is always present — every wrapper can hit a
+    // binding/marshalling failure. The DOMAIN channel (`__domain_sink` +
+    // `__DSINK_*`, the typed `<Src>Handler`) is present only for a fallible fn
+    // with a declared error plan; its `Err(E)` decomposition delivers the real
+    // leaves (no `je`, no fabricated defaults).
+    let error_ifaces = plan.onerror_iface.as_ref().unwrap_or_else(|| {
         panic!(
             "jnigen: cannot derive the onError handler interface for `{}`",
             original_ident
         )
     });
-    let sink_fqn_lit = syn::LitStr::new(&sink_spec.raw_slash_fqn(), Span::call_site());
-    let sink_descr_lit = syn::LitStr::new(&sink_spec.descr, Span::call_site());
-    let ze_defaults_setup = quote! {
-        #[allow(unused_variables)]
-        let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-            ::std::vec![#(#ze_default_exprs),*]
-        };
+    let bsink_fqn_lit = syn::LitStr::new(&error_ifaces.binding.raw_slash_fqn(), Span::call_site());
+    let bsink_descr_lit = syn::LitStr::new(&error_ifaces.binding.descr, Span::call_site());
+    let (domain_setup, domain_sink_param) = match &error_ifaces.domain {
+        Some(dsink) => {
+            let dfqn = syn::LitStr::new(&dsink.raw_slash_fqn(), Span::call_site());
+            let ddescr = syn::LitStr::new(&dsink.descr, Span::call_site());
+            (
+                quote! {
+                    #[allow(non_upper_case_globals)]
+                    static __DSINK_MID: ::prebindgen::lang::CachedIfaceMethod =
+                        ::prebindgen::lang::CachedIfaceMethod::new();
+                    const __DSINK_FQN: &str = #dfqn;
+                    const __DSINK_DESCR: &str = #ddescr;
+                },
+                quote!(__domain_sink: jni::objects::JObject<'a>,),
+            )
+        }
+        None => (quote!(), quote!()),
+    };
+    let sinks_setup = quote! {
         #[allow(non_upper_case_globals)]
         static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod =
             ::prebindgen::lang::CachedIfaceMethod::new();
-        const __SINK_FQN: &str = #sink_fqn_lit;
-        const __SINK_DESCR: &str = #sink_descr_lit;
+        const __SINK_FQN: &str = #bsink_fqn_lit;
+        const __SINK_DESCR: &str = #bsink_descr_lit;
+        #domain_setup
     };
 
-    // The trailing `__error_sink` param is the foreign **error callback** (a
-    // function type `(je: String?, ze…) -> R`); the wrapper passes a capture.
-    // Declared last so the wire param order matches the Kotlin `external fun`.
+    // Trailing sink params: `__error_sink` (binding) always, then
+    // `__domain_sink` (typed domain error) for a fallible fn — a capture is
+    // passed for each. Declared after the wire params + builder so the order
+    // matches the Kotlin `external fun`.
     quote! {
         #[no_mangle]
         #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
@@ -387,8 +385,9 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
             #(#wire_params,)*
             #builder_param
             __error_sink: jni::objects::JObject<'a>,
+            #domain_sink_param
         ) -> #wire_return {
-            #ze_defaults_setup
+            #sinks_setup
             #(#prelude)*
             #output_phase
         }
@@ -470,8 +469,7 @@ fn emit_input_param(
                     let #tmp = match #conv(&mut env, &#vid) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                             return #on_err;
                         }
                     };
@@ -531,8 +529,7 @@ fn emit_input_param(
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
             prelude.push(quote!(
                 if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some("Operation on a closed native handle."), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
                     return #on_err;
                 }
                 let #arg_ident: #arg_ty = unsafe {
@@ -611,7 +608,7 @@ fn emit_plain_decode(
             let #arg_mut #arg_ident = match #decode_call {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                     return #on_err;
                 }
             };
@@ -624,7 +621,7 @@ fn emit_plain_decode(
             let #stage0_ident = match #decode_call {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                     return #on_err;
                 }
             };
@@ -647,7 +644,7 @@ fn emit_plain_decode(
                 let #bind_mut #out_ident = match #stage_fn(&mut env, #prev) {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                         return #on_err;
                     }
                 };
@@ -726,8 +723,7 @@ pub(crate) fn emit_expanded_param(
                     let __v = match #inner_conv(&mut env, &#value_ident) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                             return #on_err;
                         }
                     };
@@ -750,8 +746,7 @@ pub(crate) fn emit_expanded_param(
             wire_params.push(quote!(#wire_ident: jni::sys::jlong));
             prelude.push(quote!(
                 if #wire_ident == 0 || (#wire_ident & 1) == 1 {
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some("Operation on a closed native handle."), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, "Operation on a closed native handle.");
                     return #on_err;
                 }
                 let #local: #leaf_ty = unsafe {
@@ -783,7 +778,7 @@ pub(crate) fn emit_expanded_param(
                 let #local = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                         return #on_err;
                     }
                 };
@@ -794,7 +789,7 @@ pub(crate) fn emit_expanded_param(
                 let #stage0 = match #decode_call {
                     ::core::result::Result::Ok(__v) => __v,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                         return #on_err;
                     }
                 };
@@ -812,7 +807,7 @@ pub(crate) fn emit_expanded_param(
                     let #out_ident = match #stage_fn(&mut env, #prev) {
                         ::core::result::Result::Ok(__v) => __v,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                             return #on_err;
                         }
                     };
@@ -836,7 +831,7 @@ pub(crate) fn emit_expanded_param(
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 let __je = <__JniErr as ::core::convert::From<::std::string::String>>::from(__e);
-                let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__je.to_string()), &__zd);
+                signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__je.to_string());
                 return #on_err;
             }
         };

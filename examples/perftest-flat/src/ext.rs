@@ -148,6 +148,30 @@ pub fn storage_try_with_label(label: &str) -> Result<Storage, StorageError> {
     })
 }
 
+/// Build a storage stamped with `s`, **failing** on a non-positive `secs` (a
+/// domain [`StorageError`]). This takes a `Stamp` **by value** (a value-blob
+/// input), so a malformed `Stamp` blob fails the input decode FIRST — the
+/// binding channel — while a well-formed but rejected value fails in the domain
+/// channel. It is the covertest exercise for issue #45's two-caller split: one
+/// wrapper, both `onBindingError` and `onError` provable independently.
+#[prebindgen]
+pub fn storage_try_from_stamp(s: Stamp) -> Result<Storage, StorageError> {
+    if s.secs <= 0 {
+        return Err(StorageError {
+            message: "stamp secs must be positive".to_string(),
+        });
+    }
+    Ok(Storage {
+        payloads: vec![Payload {
+            id: s.secs,
+            seq: 0,
+            value: 0.0,
+            flag: false,
+            label: None,
+        }],
+    })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Summary — an opaque handle whose fields decompose at the boundary.
 // ─────────────────────────────────────────────────────────────────────────────

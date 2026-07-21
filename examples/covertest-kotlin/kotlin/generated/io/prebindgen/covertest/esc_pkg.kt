@@ -31,12 +31,12 @@ public class Esc_Probe(initialPtr: Long) : NativeHandle(initialPtr) {
      */
     public fun escapeProbeValue(onError: JniErrorHandler<Long>): Long {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
-        val __cap = JniErrorHandlerCapture.acquire()
+        val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
-            CovNative.escape_probe_value(this_ptr, __cap)
+            CovNative.escape_probe_value(this_ptr, __bcap)
         }
-        if (__cap.failed) return onError.run(__cap.je)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
         return __ret
     }
 
@@ -46,9 +46,9 @@ public class Esc_Probe(initialPtr: Long) : NativeHandle(initialPtr) {
 
         /** Construct an [`EscapeProbe`] (its covertest constructor). */
         public fun escapeProbeNew(value: Long, onError: JniErrorHandler<Esc_Probe>): Esc_Probe {
-            val __cap = JniErrorHandlerCapture.acquire()
-            val __ret = Esc_Probe(CovNative.escapeProbeNew(value, __cap))
-            if (__cap.failed) return onError.run(__cap.je)
+            val __bcap = JniErrorHandlerCapture.acquire()
+            val __ret = Esc_Probe(CovNative.escapeProbeNew(value, __bcap))
+            if (__bcap.failed) return onError.run(__bcap.ze0)
             return __ret
         }
     }

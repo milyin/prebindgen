@@ -388,49 +388,67 @@ fn is_string_type(ty: &syn::Type) -> bool {
         if tp.path.segments.last().is_some_and(|s| s.ident == "String"))
 }
 
-pub(crate) fn build_signal_error_item() -> syn::Item {
+/// The pending-exception guard shared by both signal helpers: if a JVM
+/// exception is already pending (a Java upcall threw during a converter), let
+/// it propagate untouched — do NOT invoke an error callback over it, and do
+/// not clear/describe it (that would swallow the real exception). The extern
+/// returns its sentinel and the pending exception surfaces when control
+/// returns to the JVM.
+pub(crate) fn build_signal_binding_error_item() -> syn::Item {
     syn::parse_quote!(
         #[allow(non_snake_case, dead_code)]
-        pub(crate) fn signal_error(
+        pub(crate) fn signal_binding_error(
             env: &mut jni::JNIEnv,
             sink: &jni::objects::JObject,
             mid: &::prebindgen::lang::CachedIfaceMethod,
             fqn: &str,
             descr: &str,
-            je: ::core::option::Option<&str>,
-            ze: &[jni::sys::jvalue],
+            je: &str,
         ) {
-            // If a JVM exception is already pending (a Java upcall threw during a
-            // converter), let it propagate untouched — do NOT invoke the error
-            // callback over it (and do not clear/describe it: that would swallow
-            // the real exception). The extern returns its sentinel and the pending
-            // exception surfaces when control returns to the JVM.
             if env.exception_check().unwrap_or(false) {
                 return;
             }
-            // `je` (binding message, `Some` only for a `JniError`) crosses as the
-            // fixed first `String?`; the `ze` library-error leaves follow as
-            // pre-encoded object-slot jvalues — all nullable object params of
-            // the sink's typed `<Err>Handler.run` (`mid`/`fqn`/`descr` are the
-            // per-extern cached interface method).
-            let __je: jni::objects::JObject = match je {
-                ::core::option::Option::Some(__m) => match env.new_string(__m) {
-                    Ok(s) => s.into(),
-                    Err(e) => {
-                        tracing::error!("signal_error: new_string failed: {}", e);
-                        return;
-                    }
-                },
-                ::core::option::Option::None => jni::objects::JObject::null(),
+            // The binding message crosses as the single `String` param of the
+            // `JniErrorHandler.run` (`mid`/`fqn`/`descr` are the per-extern
+            // cached interface method).
+            let __je: jni::objects::JObject = match env.new_string(je) {
+                Ok(s) => s.into(),
+                Err(e) => {
+                    tracing::error!("signal_binding_error: new_string failed: {}", e);
+                    return;
+                }
             };
-            let mut __args: ::std::vec::Vec<jni::sys::jvalue> =
-                ::std::vec::Vec::with_capacity(1 + ze.len());
-            __args.push(jni::sys::jvalue { l: __je.as_raw() });
-            __args.extend_from_slice(ze);
+            let __args = [jni::sys::jvalue { l: __je.as_raw() }];
             // On failure leave any pending exception in place (don't describe/
             // clear it) so it propagates rather than being swallowed.
             if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, &__args) {
-                tracing::error!("signal_error: error-callback invoke failed: {}", e);
+                tracing::error!("signal_binding_error: error-callback invoke failed: {}", e);
+            }
+        }
+    )
+}
+
+/// Invoke a fallible function's typed **domain** error handler
+/// (`<Src>Handler.run(ze…)`) with the pre-encoded decomposed-error leaves.
+/// There is no leading `je` and no defaults — this is called ONLY on `Err(E)`.
+pub(crate) fn build_signal_domain_error_item() -> syn::Item {
+    syn::parse_quote!(
+        #[allow(non_snake_case, dead_code)]
+        pub(crate) fn signal_domain_error(
+            env: &mut jni::JNIEnv,
+            sink: &jni::objects::JObject,
+            mid: &::prebindgen::lang::CachedIfaceMethod,
+            fqn: &str,
+            descr: &str,
+            ze: &[jni::sys::jvalue],
+        ) {
+            if env.exception_check().unwrap_or(false) {
+                return;
+            }
+            // On failure leave any pending exception in place (don't describe/
+            // clear it) so it propagates rather than being swallowed.
+            if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, ze) {
+                tracing::error!("signal_domain_error: error-callback invoke failed: {}", e);
             }
         }
     )
@@ -1238,11 +1256,13 @@ impl Prebindgen for JniGen {
         );
         let mut items = vec![alias];
         items.extend(owned_object_prerequisite_items());
-        // The single `signal_error` channel fn the extern bodies call on any
-        // `Err`. Emitted above the converters so wrapper code references it by
-        // bare name; the binding crate reaches it as
-        // `<include_module>::signal_error` from outside the file.
-        items.push(build_signal_error_item());
+        // The two error-channel fns the extern bodies call: `signal_binding_error`
+        // (binding/system failure → `JniErrorHandler`) and `signal_domain_error`
+        // (a fallible fn's `Err(E)` → the typed `<Src>Handler`). Emitted above the
+        // converters so wrapper code references them by bare name; the binding
+        // crate reaches them as `<include_module>::signal_*` from outside the file.
+        items.push(build_signal_binding_error_item());
+        items.push(build_signal_domain_error_item());
         let _ = registry;
         // Handle destructors — one `extern "C" freePtr<suffix>` per
         // non-suppressed opaque handle (the Rust half of the typed-handle

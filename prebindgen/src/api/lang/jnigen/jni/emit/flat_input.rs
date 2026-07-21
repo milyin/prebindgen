@@ -614,7 +614,7 @@ pub(crate) fn render_flat_input_decode(
             match #conv(&mut env, &#wid) {
                 ::core::result::Result::Ok(__v) => __v,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                     return #on_err;
                 }
             }

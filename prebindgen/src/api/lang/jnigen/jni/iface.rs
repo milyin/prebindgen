@@ -277,17 +277,17 @@ impl IfaceSpec {
     /// Safe to reuse per thread: the error sink is invoked **synchronously**
     /// inside the extern on the calling thread (never the async daemon-callback
     /// thread, which has its own thread-local), and the wrapper reads the slots
-    /// into the `onError` arguments *before* any re-entrant call. Assumes the
-    /// error-handler shape: `params[0]` is `je: String?`, the rest are `ze`.
+    /// into the handler arguments *before* any re-entrant call. Slots are
+    /// uniform — one nullable `ze{i}` per interface param, no special leading
+    /// `je` — so the binding `JniErrorHandler` (single `je` param → `ze0`) and a
+    /// typed domain `<Src>Handler` (the decomposed leaves) share one shape.
     pub fn to_capture_decl(&self) -> kt::KtDecl {
         let cap = self.capture_name();
         let raw = self.raw_name();
-        let n_ze = self.params.len() - 1;
+        let n_ze = self.params.len();
 
-        let mut fields = kt::Code::new()
-            .line("@JvmField var failed: Boolean = false")
-            .line("@JvmField var je: String? = null");
-        for (i, p) in self.params[1..].iter().enumerate() {
+        let mut fields = kt::Code::new().line("@JvmField var failed: Boolean = false");
+        for (i, p) in self.params.iter().enumerate() {
             // The slot is nullable (null until the capture fires).
             let ty = p.raw.clone().nullable();
             fields = fields.line(format!("@JvmField var ze{i}: {ty} = null"));
@@ -299,12 +299,12 @@ impl IfaceSpec {
             .map(|p| format!("{}: {}", p.name, p.raw))
             .collect::<Vec<_>>()
             .join(", ");
-        let mut run_body = String::from("failed = true; this.je = je");
-        for (i, p) in self.params[1..].iter().enumerate() {
+        let mut run_body = String::from("failed = true");
+        for (i, p) in self.params.iter().enumerate() {
             run_body.push_str(&format!("; this.ze{i} = {}", p.name));
         }
 
-        let mut reset = String::from("c.failed = false; c.je = null");
+        let mut reset = String::from("c.failed = false");
         for i in 0..n_ze {
             reset.push_str(&format!("; c.ze{i} = null"));
         }
@@ -1207,25 +1207,21 @@ pub(crate) fn fixed_folder_typed_groups(
     ])
 }
 
-/// Interface for a fallible function's **onError** handler: `run(je: String?,
-/// ze-leaves…): R`, `<out R>`. The `ze` leaves are typed EXACTLY like a
-/// builder's for the same decomposition — the error channel IS the output
-/// channel with a fixed leading `je`. Contract: `je != null` ⇒ binding/system
-/// error, the ze carry **default values** (0 / "" / empty / closed handle /
-/// null for plan-nullable leaves); `je == null` ⇒ domain error, the ze carry
-/// the decomposed error. Keyed by the error type's deconstructor declaration.
-/// Named `<decl-base>Handler`, placed in the error type's package.
+/// Interface for a fallible function's **domain** onError handler:
+/// `run(ze-leaves…): R`, `<out R>`. The `ze` leaves are typed EXACTLY like a
+/// builder's for the same decomposition — the domain-error channel IS the
+/// output channel. This handler is called ONLY on a domain error (`Err(E)`);
+/// binding/system failures go to the separate [`jni_error_handler_iface_spec`]
+/// (`JniErrorHandler`) channel, so there is no discriminator and no defaults.
+/// Keyed by the error type's deconstructor declaration. Named
+/// `<decl-base>Handler`, placed in the error type's package.
 pub(crate) fn error_handler_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     decon: &DeconId,
 ) -> Option<IfaceSpec> {
     let spec = registry.decon_plans.get(decon)?;
-    let mut params: Vec<IfaceParam> = vec![IfaceParam::same(
-        "je".to_string(),
-        kt::KtType::string().nullable(),
-    )];
-    params.extend(plan_leaf_params(ext, registry, &spec.leaves)?);
+    let params: Vec<IfaceParam> = plan_leaf_params(ext, registry, &spec.leaves)?;
     let name = format!(
         "{}Handler",
         decon_base_name(&subject_short(&spec.source), Some(decon))
@@ -1240,11 +1236,11 @@ pub(crate) fn error_handler_iface_spec(
         kt::KtType::var_r(),
     );
     iface.kdoc = Some(format!(
-        "Error callback. Contract: `je != null` ⇒ a binding/system-tier failure — `je` is\n\
-         its message and the remaining parameters carry defaults; `je == null` ⇒ a domain\n\
-         error — the remaining parameters carry the decomposed `{source_short}`. The\n\
-         wrapper returns whatever `run` returns; throwing from `run` is safe (it executes\n\
-         after the native call has returned)."
+        "Domain-error callback: called only when the native function returns `Err` — the\n\
+         parameters carry the decomposed `{source_short}`. Binding/system failures go to the\n\
+         separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`\n\
+         discriminator here. The wrapper returns whatever `run` returns;\n\
+         throwing from `run` is safe (it executes after the native call has returned)."
     ));
     Some(iface)
 }
@@ -1265,31 +1261,51 @@ pub(crate) fn jni_error_handler_iface_spec(ext: &JniGen) -> IfaceSpec {
         kt::KtType::var_r(),
     );
     iface.kdoc = Some(
-        "Error callback for wrappers without a declared error type. `je` is the\n\
-         binding/system failure message (any converter in the chain may fail). The\n\
-         wrapper returns whatever `run` returns; throwing from `run` is safe (it\n\
-         executes after the native call has returned)."
+        "Binding-error callback — every wrapper's binding/system failure channel (any\n\
+         converter in the chain may fail, or a handle may be closed). `je` is the\n\
+         failure message. For an infallible wrapper this is the sole `onError`; a\n\
+         fallible wrapper takes it as `onBindingError` alongside the typed domain\n\
+         handler. The wrapper returns whatever `run` returns;\n\
+         throwing from `run` is safe (it executes after the native call has returned)."
             .to_string(),
     );
     iface
 }
 
-/// The onError handler spec for a declared function: its error plan's
-/// declaration-keyed typed handler, or the shared global
-/// `JniErrorHandler`. Thin KEY dispatch into the [`JniGen::iface_spec`]
-/// memo.
+/// The two onError handler interfaces for a declared function. A function has
+/// two independent error channels: a binding/system failure (any converter in
+/// the chain, a closed handle, …) and — for a `Result<_, E>` function — a
+/// domain error (`Err(E)`). Each is delivered to its own SAM handler, so
+/// neither carries a discriminator or fabricated defaults.
+pub(crate) struct ErrorIfaces {
+    /// Binding/system-failure channel — always the base `JniErrorHandler`.
+    pub binding: std::sync::Arc<IfaceSpec>,
+    /// Domain-error channel — the typed `<Src>Handler` (no `je`); `Some` iff
+    /// the function has a declared error plan (returns `Result<_, E>`).
+    pub domain: Option<std::sync::Arc<IfaceSpec>>,
+}
+
+/// The onError handler interfaces for a declared function — the always-present
+/// binding `JniErrorHandler` plus, for a fallible function, its
+/// declaration-keyed typed domain `<Src>Handler`. Thin KEY dispatch into the
+/// [`JniGen::iface_spec`] memo. `None` = the domain handler is underivable
+/// (the Rust emitter panics, the Kotlin renderer skips) — the binding channel
+/// alone always derives.
 pub(crate) fn onerror_iface_spec(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
     fn_ident: &syn::Ident,
-) -> Option<std::sync::Arc<IfaceSpec>> {
-    let key = match registry.error_plans.get(fn_ident) {
-        Some(plan) => SpecKey::Handler(
-            plan.decon
+) -> Option<ErrorIfaces> {
+    let binding = ext.iface_spec(registry, &SpecKey::JniErrorHandler)?;
+    let domain = match registry.error_plans.get(fn_ident) {
+        Some(plan) => {
+            let decon = plan
+                .decon
                 .clone()
-                .expect("error plans are always record-built (decon is Some)"),
-        ),
-        None => SpecKey::JniErrorHandler,
+                .expect("error plans are always record-built (decon is Some)");
+            Some(ext.iface_spec(registry, &SpecKey::Handler(decon))?)
+        }
+        None => None,
     };
-    ext.iface_spec(registry, &key)
+    Some(ErrorIfaces { binding, domain })
 }
