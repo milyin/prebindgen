@@ -125,6 +125,10 @@ const OWNERSHIP_MARKER_CONTENT: &str = "prebindgen Kotlin output v1\n";
 /// marker. Subsequent writes stage the complete output beside the root before
 /// replacing the marked tree, so stale generated files are removed without
 /// deleting caller-owned files or leaving an old tree half-deleted on failure.
+///
+/// The marker's content is matched ignoring surrounding whitespace and line
+/// endings, so a committed marker checked out with CRLF (git `autocrlf` on
+/// Windows) is still recognized.
 pub fn write_files(files: &[KtFile], kotlin_root: &Path) -> Result<Vec<PathBuf>, WriteKotlinError> {
     let root_state = inspect_root(kotlin_root)?;
     let parent = kotlin_root.parent().unwrap_or_else(|| Path::new("."));
@@ -187,7 +191,11 @@ fn inspect_root(kotlin_root: &Path) -> Result<RootState, WriteKotlinError> {
             kotlin_root.display()
         )));
     }
-    if fs::read_to_string(&marker)? != OWNERSHIP_MARKER_CONTENT {
+    // Compare ignoring surrounding whitespace / line endings: the marker is a
+    // sentinel, and git's `autocrlf` rewrites the committed LF marker to CRLF on
+    // a Windows checkout — an exact-byte compare would then reject the (present,
+    // valid) marker. Trimming still rejects a wrong/foreign/empty marker.
+    if fs::read_to_string(&marker)?.trim() != OWNERSHIP_MARKER_CONTENT.trim() {
         return Err(WriteKotlinError::Other(format!(
             "refusing to replace non-empty Kotlin output root `{}` without a prebindgen ownership marker",
             kotlin_root.display()
