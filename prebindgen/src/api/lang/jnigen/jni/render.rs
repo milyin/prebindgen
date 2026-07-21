@@ -472,7 +472,7 @@ pub(crate) fn render_extern_decl(
     // The name and wire params come straight off the lowered plan — the
     // same classification the Rust extern and the Kotlin call site consume,
     // so the three sites agree on arity, types, and symbol by construction.
-    let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
+    let fplan = ext.fn_plan(registry, f).ok()?;
     let jni_call = &fplan.jni_method;
     let mut params: Vec<kt::KtParam> = Vec::new();
     for leaf in fplan.leaves() {
@@ -745,7 +745,7 @@ pub(crate) fn build_wrapper_surface(
     receiver_key: Option<&TypeKey>,
 ) -> Option<WrapperSurface> {
     let mut body_imports = BTreeSet::new();
-    let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
+    let fplan = ext.fn_plan(registry, f).ok()?;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident (the
     // plan's `jni_method`). The per-entry `.name("...")` override only
     // changes the *user-facing* Kotlin wrapper name; the JNI call still has

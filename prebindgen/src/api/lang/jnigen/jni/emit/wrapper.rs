@@ -152,7 +152,8 @@ pub(crate) fn emit_jni_function_wrapper_with_callee(
     // function's sentinel into their early-`return` path.
     // Backstop only — `validate_resolved` reports every plan failure before
     // any writer runs, so this panic is unreachable through the write paths.
-    let plan = JniFunctionPlan::build(ext, registry, f)
+    let plan = ext
+        .fn_plan(registry, f)
         .unwrap_or_else(|e| panic!("{}", e.message(original_ident)));
     let wrapper_ident = syn::Ident::new(&plan.native_symbol, Span::call_site());
     // Output (data) expansion: when output expansion was declared for this

@@ -522,3 +522,45 @@ fn iface_spec_memo_shares_one_derivation() {
     assert!(Arc::ptr_eq(&cb1, &cb2), "callback identity shared");
     assert_eq!(cb1.descr, "(JLjava/lang/String;)V");
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// Function-plan memo (the #90 "build once, store" capstone): validation
+// and every emitter share ONE `JniFunctionPlan` per function ident.
+// ────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn fn_plan_memo_shares_one_derivation() {
+    use crate::SourceLocation;
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![(
+        syn::Item::Fn(syn::parse_quote!(
+            pub fn z_do_thing(x: i64) -> i64 {
+                unimplemented!()
+            }
+        )),
+        loc.clone(),
+    )];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("thing").fun(crate::fun!(z_do_thing)));
+    // resolve runs validation, which builds and stores every function's plan.
+    let gen = registry.resolve(jni).expect("resolve");
+    let (ext, registry) = (gen.adapter(), gen.registry());
+    let f = &registry
+        .functions
+        .get(&syn::parse_str::<syn::Ident>("z_do_thing").unwrap())
+        .expect("indexed")
+        .0;
+
+    // The plan is already in the memo (populated at resolve by validation) —
+    // repeated lookups return the SAME allocation, and it equals what a fresh
+    // `JniFunctionPlan::build` derives.
+    let a = ext.fn_plan(registry, f).expect("plan");
+    let b = ext.fn_plan(registry, f).expect("plan");
+    assert!(std::rc::Rc::ptr_eq(&a, &b), "one plan per function ident");
+    assert_eq!(a.native_symbol, b.native_symbol);
+    let fresh = JniFunctionPlan::build(ext, registry, f).expect("fresh build");
+    assert_eq!(a.native_symbol, fresh.native_symbol);
+    assert_eq!(a.jni_method, fresh.jni_method);
+}

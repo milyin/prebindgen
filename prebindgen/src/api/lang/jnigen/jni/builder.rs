@@ -97,6 +97,7 @@ impl JniGen {
             ignored_const_idents: std::collections::HashSet::new(),
             local_fns: Vec::new(),
             iface_specs: Default::default(),
+            fn_plans: Default::default(),
         };
         // Built-in rank-2 `Result<_, _>` peel: every Result<T, E> succeeds
         // as T and routes E to the error-sink on Err. The rank tables are

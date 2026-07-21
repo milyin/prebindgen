@@ -469,6 +469,18 @@ pub struct JniGen {
     /// `(self, registry)` — cloning the builder just clones the cache.
     pub(crate) iface_specs:
         std::cell::RefCell<std::collections::BTreeMap<SpecKey, std::sync::Arc<IfaceSpec>>>,
+
+    /// Memoized per-function lowered plans, one [`JniFunctionPlan`] per bound
+    /// function/const-getter ident — the single lowering shared by validation
+    /// and every emitter (Rust extern, JNINative extern, Kotlin wrapper,
+    /// report), so a function's binding is derived ONCE per generation
+    /// instead of ~8× (issue #90's deferred "build the plan once and store
+    /// it" — `fn_plan.rs`). Populated eagerly at `resolve` by
+    /// [`validate_bindings`], which builds every declared function's plan for
+    /// the collision tables; the writers then read it. Same interior-mutable
+    /// "derived state, keyed by `(self, registry)`" contract as
+    /// [`Self::iface_specs`].
+    pub(crate) fn_plans: std::cell::RefCell<HashMap<syn::Ident, std::rc::Rc<JniFunctionPlan>>>,
 }
 
 // ── Sibling submodules (carved from the former monolithic file) ─────────
