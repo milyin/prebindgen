@@ -59,14 +59,16 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
 }
 
 /// Build the Kotlin `data class` declaration for a `data_class`-declared
-/// Rust struct. Returns the class plus the FQN imports its (pre-shortened)
-/// field/factory type strings reference.
+/// Rust struct. The class is **self-contained**: property/factory-param types
+/// are full-FQN `KtType`s (the render-time `ImportSet` shortens + imports
+/// them), and the `fromParts` factory's raw-text class references carry their
+/// imports on the factory body `Code`.
 pub(crate) fn build_data_class(
     ext: &JniGen,
     class_name: &str,
     item_struct: &syn::ItemStruct,
     registry: &Registry<KotlinMeta>,
-) -> (kt::KtClass, BTreeSet<String>) {
+) -> kt::KtClass {
     let fields_named = match &item_struct.fields {
         syn::Fields::Named(n) => &n.named,
         _ => {
@@ -77,7 +79,6 @@ pub(crate) fn build_data_class(
         }
     };
 
-    let mut imports: BTreeSet<String> = BTreeSet::new();
     let mut ctor_params: Vec<kt::KtCtorParam> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
@@ -118,11 +119,10 @@ pub(crate) fn build_data_class(
                         item_struct.ident, field_ident, h.leaf_key
                     )
                 });
-            let short = register_fqn(&fqn, &mut imports);
             ctor_params.push(
                 kt::KtCtorParam::new(
                     &kotlin_field_name,
-                    handle_kt_type(&h.strategy, &kt::KtType::cls(short)),
+                    handle_kt_type(&h.strategy, &kt::KtType::cls(fqn)),
                 )
                 .val(),
             );
@@ -147,7 +147,7 @@ pub(crate) fn build_data_class(
                     field_ident
                 )
             });
-        let ty = register_kt_type(&kotlin_ty, &mut imports);
+        let ty = kotlin_ty;
         // `Option<T>` whose wire is a JNI primitive (jlong/jint/jboolean/…)
         // and that *isn't* an opaque handle (handled above) is encoded by
         // the struct emitter as the bare primitive with a sentinel for
@@ -174,15 +174,22 @@ pub(crate) fn build_data_class(
     // `fromParts` companion factory — recursively flattened the same way as the
     // native `flatten_struct_encode`: nested data-class fields are inlined as
     // their leaf wires, so native builds the whole object graph with ONE
-    // `call_static_method`. Any nested child FQN it references is registered
-    // into `imports`.
-    let (factory_params, factory_reconstruct) =
-        flatten_struct_factory(ext, registry, item_struct, "", class_name, &mut imports, 0)
-            .unwrap_or_else(|| {
-                panic!(
-                    "render_data_class_source: could not build fromParts factory for `{class_name}`"
-                )
-            });
+    // `call_static_method`. Its raw-text class references (`Child.fromParts`,
+    // `Enum.fromInt`, projection wraps) use short names; the FQNs they need are
+    // collected here and attached to the factory body `Code` below.
+    let mut factory_imports: BTreeSet<String> = BTreeSet::new();
+    let (factory_params, factory_reconstruct) = flatten_struct_factory(
+        ext,
+        registry,
+        item_struct,
+        "",
+        class_name,
+        &mut factory_imports,
+        0,
+    )
+    .unwrap_or_else(|| {
+        panic!("render_data_class_source: could not build fromParts factory for `{class_name}`")
+    });
 
     let mut class = kt::KtClass::new(kt::ClassKind::Data, class_name).vis(kt::Vis::Public);
     if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_struct.attrs) {
@@ -213,11 +220,17 @@ pub(crate) fn build_data_class(
     // this factory reassembles it (incl. nested `Child.fromParts(...)`) in
     // JVM bytecode. `public`, not `internal`: an `internal` fun is mangled
     // to `fromParts$<module>`, unresolvable by native (`NoSuchMethodError`).
+    // The factory body's raw-text class references (short names) carry their
+    // imports on this `Code`, so the whole `data class` is self-contained.
+    let mut factory_body = kt::Code::new().line(factory_reconstruct);
+    for fqn in factory_imports {
+        factory_body = factory_body.import(fqn);
+    }
     let mut factory = kt::KtFun::new("fromParts")
         .vis(kt::Vis::Public)
         .annotation("JvmStatic")
         .returns(kt::KtType::cls(class_name))
-        .expr_body(kt::Code::new().line(factory_reconstruct));
+        .expr_body(factory_body);
     for (name, ty) in &factory_params {
         factory = factory.param(kt::KtParam::new(name, ty.clone()));
     }
@@ -226,7 +239,7 @@ pub(crate) fn build_data_class(
             .vis(kt::Vis::Public)
             .member(factory),
     );
-    (class, imports)
+    class
 }
 
 /// Render one typed-handle Kotlin source file. Pure-shell form (with a

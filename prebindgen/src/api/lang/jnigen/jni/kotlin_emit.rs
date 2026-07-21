@@ -638,8 +638,11 @@ impl JniGen {
             if item_struct.ident != class_name {
                 aliases.push((item_struct.ident.to_string(), class_name.clone()));
             }
-            let (mut class, mut imports) =
-                build_data_class(self, &class_name, item_struct, registry);
+            let mut class = build_data_class(self, &class_name, item_struct, registry);
+            // The data class is self-contained (property/factory types +
+            // factory-body imports ride the AST/`Code`); this file-level set
+            // is only for the `JNINative` harness the promoted members call.
+            let mut imports: BTreeSet<String> = BTreeSet::new();
             // Members: same shape as the value-blob path — the instance
             // method's receiver re-enters Rust as `this`'s field leaves
             // (the data-class param destructuring, rebased to `this`).
