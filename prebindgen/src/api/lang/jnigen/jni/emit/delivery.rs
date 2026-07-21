@@ -1,104 +1,6 @@
-//! Output-expansion delivery: unfold plans, leaf encoding, and the
-//! error-channel (`ze`) defaults.
+//! Output-expansion delivery: unfold plans and leaf encoding.
 
 use super::*;
-
-/// Language-neutral default classification for one plan leaf — what a
-/// **binding** error fills its builder-typed `ze` slot with when the domain
-/// value never materialized. One classifier feeds both renderers — the
-/// native `__ze_defaults` jvalues ([`default_ze_jvalues`]) and the Kotlin
-/// guard literals (`ze_default_kotlin` in render.rs) — so the two sides
-/// cannot drift.
-pub(crate) enum LeafDefault {
-    /// Plan-nullable leaf, or an object kind with no constructible default
-    /// (data classes, …): JVM `null`.
-    Null,
-    /// Raw primitive: zero / `false`.
-    Prim(JniPrim),
-    /// Non-null `String`: `""`.
-    Str,
-    /// Byte array or `Copy` value blob: an empty array.
-    Bytes,
-    /// Collection: an empty list.
-    List,
-}
-
-/// Classify a leaf's binding-error default — see [`LeafDefault`].
-pub(crate) fn leaf_default(
-    _ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    leaf: &crate::api::core::unfold::UnfoldLeaf,
-) -> LeafDefault {
-    if leaf.nullable {
-        return LeafDefault::Null;
-    }
-    let e = registry.output_entry(&leaf.out_ty).unwrap_or_else(|| {
-        panic!(
-            "leaf_default: leaf `{}` has no registered output converter",
-            TypeKey::from_type(&leaf.out_ty)
-        )
-    });
-    if let Some(proj) = &e.metadata.projection {
-        return match proj.kind {
-            // A handle crosses as a raw jlong — `0L` (no handle) is the
-            // default; the receiver's `isClosed()`-style zero check applies.
-            ProjectionKind::Handle => LeafDefault::Prim(JniPrim::Long),
-            ProjectionKind::ValueBlob => LeafDefault::Bytes,
-        };
-    }
-    if let Some(p) = JniPrim::from_wire(&e.destination) {
-        return LeafDefault::Prim(p);
-    }
-    match jni_field_access(&e.destination) {
-        Some(("Ljava/lang/String;", _, _)) => LeafDefault::Str,
-        Some(("[B", _, _)) => LeafDefault::Bytes,
-        _ => match e
-            .metadata
-            .kotlin_name
-            .as_ref()
-            .and_then(|k| k.simple_name())
-        {
-            Some("List" | "MutableList") => LeafDefault::List,
-            _ => LeafDefault::Null,
-        },
-    }
-}
-
-/// The native default-`jvalue` expression per error-plan leaf, rendered from
-/// [`leaf_default`]. Each expression evaluates inside the lazy
-/// `__ze_defaults` closure (`env` in scope); a zeroed union (`l = null`) is
-/// 0 / `false` at every primitive slot. Construction failures fall back to
-/// null (cold path, OOM-class only).
-pub(crate) fn default_ze_jvalues(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
-    plan: &crate::api::core::unfold::UnfoldPlan,
-) -> Vec<TokenStream> {
-    let null_jv = quote!(jni::sys::jvalue {
-        l: ::std::ptr::null_mut()
-    });
-    plan.leaves
-        .iter()
-        .map(|leaf| match leaf_default(ext, registry, leaf) {
-            LeafDefault::Null | LeafDefault::Prim(_) => null_jv.clone(),
-            LeafDefault::Str => quote! {
-                env.new_string("")
-                    .map(|__s| jni::sys::jvalue { l: __s.into_raw() })
-                    .unwrap_or(#null_jv)
-            },
-            LeafDefault::Bytes => quote! {
-                env.byte_array_from_slice(&[])
-                    .map(|__a| jni::sys::jvalue { l: __a.into_raw() })
-                    .unwrap_or(#null_jv)
-            },
-            LeafDefault::List => quote! {
-                env.new_object("java/util/ArrayList", "()V", &[])
-                    .map(|__o| jni::sys::jvalue { l: __o.into_raw() })
-                    .unwrap_or(#null_jv)
-            },
-        })
-        .collect()
-}
 
 /// Emit the output-expansion delivery body (output phase) for a function
 /// marked `.expand_output()`. The return value (`__out`) is decomposed by the
@@ -145,7 +47,7 @@ pub(crate) fn emit_unfold_delivery(
     // the wrapper's sentinel. Threads through the shared leaf encoder.
     let fail = |msg: TokenStream| -> TokenStream {
         quote! {
-            let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&#msg), &__zd);
+            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &#msg);
             return #on_err;
         }
     };
@@ -183,7 +85,7 @@ pub(crate) fn emit_unfold_delivery(
                     // Clears any pending JVM exception so the sink call is safe.
                     let _ = env.exception_describe();
                     let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                    let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), &__zd);
+                    signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e2.to_string());
                     #on_err
                 }
             }
@@ -224,7 +126,7 @@ pub(crate) fn emit_unfold_delivery(
                     ::core::result::Result::Err(__e) => {
                         let _ = env.exception_describe();
                         let __e2 = <__JniErr as ::core::convert::From<String>>::from(__e.to_string());
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e2.to_string()), &__zd);
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e2.to_string());
                         return #on_err;
                     }
                 };
@@ -269,7 +171,7 @@ pub(crate) fn emit_unfold_delivery(
                 let __enc = match #elem_conv(&mut env, __elem) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env); signal_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, ::core::option::Option::Some(&__e.to_string()), &__zd);
+                        signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, &__e.to_string());
                         return #on_err;
                     }
                 };

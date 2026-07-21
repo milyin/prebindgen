@@ -257,12 +257,12 @@ public class Token(initialPtr: Long) : NativeHandle(initialPtr) {
     /** Read a plain benchmark token. */
     public fun tokenValue(onError: JniErrorHandler<Long>): Long {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
-        val __cap = JniErrorHandlerCapture.acquire()
+        val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
-            JNINative.tokenValue(this_ptr, __cap)
+            JNINative.tokenValue(this_ptr, __bcap)
         }
-        if (__cap.failed) return onError.run(__cap.je)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
         return __ret
     }
 
@@ -272,9 +272,9 @@ public class Token(initialPtr: Long) : NativeHandle(initialPtr) {
 
         /** Create a plain benchmark token. */
         public fun tokenNew(value: Long, onError: JniErrorHandler<Token>): Token {
-            val __cap = JniErrorHandlerCapture.acquire()
-            val __ret = Token(JNINative.tokenNew(value, __cap))
-            if (__cap.failed) return onError.run(__cap.je)
+            val __bcap = JniErrorHandlerCapture.acquire()
+            val __ret = Token(JNINative.tokenNew(value, __bcap))
+            if (__bcap.failed) return onError.run(__bcap.ze0)
             return __ret
         }
     }
@@ -301,12 +301,12 @@ public class TokenGc(initialPtr: Long) : GcNativeHandle(initialPtr) {
     /** Read a gc-managed benchmark token. */
     public fun tokenGcValue(onError: JniErrorHandler<Long>): Long {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
-        val __cap = JniErrorHandlerCapture.acquire()
+        val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
-            JNINative.tokenGcValue(this_ptr, __cap)
+            JNINative.tokenGcValue(this_ptr, __bcap)
         }
-        if (__cap.failed) return onError.run(__cap.je)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
         return __ret
     }
 
@@ -316,9 +316,9 @@ public class TokenGc(initialPtr: Long) : GcNativeHandle(initialPtr) {
 
         /** Create a gc-managed benchmark token. */
         public fun tokenGcNew(value: Long, onError: JniErrorHandler<TokenGc>): TokenGc {
-            val __cap = JniErrorHandlerCapture.acquire()
-            val __ret = TokenGc(JNINative.tokenGcNew(value, __cap))
-            if (__cap.failed) return onError.run(__cap.je)
+            val __bcap = JniErrorHandlerCapture.acquire()
+            val __ret = TokenGc(JNINative.tokenGcNew(value, __bcap))
+            if (__bcap.failed) return onError.run(__bcap.ze0)
             return __ret
         }
     }
@@ -384,10 +384,12 @@ internal object __PayloadFolderRawHolder {
 }
 
 /**
- * Error callback for wrappers without a declared error type. `je` is the
- * binding/system failure message (any converter in the chain may fail). The
- * wrapper returns whatever `run` returns; throwing from `run` is safe (it
- * executes after the native call has returned).
+ * Binding-error callback — every wrapper's binding/system failure channel (any
+ * converter in the chain may fail, or a handle may be closed). `je` is the
+ * failure message. For an infallible wrapper this is the sole `onError`; a
+ * fallible wrapper takes it as `onBindingError` alongside the typed domain
+ * handler. The wrapper returns whatever `run` returns;
+ * throwing from `run` is safe (it executes after the native call has returned).
  */
 public fun interface JniErrorHandler<out R> {
     public fun run(je: String?): R
@@ -395,13 +397,13 @@ public fun interface JniErrorHandler<out R> {
 
 internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
     @JvmField var failed: Boolean = false
-    @JvmField var je: String? = null
-    override fun run(je: String?) { failed = true; this.je = je }
+    @JvmField var ze0: String? = null
+    override fun run(je: String?) { failed = true; this.ze0 = je }
     companion object {
         private val TL: ThreadLocal<JniErrorHandlerCapture> = ThreadLocal.withInitial { JniErrorHandlerCapture() }
         @JvmStatic fun acquire(): JniErrorHandlerCapture {
             val c = TL.get()
-            c.failed = false; c.je = null
+            c.failed = false; c.ze0 = null
             return c
         }
     }

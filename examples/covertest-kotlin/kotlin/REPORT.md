@@ -86,8 +86,10 @@ Base package: `io.prebindgen.covertest`
 - `storage_shards_opt` — `fun storageShardsOpt(count: Long, each: Long, onError: JniErrorHandler<List<Storage>?>): List<Storage>?`
   - shaped by: return `Storage` decomposed → [] (Callback delivery)
 - `storage_total_len` — `fun storageTotalLen(a: Storage, b: Storage, c: Storage, onError: JniErrorHandler<Long>): Long`
-- `storage_try_with_label` — `fun storageTryWithLabel(label: String, onError: StorageErrorHandler<Storage>): Storage`
-  - shaped by: error `StorageError` decomposed → [je, message, handle]
+- `storage_try_from_stamp` — `fun storageTryFromStamp(s: Stamp, onBindingError: JniErrorHandler<Storage>, onError: StorageErrorHandler<Storage>): Storage`
+  - shaped by: domain error `StorageError` decomposed → onError [message, handle] (binding failures → onBindingError)
+- `storage_try_with_label` — `fun storageTryWithLabel(label: String, onBindingError: JniErrorHandler<Storage>, onError: StorageErrorHandler<Storage>): Storage`
+  - shaped by: domain error `StorageError` decomposed → onError [message, handle] (binding failures → onBindingError)
 
 ## class `io.prebindgen.covertest.esc_pkg.Esc_Probe` (ptr_class, Rust `EscapeProbe`)
 

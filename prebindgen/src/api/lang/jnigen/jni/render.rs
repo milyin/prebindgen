@@ -541,9 +541,14 @@ pub(crate) fn render_extern_decl(
             params.push(kt::KtParam::new("build", kt::KtType::any()));
         }
     }
-    // Trailing error-sink callback — every extern accepts one. `Any` wire
-    // (JObject); the wrapper passes an `ErrorSink` instance.
+    // Trailing error-sink callbacks — the binding channel (`errorSink`) always,
+    // then the typed domain channel (`domainSink`) for a fallible-typed fn. Both
+    // erased to `Any` (JObject) on the wire; the wrapper passes a capture for
+    // each. A domain plan ⇒ `error_plans` has this fn.
     params.push(kt::KtParam::new("errorSink", kt::KtType::any()));
+    if registry.error_plans.contains_key(&f.sig.ident) {
+        params.push(kt::KtParam::new("domainSink", kt::KtType::any()));
+    }
 
     let wire_return: Option<kt::KtType> = match &fplan.output {
         FnOutputPlan::Unfold(_) => Some(kt::KtType::any().nullable()),
@@ -759,7 +764,7 @@ pub(crate) fn build_wrapper_surface(
         classify_params(ext, &fplan, registry, &mut body_imports, receiver_key)?;
     let out = classify_output(ext, f, &fplan, registry, &mut body_imports)?;
     let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
-    let sink = error_sink_parts(ext, f, &fplan, registry, &mut body_imports, &r_ty)?;
+    let sink = error_sink_parts(f, &fplan, registry, &mut body_imports, &r_ty)?;
 
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
     if let Some(g) = &out.generic {
@@ -772,24 +777,35 @@ pub(crate) fn build_wrapper_surface(
         }
         fun = fun.param(kt::KtParam::new(&p.kt_name, p.kt_type.clone()));
     }
-    // The error callback — **required**: the generated code never throws; the
+    // The error callbacks — **required**: the generated code never throws; the
     // consumer decides how a failure surfaces (e.g. by throwing its own type).
-    // When an output-expansion builder/fold lambda exists, it must remain the
-    // **trailing** lambda (Kotlin trailing-lambda call syntax), so `onError` is
-    // placed *before* it — but *after* any non-lambda `builder_lead` (`acc: A`),
-    // which is passed positionally. Without a builder lambda, `onError` is the
-    // last param.
-    let onerr = kt::KtParam::new("onError", sink.onerr_type.clone());
+    // Every wrapper takes the binding handler; a fallible-typed fn additionally
+    // takes the domain handler, ordered `onBindingError, onError` so the DOMAIN
+    // `onError` is the natural trailing lambda. When an output-expansion
+    // builder/fold lambda exists it must stay the **trailing** lambda, so the
+    // error params go *before* it — but *after* any non-lambda `builder_lead`
+    // (`acc: A`), which is passed positionally.
+    let mut err_params = vec![kt::KtParam::new(
+        &sink.binding_param,
+        sink.binding_type.clone(),
+    )];
+    if let Some(d) = &sink.domain {
+        err_params.push(kt::KtParam::new("onError", d.onerr_type.clone()));
+    }
     if let Some((bp_name, bp_ty)) = &out.builder_param {
         if let Some((lead_name, lead_ty)) = &out.builder_lead {
             fun = fun.param(kt::KtParam::new(lead_name, lead_ty.clone()));
         }
+        for ep in err_params {
+            fun = fun.param(ep);
+        }
         fun = fun
-            .param(onerr)
             .param(kt::KtParam::new(bp_name, bp_ty.clone()))
             .annotation("Suppress(\"UNCHECKED_CAST\")");
     } else {
-        fun = fun.param(onerr);
+        for ep in err_params {
+            fun = fun.param(ep);
+        }
     }
     if let Some(rt) = &out.kt_return {
         fun = fun.returns(rt.clone());
@@ -830,7 +846,7 @@ pub(crate) fn render_wrapper_fn(
     // synchronized blocks around them.
     let opaques = collect_opaques(&params);
     let is_unit = fun.ret.is_none();
-    let body_expr = build_native_call(ext, &jni_call, &params, &out);
+    let body_expr = build_native_call(ext, &jni_call, &params, &out, &sink);
     // `render_body` extends `body_imports` with the body's own references; all
     // of them are attached to the body `Code`, so the emitted `KtFun` carries
     // its own imports (signature imports ride the FQN types via the render-time
@@ -1002,16 +1018,35 @@ struct OutputPlan {
     is_option_enum_return: bool,
 }
 
-/// The `onError` wiring: the handler's Kotlin type, the capture holder, and
-/// the two prebuilt argument lists (post-call redispatch / pre-lock guard).
+/// The error-callback wiring for a wrapper. Every wrapper has a **binding**
+/// channel (`JniErrorHandler`, any marshalling/closed-handle failure); a
+/// fallible function with a declared error type additionally has a **domain**
+/// channel (the typed `<Src>Handler`, the decomposed `Err(E)`). Each is a
+/// separate handler param + per-thread capture, so neither carries a `je`
+/// discriminator or fabricated defaults.
 struct ErrorSink {
+    /// Kotlin param name of the binding handler: `"onBindingError"` when a
+    /// domain channel is also present, else `"onError"` (the sole channel).
+    binding_param: String,
+    /// The binding handler's Kotlin type — always `JniErrorHandler<R>`.
+    binding_type: kt::KtType,
+    /// Short name of the base per-thread capture (`JniErrorHandlerCapture`).
+    binding_capture_short: String,
+    /// The single redispatch arg for `<binding_param>.run(...)` — the captured
+    /// message slot (`__bcap.ze0`).
+    binding_call_arg: String,
+    /// The domain channel, present only for a fallible fn with a typed error.
+    domain: Option<DomainSink>,
+}
+
+/// The typed domain-error channel: the `onError` handler, its raw capture, and
+/// the wrapped leaf args for the post-call redispatch (no `je`).
+struct DomainSink {
     onerr_type: kt::KtType,
     /// Short name of the generated per-thread raw capture holder.
     capture_short: String,
-    /// je/ze args for the post-call `onError.run(...)` redispatch.
+    /// Wrapped ze-leaf args for the post-call `onError.run(...)` redispatch.
     call_args: String,
-    /// Wrapped-default args for the pre-lock closed-handle guard.
-    guard_args: String,
 }
 
 /// Type every effective input of the lowered [`JniFunctionPlan`] into a
@@ -1351,7 +1386,13 @@ fn classify_output(
 /// arg (or several, for a flattened data_class); the output plan's extra args
 /// and the trailing `__cap` follow; the result is wrapped per the return
 /// classification (projection / enum / erased-`Any` cast).
-fn build_native_call(ext: &JniGen, jni_call: &str, params: &[Param], out: &OutputPlan) -> String {
+fn build_native_call(
+    ext: &JniGen,
+    jni_call: &str,
+    params: &[Param],
+    out: &OutputPlan,
+    sink: &ErrorSink,
+) -> String {
     let mut args: Vec<String> = Vec::with_capacity(params.len());
     for p in params.iter() {
         // Flattened data_class param expands into multiple call args
@@ -1423,11 +1464,14 @@ fn build_native_call(ext: &JniGen, jni_call: &str, params: &[Param], out: &Outpu
     // Output expansion: the builder / (acc, fold) cross just before the
     // error callback.
     args.extend(out.unfold_call_args.iter().cloned());
-    // Every extern takes a trailing error callback. The wrapper passes a
-    // **capture** (`__cap`) that records `(je, ze…)` and sets a flag — no
-    // throw on the Rust upcall. The wrapper calls the user's `onError` after
-    // the native call returns (see the body below).
-    args.push("__cap".to_string());
+    // Trailing error-sink captures: `__bcap` (binding) always, then `__dcap`
+    // (typed domain error) for a fallible-typed fn — each records its channel's
+    // args and sets a flag (no throw on the Rust upcall). The wrapper reads them
+    // after the native call returns (see the body below).
+    args.push("__bcap".to_string());
+    if sink.domain.is_some() {
+        args.push("__dcap".to_string());
+    }
     let mut call = format!(
         "{}.{jni_call}({})",
         ext.jni_native_class_name(),
@@ -1512,95 +1556,97 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
         .collect()
 }
 
-/// Error callback `onError: <Err>Handler<R>` / `JniErrorHandler<R>` — a
-/// generated typed fun interface `run(je: String?, ze…): R` whose ze params
-/// are typed EXACTLY like a builder's leaves (the error channel is the
-/// output channel with a fixed leading `je`). Contract: `je != null` ⇒
-/// binding/system error, the native side fills the ze with defaults;
-/// `je == null` ⇒ domain error, the ze carry the decomposed error. The
-/// wrapper passes a SAM **capture** to the extern, then — after the native
-/// call — calls `onError.run(je, ze…)` and returns its `R` if a failure
-/// was recorded (no throw on the Rust upcall).
+/// Error-callback wiring — the two independent channels ([`ErrorSink`]). The
+/// **binding** handler `JniErrorHandler<R>.run(je: String?)` is always present
+/// (its captured message slot is `__bcap.ze0`, since the capture is uniform).
+/// A fallible fn with a typed error also gets the **domain** handler
+/// `<Src>Handler<R>.run(ze…)` — no `je`, called only on `Err(E)`. Each is a
+/// separate SAM param; the wrapper passes a per-thread capture to the extern,
+/// then after the native call redispatches to whichever channel fired.
 fn error_sink_parts(
-    ext: &JniGen,
     f: &syn::ItemFn,
     fplan: &JniFunctionPlan,
     registry: &Registry<KotlinMeta>,
     imports: &mut BTreeSet<String>,
     r_ty: &kt::KtType,
 ) -> Option<ErrorSink> {
-    let sink_spec = fplan.onerror_iface.as_ref()?;
-    let error_plan = registry.error_plans.get(&f.sig.ident);
-    // Per ze leaf: (raw capture Kotlin type, raw default literal, raw→typed
-    // wrap) — off the handler interface spec (its first param is the fixed
-    // `je`), defaults from the matching error-plan leaf (same declaration,
-    // same order). The CAPTURE is the raw twin (what the native side calls);
-    // the user's handler is the TYPED interface — the redispatch wraps.
-    let ze_info: Vec<(kt::KtType, String, crate::api::lang::jnigen::jni::WrapKind)> = sink_spec
-        .params[1..]
-        .iter()
-        .enumerate()
-        .map(|(i, p)| {
-            let leaf = error_plan
-                .map(|pl| &pl.leaves[i])
-                .expect("ze params exist only with an error plan");
-            let default =
-                ze_default_kotlin(&leaf_default(ext, registry, leaf), p.raw.is_nullable());
-            if let Some(fqn) = p.wrap.class_fqn() {
-                imports.insert(fqn.to_string());
-            }
-            (p.raw.clone(), default, p.wrap.clone())
+    let ifaces = fplan.onerror_iface.as_ref()?;
+    let binding_spec = &ifaces.binding;
+    let binding_type = binding_spec.kt_ref(vec![r_ty.clone()]);
+    imports.insert(binding_spec.capture_fqn());
+    let binding_capture_short = binding_spec.capture_name();
+
+    // The typed domain channel exists only for a fallible fn with an error
+    // plan; when present, both the interface spec and the error plan are.
+    let domain = if let Some(domain_spec) = &ifaces.domain {
+        let error_plan = registry
+            .error_plans
+            .get(&f.sig.ident)
+            .expect("domain handler ⇒ error plan");
+        // Per ze leaf: (raw capture Kotlin type, raw→typed wrap). The CAPTURE
+        // is the raw twin (what the native side calls); the user's handler is
+        // the TYPED interface — the redispatch wraps each raw slot.
+        let ze_info: Vec<(kt::KtType, crate::api::lang::jnigen::jni::WrapKind)> = domain_spec
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(fqn) = p.wrap.class_fqn() {
+                    imports.insert(fqn.to_string());
+                }
+                (p.raw.clone(), p.wrap.clone())
+            })
+            .collect();
+        debug_assert_eq!(ze_info.len(), error_plan.leaves.len());
+        imports.insert(domain_spec.capture_fqn());
+        // The domain redispatch args — the decomposed leaves only (no `je`).
+        // The native side always fills the raw ze on `Err`, so non-null slots
+        // are asserted `!!` then wrapped raw → typed.
+        let call_args = ze_info
+            .iter()
+            .enumerate()
+            .map(|(i, (raw, wrap))| {
+                if raw.is_nullable() {
+                    wrap.wrap_expr(&format!("__dcap.ze{i}"), true)
+                } else {
+                    wrap.wrap_expr(&format!("__dcap.ze{i}!!"), false)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(DomainSink {
+            onerr_type: domain_spec.kt_ref(vec![r_ty.clone()]),
+            capture_short: domain_spec.capture_name(),
+            call_args,
         })
-        .collect();
-    let n_ze = ze_info.len();
-    let onerr_type = sink_spec.kt_ref(vec![r_ty.clone()]);
-    // The capture is a generated zero-alloc thread-local holder of the RAW
-    // twin (no SAM lambda, no `Ref`-boxed captured vars) — its short name in
-    // raw body text needs the import registered.
-    imports.insert(sink_spec.capture_fqn());
-    let capture_short = sink_spec.capture_name();
-    // The je/ze argument list to call the user's typed `onError.run`. The
-    // native side ALWAYS fills the raw ze (real values or defaults), so the
-    // nullable capture slots are non-null whenever `__cap_failed` — assert
-    // with `!!` for non-null params, then wrap raw → typed.
-    let call_args = std::iter::once("__cap.je".to_string())
-        .chain((0..n_ze).map(|i| {
-            let (raw, _, wrap) = &ze_info[i];
-            if raw.is_nullable() {
-                wrap.wrap_expr(&format!("__cap.ze{i}"), true)
-            } else {
-                wrap.wrap_expr(&format!("__cap.ze{i}!!"), false)
-            }
-        }))
-        .collect::<Vec<_>>()
-        .join(", ");
-    // Default-ze args for a synchronous (pre-call) closed-handle guard, which
-    // calls the typed `onError.run` directly (a binding-class error ⇒ wrapped
-    // raw defaults: `ZErr(0L)`, `ZId(ByteArray(0))`, …).
-    let guard_args = std::iter::once("\"Operation on a closed native handle.\"".to_string())
-        .chain(ze_info.iter().map(|(raw, def, wrap)| {
-            if raw.is_nullable() {
-                "null".to_string()
-            } else {
-                wrap.wrap_expr(def, false)
-            }
-        }))
-        .collect::<Vec<_>>()
-        .join(", ");
+    } else {
+        None
+    };
+
+    // When there is a domain channel, the binding handler is named
+    // `onBindingError` and the domain one is `onError`; otherwise the binding
+    // handler is the sole `onError`.
+    let binding_param = if domain.is_some() {
+        "onBindingError".to_string()
+    } else {
+        "onError".to_string()
+    };
     Some(ErrorSink {
-        onerr_type,
-        capture_short,
-        call_args,
-        guard_args,
+        binding_param,
+        binding_type,
+        binding_capture_short,
+        binding_call_arg: "__bcap.ze0".to_string(),
+        domain,
     })
 }
 
 /// Pre-lock closed-handle guards: a racy-but-safe `isClosed()` check before
-/// the lock, returning `onError.run(...)` (function-level return; no throw).
-/// Racy: a close between this check and the native call is caught by the
-/// Rust-side converter guard (the tag bit survives the race), which routes
-/// through the same error channel.
-fn render_prelock_guards(opaques: &[Opaque], guard_args: &str, is_unit: bool) -> kt::Code {
+/// the lock. A closed handle is a **binding** failure, so it routes to
+/// `<binding_param>.run("Operation on a closed native handle.")` (function-level
+/// return; no throw). Racy: a close between this check and the native call is
+/// caught by the Rust-side converter guard (the tag bit survives the race),
+/// which routes through the same binding channel.
+fn render_prelock_guards(opaques: &[Opaque], binding_param: &str, is_unit: bool) -> kt::Code {
+    const CLOSED_MSG: &str = "\"Operation on a closed native handle.\"";
     let mut guards = kt::Code::new();
     for o in opaques {
         let cond = if o.nullable {
@@ -1610,10 +1656,12 @@ fn render_prelock_guards(opaques: &[Opaque], guard_args: &str, is_unit: bool) ->
         };
         guards = if is_unit {
             guards.wline(format!(
-                "if ({cond}) {{ onError.run({guard_args}); return }}"
+                "if ({cond}) {{ {binding_param}.run({CLOSED_MSG}); return }}"
             ))
         } else {
-            guards.wline(format!("if ({cond}) return onError.run({guard_args})"))
+            guards.wline(format!(
+                "if ({cond}) return {binding_param}.run({CLOSED_MSG})"
+            ))
         };
     }
     guards
@@ -1765,14 +1813,31 @@ fn render_body(
     // The capture is a per-thread reusable holder (zero allocation): the
     // extern writes its `@JvmField` slots via `run`, the wrapper reads
     // them after the (synchronous) call. `acquire()` resets the slots.
-    let mut b = render_prelock_guards(opaques, &sink.guard_args, is_unit)
-        .line(format!("val __cap = {}.acquire()", sink.capture_short));
-    let failed_check = format!("if (__cap.failed) return onError.run({})", sink.call_args);
+    let mut b = render_prelock_guards(opaques, &sink.binding_param, is_unit).line(format!(
+        "val __bcap = {}.acquire()",
+        sink.binding_capture_short
+    ));
+    if let Some(d) = &sink.domain {
+        b = b.line(format!("val __dcap = {}.acquire()", d.capture_short));
+    }
+    // Post-call redispatch: at most one channel fires (the extern signals
+    // binding OR domain, then returns), so check binding first, then domain.
+    let mut failed_checks: Vec<String> = vec![format!(
+        "if (__bcap.failed) return {}.run({})",
+        sink.binding_param, sink.binding_call_arg
+    )];
+    if let Some(d) = &sink.domain {
+        failed_checks.push(format!(
+            "if (__dcap.failed) return onError.run({})",
+            d.call_args
+        ));
+    }
     let bind = if is_unit { "" } else { "val __ret = " };
     if vec_build.is_empty() {
-        b = b
-            .push(render_core_stmt(ext, opaques, body_expr, imports, bind))
-            .wline(failed_check);
+        b = b.push(render_core_stmt(ext, opaques, body_expr, imports, bind));
+        for chk in &failed_checks {
+            b = b.wline(chk);
+        }
     } else {
         let native = ext.jni_native_class_name();
         for (name, base, _) in &vec_build {
@@ -1800,9 +1865,10 @@ fn render_body(
             free = free.wline(format!("{native}.{free_m}(__vec_{name})"));
         }
         let core = render_core_stmt(ext, opaques, body_expr, imports, "");
-        b = b
-            .try_finally(bind, fill.push(core), free)
-            .wline(failed_check);
+        b = b.try_finally(bind, fill.push(core), free);
+        for chk in &failed_checks {
+            b = b.wline(chk);
+        }
     }
     if !is_unit {
         b = b.line("return __ret");
@@ -1915,25 +1981,6 @@ pub(crate) fn whole_value_name(ty: &syn::Type, i: usize) -> String {
         }
     }
     format!("arg{i}")
-}
-
-/// The Kotlin default literal for an error `ze` leaf, used when the
-/// **wrapper itself** raises a binding-class error before the native call
-/// (the pre-lock closed-handle guard) and must call `onError.run` with
-/// builder-typed ze params. Rendered from the shared [`leaf_default`]
-/// classification — the same one the native `__ze_defaults` jvalues use —
-/// so the two sides cannot drift. The [`LeafDefault::Null`] arm renders
-/// `null` (valid for plan-nullable params; an unknown non-null object kind
-/// gets a `null!!` assertion — no constructible default exists for it).
-fn ze_default_kotlin(d: &LeafDefault, kt_nullable: bool) -> String {
-    match d {
-        LeafDefault::Null if kt_nullable => "null".to_string(),
-        LeafDefault::Null => "null!!".to_string(),
-        LeafDefault::Prim(p) => p.kotlin_zero().to_string(),
-        LeafDefault::Str => "\"\"".to_string(),
-        LeafDefault::Bytes => "ByteArray(0)".to_string(),
-        LeafDefault::List => "emptyList()".to_string(),
-    }
 }
 
 /// Fall-back Kotlin type derived directly from the JNI wire type.
@@ -2141,8 +2188,8 @@ fn shape_notes(f: &syn::ItemFn, registry: &Registry<KotlinMeta>) -> Option<Strin
         let source = plan.source.to_token_stream().to_string();
         let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
         notes.push(format!(
-            "On failure `onError` receives `je` plus the decomposed Rust `{source}` \
-             error (`{}`).",
+            "On a domain error `onError` receives the decomposed Rust `{source}` error \
+             (`{}`); a binding/system failure goes to `onBindingError` instead.",
             leaves.join("`, `")
         ));
     }

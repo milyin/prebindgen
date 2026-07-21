@@ -93,12 +93,13 @@ fn inline_output_gets_own_builder() {
     assert!(all.contains("build:ZThingZMakeBBuilder<R>"), "{all}");
 }
 
-/// Error decomposition is the OUTPUT decomposition with a fixed leading `je`:
-/// the same record kinds work — an identity record (the error itself as an
-/// owned handle), plain accessors, and accessors nested through `Option`
-/// (spliced child decomposition, nullable leaves). The ze params are typed
-/// exactly like a builder's; on a binding error the native side fills typed
-/// defaults (closed handle, "", null for nullable).
+/// Domain-error decomposition is the OUTPUT decomposition (issue #45 split off
+/// the binding channel, so there is no leading `je`): the same record kinds
+/// work — an identity record (the error itself as an owned handle), plain
+/// accessors, and accessors nested through `Option` (spliced child
+/// decomposition, nullable leaves). The ze params are typed exactly like a
+/// builder's; a binding/system failure goes to the separate `onBindingError`
+/// (`JniErrorHandler`) channel, so there are no fabricated defaults.
 #[test]
 fn error_unwrap_universal_records() {
     let loc = myflat_loc();
@@ -148,27 +149,27 @@ fn error_unwrap_universal_records() {
     let rust = std::fs::read_to_string(&rust_path).unwrap();
     let rc: String = rust.split_whitespace().collect();
 
-    // Handler descriptor: typed handle class, non-null String, BOXED nullable
-    // Integer for the Option-nested code — exactly the builder typing.
+    // Domain handler descriptor (`__DSINK_DESCR`): typed handle jlong, non-null
+    // String, BOXED nullable Integer for the Option-nested code — exactly the
+    // builder typing, with NO leading `je` String (that is the binding channel).
     assert!(
-        rc.contains(
-            "\"(Ljava/lang/String;JLjava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""
-        ),
+        rc.contains("\"(JLjava/lang/String;Ljava/lang/Integer;)Ljava/lang/Object;\""),
+        "{rust}"
+    );
+    // Binding channel descriptor (`__SINK_DESCR`): the base `JniErrorHandler`.
+    assert!(
+        rc.contains("\"(Ljava/lang/String;)Ljava/lang/Object;\""),
         "{rust}"
     );
     // Domain-error arm: the SAME shared leaf encoder — owned identity moves
     // the error into a boxed handle, the nested Option accessor unwraps via
-    // a match.
+    // a match — delivered through `signal_domain_error` (no `je`, no defaults).
     assert!(rc.contains("std::boxed::Box::new(__de)"), "{rust}");
     assert!(rc.contains("matchmyflat::z_err_detail(&__de)"), "{rust}");
-    // Binding-error defaults: zeroed jlong for the handle (no native
-    // construction), empty string, null for the nullable leaf — built lazily
-    // in the __ze_defaults closure.
-    assert!(
-        !rc.contains("env.new_object(\"io/test/jni/errors/ZErr\""),
-        "{rust}"
-    );
-    assert!(rc.contains("env.new_string(\"\")"), "{rust}");
+    assert!(rc.contains("signal_domain_error("), "{rust}");
+    // No fabricated-defaults machinery — the binding channel carries only a
+    // message string, so there is no `__ze_defaults` closure.
+    assert!(!rc.contains("__ze_defaults"), "{rust}");
 
     let kdir = dir.join("kotlin");
     let paths = gen.write_kotlin(&kdir).expect("write_kotlin");
@@ -179,10 +180,11 @@ fn error_unwrap_universal_records() {
         .join("\n")
         .split_whitespace()
         .collect();
-    // Builder-typed handler interface.
+    // Builder-typed DOMAIN handler interface — no leading `je` (the binding
+    // channel is the separate `JniErrorHandler`).
     assert!(
         all.contains(
-            "funinterfaceZErrHandler<outR>{publicfunrun(je:String?,handle:ZErr,message:String,detail__code:Int?):R"
+            "funinterfaceZErrHandler<outR>{publicfunrun(handle:ZErr,message:String,detail__code:Int?):R"
         ),
         "{all}"
     );
@@ -190,22 +192,32 @@ fn error_unwrap_universal_records() {
     // on redispatch.
     assert!(
         all.contains(
-            "funinterfaceZErrHandlerRaw<outR>{publicfunrun(je:String?,handle:Long,message:String,detail__code:Int?):R"
+            "funinterfaceZErrHandlerRaw<outR>{publicfunrun(handle:Long,message:String,detail__code:Int?):R"
         ),
         "{all}"
     );
+    // The fallible wrapper takes BOTH channels; the domain redispatch wraps the
+    // captured leaves (no `je`), the binding one forwards its single message.
     assert!(
-        all.contains("returnonError.run(__cap.je,ZErr(__cap.ze0!!),__cap.ze1!!,__cap.ze2)"),
+        all.contains("returnonError.run(ZErr(__dcap.ze0!!),__dcap.ze1!!,__dcap.ze2)"),
         "{all}"
     );
-    // Zero-alloc thread-local capture holder generated for the error handler
-    // (no per-call SAM lambda / Ref-boxed vars); the wrapper uses acquire().
+    assert!(
+        all.contains("if(__bcap.failed)returnonBindingError.run(__bcap.ze0)"),
+        "{all}"
+    );
+    // Zero-alloc thread-local capture holders for BOTH channels (no per-call SAM
+    // lambda / Ref-boxed vars); the wrapper uses acquire() on each.
     assert!(
         all.contains("internalclassZErrHandlerRawCapture:ZErrHandlerRaw<Unit>"),
         "{all}"
     );
     assert!(
-        all.contains("val__cap=ZErrHandlerRawCapture.acquire()"),
+        all.contains("val__dcap=ZErrHandlerRawCapture.acquire()"),
+        "{all}"
+    );
+    assert!(
+        all.contains("val__bcap=JniErrorHandlerCapture.acquire()"),
         "{all}"
     );
     assert!(all.contains("ThreadLocal.withInitial"), "{all}");
@@ -336,10 +348,10 @@ fn rust_side_only_error_type() {
         .join("\n")
         .split_whitespace()
         .collect();
-    // Handler in the BASE package with the decomposed message field; no ZErr
-    // class anywhere.
+    // Domain handler in the BASE package with the decomposed message field (no
+    // leading `je`); no ZErr class anywhere.
     assert!(
-        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(je:String?,message:String):R"),
+        all.contains("funinterfaceZErrHandler<outR>{publicfunrun(message:String):R"),
         "{all}"
     );
     assert!(!all.contains("classZErr("), "{all}");

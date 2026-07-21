@@ -224,7 +224,7 @@ impl crate::api::core::Generation<JniGen> {
         if let Some(plan) = registry.error_plans.get(rust_ident) {
             let leaves: Vec<&str> = plan.leaves.iter().map(|l| l.name.as_str()).collect();
             shaped.push(format!(
-                "error `{}` decomposed → [je, {}]",
+                "domain error `{}` decomposed → onError [{}] (binding failures → onBindingError)",
                 plan.source.to_token_stream(),
                 leaves.join(", ")
             ));

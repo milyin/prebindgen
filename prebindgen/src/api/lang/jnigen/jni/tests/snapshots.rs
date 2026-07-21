@@ -96,13 +96,18 @@ fn snapshot_rust_side() {
     assert!(rc.contains("align_of::<myflat::ZThing>()<2"), "{rust}");
     // The freePtr destructor ignores tagged (already-closed) pointers.
     assert!(rc.contains("ifptr!=0&&(ptr&1)==0"), "{rust}");
-    // Errors funnel to the single `signal_error` channel fn (no JVM throw); it
-    // now invokes the error callback with `(je, ze…)`.
-    assert!(rc.contains("fnsignal_error"), "{rust}");
+    // Errors funnel to two channel fns (no JVM throw): `signal_binding_error`
+    // (a marshalling/system failure → the base `JniErrorHandler`) and
+    // `signal_domain_error` (a fallible fn's decomposed `Err(E)` → the typed
+    // handler). `z_thing_new`'s `Error` has no declared decomposition, so its
+    // `Err` stringifies through the BINDING channel — no `__ze_defaults`.
+    assert!(rc.contains("fnsignal_binding_error"), "{rust}");
+    assert!(rc.contains("fnsignal_domain_error"), "{rust}");
     assert!(
-        rc.contains("let__zd=__ze_defaults(&mutenv);signal_error(&mutenv,&__error_sink,&__SINK_MID,__SINK_FQN,__SINK_DESCR,::core::option::Option::Some(&__e.to_string()),&__zd"),
+        rc.contains("signal_binding_error(&mutenv,&__error_sink,&__SINK_MID,__SINK_FQN,__SINK_DESCR,&__e.to_string()"),
         "{rust}"
     );
+    assert!(!rc.contains("__ze_defaults"), "{rust}");
     // The sink's typed handler `run` is resolved once per process via the
     // cached interface-method statics.
     assert!(rc.contains("CachedIfaceMethod"), "{rust}");
@@ -188,11 +193,11 @@ fn snapshot_kotlin_side() {
         "package wrappers: {pkg}"
     );
     assert!(
-        pc.contains("if(__cap.failed)returnonError.run("),
+        pc.contains("if(__bcap.failed)returnonError.run("),
         "package wrappers: {pkg}"
     );
     // Pre-lock closed guards go through `isClosed()` (tag-bit aware), not a
-    // raw `ptr == 0L` compare.
+    // raw `ptr == 0L` compare — a closed handle is a binding failure.
     assert!(pc.contains(".isClosed())returnonError.run("), "{pkg}");
     // `onError` is a **required** parameter (no default) and the wrappers
     // never throw — error surfacing is entirely the caller's business.
@@ -202,12 +207,13 @@ fn snapshot_kotlin_side() {
     );
 }
 
-/// Generated onError handler interfaces carry the `je` contract KDoc: the
-/// typed `<Err>Handler` documents the `je != null` (binding/system, defaults)
-/// vs `je == null` (decomposed domain error) split naming the error type; the
-/// shared `JniErrorHandler` documents `je` as the binding/system message.
+/// Generated onError handler interfaces carry the split-channel contract KDoc:
+/// the typed domain `<Err>Handler` documents that it fires only on `Err(E)`
+/// (naming the decomposed error type) and points binding failures at
+/// `onBindingError`; the shared `JniErrorHandler` documents `je` as the
+/// binding/system message.
 #[test]
-fn handler_interfaces_carry_je_contract_kdoc() {
+fn handler_interfaces_carry_split_contract_kdoc() {
     // The snapshot pipeline has no error plan, so it emits the SHARED handler.
     let (_, kotlin) = snapshot_pipeline();
     let shared = kotlin
@@ -216,14 +222,14 @@ fn handler_interfaces_carry_je_contract_kdoc() {
         .cloned()
         .expect("no generated file declares JniErrorHandler");
     assert!(
-        shared.contains("binding/system failure message"),
+        shared.contains("binding/system failure channel"),
         "{shared}"
     );
     assert!(shared.contains("throwing from `run` is safe"), "{shared}");
 
     // A `Result<_, ZErr>` fn with a declared error decomposition emits the
-    // TYPED handler; its KDoc states the je-null/non-null contract and names
-    // the decomposed error type.
+    // TYPED domain handler; its KDoc states it fires only on a domain error,
+    // names the decomposed error type, and points binding failures elsewhere.
     let loc = myflat_loc();
     let fns: &[&str] = &[
         "pub fn z_err_message(e: &ZErr) -> String { unimplemented!() }",
@@ -253,8 +259,9 @@ fn handler_interfaces_carry_je_contract_kdoc() {
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .find(|v| v.contains("fun interface ZErrHandler<"))
         .expect("no generated file declares ZErrHandler");
-    assert!(typed.contains("`je != null`"), "{typed}");
+    assert!(typed.contains("Domain-error callback"), "{typed}");
     assert!(typed.contains("decomposed `ZErr`"), "{typed}");
+    assert!(typed.contains("onBindingError"), "{typed}");
     assert!(typed.contains("throwing from `run` is safe"), "{typed}");
 }
 

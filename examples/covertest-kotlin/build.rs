@@ -51,7 +51,8 @@
 //! | binding-local field `fun!(crate::…).sig(sig!).name(…)` | `storage_summary_probe` — custom field, here a conditional handle via `crate::summary_if_nonempty` |
 //! | binding-local fn `fun!(crate::…)` `.sig(sig!)` as free fn | `describeSummary` ← `crate::summary_describe` |
 //! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
-//! | `Result<_, E>` → `onError`           | `storage_try_with_label` |
+//! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
+//! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (malformed `Stamp` → binding; bad `secs` → domain) |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
@@ -61,7 +62,7 @@
 //! | N-ary sorted handle locking          | `storage_total_len` (3 handles) + a 4-thread smoke |
 //! | `Vec<String>` return                 | `storage_labels` (single-leaf string fold) |
 //! | `String` return                      | `string_new` |
-//! | binding-error channel (`je != null`) | malformed `Stamp` bytes (value-blob length guard) |
+//! | binding-error channel (`JniErrorHandler`) | malformed `Stamp` bytes (value-blob length guard) |
 //! | callback no-throw contract           | a throwing `PayloadCallback` (described + cleared per upcall) |
 //! | `data_class` instance member          | `Payload.labelLen()` (receiver crosses as `this` field leaves) |
 //! | `JniGen::ignore` (exact)              | `string_len` / `storage_put_by_read_and_update` (acknowledged-unbound, no skip warnings) |
@@ -501,6 +502,8 @@ fn main() {
                 .fun(fun!(payload_vec_handler_new))
                 .fun(fun!(storage_callback_vec))
                 .fun(fun!(storage_try_with_label))
+                // Two-caller error split (#45): both channels on one wrapper.
+                .fun(fun!(storage_try_from_stamp))
                 // Vec<opaque-handle> returns (plain + under the Option niche).
                 .fun(fun!(storage_shards))
                 .fun(fun!(storage_shards_opt))

@@ -31,12 +31,12 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
      */
     public fun message(onError: JniErrorHandler<String>): String {
         if (this.isClosed()) return onError.run("Operation on a closed native handle.")
-        val __cap = JniErrorHandlerCapture.acquire()
+        val __bcap = JniErrorHandlerCapture.acquire()
         val __ret = withSortedHandleLocks(this) {
             val this_ptr = this.ptr
-            CovNative.storageErrorMessage(this_ptr, __cap)
+            CovNative.storageErrorMessage(this_ptr, __bcap)
         }
-        if (__cap.failed) return onError.run(__cap.je)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
         return __ret
     }
 
@@ -47,27 +47,25 @@ public class StorageError(initialPtr: Long) : NativeHandle(initialPtr) {
 }
 
 /**
- * Error callback. Contract: `je != null` ⇒ a binding/system-tier failure — `je` is
- * its message and the remaining parameters carry defaults; `je == null` ⇒ a domain
- * error — the remaining parameters carry the decomposed `StorageError`. The
- * wrapper returns whatever `run` returns; throwing from `run` is safe (it executes
- * after the native call has returned).
+ * Domain-error callback: called only when the native function returns `Err` — the
+ * parameters carry the decomposed `StorageError`. Binding/system failures go to the
+ * separate `onBindingError` (`JniErrorHandler`) channel instead, so there is no `je`
+ * discriminator here. The wrapper returns whatever `run` returns;
+ * throwing from `run` is safe (it executes after the native call has returned).
  */
 public fun interface StorageErrorHandler<out R> {
-    public fun run(je: String?, message: String, handle: StorageError): R
+    public fun run(message: String, handle: StorageError): R
 }
 
 public fun interface StorageErrorHandlerRaw<out R> {
-    public fun run(je: String?, message: String, handle: Long): R
+    public fun run(message: String, handle: Long): R
 }
 
 public fun <R> StorageErrorHandler<R>.asRaw(): StorageErrorHandlerRaw<R> =
     StorageErrorHandlerRaw<R> {
-        je,
         message,
         handle ->
         run(
-            je,
             message,
             StorageError(handle)
         )
@@ -75,17 +73,16 @@ public fun <R> StorageErrorHandler<R>.asRaw(): StorageErrorHandlerRaw<R> =
 
 internal class StorageErrorHandlerRawCapture : StorageErrorHandlerRaw<Unit> {
     @JvmField var failed: Boolean = false
-    @JvmField var je: String? = null
     @JvmField var ze0: String? = null
     @JvmField var ze1: Long? = null
-    override fun run(je: String?, message: String, handle: Long) {
-        failed = true; this.je = je; this.ze0 = message; this.ze1 = handle
+    override fun run(message: String, handle: Long) {
+        failed = true; this.ze0 = message; this.ze1 = handle
     }
     companion object {
         private val TL: ThreadLocal<StorageErrorHandlerRawCapture> = ThreadLocal.withInitial { StorageErrorHandlerRawCapture() }
         @JvmStatic fun acquire(): StorageErrorHandlerRawCapture {
             val c = TL.get()
-            c.failed = false; c.je = null; c.ze0 = null; c.ze1 = null
+            c.failed = false; c.ze0 = null; c.ze1 = null
             return c
         }
     }

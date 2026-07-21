@@ -533,7 +533,7 @@ fn cross_artifact_optional_iterable_fold_agrees() {
         "optional fold wrapper surface (returns A?, null = None):\n{wrappers}"
     );
     assert!(
-        kc.contains("JNINative.zThingsMaybe(acc,fold.asRaw(),__cap)asA?"),
+        kc.contains("JNINative.zThingsMaybe(acc,fold.asRaw(),__bcap)asA?"),
         "optional fold call site casts the erased result to A?:\n{wrappers}"
     );
 }

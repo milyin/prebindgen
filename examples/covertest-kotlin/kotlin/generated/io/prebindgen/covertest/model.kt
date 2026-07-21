@@ -63,17 +63,17 @@ public data class Annotated(val payload: Payload, val ttl: Long?, val priority: 
 public value class Stamp(public val bytes: ByteArray) {
     /** Seconds component (value-class **accessor**, receiver = the value bytes). */
     public fun secs(onError: JniErrorHandler<Long>): Long {
-        val __cap = JniErrorHandlerCapture.acquire()
-        val __ret = CovNative.stampSecs(this.bytes, __cap)
-        if (__cap.failed) return onError.run(__cap.je)
+        val __bcap = JniErrorHandlerCapture.acquire()
+        val __ret = CovNative.stampSecs(this.bytes, __bcap)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
         return __ret
     }
 
     /** Nanoseconds component (value-class **accessor**). */
     public fun nanos(onError: JniErrorHandler<Long>): Long {
-        val __cap = JniErrorHandlerCapture.acquire()
-        val __ret = CovNative.stampNanos(this.bytes, __cap)
-        if (__cap.failed) return onError.run(__cap.je)
+        val __bcap = JniErrorHandlerCapture.acquire()
+        val __ret = CovNative.stampNanos(this.bytes, __bcap)
+        if (__bcap.failed) return onError.run(__bcap.ze0)
         return __ret
     }
 }
@@ -104,19 +104,19 @@ internal object __StampFolderRawHolder {
 
 /** Classify a payload by magnitude of its `value` (enum **return**). */
 public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority {
-    val __cap = JniErrorHandlerCapture.acquire()
+    val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.model.Priority.fromInt(
-        CovNative.payloadPriority(p.id, p.seq, p.value, p.flag, p.label, __cap),
+        CovNative.payloadPriority(p.id, p.seq, p.value, p.flag, p.label, __bcap),
     )
-    if (__cap.failed) return onError.run(__cap.je)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
 /** Numeric weight of a priority (enum **by-value parameter**). */
 public fun priorityWeight(p: Priority, onError: JniErrorHandler<Int>): Int {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.priorityWeight(p.value, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.priorityWeight(p.value, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -126,19 +126,19 @@ public fun priorityOr(
     fallback: Priority,
     onError: JniErrorHandler<Priority>,
 ): Priority {
-    val __cap = JniErrorHandlerCapture.acquire()
+    val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = io.prebindgen.covertest.model.Priority.fromInt(
-        CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __cap),
+        CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __bcap),
     )
-    if (__cap.failed) return onError.run(__cap.je)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
 /** Build a [`Stamp`] (value-class **return**). */
 public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = Stamp(CovNative.stampNew(secs, nanos, __cap))
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = Stamp(CovNative.stampNew(secs, nanos, __bcap))
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -147,9 +147,9 @@ public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): S
  * `List<ByteArray>`).
  */
 public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp> {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = (CovNative.stampSeries(count, ArrayList<Stamp>(), __StampFolderRawHolder.instance, __cap) as List<Stamp>)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = (CovNative.stampSeries(count, ArrayList<Stamp>(), __StampFolderRawHolder.instance, __bcap) as List<Stamp>)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -158,9 +158,9 @@ public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List
  * parameter and the return).
  */
 public fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.celsiusDouble(c, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.celsiusDouble(c, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -169,9 +169,9 @@ public fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int {
  * input conversion — including its error path — and the `Into` output).
  */
 public fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.percentScale(p, factor, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.percentScale(p, factor, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -180,9 +180,9 @@ public fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int
  * a parameter and the return).
  */
 public fun labelReverse(l: String, onError: JniErrorHandler<String>): String {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.labelReverse(l, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.labelReverse(l, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -196,7 +196,7 @@ public fun annotatedNew(
     priority: Priority?,
     onError: JniErrorHandler<Annotated>,
 ): Annotated {
-    val __cap = JniErrorHandlerCapture.acquire()
+    val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.annotatedNew(
         payload.id,
         payload.seq,
@@ -207,9 +207,9 @@ public fun annotatedNew(
         ttl ?: 0L,
         priority != null,
         priority?.value ?: 0,
-        __cap,
+        __bcap,
     )
-    if (__cap.failed) return onError.run(__cap.je)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -218,19 +218,19 @@ public fun annotatedNew(
  * **input**).
  */
 public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedTtl(a, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedTtl(a, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
 /** The metadata priority (`Option<enum>` **return**). */
 public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPriority(a, __cap)?.let {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedPriority(a, __bcap)?.let {
         io.prebindgen.covertest.model.Priority.fromInt(it)
     }
-    if (__cap.failed) return onError.run(__cap.je)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
 
@@ -239,8 +239,8 @@ public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>):
  * input decode).
  */
 public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double {
-    val __cap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPayloadValue(a, __cap)
-    if (__cap.failed) return onError.run(__cap.je)
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedPayloadValue(a, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

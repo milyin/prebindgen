@@ -27,14 +27,15 @@ pub(crate) struct JniFunctionPlan {
     /// The spec-escaped JNI export symbol (`Java_<pkg>_<JNINative>_<method>`,
     /// see `symbol`, #86), derived from [`Self::jni_method`].
     pub native_symbol: String,
-    /// The onError sink interface — the typed `<Err>Handler` when an error
-    /// plan exists, the global `JniErrorHandler` otherwise. Shared from the
-    /// [`JniGen::iface_spec`] memo: one derivation feeds the Rust `__SINK_*`
-    /// statics, the Kotlin `onError` wiring, and the interface declaration,
-    /// so the FQN/descriptor pair of the cached `run` lookup cannot drift.
-    /// `None` = underivable (the Rust emitter panics, the Kotlin renderer
-    /// skips).
-    pub onerror_iface: Option<Arc<IfaceSpec>>,
+    /// The onError handler interfaces — the always-present binding
+    /// `JniErrorHandler` plus, for a fallible function, its typed domain
+    /// `<Err>Handler` (see [`ErrorIfaces`]). Shared from the
+    /// [`JniGen::iface_spec`] memo: one derivation per channel feeds the Rust
+    /// `__SINK_*` statics, the Kotlin sink wiring, and the interface
+    /// declarations, so the FQN/descriptor pairs of the cached `run` lookups
+    /// cannot drift. `None` = the domain channel is underivable (the Rust
+    /// emitter panics, the Kotlin renderer skips).
+    pub onerror_iface: Option<ErrorIfaces>,
     pub params: Vec<PlanParam>,
     pub output: FnOutputPlan,
 }

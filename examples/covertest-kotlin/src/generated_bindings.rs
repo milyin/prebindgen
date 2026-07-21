@@ -38,40 +38,47 @@ impl<T: ?Sized> OwnedObject<T> {
     }
 }
 #[allow(non_snake_case, dead_code)]
-pub(crate) fn signal_error(
+pub(crate) fn signal_binding_error(
     env: &mut jni::JNIEnv,
     sink: &jni::objects::JObject,
     mid: &::prebindgen::lang::CachedIfaceMethod,
     fqn: &str,
     descr: &str,
-    je: ::core::option::Option<&str>,
+    je: &str,
+) {
+    if env.exception_check().unwrap_or(false) {
+        return;
+    }
+    let __je: jni::objects::JObject = match env.new_string(je) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            tracing::error!("signal_binding_error: new_string failed: {}", e);
+            return;
+        }
+    };
+    let __args = [
+        jni::sys::jvalue {
+            l: __je.as_raw(),
+        },
+    ];
+    if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, &__args) {
+        tracing::error!("signal_binding_error: error-callback invoke failed: {}", e);
+    }
+}
+#[allow(non_snake_case, dead_code)]
+pub(crate) fn signal_domain_error(
+    env: &mut jni::JNIEnv,
+    sink: &jni::objects::JObject,
+    mid: &::prebindgen::lang::CachedIfaceMethod,
+    fqn: &str,
+    descr: &str,
     ze: &[jni::sys::jvalue],
 ) {
     if env.exception_check().unwrap_or(false) {
         return;
     }
-    let __je: jni::objects::JObject = match je {
-        ::core::option::Option::Some(__m) => {
-            match env.new_string(__m) {
-                Ok(s) => s.into(),
-                Err(e) => {
-                    tracing::error!("signal_error: new_string failed: {}", e);
-                    return;
-                }
-            }
-        }
-        ::core::option::Option::None => jni::objects::JObject::null(),
-    };
-    let mut __args: ::std::vec::Vec<jni::sys::jvalue> = ::std::vec::Vec::with_capacity(
-        1 + ze.len(),
-    );
-    __args
-        .push(jni::sys::jvalue {
-            l: __je.as_raw(),
-        });
-    __args.extend_from_slice(ze);
-    if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, &__args) {
-        tracing::error!("signal_error: error-callback invoke failed: {}", e);
+    if let Err(e) = mid.call_object(env, fqn, "run", descr, sink, ze) {
+        tracing::error!("signal_domain_error: error-callback invoke failed: {}", e);
     }
 }
 #[no_mangle]
@@ -297,10 +304,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverVer
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -315,15 +318,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverVer
     match String_to_JString_c7f3ca43(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -336,10 +337,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -354,15 +351,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
     match String_to_JString_c7f3ca43(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -1872,10 +1867,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     priority_value: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -1883,15 +1874,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -1899,15 +1888,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -1915,15 +1902,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -1931,15 +1916,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -1950,15 +1933,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -1974,15 +1955,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
         let __ttl_val = match jlong_to_i64_fbf9a9bc(&mut env, &ttl_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -1995,15 +1974,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
         let __priority_val = match jint_to_Priority_447102d2(&mut env, &priority_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -2016,15 +1993,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     match Annotated_to_JObject_b543f0d9(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -2040,10 +2015,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
     a: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2051,15 +2022,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
     let a = match JObject_to_Annotated_b543f0d9(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -2068,15 +2037,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
         }
@@ -2090,10 +2057,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
     a: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2101,15 +2064,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
     let a = match JObject_to_Annotated_b543f0d9(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2118,15 +2079,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
     match Option_Priority_to_JObject_ad5cbb32(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -2140,10 +2099,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
     a: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2151,15 +2106,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
     let a = match JObject_to_Annotated_b543f0d9(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2168,15 +2121,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
     match Option_i64_to_JObject_2ba9a5ed(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -2190,10 +2141,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveLatest<'a
     a: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2201,15 +2148,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveLatest<'a
     let a = match jlong_to_Archive_cd73502c(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2218,15 +2163,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveLatest<'a
     match Option_Summary_to_jlong_828826f3(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -2239,10 +2182,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveNew<'a>(
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2251,15 +2190,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveNew<'a>(
     match Archive_to_jlong_cd73502c(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -2279,10 +2216,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
     s_1: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2290,15 +2223,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
     let mut a = match jlong_to_Archive_cd73502c(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -2306,15 +2237,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
     let __exp_s_sel = match jint_to_i32_a3e3b6ef(&mut env, &s_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -2323,15 +2252,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &s_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return ();
             }
@@ -2344,15 +2271,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &s_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return ();
             }
@@ -2364,15 +2289,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
     let __exp_s_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &s_1) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -2420,15 +2343,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return ();
         }
@@ -2437,15 +2358,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -2459,10 +2378,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     c: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2470,15 +2385,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     let __c_s0 = match jint_to_i32_a3e3b6ef(&mut env, &c) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -2486,15 +2399,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     let c = match i32_to_Celsius_8c363100(&mut env, __c_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -2503,15 +2414,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     let __out_s0 = match Celsius_to_i32_88c8e884(&mut env, __out) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -2519,15 +2428,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_celsiusDouble<'a
     match i32_to_jint_a3e3b6ef(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jint
         }
@@ -2540,10 +2447,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2552,15 +2455,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<
     match String_to_JString_c7f3ca43(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -2574,10 +2475,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escapeProbeNew<'
     value: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2585,15 +2482,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escapeProbeNew<'
     let value = match jlong_to_i64_fbf9a9bc(&mut env, &value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2602,15 +2497,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escapeProbeNew<'
     match EscapeProbe_to_jlong_416aab42(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -2624,10 +2517,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escape_1probe_1v
     p: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2635,15 +2524,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escape_1probe_1v
     let p = match jlong_to_EscapeProbe_416aab42(&mut env, &p) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2652,15 +2539,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escape_1probe_1v
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -2674,10 +2559,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     l: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2685,15 +2566,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     let __l_s0 = match JString_to_String_c7f3ca43(&mut env, &l) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2701,15 +2580,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     let l = match String_to_Label_c1a79668(&mut env, __l_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2718,15 +2595,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     let __out_s0 = match Label_to_String_63dec766(&mut env, __out) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2734,15 +2609,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
     match String_to_JString_c7f3ca43(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -2757,10 +2630,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     b: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2768,15 +2637,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let __a_s0 = match jlong_to_i64_fbf9a9bc(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2784,15 +2651,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let a = match i64_to_Millis_bb88777a(&mut env, __a_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2800,15 +2665,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let __b_s0 = match jlong_to_i64_fbf9a9bc(&mut env, &b) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2816,15 +2679,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let b = match i64_to_Millis_bb88777a(&mut env, __b_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2833,15 +2694,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     let __out_s0 = match Millis_to_i64_61ecf054(&mut env, __out) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2849,15 +2708,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     match i64_to_jlong_fbf9a9bc(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -2871,10 +2728,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadHandlerNe
     f: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2882,15 +2735,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadHandlerNe
     let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906(&mut env, &f) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -2899,15 +2750,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadHandlerNe
     match PayloadHandler_to_jlong_d61fd890(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -2925,10 +2774,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     p_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -2936,15 +2781,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2952,15 +2795,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2968,15 +2809,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -2984,15 +2823,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -3000,15 +2837,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -3024,15 +2859,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     match Option_i64_to_JObject_2ba9a5ed(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -3050,10 +2883,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     p_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3061,15 +2890,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3077,15 +2904,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3093,15 +2918,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3109,15 +2932,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3125,15 +2946,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3149,15 +2968,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     match Priority_to_jint_447102d2(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jint
         }
@@ -3171,10 +2988,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecHandle
     f: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3182,15 +2995,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecHandle
     let f = match JObject_to_impl_Fn_Payload_Send_Sync_static_95073668(&mut env, &f) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -3199,15 +3010,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecHandle
     match PayloadVecHandler_to_jlong_b32d2812(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -3222,10 +3031,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     factor: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3233,15 +3038,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     let __p_s0 = match jint_to_i32_a3e3b6ef(&mut env, &p) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3249,15 +3052,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     let p = match i32_to_Percent_db3641cc(&mut env, __p_s0) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3265,15 +3066,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     let factor = match jint_to_i32_a3e3b6ef(&mut env, &factor) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3282,15 +3081,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     let __out_s0 = match Percent_to_i32_01484801(&mut env, __out) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3298,15 +3095,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentScale<'a>
     match i32_to_jint_a3e3b6ef(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jint
         }
@@ -3322,10 +3117,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
     fallback: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3334,15 +3125,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
         let __p_val = match jint_to_Priority_447102d2(&mut env, &p_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jint;
             }
@@ -3354,15 +3143,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
     let fallback = match jint_to_Priority_447102d2(&mut env, &fallback) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3371,15 +3158,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityOr<'a>(
     match Priority_to_jint_447102d2(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jint
         }
@@ -3393,10 +3178,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityWeight<'
     p: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3404,15 +3185,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityWeight<'
     let p = match jint_to_Priority_447102d2(&mut env, &p) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jint;
         }
@@ -3421,15 +3200,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityWeight<'
     match i32_to_jint_a3e3b6ef(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jint
         }
@@ -3443,10 +3220,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNanos<'a>(
     s: jni::objects::JByteArray<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3454,15 +3227,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNanos<'a>(
     let s = match JByteArray_to_Stamp_2fc9bd18(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -3471,15 +3242,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNanos<'a>(
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -3494,10 +3263,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNew<'a>(
     nanos: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JByteArray<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3505,15 +3270,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNew<'a>(
     let secs = match jlong_to_i64_fbf9a9bc(&mut env, &secs) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -3521,15 +3284,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNew<'a>(
     let nanos = match jlong_to_i64_fbf9a9bc(&mut env, &nanos) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -3538,15 +3299,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampNew<'a>(
     match Stamp_to_JByteArray_2fc9bd18(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -3560,10 +3319,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSecs<'a>(
     s: jni::objects::JByteArray<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3571,15 +3326,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSecs<'a>(
     let s = match JByteArray_to_Stamp_2fc9bd18(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -3588,15 +3341,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSecs<'a>(
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -3612,10 +3363,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSeries<'a>(
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3623,15 +3370,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSeries<'a>(
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -3646,15 +3391,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSeries<'a>(
         let __enc = match Stamp_to_JByteArray_2fc9bd18(&mut env, __elem) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -3683,15 +3426,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stampSeries<'a>(
                 let __e2 = <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string());
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e2.to_string()),
-                    &__zd,
+                    &__e2.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -3708,10 +3449,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallback<
     handler: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3719,15 +3456,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallback<
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -3735,15 +3470,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallback<
     let handler = match jlong_to_PayloadHandler_d61fd890(&mut env, &handler) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -3752,15 +3485,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallback<
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -3775,10 +3506,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallbackV
     handler: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3786,15 +3513,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallbackV
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -3802,15 +3527,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallbackV
     let handler = match jlong_to_PayloadVecHandler_b32d2812(&mut env, &handler) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -3819,15 +3542,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageCallbackV
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -3842,10 +3563,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageContains<
     id: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jboolean {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3853,15 +3570,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageContains<
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -3869,15 +3584,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageContains<
     let id = match jlong_to_i64_fbf9a9bc(&mut env, &id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -3886,15 +3599,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageContains<
     match bool_to_jboolean_31306d98(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jboolean
         }
@@ -3909,10 +3620,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageEmit<'a>(
     h: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3920,15 +3627,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageEmit<'a>(
     let n = match jlong_to_i64_fbf9a9bc(&mut env, &n) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -3936,15 +3641,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageEmit<'a>(
     let h = match jlong_to_StorageHandler_3b4d3ed3(&mut env, &h) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -3953,15 +3656,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageEmit<'a>(
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -3975,10 +3676,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageErrorMess
     e: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -3986,15 +3683,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageErrorMess
     let e = match jlong_to_StorageError_26b2d298(&mut env, &e) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -4003,15 +3698,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageErrorMess
     match String_to_JString_c7f3ca43(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -4031,10 +3724,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
     expected_1: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jboolean {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4042,15 +3731,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4058,15 +3745,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
     let __exp_expected_sel = match jint_to_i32_a3e3b6ef(&mut env, &expected_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4075,15 +3760,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &expected_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -4096,15 +3779,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &expected_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -4119,15 +3800,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4175,15 +3854,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4192,15 +3869,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageExpectSum
     match bool_to_jboolean_31306d98(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jboolean
         }
@@ -4215,10 +3890,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
     __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4226,15 +3897,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -4250,15 +3919,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
                 let __enc0 = match i64_to_jlong_fbf9a9bc(&mut env, __inner.id.clone()) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -4269,15 +3936,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
                 let __enc1 = match i32_to_jint_a3e3b6ef(&mut env, __inner.seq.clone()) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -4291,15 +3956,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -4313,15 +3976,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -4335,15 +3996,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -4374,15 +4033,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGet<'a>(
                     let __e2 = <__JniErr as ::core::convert::From<
                         String,
                     >>::from(__e.to_string());
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(
+                    signal_binding_error(
                         &mut env,
                         &__error_sink,
                         &__SINK_MID,
                         __SINK_FQN,
                         __SINK_DESCR,
-                        ::core::option::Option::Some(&__e2.to_string()),
-                        &__zd,
+                        &__e2.to_string(),
                     );
                     jni::objects::JObject::null().into()
                 }
@@ -4401,10 +4058,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4412,15 +4065,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -4441,15 +4092,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -4463,15 +4112,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -4485,15 +4132,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -4507,15 +4152,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -4529,15 +4172,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -4571,15 +4212,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageGetVec<'a
                         let __e2 = <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string());
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e2.to_string()),
-                            &__zd,
+                            &__e2.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -4598,10 +4237,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageHandlerNe
     f: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4609,15 +4244,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageHandlerNe
     let f = match JObject_to_impl_Fn_Storage_Send_Sync_static_2f26edcf(&mut env, &f) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -4626,15 +4259,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageHandlerNe
     match StorageHandler_to_jlong_3b4d3ed3(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -4650,10 +4281,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLabels<'a
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4661,15 +4288,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLabels<'a
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -4684,15 +4309,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLabels<'a
         let __enc = match String_to_JString_c7f3ca43(&mut env, __elem) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -4721,15 +4344,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLabels<'a
                 let __e2 = <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string());
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e2.to_string()),
-                    &__zd,
+                    &__e2.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -4745,10 +4366,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLen<'a>(
     s: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4756,15 +4373,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLen<'a>(
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -4773,15 +4388,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageLen<'a>(
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -4803,10 +4416,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
     expected_1: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jboolean {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4814,15 +4423,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4830,15 +4437,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
     let __exp_expected_sel = match jint_to_i32_a3e3b6ef(&mut env, &expected_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4847,15 +4452,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &expected_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -4868,15 +4471,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &expected_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -4891,15 +4492,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4947,15 +4546,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -4964,15 +4561,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageMatchesSu
     match bool_to_jboolean_31306d98(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jboolean
         }
@@ -4985,10 +4580,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageNew<'a>(
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -4997,15 +4588,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageNew<'a>(
     match Storage_to_jlong_1b233abd(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -5024,10 +4613,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     payload_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5035,15 +4620,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5051,15 +4634,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5067,15 +4648,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5083,15 +4662,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5099,15 +4676,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5118,15 +4693,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5142,15 +4715,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -5169,10 +4740,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     payload_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5180,15 +4747,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5196,15 +4761,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5212,15 +4775,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5228,15 +4789,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5244,15 +4803,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5263,15 +4820,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5287,15 +4842,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -5315,10 +4868,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
     p_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jboolean {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5326,15 +4875,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jboolean;
         }
@@ -5343,15 +4890,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
         let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -5359,15 +4904,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
         let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -5375,15 +4918,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
         let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -5391,15 +4932,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
         let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -5407,15 +4946,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
         let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jboolean;
             }
@@ -5434,15 +4971,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
     match bool_to_jboolean_31306d98(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jboolean
         }
@@ -5457,10 +4992,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutSlice<
     payloads_handle: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> () {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5468,15 +4999,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutSlice<
     let mut s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return ();
         }
@@ -5488,15 +5017,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutSlice<
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             ()
         }
@@ -5513,10 +5040,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShards<'a
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5524,15 +5047,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShards<'a
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -5540,15 +5061,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShards<'a
     let each = match jlong_to_i64_fbf9a9bc(&mut env, &each) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -5563,15 +5082,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShards<'a
         let __enc = match Storage_to_jlong_1b233abd(&mut env, __elem) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -5597,15 +5114,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShards<'a
                 let __e2 = <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string());
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e2.to_string()),
-                    &__zd,
+                    &__e2.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -5624,10 +5139,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShardsOpt
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5635,15 +5146,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShardsOpt
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -5651,15 +5160,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShardsOpt
     let each = match jlong_to_i64_fbf9a9bc(&mut env, &each) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -5676,15 +5183,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShardsOpt
                 let __enc = match Storage_to_jlong_1b233abd(&mut env, __elem) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -5710,15 +5215,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageShardsOpt
                         let __e2 = <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string());
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e2.to_string()),
-                            &__zd,
+                            &__e2.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -5738,10 +5241,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummary<'
     __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5749,15 +5248,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummary<'
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -5774,15 +5271,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummary<'
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -5796,15 +5291,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummary<'
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -5827,15 +5320,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummary<'
             let __e2 = <__JniErr as ::core::convert::From<
                 String,
             >>::from(__e.to_string());
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e2.to_string()),
-                &__zd,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -5850,10 +5341,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryFu
     __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5861,15 +5348,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryFu
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -5886,15 +5371,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryFu
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -5908,15 +5391,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryFu
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -5942,15 +5423,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryFu
             let __e2 = <__JniErr as ::core::convert::From<
                 String,
             >>::from(__e.to_string());
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e2.to_string()),
-                &__zd,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -5964,10 +5443,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryHa
     s: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -5975,15 +5450,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryHa
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -5992,15 +5465,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryHa
     match Summary_to_jlong_3cb103b9(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -6015,10 +5486,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
     __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6026,15 +5493,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
     let s = match jlong_to_Storage_1b233abd(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6051,15 +5516,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -6073,15 +5536,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -6093,15 +5554,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
             let __h2: jni::sys::jlong = match Summary_to_jlong_ccacdeac(&mut env, __n0) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(
+                    signal_binding_error(
                         &mut env,
                         &__error_sink,
                         &__SINK_MID,
                         __SINK_FQN,
                         __SINK_DESCR,
-                        ::core::option::Option::Some(&__e.to_string()),
-                        &__zd,
+                        &__e.to_string(),
                     );
                     return jni::objects::JObject::null().into();
                 }
@@ -6109,15 +5568,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
             match ::prebindgen::lang::box_jlong(&mut env, __h2) {
                 ::core::result::Result::Ok(__o) => __o,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(
+                    signal_binding_error(
                         &mut env,
                         &__error_sink,
                         &__SINK_MID,
                         __SINK_FQN,
                         __SINK_DESCR,
-                        ::core::option::Option::Some(&__e.to_string()),
-                        &__zd,
+                        &__e.to_string(),
                     );
                     return jni::objects::JObject::null().into();
                 }
@@ -6147,15 +5604,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageSummaryPr
             let __e2 = <__JniErr as ::core::convert::From<
                 String,
             >>::from(__e.to_string());
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e2.to_string()),
-                &__zd,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -6171,10 +5626,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTotalLen<
     c: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6182,15 +5633,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTotalLen<
     let a = match jlong_to_Storage_1b233abd(&mut env, &a) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6198,15 +5647,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTotalLen<
     let b = match jlong_to_Storage_1b233abd(&mut env, &b) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6214,15 +5661,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTotalLen<
     let c = match jlong_to_Storage_1b233abd(&mut env, &c) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6231,15 +5676,102 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTotalLen<
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryFromStamp<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    s: jni::objects::JByteArray<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+    __domain_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    #[allow(non_upper_case_globals)]
+    static __DSINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __DSINK_FQN: &str = "io/prebindgen/covertest/errors/StorageErrorHandlerRaw";
+    const __DSINK_DESCR: &str = "(Ljava/lang/String;J)Ljava/lang/Object;";
+    let s = match JByteArray_to_Stamp_2fc9bd18(&mut env, &s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = match perftest_flat::storage_try_from_stamp(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__de) => {
+            let __eze0: jni::objects::JObject = {
+                let __enc0 = match String_to_JString_c7f3ca43(
+                    &mut env,
+                    perftest_flat::storage_error_message(&__de),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return 0 as jni::sys::jlong;
+                    }
+                };
+                __enc0.into()
+            };
+            let __eze1: jni::sys::jvalue = jni::sys::jvalue {
+                j: std::boxed::Box::into_raw(std::boxed::Box::new(__de))
+                    as jni::sys::jlong,
+            };
+            signal_domain_error(
+                &mut env,
+                &__domain_sink,
+                &__DSINK_MID,
+                __DSINK_FQN,
+                __DSINK_DESCR,
+                &[
+                    jni::sys::jvalue {
+                        l: __eze0.as_raw(),
+                    },
+                    __eze1,
+                ],
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    match Storage_to_jlong_1b233abd(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -6252,31 +5784,26 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
     _class: jni::objects::JClass<'a>,
     label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
+    __domain_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![
-            env.new_string("").map(| __s | jni::sys::jvalue { l : __s.into_raw() })
-            .unwrap_or(jni::sys::jvalue { l : ::std::ptr::null_mut() }), jni::sys::jvalue
-            { l : ::std::ptr::null_mut() }
-        ]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
-    const __SINK_FQN: &str = "io/prebindgen/covertest/errors/StorageErrorHandlerRaw";
-    const __SINK_DESCR: &str = "(Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/Object;";
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    #[allow(non_upper_case_globals)]
+    static __DSINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __DSINK_FQN: &str = "io/prebindgen/covertest/errors/StorageErrorHandlerRaw";
+    const __DSINK_DESCR: &str = "(Ljava/lang/String;J)Ljava/lang/Object;";
     let label = match JString_to_String_c7f3ca43(&mut env, &label) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6291,15 +5818,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
                 ) {
                     ::core::result::Result::Ok(__w) => __w,
                     ::core::result::Result::Err(__e) => {
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e.to_string()),
-                            &__zd,
+                            &__e.to_string(),
                         );
                         return 0 as jni::sys::jlong;
                     }
@@ -6310,13 +5835,12 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
                 j: std::boxed::Box::into_raw(std::boxed::Box::new(__de))
                     as jni::sys::jlong,
             };
-            signal_error(
+            signal_domain_error(
                 &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                ::core::option::Option::None,
+                &__domain_sink,
+                &__DSINK_MID,
+                __DSINK_FQN,
+                __DSINK_DESCR,
                 &[
                     jni::sys::jvalue {
                         l: __eze0.as_raw(),
@@ -6330,15 +5854,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageTryWithLa
     match Storage_to_jlong_1b233abd(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -6356,10 +5878,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     payload_label: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6367,15 +5885,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6383,15 +5899,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6399,15 +5913,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6415,15 +5927,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6434,15 +5944,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6458,15 +5966,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     match Storage_to_jlong_1b233abd(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -6480,10 +5986,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stringNew<'a>(
     s: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6491,15 +5993,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stringNew<'a>(
     let s = match JString_to_String_c7f3ca43(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6508,15 +6008,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_stringNew<'a>(
     match String_to_JString_c7f3ca43(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -6530,10 +6028,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryCount<'a>
     s: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6541,15 +6035,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryCount<'a>
     let s = match jlong_to_Summary_3cb103b9(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6558,15 +6050,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryCount<'a>
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -6586,10 +6076,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
     verbose: jni::sys::jboolean,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6597,15 +6083,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
     let __exp_s_sel = match jint_to_i32_a3e3b6ef(&mut env, &s_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6614,15 +6098,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &s_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -6635,15 +6117,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &s_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -6655,15 +6135,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
     let __exp_s_1 = match jlong_to_Option_Summary_828826f3(&mut env, &s_1) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6713,15 +6191,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6729,15 +6205,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
     let verbose = match jboolean_to_bool_31306d98(&mut env, &verbose) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6746,15 +6220,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryDescribe<
     match String_to_JString_c7f3ca43(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -6769,10 +6241,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
     mean: jni::sys::jdouble,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6780,15 +6248,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6796,15 +6262,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
     let mean = match jdouble_to_f64_9e4a8f70(&mut env, &mean) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6813,15 +6277,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
     let __out_s0 = match Result_Summary_String_to_Summary_dfdf7f9e(&mut env, __out) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -6829,15 +6291,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryFromMean<
     match Summary_to_jlong_3cb103b9(&mut env, __out_s0) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -6851,10 +6311,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMean<'a>(
     s: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6862,15 +6318,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMean<'a>(
     let s = match jlong_to_Summary_3cb103b9(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -6879,15 +6333,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMean<'a>(
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
         }
@@ -6913,10 +6365,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
     __builder: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -6924,15 +6372,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
     let __exp_primary_sel = match jint_to_i32_a3e3b6ef(&mut env, &primary_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -6941,15 +6387,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &primary_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -6962,15 +6406,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &primary_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -6982,15 +6424,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
     let __exp_primary_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &primary_1) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7038,15 +6478,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7054,15 +6492,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
     let __exp_fallback_sel = match jint_to_i32_a3e3b6ef(&mut env, &fallback_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7071,15 +6507,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &fallback_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -7092,15 +6526,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &fallback_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -7115,15 +6547,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7171,15 +6601,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7196,15 +6624,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -7218,15 +6644,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
         ) {
             ::core::result::Result::Ok(__w) => __w,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -7249,15 +6673,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryMerge<'a>
             let __e2 = <__JniErr as ::core::convert::From<
                 String,
             >>::from(__e.to_string());
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e2.to_string()),
-                &__zd,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }
@@ -7272,10 +6694,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
     total: jni::sys::jdouble,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -7283,15 +6701,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7299,15 +6715,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
     let total = match jdouble_to_f64_9e4a8f70(&mut env, &total) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7316,15 +6730,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryNew<'a>(
     match Summary_to_jlong_3cb103b9(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -7349,10 +6761,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
     fallback_1: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -7360,15 +6768,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
     let __exp_primary_sel = match jint_to_i32_a3e3b6ef(&mut env, &primary_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7377,15 +6783,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &primary_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jlong;
             }
@@ -7398,15 +6802,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &primary_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jlong;
             }
@@ -7418,15 +6820,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
     let __exp_primary_1 = match jlong_to_Option_Summary_252ef2ba(&mut env, &primary_1) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7474,15 +6874,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7490,15 +6888,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
     let __exp_fallback_sel = match jint_to_i32_a3e3b6ef(&mut env, &fallback_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7507,15 +6903,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &fallback_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jlong;
             }
@@ -7528,15 +6922,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &fallback_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0 as jni::sys::jlong;
             }
@@ -7551,15 +6943,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
     ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7607,15 +6997,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return 0 as jni::sys::jlong;
         }
@@ -7624,15 +7012,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryPrefer<'a
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -7647,10 +7033,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a
     factor: jni::sys::jdouble,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -7658,15 +7040,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a
     let s = match jlong_to_Summary_3cb103b9(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -7674,15 +7054,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a
     let factor = match jdouble_to_f64_9e4a8f70(&mut env, &factor) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -7691,15 +7069,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryScaled<'a
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
         }
@@ -7716,10 +7092,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -7727,15 +7099,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7743,15 +7113,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a
     let start = match jlong_to_i64_fbf9a9bc(&mut env, &start) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7770,15 +7138,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a
             ) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(
+                    signal_binding_error(
                         &mut env,
                         &__error_sink,
                         &__SINK_MID,
                         __SINK_FQN,
                         __SINK_DESCR,
-                        ::core::option::Option::Some(&__e.to_string()),
-                        &__zd,
+                        &__e.to_string(),
                     );
                     return jni::objects::JObject::null().into();
                 }
@@ -7792,15 +7158,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a
             ) {
                 ::core::result::Result::Ok(__w) => __w,
                 ::core::result::Result::Err(__e) => {
-                    let __zd = __ze_defaults(&mut env);
-                    signal_error(
+                    signal_binding_error(
                         &mut env,
                         &__error_sink,
                         &__SINK_MID,
                         __SINK_FQN,
                         __SINK_DESCR,
-                        ::core::option::Option::Some(&__e.to_string()),
-                        &__zd,
+                        &__e.to_string(),
                     );
                     return jni::objects::JObject::null().into();
                 }
@@ -7829,15 +7193,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeries<'a
                 let __e2 = <__JniErr as ::core::convert::From<
                     String,
                 >>::from(__e.to_string());
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e2.to_string()),
-                    &__zd,
+                    &__e2.to_string(),
                 );
                 return jni::objects::JObject::null().into();
             }
@@ -7856,10 +7218,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt
     __fold: jni::objects::JObject<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -7867,15 +7225,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt
     let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7883,15 +7239,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt
     let start = match jlong_to_i64_fbf9a9bc(&mut env, &start) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return jni::objects::JObject::null().into();
         }
@@ -7912,15 +7266,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -7934,15 +7286,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt
                     ) {
                         ::core::result::Result::Ok(__w) => __w,
                         ::core::result::Result::Err(__e) => {
-                            let __zd = __ze_defaults(&mut env);
-                            signal_error(
+                            signal_binding_error(
                                 &mut env,
                                 &__error_sink,
                                 &__SINK_MID,
                                 __SINK_FQN,
                                 __SINK_DESCR,
-                                ::core::option::Option::Some(&__e.to_string()),
-                                &__zd,
+                                &__e.to_string(),
                             );
                             return jni::objects::JObject::null().into();
                         }
@@ -7971,15 +7321,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summarySeriesOpt
                         let __e2 = <__JniErr as ::core::convert::From<
                             String,
                         >>::from(__e.to_string());
-                        let __zd = __ze_defaults(&mut env);
-                        signal_error(
+                        signal_binding_error(
                             &mut env,
                             &__error_sink,
                             &__SINK_MID,
                             __SINK_FQN,
                             __SINK_DESCR,
-                            ::core::option::Option::Some(&__e2.to_string()),
-                            &__zd,
+                            &__e2.to_string(),
                         );
                         return jni::objects::JObject::null().into();
                     }
@@ -7998,10 +7346,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotal<'a>
     s: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -8009,15 +7353,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotal<'a>
     let s = match jlong_to_Summary_3cb103b9(&mut env, &s) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -8026,15 +7368,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotal<'a>
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
         }
@@ -8053,10 +7393,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
     s_1: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -8064,15 +7400,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
     let __exp_s_sel = match jint_to_i32_a3e3b6ef(&mut env, &s_sel) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -8081,15 +7415,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
         let __v = match jlong_to_i64_fbf9a9bc(&mut env, &s_0_0_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0.0 as jni::sys::jdouble;
             }
@@ -8102,15 +7434,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
         let __v = match jdouble_to_f64_9e4a8f70(&mut env, &s_0_1_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
-                let __zd = __ze_defaults(&mut env);
-                signal_error(
+                signal_binding_error(
                     &mut env,
                     &__error_sink,
                     &__SINK_MID,
                     __SINK_FQN,
                     __SINK_DESCR,
-                    ::core::option::Option::Some(&__e.to_string()),
-                    &__zd,
+                    &__e.to_string(),
                 );
                 return 0.0 as jni::sys::jdouble;
             }
@@ -8122,15 +7452,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
     let __exp_s_1 = match jlong_to_Option_Summary_828826f3(&mut env, &s_1) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -8189,15 +7517,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
             let __je = <__JniErr as ::core::convert::From<
                 ::std::string::String,
             >>::from(__e);
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__je.to_string()),
-                &__zd,
+                &__je.to_string(),
             );
             return 0.0 as jni::sys::jdouble;
         }
@@ -8206,15 +7532,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalOpt<
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
         }
@@ -8228,24 +7552,18 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalRaw<
     s: jni::sys::jlong,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
     if s == 0 || (s & 1) == 1 {
-        let __zd = __ze_defaults(&mut env);
-        signal_error(
+        signal_binding_error(
             &mut env,
             &__error_sink,
             &__SINK_MID,
             __SINK_FQN,
             __SINK_DESCR,
-            ::core::option::Option::Some("Operation on a closed native handle."),
-            &__zd,
+            "Operation on a closed native handle.",
         );
         return 0.0 as jni::sys::jdouble;
     }
@@ -8256,15 +7574,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalRaw<
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
         }
@@ -8279,10 +7595,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverMag
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jlong {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -8291,15 +7603,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverMag
     match i64_to_jlong_fbf9a9bc(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             0 as jni::sys::jlong
         }
@@ -8314,10 +7624,6 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverTag
     _class: jni::objects::JClass<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JString<'a> {
-    #[allow(unused_variables)]
-    let __ze_defaults = |env: &mut jni::JNIEnv| -> ::std::vec::Vec<jni::sys::jvalue> {
-        ::std::vec![]
-    };
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
@@ -8326,15 +7632,13 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverTag
     match str_to_JString_7b77dc67(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
         ::core::result::Result::Err(__e) => {
-            let __zd = __ze_defaults(&mut env);
-            signal_error(
+            signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                ::core::option::Option::Some(&__e.to_string()),
-                &__zd,
+                &__e.to_string(),
             );
             jni::objects::JObject::null().into()
         }
