@@ -573,6 +573,33 @@ fn write_files_refuses_nonempty_unowned_root() {
 }
 
 #[test]
+fn write_files_accepts_crlf_marker() {
+    // A committed LF marker is rewritten to CRLF by git's `autocrlf` on a
+    // Windows checkout; the (present, valid) marker must still be recognized so
+    // regeneration succeeds. Simulate that by writing the marker with CRLF.
+    let dir = unique_test_dir("kotlin_crlf_marker");
+    let root = dir.join("generated");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join(".prebindgen-kotlin-output"),
+        "prebindgen Kotlin output v1\r\n",
+    )
+    .unwrap();
+    // A stale generated file from a previous run — must be wiped on rewrite.
+    fs::write(root.join("Stale.kt"), "package stale\n").unwrap();
+
+    let paths = write_files(&[KtFile::new("io.test")], &root)
+        .expect("CRLF marker must be accepted as a prebindgen-owned root");
+    assert!(paths.iter().all(|p| p.exists()));
+    assert!(
+        !root.join("Stale.kt").exists(),
+        "stale file wiped on rewrite"
+    );
+
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
 fn write_files_replaces_marked_root_and_preserves_it_on_staging_failure() {
     let dir = unique_test_dir("kotlin_owned_root");
     let root = dir.join("generated");
