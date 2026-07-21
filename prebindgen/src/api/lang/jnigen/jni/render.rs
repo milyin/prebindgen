@@ -311,7 +311,6 @@ pub(crate) fn build_typed_handle(
                 ext,
                 item_fn,
                 registry,
-                imports,
                 Some(ext.effective_method_name(key, m).as_str()),
                 None,
             ) {
@@ -421,7 +420,6 @@ pub(crate) fn build_typed_handle(
                 ext,
                 item_fn,
                 registry,
-                imports,
                 Some(ext.effective_method_name(key, m).as_str()),
                 Some(key),
             ) {
@@ -710,20 +708,30 @@ pub(crate) struct WrapperSurface {
     out: OutputPlan,
     sink: ErrorSink,
     jni_call: String,
+    /// FQNs the wrapper **body** references by short name (extension `asRaw`,
+    /// hoisted singletons, the error-capture holder). Signature-type imports
+    /// are NOT here — those are full-FQN `KtType`s in `fun`, collected by the
+    /// render-time `ImportSet`. `render_wrapper_fn` attaches these to the
+    /// body `Code`, so the emitted `KtFun` is self-contained; the validator
+    /// ignores them.
+    body_imports: BTreeSet<String>,
 }
 
 /// Build the [`WrapperSurface`]: everything [`render_wrapper_fn`] does up to
 /// (but not including) the body render — the single surface-signature
-/// derivation. Validation calls this directly and skips the body work
+/// derivation. **Pure** over `(ext, f, registry, name, receiver)`: signature
+/// types are full-FQN `KtType`s and any body-import FQNs are returned in
+/// [`WrapperSurface::body_imports`], so nothing is registered into a caller's
+/// import set. Validation calls this directly and skips the body work
 /// (`build_native_call` / `render_body` / KDoc / opaque-lock collection).
 pub(crate) fn build_wrapper_surface(
     ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
-    imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<WrapperSurface> {
+    let mut body_imports = BTreeSet::new();
     let fplan = JniFunctionPlan::build(ext, registry, f).ok()?;
     // The Kotlin extern in `JNINative` is keyed on the Rust ident (the
     // plan's `jni_method`). The per-entry `.name("...")` override only
@@ -734,10 +742,11 @@ pub(crate) fn build_wrapper_surface(
         None => kt_snake_to_camel(&f.sig.ident.to_string()),
     };
     let jni_call = fplan.jni_method.clone();
-    let (params, receiver_idx) = classify_params(ext, &fplan, registry, imports, receiver_key)?;
-    let out = classify_output(ext, f, &fplan, registry, imports)?;
+    let (params, receiver_idx) =
+        classify_params(ext, &fplan, registry, &mut body_imports, receiver_key)?;
+    let out = classify_output(ext, f, &fplan, registry, &mut body_imports)?;
     let r_ty = out.kt_return.clone().unwrap_or_else(kt::KtType::unit);
-    let sink = error_sink_parts(ext, f, &fplan, registry, imports, &r_ty)?;
+    let sink = error_sink_parts(ext, f, &fplan, registry, &mut body_imports, &r_ty)?;
 
     let mut fun = kt::KtFun::new(&kt_name).vis(kt::Vis::Public);
     if let Some(g) = &out.generic {
@@ -778,6 +787,7 @@ pub(crate) fn build_wrapper_surface(
         out,
         sink,
         jni_call,
+        body_imports,
     })
 }
 
@@ -785,24 +795,17 @@ pub(crate) fn render_wrapper_fn(
     ext: &JniGen,
     f: &syn::ItemFn,
     registry: &Registry<KotlinMeta>,
-    imports: &mut BTreeSet<String>,
     kotlin_name_override: Option<&str>,
     receiver_key: Option<&TypeKey>,
 ) -> Option<kt::KtFun> {
-    let surface = build_wrapper_surface(
-        ext,
-        f,
-        registry,
-        imports,
-        kotlin_name_override,
-        receiver_key,
-    )?;
+    let surface = build_wrapper_surface(ext, f, registry, kotlin_name_override, receiver_key)?;
     let WrapperSurface {
         mut fun,
         params,
         out,
         sink,
         jni_call,
+        mut body_imports,
     } = surface;
     // KDoc: the Rust fn's `///` prose first, then generated notes for every
     // position an expansion reshaped away from the Rust signature (N1).
@@ -815,7 +818,23 @@ pub(crate) fn render_wrapper_fn(
     let opaques = collect_opaques(&params);
     let is_unit = fun.ret.is_none();
     let body_expr = build_native_call(ext, &jni_call, &params, &out);
-    let body = render_body(ext, &params, &opaques, &sink, &body_expr, is_unit, imports);
+    // `render_body` extends `body_imports` with the body's own references; all
+    // of them are attached to the body `Code`, so the emitted `KtFun` carries
+    // its own imports (signature imports ride the FQN types via the render-time
+    // `ImportSet`). The wrapper is thus a self-contained decl — callers no
+    // longer thread a per-file import set through it.
+    let mut body = render_body(
+        ext,
+        &params,
+        &opaques,
+        &sink,
+        &body_expr,
+        is_unit,
+        &mut body_imports,
+    );
+    for fqn in body_imports {
+        body = body.import(fqn);
+    }
     Some(fun.body(body))
 }
 
@@ -835,7 +854,7 @@ pub(crate) fn render_const_val(
     let getter = const_getter_fn(c);
     let default = kt_snake_to_camel(&getter.sig.ident.to_string());
     let helper_name = ext.mangle_fun(package, &default);
-    let helper = render_wrapper_fn(ext, &getter, registry, imports, Some(&helper_name), None)?;
+    let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| c.ident.to_string());
@@ -865,7 +884,7 @@ pub(crate) fn render_constant_fn_val(
 ) -> Option<(kt::KtFun, kt::KtProperty)> {
     let default = kt_snake_to_camel(&f.sig.ident.to_string());
     let helper_name = ext.mangle_fun(package, &default);
-    let helper = render_wrapper_fn(ext, f, registry, imports, Some(&helper_name), None)?;
+    let helper = render_wrapper_fn(ext, f, registry, Some(&helper_name), None)?;
     let val_name = kotlin_name_override
         .map(str::to_string)
         .unwrap_or_else(|| f.sig.ident.to_string());
@@ -895,7 +914,7 @@ pub(crate) fn render_const_expr_val(
     let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
     let default = kt_snake_to_camel(&getter.sig.ident.to_string());
     let helper_name = ext.mangle_fun(package, &default);
-    let helper = render_wrapper_fn(ext, &getter, registry, imports, Some(&helper_name), None)?;
+    let helper = render_wrapper_fn(ext, &getter, registry, Some(&helper_name), None)?;
     let expr = decl.expr.to_token_stream();
     let kdoc = format!(
         "Binding-defined constant: `{expr}` (evaluated lazily, once, through \
@@ -1197,15 +1216,20 @@ fn classify_output(
         // a **whole-element leaf** fold (`plan.element` set — String / value blob
         // / handle) `plan.source` (e.g. `String`) has no class FQN, so take the
         // element's typed view from the folder interface's element param instead.
+        // Full-FQN class type: the render-time `ImportSet` shortens it (and
+        // handles simple-name collisions) when it renders the return type. The
+        // `ArrayList<…>` body arg below uses the short name — the class is
+        // imported via that return type, so the short name resolves.
         let class_ty = if u.whole_element {
             let spec = u.iface.as_deref()?;
-            register_kt_type(&spec.params[1].typed, imports)
+            spec.params[1].typed.clone()
         } else {
             let class_fqn = ext
                 .kotlin_fqn(&TypeKey::from_type(&plan.source))
                 .map(|s| s.to_string())?;
-            register_kt_type(&kt::KtType::cls(class_fqn), imports)
+            kt::KtType::cls(class_fqn)
         };
+        let class_short = kt_type_short(&class_ty);
         if u.iterable_fold {
             // `Vec<data_class>` fold: allocate an `ArrayList<Class>` accumulator,
             // pass the hoisted **folder-appender** singleton as `fold` (it
@@ -1217,7 +1241,7 @@ fn classify_output(
             let holder = spec.singleton_holder_name();
             let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
             imports.insert(spec.singleton_holder_fqn());
-            unfold_call_args.push(format!("ArrayList<{class_ty}>()"));
+            unfold_call_args.push(format!("ArrayList<{class_short}>()"));
             unfold_call_args.push(format!("{holder}.{field}"));
             let list_ty = kt::KtType::generic("List", [class_ty]);
             let kt = if u.optional {
@@ -1432,7 +1456,10 @@ fn build_native_call(ext: &JniGen, jni_call: &str, params: &[Param], out: &Outpu
             .kt_return
             .as_ref()
             .expect("callback delivery returns R/A");
-        call = format!("({call} as {cast_kt})");
+        // The class(es) in the cast type are imported via the wrapper's
+        // return type; render with short names (the return type is FQN in
+        // the AST, so the render-time `ImportSet` imports them).
+        call = format!("({call} as {})", kt_type_short(cast_kt));
     }
     // Return delivery (`convert_output`): the extern returns the real typed
     // wire; the projection wrap above (if any) already produced the value
@@ -1974,6 +2001,15 @@ pub(crate) fn render_return_surface(
         }
         ReturnSurface::Plain { kt } => Some((Some(kt.clone()), None)),
     }
+}
+
+/// Render a `KtType` to a string with every named type shortened to its
+/// simple name — for **raw body text** that references a type already imported
+/// elsewhere in the wrapper (the return type). A throwaway `ImportSet`
+/// discards the imports (they come from the AST); the shortening matches what
+/// the file renderer produces for the same type.
+pub(crate) fn kt_type_short(ty: &kt::KtType) -> String {
+    ty.render(&mut kt::ImportSet::new(""))
 }
 
 pub(crate) fn kt_snake_to_camel(s: &str) -> String {

@@ -183,15 +183,7 @@ impl crate::api::core::Generation<JniGen> {
         let Some((item_fn, _)) = registry.functions.get(rust_ident) else {
             return;
         };
-        let mut imports = BTreeSet::new();
-        let Some(f) = render_wrapper_fn(
-            ext,
-            item_fn,
-            registry,
-            &mut imports,
-            kotlin_name,
-            receiver_key,
-        ) else {
+        let Some(f) = render_wrapper_fn(ext, item_fn, registry, kotlin_name, receiver_key) else {
             return;
         };
         out.push_str(&format!("- `{}` — `{}`\n", rust_ident, signature(&f)));
