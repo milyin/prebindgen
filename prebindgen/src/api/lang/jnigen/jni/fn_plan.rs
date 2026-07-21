@@ -207,6 +207,7 @@ pub(crate) enum ReturnSurface {
 /// ([`validate_bindings`]) reports every failure before any artifact is
 /// written; the Rust emitter keeps the same messages as panic backstops and
 /// the Kotlin renderers map to `None` (skip).
+#[derive(Debug)]
 pub(crate) enum PlanError {
     /// `registry.input_entry` has no converter for a source param type.
     Unresolved { ty: TypeKey },
@@ -288,7 +289,7 @@ pub(crate) fn validate_bindings(
             continue;
         }
         let (item_fn, _) = &registry.functions[ident];
-        match JniFunctionPlan::build(ext, registry, item_fn) {
+        match ext.fn_plan(registry, item_fn) {
             Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
             Err(e) => errors.push(e.message(ident)),
         }
@@ -305,7 +306,7 @@ pub(crate) fn validate_bindings(
             }
             let (item_const, _) = &registry.consts[ident];
             let getter = const_getter_fn(item_const);
-            match JniFunctionPlan::build(ext, registry, &getter) {
+            match ext.fn_plan(registry, &getter) {
                 Ok(plan) => record_symbol(&plan.native_symbol, ident.to_string(), &mut errors),
                 Err(e) => errors.push(e.message(&getter.sig.ident)),
             }
@@ -322,7 +323,7 @@ pub(crate) fn validate_bindings(
     expr_decls.sort_by(|a, b| a.kotlin_name.cmp(&b.kotlin_name));
     for decl in expr_decls {
         let getter = const_expr_getter_fn(&decl.kotlin_name, &decl.ty);
-        match JniFunctionPlan::build(ext, registry, &getter) {
+        match ext.fn_plan(registry, &getter) {
             Ok(plan) => record_symbol(&plan.native_symbol, decl.kotlin_name.clone(), &mut errors),
             Err(e) => errors.push(e.message(&getter.sig.ident)),
         }
@@ -351,10 +352,38 @@ impl FnOutputPlan {
     }
 }
 
+impl JniGen {
+    /// The memoized lowered plan for one bound function — the "build the plan
+    /// once and store it" stage [`JniFunctionPlan::build`] anticipated (issue
+    /// #90). Keyed by the function's ident (bound functions live in one flat
+    /// namespace, and the synthetic const-getter idents `const_get_*` are
+    /// distinct), so validation and every emitter share ONE derivation
+    /// instead of rebuilding it ~8× per generation. `Ok` is cached; an `Err`
+    /// (an unresolved converter) is passed through — it only occurs at the
+    /// validation phase, which reports it and fails `resolve` before any
+    /// emitter runs. Same interior-mutable contract as
+    /// [`JniGen::iface_spec`]; drift is guarded externally by the byte-identity
+    /// regen check (a plan change alters generated code).
+    pub(crate) fn fn_plan(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        f: &syn::ItemFn,
+    ) -> Result<std::rc::Rc<JniFunctionPlan>, PlanError> {
+        if let Some(hit) = self.fn_plans.borrow().get(&f.sig.ident).cloned() {
+            return Ok(hit);
+        }
+        let plan = std::rc::Rc::new(JniFunctionPlan::build(self, registry, f)?);
+        self.fn_plans
+            .borrow_mut()
+            .insert(f.sig.ident.clone(), plan.clone());
+        Ok(plan)
+    }
+}
+
 impl JniFunctionPlan {
-    /// Lower `f`'s inputs. Deterministic over `(ext, registry, f)` — until
-    /// plans are built once and stored (a later stage), each emission site
-    /// rebuilds the identical plan, exactly like [`build_struct_plan`].
+    /// Lower `f`'s inputs. Deterministic over `(ext, registry, f)`. Emission
+    /// and validation go through the memo [`JniGen::fn_plan`], so the plan is
+    /// built ONCE per function and shared; this is the underlying derivation.
     pub fn build(
         ext: &JniGen,
         registry: &Registry<KotlinMeta>,
