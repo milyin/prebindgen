@@ -127,6 +127,31 @@
 //! include!(concat!(env!("OUT_DIR"), "/example_flat.rs"));
 //! ```
 //!
+//! ## Macros
+//!
+//! The declaration surface is built almost entirely from exported macros, which
+//! fall into two groups.
+//!
+//! **Declaration macros** construct a typed [`lang`] `*Decl` from bare Rust
+//! syntax — the domain vocabulary you compose and hand to [`lang::JniGen`]:
+//!
+//! - Kotlin surface: [`package!`](crate::package), [`ptr_class!`](crate::ptr_class),
+//!   [`data_class!`](crate::data_class), [`value_class!`](crate::value_class),
+//!   [`enum_class!`](crate::enum_class)
+//! - Members & constants: [`fun!`](crate::fun), [`constant!`](crate::constant)
+//! - Conversions: [`convert!`](crate::convert), [`from!`](crate::from),
+//!   [`try_from!`](crate::try_from), [`into!`](crate::into),
+//!   [`try_into!`](crate::try_into)
+//! - Boundary expansion: [`expand_param!`](crate::expand_param),
+//!   [`expand_return!`](crate::expand_return)
+//!
+//! **Syntax helpers** produce a bare `syn` node — `Type` / `Path` / `Expr` /
+//! `Signature` / `Ident` — to hand to a declaration method that requires one.
+//! They exist only to sidestep `syn::parse_quote!`'s type-inference ambiguity
+//! (E0283) in a generic argument position, not to express a domain concept:
+//! [`ty!`](crate::ty), [`path!`](crate::path), [`expr!`](crate::expr),
+//! [`sig!`](crate::sig), [`ident!`](crate::ident).
+//!
 
 /// File name for storing the crate name
 const CRATE_NAME_FILE: &str = "crate_name.txt";
