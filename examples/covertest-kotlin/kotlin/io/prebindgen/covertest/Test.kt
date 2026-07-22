@@ -26,6 +26,8 @@ import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.celsiusDouble
+import io.prebindgen.covertest.model.durationOptional
+import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.labelReverse
 import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
@@ -165,6 +167,45 @@ fun main() {
         expectRangeError(-1, 0, 0L, "u8 input out of range: -1")
         expectRangeError(0, 65_536, 0L, "u16 input out of range: 65536")
         expectRangeError(0, 0, 4_294_967_296L, "u32 input out of range: 4294967296")
+    }
+
+    // ── bounded custom representation: Rust keeps Option<Duration>, Kotlin
+    // sees ULong?, and JNI uses an invalid u64 bit pattern for null so the
+    // native carrier remains primitive long rather than JObject/boxed Long. ─
+    section("bounded Option<Duration> niche over raw Long") {
+        val native = CovNative::class.java.getDeclaredMethod(
+            "durationOptional",
+            java.lang.Long.TYPE,
+            Any::class.java,
+        )
+        check(native.parameterTypes[0] == java.lang.Long.TYPE)
+        check(native.returnType == java.lang.Long.TYPE) {
+            "bounded Option<Duration> must use a primitive Long JNI carrier"
+        }
+
+        check(durationOptional(null, boom) == null)
+        check(durationOptional(0uL, boom) == 0uL)
+        check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
+
+        var inputError: String? = null
+        val inputFallback = durationOptional(86_400_001uL) { je ->
+            inputError = je
+            7uL
+        }
+        check(inputFallback == 7uL)
+        check(inputError?.contains("outside its declared domain") == true) {
+            "invalid duration input did not report its domain error: $inputError"
+        }
+
+        var outputError: String? = null
+        val outputFallback = durationOutOfRange { je ->
+            outputError = je
+            null
+        }
+        check(outputFallback == null)
+        check(outputError?.contains("outside its declared domain") == true) {
+            "invalid duration output did not report its domain error: $outputError"
+        }
     }
 
     // ── enum_class: return / by-value param / Option<enum> param ─────────────

@@ -26,6 +26,7 @@
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
 //! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
+//! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError` |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
@@ -179,6 +180,19 @@ fn main() {
             convert!(Label)
                 .input(fun!(crate::label_in).sig(sig!((s: String) -> Result<Label, String>)))
                 .output(fun!(crate::label_out).sig(sig!((l: Label) -> String))),
+        )
+        // Keep Rust's standard `Duration` as the semantic type while exposing
+        // bounded u64 milliseconds. Values above one day are invalid; one of
+        // those representations becomes the `Option<Duration>` None marker,
+        // so nullable Kotlin `ULong?` crosses JNI as a raw primitive `Long`
+        // without JObject/boxed-Long allocation.
+        .convert(
+            convert!(Duration)
+                .input(fun!(crate::duration_from_millis).sig(sig!((ms: u64) -> Duration)))
+                .output(
+                    fun!(crate::duration_to_millis).sig(sig!((d: Duration) -> Result<u64, String>)),
+                )
+                .valid_range(0u64..=86_400_000u64),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
@@ -388,7 +402,9 @@ fn main() {
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))
                 .fun(fun!(unsigned_emit))
-                .fun(fun!(unsigned_series)),
+                .fun(fun!(unsigned_series))
+                .fun(fun!(duration_optional))
+                .fun(fun!(duration_out_of_range)),
         )
         // analytics: the param-variant / return-field matrix (type default /
         // per-fn override, in + out). Per-fn overrides reuse the SAME

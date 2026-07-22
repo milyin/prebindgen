@@ -145,6 +145,38 @@ impl ScalarValue {
             _ => unreachable!(),
         }
     }
+
+    fn is_integer_min(self) -> bool {
+        matches!(
+            self,
+            Self::I8(i8::MIN)
+                | Self::I16(i16::MIN)
+                | Self::I32(i32::MIN)
+                | Self::I64(i64::MIN)
+                | Self::I128(i128::MIN)
+                | Self::U8(u8::MIN)
+                | Self::U16(u16::MIN)
+                | Self::U32(u32::MIN)
+                | Self::U64(u64::MIN)
+                | Self::U128(u128::MIN)
+        )
+    }
+
+    fn is_integer_max(self) -> bool {
+        matches!(
+            self,
+            Self::I8(i8::MAX)
+                | Self::I16(i16::MAX)
+                | Self::I32(i32::MAX)
+                | Self::I64(i64::MAX)
+                | Self::I128(i128::MAX)
+                | Self::U8(u8::MAX)
+                | Self::U16(u16::MAX)
+                | Self::U32(u32::MAX)
+                | Self::U64(u64::MAX)
+                | Self::U128(u128::MAX)
+        )
+    }
 }
 
 #[derive(Clone)]
@@ -333,6 +365,8 @@ fn float64_candidates(out: &mut Vec<ScalarValue>, n: usize) {
 fn bound_expr(bound: &Bound<ScalarValue>, value: &TokenStream, lower: bool) -> TokenStream {
     match bound {
         Bound::Unbounded => quote!(true),
+        Bound::Included(v) if lower && v.is_integer_min() => quote!(true),
+        Bound::Included(v) if !lower && v.is_integer_max() => quote!(true),
         Bound::Included(v) if lower => v.cmp_expr(value, ">="),
         Bound::Excluded(v) if lower => v.cmp_expr(value, ">"),
         Bound::Included(v) => v.cmp_expr(value, "<="),
@@ -444,6 +478,19 @@ mod tests {
                 ScalarValue::U64(u64::MAX - 2),
             ]
         );
+    }
+
+    #[test]
+    fn integer_extreme_bounds_do_not_emit_useless_comparisons() {
+        let domain = RepresentationDomain::range(0u64..=1_000_000);
+        let expr = domain.contains_expr(quote!(value)).to_string();
+        assert!(!expr.contains(">= 0u64"), "{expr}");
+        assert!(expr.contains("<= 1000000u64"), "{expr}");
+
+        let full = RepresentationDomain::range(i32::MIN..=i32::MAX);
+        let expr = full.contains_expr(quote!(value)).to_string();
+        assert!(!expr.contains(">="), "{expr}");
+        assert!(!expr.contains("<="), "{expr}");
     }
 
     #[test]

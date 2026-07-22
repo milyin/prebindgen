@@ -19,6 +19,18 @@ pub fn label_out(l: perftest_flat::Label) -> String {
     l.0
 }
 
+// Binding-local canonical conversion for `std::time::Duration`. The semantic
+// Rust type stays intact; build.rs declares that the foreign representation is
+// bounded `u64` milliseconds, whose invalid values provide Option niches.
+pub fn duration_from_millis(ms: u64) -> perftest_flat::Duration {
+    perftest_flat::Duration::from_millis(ms)
+}
+
+pub fn duration_to_millis(d: perftest_flat::Duration) -> Result<u64, String> {
+    u64::try_from(d.as_millis())
+        .map_err(|_| "duration does not fit in u64 milliseconds".to_string())
+}
+
 // Binding-local FUNCTIONS (`fun!(crate::…).sig(sig!(…))`): full fns defined
 // in THIS crate and exported through the ordinary FunctionDecl surface —
 // free package fn, instance method, companion constructor. No source-crate

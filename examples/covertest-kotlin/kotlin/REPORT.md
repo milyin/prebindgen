@@ -52,6 +52,8 @@ Base package: `io.prebindgen.covertest`
 - `annotated_priority` — `fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority?`
 - `annotated_ttl` — `fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long?`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
+- `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
+- `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
 - `payload_priority` — `fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority`
 - `percent_scale` — `fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int`
@@ -149,6 +151,7 @@ Base package: `io.prebindgen.covertest`
 ## conversions
 
 - `convert!(Celsius)`: input `Into` ⇄ `i32`, output `Into` ⇄ `i32`
+- `convert!(Duration)`: input `#[prebindgen]` fn `duration_from_millis`, output `#[prebindgen]` fn `duration_to_millis`
 - `convert!(Label)`: input `#[prebindgen]` fn `label_in`, output `#[prebindgen]` fn `label_out`
 - `convert!(Millis)`: input `#[prebindgen]` fn `millis_from_long`, output `#[prebindgen]` fn `millis_value`
 - `convert!(Percent)`: input `TryInto` ⇄ `i32`, output `Into` ⇄ `i32`

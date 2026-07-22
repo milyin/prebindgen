@@ -17,6 +17,11 @@
 //!   (→ flatten-input / flatten-output).
 //! * [`Millis`] — a newtype crossing as a plain `Long` via a custom
 //!   input/output wrapper.
+//! * [`Duration`] — the standard-library semantic type crossing as bounded
+//!   milliseconds, with `Option<Duration>` using an invalid representation as
+//!   an allocation-free niche.
+
+pub use std::time::Duration;
 
 use prebindgen_proc_macro::prebindgen;
 
@@ -347,6 +352,31 @@ pub struct Millis(pub u64);
 #[prebindgen]
 pub fn millis_add(a: Millis, b: Millis) -> Millis {
     Millis(a.0 + b.0)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Duration — std semantic type crossing as bounded u64 milliseconds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Largest duration accepted by the covertest binding: one day in
+/// milliseconds. The binding's representation-domain declaration reserves all
+/// larger `u64` values, allowing `Option<Duration>` to use one as `None` while
+/// keeping the JNI carrier a primitive `jlong`.
+pub const DURATION_MAX_MILLIS: u64 = 86_400_000;
+
+/// Round-trip an optional standard-library duration. The source API remains
+/// semantic (`Option<Duration>`); only the binding declares its millisecond
+/// representation and range.
+#[prebindgen]
+pub fn duration_optional(value: Option<Duration>) -> Option<Duration> {
+    value
+}
+
+/// Deliberately violate the binding's declared output domain so the Kotlin
+/// covertest can verify outbound validation and error routing.
+#[prebindgen]
+pub fn duration_out_of_range() -> Option<Duration> {
+    Some(Duration::from_millis(DURATION_MAX_MILLIS + 1))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

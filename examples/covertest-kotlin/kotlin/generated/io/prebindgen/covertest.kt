@@ -651,6 +651,10 @@ internal object CovNative {
 
     external fun coverTagRuntime(errorSink: Any): String
 
+    external fun durationOptional(value: Long, errorSink: Any): Long
+
+    external fun durationOutOfRange(errorSink: Any): Long
+
     external fun escapeProbeNew(value: Long, errorSink: Any): Long
 
     external fun escape_probe_value(p: Long, errorSink: Any): Long
