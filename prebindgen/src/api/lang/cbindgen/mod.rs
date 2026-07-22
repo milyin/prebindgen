@@ -78,12 +78,14 @@ pub(crate) use crate::api::core::types_util::{
     first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
     is_vec_type as is_vec, path_tail_ident as type_path_tail, result_parts,
 };
-use crate::api::core::{
-    niches::{NicheSlot, Niches},
-    prebindgen::{ConverterImpl, Prebindgen},
-    registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
+use crate::api::{
+    core::{
+        niches::{NicheSlot, Niches},
+        prebindgen::{ConverterImpl, Prebindgen},
+        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
+    },
+    lang::jnigen::{ConvertDecl, ConvertSpec},
 };
-use crate::api::lang::jnigen::{ConvertDecl, ConvertSpec};
 
 /// Identity of a declared callback signature: its argument-type list (the
 /// dedup key, since two `impl Fn` params with the same args share one closure
