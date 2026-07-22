@@ -239,6 +239,7 @@ impl JniGen {
                 owned: true,
                 strategy: FoldStrategy::Base,
                 kind: ProjectionKind::Handle,
+                niche_sentinels: Vec::new(),
             }),
             ..self.framework_meta(Some(kt::KtType::cls("Long")))
         }
@@ -254,6 +255,7 @@ impl JniGen {
                 owned: false,
                 strategy: FoldStrategy::Base,
                 kind: ProjectionKind::Unsigned64,
+                niche_sentinels: Vec::new(),
             }),
             ..self.framework_meta(Some(kt::KtType::long()))
         }
@@ -1469,6 +1471,7 @@ impl JniGen {
                         owned: false,
                         strategy: FoldStrategy::Base,
                         kind: ProjectionKind::ValueBlob,
+                        niche_sentinels: Vec::new(),
                     }),
                     ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
                 },
@@ -1679,6 +1682,7 @@ impl JniGen {
                         owned: false,
                         strategy: FoldStrategy::Base,
                         kind: ProjectionKind::ValueBlob,
+                        niche_sentinels: Vec::new(),
                     }),
                     ..self.framework_meta(Some(kt::KtType::cls("ByteArray")))
                 },

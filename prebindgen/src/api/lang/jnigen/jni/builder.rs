@@ -1027,7 +1027,7 @@ impl JniGen {
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         let target = key.to_type();
-        match decl.input.as_ref()? {
+        let result = match decl.input.as_ref()? {
             ConvertSpec::PrebindgenFn(f) => {
                 let (item_fn, _) = registry.functions.get(f).unwrap_or_else(|| {
                     panic!(
@@ -1085,7 +1085,9 @@ impl JniGen {
               // pass the qualification visitor untouched). With a declared
               // error type the fn returns `Result<T, E>` — emitted as-is, `E`
               // riding the standard exc slot.
-        }
+        };
+        let (repr, exc, body) = result?;
+        Some(self.apply_input_domain(decl, repr, exc, body))
     }
 
     /// Output-direction peer of [`Self::convert_input_body`]: the conversion
@@ -1097,7 +1099,7 @@ impl JniGen {
     ) -> Option<(syn::Type, Option<syn::Type>, syn::Expr)> {
         let decl = self.convert_decls.iter().find(|d| &d.key == key)?;
         let target = key.to_type();
-        match decl.output.as_ref()? {
+        let result = match decl.output.as_ref()? {
             ConvertSpec::PrebindgenFn(g) => {
                 let (item_fn, _) = registry.functions.get(g).unwrap_or_else(|| {
                     panic!(
@@ -1113,8 +1115,18 @@ impl JniGen {
                     got = TypeKey::from_type(&param_ty).as_str()
                 );
                 let ret = fn_return_type(item_fn);
+                let (repr, exc) = match crate::api::core::types_util::result_ok_type(&ret) {
+                    Some(ok) => (
+                        ok,
+                        Some(
+                            crate::api::core::types_util::result_err_type(&ret)
+                                .expect("result_ok_type implies result_err_type"),
+                        ),
+                    ),
+                    None => (ret, None),
+                };
                 assert!(
-                    TypeKey::from_type(&ret) != *key,
+                    TypeKey::from_type(&repr) != *key,
                     "convert!({k}).output({g}): the function must return the converted form, \
                      not `{k}`",
                     k = key.as_str()
@@ -1125,7 +1137,7 @@ impl JniGen {
                 } else {
                     syn::parse_quote!(#module::#g(v))
                 };
-                Some((ret, None, body))
+                Some((repr, exc, body))
             }
             ConvertSpec::Trait { repr, fallible } => {
                 if *fallible {
@@ -1143,12 +1155,102 @@ impl JniGen {
                     Some((repr.clone(), None, body))
                 }
             }
-        }
+        };
+        let (repr, exc, body) = result?;
+        Some(self.apply_output_domain(decl, repr, exc, body))
     }
 
     /// Idents of every `#[prebindgen]`-fn conversion source — scanned as
     /// helper functions ([`Prebindgen::helper_functions`]) so their extern
     /// emission is suppressed. Trait/local-fn sources have no registry item.
+    fn apply_input_domain(
+        &self,
+        decl: &ConvertDecl,
+        repr: syn::Type,
+        exc: Option<syn::Type>,
+        body: syn::Expr,
+    ) -> (syn::Type, Option<syn::Type>, syn::Expr) {
+        let Some(domain) = &decl.domain else {
+            return (repr, exc, body);
+        };
+        assert_eq!(
+            TypeKey::from_type(domain.ty()),
+            TypeKey::from_type(&repr),
+            "convert!({}): domain type {} does not match input representation {}",
+            decl.key.as_str(),
+            TypeKey::from_type(domain.ty()),
+            TypeKey::from_type(&repr),
+        );
+        let valid = domain.contains_expr(quote!(v));
+        let key = decl.key.as_str();
+        let converted = if exc.is_some() {
+            quote!((#body).map_err(|__e| {
+                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
+            }))
+        } else {
+            quote!(::core::result::Result::Ok(#body))
+        };
+        let body = syn::parse_quote!({
+            if #valid {
+                #converted
+            } else {
+                ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<String>>::from(
+                        format!("{} representation is outside its declared domain", #key)
+                    )
+                )
+            }
+        });
+        (repr, Some(syn::parse_quote!(__JniErr)), body)
+    }
+
+    fn apply_output_domain(
+        &self,
+        decl: &ConvertDecl,
+        repr: syn::Type,
+        exc: Option<syn::Type>,
+        body: syn::Expr,
+    ) -> (syn::Type, Option<syn::Type>, syn::Expr) {
+        let Some(domain) = &decl.domain else {
+            return (repr, exc, body);
+        };
+        assert_eq!(
+            TypeKey::from_type(domain.ty()),
+            TypeKey::from_type(&repr),
+            "convert!({}): domain type {} does not match output representation {}",
+            decl.key.as_str(),
+            TypeKey::from_type(domain.ty()),
+            TypeKey::from_type(&repr),
+        );
+        let valid = domain.contains_expr(quote!(__repr));
+        let key = decl.key.as_str();
+        let converted = if exc.is_some() {
+            quote!((#body).map_err(|__e| {
+                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
+            }))
+        } else {
+            quote!(::core::result::Result::Ok(#body))
+        };
+        let body = syn::parse_quote!({
+            match #converted {
+                ::core::result::Result::Ok(__repr) if #valid => {
+                    ::core::result::Result::Ok(__repr)
+                }
+                ::core::result::Result::Ok(_) => {
+                    ::core::result::Result::Err(
+                        <__JniErr as ::core::convert::From<String>>::from(
+                            format!("{} representation is outside its declared domain", #key)
+                        )
+                    )
+                }
+                ::core::result::Result::Err(__e) => {
+                    ::core::result::Result::Err(__e)
+                }
+            }
+        });
+        (repr, Some(syn::parse_quote!(__JniErr)), body)
+    }
+
     pub(crate) fn convert_fns(&self) -> impl Iterator<Item = syn::Ident> + '_ {
         self.convert_decls
             .iter()
@@ -1218,6 +1320,75 @@ impl JniGen {
             kotlin_name,
             value_rust_key: None,
             projection: None,
+        }
+    }
+
+    fn conversion_domain_niches(
+        &self,
+        key: &TypeKey,
+        registry: &Registry<KotlinMeta>,
+        direction: Direction,
+        wire: &syn::Type,
+    ) -> (Niches, Vec<String>) {
+        let Some(domain) = self
+            .convert_decls
+            .iter()
+            .find(|d| &d.key == key)
+            .and_then(|d| d.domain.as_ref())
+        else {
+            return (Niches::empty(), Vec::new());
+        };
+        if TypeKey::from_type(domain.ty()).as_str() != "u64"
+            || crate::api::core::types_util::path_tail_ident(wire)
+                .is_none_or(|ident| ident != "jlong")
+        {
+            return (Niches::empty(), Vec::new());
+        }
+        let demand = registry
+            .type_table(direction)
+            .keys()
+            .map(|candidate| {
+                let mut ty = candidate.to_type();
+                let mut depth = 0;
+                while crate::api::core::types_util::is_option_type(&ty) {
+                    let Some(inner) = crate::api::core::types_util::first_type_arg(&ty) else {
+                        return 0;
+                    };
+                    ty = inner;
+                    depth += 1;
+                }
+                if TypeKey::from_type(&ty) == *key {
+                    depth
+                } else {
+                    0
+                }
+            })
+            .max()
+            .unwrap_or(0);
+        let mut slots = Vec::new();
+        let mut kotlin = Vec::new();
+        for value in domain.niche_values(demand) {
+            let ScalarValue::U64(value) = value else {
+                continue;
+            };
+            let raw = value as i64;
+            let literal = if raw == i64::MIN {
+                "Long.MIN_VALUE".to_string()
+            } else {
+                format!("{raw}L")
+            };
+            slots.push(NicheSlot {
+                value: syn::parse_quote!(#raw),
+                matches: syn::parse_quote!(*v == #raw),
+            });
+            kotlin.push(literal);
+        }
+        (Niches::from_slots(slots), kotlin)
+    }
+
+    fn attach_domain_sentinels(metadata: &mut KotlinMeta, sentinels: Vec<String>) {
+        if let Some(projection) = metadata.projection.as_mut() {
+            projection.niche_sentinels = sentinels;
         }
     }
 
@@ -1376,25 +1547,29 @@ impl JniGen {
                 } else {
                     (inner.metadata.kotlin_name.clone(), None)
                 };
-                let niches = if rank == 0 {
-                    Niches::empty()
+                let (niches, sentinels) = if rank == 0 {
+                    self.conversion_domain_niches(
+                        &key,
+                        registry,
+                        Direction::Input,
+                        &inner.destination,
+                    )
                 } else {
-                    default_niches_for_wire(&inner.destination)
+                    (default_niches_for_wire(&inner.destination), Vec::new())
                 };
+                let mut metadata = KotlinMeta {
+                    kotlin_name,
+                    value_rust_key,
+                    projection: inner.metadata.projection.clone(),
+                };
+                Self::attach_domain_sentinels(&mut metadata, sentinels);
                 Some(ConverterImpl {
                     subs: vec![],
                     function: inner.function.clone(),
                     destination: inner.destination.clone(),
                     pre_stages,
                     niches,
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_key,
-                        // Identity propagation: a composed wrapper (e.g.
-                        // `Result<Handle,Error>`) projects to its inner value,
-                        // so a handle inner stays a handle (same strategy).
-                        projection: inner.metadata.projection.clone(),
-                    },
+                    metadata,
                 })
             }
         }
@@ -1506,25 +1681,29 @@ impl JniGen {
                 } else {
                     (inner.metadata.kotlin_name.clone(), None)
                 };
-                let niches = if rank == 0 {
-                    Niches::empty()
+                let (niches, sentinels) = if rank == 0 {
+                    self.conversion_domain_niches(
+                        &key,
+                        registry,
+                        Direction::Output,
+                        &inner.destination,
+                    )
                 } else {
-                    default_niches_for_wire(&inner.destination)
+                    (default_niches_for_wire(&inner.destination), Vec::new())
                 };
+                let mut metadata = KotlinMeta {
+                    kotlin_name,
+                    value_rust_key,
+                    projection: inner.metadata.projection.clone(),
+                };
+                Self::attach_domain_sentinels(&mut metadata, sentinels);
                 Some(ConverterImpl {
                     subs: vec![],
                     function: inner.function.clone(),
                     destination: inner.destination.clone(),
                     pre_stages,
                     niches,
-                    metadata: KotlinMeta {
-                        kotlin_name,
-                        value_rust_key,
-                        // Identity propagation: a composed wrapper (e.g.
-                        // `Result<Handle,Error>`) projects to its inner value,
-                        // so a handle inner stays a handle (same strategy).
-                        projection: inner.metadata.projection.clone(),
-                    },
+                    metadata,
                 })
             }
         }

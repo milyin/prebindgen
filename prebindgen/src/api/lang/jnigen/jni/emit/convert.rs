@@ -79,10 +79,6 @@ pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> 
             syn::parse_quote!(*v as ::core::primitive::u64),
         ),
         "f64" => (syn::parse_quote!(jni::sys::jdouble), syn::parse_quote!(*v)),
-        "Duration" | "std :: time :: Duration" => (
-            syn::parse_quote!(jni::sys::jlong),
-            syn::parse_quote!(std::time::Duration::from_millis(*v as u64)),
-        ),
         "String" => (
             syn::parse_quote!(jni::objects::JString),
             syn::parse_quote!({

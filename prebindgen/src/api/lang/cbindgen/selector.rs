@@ -10,7 +10,8 @@ impl Cbindgen {
         ty: &syn::Type,
         registry: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
-        self.in_opaque_handle(ty)
+        self.in_custom(ty, registry)
+            .or_else(|| self.in_opaque_handle(ty))
             .or_else(|| self.in_data_struct(ty, registry))
             .or_else(|| self.in_value_opaque(ty, registry))
             .or_else(|| self.in_enum(ty, registry))
@@ -27,7 +28,8 @@ impl Cbindgen {
         ty: &syn::Type,
         registry: &Registry<()>,
     ) -> Option<ConverterImpl<()>> {
-        self.out_terminal(ty, registry)
+        self.out_custom(ty, registry)
+            .or_else(|| self.out_terminal(ty, registry))
             .or_else(|| self.out_wrappers(ty, registry))
     }
 }

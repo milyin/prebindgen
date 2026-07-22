@@ -288,8 +288,9 @@ macro_rules! ident {
 /// with the `unstable-cbindgen` feature.
 pub mod core {
     pub use crate::api::core::{
-        ConverterImpl, Direction, Generation, Gravestone, NicheSlot, Niches, Prebindgen, Registry,
-        ScanError, Stage, Transmute, TypeEntry, TypeKey, WriteRustError,
+        ConverterImpl, Direction, DomainScalar, Generation, Gravestone, NicheSlot, Niches,
+        Prebindgen, Registry, RepresentationDomain, ScalarValue, ScanError, Stage, Transmute,
+        TypeEntry, TypeKey, WriteRustError,
     };
 }
 

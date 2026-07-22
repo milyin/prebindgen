@@ -778,6 +778,41 @@ impl Prebindgen for Cbindgen {
         self.ignored_functions.clone()
     }
 
+    fn helper_functions(&self) -> HashSet<syn::Ident> {
+        self.convert_decls
+            .iter()
+            .flat_map(|decl| decl.input.iter().chain(decl.output.iter()))
+            .filter_map(|spec| match spec {
+                ConvertSpec::PrebindgenFn(ident) => Some(ident.clone()),
+                ConvertSpec::Trait { .. } => None,
+            })
+            .filter(|ident| !self.functions.contains_key(ident))
+            .collect()
+    }
+
+    fn local_functions(&self) -> Vec<(syn::ItemFn, String)> {
+        let mut result = Vec::new();
+        let mut seen = HashMap::<syn::Ident, String>::new();
+        for (ident, path, sig) in self.convert_decls.iter().flat_map(|decl| &decl.locals) {
+            let origin = crate::api::lang::jnigen::jni::local_path_prefix(path);
+            let mut sig = sig.clone();
+            sig.ident = ident.clone();
+            let signature = quote!(#origin #sig).to_string();
+            match seen.get(ident) {
+                Some(previous) if previous == &signature => continue,
+                Some(_) => panic!(
+                    "binding-local conversion fn `{ident}` is declared with two different signatures"
+                ),
+                None => {
+                    seen.insert(ident.clone(), signature);
+                }
+            }
+            let item: syn::ItemFn = syn::parse_quote!(#sig { unimplemented!() });
+            result.push((item, origin));
+        }
+        result
+    }
+
     fn declared_types(&self) -> HashSet<TypeKey> {
         self.opaque
             .keys()
@@ -808,6 +843,7 @@ impl Prebindgen for Cbindgen {
         items.extend(self.prereq_value_opaque(registry));
         items.extend(self.prereq_enums(registry));
         items.extend(self.prereq_callback_structs(registry));
+        items.extend(self.prereq_domain_constants(registry));
         items
     }
 
@@ -1175,6 +1211,49 @@ impl Cbindgen {
                 syn::ReturnType::Type(_, t) => ((**t).clone(), false),
                 syn::ReturnType::Default => (syn::parse_quote!(()), false),
             };
+            if let Some((slot, rest)) = entry.niches.clone().carve() {
+                let pred = &slot.matches;
+                let name =
+                    format_ident!("__cbg_in_option_{}", sanitize(&TypeKey::from_type(&inner)));
+                let function: syn::ItemFn = if fallible {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) unsafe fn #name(
+                            v: #inner_wire,
+                        ) -> ::core::result::Result<
+                            ::core::option::Option<#inner_ok>,
+                            ::std::string::String
+                        > {
+                            if #pred {
+                                ::core::result::Result::Ok(::core::option::Option::None)
+                            } else {
+                                #inner_conv(v).map(::core::option::Option::Some)
+                            }
+                        }
+                    )
+                } else {
+                    syn::parse_quote!(
+                        #[allow(non_snake_case, unused_variables, dead_code)]
+                        pub(crate) unsafe fn #name(
+                            v: #inner_wire,
+                        ) -> ::core::option::Option<#inner_ok> {
+                            if #pred {
+                                ::core::option::Option::None
+                            } else {
+                                ::core::option::Option::Some(#inner_conv(v))
+                            }
+                        }
+                    )
+                };
+                return Some(ConverterImpl {
+                    subs: vec![inner],
+                    destination: inner_wire,
+                    function,
+                    pre_stages: vec![],
+                    niches: rest,
+                    metadata: (),
+                });
+            }
             let is_ptr = matches!(inner_wire, syn::Type::Ptr(_));
             let wire: syn::Type = if is_ptr {
                 inner_wire.clone()

@@ -144,6 +144,7 @@ impl Cbindgen {
             Some((ok, e)) => (ok, Some(e)),
             None => (return_ty.clone(), None),
         };
+        let has_fallible_output = self.output_is_fallible(&value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -174,9 +175,9 @@ impl Cbindgen {
         if err_ty.is_none() {
             let allows_panic = self.functions.get(orig).map(|c| c.panic).unwrap_or(false);
             assert!(
-                !has_fallible_input || allows_panic,
-                "Cbindgen: function `{}` has a fallible input (e.g. a `String` or \
-                 opaque-by-value argument) but does not return `Result`; add \
+                !(has_fallible_input || has_fallible_output) || allows_panic,
+                "Cbindgen: function `{}` has a fallible binding conversion but does not \
+                 return `Result`; add \
                  `.panic()` after its `.function(...)` declaration to allow aborting \
                  on the internal error, or change its signature",
                 orig,
@@ -188,7 +189,8 @@ impl Cbindgen {
         //   * Result without a free niche     → `bool` status, value to out-params;
         //   * no Result                       → field 0 is the C return, rest out.
         let shape = self.lower_shape(&value_ty, registry);
-        let result_in_band = err_ty.is_some() && shape.has_niche; // value rides the return
+        let result_slot = shape.niches.clone().carve().map(|(slot, _)| slot);
+        let result_in_band = err_ty.is_some() && result_slot.is_some();
         let field0_is_return = result_in_band || err_ty.is_none();
 
         // Partition fields into the (optional) C return value + out-parameters,
@@ -238,7 +240,9 @@ impl Cbindgen {
         // Input decode: route a fallible-input failure to the error out-param
         // (with the wrapper's fail value) when there is a `Result`, else panic.
         let fail_return = if result_in_band {
-            null_for(field0_wire.as_ref().expect("in-band ⇒ pointer return"))
+            let slot = result_slot.as_ref().expect("in-band result has a niche");
+            let value = &slot.value;
+            quote!(#value)
         } else {
             quote!(false)
         };
@@ -263,7 +267,8 @@ impl Cbindgen {
             // No `Result`: straight-line. `void` when there are no fields.
             (None, _) => {
                 if let Some(field0_wire) = field0_wire.as_ref() {
-                    let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                    let enc =
+                        self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
                     quote!(
                         #(#decodes)*
                         let __v = #call;
@@ -278,8 +283,12 @@ impl Cbindgen {
             // `Result` with a free niche: value in-band, NULL marks `Err`.
             (Some((_, e_conv, _)), true) => {
                 let field0_wire = field0_wire.as_ref().expect("in-band ⇒ pointer return");
-                let null = null_for(field0_wire);
-                let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                let null = &result_slot
+                    .as_ref()
+                    .expect("in-band result has a niche")
+                    .value;
+                let enc =
+                    self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -293,7 +302,8 @@ impl Cbindgen {
             }
             // `Result` without a free niche: `bool` status, value to out-params.
             (Some((_, e_conv, _)), false) => {
-                let enc = self.encode_value(&value_ty, quote!(__v), &targets, registry);
+                let enc =
+                    self.encode_value(&value_ty, quote!(__v), &targets, registry, &input_route);
                 quote!(
                     #(#decodes)*
                     match #call {
@@ -321,15 +331,15 @@ impl Cbindgen {
     }
 
     /// Lower how a *present / ok* value of `ty` is carried over the C ABI: an
-    /// ordered list of wire components, plus whether `fields[0]` is a pointer
-    /// whose NULL bit-pattern is still free for an enclosing `Option`/`Result`
-    /// layer to claim. Mirrors the niche-stacking model in `core::niches`.
+    /// ordered list of wire components plus the representation niches still
+    /// available for enclosing `Option`/`Result` layers. Mirrors the
+    /// niche-stacking model in `core::niches`.
     #[allow(clippy::only_used_in_recursion)]
     pub(super) fn lower_shape(&self, ty: &syn::Type, registry: &Registry<()>) -> ValueShape {
         if is_unit(ty) {
             return ValueShape {
                 fields: vec![],
-                has_niche: false,
+                niches: Niches::empty(),
             };
         }
         // `Vec<T>` → `T_wire* + size_t`. The element must lower to a single C
@@ -360,7 +370,7 @@ impl Cbindgen {
                         wire: syn::parse_quote!(usize),
                     },
                 ],
-                has_niche: false,
+                niches: Niches::empty(),
             };
         }
         // `Cow<'_, [T]>` → `T_wire* + size_t`. The C side receives an owned
@@ -384,19 +394,19 @@ impl Cbindgen {
                         wire: syn::parse_quote!(usize),
                     },
                 ],
-                has_niche: false,
+                niches: Niches::empty(),
             };
         }
-        // `Option<T>` consumes one discriminant. If the inner value still has a
-        // free pointer niche, reuse it (NULL = `None`); otherwise prepend an
-        // explicit `present: bool`. Either way the result exposes no niche.
+        // `Option<T>` consumes one available inner niche. This includes NULL
+        // pointers and invalid scalar values declared by `convert!`; without a
+        // niche it prepends an explicit `present: bool`.
         if is_option(ty) {
             let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
             let inner = self.lower_shape(&inner_ty, registry);
-            if inner.has_niche {
+            if let Some((_slot, rest)) = inner.niches.clone().carve() {
                 return ValueShape {
                     fields: inner.fields,
-                    has_niche: false,
+                    niches: rest,
                 };
             }
             let mut fields = vec![WireField {
@@ -406,11 +416,12 @@ impl Cbindgen {
             fields.extend(inner.fields);
             return ValueShape {
                 fields,
-                has_niche: false,
+                niches: Niches::empty(),
             };
         }
-        // Base value: one wire component from its rank-0/1 converter. A pointer
-        // wire (String, opaque handle, `&'static`) carries a free NULL niche.
+        // Base value: one wire component from its rank-0/1 converter. Custom
+        // conversions may declare scalar niches; otherwise a pointer wire
+        // (String, opaque handle, `&'static`) carries a free NULL niche.
         let entry = registry.output_entry(ty).unwrap_or_else(|| {
             panic!(
                 "Cbindgen::on_function: type `{}` has no output converter",
@@ -418,10 +429,15 @@ impl Cbindgen {
             )
         });
         let wire = entry.destination.clone();
-        let has_niche = matches!(wire, syn::Type::Ptr(_));
+        let niches = if entry.niches.is_empty() && matches!(wire, syn::Type::Ptr(_)) {
+            let null = null_for(&wire);
+            Niches::one(syn::parse_quote!(#null), syn::parse_quote!(v.is_null()))
+        } else {
+            entry.niches.clone()
+        };
         ValueShape {
             fields: vec![WireField { suffix: "", wire }],
-            has_niche,
+            niches,
         }
     }
 
@@ -433,6 +449,7 @@ impl Cbindgen {
         val: TokenStream,
         targets: &[TokenStream],
         registry: &Registry<()>,
+        route: &ErrRoute,
     ) -> TokenStream {
         if is_unit(ty) {
             return quote!();
@@ -444,13 +461,26 @@ impl Cbindgen {
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
             let t_len = &targets[1];
-            return quote!(
-                let __arr: ::std::vec::Vec<#elem_wire> =
-                    #val.into_iter().map(#elem_conv).collect();
-                let (__p, __n) = __cbg_alloc_array(__arr);
-                #t_ptr = __p;
-                #t_len = __n;
-            );
+            if returns_result(&entry.function.sig.output) {
+                let converted = route_result(quote!(#elem_conv(__value)), route);
+                return quote!(
+                    let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
+                    for __value in #val {
+                        __arr.push(#converted);
+                    }
+                    let (__p, __n) = __cbg_alloc_array(__arr);
+                    #t_ptr = __p;
+                    #t_len = __n;
+                );
+            } else {
+                return quote!(
+                    let __arr: ::std::vec::Vec<#elem_wire> =
+                        #val.into_iter().map(#elem_conv).collect();
+                    let (__p, __n) = __cbg_alloc_array(__arr);
+                    #t_ptr = __p;
+                    #t_len = __n;
+                );
+            }
         }
         if let Some(elem) = cow_slice_elem(ty) {
             let entry = registry
@@ -460,21 +490,34 @@ impl Cbindgen {
             let elem_wire = entry.destination.clone();
             let t_ptr = &targets[0];
             let t_len = &targets[1];
-            return quote!(
-                let __arr: ::std::vec::Vec<#elem_wire> =
-                    #val.iter().copied().map(#elem_conv).collect();
-                let (__p, __n) = __cbg_alloc_array(__arr);
-                #t_ptr = __p;
-                #t_len = __n;
-            );
+            if returns_result(&entry.function.sig.output) {
+                let converted = route_result(quote!(#elem_conv(__value)), route);
+                return quote!(
+                    let mut __arr: ::std::vec::Vec<#elem_wire> = ::std::vec::Vec::new();
+                    for __value in #val.iter().copied() {
+                        __arr.push(#converted);
+                    }
+                    let (__p, __n) = __cbg_alloc_array(__arr);
+                    #t_ptr = __p;
+                    #t_len = __n;
+                );
+            } else {
+                return quote!(
+                    let __arr: ::std::vec::Vec<#elem_wire> =
+                        #val.iter().copied().map(#elem_conv).collect();
+                    let (__p, __n) = __cbg_alloc_array(__arr);
+                    #t_ptr = __p;
+                    #t_len = __n;
+                );
+            }
         }
         if is_option(ty) {
             let inner_ty = first_type_arg(ty).expect("Option<T> has a type argument");
             let inner = self.lower_shape(&inner_ty, registry);
-            if inner.has_niche {
-                // None reuses the inner pointer's NULL; Some encodes inline.
-                let inner_enc = self.encode_value(&inner_ty, quote!(__x), targets, registry);
-                let null = null_for(&inner.fields[0].wire);
+            if let Some((slot, _rest)) = inner.niches.clone().carve() {
+                // None reuses the next inner niche; Some encodes inline.
+                let inner_enc = self.encode_value(&inner_ty, quote!(__x), targets, registry, route);
+                let null = &slot.value;
                 let t0 = &targets[0];
                 return quote!(
                     match #val {
@@ -485,7 +528,8 @@ impl Cbindgen {
             }
             // Explicit `present` flag in targets[0]; inner value follows.
             let present = &targets[0];
-            let inner_enc = self.encode_value(&inner_ty, quote!(__x), &targets[1..], registry);
+            let inner_enc =
+                self.encode_value(&inner_ty, quote!(__x), &targets[1..], registry, route);
             return quote!(
                 match #val {
                     ::core::option::Option::Some(__x) => { #present = true; #inner_enc }
@@ -497,7 +541,25 @@ impl Cbindgen {
         let entry = registry.output_entry(ty).expect("base value converter");
         let conv = entry.function.sig.ident.clone();
         let t0 = &targets[0];
-        quote!( #t0 = #conv(#val); )
+        if returns_result(&entry.function.sig.output) {
+            let converted = route_result(quote!(#conv(#val)), route);
+            quote!( #t0 = #converted; )
+        } else {
+            quote!( #t0 = #conv(#val); )
+        }
+    }
+
+    fn output_is_fallible(&self, ty: &syn::Type, registry: &Registry<()>) -> bool {
+        if is_option(ty) || is_vec(ty) {
+            return first_type_arg(ty)
+                .is_some_and(|inner| self.output_is_fallible(&inner, registry));
+        }
+        if let Some(inner) = cow_slice_elem(ty) {
+            return self.output_is_fallible(&inner, registry);
+        }
+        registry
+            .output_entry(ty)
+            .is_some_and(|entry| returns_result(&entry.function.sig.output))
     }
 
     /// Build the wire param list, per-input decode statements, and call-site

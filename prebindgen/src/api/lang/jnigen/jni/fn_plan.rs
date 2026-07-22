@@ -114,7 +114,7 @@ pub(crate) enum InputKind {
     ValueUnwrap { field: String },
     /// Rust `u64`: typed Kotlin `ULong`, raw JNI `Long`. The wrapper passes
     /// the bit-preserving `toLong()` representation and takes no lock.
-    Unsigned64,
+    Unsigned64 { niche: Option<String> },
     /// Everything else: the resolved entry's converter/wire as-is.
     Plain,
 }
@@ -530,7 +530,13 @@ fn classify_leaf(
                     });
                 InputKind::ValueUnwrap { field }
             }
-            Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64,
+            Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64 {
+                niche: entry.metadata.projection.as_ref().and_then(|p| {
+                    is_option_type(ty)
+                        .then(|| p.niche_sentinels.first().cloned())
+                        .flatten()
+                }),
+            },
             None => InputKind::Plain,
         }
     };

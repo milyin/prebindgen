@@ -1,5 +1,149 @@
 use super::*;
 
+#[test]
+fn bounded_duration_option_is_one_scalar_with_named_niche() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &std::time::Duration) -> u64 { unimplemented!() }",
+        "pub fn duration_echo(v: Option<std::time::Duration>) -> Option<std::time::Duration> { unimplemented!() }",
+        "pub fn duration_nested_echo(v: Option<Option<std::time::Duration>>) -> Option<Option<std::time::Duration>> { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let function: syn::ItemFn = syn::parse_str(source).unwrap();
+        (syn::Item::Fn(function), loc.clone())
+    })
+    .collect();
+    let registry = Registry::<()>::from_items(items).unwrap();
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            crate::convert!(std::time::Duration)
+                .input(crate::fun!(duration_from_millis))
+                .output(crate::fun!(duration_to_millis))
+                .valid_range(0u64..=1_000_000u64),
+        )
+        .base_name("z_duration")
+        .function(syn::parse_quote!(duration_echo))
+        .panic()
+        .function(syn::parse_quote!(duration_nested_echo))
+        .panic();
+
+    let src = write(cbindgen, registry, "bounded_duration");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("pubconstZ_DURATION_NICHE_0:u64=18446744073709551615"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("pubconstZ_DURATION_NICHE_1:u64=18446744073709551614"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("pubconstZ_DURATION_NONE:u64=18446744073709551615"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("extern\"C\"fnduration_echo(v:u64)->u64"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("extern\"C\"fnduration_nested_echo(v:u64)->u64"),
+        "{src}"
+    );
+    assert!(!compact.contains("v:*constu64"), "{src}");
+    assert!(!compact.contains("_present"), "{src}");
+    assert!(compact.contains("ifv==18446744073709551615"), "{src}");
+}
+
+#[test]
+fn bounded_float_option_uses_a_finite_bit_exact_niche() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn ratio_from_f64(v: f64) -> Ratio { unimplemented!() }",
+        "pub fn ratio_to_f64(v: Ratio) -> f64 { unimplemented!() }",
+        "pub fn ratio_echo(v: Option<Ratio>) -> Option<Ratio> { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let function: syn::ItemFn = syn::parse_str(source).unwrap();
+        (syn::Item::Fn(function), loc.clone())
+    })
+    .collect();
+    let registry = Registry::<()>::from_items(items).unwrap();
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            crate::convert!(Ratio)
+                .input(crate::fun!(ratio_from_f64))
+                .output(crate::fun!(ratio_to_f64))
+                .valid_range(0.0f64..=1.0f64),
+        )
+        .base_name("z_ratio")
+        .function(syn::parse_quote!(ratio_echo))
+        .panic();
+
+    let src = write(cbindgen, registry, "bounded_float");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("pubconstZ_RATIO_NONE:f64=1.7976931348623157e308f64"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("extern\"C\"fnratio_echo(v:f64)->f64"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("v.to_bits()==9218868437227405311"),
+        "{src}"
+    );
+    assert!(compact.contains("myflat::ratio_to_f64(v)"), "{src}");
+}
+
+#[test]
+fn custom_conversion_without_domain_stays_infallible() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn ratio_from_f64(v: f64) -> Ratio { unimplemented!() }",
+        "pub fn ratio_to_f64(v: Ratio) -> f64 { unimplemented!() }",
+        "pub fn ratio_echo(v: Ratio) -> Ratio { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let function: syn::ItemFn = syn::parse_str(source).unwrap();
+        (syn::Item::Fn(function), loc.clone())
+    })
+    .collect();
+    let registry = Registry::<()>::from_items(items).unwrap();
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .convert(
+            crate::convert!(Ratio)
+                .input(crate::fun!(ratio_from_f64))
+                .output(crate::fun!(ratio_to_f64)),
+        )
+        .function(syn::parse_quote!(ratio_echo));
+
+    let src = write(cbindgen, registry, "unbounded_conversion");
+    let compact: String = src.split_whitespace().collect();
+
+    assert!(
+        compact.contains("fn__cbg_in_Ratio(v:f64)->myflat::Ratio"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("fn__cbg_out_Ratio(v:myflat::Ratio)->f64"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("extern\"C\"fnratio_echo(v:f64)->f64"),
+        "{src}"
+    );
+}
+
 /// An adapter with no declarations writes an empty (whitespace-only) file.
 #[test]
 fn empty_adapter_writes_empty_file() {
