@@ -1,8 +1,9 @@
-//! Extended `#[prebindgen]` surface used **only** to exercise language-binding
+//! Extended `#[prebindgen]` surface primarily used to exercise language-binding
 //! generator features that the lean performance surface in [`crate`] does not
-//! need. None of these items are used by the `perftest-*` benchmarks; they exist
-//! so a *coverage* binding (e.g. `examples/covertest-kotlin`) can map one flat
-//! library through **every** adapter feature and assert the result.
+//! need. Most items exist so a *coverage* binding (e.g.
+//! `examples/covertest-kotlin`) can map one flat library through **every**
+//! adapter feature and assert the result; the `ObjectBoundary*` family also
+//! supports the flattened-vs-`JObject` JNI input micro-benchmark.
 //!
 //! Everything here is re-exported at the crate root (`pub use ext::*`), so a
 //! single `source_module = perftest_flat` reaches both the perf surface and this
@@ -561,6 +562,15 @@ object_boundary_level!(ObjectBoundary16, ObjectBoundary8);
 object_boundary_level!(ObjectBoundary32, ObjectBoundary16);
 object_boundary_level!(ObjectBoundary64, ObjectBoundary32);
 
+/// Structural twin of [`ObjectBoundary64`] used to benchmark an explicit
+/// whole-`JObject` input against recursive 64-leaf flattening.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundary64Object {
+    pub left: ObjectBoundary32,
+    pub right: ObjectBoundary32,
+}
+
 /// The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -617,6 +627,7 @@ impl_object_boundary_sum!(
     ObjectBoundary16,
     ObjectBoundary32,
     ObjectBoundary64,
+    ObjectBoundary64Object,
 );
 
 impl ObjectBoundarySum for ObjectBoundary63 {
@@ -638,6 +649,18 @@ impl ObjectBoundarySum for ObjectBoundary {
 
 #[prebindgen]
 pub fn object_boundary_value(value: &ObjectBoundary) -> i64 {
+    value.boundary_sum()
+}
+
+/// Sum the 64 scalar leaves after recursive JNI parameter flattening.
+#[prebindgen]
+pub fn large_flat_input_sum(value: &ObjectBoundary64) -> i64 {
+    value.boundary_sum()
+}
+
+/// Sum the same 64-leaf shape after decoding one whole `JObject` input.
+#[prebindgen]
+pub fn large_object_input_sum(value: &ObjectBoundary64Object) -> i64 {
     value.boundary_sum()
 }
 

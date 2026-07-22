@@ -15,6 +15,11 @@
 //! `Payload.label` is `Option<Box<String>>` (an opaque-pointer string field);
 //! JniGen maps `Box<String>` → Kotlin `String` and `Option<Box<String>>` →
 //! `String?` automatically.
+//!
+//! The `large_*_input_sum` pair compares the two Kotlin→Rust data-class input
+//! paths over identical nested structures with 64 `Long` leaves:
+//! `ObjectBoundary64` is recursively flattened, while its structural twin
+//! `ObjectBoundary64Object` uses `.jobject_input()`.
 
 use prebindgen::{core::Registry, data_class, fun, lang::JniGen, package, ptr_class};
 
@@ -34,6 +39,18 @@ fn main() {
                 // object is (re)assembled on the Kotlin side — no Java object is built on
                 // the Rust side.
                 .class(data_class!(Payload))
+                // Matched large-input micro-benchmark. Both roots contain the
+                // same 64 Long leaves; only the JNI input representation differs.
+                .class(data_class!(ObjectBoundaryLeaf))
+                .class(data_class!(ObjectBoundary2))
+                .class(data_class!(ObjectBoundary4))
+                .class(data_class!(ObjectBoundary8))
+                .class(data_class!(ObjectBoundary16))
+                .class(data_class!(ObjectBoundary32))
+                .class(data_class!(ObjectBoundary64))
+                .class(data_class!(ObjectBoundary64Object).jobject_input())
+                .fun(fun!(large_flat_input_sum))
+                .fun(fun!(large_object_input_sum))
                 // `Storage` as an opaque Kotlin handle class (`NativeHandle`, closeable);
                 // the functions read/write the payload it owns.
                 .class(ptr_class!(Storage))

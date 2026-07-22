@@ -145,6 +145,261 @@ internal inline fun <R> withSortedHandleLocks(
     return synchronized(x) { synchronized(y) { synchronized(z) { body() } } }
 }
 
+public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectBoundary8) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_value: Long,
+            left_left_left_right_value: Long,
+            left_left_right_left_value: Long,
+            left_left_right_right_value: Long,
+            left_right_left_left_value: Long,
+            left_right_left_right_value: Long,
+            left_right_right_left_value: Long,
+            left_right_right_right_value: Long,
+            right_left_left_left_value: Long,
+            right_left_left_right_value: Long,
+            right_left_right_left_value: Long,
+            right_left_right_right_value: Long,
+            right_right_left_left_value: Long,
+            right_right_left_right_value: Long,
+            right_right_right_left_value: Long,
+            right_right_right_right_value: Long,
+        ): ObjectBoundary16 = ObjectBoundary16(ObjectBoundary8.fromParts(left_left_left_left_value, left_left_left_right_value, left_left_right_left_value, left_left_right_right_value, left_right_left_left_value, left_right_left_right_value, left_right_right_left_value, left_right_right_right_value), ObjectBoundary8.fromParts(right_left_left_left_value, right_left_left_right_value, right_left_right_left_value, right_left_right_right_value, right_right_left_left_value, right_right_left_right_value, right_right_right_left_value, right_right_right_right_value))
+    }
+}
+
+public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: ObjectBoundaryLeaf) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left_value: Long, right_value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left_value), ObjectBoundaryLeaf.fromParts(right_value))
+    }
+}
+
+public data class ObjectBoundary32(val left: ObjectBoundary16, val right: ObjectBoundary16) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_left_value: Long,
+            left_left_left_left_right_value: Long,
+            left_left_left_right_left_value: Long,
+            left_left_left_right_right_value: Long,
+            left_left_right_left_left_value: Long,
+            left_left_right_left_right_value: Long,
+            left_left_right_right_left_value: Long,
+            left_left_right_right_right_value: Long,
+            left_right_left_left_left_value: Long,
+            left_right_left_left_right_value: Long,
+            left_right_left_right_left_value: Long,
+            left_right_left_right_right_value: Long,
+            left_right_right_left_left_value: Long,
+            left_right_right_left_right_value: Long,
+            left_right_right_right_left_value: Long,
+            left_right_right_right_right_value: Long,
+            right_left_left_left_left_value: Long,
+            right_left_left_left_right_value: Long,
+            right_left_left_right_left_value: Long,
+            right_left_left_right_right_value: Long,
+            right_left_right_left_left_value: Long,
+            right_left_right_left_right_value: Long,
+            right_left_right_right_left_value: Long,
+            right_left_right_right_right_value: Long,
+            right_right_left_left_left_value: Long,
+            right_right_left_left_right_value: Long,
+            right_right_left_right_left_value: Long,
+            right_right_left_right_right_value: Long,
+            right_right_right_left_left_value: Long,
+            right_right_right_left_right_value: Long,
+            right_right_right_right_left_value: Long,
+            right_right_right_right_right_value: Long,
+        ): ObjectBoundary32 = ObjectBoundary32(ObjectBoundary16.fromParts(left_left_left_left_left_value, left_left_left_left_right_value, left_left_left_right_left_value, left_left_left_right_right_value, left_left_right_left_left_value, left_left_right_left_right_value, left_left_right_right_left_value, left_left_right_right_right_value, left_right_left_left_left_value, left_right_left_left_right_value, left_right_left_right_left_value, left_right_left_right_right_value, left_right_right_left_left_value, left_right_right_left_right_value, left_right_right_right_left_value, left_right_right_right_right_value), ObjectBoundary16.fromParts(right_left_left_left_left_value, right_left_left_left_right_value, right_left_left_right_left_value, right_left_left_right_right_value, right_left_right_left_left_value, right_left_right_left_right_value, right_left_right_right_left_value, right_left_right_right_right_value, right_right_left_left_left_value, right_right_left_left_right_value, right_right_left_right_left_value, right_right_left_right_right_value, right_right_right_left_left_value, right_right_right_left_right_value, right_right_right_right_left_value, right_right_right_right_right_value))
+    }
+}
+
+public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBoundary2) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_value: Long,
+            left_right_value: Long,
+            right_left_value: Long,
+            right_right_value: Long,
+        ): ObjectBoundary4 = ObjectBoundary4(ObjectBoundary2.fromParts(left_left_value, left_right_value), ObjectBoundary2.fromParts(right_left_value, right_right_value))
+    }
+}
+
+public data class ObjectBoundary64(val left: ObjectBoundary32, val right: ObjectBoundary32) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_left_left_value: Long,
+            left_left_left_left_left_right_value: Long,
+            left_left_left_left_right_left_value: Long,
+            left_left_left_left_right_right_value: Long,
+            left_left_left_right_left_left_value: Long,
+            left_left_left_right_left_right_value: Long,
+            left_left_left_right_right_left_value: Long,
+            left_left_left_right_right_right_value: Long,
+            left_left_right_left_left_left_value: Long,
+            left_left_right_left_left_right_value: Long,
+            left_left_right_left_right_left_value: Long,
+            left_left_right_left_right_right_value: Long,
+            left_left_right_right_left_left_value: Long,
+            left_left_right_right_left_right_value: Long,
+            left_left_right_right_right_left_value: Long,
+            left_left_right_right_right_right_value: Long,
+            left_right_left_left_left_left_value: Long,
+            left_right_left_left_left_right_value: Long,
+            left_right_left_left_right_left_value: Long,
+            left_right_left_left_right_right_value: Long,
+            left_right_left_right_left_left_value: Long,
+            left_right_left_right_left_right_value: Long,
+            left_right_left_right_right_left_value: Long,
+            left_right_left_right_right_right_value: Long,
+            left_right_right_left_left_left_value: Long,
+            left_right_right_left_left_right_value: Long,
+            left_right_right_left_right_left_value: Long,
+            left_right_right_left_right_right_value: Long,
+            left_right_right_right_left_left_value: Long,
+            left_right_right_right_left_right_value: Long,
+            left_right_right_right_right_left_value: Long,
+            left_right_right_right_right_right_value: Long,
+            right_left_left_left_left_left_value: Long,
+            right_left_left_left_left_right_value: Long,
+            right_left_left_left_right_left_value: Long,
+            right_left_left_left_right_right_value: Long,
+            right_left_left_right_left_left_value: Long,
+            right_left_left_right_left_right_value: Long,
+            right_left_left_right_right_left_value: Long,
+            right_left_left_right_right_right_value: Long,
+            right_left_right_left_left_left_value: Long,
+            right_left_right_left_left_right_value: Long,
+            right_left_right_left_right_left_value: Long,
+            right_left_right_left_right_right_value: Long,
+            right_left_right_right_left_left_value: Long,
+            right_left_right_right_left_right_value: Long,
+            right_left_right_right_right_left_value: Long,
+            right_left_right_right_right_right_value: Long,
+            right_right_left_left_left_left_value: Long,
+            right_right_left_left_left_right_value: Long,
+            right_right_left_left_right_left_value: Long,
+            right_right_left_left_right_right_value: Long,
+            right_right_left_right_left_left_value: Long,
+            right_right_left_right_left_right_value: Long,
+            right_right_left_right_right_left_value: Long,
+            right_right_left_right_right_right_value: Long,
+            right_right_right_left_left_left_value: Long,
+            right_right_right_left_left_right_value: Long,
+            right_right_right_left_right_left_value: Long,
+            right_right_right_left_right_right_value: Long,
+            right_right_right_right_left_left_value: Long,
+            right_right_right_right_left_right_value: Long,
+            right_right_right_right_right_left_value: Long,
+            right_right_right_right_right_right_value: Long,
+        ): ObjectBoundary64 = ObjectBoundary64(ObjectBoundary32.fromParts(left_left_left_left_left_left_value, left_left_left_left_left_right_value, left_left_left_left_right_left_value, left_left_left_left_right_right_value, left_left_left_right_left_left_value, left_left_left_right_left_right_value, left_left_left_right_right_left_value, left_left_left_right_right_right_value, left_left_right_left_left_left_value, left_left_right_left_left_right_value, left_left_right_left_right_left_value, left_left_right_left_right_right_value, left_left_right_right_left_left_value, left_left_right_right_left_right_value, left_left_right_right_right_left_value, left_left_right_right_right_right_value, left_right_left_left_left_left_value, left_right_left_left_left_right_value, left_right_left_left_right_left_value, left_right_left_left_right_right_value, left_right_left_right_left_left_value, left_right_left_right_left_right_value, left_right_left_right_right_left_value, left_right_left_right_right_right_value, left_right_right_left_left_left_value, left_right_right_left_left_right_value, left_right_right_left_right_left_value, left_right_right_left_right_right_value, left_right_right_right_left_left_value, left_right_right_right_left_right_value, left_right_right_right_right_left_value, left_right_right_right_right_right_value), ObjectBoundary32.fromParts(right_left_left_left_left_left_value, right_left_left_left_left_right_value, right_left_left_left_right_left_value, right_left_left_left_right_right_value, right_left_left_right_left_left_value, right_left_left_right_left_right_value, right_left_left_right_right_left_value, right_left_left_right_right_right_value, right_left_right_left_left_left_value, right_left_right_left_left_right_value, right_left_right_left_right_left_value, right_left_right_left_right_right_value, right_left_right_right_left_left_value, right_left_right_right_left_right_value, right_left_right_right_right_left_value, right_left_right_right_right_right_value, right_right_left_left_left_left_value, right_right_left_left_left_right_value, right_right_left_left_right_left_value, right_right_left_left_right_right_value, right_right_left_right_left_left_value, right_right_left_right_left_right_value, right_right_left_right_right_left_value, right_right_left_right_right_right_value, right_right_right_left_left_left_value, right_right_right_left_left_right_value, right_right_right_left_right_left_value, right_right_right_left_right_right_value, right_right_right_right_left_left_value, right_right_right_right_left_right_value, right_right_right_right_right_left_value, right_right_right_right_right_right_value))
+    }
+}
+
+/**
+ * Structural twin of [`ObjectBoundary64`] used to benchmark an explicit
+ * whole-`JObject` input against recursive 64-leaf flattening.
+ */
+public data class ObjectBoundary64Object(val left: ObjectBoundary32, val right: ObjectBoundary32) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_left_left_value: Long,
+            left_left_left_left_left_right_value: Long,
+            left_left_left_left_right_left_value: Long,
+            left_left_left_left_right_right_value: Long,
+            left_left_left_right_left_left_value: Long,
+            left_left_left_right_left_right_value: Long,
+            left_left_left_right_right_left_value: Long,
+            left_left_left_right_right_right_value: Long,
+            left_left_right_left_left_left_value: Long,
+            left_left_right_left_left_right_value: Long,
+            left_left_right_left_right_left_value: Long,
+            left_left_right_left_right_right_value: Long,
+            left_left_right_right_left_left_value: Long,
+            left_left_right_right_left_right_value: Long,
+            left_left_right_right_right_left_value: Long,
+            left_left_right_right_right_right_value: Long,
+            left_right_left_left_left_left_value: Long,
+            left_right_left_left_left_right_value: Long,
+            left_right_left_left_right_left_value: Long,
+            left_right_left_left_right_right_value: Long,
+            left_right_left_right_left_left_value: Long,
+            left_right_left_right_left_right_value: Long,
+            left_right_left_right_right_left_value: Long,
+            left_right_left_right_right_right_value: Long,
+            left_right_right_left_left_left_value: Long,
+            left_right_right_left_left_right_value: Long,
+            left_right_right_left_right_left_value: Long,
+            left_right_right_left_right_right_value: Long,
+            left_right_right_right_left_left_value: Long,
+            left_right_right_right_left_right_value: Long,
+            left_right_right_right_right_left_value: Long,
+            left_right_right_right_right_right_value: Long,
+            right_left_left_left_left_left_value: Long,
+            right_left_left_left_left_right_value: Long,
+            right_left_left_left_right_left_value: Long,
+            right_left_left_left_right_right_value: Long,
+            right_left_left_right_left_left_value: Long,
+            right_left_left_right_left_right_value: Long,
+            right_left_left_right_right_left_value: Long,
+            right_left_left_right_right_right_value: Long,
+            right_left_right_left_left_left_value: Long,
+            right_left_right_left_left_right_value: Long,
+            right_left_right_left_right_left_value: Long,
+            right_left_right_left_right_right_value: Long,
+            right_left_right_right_left_left_value: Long,
+            right_left_right_right_left_right_value: Long,
+            right_left_right_right_right_left_value: Long,
+            right_left_right_right_right_right_value: Long,
+            right_right_left_left_left_left_value: Long,
+            right_right_left_left_left_right_value: Long,
+            right_right_left_left_right_left_value: Long,
+            right_right_left_left_right_right_value: Long,
+            right_right_left_right_left_left_value: Long,
+            right_right_left_right_left_right_value: Long,
+            right_right_left_right_right_left_value: Long,
+            right_right_left_right_right_right_value: Long,
+            right_right_right_left_left_left_value: Long,
+            right_right_right_left_left_right_value: Long,
+            right_right_right_left_right_left_value: Long,
+            right_right_right_left_right_right_value: Long,
+            right_right_right_right_left_left_value: Long,
+            right_right_right_right_left_right_value: Long,
+            right_right_right_right_right_left_value: Long,
+            right_right_right_right_right_right_value: Long,
+        ): ObjectBoundary64Object = ObjectBoundary64Object(ObjectBoundary32.fromParts(left_left_left_left_left_left_value, left_left_left_left_left_right_value, left_left_left_left_right_left_value, left_left_left_left_right_right_value, left_left_left_right_left_left_value, left_left_left_right_left_right_value, left_left_left_right_right_left_value, left_left_left_right_right_right_value, left_left_right_left_left_left_value, left_left_right_left_left_right_value, left_left_right_left_right_left_value, left_left_right_left_right_right_value, left_left_right_right_left_left_value, left_left_right_right_left_right_value, left_left_right_right_right_left_value, left_left_right_right_right_right_value, left_right_left_left_left_left_value, left_right_left_left_left_right_value, left_right_left_left_right_left_value, left_right_left_left_right_right_value, left_right_left_right_left_left_value, left_right_left_right_left_right_value, left_right_left_right_right_left_value, left_right_left_right_right_right_value, left_right_right_left_left_left_value, left_right_right_left_left_right_value, left_right_right_left_right_left_value, left_right_right_left_right_right_value, left_right_right_right_left_left_value, left_right_right_right_left_right_value, left_right_right_right_right_left_value, left_right_right_right_right_right_value), ObjectBoundary32.fromParts(right_left_left_left_left_left_value, right_left_left_left_left_right_value, right_left_left_left_right_left_value, right_left_left_left_right_right_value, right_left_left_right_left_left_value, right_left_left_right_left_right_value, right_left_left_right_right_left_value, right_left_left_right_right_right_value, right_left_right_left_left_left_value, right_left_right_left_left_right_value, right_left_right_left_right_left_value, right_left_right_left_right_right_value, right_left_right_right_left_left_value, right_left_right_right_left_right_value, right_left_right_right_right_left_value, right_left_right_right_right_right_value, right_right_left_left_left_left_value, right_right_left_left_left_right_value, right_right_left_left_right_left_value, right_right_left_left_right_right_value, right_right_left_right_left_left_value, right_right_left_right_left_right_value, right_right_left_right_right_left_value, right_right_left_right_right_right_value, right_right_right_left_left_left_value, right_right_right_left_left_right_value, right_right_right_left_right_left_value, right_right_right_left_right_right_value, right_right_right_right_left_left_value, right_right_right_right_left_right_value, right_right_right_right_right_left_value, right_right_right_right_right_right_value))
+    }
+}
+
+public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBoundary4) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_value: Long,
+            left_left_right_value: Long,
+            left_right_left_value: Long,
+            left_right_right_value: Long,
+            right_left_left_value: Long,
+            right_left_right_value: Long,
+            right_right_left_value: Long,
+            right_right_right_value: Long,
+        ): ObjectBoundary8 = ObjectBoundary8(ObjectBoundary4.fromParts(left_left_left_value, left_left_right_value, left_right_left_value, left_right_right_value), ObjectBoundary4.fromParts(right_left_left_value, right_left_right_value, right_right_left_value, right_right_right_value))
+    }
+}
+
+/** One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree. */
+public data class ObjectBoundaryLeaf(val value: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
+    }
+}
+
 /**
  * A by-value, FFI-safe payload. Scalars cross the C ABI as themselves; the
  * `label` string crosses as an opaque pointer (`Option<Box<String>>` ⇒ a nullable
@@ -409,10 +664,162 @@ internal class JniErrorHandlerCapture : JniErrorHandler<Unit> {
     }
 }
 
+/** Sum the 64 scalar leaves after recursive JNI parameter flattening. */
+public fun largeFlatInputSum(value: ObjectBoundary64, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = JNINative.largeFlatInputSum(
+        value.left.left.left.left.left.left.value,
+        value.left.left.left.left.left.right.value,
+        value.left.left.left.left.right.left.value,
+        value.left.left.left.left.right.right.value,
+        value.left.left.left.right.left.left.value,
+        value.left.left.left.right.left.right.value,
+        value.left.left.left.right.right.left.value,
+        value.left.left.left.right.right.right.value,
+        value.left.left.right.left.left.left.value,
+        value.left.left.right.left.left.right.value,
+        value.left.left.right.left.right.left.value,
+        value.left.left.right.left.right.right.value,
+        value.left.left.right.right.left.left.value,
+        value.left.left.right.right.left.right.value,
+        value.left.left.right.right.right.left.value,
+        value.left.left.right.right.right.right.value,
+        value.left.right.left.left.left.left.value,
+        value.left.right.left.left.left.right.value,
+        value.left.right.left.left.right.left.value,
+        value.left.right.left.left.right.right.value,
+        value.left.right.left.right.left.left.value,
+        value.left.right.left.right.left.right.value,
+        value.left.right.left.right.right.left.value,
+        value.left.right.left.right.right.right.value,
+        value.left.right.right.left.left.left.value,
+        value.left.right.right.left.left.right.value,
+        value.left.right.right.left.right.left.value,
+        value.left.right.right.left.right.right.value,
+        value.left.right.right.right.left.left.value,
+        value.left.right.right.right.left.right.value,
+        value.left.right.right.right.right.left.value,
+        value.left.right.right.right.right.right.value,
+        value.right.left.left.left.left.left.value,
+        value.right.left.left.left.left.right.value,
+        value.right.left.left.left.right.left.value,
+        value.right.left.left.left.right.right.value,
+        value.right.left.left.right.left.left.value,
+        value.right.left.left.right.left.right.value,
+        value.right.left.left.right.right.left.value,
+        value.right.left.left.right.right.right.value,
+        value.right.left.right.left.left.left.value,
+        value.right.left.right.left.left.right.value,
+        value.right.left.right.left.right.left.value,
+        value.right.left.right.left.right.right.value,
+        value.right.left.right.right.left.left.value,
+        value.right.left.right.right.left.right.value,
+        value.right.left.right.right.right.left.value,
+        value.right.left.right.right.right.right.value,
+        value.right.right.left.left.left.left.value,
+        value.right.right.left.left.left.right.value,
+        value.right.right.left.left.right.left.value,
+        value.right.right.left.left.right.right.value,
+        value.right.right.left.right.left.left.value,
+        value.right.right.left.right.left.right.value,
+        value.right.right.left.right.right.left.value,
+        value.right.right.left.right.right.right.value,
+        value.right.right.right.left.left.left.value,
+        value.right.right.right.left.left.right.value,
+        value.right.right.right.left.right.left.value,
+        value.right.right.right.left.right.right.value,
+        value.right.right.right.right.left.left.value,
+        value.right.right.right.right.left.right.value,
+        value.right.right.right.right.right.left.value,
+        value.right.right.right.right.right.right.value,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Sum the same 64-leaf shape after decoding one whole `JObject` input. */
+public fun largeObjectInputSum(value: ObjectBoundary64Object, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = JNINative.largeObjectInputSum(value, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
 internal object JNINative {
     init {
         io.prebindgen.perftest.NativeLibrary.ensureLoaded()
     }
+
+    external fun largeFlatInputSum(
+        valueLeftLeftLeftLeftLeftLeftValue: Long,
+        valueLeftLeftLeftLeftLeftRightValue: Long,
+        valueLeftLeftLeftLeftRightLeftValue: Long,
+        valueLeftLeftLeftLeftRightRightValue: Long,
+        valueLeftLeftLeftRightLeftLeftValue: Long,
+        valueLeftLeftLeftRightLeftRightValue: Long,
+        valueLeftLeftLeftRightRightLeftValue: Long,
+        valueLeftLeftLeftRightRightRightValue: Long,
+        valueLeftLeftRightLeftLeftLeftValue: Long,
+        valueLeftLeftRightLeftLeftRightValue: Long,
+        valueLeftLeftRightLeftRightLeftValue: Long,
+        valueLeftLeftRightLeftRightRightValue: Long,
+        valueLeftLeftRightRightLeftLeftValue: Long,
+        valueLeftLeftRightRightLeftRightValue: Long,
+        valueLeftLeftRightRightRightLeftValue: Long,
+        valueLeftLeftRightRightRightRightValue: Long,
+        valueLeftRightLeftLeftLeftLeftValue: Long,
+        valueLeftRightLeftLeftLeftRightValue: Long,
+        valueLeftRightLeftLeftRightLeftValue: Long,
+        valueLeftRightLeftLeftRightRightValue: Long,
+        valueLeftRightLeftRightLeftLeftValue: Long,
+        valueLeftRightLeftRightLeftRightValue: Long,
+        valueLeftRightLeftRightRightLeftValue: Long,
+        valueLeftRightLeftRightRightRightValue: Long,
+        valueLeftRightRightLeftLeftLeftValue: Long,
+        valueLeftRightRightLeftLeftRightValue: Long,
+        valueLeftRightRightLeftRightLeftValue: Long,
+        valueLeftRightRightLeftRightRightValue: Long,
+        valueLeftRightRightRightLeftLeftValue: Long,
+        valueLeftRightRightRightLeftRightValue: Long,
+        valueLeftRightRightRightRightLeftValue: Long,
+        valueLeftRightRightRightRightRightValue: Long,
+        valueRightLeftLeftLeftLeftLeftValue: Long,
+        valueRightLeftLeftLeftLeftRightValue: Long,
+        valueRightLeftLeftLeftRightLeftValue: Long,
+        valueRightLeftLeftLeftRightRightValue: Long,
+        valueRightLeftLeftRightLeftLeftValue: Long,
+        valueRightLeftLeftRightLeftRightValue: Long,
+        valueRightLeftLeftRightRightLeftValue: Long,
+        valueRightLeftLeftRightRightRightValue: Long,
+        valueRightLeftRightLeftLeftLeftValue: Long,
+        valueRightLeftRightLeftLeftRightValue: Long,
+        valueRightLeftRightLeftRightLeftValue: Long,
+        valueRightLeftRightLeftRightRightValue: Long,
+        valueRightLeftRightRightLeftLeftValue: Long,
+        valueRightLeftRightRightLeftRightValue: Long,
+        valueRightLeftRightRightRightLeftValue: Long,
+        valueRightLeftRightRightRightRightValue: Long,
+        valueRightRightLeftLeftLeftLeftValue: Long,
+        valueRightRightLeftLeftLeftRightValue: Long,
+        valueRightRightLeftLeftRightLeftValue: Long,
+        valueRightRightLeftLeftRightRightValue: Long,
+        valueRightRightLeftRightLeftLeftValue: Long,
+        valueRightRightLeftRightLeftRightValue: Long,
+        valueRightRightLeftRightRightLeftValue: Long,
+        valueRightRightLeftRightRightRightValue: Long,
+        valueRightRightRightLeftLeftLeftValue: Long,
+        valueRightRightRightLeftLeftRightValue: Long,
+        valueRightRightRightLeftRightLeftValue: Long,
+        valueRightRightRightLeftRightRightValue: Long,
+        valueRightRightRightRightLeftLeftValue: Long,
+        valueRightRightRightRightLeftRightValue: Long,
+        valueRightRightRightRightRightLeftValue: Long,
+        valueRightRightRightRightRightRightValue: Long,
+        errorSink: Any,
+    ): Long
+
+    external fun largeObjectInputSum(value: ObjectBoundary64Object, errorSink: Any): Long
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
 
