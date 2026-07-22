@@ -508,7 +508,7 @@ pub(crate) fn render_extern_decl(
             }
             InputKind::Callback { .. }
             | InputKind::ValueUnwrap { .. }
-            | InputKind::Unsigned64
+            | InputKind::Unsigned64 { .. }
             | InputKind::Plain => {
                 let ty = if leaf.as_enum_value {
                     // Enum (incl. `Option<enum>`) crosses as jint → Kotlin
@@ -519,7 +519,13 @@ pub(crate) fn render_extern_decl(
                 } else {
                     leaf.kt_meta.clone()?
                 };
-                let ty = if leaf.optional { ty.nullable() } else { ty };
+                let niche_primitive =
+                    matches!(&leaf.kind, InputKind::Unsigned64 { niche: Some(_) });
+                let ty = if leaf.optional && !niche_primitive {
+                    ty.nullable()
+                } else {
+                    ty
+                };
                 params.push(kt::KtParam::new(name, ty));
             }
         }
@@ -610,7 +616,9 @@ enum ParamMode {
         field: String,
     },
     /// Kotlin `ULong` projected to its raw JNI `Long` bit pattern.
-    Unsigned64,
+    Unsigned64 {
+        niche: Option<String>,
+    },
     /// Flattenable `data_class` param: the high-level Kotlin signature keeps the
     /// typed object, but the `JNINative` call destructures it into the leaf
     /// access expressions (no `JObject` crosses, so the Rust side skips
@@ -1181,7 +1189,9 @@ fn classify_params(
             InputKind::ValueUnwrap { field } => ParamMode::ValueUnwrap {
                 field: field.clone(),
             },
-            InputKind::Unsigned64 => ParamMode::Unsigned64,
+            InputKind::Unsigned64 { niche } => ParamMode::Unsigned64 {
+                niche: niche.clone(),
+            },
             InputKind::Plain => ParamMode::PassThrough,
             InputKind::Callback { .. } => unreachable!("callback params handled above"),
         };
@@ -1439,9 +1449,12 @@ fn build_native_call(
                     format!("{}.{}", p.kt_name, field)
                 }
             }
-            ParamMode::Unsigned64 => {
+            ParamMode::Unsigned64 { niche } => {
                 if p.kt_type.is_nullable() {
-                    format!("{}?.toLong()", p.kt_name)
+                    match niche {
+                        Some(niche) => format!("{}?.toLong() ?: {}", p.kt_name, niche),
+                        None => format!("{}?.toLong()", p.kt_name),
+                    }
                 } else {
                     format!("{}.toLong()", p.kt_name)
                 }

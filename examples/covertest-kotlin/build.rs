@@ -24,8 +24,9 @@
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
-//! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
+//! | fallible conversion stages under `Option` | `Option<Percent>` ⇄ `Int?`; raw `TryFrom::Error` input and binding-local `String` output errors normalize to `JniErrorHandler` |
 //! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
+//! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError` |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
@@ -167,9 +168,14 @@ fn main() {
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
         .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
-        // `Percent`: fallible input via `TryFrom<i32>` (out-of-range values
-        // from the JVM route the impl's Error to onError); infallible output.
-        .convert(convert!(Percent).input(try_from!(i32)).output(into!(i32)))
+        // `Percent`: fallible in BOTH directions. `Option<Percent>` below
+        // forces both raw stage error types through the structural Option
+        // converter, where they normalize to the binding error channel.
+        .convert(
+            convert!(Percent)
+                .input(try_from!(i32))
+                .output(fun!(crate::percent_out).sig(sig!((p: Percent) -> Result<i32, String>))),
+        )
         // `Label`: conversions are plain fns in THIS binding crate (see
         // src/lib.rs) — no #[prebindgen], no helper crate — declared with
         // the ONE binding-local vocabulary, `fun!(crate::…).sig(sig!(…))`.
@@ -179,6 +185,19 @@ fn main() {
             convert!(Label)
                 .input(fun!(crate::label_in).sig(sig!((s: String) -> Result<Label, String>)))
                 .output(fun!(crate::label_out).sig(sig!((l: Label) -> String))),
+        )
+        // Keep Rust's standard `Duration` as the semantic type while exposing
+        // bounded u64 milliseconds. Values above one day are invalid; one of
+        // those representations becomes the `Option<Duration>` None marker,
+        // so nullable Kotlin `ULong?` crosses JNI as a raw primitive `Long`
+        // without JObject/boxed-Long allocation.
+        .convert(
+            convert!(Duration)
+                .input(fun!(crate::duration_from_millis).sig(sig!((ms: u64) -> Duration)))
+                .output(
+                    fun!(crate::duration_to_millis).sig(sig!((d: Duration) -> Result<u64, String>)),
+                )
+                .valid_range(0u64..=86_400_000u64),
         )
         // ── Base-package types ──────────────────────────────────────────────
         // `Payload` as a Kotlin `data class` (fields cross as decoupled leaves,
@@ -380,6 +399,8 @@ fn main() {
                 // below): Into/From traits, TryFrom trait, binding-local fns.
                 .fun(fun!(celsius_double))
                 .fun(fun!(percent_scale))
+                .fun(fun!(percent_optional))
+                .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_ttl))
@@ -388,7 +409,9 @@ fn main() {
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))
                 .fun(fun!(unsigned_emit))
-                .fun(fun!(unsigned_series)),
+                .fun(fun!(unsigned_series))
+                .fun(fun!(duration_optional))
+                .fun(fun!(duration_out_of_range)),
         )
         // analytics: the param-variant / return-field matrix (type default /
         // per-fn override, in + out). Per-fn overrides reuse the SAME

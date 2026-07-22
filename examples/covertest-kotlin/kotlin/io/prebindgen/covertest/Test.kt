@@ -26,7 +26,11 @@ import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.celsiusDouble
+import io.prebindgen.covertest.model.durationOptional
+import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.labelReverse
+import io.prebindgen.covertest.model.percentInvalidOutput
+import io.prebindgen.covertest.model.percentOptional
 import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
@@ -165,6 +169,45 @@ fun main() {
         expectRangeError(-1, 0, 0L, "u8 input out of range: -1")
         expectRangeError(0, 65_536, 0L, "u16 input out of range: 65536")
         expectRangeError(0, 0, 4_294_967_296L, "u32 input out of range: 4294967296")
+    }
+
+    // ── bounded custom representation: Rust keeps Option<Duration>, Kotlin
+    // sees ULong?, and JNI uses an invalid u64 bit pattern for null so the
+    // native carrier remains primitive long rather than JObject/boxed Long. ─
+    section("bounded Option<Duration> niche over raw Long") {
+        val native = CovNative::class.java.getDeclaredMethod(
+            "durationOptional",
+            java.lang.Long.TYPE,
+            Any::class.java,
+        )
+        check(native.parameterTypes[0] == java.lang.Long.TYPE)
+        check(native.returnType == java.lang.Long.TYPE) {
+            "bounded Option<Duration> must use a primitive Long JNI carrier"
+        }
+
+        check(durationOptional(null, boom) == null)
+        check(durationOptional(0uL, boom) == 0uL)
+        check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
+
+        var inputError: String? = null
+        val inputFallback = durationOptional(86_400_001uL) { je ->
+            inputError = je
+            7uL
+        }
+        check(inputFallback == 7uL)
+        check(inputError?.contains("outside its declared domain") == true) {
+            "invalid duration input did not report its domain error: $inputError"
+        }
+
+        var outputError: String? = null
+        val outputFallback = durationOutOfRange { je ->
+            outputError = je
+            null
+        }
+        check(outputFallback == null)
+        check(outputError?.contains("outside its declared domain") == true) {
+            "invalid duration output did not report its domain error: $outputError"
+        }
     }
 
     // ── enum_class: return / by-value param / Option<enum> param ─────────────
@@ -543,19 +586,32 @@ fun main() {
         check(celsiusDouble(21, boom) == 42)
         check(celsiusDouble(-5, boom) == -10)
     }
-    section("convert! via TryFrom (Percent -> Int, fallible input)") {
+    section("convert! fallible stages under Option (Percent -> Int?)") {
         check(percentScale(50, 2, boom) == 100)
         check(percentScale(30, 2, boom) == 60)
+        check(percentOptional(null, boom) == null)
+        check(percentOptional(25, boom) == 25)
         // Out-of-range input: the TryFrom impl's Err(String) routes to
-        // onError through the converter's error slot (je carries the
-        // Display'd message).
+        // onError through an Option-composed stage (je carries the Display'd
+        // message after normalization to __JniErr).
         var msg: String? = null
-        percentScale(150, 1) { je ->
+        percentOptional(150) { je ->
             msg = je
-            0
+            null
         }
         check(msg?.contains("percent out of range: 150") == true) {
-            "percentScale(150) must report the range error, got: $msg"
+            "percentOptional(150) must report the range error, got: $msg"
+        }
+
+        // The output stage has its own raw String error. It must normalize in
+        // the opposite Option composition direction and use the same handler.
+        msg = null
+        percentInvalidOutput { je ->
+            msg = je
+            null
+        }
+        check(msg == "invalid Percent output: 101") {
+            "percentInvalidOutput must report the output conversion error, got: $msg"
         }
     }
     section("convert! via binding-local fns (Label -> String, fallible input)") {

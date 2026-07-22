@@ -104,6 +104,29 @@ impl Cbindgen {
         self
     }
 
+    /// Declare a canonical scalar conversion shared with JniGen. A domain on
+    /// the [`ConvertDecl`] is validated in both directions; invalid scalar
+    /// values become by-value niches for `Option`/`Result`, with public C
+    /// constants derived from the conversion's naming base.
+    pub fn convert(mut self, decl: ConvertDecl) -> Self {
+        assert!(
+            decl.input.is_some() || decl.output.is_some(),
+            "Cbindgen::convert declares no input or output conversion"
+        );
+        let key = decl.key.clone();
+        assert!(
+            !self
+                .convert_decls
+                .iter()
+                .any(|existing| existing.key == key),
+            "Cbindgen::convert already declares {}",
+            key
+        );
+        self.convert_decls.push(decl);
+        self.current = Some(CurrentDecl::Convert(key));
+        self
+    }
+
     /// Mark a `#[prebindgen]` function as intentionally ignored by this
     /// adapter. Root-level modifier: suppresses the registry's
     /// "skipping undeclared" warning for that function without scanning or
@@ -324,9 +347,13 @@ impl Cbindgen {
             Some(CurrentDecl::Function(ident)) => {
                 self.functions.get_mut(&ident).expect("entry vanished").base = Some(base);
             }
+            Some(CurrentDecl::Convert(key)) => {
+                self.convert_bases.insert(key, base);
+            }
             None => panic!(
                 "Cbindgen::base_name must be chained directly after a declaration \
-                 (`opaque_ptr` / `data_struct` / `enum_type` / `callback` / `function`)"
+                 (`opaque_ptr` / `data_struct` / `enum_type` / `callback` / `function` / \
+                 `convert`)"
             ),
         }
         self
@@ -677,5 +704,6 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
             format!("callback `impl Fn({})`", args.join(", "))
         }
         Some(CurrentDecl::Function(i)) => format!("function `{i}`"),
+        Some(CurrentDecl::Convert(k)) => format!("convert `{k}`"),
     }
 }

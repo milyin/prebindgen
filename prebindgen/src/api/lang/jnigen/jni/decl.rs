@@ -1400,15 +1400,22 @@ impl PackageDecl {
 /// ```rust,ignore
 /// .convert(convert!(Millis)
 ///     .input(fun!(millis_from_long))   // fn(u64) -> Millis    (wire → rust)
-///     .output(fun!(millis_value)))     // fn(&Millis) -> u64   (rust → wire)
+///     .output(fun!(millis_value))      // fn(&Millis) -> u64   (rust → wire)
+///     .valid_range(0u64..=86_400_000)) // rejects invalid values; Option uses a niche
 /// .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
 /// .convert(convert!(Label)
 ///     .input(try_from!(String).with(path!(crate::label_in)).error(ty!(String)))
 ///     .output(into!(String).with(path!(crate::label_out))))
 /// ```
 ///
-/// The Kotlin surface derives from the conversion's other-side type
-/// (`u64` ⇒ `Long`) — nothing is stated verbatim. A `try_` source's `Err`
+/// The foreign surface derives from the conversion's other-side type
+/// (`u64` ⇒ Kotlin `ULong` / C `uint64_t`) — nothing is stated verbatim.
+/// [`valid_range`](ConvertDecl::valid_range) and
+/// [`valid_values`](ConvertDecl::valid_values) declare the legal subset of a
+/// scalar representation. Generated converters validate the subset, and
+/// adapters may reuse values outside it as allocation-free `Option`/`Result`
+/// markers; [`exclude_values`](ConvertDecl::exclude_values) reserves holes in
+/// an otherwise legal domain. A `try_` source's `Err`
 /// routes to the caller's error handler. Conversion fns may live in the flat
 /// crate or in a **helper crate** whose item stream is chained into the same
 /// [`crate::core::Registry::from_items`] call; generated calls qualify each
@@ -1575,6 +1582,7 @@ pub struct ConvertDecl {
     pub(crate) key: TypeKey,
     pub(crate) input: Option<ConvertSpec>,
     pub(crate) output: Option<ConvertSpec>,
+    pub(crate) domain: Option<crate::core::RepresentationDomain>,
     /// Binding-local fn sources declared on this convert (`fun!(crate::f)
     /// .sig(…)`): drained into [`JniGen::local_fns`] at acceptance so the
     /// synthesis pre-pass covers them.
@@ -1604,6 +1612,7 @@ impl ConvertDecl {
             key: TypeKey::from_type(&rust_type),
             input: None,
             output: None,
+            domain: None,
             locals: Vec::new(),
         }
     }
@@ -1695,6 +1704,59 @@ impl ConvertDecl {
     pub fn output(mut self, src: impl Into<ConvertSourceDecl>) -> Self {
         let spec = self.spec_of(ConvertDirection::Output, "output", src.into());
         self.set_output(spec)
+    }
+
+    /// Restrict the scalar representation to a numeric range. Values outside
+    /// the range are rejected and may be reused by wrappers such as `Option`.
+    /// Floating-point ranges reject every NaN; use [`Self::valid_values`] when
+    /// exact raw IEEE values (including a specific NaN payload) are intended.
+    pub fn valid_range<T, R>(mut self, range: R) -> Self
+    where
+        T: crate::core::DomainScalar,
+        R: ::core::ops::RangeBounds<T>,
+    {
+        assert!(
+            self.domain.is_none(),
+            "convert!({}): the representation domain is already declared",
+            self.key.as_str()
+        );
+        self.domain = Some(crate::core::RepresentationDomain::range(range));
+        self
+    }
+
+    /// Restrict the scalar representation to a finite valid-value set. Float
+    /// membership uses raw IEEE bits, so `0.0`, `-0.0`, and NaN payloads remain
+    /// distinct.
+    pub fn valid_values<T>(mut self, values: impl IntoIterator<Item = T>) -> Self
+    where
+        T: crate::core::DomainScalar,
+    {
+        assert!(
+            self.domain.is_none(),
+            "convert!({}): the representation domain is already declared",
+            self.key.as_str()
+        );
+        self.domain = Some(crate::core::RepresentationDomain::values(values));
+        self
+    }
+
+    /// Remove finite values from the previously declared base domain. Float
+    /// exclusions use raw IEEE bits.
+    pub fn exclude_values<T>(mut self, values: impl IntoIterator<Item = T>) -> Self
+    where
+        T: crate::core::DomainScalar,
+    {
+        self.domain
+            .as_mut()
+            .unwrap_or_else(|| {
+                panic!(
+                    "convert!({}): .exclude_values(...) requires .valid_range(...) \
+                     or .valid_values(...) first",
+                    self.key.as_str()
+                )
+            })
+            .exclude(values);
+        self
     }
 }
 

@@ -430,6 +430,9 @@ pub(crate) fn projection_wire_return(
 pub(crate) fn projection_leaf_sentinel(
     proj: &crate::api::lang::jnigen::jni::Projection,
 ) -> Option<String> {
+    if let Some(sentinel) = proj.niche_sentinels.first() {
+        return Some(sentinel.clone());
+    }
     use crate::api::lang::jnigen::jni::ProjectionKind;
     let leaf_wire: syn::Type = match proj.kind {
         ProjectionKind::Handle => syn::parse_quote!(jni::sys::jlong),

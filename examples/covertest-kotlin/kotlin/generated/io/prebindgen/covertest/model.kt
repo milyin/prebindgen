@@ -226,6 +226,29 @@ public fun percentScale(p: Int, factor: Int, onError: JniErrorHandler<Int>): Int
 }
 
 /**
+ * Round-trip an optional percentage. The covertest binding uses this to
+ * compose `Option` with the fallible `TryFrom<i32>` input conversion and its
+ * fallible output conversion.
+ */
+public fun percentOptional(p: Int?, onError: JniErrorHandler<Int?>): Int? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.percentOptional(p, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Deliberately construct a value outside `Percent`'s semantic invariant so
+ * the covertest can verify a fallible output stage nested under `Option`.
+ */
+public fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.percentInvalidOutput(__bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * Reverse a label's characters (exercises the binding-local conversion on
  * a parameter and the return).
  */
@@ -347,4 +370,27 @@ public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
     val __ret = CovNative.unsignedSeries(ArrayList<ULong>(), __u64FolderRawHolder.instance, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as List<ULong>
+}
+
+/**
+ * Round-trip an optional standard-library duration. The source API remains
+ * semantic (`Option<Duration>`); only the binding declares its millisecond
+ * representation and range.
+ */
+public fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.durationOptional(value?.toLong() ?: -1L, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret.let { if (it == -1L) null else it.toULong() }
+}
+
+/**
+ * Deliberately violate the binding's declared output domain so the Kotlin
+ * covertest can verify outbound validation and error routing.
+ */
+public fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.durationOutOfRange(__bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret.let { if (it == -1L) null else it.toULong() }
 }

@@ -13,9 +13,10 @@ benchmark.
 
 The shared Rust library lives in `perftest-flat`. The coverage-only items
 (`Priority`, `Stamp`, `Annotated`, `StorageError`, `Summary`, `Archive`,
-`StorageHandler`, `Millis`, and the analytics/shape functions) are additive and
-opt-in: they sit in `perftest_flat::ext` and are only pulled in by a binding
-that declares them, so `perftest-c` / `perftest-kotlin` are unaffected.
+`StorageHandler`, `Millis`, `Duration`, and the analytics/shape functions) are
+additive and opt-in: they sit in `perftest_flat::ext` and are only pulled in by
+a binding that declares them, so `perftest-c` / `perftest-kotlin` are
+unaffected.
 
 ## Running
 
@@ -30,7 +31,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 30 sections, every JniGen feature exercised
+PASS - 34 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -73,6 +74,15 @@ for the full table; in brief:
 - **per-class:** `.name()` on a type declaration (renames `Archive` → Kotlin
   `SummaryVault`; literal, bypasses the mangle closures).
 - **wrappers:** `input_wrapper` / `output_wrapper` (`Millis` ⇄ `Long`).
+- **bounded representations:** standard-library `Duration` ⇄ millisecond
+  `u64` with `.valid_range(...)`; `Option<Duration>` is `ULong?` publicly but
+  remains primitive `Long` at the native boundary, using an invalid value as
+  the `None` niche. The runtime checks both conversion directions, both domain
+  error paths, and the unboxed JNI signature.
+- **fallible stages under structural wrappers:** `Option<Percent>` composes a
+  raw `TryFrom::Error` input stage and a raw `String` output stage. The runtime
+  checks null/value round trips and verifies both stage errors normalize to
+  `JniErrorHandler`.
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
   return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in
   all three positions and `Option<Payload>` in both directions),
@@ -88,26 +98,40 @@ for the full table; in brief:
 
 The asserts are grouped into these sections (run order):
 
-1. `data_class Payload`
-2. `enum_class Priority`
-3. `value_class Stamp`
-4. `Option<i64> payloadLabelLen`
-5. `Storage members + Option/Vec round-trips`
-6. `constructor Storage.withPayload`
-7. `callbacks (impl Fn single + slice)`
-8. `flatten_output (default / suppress / with)`
-9. `flatten_input (default / with), leaves + handle`
-10. `Result error channel storageTryWithLabel`
-11. `input/output wrapper Millis -> Long (+ .name rename)`
-12. `Vec<Storage> handle fold (storageShards / storageShardsOpt)`
-13. `owned-handle callback (impl Fn(Storage))`
-14. `nested data_class Annotated + Option fields`
-15. `borrowed-opaque output archiveLatest`
-16. `Vec<String> storageLabels + Option<Payload> input + String return`
-17. `binding error je != null (malformed Stamp bytes)`
-18. `callback exceptions are swallowed (no-throw contract)`
-19. `3-handle locking + 2-thread smoke`
-20. `high-volume callback (localref pressure)`
+1. `top-level const vals (all four value sources)`
+2. `data_class Payload`
+3. `fixed-width unsigned scalars`
+4. `bounded Option<Duration> niche over raw Long`
+5. `enum_class Priority`
+6. `value_class Stamp`
+7. `Option<i64> Payload.labelLen`
+8. `Storage members + Option/Vec round-trips`
+9. `constructor Storage.withPayload`
+10. `.interface() hatch (Api interfaces extended by SDK interfaces)`
+11. `callbacks (impl Fn single + slice)`
+12. `flatten_output (default / suppress / with)`
+13. `binding-local field (fun! + sig!)`
+14. `binding-local functions (fun!(crate::…) + sig!)`
+15. `flatten_input (default / with), leaves + handle`
+16. `Result error channel storageTryWithLabel`
+17. `two-caller split storageTryFromStamp`
+18. `input/output wrapper Millis -> Long (+ .name rename)`
+19. `convert! via From/Into impls (Celsius -> Int)`
+20. `convert! fallible stages under Option (Percent -> Int?)`
+21. `convert! via binding-local fns (Label -> String, fallible input)`
+22. `record-built <A> fold (summarySeries / summarySeriesOpt)`
+23. `Vec<Storage> handle fold (storageShards / storageShardsOpt)`
+24. `owned-handle callback (impl Fn(Storage))`
+25. `nested data_class Annotated + Option fields`
+26. `borrowed-opaque output archiveLatest`
+27. `Vec<String> storageLabels + Option<Payload> input + String return`
+28. `binding error je != null (malformed Stamp bytes)`
+29. `callback exceptions are swallowed (no-throw contract)`
+30. `3-handle locking + 2-thread smoke`
+31. `close/take storm (lock-order stability + closed-handle race)`
+32. `high-volume callback (localref pressure)`
+33. `.gc_managed() lifecycle (ticket + Cleaner backstop)`
+34. `JNI native-symbol escaping (esc_pkg / Esc_Probe / snake extern)`
 
 ### Relationship to perftest-kotlin
 

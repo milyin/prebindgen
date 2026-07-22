@@ -78,10 +78,13 @@ pub(crate) use crate::api::core::types_util::{
     first_type_arg, is_option_type as is_option, is_result_type as is_result, is_unit,
     is_vec_type as is_vec, path_tail_ident as type_path_tail, result_parts,
 };
-use crate::api::core::{
-    niches::Niches,
-    prebindgen::{ConverterImpl, Prebindgen},
-    registry::{extract_fn_trait_args, Registry, TypeKey},
+use crate::api::{
+    core::{
+        niches::{NicheSlot, Niches},
+        prebindgen::{ConverterImpl, Prebindgen},
+        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
+    },
+    lang::jnigen::{ConvertDecl, ConvertSpec},
 };
 
 /// Identity of a declared callback signature: its argument-type list (the
@@ -178,6 +181,7 @@ enum CurrentDecl {
     Enum(TypeKey),
     Callback(CallbackKey),
     Function(syn::Ident),
+    Convert(TypeKey),
 }
 
 /// Where a fallible input-decode failure is routed in a generated wrapper.
@@ -206,6 +210,10 @@ pub struct Cbindgen {
     source_module: Option<syn::Path>,
     /// `#[prebindgen]` functions explicitly declared for conversion.
     functions: HashMap<syn::Ident, FnCfg>,
+    /// Canonical scalar conversions shared with JniGen.
+    convert_decls: Vec<ConvertDecl>,
+    /// Per-conversion C naming base used for generated niche constants.
+    convert_bases: HashMap<TypeKey, String>,
     /// `#[prebindgen]` functions intentionally not exported by this adapter.
     ignored_functions: HashSet<syn::Ident>,
     /// Opaque-handle types (`Box` + `void*` lifecycle, auto `_drop`).
@@ -265,6 +273,7 @@ type Mangle1 = Box<dyn Fn(&str) -> String>;
 type MangleN = Box<dyn Fn(&[String]) -> String>;
 
 mod builder;
+mod convert;
 mod emit;
 mod selector;
 #[cfg(test)]
@@ -458,13 +467,12 @@ struct WireField {
     wire: syn::Type,
 }
 
-/// How a *present / ok* value of a return type is carried over the C ABI:
-/// an ordered list of wire components, plus whether `fields[0]` is a pointer
-/// whose NULL bit-pattern is still free for an enclosing `Option`/`Result`
-/// layer to claim (the niche).
+/// How a *present / ok* value of a return type is carried over the C ABI: an
+/// ordered list of wire components plus the representation niches still free
+/// for enclosing `Option`/`Result` layers.
 struct ValueShape {
     fields: Vec<WireField>,
-    has_niche: bool,
+    niches: Niches,
 }
 
 /// Whether a converter function's return type is `Result<_, _>` (⇒ fallible).
@@ -472,6 +480,36 @@ fn returns_result(output: &syn::ReturnType) -> bool {
     match output {
         syn::ReturnType::Type(_, ty) => is_result(ty),
         syn::ReturnType::Default => false,
+    }
+}
+
+fn route_result(call: TokenStream, route: &ErrRoute<'_>) -> TokenStream {
+    match route {
+        ErrRoute::Result {
+            e_conv,
+            e_ty_src,
+            fail_return,
+        } => quote! {
+            match #call {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(message) => {
+                    if !e.is_null() {
+                        *e = #e_conv(
+                            <#e_ty_src as ::core::convert::From<
+                                ::std::string::String
+                            >>::from(message)
+                        );
+                    }
+                    return #fail_return;
+                }
+            }
+        },
+        ErrRoute::Panic => quote! {
+            match #call {
+                ::core::result::Result::Ok(value) => value,
+                ::core::result::Result::Err(message) => panic!("{}", message),
+            }
+        },
     }
 }
 

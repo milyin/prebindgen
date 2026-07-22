@@ -651,6 +651,10 @@ internal object CovNative {
 
     external fun coverTagRuntime(errorSink: Any): String
 
+    external fun durationOptional(value: Long, errorSink: Any): Long
+
+    external fun durationOutOfRange(errorSink: Any): Long
+
     external fun escapeProbeNew(value: Long, errorSink: Any): Long
 
     external fun escape_probe_value(p: Long, errorSink: Any): Long
@@ -680,6 +684,10 @@ internal object CovNative {
     ): Int
 
     external fun payloadVecHandlerNew(f: Any, errorSink: Any): Long
+
+    external fun percentInvalidOutput(errorSink: Any): Int?
+
+    external fun percentOptional(p: Int?, errorSink: Any): Int?
 
     external fun percentScale(p: Int, factor: Int, errorSink: Any): Int
 

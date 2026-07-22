@@ -80,6 +80,9 @@ pub struct Projection {
     pub strategy: FoldStrategy,
     /// Handle vs value class — see [`ProjectionKind`].
     pub kind: ProjectionKind,
+    /// Kotlin literals for representation-domain niches, in carve order.
+    /// Empty for ordinary projections; bounded u64 conversions populate it.
+    pub niche_sentinels: Vec<String>,
 }
 
 /// Per-converter language-specific extras carried by every converter this

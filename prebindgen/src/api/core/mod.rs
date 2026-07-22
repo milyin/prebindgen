@@ -19,6 +19,7 @@
 //! Secondary artifacts such as C headers or Kotlin sources are produced by the
 //! language adapter after the Rust registry is resolved.
 
+pub mod domain;
 pub mod expand;
 pub mod gravestone;
 pub mod niches;
@@ -31,6 +32,7 @@ pub mod unfold;
 pub(crate) mod write;
 
 pub use self::{
+    domain::{DomainScalar, RepresentationDomain, ScalarValue},
     gravestone::{Gravestone, Transmute},
     niches::{NicheSlot, Niches},
     prebindgen::{const_path_alias, ConverterImpl, Prebindgen, Stage},

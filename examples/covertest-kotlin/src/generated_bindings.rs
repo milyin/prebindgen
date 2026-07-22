@@ -435,6 +435,38 @@ pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     Ok(<perftest_flat::Celsius as ::core::convert::Into<i32>>::into(v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Duration_to_u64_e3980876<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Duration,
+) -> ::core::result::Result<u64, __JniErr> {
+    {
+        match (crate::duration_to_millis(v))
+            .map_err(|__e| {
+                <__JniErr as ::core::convert::From<String>>::from(__e.to_string())
+            })
+        {
+            ::core::result::Result::Ok(
+                __repr,
+            ) if (true && true && (__repr) <= 86400000u64) && !(false) => {
+                ::core::result::Result::Ok(__repr)
+            }
+            ::core::result::Result::Ok(_) => {
+                ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        format!(
+                            "{} representation is outside its declared domain",
+                            "Duration"
+                        ),
+                    ),
+                )
+            }
+            ::core::result::Result::Err(__e) => ::core::result::Result::Err(__e),
+        }
+    }
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn EscapeProbe_to_jlong_416aab42<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::EscapeProbe,
@@ -518,6 +550,33 @@ pub(crate) unsafe fn JObject_to_Option_Payload_97036642<'env, 'v>(
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Payload>, __JniErr> {
     Ok({ if v.is_null() { None } else { Some(JObject_to_Payload_98f64326(env, v)?) } })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Option<perftest_flat::Percent>, __JniErr> {
+    Ok({
+        if !v.is_null() {
+            let __unboxed: jni::sys::jint = env
+                .call_method(&v, "intValue", "()I", &[])
+                .and_then(|val| val.i())
+                .map(|__x| __x as jni::sys::jint)
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Option unbox: {}", e)))?;
+            Some({
+                let __inner_s0 = jint_to_i32_a3e3b6ef(env, &__unboxed)?;
+                let __inner_s1 = i32_to_Percent_db3641cc(env, __inner_s0)
+                    .map_err(|__e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string()))?;
+                __inner_s1
+            })
+        } else {
+            None
+        }
+    })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
@@ -1390,6 +1449,24 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<perftest_flat::Duration>,
+) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
+    Ok({
+        match v {
+            Some(value) => {
+                let __inner_s0 = Duration_to_u64_e3980876(env, value)
+                    .map_err(|__e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string()))?;
+                u64_to_jlong_4384a5d6(env, __inner_s0)?
+            }
+            None => -1i64,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Payload>,
@@ -1398,6 +1475,30 @@ pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
         match v {
             Some(value) => Payload_to_JObject_98f64326(env, value)?,
             None => jni::objects::JObject::null().into(),
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<perftest_flat::Percent>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        match v {
+            Some(value) => {
+                let __raw: jni::sys::jint = {
+                    let __inner_s0 = Percent_to_i32_01484801(env, value)
+                        .map_err(|__e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(__e.to_string()))?;
+                    i32_to_jint_a3e3b6ef(env, __inner_s0)?
+                };
+                ::prebindgen::lang::box_jint(env, __raw)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", e)))?
+            }
+            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -1565,8 +1666,8 @@ pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
 pub(crate) unsafe fn Percent_to_i32_01484801<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Percent,
-) -> ::core::result::Result<i32, __JniErr> {
-    Ok(<perftest_flat::Percent as ::core::convert::Into<i32>>::into(v))
+) -> ::core::result::Result<i32, String> {
+    crate::percent_out(v)
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Priority_to_jint_447102d2<'a>(
@@ -1930,6 +2031,26 @@ pub(crate) unsafe fn jlong_to_EscapeProbe_416aab42<'env, 'v>(
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::EscapeProbe) })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::sys::jlong,
+) -> ::core::result::Result<Option<perftest_flat::Duration>, __JniErr> {
+    Ok({
+        if *v == -1i64 {
+            None
+        } else {
+            Some({
+                let __inner_s0 = jlong_to_u64_4384a5d6(env, v)?;
+                let __inner_s1 = u64_to_Duration_7c0845f9(env, __inner_s0)
+                    .map_err(|__e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string()))?;
+                __inner_s1
+            })
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -2108,6 +2229,27 @@ pub(crate) unsafe fn u32_to_jlong_9594a230<'a>(
     v: u32,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(v as jni::sys::jlong)
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn u64_to_Duration_7c0845f9<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: u64,
+) -> ::core::result::Result<perftest_flat::Duration, __JniErr> {
+    {
+        if (true && true && (v) <= 86400000u64) && !(false) {
+            ::core::result::Result::Ok(crate::duration_from_millis(v))
+        } else {
+            ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        "{} representation is outside its declared domain", "Duration"
+                    ),
+                ),
+            )
+        }
+    }
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn u64_to_jlong_4384a5d6<'a>(
@@ -2748,6 +2890,75 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_durationOptional<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let value = match jlong_to_Option_Duration_1cfa4d44(&mut env, &value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::duration_optional(value);
+    match Option_Duration_to_jlong_1cfa4d44(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_durationOutOfRange<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __out = perftest_flat::duration_out_of_range();
+    match Option_Duration_to_jlong_1cfa4d44(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_escapeProbeNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -3298,6 +3509,75 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadVecHandle
                 &__e.to_string(),
             );
             0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentInvalidOutput<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __out = perftest_flat::percent_invalid_output();
+    match Option_Percent_to_JObject_544dd364(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_percentOptional<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    p: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let p = match JObject_to_Option_Percent_544dd364(&mut env, &p) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::percent_optional(p);
+    match Option_Percent_to_JObject_544dd364(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

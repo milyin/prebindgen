@@ -1,5 +1,111 @@
 use super::*;
 
+#[test]
+fn bounded_duration_option_uses_u64_niche_without_boxing() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
+        "pub fn duration_to_millis(v: &std::time::Duration) -> u64 { unimplemented!() }",
+        "pub fn duration_echo(v: Option<std::time::Duration>) -> Option<std::time::Duration> { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let function: syn::ItemFn = syn::parse_str(source).unwrap();
+        (syn::Item::Fn(function), loc.clone())
+    })
+    .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(std::time::Duration)
+                .input(crate::fun!(duration_from_millis))
+                .output(crate::fun!(duration_to_millis))
+                .valid_range(0u64..=1_000_000u64),
+        )
+        .package(crate::package!("time").fun(crate::fun!(duration_echo)));
+    let dir = unique_test_dir("jnigen_bounded_duration");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).unwrap();
+    let rust_path = generation.write_rust(dir.join("gen.rs")).unwrap();
+    let rust = std::fs::read_to_string(rust_path).unwrap();
+    let paths = generation.write_kotlin(&dir.join("kotlin")).unwrap();
+    let kotlin = paths
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rc: String = rust.split_whitespace().collect();
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(rc.contains("outsideitsdeclareddomain"), "{rust}");
+    assert!(
+        rc.contains("None=>-1i64") || rc.contains("None=>-1"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains("Some({let__inner_s0=jlong_to_u64_")
+            && rc.contains("let__inner_s1=u64_to_Duration_"),
+        "Option input must compose the raw u64 decoder with the Duration stage:\n{rust}"
+    );
+    assert!(
+        rc.contains("Some(value)=>{let__inner_s0=")
+            && rc.contains("Duration_to_u64_")
+            && rc.contains("u64_to_jlong_"),
+        "Option output must compose the Duration stage with the raw u64 encoder:\n{rust}"
+    );
+    assert!(!rc.contains("Optionbox:"), "{rust}");
+    assert!(kc.contains("v:ULong?"), "{kotlin}");
+    assert!(kc.contains("v?.toLong()?:-1L"), "{kotlin}");
+    assert!(kc.contains("v:Long"), "{kotlin}");
+}
+
+#[test]
+fn duration_requires_an_explicit_conversion() {
+    let function: syn::ItemFn = syn::parse_str(
+        "pub fn duration_echo(v: std::time::Duration) -> std::time::Duration { unimplemented!() }",
+    )
+    .unwrap();
+    let registry = Registry::<KotlinMeta>::from_items([(syn::Item::Fn(function), myflat_loc())])
+        .expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("time").fun(crate::fun!(duration_echo)));
+
+    let error = registry
+        .resolve(jni)
+        .expect_err("Duration must not have an implicit unchecked converter")
+        .to_string();
+    assert!(error.contains("Duration"), "{error}");
+}
+
+#[test]
+#[should_panic(expected = "domain type i64 does not match input representation u64")]
+fn conversion_domain_must_match_the_representation() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = [
+        "pub fn duration_from_millis(v: u64) -> std::time::Duration { unimplemented!() }",
+        "pub fn duration_use(v: std::time::Duration) { unimplemented!() }",
+    ]
+    .into_iter()
+    .map(|source| {
+        let function: syn::ItemFn = syn::parse_str(source).unwrap();
+        (syn::Item::Fn(function), loc.clone())
+    })
+    .collect();
+    let registry = Registry::<KotlinMeta>::from_items(items).unwrap();
+    let jni = JniGen::new()
+        .convert(
+            crate::convert!(std::time::Duration)
+                .input(crate::fun!(duration_from_millis))
+                .valid_range(0i64..=1_000i64),
+        )
+        .package(crate::package!("time").fun(crate::fun!(duration_use)));
+
+    let _ = registry.resolve(jni);
+}
+
 /// Phase 4: a bare `Option<primitive>` / `Option<enum>` **input** parameter
 /// crosses as a decoupled `(present: Boolean, value: <prim>)` pair instead of a
 /// boxed `java.lang.*` `JObject`. The Rust side reassembles the `Option` from
@@ -573,6 +679,45 @@ fn convert_via_try_from_is_fallible() {
         rc.contains("<i32as::core::convert::TryInto<myflat::Percent>>::Error"),
         "{rust}"
     );
+}
+
+/// Structural `Option<T>` converters return `__JniErr`, while a custom
+/// conversion stage may retain its raw `E`. Both input and output composition
+/// must normalize that `E` before using `?`.
+#[test]
+fn option_composition_normalizes_fallible_stage_errors() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn = syn::parse_str(
+        "pub fn pct_optional(p: Option<Percent>) -> Option<Percent> { unimplemented!() }",
+    )
+    .unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(Percent)
+                .input(crate::try_from!(i32))
+                .output(
+                    crate::fun!(crate::conv::pct_out)
+                        .sig(crate::sig!((p: Percent) -> Result<i32, String>)),
+                ),
+        )
+        .package(crate::package!("m").fun(crate::fun!(pct_optional)));
+    let dir = unique_test_dir("jnigen_option_fallible_stages");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    assert!(
+        rc.matches("__e.to_string()").count() >= 2,
+        "input and output stages must both normalize their raw errors:\n{rust}"
+    );
+    assert!(rc.contains("JObject_to_Option_Percent"), "{rust}");
+    assert!(rc.contains("Option_Percent_to_JObject"), "{rust}");
 }
 
 /// Binding-local conversion fns via the ONE vocabulary —

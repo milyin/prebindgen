@@ -49,9 +49,10 @@ pub use string_helpers::{decode_string, encode_string, null_string};
 pub(crate) use crate::api::gen::kotlin as kt;
 pub(crate) use crate::api::{
     core::{
-        niches::Niches,
+        domain::ScalarValue,
+        niches::{NicheSlot, Niches},
         prebindgen::{ConverterImpl, Prebindgen, Stage},
-        registry::{extract_fn_trait_args, Registry, TypeKey},
+        registry::{extract_fn_trait_args, Direction, Registry, TypeKey},
         types_util::{
             bare_path_ident, is_option_ref, is_option_type, option_inner_type, vec_inner_type,
         },

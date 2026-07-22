@@ -17,6 +17,11 @@
 //!   (→ flatten-input / flatten-output).
 //! * [`Millis`] — a newtype crossing as a plain `Long` via a custom
 //!   input/output wrapper.
+//! * [`Duration`] — the standard-library semantic type crossing as bounded
+//!   milliseconds, with `Option<Duration>` using an invalid representation as
+//!   an allocation-free niche.
+
+pub use std::time::Duration;
 
 use prebindgen_proc_macro::prebindgen;
 
@@ -350,6 +355,31 @@ pub fn millis_add(a: Millis, b: Millis) -> Millis {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Duration — std semantic type crossing as bounded u64 milliseconds.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Largest duration accepted by the covertest binding: one day in
+/// milliseconds. The binding's representation-domain declaration reserves all
+/// larger `u64` values, allowing `Option<Duration>` to use one as `None` while
+/// keeping the JNI carrier a primitive `jlong`.
+pub const DURATION_MAX_MILLIS: u64 = 86_400_000;
+
+/// Round-trip an optional standard-library duration. The source API remains
+/// semantic (`Option<Duration>`); only the binding declares its millisecond
+/// representation and range.
+#[prebindgen]
+pub fn duration_optional(value: Option<Duration>) -> Option<Duration> {
+    value
+}
+
+/// Deliberately violate the binding's declared output domain so the Kotlin
+/// covertest can verify outbound validation and error routing.
+#[prebindgen]
+pub fn duration_out_of_range() -> Option<Duration> {
+    Some(Duration::from_millis(DURATION_MAX_MILLIS + 1))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // convert! source-kind fixtures — one type per conversion source. Like
 // `Millis`, none of these types is `#[prebindgen]`-marked: each crosses the
 // boundary only through its declared canonical conversion.
@@ -405,6 +435,21 @@ impl From<Percent> for i32 {
 #[prebindgen]
 pub fn percent_scale(p: Percent, factor: i32) -> Percent {
     Percent(((p.0 as i32) * factor).clamp(0, 100) as u8)
+}
+
+/// Round-trip an optional percentage. The covertest binding uses this to
+/// compose `Option` with the fallible `TryFrom<i32>` input conversion and its
+/// fallible output conversion.
+#[prebindgen]
+pub fn percent_optional(p: Option<Percent>) -> Option<Percent> {
+    p
+}
+
+/// Deliberately construct a value outside `Percent`'s semantic invariant so
+/// the covertest can verify a fallible output stage nested under `Option`.
+#[prebindgen]
+pub fn percent_invalid_output() -> Option<Percent> {
+    Some(Percent(101))
 }
 
 /// A text label. Crosses via plain conversion fns declared **in the binding

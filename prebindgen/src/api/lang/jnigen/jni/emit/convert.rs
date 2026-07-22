@@ -1,6 +1,7 @@
 //! Scalar / `Option` / enum converter bodies and their wire probes.
 
 use super::*;
+use crate::api::core::registry::TypeEntry;
 
 /// Sentinel value to return through the wrapper signature when the inner
 /// closure errors. Must compile against any wire type we emit.
@@ -79,10 +80,6 @@ pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> 
             syn::parse_quote!(*v as ::core::primitive::u64),
         ),
         "f64" => (syn::parse_quote!(jni::sys::jdouble), syn::parse_quote!(*v)),
-        "Duration" | "std :: time :: Duration" => (
-            syn::parse_quote!(jni::sys::jlong),
-            syn::parse_quote!(std::time::Duration::from_millis(*v as u64)),
-        ),
         "String" => (
             syn::parse_quote!(jni::objects::JString),
             syn::parse_quote!({
@@ -169,6 +166,58 @@ pub(crate) fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)>
 // Option<_> wrappers
 // ──────────────────────────────────────────────────────────────────────
 
+/// Invoke an inner input converter's complete `wire -> Rust` chain.
+///
+/// Structural wrappers cannot call only [`TypeEntry::function`]: custom
+/// conversions may carry semantic steps in `pre_stages` (for example
+/// `jlong -> u64 -> Duration`). Keep those steps inside the `Some` arm so a
+/// niche discriminator is tested before any conversion runs.
+fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn::Expr {
+    let converter = inner.converter_ident();
+    if inner.pre_stages.is_empty() {
+        return syn::parse2(quote!(#converter(env, #wire)?))
+            .expect("single-stage input call is a valid expression");
+    }
+    let mut body = quote! {
+        let __inner_s0 = #converter(env, #wire)?;
+    };
+    let mut previous = format_ident!("__inner_s0");
+    for (order, (_, stage)) in inner.input_stage_order().enumerate() {
+        let stage_fn = &stage.function.sig.ident;
+        let next = format_ident!("__inner_s{}", order + 1);
+        body.extend(quote! {
+            let #next = #stage_fn(env, #previous)
+                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(__e.to_string()))?;
+        });
+        previous = next;
+    }
+    body.extend(quote!(#previous));
+    syn::parse2(quote!({ #body })).expect("composed input chain is a valid expression")
+}
+
+/// Invoke an inner output converter's complete `Rust -> wire` chain.
+/// Mirror of [`composed_inner_input`].
+fn composed_inner_output(inner: &TypeEntry<KotlinMeta>, value: TokenStream) -> syn::Expr {
+    let converter = inner.converter_ident();
+    if inner.pre_stages.is_empty() {
+        return syn::parse2(quote!(#converter(env, #value)?))
+            .expect("single-stage output call is a valid expression");
+    }
+    let mut body = TokenStream::new();
+    let mut previous = value;
+    for (order, (_, stage)) in inner.output_stage_order().enumerate() {
+        let stage_fn = &stage.function.sig.ident;
+        let next = format_ident!("__inner_s{}", order);
+        body.extend(quote! {
+            let #next = #stage_fn(env, #previous)
+                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(__e.to_string()))?;
+        });
+        previous = quote!(#next);
+    }
+    body.extend(quote!(#converter(env, #previous)?));
+    syn::parse2(quote!({ #body })).expect("composed output chain is a valid expression")
+}
+
 /// Build `Option<T>`'s input converter.
 ///
 /// Two paths, picked in this order:
@@ -195,7 +244,7 @@ pub(crate) fn option_input(
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
     let inner_entry = registry.input_entry(t1)?;
     let inner_wire = inner_entry.destination.clone();
-    let inner_conv = inner_entry.function.sig.ident.clone();
+    let inner_decode = composed_inner_input(inner_entry, quote!(v));
 
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
@@ -218,7 +267,7 @@ pub(crate) fn option_input(
             })
         } else {
             syn::parse_quote!({
-                if #pred { None } else { Some(#inner_conv(env, v)?) }
+                if #pred { None } else { Some(#inner_decode) }
             })
         };
         return Some((inner_wire, body, rest));
@@ -230,6 +279,7 @@ pub(crate) fn option_input(
         let unbox_sig = jni_unbox_sig(&inner_wire);
         let getter = jni_unbox_getter(&inner_wire);
         let getter_id = format_ident!("{}", getter);
+        let inner_decode = composed_inner_input(inner_entry, quote!(&__unboxed));
         let body: syn::Expr = syn::parse_quote!({
             if !v.is_null() {
                 let __unboxed: #inner_wire = env
@@ -241,7 +291,7 @@ pub(crate) fn option_input(
                     .and_then(|val| val.#getter_id())
                     .map(|__x| __x as #inner_wire)
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Option unbox: {}", e)))?;
-                Some(#inner_conv(env, &__unboxed)?)
+                Some(#inner_decode)
             } else {
                 None
             }
@@ -260,14 +310,14 @@ pub(crate) fn option_output(
 ) -> Option<(syn::Type, syn::Expr, Niches)> {
     let inner_entry = registry.output_entry(t1)?;
     let inner_wire = inner_entry.destination.clone();
-    let inner_conv = inner_entry.function.sig.ident.clone();
+    let inner_encode = composed_inner_output(inner_entry, quote!(value));
 
     // 1. Niche path.
     if let Some((slot, rest)) = inner_entry.niches.clone().carve() {
         let none_value = &slot.value;
         let body: syn::Expr = syn::parse_quote!({
             match v {
-                Some(value) => #inner_conv(env, value)?,
+                Some(value) => #inner_encode,
                 None => #none_value,
             }
         });
@@ -276,10 +326,11 @@ pub(crate) fn option_output(
 
     // 2. Boxed-primitive fallback (cached box class + `valueOf` method ID).
     if let Some(helper) = box_helper_for_wire(&inner_wire) {
+        let inner_encode = composed_inner_output(inner_entry, quote!(value));
         let body: syn::Expr = syn::parse_quote!({
             match v {
                 Some(value) => {
-                    let __raw: #inner_wire = #inner_conv(env, value)?;
+                    let __raw: #inner_wire = #inner_encode;
                     ::prebindgen::lang::#helper(env, __raw)
                         .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!("Option box: {}", e)))?
                 }
