@@ -44,32 +44,53 @@ pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> 
         ),
         "i32" => (syn::parse_quote!(jni::sys::jint), syn::parse_quote!(*v)),
         "i64" => (syn::parse_quote!(jni::sys::jlong), syn::parse_quote!(*v)),
+        // Range-checked unsigned inputs: unwrap via a transforming `match` with
+        // an early return, so the surrounding `Ok(#body)` wrap yields
+        // `Ok(match { .. })` rather than `Ok(x?)` (which clippy's
+        // `needless_question_mark` rejects). The transforming error arm also
+        // avoids clippy's `question_mark` lint (it fires only for identity
+        // error propagation).
         "u8" => (
             syn::parse_quote!(jni::sys::jint),
-            syn::parse_quote!(::core::primitive::u8::try_from(*v).map_err(|_| {
-                <__JniErr as ::core::convert::From<String>>::from(format!(
-                    "u8 input out of range: {}",
-                    *v
-                ))
-            })?),
+            syn::parse_quote!(match ::core::primitive::u8::try_from(*v) {
+                ::core::result::Result::Ok(__u) => __u,
+                ::core::result::Result::Err(_) => {
+                    return ::core::result::Result::Err(<__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!(
+                        "u8 input out of range: {}",
+                        *v
+                    )));
+                }
+            }),
         ),
         "u16" => (
             syn::parse_quote!(jni::sys::jint),
-            syn::parse_quote!(::core::primitive::u16::try_from(*v).map_err(|_| {
-                <__JniErr as ::core::convert::From<String>>::from(format!(
-                    "u16 input out of range: {}",
-                    *v
-                ))
-            })?),
+            syn::parse_quote!(match ::core::primitive::u16::try_from(*v) {
+                ::core::result::Result::Ok(__u) => __u,
+                ::core::result::Result::Err(_) => {
+                    return ::core::result::Result::Err(<__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!(
+                        "u16 input out of range: {}",
+                        *v
+                    )));
+                }
+            }),
         ),
         "u32" => (
             syn::parse_quote!(jni::sys::jlong),
-            syn::parse_quote!(::core::primitive::u32::try_from(*v).map_err(|_| {
-                <__JniErr as ::core::convert::From<String>>::from(format!(
-                    "u32 input out of range: {}",
-                    *v
-                ))
-            })?),
+            syn::parse_quote!(match ::core::primitive::u32::try_from(*v) {
+                ::core::result::Result::Ok(__u) => __u,
+                ::core::result::Result::Err(_) => {
+                    return ::core::result::Result::Err(<__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!(
+                        "u32 input out of range: {}",
+                        *v
+                    )));
+                }
+            }),
         ),
         // Kotlin's public surface is `ULong`, but the JNI tier receives its
         // underlying `Long` bit pattern. Rust's `as u64` is the inverse of

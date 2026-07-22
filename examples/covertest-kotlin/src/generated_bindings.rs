@@ -1879,12 +1879,16 @@ pub(crate) unsafe fn jint_to_u16_28edf527<'env, 'v>(
     v: &jni::sys::jint,
 ) -> ::core::result::Result<u16, __JniErr> {
     Ok(
-        ::core::primitive::u16::try_from(*v)
-            .map_err(|_| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("u16 input out of range: {}", * v))
-            })?,
+        match ::core::primitive::u16::try_from(*v) {
+            ::core::result::Result::Ok(__u) => __u,
+            ::core::result::Result::Err(_) => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("u16 input out of range: {}", * v)),
+                );
+            }
+        },
     )
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -1893,12 +1897,16 @@ pub(crate) unsafe fn jint_to_u8_553cf6ec<'env, 'v>(
     v: &jni::sys::jint,
 ) -> ::core::result::Result<u8, __JniErr> {
     Ok(
-        ::core::primitive::u8::try_from(*v)
-            .map_err(|_| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("u8 input out of range: {}", * v))
-            })?,
+        match ::core::primitive::u8::try_from(*v) {
+            ::core::result::Result::Ok(__u) => __u,
+            ::core::result::Result::Err(_) => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("u8 input out of range: {}", * v)),
+                );
+            }
+        },
     )
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
@@ -2052,12 +2060,16 @@ pub(crate) unsafe fn jlong_to_u32_9594a230<'env, 'v>(
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<u32, __JniErr> {
     Ok(
-        ::core::primitive::u32::try_from(*v)
-            .map_err(|_| {
-                <__JniErr as ::core::convert::From<
-                    String,
-                >>::from(format!("u32 input out of range: {}", * v))
-            })?,
+        match ::core::primitive::u32::try_from(*v) {
+            ::core::result::Result::Ok(__u) => __u,
+            ::core::result::Result::Err(_) => {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("u32 input out of range: {}", * v)),
+                );
+            }
+        },
     )
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
