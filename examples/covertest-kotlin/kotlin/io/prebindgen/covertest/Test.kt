@@ -22,6 +22,14 @@ import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.ObjectBoundary
+import io.prebindgen.covertest.model.ObjectBoundary2
+import io.prebindgen.covertest.model.ObjectBoundary4
+import io.prebindgen.covertest.model.ObjectBoundary8
+import io.prebindgen.covertest.model.ObjectBoundary16
+import io.prebindgen.covertest.model.ObjectBoundary32
+import io.prebindgen.covertest.model.ObjectBoundary63
+import io.prebindgen.covertest.model.ObjectBoundary64
+import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
@@ -711,8 +719,16 @@ fun main() {
         check(annotatedAlternateValue(c, boom) == 11.0)
     }
 
-    section("data_class explicit JObject input boundary") {
-        check(objectBoundaryValue(ObjectBoundary(91L), boom) == 91L)
+    section("data_class JVM-slot-limited JObject input boundary") {
+        val leaf = ObjectBoundaryLeaf(1L)
+        val level2 = ObjectBoundary2(leaf, leaf)
+        val level4 = ObjectBoundary4(level2, level2)
+        val level8 = ObjectBoundary8(level4, level4)
+        val level16 = ObjectBoundary16(level8, level8)
+        val level32 = ObjectBoundary32(level16, level16)
+        val level64 = ObjectBoundary64(level32, level32)
+        val level63 = ObjectBoundary63(level32, level16, level8, level4, level2, leaf)
+        check(objectBoundaryValue(ObjectBoundary(level64, level63), boom) == 127L)
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────

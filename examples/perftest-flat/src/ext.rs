@@ -536,19 +536,109 @@ pub fn annotated_payload_value(a: &Annotated) -> f64 {
     a.payload.value
 }
 
+/// One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundaryLeaf {
+    pub value: i64,
+}
+
+macro_rules! object_boundary_level {
+    ($name:ident, $child:ty) => {
+        #[prebindgen]
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        pub struct $name {
+            pub left: $child,
+            pub right: $child,
+        }
+    };
+}
+
+object_boundary_level!(ObjectBoundary2, ObjectBoundaryLeaf);
+object_boundary_level!(ObjectBoundary4, ObjectBoundary2);
+object_boundary_level!(ObjectBoundary8, ObjectBoundary4);
+object_boundary_level!(ObjectBoundary16, ObjectBoundary8);
+object_boundary_level!(ObjectBoundary32, ObjectBoundary16);
+object_boundary_level!(ObjectBoundary64, ObjectBoundary32);
+
+/// The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundary63 {
+    pub leaves32: ObjectBoundary32,
+    pub leaves16: ObjectBoundary16,
+    pub leaves8: ObjectBoundary8,
+    pub leaves4: ObjectBoundary4,
+    pub leaves2: ObjectBoundary2,
+    pub leaf: ObjectBoundaryLeaf,
+}
+
 /// Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
-/// Unlike ordinary data classes this one crosses Kotlin→Rust as one `JObject`;
-/// it demonstrates the explicit escape hatch for a boundary that must not be
-/// recursively flattened.
+///
+/// Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
+/// contain 127 `i64` leaves. The generated Kotlin constructor/fromParts bridge
+/// remains legal at 254 JVM slots, but flattening a native input parameter
+/// would require 256: 254 for the leaves plus the `JNINative` receiver and
+/// binding-error sink. Because the JVM limit is 255, this otherwise-valid data
+/// class must cross Kotlin→Rust as one `JObject`.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectBoundary {
-    pub value: i64,
+    pub left: ObjectBoundary64,
+    pub right: ObjectBoundary63,
+}
+
+trait ObjectBoundarySum {
+    fn boundary_sum(&self) -> i64;
+}
+
+impl ObjectBoundarySum for ObjectBoundaryLeaf {
+    fn boundary_sum(&self) -> i64 {
+        self.value
+    }
+}
+
+macro_rules! impl_object_boundary_sum {
+    ($($name:ty),+ $(,)?) => {
+        $(
+            impl ObjectBoundarySum for $name {
+                fn boundary_sum(&self) -> i64 {
+                    self.left.boundary_sum() + self.right.boundary_sum()
+                }
+            }
+        )+
+    };
+}
+
+impl_object_boundary_sum!(
+    ObjectBoundary2,
+    ObjectBoundary4,
+    ObjectBoundary8,
+    ObjectBoundary16,
+    ObjectBoundary32,
+    ObjectBoundary64,
+);
+
+impl ObjectBoundarySum for ObjectBoundary63 {
+    fn boundary_sum(&self) -> i64 {
+        self.leaves32.boundary_sum()
+            + self.leaves16.boundary_sum()
+            + self.leaves8.boundary_sum()
+            + self.leaves4.boundary_sum()
+            + self.leaves2.boundary_sum()
+            + self.leaf.boundary_sum()
+    }
+}
+
+impl ObjectBoundarySum for ObjectBoundary {
+    fn boundary_sum(&self) -> i64 {
+        self.left.boundary_sum() + self.right.boundary_sum()
+    }
 }
 
 #[prebindgen]
 pub fn object_boundary_value(value: &ObjectBoundary) -> i64 {
-    value.value
+    value.boundary_sum()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

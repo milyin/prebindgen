@@ -604,20 +604,260 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
     })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
+pub(crate) unsafe fn JObject_to_ObjectBoundary16_e9d41606<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
-) -> ::core::result::Result<perftest_flat::ObjectBoundary, __JniErr> {
+) -> ::core::result::Result<perftest_flat::ObjectBoundary16, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary16.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary8_55b82b02(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary16.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary8_55b82b02(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary16 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary2_a8f288cc<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary2, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary2.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundaryLeaf_93531764(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary2.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundaryLeaf_93531764(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary2 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary32_ed80fac3<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary32, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary32.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary16_e9d41606(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary32.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary16_e9d41606(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary32 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary4_ea3fd497<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary4, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary4.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary2_a8f288cc(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary4.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary2_a8f288cc(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary4 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary63_29aa82ff<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary63, __JniErr> {
+    Ok({
+        let __leaves32_raw: jni::objects::JObject = env
+            .get_field(v, "leaves32", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves32: {}", e)))?;
+        let leaves32 = JObject_to_ObjectBoundary32_ed80fac3(env, &__leaves32_raw)?;
+        let __leaves16_raw: jni::objects::JObject = env
+            .get_field(v, "leaves16", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves16: {}", e)))?;
+        let leaves16 = JObject_to_ObjectBoundary16_e9d41606(env, &__leaves16_raw)?;
+        let __leaves8_raw: jni::objects::JObject = env
+            .get_field(v, "leaves8", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves8: {}", e)))?;
+        let leaves8 = JObject_to_ObjectBoundary8_55b82b02(env, &__leaves8_raw)?;
+        let __leaves4_raw: jni::objects::JObject = env
+            .get_field(v, "leaves4", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves4: {}", e)))?;
+        let leaves4 = JObject_to_ObjectBoundary4_ea3fd497(env, &__leaves4_raw)?;
+        let __leaves2_raw: jni::objects::JObject = env
+            .get_field(v, "leaves2", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves2: {}", e)))?;
+        let leaves2 = JObject_to_ObjectBoundary2_a8f288cc(env, &__leaves2_raw)?;
+        let __leaf_raw: jni::objects::JObject = env
+            .get_field(v, "leaf", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaf: {}", e)))?;
+        let leaf = JObject_to_ObjectBoundaryLeaf_93531764(env, &__leaf_raw)?;
+        perftest_flat::ObjectBoundary63 {
+            leaves32,
+            leaves16,
+            leaves8,
+            leaves4,
+            leaves2,
+            leaf,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary64_b2751ca5<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary64, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary64.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary32_ed80fac3(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary64.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary32_ed80fac3(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary64 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary8_55b82b02<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary8, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary8.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary4_ea3fd497(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary8.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary4_ea3fd497(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary8 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundaryLeaf_93531764<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundaryLeaf, __JniErr> {
     Ok({
         let __value_raw: jni::sys::jlong = env
             .get_field(v, "value", "J")
             .and_then(|val| val.j())
             .map_err(|e| <__JniErr as ::core::convert::From<
                 String,
-            >>::from(format!("ObjectBoundary.value: {}", e)))? as _;
+            >>::from(format!("ObjectBoundaryLeaf.value: {}", e)))? as _;
         let value = jlong_to_i64_fbf9a9bc(env, &__value_raw)?;
-        perftest_flat::ObjectBoundary {
+        perftest_flat::ObjectBoundaryLeaf {
             value,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary64;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary64_b2751ca5(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary63;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary63_29aa82ff(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary {
+            left,
+            right,
         }
     })
 }
@@ -1512,18 +1752,2140 @@ pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     Ok(cov_helpers::millis_value(&v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
-pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
+pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
     env: &mut jni::JNIEnv<'a>,
-    v: perftest_flat::ObjectBoundary,
+    v: perftest_flat::ObjectBoundary16,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.value.clone(),
+        )?;
+        let ___right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.value.clone(),
+        )?;
+        let ___right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.value.clone(),
+        )?;
+        let ___right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.value.clone(),
+        )?;
+        let ___right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.value.clone(),
+        )?;
+        let ___right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.value.clone(),
+        )?;
+        let ___right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.value.clone(),
+        )?;
+        let ___right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary16",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary16;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_right_left_value),
+                    jni::objects::JValue::from(___left_left_right_right_value),
+                    jni::objects::JValue::from(___left_right_left_left_value),
+                    jni::objects::JValue::from(___left_right_left_right_value),
+                    jni::objects::JValue::from(___left_right_right_left_value),
+                    jni::objects::JValue::from(___left_right_right_right_value),
+                    jni::objects::JValue::from(___right_left_left_left_value),
+                    jni::objects::JValue::from(___right_left_left_right_value),
+                    jni::objects::JValue::from(___right_left_right_left_value),
+                    jni::objects::JValue::from(___right_left_right_right_value),
+                    jni::objects::JValue::from(___right_right_left_left_value),
+                    jni::objects::JValue::from(___right_right_left_right_value),
+                    jni::objects::JValue::from(___right_right_right_left_value),
+                    jni::objects::JValue::from(___right_right_right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary2,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.value.clone(),
+        )?;
+        let ___right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary2",
+                "fromParts",
+                "(JJ)Lio/prebindgen/covertest/model/ObjectBoundary2;",
+                &[
+                    jni::objects::JValue::from(___left_value),
+                    jni::objects::JValue::from(___right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary32,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.value.clone(),
+        )?;
+        let ___right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.left.value.clone(),
+        )?;
+        let ___right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.right.value.clone(),
+        )?;
+        let ___right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.left.value.clone(),
+        )?;
+        let ___right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.right.value.clone(),
+        )?;
+        let ___right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.left.value.clone(),
+        )?;
+        let ___right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.right.value.clone(),
+        )?;
+        let ___right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.left.value.clone(),
+        )?;
+        let ___right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.right.value.clone(),
+        )?;
+        let ___right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.left.value.clone(),
+        )?;
+        let ___right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.right.value.clone(),
+        )?;
+        let ___right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.left.value.clone(),
+        )?;
+        let ___right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.right.value.clone(),
+        )?;
+        let ___right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.left.value.clone(),
+        )?;
+        let ___right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.right.value.clone(),
+        )?;
+        let ___right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary32",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary32;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_left_right_left_value),
+                    jni::objects::JValue::from(___left_left_left_right_right_value),
+                    jni::objects::JValue::from(___left_left_right_left_left_value),
+                    jni::objects::JValue::from(___left_left_right_left_right_value),
+                    jni::objects::JValue::from(___left_left_right_right_left_value),
+                    jni::objects::JValue::from(___left_left_right_right_right_value),
+                    jni::objects::JValue::from(___left_right_left_left_left_value),
+                    jni::objects::JValue::from(___left_right_left_left_right_value),
+                    jni::objects::JValue::from(___left_right_left_right_left_value),
+                    jni::objects::JValue::from(___left_right_left_right_right_value),
+                    jni::objects::JValue::from(___left_right_right_left_left_value),
+                    jni::objects::JValue::from(___left_right_right_left_right_value),
+                    jni::objects::JValue::from(___left_right_right_right_left_value),
+                    jni::objects::JValue::from(___left_right_right_right_right_value),
+                    jni::objects::JValue::from(___right_left_left_left_left_value),
+                    jni::objects::JValue::from(___right_left_left_left_right_value),
+                    jni::objects::JValue::from(___right_left_left_right_left_value),
+                    jni::objects::JValue::from(___right_left_left_right_right_value),
+                    jni::objects::JValue::from(___right_left_right_left_left_value),
+                    jni::objects::JValue::from(___right_left_right_left_right_value),
+                    jni::objects::JValue::from(___right_left_right_right_left_value),
+                    jni::objects::JValue::from(___right_left_right_right_right_value),
+                    jni::objects::JValue::from(___right_right_left_left_left_value),
+                    jni::objects::JValue::from(___right_right_left_left_right_value),
+                    jni::objects::JValue::from(___right_right_left_right_left_value),
+                    jni::objects::JValue::from(___right_right_left_right_right_value),
+                    jni::objects::JValue::from(___right_right_right_left_left_value),
+                    jni::objects::JValue::from(___right_right_right_left_right_value),
+                    jni::objects::JValue::from(___right_right_right_right_left_value),
+                    jni::objects::JValue::from(___right_right_right_right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary4,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.value.clone(),
+        )?;
+        let ___left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.value.clone(),
+        )?;
+        let ___right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.value.clone(),
+        )?;
+        let ___right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary4",
+                "fromParts",
+                "(JJJJ)Lio/prebindgen/covertest/model/ObjectBoundary4;",
+                &[
+                    jni::objects::JValue::from(___left_left_value),
+                    jni::objects::JValue::from(___left_right_value),
+                    jni::objects::JValue::from(___right_left_value),
+                    jni::objects::JValue::from(___right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary63_to_JObject_29aa82ff<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary63,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___leaves32_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.right.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.right.right.value.clone(),
+        )?;
+        let ___leaves16_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.left.left.value.clone(),
+        )?;
+        let ___leaves16_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.left.right.value.clone(),
+        )?;
+        let ___leaves16_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.right.left.value.clone(),
+        )?;
+        let ___leaves16_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.right.right.value.clone(),
+        )?;
+        let ___leaves16_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.left.left.value.clone(),
+        )?;
+        let ___leaves16_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.left.right.value.clone(),
+        )?;
+        let ___leaves16_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.right.left.value.clone(),
+        )?;
+        let ___leaves16_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.right.right.value.clone(),
+        )?;
+        let ___leaves16_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.left.left.value.clone(),
+        )?;
+        let ___leaves16_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.left.right.value.clone(),
+        )?;
+        let ___leaves16_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.right.left.value.clone(),
+        )?;
+        let ___leaves16_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.right.right.value.clone(),
+        )?;
+        let ___leaves16_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.left.left.value.clone(),
+        )?;
+        let ___leaves16_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.left.right.value.clone(),
+        )?;
+        let ___leaves16_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.right.left.value.clone(),
+        )?;
+        let ___leaves16_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.right.right.value.clone(),
+        )?;
+        let ___leaves8_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.left.left.value.clone(),
+        )?;
+        let ___leaves8_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.left.right.value.clone(),
+        )?;
+        let ___leaves8_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.right.left.value.clone(),
+        )?;
+        let ___leaves8_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.right.right.value.clone(),
+        )?;
+        let ___leaves8_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.left.left.value.clone(),
+        )?;
+        let ___leaves8_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.left.right.value.clone(),
+        )?;
+        let ___leaves8_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.right.left.value.clone(),
+        )?;
+        let ___leaves8_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.right.right.value.clone(),
+        )?;
+        let ___leaves4_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.left.left.value.clone(),
+        )?;
+        let ___leaves4_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.left.right.value.clone(),
+        )?;
+        let ___leaves4_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.right.left.value.clone(),
+        )?;
+        let ___leaves4_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.right.right.value.clone(),
+        )?;
+        let ___leaves2_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves2.left.value.clone(),
+        )?;
+        let ___leaves2_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves2.right.value.clone(),
+        )?;
+        let ___leaf_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaf.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary63",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary63;",
+                &[
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___leaves16_left_left_left_left_value),
+                    jni::objects::JValue::from(___leaves16_left_left_left_right_value),
+                    jni::objects::JValue::from(___leaves16_left_left_right_left_value),
+                    jni::objects::JValue::from(___leaves16_left_left_right_right_value),
+                    jni::objects::JValue::from(___leaves16_left_right_left_left_value),
+                    jni::objects::JValue::from(___leaves16_left_right_left_right_value),
+                    jni::objects::JValue::from(___leaves16_left_right_right_left_value),
+                    jni::objects::JValue::from(___leaves16_left_right_right_right_value),
+                    jni::objects::JValue::from(___leaves16_right_left_left_left_value),
+                    jni::objects::JValue::from(___leaves16_right_left_left_right_value),
+                    jni::objects::JValue::from(___leaves16_right_left_right_left_value),
+                    jni::objects::JValue::from(___leaves16_right_left_right_right_value),
+                    jni::objects::JValue::from(___leaves16_right_right_left_left_value),
+                    jni::objects::JValue::from(___leaves16_right_right_left_right_value),
+                    jni::objects::JValue::from(___leaves16_right_right_right_left_value),
+                    jni::objects::JValue::from(
+                        ___leaves16_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___leaves8_left_left_left_value),
+                    jni::objects::JValue::from(___leaves8_left_left_right_value),
+                    jni::objects::JValue::from(___leaves8_left_right_left_value),
+                    jni::objects::JValue::from(___leaves8_left_right_right_value),
+                    jni::objects::JValue::from(___leaves8_right_left_left_value),
+                    jni::objects::JValue::from(___leaves8_right_left_right_value),
+                    jni::objects::JValue::from(___leaves8_right_right_left_value),
+                    jni::objects::JValue::from(___leaves8_right_right_right_value),
+                    jni::objects::JValue::from(___leaves4_left_left_value),
+                    jni::objects::JValue::from(___leaves4_left_right_value),
+                    jni::objects::JValue::from(___leaves4_right_left_value),
+                    jni::objects::JValue::from(___leaves4_right_right_value),
+                    jni::objects::JValue::from(___leaves2_left_value),
+                    jni::objects::JValue::from(___leaves2_right_value),
+                    jni::objects::JValue::from(___leaf_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary64,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.right.value.clone(),
+        )?;
+        let ___right_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.left.left.value.clone(),
+        )?;
+        let ___right_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.left.right.value.clone(),
+        )?;
+        let ___right_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.right.left.value.clone(),
+        )?;
+        let ___right_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.right.right.value.clone(),
+        )?;
+        let ___right_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.left.left.value.clone(),
+        )?;
+        let ___right_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.left.right.value.clone(),
+        )?;
+        let ___right_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.right.left.value.clone(),
+        )?;
+        let ___right_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.right.right.value.clone(),
+        )?;
+        let ___right_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.left.left.value.clone(),
+        )?;
+        let ___right_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.left.right.value.clone(),
+        )?;
+        let ___right_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.right.left.value.clone(),
+        )?;
+        let ___right_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.right.right.value.clone(),
+        )?;
+        let ___right_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.left.left.value.clone(),
+        )?;
+        let ___right_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.left.right.value.clone(),
+        )?;
+        let ___right_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.right.left.value.clone(),
+        )?;
+        let ___right_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.right.right.value.clone(),
+        )?;
+        let ___right_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.left.left.value.clone(),
+        )?;
+        let ___right_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.left.right.value.clone(),
+        )?;
+        let ___right_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.right.left.value.clone(),
+        )?;
+        let ___right_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.right.right.value.clone(),
+        )?;
+        let ___right_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.left.left.value.clone(),
+        )?;
+        let ___right_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.left.right.value.clone(),
+        )?;
+        let ___right_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.right.left.value.clone(),
+        )?;
+        let ___right_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.right.right.value.clone(),
+        )?;
+        let ___right_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.left.left.value.clone(),
+        )?;
+        let ___right_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.left.right.value.clone(),
+        )?;
+        let ___right_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.right.left.value.clone(),
+        )?;
+        let ___right_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.right.right.value.clone(),
+        )?;
+        let ___right_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.left.left.value.clone(),
+        )?;
+        let ___right_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.left.right.value.clone(),
+        )?;
+        let ___right_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary64",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary64;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_left_left_right_left_value),
+                    jni::objects::JValue::from(___left_left_left_left_right_right_value),
+                    jni::objects::JValue::from(___left_left_left_right_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_right_left_right_value),
+                    jni::objects::JValue::from(___left_left_left_right_right_left_value),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_left_right_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_right_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_right_left_right_left_value),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_left_right_right_left_left_value),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_right_left_left_left_left_value),
+                    jni::objects::JValue::from(___left_right_left_left_left_right_value),
+                    jni::objects::JValue::from(___left_right_left_left_right_left_value),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_right_left_right_left_left_value),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_right_right_left_left_left_value),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_left_left_left_left_left_value),
+                    jni::objects::JValue::from(___right_left_left_left_left_right_value),
+                    jni::objects::JValue::from(___right_left_left_left_right_left_value),
+                    jni::objects::JValue::from(
+                        ___right_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_left_left_right_left_left_value),
+                    jni::objects::JValue::from(
+                        ___right_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_left_right_left_left_left_value),
+                    jni::objects::JValue::from(
+                        ___right_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_right_left_left_left_left_value),
+                    jni::objects::JValue::from(
+                        ___right_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_right_right_value,
+                    ),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary8,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.value.clone(),
+        )?;
+        let ___right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.value.clone(),
+        )?;
+        let ___right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.value.clone(),
+        )?;
+        let ___right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary8",
+                "fromParts",
+                "(JJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary8;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_value),
+                    jni::objects::JValue::from(___left_left_right_value),
+                    jni::objects::JValue::from(___left_right_left_value),
+                    jni::objects::JValue::from(___left_right_right_value),
+                    jni::objects::JValue::from(___right_left_left_value),
+                    jni::objects::JValue::from(___right_left_right_value),
+                    jni::objects::JValue::from(___right_right_left_value),
+                    jni::objects::JValue::from(___right_right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundaryLeaf,
 ) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
     Ok({
         let ___value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.value.clone())?;
         let __obj = env
             .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundaryLeaf",
+                "fromParts",
+                "(J)Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;",
+                &[jni::objects::JValue::from(___value)],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_left_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.right.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves8_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves8_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves8_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves8_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves8_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves8_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves8_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves8_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves4_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.left.left.value.clone(),
+        )?;
+        let ___right_leaves4_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.left.right.value.clone(),
+        )?;
+        let ___right_leaves4_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.right.left.value.clone(),
+        )?;
+        let ___right_leaves4_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.right.right.value.clone(),
+        )?;
+        let ___right_leaves2_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves2.left.value.clone(),
+        )?;
+        let ___right_leaves2_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves2.right.value.clone(),
+        )?;
+        let ___right_leaf_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaf.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
                 "io/prebindgen/covertest/model/ObjectBoundary",
                 "fromParts",
-                "(J)Lio/prebindgen/covertest/model/ObjectBoundary;",
-                &[jni::objects::JValue::from(___value)],
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary;",
+                &[
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_leaves8_left_left_left_value),
+                    jni::objects::JValue::from(___right_leaves8_left_left_right_value),
+                    jni::objects::JValue::from(___right_leaves8_left_right_left_value),
+                    jni::objects::JValue::from(___right_leaves8_left_right_right_value),
+                    jni::objects::JValue::from(___right_leaves8_right_left_left_value),
+                    jni::objects::JValue::from(___right_leaves8_right_left_right_value),
+                    jni::objects::JValue::from(___right_leaves8_right_right_left_value),
+                    jni::objects::JValue::from(___right_leaves8_right_right_right_value),
+                    jni::objects::JValue::from(___right_leaves4_left_left_value),
+                    jni::objects::JValue::from(___right_leaves4_left_right_value),
+                    jni::objects::JValue::from(___right_leaves4_right_left_value),
+                    jni::objects::JValue::from(___right_leaves4_right_right_value),
+                    jni::objects::JValue::from(___right_leaves2_left_value),
+                    jni::objects::JValue::from(___right_leaves2_right_value),
+                    jni::objects::JValue::from(___right_leaf_value),
+                ],
             )
             .and_then(|__v| __v.l())
             .map_err(|e| <__JniErr as ::core::convert::From<

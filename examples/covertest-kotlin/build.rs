@@ -18,7 +18,7 @@
 //! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
 //! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
-//! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (explicit whole-object input escape hatch) |
+//! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (127 `Long` leaves plus JNI infrastructure exceed the JVM's 255-slot method limit) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
@@ -233,8 +233,17 @@ fn main() {
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
                 .class(data_class!(Annotated))
-                // Explicit opt-out from recursive input flattening: this type
-                // alone keeps the historical whole-JObject decode boundary.
+                // These small nested classes form a 127-Long-leaf tree. Its
+                // constructor is legal, but flattening the root function input
+                // would consume 256 JVM slots, so it keeps one JObject input.
+                .class(data_class!(ObjectBoundaryLeaf))
+                .class(data_class!(ObjectBoundary2))
+                .class(data_class!(ObjectBoundary4))
+                .class(data_class!(ObjectBoundary8))
+                .class(data_class!(ObjectBoundary16))
+                .class(data_class!(ObjectBoundary32))
+                .class(data_class!(ObjectBoundary64))
+                .class(data_class!(ObjectBoundary63))
                 .class(data_class!(ObjectBoundary).jobject_input())
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.

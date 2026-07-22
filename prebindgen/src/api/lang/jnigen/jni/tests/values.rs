@@ -747,8 +747,8 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
     );
     let loc = myflat_loc();
     let registry = Registry::<KotlinMeta>::from_items([
-        (syn::Item::Struct(wide), loc.clone()),
-        (syn::Item::Fn(use_wide), loc),
+        (syn::Item::Struct(wide.clone()), loc.clone()),
+        (syn::Item::Fn(use_wide.clone()), loc.clone()),
     ])
     .expect("index items");
     let jni = JniGen::new().package(
@@ -762,6 +762,24 @@ fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
         .to_string();
     assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
     assert!(error.contains("jobject_input"), "{error}");
+
+    // The explicit object boundary keeps the same public Kotlin data class,
+    // but the native method receives it in one slot and performs the legacy
+    // whole-object field decode instead of producing an illegal signature.
+    let registry = Registry::<KotlinMeta>::from_items([
+        (syn::Item::Struct(wide), loc.clone()),
+        (syn::Item::Fn(use_wide), loc),
+    ])
+    .expect("index marked items");
+    let jni = JniGen::new().package(
+        crate::package!()
+            .class(crate::data_class!(Wide).jobject_input())
+            .fun(crate::fun!(use_wide)),
+    );
+    let generation = registry
+        .resolve(jni)
+        .expect("JObject boundary must bypass the flattened slot limit");
+    assert!(generation.report().contains("input `JObject` opt-in"));
 }
 
 /// An output-only `convert!` type must resolve with only its `.output()`

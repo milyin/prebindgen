@@ -60,7 +60,8 @@ for the full table; in brief:
   `model` / `errors` / `analytics` / `storage`), `jni_native_init`, all six
   name-mangle closures.
 - **types:** `data_class` (`Payload`; recursively nested/Option-nested
-  `Annotated`; explicit `.jobject_input()` `ObjectBoundary`),
+  `Annotated`; explicit `.jobject_input()` `ObjectBoundary`, whose 127 nested
+  `Long` leaves plus native infrastructure exceed the JVM's 255-slot limit),
   `ptr_class` (`Storage` / `Summary` / `StorageError` / `Archive` / handlers),
   `enum_class` (`Priority`), `value_class` (`Stamp`),
   `kotlin_type` (`Millis` → `Long`).
