@@ -144,7 +144,7 @@ impl Cbindgen {
             Some((ok, e)) => (ok, Some(e)),
             None => (return_ty.clone(), None),
         };
-        let has_fallible_output = self.output_is_fallible(&value_ty, registry);
+        let has_fallible_output = Self::output_is_fallible(&value_ty, registry);
 
         // Error wiring: the error type must be declared via `.error()`.
         let err_bits = err_ty.as_ref().map(|err_ty| {
@@ -549,13 +549,13 @@ impl Cbindgen {
         }
     }
 
-    fn output_is_fallible(&self, ty: &syn::Type, registry: &Registry<()>) -> bool {
+    fn output_is_fallible(ty: &syn::Type, registry: &Registry<()>) -> bool {
         if is_option(ty) || is_vec(ty) {
             return first_type_arg(ty)
-                .is_some_and(|inner| self.output_is_fallible(&inner, registry));
+                .is_some_and(|inner| Self::output_is_fallible(&inner, registry));
         }
         if let Some(inner) = cow_slice_elem(ty) {
-            return self.output_is_fallible(&inner, registry);
+            return Self::output_is_fallible(&inner, registry);
         }
         registry
             .output_entry(ty)
