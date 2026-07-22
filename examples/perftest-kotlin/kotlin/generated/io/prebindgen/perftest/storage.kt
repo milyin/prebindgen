@@ -18,9 +18,9 @@ import io.prebindgen.perftest.withSortedHandleLocks
 /** Create a new, empty storage handle. */
 public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = Storage(JNINative.storageNew(__bcap))
+    val __ret = JNINative.storageNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return Storage(__ret)
 }
 
 /**
@@ -32,15 +32,16 @@ public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
  *
  * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (JNINative.storageGet(s_ptr, __PayloadBuilder, __bcap) as Payload?)
+        JNINative.storageGet(s_ptr, __PayloadBuilder, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Payload?
 }
 
 /**
@@ -101,9 +102,9 @@ public fun payloadHandlerNew(
     onError: JniErrorHandler<PayloadHandler>,
 ): PayloadHandler {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = PayloadHandler(JNINative.payloadHandlerNew(f.asRaw(), __bcap))
+    val __ret = JNINative.payloadHandlerNew(f.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return PayloadHandler(__ret)
 }
 
 /**
@@ -167,15 +168,21 @@ public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErro
  *
  * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): List<Payload>? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (JNINative.storageGetVec(s_ptr, ArrayList<Payload>(), __PayloadFolderRawHolder.instance, __bcap) as List<Payload>?)
+        JNINative.storageGetVec(
+            s_ptr,
+            ArrayList<Payload>(),
+            __PayloadFolderRawHolder.instance,
+            __bcap,
+        )
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as List<Payload>?
 }
 
 /**
@@ -188,9 +195,9 @@ public fun payloadVecHandlerNew(
     onError: JniErrorHandler<PayloadVecHandler>,
 ): PayloadVecHandler {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = PayloadVecHandler(JNINative.payloadVecHandlerNew(f, __bcap))
+    val __ret = JNINative.payloadVecHandlerNew(f, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return PayloadVecHandler(__ret)
 }
 
 /**

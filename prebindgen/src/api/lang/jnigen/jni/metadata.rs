@@ -53,6 +53,10 @@ pub enum ProjectionKind {
     /// no Rust struct field to resolve. The typed class has a single
     /// `bytes: ByteArray` field; the wire is `JByteArray`. Never closeable.
     ValueBlob,
+    /// Rust `u64`: raw JNI `jlong` bit pattern with a typed Kotlin `ULong`
+    /// surface. It owns no resource; wrapping/unwrapping is
+    /// `Long.toULong()` / `ULong.toLong()`.
+    Unsigned64,
 }
 
 /// Folded description of a Kotlin newtype projection (opaque handle or value

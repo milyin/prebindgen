@@ -482,6 +482,61 @@ pub fn annotated_payload_value(a: &Annotated) -> f64 {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Fixed-width unsigned integers — widened Kotlin scalars + ULong projection.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Every fixed-width Rust unsigned scalar in one generated Kotlin data class.
+/// The first three fields widen losslessly; `long`/`maybe_long` surface as
+/// `ULong`/`ULong?` over raw JNI `Long` bit patterns.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unsigned {
+    pub byte: u8,
+    pub short: u16,
+    pub int: u32,
+    pub long: u64,
+    pub maybe_long: Option<u64>,
+}
+
+/// Round-trip direct unsigned parameters through an unsigned data-class
+/// return, covering both checked widening and the `ULong` projection.
+#[prebindgen]
+pub fn unsigned_round_trip(
+    byte: u8,
+    short: u16,
+    int: u32,
+    long: u64,
+    maybe_long: Option<u64>,
+) -> Unsigned {
+    Unsigned {
+        byte,
+        short,
+        int,
+        long,
+        maybe_long,
+    }
+}
+
+/// Direct nullable `u64` projection in both directions.
+#[prebindgen]
+pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
+    value
+}
+
+/// Deliver a `u64` through the generated typed/raw callback twin.
+#[prebindgen]
+pub fn unsigned_emit(value: u64, f: impl Fn(u64) + Send + Sync + 'static) {
+    f(value)
+}
+
+/// Output collection fold whose raw `jlong` leaves become `ULong` values on
+/// the Kotlin side.
+#[prebindgen]
+pub fn unsigned_series() -> Vec<u64> {
+    vec![0, u64::MAX]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Vec<opaque-handle> outputs — the Kotlin-side handle fold.
 // ─────────────────────────────────────────────────────────────────────────────
 

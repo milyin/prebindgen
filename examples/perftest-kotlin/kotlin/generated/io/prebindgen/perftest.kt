@@ -273,9 +273,9 @@ public class Token(initialPtr: Long) : NativeHandle(initialPtr) {
         /** Create a plain benchmark token. */
         public fun tokenNew(value: Long, onError: JniErrorHandler<Token>): Token {
             val __bcap = JniErrorHandlerCapture.acquire()
-            val __ret = Token(JNINative.tokenNew(value, __bcap))
+            val __ret = JNINative.tokenNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return __ret
+            return Token(__ret)
         }
     }
 }
@@ -317,9 +317,9 @@ public class TokenGc(initialPtr: Long) : GcNativeHandle(initialPtr) {
         /** Create a gc-managed benchmark token. */
         public fun tokenGcNew(value: Long, onError: JniErrorHandler<TokenGc>): TokenGc {
             val __bcap = JniErrorHandlerCapture.acquire()
-            val __ret = TokenGc(JNINative.tokenGcNew(value, __bcap))
+            val __ret = JNINative.tokenGcNew(value, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return __ret
+            return TokenGc(__ret)
         }
     }
 }

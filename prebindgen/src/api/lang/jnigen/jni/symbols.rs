@@ -421,6 +421,8 @@ fn boxed_primitive(simple: &str) -> Option<&'static str> {
 /// * a type variable declared on the function (`R` / `A`) → `Object`;
 /// * a non-null primitive → itself; a **nullable** primitive → its box
 ///   (`Int?` → `java.lang.Integer`) — a distinct descriptor;
+/// * non-null `ULong` → its inline-class carrier `Long`; nullable `ULong?` →
+///   the boxed `kotlin.ULong` class;
 /// * `String` / `ByteArray` / `Any` → their JVM types (object nullability is
 ///   irrelevant to the descriptor);
 /// * a `@JvmInline value class` → its underlying wire (`byte[]`), so two
@@ -438,6 +440,12 @@ pub(crate) fn erase_kt_type(ext: &JniGen, generics: &[String], ty: &kt::KtType) 
                 "java.lang.Object".to_string()
             } else if ext.is_value_blob_kotlin(simple) {
                 "byte[]".to_string()
+            } else if simple == "ULong" {
+                if *nullable {
+                    "kotlin.ULong".to_string()
+                } else {
+                    "Long".to_string()
+                }
             } else if let Some(boxed) = boxed_primitive(simple) {
                 if *nullable {
                     boxed.to_string()
@@ -513,6 +521,18 @@ mod tests {
             erase(&[], kt::KtType::int()),
             erase(&[], kt::KtType::int().nullable()),
             "Int and Int? must NOT clash"
+        );
+        // Kotlin's ULong is an inline class backed by a primitive long. Its
+        // nullable form is boxed as kotlin.ULong, not java.lang.Long.
+        assert_eq!(erase(&[], kt::KtType::cls("ULong")), "Long");
+        assert_eq!(
+            erase(&[], kt::KtType::cls("ULong").nullable()),
+            "kotlin.ULong"
+        );
+        assert_eq!(
+            erase(&[], kt::KtType::cls("ULong")),
+            erase(&[], kt::KtType::long()),
+            "ULong and Long share the same JVM carrier"
         );
         // Object types: nullability is irrelevant to the descriptor.
         assert_eq!(erase(&[], kt::KtType::string()), "java.lang.String");

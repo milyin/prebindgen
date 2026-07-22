@@ -228,7 +228,11 @@ pub(crate) fn callback_input(
         // passes its raw primitive; everything else casts to JObject. Output
         // converters take the value by move; `cb_arg` is the closure
         // parameter, so pass it directly.
-        let arg_is_prim = arg_entry.metadata.projection.is_none()
+        let arg_is_prim = arg_entry
+            .metadata
+            .projection
+            .as_ref()
+            .is_none_or(|p| p.kind == ProjectionKind::Unsigned64)
             && !is_option_type(arg_ty)
             && matches!(jni_field_access(&arg_wire), Some((_, _, false)));
         if arg_is_prim {

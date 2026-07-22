@@ -44,6 +44,40 @@ pub(crate) fn primitive_input(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)> 
         ),
         "i32" => (syn::parse_quote!(jni::sys::jint), syn::parse_quote!(*v)),
         "i64" => (syn::parse_quote!(jni::sys::jlong), syn::parse_quote!(*v)),
+        "u8" => (
+            syn::parse_quote!(jni::sys::jint),
+            syn::parse_quote!(::core::primitive::u8::try_from(*v).map_err(|_| {
+                <__JniErr as ::core::convert::From<String>>::from(format!(
+                    "u8 input out of range: {}",
+                    *v
+                ))
+            })?),
+        ),
+        "u16" => (
+            syn::parse_quote!(jni::sys::jint),
+            syn::parse_quote!(::core::primitive::u16::try_from(*v).map_err(|_| {
+                <__JniErr as ::core::convert::From<String>>::from(format!(
+                    "u16 input out of range: {}",
+                    *v
+                ))
+            })?),
+        ),
+        "u32" => (
+            syn::parse_quote!(jni::sys::jlong),
+            syn::parse_quote!(::core::primitive::u32::try_from(*v).map_err(|_| {
+                <__JniErr as ::core::convert::From<String>>::from(format!(
+                    "u32 input out of range: {}",
+                    *v
+                ))
+            })?),
+        ),
+        // Kotlin's public surface is `ULong`, but the JNI tier receives its
+        // underlying `Long` bit pattern. Rust's `as u64` is the inverse of
+        // Kotlin's `ULong.toLong()` for all 64 bits.
+        "u64" => (
+            syn::parse_quote!(jni::sys::jlong),
+            syn::parse_quote!(*v as ::core::primitive::u64),
+        ),
         "f64" => (syn::parse_quote!(jni::sys::jdouble), syn::parse_quote!(*v)),
         "Duration" | "std :: time :: Duration" => (
             syn::parse_quote!(jni::sys::jlong),
@@ -90,6 +124,14 @@ pub(crate) fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)>
             syn::parse_quote!(v as jni::sys::jint),
         ),
         "i64" => (
+            syn::parse_quote!(jni::sys::jlong),
+            syn::parse_quote!(v as jni::sys::jlong),
+        ),
+        "u8" | "u16" => (
+            syn::parse_quote!(jni::sys::jint),
+            syn::parse_quote!(v as jni::sys::jint),
+        ),
+        "u32" | "u64" => (
             syn::parse_quote!(jni::sys::jlong),
             syn::parse_quote!(v as jni::sys::jlong),
         ),

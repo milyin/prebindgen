@@ -563,6 +563,64 @@ pub(crate) fn encode_plan_leaves(
                         stmts.extend(bind_obj(obj_ident, expr));
                     }
                 }
+                ProjectionKind::Unsigned64 => {
+                    let enc_ident = format_ident!("__enc{}", idx);
+                    let encode = |reached: TokenStream| {
+                        quote! {{
+                            let #enc_ident: jni::sys::jlong = match #conv(&mut env, #reached) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    #conv_fail
+                                }
+                            };
+                            jni::sys::jvalue { j: #enc_ident }
+                        }}
+                    };
+                    if leaf.path.is_empty() && !by_ref {
+                        let expr = encode(value.clone());
+                        stmts.extend(quote! { let #obj_ident: jni::sys::jvalue = #expr; });
+                    } else if !leaf.nullable {
+                        let expr = reach_leaf(
+                            &qualify,
+                            &leaf.path,
+                            &returns_option,
+                            value.clone(),
+                            by_ref,
+                            true,
+                            0,
+                            &|reached| encode(quote!(*#reached)),
+                        );
+                        stmts.extend(quote! { let #obj_ident: jni::sys::jvalue = #expr; });
+                    } else {
+                        let box_fail = fail(quote!(__e.to_string()));
+                        let expr = reach_leaf(
+                            &qualify,
+                            &leaf.path,
+                            &returns_option,
+                            value.clone(),
+                            by_ref,
+                            true,
+                            0,
+                            &|reached| {
+                                quote! {{
+                                    let #enc_ident: jni::sys::jlong = match #conv(&mut env, *#reached) {
+                                        ::core::result::Result::Ok(__w) => __w,
+                                        ::core::result::Result::Err(__e) => {
+                                            #conv_fail
+                                        }
+                                    };
+                                    match ::prebindgen::lang::box_jlong(&mut env, #enc_ident) {
+                                        ::core::result::Result::Ok(__o) => __o,
+                                        ::core::result::Result::Err(__e) => {
+                                            #box_fail
+                                        }
+                                    }
+                                }}
+                            },
+                        );
+                        stmts.extend(bind_obj(obj_ident, expr));
+                    }
+                }
             }
             continue;
         }
@@ -660,7 +718,7 @@ pub(crate) fn leaf_is_prim(
     // stay objects (`[B`).
     let proj_ok = match &entry.metadata.projection {
         None => true,
-        Some(p) => p.kind == ProjectionKind::Handle,
+        Some(p) => matches!(p.kind, ProjectionKind::Handle | ProjectionKind::Unsigned64),
     };
     proj_ok && matches!(jni_field_access(&entry.destination), Some((_, _, false)))
 }
