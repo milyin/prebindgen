@@ -549,16 +549,7 @@ pub(crate) unsafe fn JObject_to_Option_Payload_97036642<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Payload>, __JniErr> {
-    Ok({
-        if v.is_null() {
-            None
-        } else {
-            Some({
-                let __inner_s0 = JObject_to_Payload_98f64326(env, v)?;
-                __inner_s0
-            })
-        }
-    })
+    Ok({ if v.is_null() { None } else { Some(JObject_to_Payload_98f64326(env, v)?) } })
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
@@ -574,10 +565,7 @@ pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Option unbox: {}", e)))?;
-            Some({
-                let __inner_s0 = jint_to_Priority_447102d2(env, &__unboxed)?;
-                __inner_s0
-            })
+            Some(jint_to_Priority_447102d2(env, &__unboxed)?)
         } else {
             None
         }
@@ -597,10 +585,7 @@ pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Option unbox: {}", e)))?;
-            Some({
-                let __inner_s0 = jdouble_to_f64_9e4a8f70(env, &__unboxed)?;
-                __inner_s0
-            })
+            Some(jdouble_to_f64_9e4a8f70(env, &__unboxed)?)
         } else {
             None
         }
@@ -620,10 +605,7 @@ pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Option unbox: {}", e)))?;
-            Some({
-                let __inner_s0 = jlong_to_i64_fbf9a9bc(env, &__unboxed)?;
-                __inner_s0
-            })
+            Some(jlong_to_i64_fbf9a9bc(env, &__unboxed)?)
         } else {
             None
         }
@@ -643,10 +625,7 @@ pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
                 .map_err(|e| <__JniErr as ::core::convert::From<
                     String,
                 >>::from(format!("Option unbox: {}", e)))?;
-            Some({
-                let __inner_s0 = jlong_to_u64_4384a5d6(env, &__unboxed)?;
-                __inner_s0
-            })
+            Some(jlong_to_u64_4384a5d6(env, &__unboxed)?)
         } else {
             None
         }
@@ -1378,13 +1357,7 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
         if v.is_null() {
             None
         } else {
-            Some({
-                let __inner_s0 = JString_to_std_boxed_Box_std_string_String_cfbab680(
-                    env,
-                    v,
-                )?;
-                __inner_s0
-            })
+            Some(JString_to_std_boxed_Box_std_string_String_cfbab680(env, v)?)
         }
     })
 }
@@ -1483,7 +1456,7 @@ pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
     Ok({
         match v {
             Some(value) => {
-                let __raw: jni::sys::jint = { Priority_to_jint_447102d2(env, value)? };
+                let __raw: jni::sys::jint = Priority_to_jint_447102d2(env, value)?;
                 ::prebindgen::lang::box_jint(env, __raw)
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
@@ -1525,7 +1498,7 @@ pub(crate) unsafe fn Option_i64_to_JObject_2ba9a5ed<'a>(
     Ok({
         match v {
             Some(value) => {
-                let __raw: jni::sys::jlong = { i64_to_jlong_fbf9a9bc(env, value)? };
+                let __raw: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, value)?;
                 ::prebindgen::lang::box_jlong(env, __raw)
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,
@@ -1543,7 +1516,7 @@ pub(crate) unsafe fn Option_u64_to_JObject_32be16a2<'a>(
     Ok({
         match v {
             Some(value) => {
-                let __raw: jni::sys::jlong = { u64_to_jlong_4384a5d6(env, value)? };
+                let __raw: jni::sys::jlong = u64_to_jlong_4384a5d6(env, value)?;
                 ::prebindgen::lang::box_jlong(env, __raw)
                     .map_err(|e| <__JniErr as ::core::convert::From<
                         String,

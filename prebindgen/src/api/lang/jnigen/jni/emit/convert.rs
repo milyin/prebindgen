@@ -174,6 +174,10 @@ pub(crate) fn primitive_output(ty: &syn::Type) -> Option<(syn::Type, syn::Expr)>
 /// niche discriminator is tested before any conversion runs.
 fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn::Expr {
     let converter = inner.converter_ident();
+    if inner.pre_stages.is_empty() {
+        return syn::parse2(quote!(#converter(env, #wire)?))
+            .expect("single-stage input call is a valid expression");
+    }
     let mut body = quote! {
         let __inner_s0 = #converter(env, #wire)?;
     };
@@ -193,6 +197,11 @@ fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn
 /// Invoke an inner output converter's complete `Rust -> wire` chain.
 /// Mirror of [`composed_inner_input`].
 fn composed_inner_output(inner: &TypeEntry<KotlinMeta>, value: TokenStream) -> syn::Expr {
+    let converter = inner.converter_ident();
+    if inner.pre_stages.is_empty() {
+        return syn::parse2(quote!(#converter(env, #value)?))
+            .expect("single-stage output call is a valid expression");
+    }
     let mut body = TokenStream::new();
     let mut previous = value;
     for (order, (_, stage)) in inner.output_stage_order().enumerate() {
@@ -203,7 +212,6 @@ fn composed_inner_output(inner: &TypeEntry<KotlinMeta>, value: TokenStream) -> s
         });
         previous = quote!(#next);
     }
-    let converter = inner.converter_ident();
     body.extend(quote!(#converter(env, #previous)?));
     syn::parse2(quote!({ #body })).expect("composed output chain is a valid expression")
 }
