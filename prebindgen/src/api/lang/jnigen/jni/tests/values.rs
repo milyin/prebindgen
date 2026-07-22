@@ -681,6 +681,45 @@ fn convert_via_try_from_is_fallible() {
     );
 }
 
+/// Structural `Option<T>` converters return `__JniErr`, while a custom
+/// conversion stage may retain its raw `E`. Both input and output composition
+/// must normalize that `E` before using `?`.
+#[test]
+fn option_composition_normalizes_fallible_stage_errors() {
+    let loc = myflat_loc();
+    let f: syn::ItemFn = syn::parse_str(
+        "pub fn pct_optional(p: Option<Percent>) -> Option<Percent> { unimplemented!() }",
+    )
+    .unwrap();
+    let registry =
+        Registry::<KotlinMeta>::from_items(vec![(syn::Item::Fn(f), loc)]).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(Percent)
+                .input(crate::try_from!(i32))
+                .output(
+                    crate::fun!(crate::conv::pct_out)
+                        .sig(crate::sig!((p: Percent) -> Result<i32, String>)),
+                ),
+        )
+        .package(crate::package!("m").fun(crate::fun!(pct_optional)));
+    let dir = unique_test_dir("jnigen_option_fallible_stages");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+
+    assert!(
+        rc.matches("__e.to_string()").count() >= 2,
+        "input and output stages must both normalize their raw errors:\n{rust}"
+    );
+    assert!(rc.contains("JObject_to_Option_Percent"), "{rust}");
+    assert!(rc.contains("Option_Percent_to_JObject"), "{rust}");
+}
+
 /// Binding-local conversion fns via the ONE vocabulary —
 /// `fun!(crate::…).sig(sig!(…))`: synthesized into the registry, lowered
 /// through the ordinary `#[prebindgen]`-fn path, called by the declared path.

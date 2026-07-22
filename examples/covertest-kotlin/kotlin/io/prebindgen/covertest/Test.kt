@@ -29,6 +29,8 @@ import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.labelReverse
+import io.prebindgen.covertest.model.percentInvalidOutput
+import io.prebindgen.covertest.model.percentOptional
 import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
@@ -584,19 +586,32 @@ fun main() {
         check(celsiusDouble(21, boom) == 42)
         check(celsiusDouble(-5, boom) == -10)
     }
-    section("convert! via TryFrom (Percent -> Int, fallible input)") {
+    section("convert! fallible stages under Option (Percent -> Int?)") {
         check(percentScale(50, 2, boom) == 100)
         check(percentScale(30, 2, boom) == 60)
+        check(percentOptional(null, boom) == null)
+        check(percentOptional(25, boom) == 25)
         // Out-of-range input: the TryFrom impl's Err(String) routes to
-        // onError through the converter's error slot (je carries the
-        // Display'd message).
+        // onError through an Option-composed stage (je carries the Display'd
+        // message after normalization to __JniErr).
         var msg: String? = null
-        percentScale(150, 1) { je ->
+        percentOptional(150) { je ->
             msg = je
-            0
+            null
         }
         check(msg?.contains("percent out of range: 150") == true) {
-            "percentScale(150) must report the range error, got: $msg"
+            "percentOptional(150) must report the range error, got: $msg"
+        }
+
+        // The output stage has its own raw String error. It must normalize in
+        // the opposite Option composition direction and use the same handler.
+        msg = null
+        percentInvalidOutput { je ->
+            msg = je
+            null
+        }
+        check(msg == "invalid Percent output: 101") {
+            "percentInvalidOutput must report the output conversion error, got: $msg"
         }
     }
     section("convert! via binding-local fns (Label -> String, fallible input)") {

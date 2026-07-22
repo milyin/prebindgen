@@ -437,6 +437,21 @@ pub fn percent_scale(p: Percent, factor: i32) -> Percent {
     Percent(((p.0 as i32) * factor).clamp(0, 100) as u8)
 }
 
+/// Round-trip an optional percentage. The covertest binding uses this to
+/// compose `Option` with the fallible `TryFrom<i32>` input conversion and its
+/// fallible output conversion.
+#[prebindgen]
+pub fn percent_optional(p: Option<Percent>) -> Option<Percent> {
+    p
+}
+
+/// Deliberately construct a value outside `Percent`'s semantic invariant so
+/// the covertest can verify a fallible output stage nested under `Option`.
+#[prebindgen]
+pub fn percent_invalid_output() -> Option<Percent> {
+    Some(Percent(101))
+}
+
 /// A text label. Crosses via plain conversion fns declared **in the binding
 /// crate** (`convert!(Label).input_with(ty!(String), path!(crate::label_in))…`)
 /// — no `#[prebindgen]` marking anywhere in the conversion.

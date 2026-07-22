@@ -31,6 +31,17 @@ pub fn duration_to_millis(d: perftest_flat::Duration) -> Result<u64, String> {
         .map_err(|_| "duration does not fit in u64 milliseconds".to_string())
 }
 
+// Fallible output peer of `Percent`'s `TryFrom<i32>` input. Keeping the error
+// type as raw `String` exercises Option's stage-error normalization in the
+// opposite conversion direction.
+pub fn percent_out(p: perftest_flat::Percent) -> Result<i32, String> {
+    if p.0 <= 100 {
+        Ok(i32::from(p.0))
+    } else {
+        Err(format!("invalid Percent output: {}", p.0))
+    }
+}
+
 // Binding-local FUNCTIONS (`fun!(crate::…).sig(sig!(…))`): full fns defined
 // in THIS crate and exported through the ordinary FunctionDecl surface —
 // free package fn, instance method, companion constructor. No source-crate

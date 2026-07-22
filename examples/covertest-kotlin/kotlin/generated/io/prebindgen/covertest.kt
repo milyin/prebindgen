@@ -685,6 +685,10 @@ internal object CovNative {
 
     external fun payloadVecHandlerNew(f: Any, errorSink: Any): Long
 
+    external fun percentInvalidOutput(errorSink: Any): Int?
+
+    external fun percentOptional(p: Int?, errorSink: Any): Int?
+
     external fun percentScale(p: Int, factor: Int, errorSink: Any): Int
 
     external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int

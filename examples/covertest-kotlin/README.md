@@ -79,6 +79,10 @@ for the full table; in brief:
   remains primitive `Long` at the native boundary, using an invalid value as
   the `None` niche. The runtime checks both conversion directions, both domain
   error paths, and the unboxed JNI signature.
+- **fallible stages under structural wrappers:** `Option<Percent>` composes a
+  raw `TryFrom::Error` input stage and a raw `String` output stage. The runtime
+  checks null/value round trips and verifies both stage errors normalize to
+  `JniErrorHandler`.
 - **type mappings:** primitives, `String`/`&str` (incl. a bare `String`
   return), `Option<T>` (param / return / **field**, incl. `Option<enum>` in
   all three positions and `Option<Payload>` in both directions),
@@ -113,7 +117,7 @@ The asserts are grouped into these sections (run order):
 17. `two-caller split storageTryFromStamp`
 18. `input/output wrapper Millis -> Long (+ .name rename)`
 19. `convert! via From/Into impls (Celsius -> Int)`
-20. `convert! via TryFrom (Percent -> Int, fallible input)`
+20. `convert! fallible stages under Option (Percent -> Int?)`
 21. `convert! via binding-local fns (Label -> String, fallible input)`
 22. `record-built <A> fold (summarySeries / summarySeriesOpt)`
 23. `Vec<Storage> handle fold (storageShards / storageShardsOpt)`

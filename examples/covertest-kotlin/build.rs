@@ -24,7 +24,7 @@
 //! | `convert!` + chained source streams   | `Millis` ⇄ `Long` via `covertest-helpers` fns |
 //! | `Source::builder().crate_name()`      | the helpers dep is RENAMED to `cov_helpers` in Cargo.toml |
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
-//! | `convert!` `.input(try_from!)` (fallible) | `Percent` ⇄ `Int`; out-of-range → `onError` |
+//! | fallible conversion stages under `Option` | `Option<Percent>` ⇄ `Int?`; raw `TryFrom::Error` input and binding-local `String` output errors normalize to `JniErrorHandler` |
 //! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
 //! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError` |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
@@ -168,9 +168,14 @@ fn main() {
         // `Celsius`: canonical conversion via `From`/`Into` impls in the flat
         // crate — the repr (`i32`) is stated, the impls do the work.
         .convert(convert!(Celsius).input(from!(i32)).output(into!(i32)))
-        // `Percent`: fallible input via `TryFrom<i32>` (out-of-range values
-        // from the JVM route the impl's Error to onError); infallible output.
-        .convert(convert!(Percent).input(try_from!(i32)).output(into!(i32)))
+        // `Percent`: fallible in BOTH directions. `Option<Percent>` below
+        // forces both raw stage error types through the structural Option
+        // converter, where they normalize to the binding error channel.
+        .convert(
+            convert!(Percent)
+                .input(try_from!(i32))
+                .output(fun!(crate::percent_out).sig(sig!((p: Percent) -> Result<i32, String>))),
+        )
         // `Label`: conversions are plain fns in THIS binding crate (see
         // src/lib.rs) — no #[prebindgen], no helper crate — declared with
         // the ONE binding-local vocabulary, `fun!(crate::…).sig(sig!(…))`.
@@ -394,6 +399,8 @@ fn main() {
                 // below): Into/From traits, TryFrom trait, binding-local fns.
                 .fun(fun!(celsius_double))
                 .fun(fun!(percent_scale))
+                .fun(fun!(percent_optional))
+                .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_ttl))

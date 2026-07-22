@@ -186,7 +186,8 @@ fn composed_inner_input(inner: &TypeEntry<KotlinMeta>, wire: TokenStream) -> syn
         let stage_fn = &stage.function.sig.ident;
         let next = format_ident!("__inner_s{}", order + 1);
         body.extend(quote! {
-            let #next = #stage_fn(env, #previous)?;
+            let #next = #stage_fn(env, #previous)
+                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(__e.to_string()))?;
         });
         previous = next;
     }
@@ -208,7 +209,8 @@ fn composed_inner_output(inner: &TypeEntry<KotlinMeta>, value: TokenStream) -> s
         let stage_fn = &stage.function.sig.ident;
         let next = format_ident!("__inner_s{}", order);
         body.extend(quote! {
-            let #next = #stage_fn(env, #previous)?;
+            let #next = #stage_fn(env, #previous)
+                .map_err(|__e| <__JniErr as ::core::convert::From<String>>::from(__e.to_string()))?;
         });
         previous = quote!(#next);
     }
