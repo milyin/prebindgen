@@ -705,6 +705,21 @@ pub(crate) fn emit_expanded_param(
         };
         let local = format_ident!("__exp_{}", leaf.name);
 
+        // An expansion leaf can itself be a data class. Reuse the recursive
+        // plan instead of allowing that leaf to fall back to a JObject, so
+        // expansion and ordinary parameters have the same boundary rule.
+        if let InputKind::FlattenStruct(flat) = &classified.kind {
+            for flat_leaf in &flat.leaves {
+                let ident = &flat_leaf.native_ident;
+                let wire = &flat_leaf.native_wire_ty;
+                wire_params.push(quote!(#ident: #wire));
+            }
+            let (decode, _) = render_flat_input_decode(flat, &local, on_err);
+            prelude.push(decode);
+            leaf_locals.push(local);
+            continue;
+        }
+
         // `Option<scalar>` / `Option<enum>` leaf (only produced by a
         // selector-dispatched constructor variant, where each arm's args are
         // `Option`-wrapped by presence): cross as a decoupled

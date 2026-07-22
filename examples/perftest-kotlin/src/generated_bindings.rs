@@ -1733,7 +1733,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+    let __flat_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1747,7 +1747,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+    let __flat_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1761,7 +1761,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+    let __flat_payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1775,7 +1775,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+    let __flat_payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1789,7 +1789,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+    let __flat_payload_label = match JString_to_Option_Box_String_071e4c8c(
         &mut env,
         &payload_label,
     ) {
@@ -1806,13 +1806,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByRead<
             return ();
         }
     };
-    let payload = perftest_flat::Payload {
-        id: __payload_id,
-        seq: __payload_seq,
-        value: __payload_value,
-        flag: __payload_flag,
-        label: __payload_label,
+    let __flat_payload = perftest_flat::Payload {
+        id: __flat_payload_id,
+        seq: __flat_payload_seq,
+        value: __flat_payload_value,
+        flag: __flat_payload_flag,
+        label: __flat_payload_label,
     };
+    let payload = __flat_payload;
     let __out = perftest_flat::storage_put_by_read(&mut s, &payload);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -1860,7 +1861,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+    let __flat_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1874,7 +1875,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+    let __flat_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1888,7 +1889,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+    let __flat_payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1902,7 +1903,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+    let __flat_payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -1916,7 +1917,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+    let __flat_payload_label = match JString_to_Option_Box_String_071e4c8c(
         &mut env,
         &payload_label,
     ) {
@@ -1933,13 +1934,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_perftest_JNINative_storagePutByTake<
             return ();
         }
     };
-    let payload = perftest_flat::Payload {
-        id: __payload_id,
-        seq: __payload_seq,
-        value: __payload_value,
-        flag: __payload_flag,
-        label: __payload_label,
+    let __flat_payload = perftest_flat::Payload {
+        id: __flat_payload_id,
+        seq: __flat_payload_seq,
+        value: __flat_payload_value,
+        flag: __flat_payload_flag,
+        label: __flat_payload_label,
     };
+    let payload = __flat_payload;
     let __out = perftest_flat::storage_put_by_take(&mut s, payload);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,

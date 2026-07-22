@@ -626,6 +626,10 @@ enum ParamMode {
     /// expressions in plan order.
     FlattenStruct {
         accesses: Vec<String>,
+        /// Owned handles nested anywhere below the flattened root. They join
+        /// the wrapper's one sorted lock set and are marked consumed after
+        /// the native call, exactly like top-level by-value handles.
+        handles: Vec<Opaque>,
     },
     /// `&[T]` / `Vec<T>` of a flattenable data_class `T`: the public Kotlin
     /// signature keeps `List<T>`, but the wrapper allocates a Rust-side `Vec<T>`
@@ -659,6 +663,7 @@ enum ParamMode {
     },
 }
 
+#[derive(Clone)]
 struct Opaque {
     /// Kotlin param name (e.g. `"b"`).
     name: String,
@@ -1165,9 +1170,31 @@ fn classify_params(
                     value_expr,
                 }
             }
-            InputKind::FlattenStruct(plan) => ParamMode::FlattenStruct {
-                accesses: plan.leaves.iter().map(|l| l.kt_access(&name)).collect(),
-            },
+            InputKind::FlattenStruct(plan) => {
+                let handles = plan
+                    .leaves
+                    .iter()
+                    .filter_map(|leaf| {
+                        let tail = leaf.handle_target_tail.as_ref()?;
+                        let target = format!("{name}{tail}");
+                        let consume_null = if leaf.handle_nullable {
+                            format!("{target}?.markConsumed()")
+                        } else {
+                            format!("{target}.markConsumed()")
+                        };
+                        Some(Opaque {
+                            name: leaf.kt_name.clone(),
+                            target,
+                            consume_null: Some(consume_null),
+                            nullable: leaf.handle_nullable,
+                        })
+                    })
+                    .collect();
+                ParamMode::FlattenStruct {
+                    accesses: plan.leaves.iter().map(|l| l.kt_call_arg(&name)).collect(),
+                    handles,
+                }
+            }
             InputKind::Handle { .. } => {
                 // Handle → Borrow/Consume by Rust syntactic shape (locked);
                 // `Option<&T>` / by-value `Option<T>` mark the param nullable
@@ -1413,7 +1440,7 @@ fn build_native_call(
     for p in params.iter() {
         // Flattened data_class param expands into multiple call args
         // (the leaf destructure expressions, in plan order).
-        if let ParamMode::FlattenStruct { accesses } = &p.mode {
+        if let ParamMode::FlattenStruct { accesses, .. } = &p.mode {
             args.extend(accesses.iter().cloned());
             continue;
         }
@@ -1554,8 +1581,8 @@ fn build_success_return(ext: &JniGen, out: &OutputPlan, raw: &str) -> String {
 fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
     params
         .iter()
-        .filter_map(|p| {
-            let (target, consume_null, nullable) = match p.mode {
+        .flat_map(|p| {
+            let (target, consume_null, nullable) = match &p.mode {
                 ParamMode::Borrow => (p.kt_name.clone(), None, false),
                 ParamMode::Consume => (
                     p.kt_name.clone(),
@@ -1569,14 +1596,15 @@ fn collect_opaques(params: &[Param]) -> Vec<Opaque> {
                     Some(format!("{n}?.markConsumed()", n = p.kt_name)),
                     true,
                 ),
-                _ => return None,
+                ParamMode::FlattenStruct { handles, .. } => return handles.clone(),
+                _ => return Vec::new(),
             };
-            Some(Opaque {
+            vec![Opaque {
                 name: p.kt_name.clone(),
                 target,
                 consume_null,
                 nullable,
-            })
+            }]
         })
         .collect()
 }
@@ -1675,7 +1703,7 @@ fn render_prelock_guards(opaques: &[Opaque], binding_param: &str, is_unit: bool)
     let mut guards = kt::Code::new();
     for o in opaques {
         let cond = if o.nullable {
-            format!("{n} != null && {t}.isClosed()", n = o.name, t = o.target)
+            format!("{t}?.isClosed() == true", t = o.target)
         } else {
             format!("{t}.isClosed()", t = o.target)
         };
@@ -1784,7 +1812,7 @@ fn render_core_stmt(
             let mut adds = kt::Code::new();
             for o in opaques {
                 adds = if o.nullable {
-                    adds.line(format!("{n}?.let {{ __locks.add(it) }}", n = o.name))
+                    adds.line(format!("{t}?.let {{ __locks.add(it) }}", t = o.target))
                 } else {
                     adds.line(format!("__locks.add({t})", t = o.target))
                 };

@@ -407,6 +407,10 @@ impl JniGen {
         let key = decl.key;
         let spec = Self::data_value_name_spec(subpackage, short, decl.name_override);
         self.register_class_name(&key, spec);
+        self.types
+            .get_mut(&key)
+            .expect("register_class_name created the entry")
+            .jobject_input |= decl.jobject_input;
         self.store_iface_opts(&key, decl.iface);
         self.accept_members(&key, decl.members);
     }

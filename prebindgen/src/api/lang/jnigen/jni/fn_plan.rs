@@ -56,8 +56,9 @@ pub(crate) enum ParamForm {
     /// Constructor-expansion ([`FoldPlan`] declared for this `(fn, param)`):
     /// the wire form is the plan's flattened leaves, classified individually;
     /// the Rust wrapper folds them back into the built value. Leaves use the
-    /// restricted probe set of the fold path (no struct-flatten / vec-build
-    /// nesting), so all three sites agree on the leaf wire.
+    /// same recursive data-class probe as ordinary parameters (vec-build
+    /// remains a source-parameter-only collection optimization), so all three
+    /// sites agree on the leaf wire.
     Expanded(Vec<PlanLeaf>),
 }
 
@@ -219,6 +220,12 @@ pub(crate) enum PlanError {
     UnresolvedLeaf { ty: TypeKey, param: syn::Ident },
     /// `registry.output_entry` has no converter for the output target type.
     UnresolvedOutput { ty: TypeKey },
+    /// An unmarked declared data class could not produce a complete recursive
+    /// input plan. Silent `JObject` fallback is forbidden.
+    UnflattenableDataClass(FlatInputError),
+    /// The flattened native method would exceed the JVM's 255 parameter-unit
+    /// descriptor limit (including the implicit receiver).
+    JvmParameterLimit { slots: usize },
 }
 
 impl PlanError {
@@ -241,6 +248,12 @@ impl PlanError {
                  (exc = `None` for non-throwing, `Some(parse_quote!(<full path>))` \
                   to bind a domain exception)",
                 ty, fn_ident,
+            ),
+            PlanError::UnflattenableDataClass(error) => {
+                format!("JniGen::on_function `{fn_ident}`: {}", error.message())
+            }
+            PlanError::JvmParameterLimit { slots } => format!(
+                "JniGen::on_function `{fn_ident}`: flattened JNI signature uses {slots} JVM parameter slots (maximum 255, including the JNINative receiver); reduce the data-class shape or declare an intentional `data_class!(T).jobject_input()` boundary"
             ),
         }
     }
@@ -429,13 +442,18 @@ impl JniFunctionPlan {
             };
             params.push(PlanParam { ident, ty, form });
         }
-        Ok(Self {
+        let result = Self {
             jni_method,
             native_symbol,
             onerror_iface,
             params,
             output,
-        })
+        };
+        let slots = result.jvm_parameter_slots(registry, f);
+        if slots > 255 {
+            return Err(PlanError::JvmParameterLimit { slots });
+        }
+        Ok(result)
     }
 
     /// The flattened effective-parameter view (expansion leaves inline) —
@@ -446,13 +464,56 @@ impl JniFunctionPlan {
             ParamForm::Expanded(ls) => ls.iter(),
         })
     }
+
+    fn jvm_parameter_slots(&self, registry: &Registry<KotlinMeta>, f: &syn::ItemFn) -> usize {
+        // `JNINative` is a Kotlin object, so its external methods are instance
+        // methods and the JVM counts the implicit receiver as one unit.
+        let mut slots = 1usize;
+        for leaf in self.leaves() {
+            slots += match &leaf.kind {
+                InputKind::FlattenStruct(plan) => plan
+                    .leaves
+                    .iter()
+                    .map(|l| kotlin_jvm_slots(&l.kt_wire_ty))
+                    .sum(),
+                InputKind::OptionScalar(plan) => 1 + kotlin_jvm_slots(&plan.value_kt_type),
+                InputKind::Handle { .. } | InputKind::VecBuild { .. } => 2,
+                InputKind::Callback { .. } => 1,
+                InputKind::ValueUnwrap { .. } | InputKind::Unsigned64 { .. } | InputKind::Plain => {
+                    registry
+                        .input_entry(&leaf.ty)
+                        .and_then(|entry| JniPrim::from_wire(&entry.destination))
+                        .map_or(1, |prim| match prim {
+                            JniPrim::Long | JniPrim::Double => 2,
+                            _ => 1,
+                        })
+                }
+            };
+        }
+        slots += match &self.output {
+            FnOutputPlan::Unfold(plan) if plan.iterable_fold => 2,
+            FnOutputPlan::Unfold(_) => 1,
+            FnOutputPlan::Value(_) => 0,
+        };
+        slots += 1; // binding-error sink
+        if registry.error_plans.contains_key(&f.sig.ident) {
+            slots += 1;
+        }
+        slots
+    }
 }
 
-/// Classify one effective parameter. `expanded` selects the restricted probe
-/// set of the constructor-expansion fold path (its Rust decode handles
-/// scalar-pair / consume / pass-through leaves only — struct-flatten and
-/// vec-build never applied there, so probing them here would desynchronize
-/// the wire).
+fn kotlin_jvm_slots(ty: &str) -> usize {
+    if !ty.ends_with('?') && matches!(ty, "Long" | "Double") {
+        2
+    } else {
+        1
+    }
+}
+
+/// Classify one effective parameter. `expanded` disables only the Vec-build
+/// collection helper; recursive data-class leaves are valid in constructor
+/// expansions and reuse the same Rust/Kotlin lowering as ordinary parameters.
 fn classify_leaf(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -496,6 +557,8 @@ fn classify_leaf(
         });
     };
 
+    let flat_plan = build_flat_input_plan(ext, registry, ident, ty)
+        .map_err(PlanError::UnflattenableDataClass)?;
     let kind = if let Some((elem, by_ref)) = (!expanded)
         .then(|| vec_build_elem(ext, registry, ty))
         .flatten()
@@ -503,10 +566,7 @@ fn classify_leaf(
         InputKind::VecBuild { elem, by_ref }
     } else if let Some(sp) = build_option_scalar_input_plan(ext, registry, ident, ty) {
         InputKind::OptionScalar(sp)
-    } else if let Some(plan) = (!expanded)
-        .then(|| build_flat_input_plan(ext, registry, ident, ty))
-        .flatten()
-    {
+    } else if let Some(plan) = flat_plan {
         InputKind::FlattenStruct(plan)
     } else {
         match entry.metadata.projection.as_ref().map(|p| p.kind.clone()) {

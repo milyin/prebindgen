@@ -17,7 +17,8 @@
 //! | `JniGen::package` (subpackages)      | `model` / `errors` / `analytics` / `storage` |
 //! | `JniGen::set_jni_native_init`      | `NativeLibrary.ensureLoaded()` |
 //! | contextual name-mangle closures      | package-aware class/function hooks + package/class-aware method hook |
-//! | `DataClassDecl`                      | `Payload`; `Annotated` (NESTED field + `Option<prim>`/`Option<enum>` fields) |
+//! | `DataClassDecl`                      | `Payload`; `Annotated` (recursive direct + optional nested fields) |
+//! | `DataClassDecl::jobject_input()`     | `ObjectBoundary` (explicit whole-object input escape hatch) |
 //! | `PtrClassDecl`                       | `Storage` / `Summary` / `StorageError` / `Archive` / handlers |
 //! | `EnumClassDecl`                      | `Priority` |
 //! | `ValueClassDecl`                     | `Stamp` (+ `Vec<Stamp>` → `List<ByteArray>`) |
@@ -232,6 +233,9 @@ fn main() {
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
                 .class(data_class!(Annotated))
+                // Explicit opt-out from recursive input flattening: this type
+                // alone keeps the historical whole-JObject decode boundary.
+                .class(data_class!(ObjectBoundary).jobject_input())
                 // Fixed-width unsigned mappings: Int / Long widening plus
                 // ULong over a raw jlong bit pattern.
                 .class(data_class!(Unsigned))
@@ -403,11 +407,14 @@ fn main() {
                 .fun(fun!(percent_invalid_output))
                 .fun(fun!(label_reverse))
                 .fun(fun!(annotated_new))
+                .fun(fun!(annotated_alternate_value))
                 .fun(fun!(annotated_ttl))
                 .fun(fun!(annotated_priority))
                 .fun(fun!(annotated_payload_value))
+                .fun(fun!(object_boundary_value))
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))
+                .fun(fun!(unsigned_data_maybe))
                 .fun(fun!(unsigned_emit))
                 .fun(fun!(unsigned_series))
                 .fun(fun!(duration_optional))

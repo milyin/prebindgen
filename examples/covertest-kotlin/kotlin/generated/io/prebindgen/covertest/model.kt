@@ -39,7 +39,7 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
  * input) and `Option<primitive>` / `Option<enum>` **fields** (each crossing
  * as a decoupled `(present, value)` leaf pair).
  */
-public data class Annotated(val payload: Payload, val ttl: Long?, val priority: Priority?) {
+public data class Annotated(val payload: Payload, val alternate: Payload?, val ttl: Long?, val priority: Priority?) {
     public companion object {
         @JvmStatic
         public fun fromParts(
@@ -48,9 +48,28 @@ public data class Annotated(val payload: Payload, val ttl: Long?, val priority: 
             payload_value: Double,
             payload_flag: Boolean,
             payload_label: String?,
+            alternate__present: Boolean,
+            alternate_id: Long,
+            alternate_seq: Int,
+            alternate_value: Double,
+            alternate_flag: Boolean,
+            alternate_label: String?,
             ttl: Long?,
             priority: Int?,
-        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), ttl, priority?.let { Priority.fromInt(it) })
+        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), if (alternate__present) Payload.fromParts(alternate_id, alternate_seq, alternate_value, alternate_flag, alternate_label) else null, ttl, priority?.let { Priority.fromInt(it) })
+    }
+}
+
+/**
+ * Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
+ * Unlike ordinary data classes this one crosses Kotlin→Rust as one `JObject`;
+ * it demonstrates the explicit escape hatch for a boundary that must not be
+ * recursively flattened.
+ */
+public data class ObjectBoundary(val value: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(value: Long): ObjectBoundary = ObjectBoundary(value)
     }
 }
 
@@ -287,12 +306,58 @@ public fun annotatedNew(
 }
 
 /**
+ * The optional nested payload's value. Its `Option<data_class>` input leaves
+ * are guarded by one presence bit and recursively reconstructed only when
+ * present.
+ */
+public fun annotatedAlternateValue(a: Annotated, onError: JniErrorHandler<Double?>): Double? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedAlternateValue(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * The metadata TTL (`Option<prim>` field read back through a data-class
  * **input**).
  */
 public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedTtl(a, __bcap)
+    val __ret = CovNative.annotatedTtl(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
@@ -300,7 +365,24 @@ public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
 /** The metadata priority (`Option<enum>` **return**). */
 public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPriority(a, __bcap)
+    val __ret = CovNative.annotatedPriority(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret?.let { io.prebindgen.covertest.model.Priority.fromInt(it) }
 }
@@ -311,7 +393,31 @@ public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>):
  */
 public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPayloadValue(a, __bcap)
+    val __ret = CovNative.annotatedPayloadValue(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+public fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.objectBoundaryValue(value, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
@@ -349,6 +455,26 @@ public fun unsignedRoundTrip(
 public fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.unsignedOptional(value?.toLong(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret?.let { it.toULong() }
+}
+
+/**
+ * Read the optional `u64` field through the flattened data-class input ABI.
+ * With no natural niche it crosses as `(present, raw Long)`, never a boxed
+ * `java.lang.Long`/`JObject`.
+ */
+public fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.unsignedDataMaybe(
+        value.byte,
+        value.short,
+        value.int,
+        value.long.toLong(),
+        value.maybeLong != null,
+        value.maybeLong?.toLong() ?: 0L,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret?.let { it.toULong() }
 }

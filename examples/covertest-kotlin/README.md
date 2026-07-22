@@ -31,7 +31,7 @@ re-runs `build.rs` to regenerate both sides of the binding
 the Kotlin asserts. Expected output ends with:
 
 ```
-PASS - 34 sections, every JniGen feature exercised
+PASS - 35 sections, every JniGen feature exercised
 ```
 
 (One section deliberately provokes callback exceptions; the stack traces it
@@ -59,7 +59,8 @@ for the full table; in brief:
 - **config:** `source_module`, `package_prefix`, `package` (subpackages
   `model` / `errors` / `analytics` / `storage`), `jni_native_init`, all six
   name-mangle closures.
-- **types:** `data_class` (`Payload`; nested/Option-field `Annotated`),
+- **types:** `data_class` (`Payload`; recursively nested/Option-nested
+  `Annotated`; explicit `.jobject_input()` `ObjectBoundary`),
   `ptr_class` (`Storage` / `Summary` / `StorageError` / `Archive` / handlers),
   `enum_class` (`Priority`), `value_class` (`Stamp`),
   `kotlin_type` (`Millis` → `Long`).
@@ -123,15 +124,16 @@ The asserts are grouped into these sections (run order):
 23. `Vec<Storage> handle fold (storageShards / storageShardsOpt)`
 24. `owned-handle callback (impl Fn(Storage))`
 25. `nested data_class Annotated + Option fields`
-26. `borrowed-opaque output archiveLatest`
-27. `Vec<String> storageLabels + Option<Payload> input + String return`
-28. `binding error je != null (malformed Stamp bytes)`
-29. `callback exceptions are swallowed (no-throw contract)`
-30. `3-handle locking + 2-thread smoke`
-31. `close/take storm (lock-order stability + closed-handle race)`
-32. `high-volume callback (localref pressure)`
-33. `.gc_managed() lifecycle (ticket + Cleaner backstop)`
-34. `JNI native-symbol escaping (esc_pkg / Esc_Probe / snake extern)`
+26. `data_class explicit JObject input boundary`
+27. `borrowed-opaque output archiveLatest`
+28. `Vec<String> storageLabels + Option<Payload> input + String return`
+29. `binding error je != null (malformed Stamp bytes)`
+30. `callback exceptions are swallowed (no-throw contract)`
+31. `3-handle locking + 2-thread smoke`
+32. `close/take storm (lock-order stability + closed-handle race)`
+33. `high-volume callback (localref pressure)`
+34. `.gc_managed() lifecycle (ticket + Cleaner backstop)`
+35. `JNI native-symbol escaping (esc_pkg / Esc_Probe / snake extern)`
 
 ### Relationship to perftest-kotlin
 

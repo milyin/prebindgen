@@ -491,6 +491,7 @@ pub fn payload_label_len(p: &Payload) -> Option<i64> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Annotated {
     pub payload: Payload,
+    pub alternate: Option<Payload>,
     pub ttl: Option<i64>,
     pub priority: Option<Priority>,
 }
@@ -501,9 +502,18 @@ pub struct Annotated {
 pub fn annotated_new(payload: Payload, ttl: Option<i64>, priority: Option<Priority>) -> Annotated {
     Annotated {
         payload,
+        alternate: None,
         ttl,
         priority,
     }
+}
+
+/// The optional nested payload's value. Its `Option<data_class>` input leaves
+/// are guarded by one presence bit and recursively reconstructed only when
+/// present.
+#[prebindgen]
+pub fn annotated_alternate_value(a: &Annotated) -> Option<f64> {
+    a.alternate.as_ref().map(|payload| payload.value)
 }
 
 /// The metadata TTL (`Option<prim>` field read back through a data-class
@@ -524,6 +534,21 @@ pub fn annotated_priority(a: &Annotated) -> Option<Priority> {
 #[prebindgen]
 pub fn annotated_payload_value(a: &Annotated) -> f64 {
     a.payload.value
+}
+
+/// Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
+/// Unlike ordinary data classes this one crosses Kotlin→Rust as one `JObject`;
+/// it demonstrates the explicit escape hatch for a boundary that must not be
+/// recursively flattened.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundary {
+    pub value: i64,
+}
+
+#[prebindgen]
+pub fn object_boundary_value(value: &ObjectBoundary) -> i64 {
+    value.value
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -566,6 +591,14 @@ pub fn unsigned_round_trip(
 #[prebindgen]
 pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
     value
+}
+
+/// Read the optional `u64` field through the flattened data-class input ABI.
+/// With no natural niche it crosses as `(present, raw Long)`, never a boxed
+/// `java.lang.Long`/`JObject`.
+#[prebindgen]
+pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
+    value.maybe_long
 }
 
 /// Deliver a `u64` through the generated typed/raw callback twin.
@@ -849,6 +882,12 @@ mod tests {
         assert_eq!(annotated_ttl(&a), Some(30));
         assert_eq!(annotated_priority(&a), Some(Priority::High));
         assert_eq!(annotated_payload_value(&a), 2.5);
+        assert_eq!(annotated_alternate_value(&a), None);
+        let with_alternate = Annotated {
+            alternate: Some(payload(2, 7.5, None)),
+            ..a.clone()
+        };
+        assert_eq!(annotated_alternate_value(&with_alternate), Some(7.5));
         let b = annotated_new(payload(1, 0.0, None), None, None);
         assert_eq!(annotated_ttl(&b), None);
         assert_eq!(annotated_priority(&b), None);

@@ -21,10 +21,12 @@ import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
+import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.durationOptional
 import io.prebindgen.covertest.model.durationOutOfRange
@@ -35,12 +37,14 @@ import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
+import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
 import io.prebindgen.covertest.model.stampNew
 import io.prebindgen.covertest.model.stampSeries
 import io.prebindgen.covertest.model.unsignedEmit
+import io.prebindgen.covertest.model.unsignedDataMaybe
 import io.prebindgen.covertest.model.unsignedOptional
 import io.prebindgen.covertest.model.unsignedRoundTrip
 import io.prebindgen.covertest.model.unsignedSeries
@@ -145,6 +149,8 @@ fun main() {
         ) { "unsigned max round trip mismatch: $max" }
         check(unsignedOptional(null, boom) == null)
         check(unsignedOptional(ULong.MAX_VALUE, boom) == ULong.MAX_VALUE)
+        check(unsignedDataMaybe(max, boom) == ULong.MAX_VALUE)
+        check(unsignedDataMaybe(max.copy(maybeLong = null), boom) == null)
 
         var emitted = 0uL
         unsignedEmit(ULong.MAX_VALUE, u64Callback { emitted = it }, boom)
@@ -689,13 +695,24 @@ fun main() {
         check(annotatedTtl(a, boom) == 30L)                 // input: (present, value) pair
         check(annotatedPriority(a, boom) == Priority.HIGH)  // Option<enum> return
         check(annotatedPayloadValue(a, boom) == 2.5)        // nested field survived decode
+        check(annotatedAlternateValue(a, boom) == null)     // Option<nested> absent gate
         val none = annotatedNew(payload(1L, 0, 0.0, false, null), null, null, boom)
         check(annotatedTtl(none, boom) == null && annotatedPriority(none, boom) == null)
-        // Kotlin-constructed instance crosses the input path too.
-        val c = Annotated(payload(2L, 0, 9.0, false, null), 5L, Priority.LOW)
+        // Kotlin-constructed instance crosses direct + optional recursive paths.
+        val c = Annotated(
+            payload(2L, 0, 9.0, false, null),
+            payload(3L, 0, 11.0, false, "alternate"),
+            5L,
+            Priority.LOW,
+        )
         check(annotatedTtl(c, boom) == 5L)
         check(annotatedPriority(c, boom) == Priority.LOW)
         check(annotatedPayloadValue(c, boom) == 9.0)
+        check(annotatedAlternateValue(c, boom) == 11.0)
+    }
+
+    section("data_class explicit JObject input boundary") {
+        check(objectBoundaryValue(ObjectBoundary(91L), boom) == 91L)
     }
 
     // ── borrowed-opaque output: Option<&Summary> → cloned owned handle ───────

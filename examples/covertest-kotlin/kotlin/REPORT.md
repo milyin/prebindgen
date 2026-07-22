@@ -47,6 +47,7 @@ Base package: `io.prebindgen.covertest`
 
 ## package `io.prebindgen.covertest.model`
 
+- `annotated_alternate_value` — `fun annotatedAlternateValue(a: Annotated, onError: JniErrorHandler<Double?>): Double?`
 - `annotated_new` — `fun annotatedNew(payload: Payload, ttl: Long?, priority: Priority?, onError: JniErrorHandler<Annotated>): Annotated`
 - `annotated_payload_value` — `fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double`
 - `annotated_priority` — `fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority?`
@@ -55,6 +56,7 @@ Base package: `io.prebindgen.covertest`
 - `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
+- `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `payload_priority` — `fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority`
 - `percent_invalid_output` — `fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int?`
 - `percent_optional` — `fun percentOptional(p: Int?, onError: JniErrorHandler<Int?>): Int?`
@@ -64,6 +66,7 @@ Base package: `io.prebindgen.covertest`
 - `stamp_new` — `fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp`
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp>`
   - shaped by: return `Stamp` decomposed → [] (Callback delivery)
+- `unsigned_data_maybe` — `fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong?`
 - `unsigned_emit` — `fun unsignedEmit(value: ULong, f: u64Callback, onError: JniErrorHandler<Unit>)`
 - `unsigned_optional` — `fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `unsigned_round_trip` — `fun unsignedRoundTrip(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?, onError: JniErrorHandler<Unsigned>): Unsigned`
@@ -139,6 +142,7 @@ Base package: `io.prebindgen.covertest`
 - `Annotated`: data_class → `io.prebindgen.covertest.model.Annotated` (wire `jni :: objects :: JObject`)
 - `Archive`: ptr_class → `io.prebindgen.covertest.analytics.SummaryVault` (wire `jni :: sys :: jlong`)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
+- `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `Payload`: data_class → `io.prebindgen.covertest.Payload` (wire `jni :: objects :: JObject`)
 - `PayloadHandler`: ptr_class → `io.prebindgen.covertest.PayloadHandler` (wire `jni :: sys :: jlong`)
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)

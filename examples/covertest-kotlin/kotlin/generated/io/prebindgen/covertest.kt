@@ -2,6 +2,7 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.ObjectBoundary
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -613,6 +614,25 @@ internal object CovNative {
         io.prebindgen.covertest.NativeLibrary.ensureLoaded()
     }
 
+    external fun annotatedAlternateValue(
+        aPayloadId: Long,
+        aPayloadSeq: Int,
+        aPayloadValue: Double,
+        aPayloadFlag: Boolean,
+        aPayloadLabel: String?,
+        aAlternatePresent: Boolean,
+        aAlternateId: Long,
+        aAlternateSeq: Int,
+        aAlternateValue: Double,
+        aAlternateFlag: Boolean,
+        aAlternateLabel: String?,
+        aTtlPresent: Boolean,
+        aTtlValue: Long,
+        aPriorityPresent: Boolean,
+        aPriorityValue: Int,
+        errorSink: Any,
+    ): Double?
+
     external fun annotatedNew(
         payloadId: Long,
         payloadSeq: Int,
@@ -626,11 +646,62 @@ internal object CovNative {
         errorSink: Any,
     ): Annotated
 
-    external fun annotatedPayloadValue(a: Annotated, errorSink: Any): Double
+    external fun annotatedPayloadValue(
+        aPayloadId: Long,
+        aPayloadSeq: Int,
+        aPayloadValue: Double,
+        aPayloadFlag: Boolean,
+        aPayloadLabel: String?,
+        aAlternatePresent: Boolean,
+        aAlternateId: Long,
+        aAlternateSeq: Int,
+        aAlternateValue: Double,
+        aAlternateFlag: Boolean,
+        aAlternateLabel: String?,
+        aTtlPresent: Boolean,
+        aTtlValue: Long,
+        aPriorityPresent: Boolean,
+        aPriorityValue: Int,
+        errorSink: Any,
+    ): Double
 
-    external fun annotatedPriority(a: Annotated, errorSink: Any): Int?
+    external fun annotatedPriority(
+        aPayloadId: Long,
+        aPayloadSeq: Int,
+        aPayloadValue: Double,
+        aPayloadFlag: Boolean,
+        aPayloadLabel: String?,
+        aAlternatePresent: Boolean,
+        aAlternateId: Long,
+        aAlternateSeq: Int,
+        aAlternateValue: Double,
+        aAlternateFlag: Boolean,
+        aAlternateLabel: String?,
+        aTtlPresent: Boolean,
+        aTtlValue: Long,
+        aPriorityPresent: Boolean,
+        aPriorityValue: Int,
+        errorSink: Any,
+    ): Int?
 
-    external fun annotatedTtl(a: Annotated, errorSink: Any): Long?
+    external fun annotatedTtl(
+        aPayloadId: Long,
+        aPayloadSeq: Int,
+        aPayloadValue: Double,
+        aPayloadFlag: Boolean,
+        aPayloadLabel: String?,
+        aAlternatePresent: Boolean,
+        aAlternateId: Long,
+        aAlternateSeq: Int,
+        aAlternateValue: Double,
+        aAlternateFlag: Boolean,
+        aAlternateLabel: String?,
+        aTtlPresent: Boolean,
+        aTtlValue: Long,
+        aPriorityPresent: Boolean,
+        aPriorityValue: Int,
+        errorSink: Any,
+    ): Long?
 
     external fun archiveLatest(a: Long, errorSink: Any): Long
 
@@ -662,6 +733,8 @@ internal object CovNative {
     external fun labelReverse(l: String, errorSink: Any): String
 
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
+
+    external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
 
@@ -892,6 +965,16 @@ internal object CovNative {
     ): Double
 
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+
+    external fun unsignedDataMaybe(
+        valueByte: Int,
+        valueShort: Int,
+        valueInt: Long,
+        valueLong: Long,
+        valueMaybeLongPresent: Boolean,
+        valueMaybeLongValue: Long,
+        errorSink: Any,
+    ): Long?
 
     external fun unsignedEmit(value: Long, f: Any, errorSink: Any)
 
