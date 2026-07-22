@@ -390,6 +390,51 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
                 v.payload.label.clone(),
             )?
             .into();
+        let ___alternate_present: jni::sys::jboolean;
+        let ___alternate_o0: jni::sys::jlong;
+        let ___alternate_o1: jni::sys::jint;
+        let ___alternate_o2: jni::sys::jdouble;
+        let ___alternate_o3: jni::sys::jboolean;
+        let ___alternate_o4: jni::objects::JObject;
+        match &v.alternate {
+            Some(__c0) => {
+                let ___alternate_id: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+                    env,
+                    __c0.id.clone(),
+                )?;
+                let ___alternate_seq: jni::sys::jint = i32_to_jint_a3e3b6ef(
+                    env,
+                    __c0.seq.clone(),
+                )?;
+                let ___alternate_value: jni::sys::jdouble = f64_to_jdouble_9e4a8f70(
+                    env,
+                    __c0.value.clone(),
+                )?;
+                let ___alternate_flag: jni::sys::jboolean = bool_to_jboolean_31306d98(
+                    env,
+                    __c0.flag.clone(),
+                )?;
+                let ___alternate_label: jni::objects::JObject = Option_Box_String_to_JString_071e4c8c(
+                        env,
+                        __c0.label.clone(),
+                    )?
+                    .into();
+                ___alternate_present = 1u8;
+                ___alternate_o0 = ___alternate_id;
+                ___alternate_o1 = ___alternate_seq;
+                ___alternate_o2 = ___alternate_value;
+                ___alternate_o3 = ___alternate_flag;
+                ___alternate_o4 = ___alternate_label;
+            }
+            None => {
+                ___alternate_present = 0u8;
+                ___alternate_o0 = 0i64;
+                ___alternate_o1 = 0i32;
+                ___alternate_o2 = 0.0f64;
+                ___alternate_o3 = 0u8;
+                ___alternate_o4 = jni::objects::JObject::null();
+            }
+        }
         let ___ttl: jni::objects::JObject = Option_i64_to_JObject_2ba9a5ed(
             env,
             v.ttl.clone(),
@@ -402,13 +447,19 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
             .call_static_method(
                 "io/prebindgen/covertest/model/Annotated",
                 "fromParts",
-                "(JIDZLjava/lang/String;Ljava/lang/Long;Ljava/lang/Integer;)Lio/prebindgen/covertest/model/Annotated;",
+                "(JIDZLjava/lang/String;ZJIDZLjava/lang/String;Ljava/lang/Long;Ljava/lang/Integer;)Lio/prebindgen/covertest/model/Annotated;",
                 &[
                     jni::objects::JValue::from(___payload_id),
                     jni::objects::JValue::from(___payload_seq),
                     jni::objects::JValue::from(___payload_value),
                     jni::objects::JValue::from(___payload_flag),
                     jni::objects::JValue::Object(&___payload_label),
+                    jni::objects::JValue::from(___alternate_present),
+                    jni::objects::JValue::from(___alternate_o0),
+                    jni::objects::JValue::from(___alternate_o1),
+                    jni::objects::JValue::from(___alternate_o2),
+                    jni::objects::JValue::from(___alternate_o3),
+                    jni::objects::JValue::Object(&___alternate_o4),
                     jni::objects::JValue::Object(&___ttl),
                     jni::objects::JValue::Object(&___priority),
                 ],
@@ -511,6 +562,13 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
                 String,
             >>::from(format!("Annotated.payload: {}", e)))?;
         let payload = JObject_to_Payload_98f64326(env, &__payload_raw)?;
+        let __alternate_raw: jni::objects::JObject = env
+            .get_field(v, "alternate", "Lio/prebindgen/covertest/Payload;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Annotated.alternate: {}", e)))?;
+        let alternate = JObject_to_Option_Payload_97036642(env, &__alternate_raw)?;
         let __ttl_raw: jni::objects::JObject = env
             .get_field(v, "ttl", "Ljava/lang/Long;")
             .and_then(|val| val.l())
@@ -539,8 +597,267 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
         };
         perftest_flat::Annotated {
             payload,
+            alternate,
             ttl,
             priority,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary16_e9d41606<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary16, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary16.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary8_55b82b02(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary16.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary8_55b82b02(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary16 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary2_a8f288cc<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary2, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary2.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundaryLeaf_93531764(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary2.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundaryLeaf_93531764(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary2 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary32_ed80fac3<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary32, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary32.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary16_e9d41606(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary32.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary16_e9d41606(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary32 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary4_ea3fd497<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary4, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary4.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary2_a8f288cc(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary4.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary2_a8f288cc(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary4 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary63_29aa82ff<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary63, __JniErr> {
+    Ok({
+        let __leaves32_raw: jni::objects::JObject = env
+            .get_field(v, "leaves32", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves32: {}", e)))?;
+        let leaves32 = JObject_to_ObjectBoundary32_ed80fac3(env, &__leaves32_raw)?;
+        let __leaves16_raw: jni::objects::JObject = env
+            .get_field(v, "leaves16", "Lio/prebindgen/covertest/model/ObjectBoundary16;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves16: {}", e)))?;
+        let leaves16 = JObject_to_ObjectBoundary16_e9d41606(env, &__leaves16_raw)?;
+        let __leaves8_raw: jni::objects::JObject = env
+            .get_field(v, "leaves8", "Lio/prebindgen/covertest/model/ObjectBoundary8;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves8: {}", e)))?;
+        let leaves8 = JObject_to_ObjectBoundary8_55b82b02(env, &__leaves8_raw)?;
+        let __leaves4_raw: jni::objects::JObject = env
+            .get_field(v, "leaves4", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves4: {}", e)))?;
+        let leaves4 = JObject_to_ObjectBoundary4_ea3fd497(env, &__leaves4_raw)?;
+        let __leaves2_raw: jni::objects::JObject = env
+            .get_field(v, "leaves2", "Lio/prebindgen/covertest/model/ObjectBoundary2;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaves2: {}", e)))?;
+        let leaves2 = JObject_to_ObjectBoundary2_a8f288cc(env, &__leaves2_raw)?;
+        let __leaf_raw: jni::objects::JObject = env
+            .get_field(v, "leaf", "Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary63.leaf: {}", e)))?;
+        let leaf = JObject_to_ObjectBoundaryLeaf_93531764(env, &__leaf_raw)?;
+        perftest_flat::ObjectBoundary63 {
+            leaves32,
+            leaves16,
+            leaves8,
+            leaves4,
+            leaves2,
+            leaf,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary64_b2751ca5<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary64, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary64.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary32_ed80fac3(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary32;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary64.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary32_ed80fac3(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary64 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary8_55b82b02<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary8, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary8.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary4_ea3fd497(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary4;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary8.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary4_ea3fd497(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary8 {
+            left,
+            right,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundaryLeaf_93531764<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundaryLeaf, __JniErr> {
+    Ok({
+        let __value_raw: jni::sys::jlong = env
+            .get_field(v, "value", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundaryLeaf.value: {}", e)))? as _;
+        let value = jlong_to_i64_fbf9a9bc(env, &__value_raw)?;
+        perftest_flat::ObjectBoundaryLeaf {
+            value,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::ObjectBoundary, __JniErr> {
+    Ok({
+        let __left_raw: jni::objects::JObject = env
+            .get_field(v, "left", "Lio/prebindgen/covertest/model/ObjectBoundary64;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary.left: {}", e)))?;
+        let left = JObject_to_ObjectBoundary64_b2751ca5(env, &__left_raw)?;
+        let __right_raw: jni::objects::JObject = env
+            .get_field(v, "right", "Lio/prebindgen/covertest/model/ObjectBoundary63;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("ObjectBoundary.right: {}", e)))?;
+        let right = JObject_to_ObjectBoundary63_29aa82ff(env, &__right_raw)?;
+        perftest_flat::ObjectBoundary {
+            left,
+            right,
         }
     })
 }
@@ -1435,6 +1752,2149 @@ pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     Ok(cov_helpers::millis_value(&v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary16,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.value.clone(),
+        )?;
+        let ___right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.value.clone(),
+        )?;
+        let ___right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.value.clone(),
+        )?;
+        let ___right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.value.clone(),
+        )?;
+        let ___right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.value.clone(),
+        )?;
+        let ___right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.value.clone(),
+        )?;
+        let ___right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.value.clone(),
+        )?;
+        let ___right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary16",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary16;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_right_left_value),
+                    jni::objects::JValue::from(___left_left_right_right_value),
+                    jni::objects::JValue::from(___left_right_left_left_value),
+                    jni::objects::JValue::from(___left_right_left_right_value),
+                    jni::objects::JValue::from(___left_right_right_left_value),
+                    jni::objects::JValue::from(___left_right_right_right_value),
+                    jni::objects::JValue::from(___right_left_left_left_value),
+                    jni::objects::JValue::from(___right_left_left_right_value),
+                    jni::objects::JValue::from(___right_left_right_left_value),
+                    jni::objects::JValue::from(___right_left_right_right_value),
+                    jni::objects::JValue::from(___right_right_left_left_value),
+                    jni::objects::JValue::from(___right_right_left_right_value),
+                    jni::objects::JValue::from(___right_right_right_left_value),
+                    jni::objects::JValue::from(___right_right_right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary2,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.value.clone(),
+        )?;
+        let ___right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary2",
+                "fromParts",
+                "(JJ)Lio/prebindgen/covertest/model/ObjectBoundary2;",
+                &[
+                    jni::objects::JValue::from(___left_value),
+                    jni::objects::JValue::from(___right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary32,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.value.clone(),
+        )?;
+        let ___right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.left.value.clone(),
+        )?;
+        let ___right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.right.value.clone(),
+        )?;
+        let ___right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.left.value.clone(),
+        )?;
+        let ___right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.right.value.clone(),
+        )?;
+        let ___right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.left.value.clone(),
+        )?;
+        let ___right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.right.value.clone(),
+        )?;
+        let ___right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.left.value.clone(),
+        )?;
+        let ___right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.right.value.clone(),
+        )?;
+        let ___right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.left.value.clone(),
+        )?;
+        let ___right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.right.value.clone(),
+        )?;
+        let ___right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.left.value.clone(),
+        )?;
+        let ___right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.right.value.clone(),
+        )?;
+        let ___right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.left.value.clone(),
+        )?;
+        let ___right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.right.value.clone(),
+        )?;
+        let ___right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary32",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary32;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_left_right_left_value),
+                    jni::objects::JValue::from(___left_left_left_right_right_value),
+                    jni::objects::JValue::from(___left_left_right_left_left_value),
+                    jni::objects::JValue::from(___left_left_right_left_right_value),
+                    jni::objects::JValue::from(___left_left_right_right_left_value),
+                    jni::objects::JValue::from(___left_left_right_right_right_value),
+                    jni::objects::JValue::from(___left_right_left_left_left_value),
+                    jni::objects::JValue::from(___left_right_left_left_right_value),
+                    jni::objects::JValue::from(___left_right_left_right_left_value),
+                    jni::objects::JValue::from(___left_right_left_right_right_value),
+                    jni::objects::JValue::from(___left_right_right_left_left_value),
+                    jni::objects::JValue::from(___left_right_right_left_right_value),
+                    jni::objects::JValue::from(___left_right_right_right_left_value),
+                    jni::objects::JValue::from(___left_right_right_right_right_value),
+                    jni::objects::JValue::from(___right_left_left_left_left_value),
+                    jni::objects::JValue::from(___right_left_left_left_right_value),
+                    jni::objects::JValue::from(___right_left_left_right_left_value),
+                    jni::objects::JValue::from(___right_left_left_right_right_value),
+                    jni::objects::JValue::from(___right_left_right_left_left_value),
+                    jni::objects::JValue::from(___right_left_right_left_right_value),
+                    jni::objects::JValue::from(___right_left_right_right_left_value),
+                    jni::objects::JValue::from(___right_left_right_right_right_value),
+                    jni::objects::JValue::from(___right_right_left_left_left_value),
+                    jni::objects::JValue::from(___right_right_left_left_right_value),
+                    jni::objects::JValue::from(___right_right_left_right_left_value),
+                    jni::objects::JValue::from(___right_right_left_right_right_value),
+                    jni::objects::JValue::from(___right_right_right_left_left_value),
+                    jni::objects::JValue::from(___right_right_right_left_right_value),
+                    jni::objects::JValue::from(___right_right_right_right_left_value),
+                    jni::objects::JValue::from(___right_right_right_right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary4,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.value.clone(),
+        )?;
+        let ___left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.value.clone(),
+        )?;
+        let ___right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.value.clone(),
+        )?;
+        let ___right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary4",
+                "fromParts",
+                "(JJJJ)Lio/prebindgen/covertest/model/ObjectBoundary4;",
+                &[
+                    jni::objects::JValue::from(___left_left_value),
+                    jni::objects::JValue::from(___left_right_value),
+                    jni::objects::JValue::from(___right_left_value),
+                    jni::objects::JValue::from(___right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary63_to_JObject_29aa82ff<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary63,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___leaves32_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.left.right.right.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.left.right.right.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.left.right.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.left.right.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.left.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.left.right.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.right.left.value.clone(),
+        )?;
+        let ___leaves32_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves32.right.right.right.right.right.value.clone(),
+        )?;
+        let ___leaves16_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.left.left.value.clone(),
+        )?;
+        let ___leaves16_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.left.right.value.clone(),
+        )?;
+        let ___leaves16_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.right.left.value.clone(),
+        )?;
+        let ___leaves16_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.left.right.right.value.clone(),
+        )?;
+        let ___leaves16_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.left.left.value.clone(),
+        )?;
+        let ___leaves16_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.left.right.value.clone(),
+        )?;
+        let ___leaves16_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.right.left.value.clone(),
+        )?;
+        let ___leaves16_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.left.right.right.right.value.clone(),
+        )?;
+        let ___leaves16_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.left.left.value.clone(),
+        )?;
+        let ___leaves16_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.left.right.value.clone(),
+        )?;
+        let ___leaves16_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.right.left.value.clone(),
+        )?;
+        let ___leaves16_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.left.right.right.value.clone(),
+        )?;
+        let ___leaves16_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.left.left.value.clone(),
+        )?;
+        let ___leaves16_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.left.right.value.clone(),
+        )?;
+        let ___leaves16_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.right.left.value.clone(),
+        )?;
+        let ___leaves16_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves16.right.right.right.right.value.clone(),
+        )?;
+        let ___leaves8_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.left.left.value.clone(),
+        )?;
+        let ___leaves8_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.left.right.value.clone(),
+        )?;
+        let ___leaves8_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.right.left.value.clone(),
+        )?;
+        let ___leaves8_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.left.right.right.value.clone(),
+        )?;
+        let ___leaves8_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.left.left.value.clone(),
+        )?;
+        let ___leaves8_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.left.right.value.clone(),
+        )?;
+        let ___leaves8_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.right.left.value.clone(),
+        )?;
+        let ___leaves8_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves8.right.right.right.value.clone(),
+        )?;
+        let ___leaves4_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.left.left.value.clone(),
+        )?;
+        let ___leaves4_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.left.right.value.clone(),
+        )?;
+        let ___leaves4_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.right.left.value.clone(),
+        )?;
+        let ___leaves4_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves4.right.right.value.clone(),
+        )?;
+        let ___leaves2_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves2.left.value.clone(),
+        )?;
+        let ___leaves2_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaves2.right.value.clone(),
+        )?;
+        let ___leaf_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.leaf.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary63",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary63;",
+                &[
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___leaves32_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___leaves16_left_left_left_left_value),
+                    jni::objects::JValue::from(___leaves16_left_left_left_right_value),
+                    jni::objects::JValue::from(___leaves16_left_left_right_left_value),
+                    jni::objects::JValue::from(___leaves16_left_left_right_right_value),
+                    jni::objects::JValue::from(___leaves16_left_right_left_left_value),
+                    jni::objects::JValue::from(___leaves16_left_right_left_right_value),
+                    jni::objects::JValue::from(___leaves16_left_right_right_left_value),
+                    jni::objects::JValue::from(___leaves16_left_right_right_right_value),
+                    jni::objects::JValue::from(___leaves16_right_left_left_left_value),
+                    jni::objects::JValue::from(___leaves16_right_left_left_right_value),
+                    jni::objects::JValue::from(___leaves16_right_left_right_left_value),
+                    jni::objects::JValue::from(___leaves16_right_left_right_right_value),
+                    jni::objects::JValue::from(___leaves16_right_right_left_left_value),
+                    jni::objects::JValue::from(___leaves16_right_right_left_right_value),
+                    jni::objects::JValue::from(___leaves16_right_right_right_left_value),
+                    jni::objects::JValue::from(
+                        ___leaves16_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___leaves8_left_left_left_value),
+                    jni::objects::JValue::from(___leaves8_left_left_right_value),
+                    jni::objects::JValue::from(___leaves8_left_right_left_value),
+                    jni::objects::JValue::from(___leaves8_left_right_right_value),
+                    jni::objects::JValue::from(___leaves8_right_left_left_value),
+                    jni::objects::JValue::from(___leaves8_right_left_right_value),
+                    jni::objects::JValue::from(___leaves8_right_right_left_value),
+                    jni::objects::JValue::from(___leaves8_right_right_right_value),
+                    jni::objects::JValue::from(___leaves4_left_left_value),
+                    jni::objects::JValue::from(___leaves4_left_right_value),
+                    jni::objects::JValue::from(___leaves4_right_left_value),
+                    jni::objects::JValue::from(___leaves4_right_right_value),
+                    jni::objects::JValue::from(___leaves2_left_value),
+                    jni::objects::JValue::from(___leaves2_right_value),
+                    jni::objects::JValue::from(___leaf_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary64,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.right.value.clone(),
+        )?;
+        let ___right_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.left.left.value.clone(),
+        )?;
+        let ___right_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.left.right.value.clone(),
+        )?;
+        let ___right_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.right.left.value.clone(),
+        )?;
+        let ___right_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.left.right.right.value.clone(),
+        )?;
+        let ___right_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.left.left.value.clone(),
+        )?;
+        let ___right_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.left.right.value.clone(),
+        )?;
+        let ___right_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.right.left.value.clone(),
+        )?;
+        let ___right_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.right.right.right.value.clone(),
+        )?;
+        let ___right_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.left.left.value.clone(),
+        )?;
+        let ___right_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.left.right.value.clone(),
+        )?;
+        let ___right_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.right.left.value.clone(),
+        )?;
+        let ___right_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.left.right.right.value.clone(),
+        )?;
+        let ___right_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.left.left.value.clone(),
+        )?;
+        let ___right_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.left.right.value.clone(),
+        )?;
+        let ___right_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.right.left.value.clone(),
+        )?;
+        let ___right_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.right.right.right.value.clone(),
+        )?;
+        let ___right_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.left.left.value.clone(),
+        )?;
+        let ___right_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.left.right.value.clone(),
+        )?;
+        let ___right_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.right.left.value.clone(),
+        )?;
+        let ___right_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.left.right.right.value.clone(),
+        )?;
+        let ___right_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.left.left.value.clone(),
+        )?;
+        let ___right_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.left.right.value.clone(),
+        )?;
+        let ___right_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.right.left.value.clone(),
+        )?;
+        let ___right_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.right.right.right.value.clone(),
+        )?;
+        let ___right_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.left.left.value.clone(),
+        )?;
+        let ___right_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.left.right.value.clone(),
+        )?;
+        let ___right_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.right.left.value.clone(),
+        )?;
+        let ___right_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.left.right.right.value.clone(),
+        )?;
+        let ___right_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.left.left.value.clone(),
+        )?;
+        let ___right_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.left.right.value.clone(),
+        )?;
+        let ___right_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary64",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary64;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_left_left_right_left_value),
+                    jni::objects::JValue::from(___left_left_left_left_right_right_value),
+                    jni::objects::JValue::from(___left_left_left_right_left_left_value),
+                    jni::objects::JValue::from(___left_left_left_right_left_right_value),
+                    jni::objects::JValue::from(___left_left_left_right_right_left_value),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_left_right_left_left_left_value),
+                    jni::objects::JValue::from(___left_left_right_left_left_right_value),
+                    jni::objects::JValue::from(___left_left_right_left_right_left_value),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_left_right_right_left_left_value),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_right_left_left_left_left_value),
+                    jni::objects::JValue::from(___left_right_left_left_left_right_value),
+                    jni::objects::JValue::from(___left_right_left_left_right_left_value),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_right_left_right_left_left_value),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___left_right_right_left_left_left_value),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_left_left_left_left_left_value),
+                    jni::objects::JValue::from(___right_left_left_left_left_right_value),
+                    jni::objects::JValue::from(___right_left_left_left_right_left_value),
+                    jni::objects::JValue::from(
+                        ___right_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_left_left_right_left_left_value),
+                    jni::objects::JValue::from(
+                        ___right_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_left_right_left_left_left_value),
+                    jni::objects::JValue::from(
+                        ___right_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_right_left_left_left_left_value),
+                    jni::objects::JValue::from(
+                        ___right_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_right_right_right_right_right_value,
+                    ),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary8,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.value.clone(),
+        )?;
+        let ___right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.left.value.clone(),
+        )?;
+        let ___right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.left.right.value.clone(),
+        )?;
+        let ___right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.left.value.clone(),
+        )?;
+        let ___right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.right.right.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary8",
+                "fromParts",
+                "(JJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary8;",
+                &[
+                    jni::objects::JValue::from(___left_left_left_value),
+                    jni::objects::JValue::from(___left_left_right_value),
+                    jni::objects::JValue::from(___left_right_left_value),
+                    jni::objects::JValue::from(___left_right_right_value),
+                    jni::objects::JValue::from(___right_left_left_value),
+                    jni::objects::JValue::from(___right_left_right_value),
+                    jni::objects::JValue::from(___right_right_left_value),
+                    jni::objects::JValue::from(___right_right_right_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundaryLeaf,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.value.clone())?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundaryLeaf",
+                "fromParts",
+                "(J)Lio/prebindgen/covertest/model/ObjectBoundaryLeaf;",
+                &[jni::objects::JValue::from(___value)],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::ObjectBoundary,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___left_left_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_left_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_left_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_left_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.left.right.right.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.left.right.right.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.left.left.value.clone(),
+        )?;
+        let ___left_left_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.left.right.right.value.clone(),
+        )?;
+        let ___left_left_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.left.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.left.right.value.clone(),
+        )?;
+        let ___left_left_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.right.left.value.clone(),
+        )?;
+        let ___left_left_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.left.right.right.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.left.right.right.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.left.right.right.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.left.left.value.clone(),
+        )?;
+        let ___left_right_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.left.right.right.value.clone(),
+        )?;
+        let ___left_right_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.left.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.left.right.value.clone(),
+        )?;
+        let ___left_right_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.right.left.value.clone(),
+        )?;
+        let ___left_right_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.left.right.right.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.left.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_left_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.left.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.left.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves32_right_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves32.right.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_left_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.left.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves16_right_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves16.right.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves8_left_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.left.left.value.clone(),
+        )?;
+        let ___right_leaves8_left_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.left.right.value.clone(),
+        )?;
+        let ___right_leaves8_left_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.right.left.value.clone(),
+        )?;
+        let ___right_leaves8_left_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.left.right.right.value.clone(),
+        )?;
+        let ___right_leaves8_right_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.left.left.value.clone(),
+        )?;
+        let ___right_leaves8_right_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.left.right.value.clone(),
+        )?;
+        let ___right_leaves8_right_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.right.left.value.clone(),
+        )?;
+        let ___right_leaves8_right_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves8.right.right.right.value.clone(),
+        )?;
+        let ___right_leaves4_left_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.left.left.value.clone(),
+        )?;
+        let ___right_leaves4_left_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.left.right.value.clone(),
+        )?;
+        let ___right_leaves4_right_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.right.left.value.clone(),
+        )?;
+        let ___right_leaves4_right_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves4.right.right.value.clone(),
+        )?;
+        let ___right_leaves2_left_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves2.left.value.clone(),
+        )?;
+        let ___right_leaves2_right_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaves2.right.value.clone(),
+        )?;
+        let ___right_leaf_value: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.right.leaf.value.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/ObjectBoundary",
+                "fromParts",
+                "(JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ)Lio/prebindgen/covertest/model/ObjectBoundary;",
+                &[
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_left_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___left_right_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_left_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves32_right_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_left_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_left_right_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_left_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_left_right_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_right_left_value,
+                    ),
+                    jni::objects::JValue::from(
+                        ___right_leaves16_right_right_right_right_value,
+                    ),
+                    jni::objects::JValue::from(___right_leaves8_left_left_left_value),
+                    jni::objects::JValue::from(___right_leaves8_left_left_right_value),
+                    jni::objects::JValue::from(___right_leaves8_left_right_left_value),
+                    jni::objects::JValue::from(___right_leaves8_left_right_right_value),
+                    jni::objects::JValue::from(___right_leaves8_right_left_left_value),
+                    jni::objects::JValue::from(___right_leaves8_right_left_right_value),
+                    jni::objects::JValue::from(___right_leaves8_right_right_left_value),
+                    jni::objects::JValue::from(___right_leaves8_right_right_right_value),
+                    jni::objects::JValue::from(___right_leaves4_left_left_value),
+                    jni::objects::JValue::from(___right_leaves4_left_right_value),
+                    jni::objects::JValue::from(___right_leaves4_right_left_value),
+                    jni::objects::JValue::from(___right_leaves4_right_right_value),
+                    jni::objects::JValue::from(___right_leaves2_left_value),
+                    jni::objects::JValue::from(___right_leaves2_right_value),
+                    jni::objects::JValue::from(___right_leaf_value),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Box<String>>,
@@ -1541,6 +4001,24 @@ pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
         match v {
             Some(value) => Vec_Payload_to_JObject_8b7084d2(env, value)?,
             None => jni::objects::JObject::null().into(),
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn Option_f64_to_JObject_b3f3e9a9<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: Option<f64>,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        match v {
+            Some(value) => {
+                let __raw: jni::sys::jdouble = f64_to_jdouble_9e4a8f70(env, value)?;
+                ::prebindgen::lang::box_jdouble(env, __raw)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Option box: {}", e)))?
+            }
+            None => jni::objects::JObject::null(),
         }
     })
 }
@@ -2274,6 +4752,280 @@ pub(crate) unsafe fn unit_to_unit_9ecccf8e<'a>(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedAlternateValue<
+    'a,
+>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    a_payload_id: jni::sys::jlong,
+    a_payload_seq: jni::sys::jint,
+    a_payload_value: jni::sys::jdouble,
+    a_payload_flag: jni::sys::jboolean,
+    a_payload_label: jni::objects::JString<'a>,
+    a_alternate_present: jni::sys::jboolean,
+    a_alternate_id: jni::sys::jlong,
+    a_alternate_seq: jni::sys::jint,
+    a_alternate_value: jni::sys::jdouble,
+    a_alternate_flag: jni::sys::jboolean,
+    a_alternate_label: jni::objects::JString<'a>,
+    a_ttl_present: jni::sys::jboolean,
+    a_ttl_value: jni::sys::jlong,
+    a_priority_present: jni::sys::jboolean,
+    a_priority_value: jni::sys::jint,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+        &mut env,
+        &a_payload_value,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
+        &mut env,
+        &a_payload_flag,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &a_payload_label,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload = perftest_flat::Payload {
+        id: __flat_a_payload_id,
+        seq: __flat_a_payload_seq,
+        value: __flat_a_payload_value,
+        flag: __flat_a_payload_flag,
+        label: __flat_a_payload_label,
+    };
+    let __flat_a_alternate = if a_alternate_present != 0u8 {
+        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
+            &mut env,
+            &a_alternate_id,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
+            &mut env,
+            &a_alternate_seq,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
+            &mut env,
+            &a_alternate_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
+            &mut env,
+            &a_alternate_flag,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
+            &mut env,
+            &a_alternate_label,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(perftest_flat::Payload {
+            id: __flat_a_alternate_id,
+            seq: __flat_a_alternate_seq,
+            value: __flat_a_alternate_value,
+            flag: __flat_a_alternate_flag,
+            label: __flat_a_alternate_label,
+        })
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_ttl = if a_ttl_present != 0u8 {
+        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_a_ttl_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_priority = if a_priority_present != 0u8 {
+        let __flat_a_priority_value = match jint_to_Priority_447102d2(
+            &mut env,
+            &a_priority_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_a_priority_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a = perftest_flat::Annotated {
+        payload: __flat_a_payload,
+        alternate: __flat_a_alternate,
+        ttl: __flat_a_ttl,
+        priority: __flat_a_priority,
+    };
+    let a = __flat_a;
+    let __out = perftest_flat::annotated_alternate_value(&a);
+    match Option_f64_to_JObject_b3f3e9a9(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -2292,7 +5044,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+    let __flat_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2306,7 +5058,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+    let __flat_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2320,7 +5072,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+    let __flat_payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2334,7 +5086,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+    let __flat_payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2348,7 +5100,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+    let __flat_payload_label = match JString_to_Option_Box_String_071e4c8c(
         &mut env,
         &payload_label,
     ) {
@@ -2365,13 +5117,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedNew<'a>
             return jni::objects::JObject::null().into();
         }
     };
-    let payload = perftest_flat::Payload {
-        id: __payload_id,
-        seq: __payload_seq,
-        value: __payload_value,
-        flag: __payload_flag,
-        label: __payload_label,
+    let __flat_payload = perftest_flat::Payload {
+        id: __flat_payload_id,
+        seq: __flat_payload_seq,
+        value: __flat_payload_value,
+        flag: __flat_payload_flag,
+        label: __flat_payload_label,
     };
+    let payload = __flat_payload;
     let ttl = if ttl_present != 0u8 {
         let __ttl_val = match jlong_to_i64_fbf9a9bc(&mut env, &ttl_value) {
             ::core::result::Result::Ok(__v) => __v,
@@ -2433,14 +5186,28 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
 >(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
-    a: jni::objects::JObject<'a>,
+    a_payload_id: jni::sys::jlong,
+    a_payload_seq: jni::sys::jint,
+    a_payload_value: jni::sys::jdouble,
+    a_payload_flag: jni::sys::jboolean,
+    a_payload_label: jni::objects::JString<'a>,
+    a_alternate_present: jni::sys::jboolean,
+    a_alternate_id: jni::sys::jlong,
+    a_alternate_seq: jni::sys::jint,
+    a_alternate_value: jni::sys::jdouble,
+    a_alternate_flag: jni::sys::jboolean,
+    a_alternate_label: jni::objects::JString<'a>,
+    a_ttl_present: jni::sys::jboolean,
+    a_ttl_value: jni::sys::jlong,
+    a_priority_present: jni::sys::jboolean,
+    a_priority_value: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jdouble {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let a = match JObject_to_Annotated_b543f0d9(&mut env, &a) {
+    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2454,6 +5221,222 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
             return 0.0 as jni::sys::jdouble;
         }
     };
+    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
+    };
+    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+        &mut env,
+        &a_payload_value,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
+    };
+    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
+        &mut env,
+        &a_payload_flag,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
+    };
+    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &a_payload_label,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0.0 as jni::sys::jdouble;
+        }
+    };
+    let __flat_a_payload = perftest_flat::Payload {
+        id: __flat_a_payload_id,
+        seq: __flat_a_payload_seq,
+        value: __flat_a_payload_value,
+        flag: __flat_a_payload_flag,
+        label: __flat_a_payload_label,
+    };
+    let __flat_a_alternate = if a_alternate_present != 0u8 {
+        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
+            &mut env,
+            &a_alternate_id,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
+            &mut env,
+            &a_alternate_seq,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
+            &mut env,
+            &a_alternate_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
+            &mut env,
+            &a_alternate_flag,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
+            &mut env,
+            &a_alternate_label,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        ::core::option::Option::Some(perftest_flat::Payload {
+            id: __flat_a_alternate_id,
+            seq: __flat_a_alternate_seq,
+            value: __flat_a_alternate_value,
+            flag: __flat_a_alternate_flag,
+            label: __flat_a_alternate_label,
+        })
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_ttl = if a_ttl_present != 0u8 {
+        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        ::core::option::Option::Some(__flat_a_ttl_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_priority = if a_priority_present != 0u8 {
+        let __flat_a_priority_value = match jint_to_Priority_447102d2(
+            &mut env,
+            &a_priority_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0.0 as jni::sys::jdouble;
+            }
+        };
+        ::core::option::Option::Some(__flat_a_priority_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a = perftest_flat::Annotated {
+        payload: __flat_a_payload,
+        alternate: __flat_a_alternate,
+        ttl: __flat_a_ttl,
+        priority: __flat_a_priority,
+    };
+    let a = __flat_a;
     let __out = perftest_flat::annotated_payload_value(&a);
     match f64_to_jdouble_9e4a8f70(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -2475,14 +5458,28 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPayload
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriority<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
-    a: jni::objects::JObject<'a>,
+    a_payload_id: jni::sys::jlong,
+    a_payload_seq: jni::sys::jint,
+    a_payload_value: jni::sys::jdouble,
+    a_payload_flag: jni::sys::jboolean,
+    a_payload_label: jni::objects::JString<'a>,
+    a_alternate_present: jni::sys::jboolean,
+    a_alternate_id: jni::sys::jlong,
+    a_alternate_seq: jni::sys::jint,
+    a_alternate_value: jni::sys::jdouble,
+    a_alternate_flag: jni::sys::jboolean,
+    a_alternate_label: jni::objects::JString<'a>,
+    a_ttl_present: jni::sys::jboolean,
+    a_ttl_value: jni::sys::jlong,
+    a_priority_present: jni::sys::jboolean,
+    a_priority_value: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let a = match JObject_to_Annotated_b543f0d9(&mut env, &a) {
+    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2496,6 +5493,222 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
             return jni::objects::JObject::null().into();
         }
     };
+    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+        &mut env,
+        &a_payload_value,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
+        &mut env,
+        &a_payload_flag,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &a_payload_label,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload = perftest_flat::Payload {
+        id: __flat_a_payload_id,
+        seq: __flat_a_payload_seq,
+        value: __flat_a_payload_value,
+        flag: __flat_a_payload_flag,
+        label: __flat_a_payload_label,
+    };
+    let __flat_a_alternate = if a_alternate_present != 0u8 {
+        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
+            &mut env,
+            &a_alternate_id,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
+            &mut env,
+            &a_alternate_seq,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
+            &mut env,
+            &a_alternate_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
+            &mut env,
+            &a_alternate_flag,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
+            &mut env,
+            &a_alternate_label,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(perftest_flat::Payload {
+            id: __flat_a_alternate_id,
+            seq: __flat_a_alternate_seq,
+            value: __flat_a_alternate_value,
+            flag: __flat_a_alternate_flag,
+            label: __flat_a_alternate_label,
+        })
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_ttl = if a_ttl_present != 0u8 {
+        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_a_ttl_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_priority = if a_priority_present != 0u8 {
+        let __flat_a_priority_value = match jint_to_Priority_447102d2(
+            &mut env,
+            &a_priority_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_a_priority_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a = perftest_flat::Annotated {
+        payload: __flat_a_payload,
+        alternate: __flat_a_alternate,
+        ttl: __flat_a_ttl,
+        priority: __flat_a_priority,
+    };
+    let a = __flat_a;
     let __out = perftest_flat::annotated_priority(&a);
     match Option_Priority_to_JObject_ad5cbb32(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -2517,14 +5730,28 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedPriorit
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
-    a: jni::objects::JObject<'a>,
+    a_payload_id: jni::sys::jlong,
+    a_payload_seq: jni::sys::jint,
+    a_payload_value: jni::sys::jdouble,
+    a_payload_flag: jni::sys::jboolean,
+    a_payload_label: jni::objects::JString<'a>,
+    a_alternate_present: jni::sys::jboolean,
+    a_alternate_id: jni::sys::jlong,
+    a_alternate_seq: jni::sys::jint,
+    a_alternate_value: jni::sys::jdouble,
+    a_alternate_flag: jni::sys::jboolean,
+    a_alternate_label: jni::objects::JString<'a>,
+    a_ttl_present: jni::sys::jboolean,
+    a_ttl_value: jni::sys::jlong,
+    a_priority_present: jni::sys::jboolean,
+    a_priority_value: jni::sys::jint,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::objects::JObject<'a> {
     #[allow(non_upper_case_globals)]
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let a = match JObject_to_Annotated_b543f0d9(&mut env, &a) {
+    let __flat_a_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &a_payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -2538,6 +5765,222 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_annotatedTtl<'a>
             return jni::objects::JObject::null().into();
         }
     };
+    let __flat_a_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &a_payload_seq) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_value = match jdouble_to_f64_9e4a8f70(
+        &mut env,
+        &a_payload_value,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_flag = match jboolean_to_bool_31306d98(
+        &mut env,
+        &a_payload_flag,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &a_payload_label,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_a_payload = perftest_flat::Payload {
+        id: __flat_a_payload_id,
+        seq: __flat_a_payload_seq,
+        value: __flat_a_payload_value,
+        flag: __flat_a_payload_flag,
+        label: __flat_a_payload_label,
+    };
+    let __flat_a_alternate = if a_alternate_present != 0u8 {
+        let __flat_a_alternate_id = match jlong_to_i64_fbf9a9bc(
+            &mut env,
+            &a_alternate_id,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_seq = match jint_to_i32_a3e3b6ef(
+            &mut env,
+            &a_alternate_seq,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_value = match jdouble_to_f64_9e4a8f70(
+            &mut env,
+            &a_alternate_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_flag = match jboolean_to_bool_31306d98(
+            &mut env,
+            &a_alternate_flag,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        let __flat_a_alternate_label = match JString_to_Option_Box_String_071e4c8c(
+            &mut env,
+            &a_alternate_label,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(perftest_flat::Payload {
+            id: __flat_a_alternate_id,
+            seq: __flat_a_alternate_seq,
+            value: __flat_a_alternate_value,
+            flag: __flat_a_alternate_flag,
+            label: __flat_a_alternate_label,
+        })
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_ttl = if a_ttl_present != 0u8 {
+        let __flat_a_ttl_value = match jlong_to_i64_fbf9a9bc(&mut env, &a_ttl_value) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_a_ttl_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a_priority = if a_priority_present != 0u8 {
+        let __flat_a_priority_value = match jint_to_Priority_447102d2(
+            &mut env,
+            &a_priority_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_a_priority_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_a = perftest_flat::Annotated {
+        payload: __flat_a_payload,
+        alternate: __flat_a_alternate,
+        ttl: __flat_a_ttl,
+        priority: __flat_a_priority,
+    };
+    let a = __flat_a;
     let __out = perftest_flat::annotated_ttl(&a);
     match Option_i64_to_JObject_2ba9a5ed(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -3212,6 +6655,48 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_objectBoundaryValue<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jlong {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let value = match JObject_to_ObjectBoundary_dc5ac22b(&mut env, &value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jlong;
+        }
+    };
+    let __out = perftest_flat::object_boundary_value(&value);
+    match i64_to_jlong_fbf9a9bc(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jlong
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadHandlerNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -3268,7 +6753,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
+    let __flat_p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3282,7 +6767,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
             return jni::objects::JObject::null().into();
         }
     };
-    let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
+    let __flat_p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3296,7 +6781,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
             return jni::objects::JObject::null().into();
         }
     };
-    let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
+    let __flat_p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3310,7 +6795,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
             return jni::objects::JObject::null().into();
         }
     };
-    let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
+    let __flat_p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3324,7 +6809,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
             return jni::objects::JObject::null().into();
         }
     };
-    let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
+    let __flat_p_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &p_label,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3338,13 +6826,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadLabelLen<
             return jni::objects::JObject::null().into();
         }
     };
-    let p = perftest_flat::Payload {
-        id: __p_id,
-        seq: __p_seq,
-        value: __p_value,
-        flag: __p_flag,
-        label: __p_label,
+    let __flat_p = perftest_flat::Payload {
+        id: __flat_p_id,
+        seq: __flat_p_seq,
+        value: __flat_p_value,
+        flag: __flat_p_flag,
+        label: __flat_p_label,
     };
+    let p = __flat_p;
     let __out = perftest_flat::payload_label_len(&p);
     match Option_i64_to_JObject_2ba9a5ed(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -3377,7 +6866,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
+    let __flat_p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3391,7 +6880,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
             return 0 as jni::sys::jint;
         }
     };
-    let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
+    let __flat_p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3405,7 +6894,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
             return 0 as jni::sys::jint;
         }
     };
-    let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
+    let __flat_p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3419,7 +6908,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
             return 0 as jni::sys::jint;
         }
     };
-    let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
+    let __flat_p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3433,7 +6922,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
             return 0 as jni::sys::jint;
         }
     };
-    let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
+    let __flat_p_label = match JString_to_Option_Box_String_071e4c8c(
+        &mut env,
+        &p_label,
+    ) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -3447,13 +6939,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadPriority<
             return 0 as jni::sys::jint;
         }
     };
-    let p = perftest_flat::Payload {
-        id: __p_id,
-        seq: __p_seq,
-        value: __p_value,
-        flag: __p_flag,
-        label: __p_label,
+    let __flat_p = perftest_flat::Payload {
+        id: __flat_p_id,
+        seq: __flat_p_seq,
+        value: __flat_p_value,
+        flag: __flat_p_flag,
+        label: __flat_p_label,
     };
+    let p = __flat_p;
     let __out = perftest_flat::payload_priority(&p);
     match Priority_to_jint_447102d2(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -5190,7 +8683,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
             return ();
         }
     };
-    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+    let __flat_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5204,7 +8697,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
             return ();
         }
     };
-    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+    let __flat_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5218,7 +8711,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
             return ();
         }
     };
-    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+    let __flat_payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5232,7 +8725,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
             return ();
         }
     };
-    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+    let __flat_payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5246,7 +8739,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
             return ();
         }
     };
-    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+    let __flat_payload_label = match JString_to_Option_Box_String_071e4c8c(
         &mut env,
         &payload_label,
     ) {
@@ -5263,13 +8756,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByRead
             return ();
         }
     };
-    let payload = perftest_flat::Payload {
-        id: __payload_id,
-        seq: __payload_seq,
-        value: __payload_value,
-        flag: __payload_flag,
-        label: __payload_label,
+    let __flat_payload = perftest_flat::Payload {
+        id: __flat_payload_id,
+        seq: __flat_payload_seq,
+        value: __flat_payload_value,
+        flag: __flat_payload_flag,
+        label: __flat_payload_label,
     };
+    let payload = __flat_payload;
     let __out = perftest_flat::storage_put_by_read(&mut s, &payload);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -5317,7 +8811,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
             return ();
         }
     };
-    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+    let __flat_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5331,7 +8825,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
             return ();
         }
     };
-    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+    let __flat_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5345,7 +8839,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
             return ();
         }
     };
-    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+    let __flat_payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5359,7 +8853,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
             return ();
         }
     };
-    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+    let __flat_payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -5373,7 +8867,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
             return ();
         }
     };
-    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+    let __flat_payload_label = match JString_to_Option_Box_String_071e4c8c(
         &mut env,
         &payload_label,
     ) {
@@ -5390,13 +8884,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutByTake
             return ();
         }
     };
-    let payload = perftest_flat::Payload {
-        id: __payload_id,
-        seq: __payload_seq,
-        value: __payload_value,
-        flag: __payload_flag,
-        label: __payload_label,
+    let __flat_payload = perftest_flat::Payload {
+        id: __flat_payload_id,
+        seq: __flat_payload_seq,
+        value: __flat_payload_value,
+        flag: __flat_payload_flag,
+        label: __flat_payload_label,
     };
+    let payload = __flat_payload;
     let __out = perftest_flat::storage_put_by_take(&mut s, payload);
     match unit_to_unit_9ecccf8e(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -5445,8 +8940,8 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
             return 0 as jni::sys::jboolean;
         }
     };
-    let p = if p_present != 0u8 {
-        let __p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
+    let __flat_p = if p_present != 0u8 {
+        let __flat_p_id = match jlong_to_i64_fbf9a9bc(&mut env, &p_id) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(
@@ -5460,7 +8955,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
                 return 0 as jni::sys::jboolean;
             }
         };
-        let __p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
+        let __flat_p_seq = match jint_to_i32_a3e3b6ef(&mut env, &p_seq) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(
@@ -5474,7 +8969,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
                 return 0 as jni::sys::jboolean;
             }
         };
-        let __p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
+        let __flat_p_value = match jdouble_to_f64_9e4a8f70(&mut env, &p_value) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(
@@ -5488,7 +8983,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
                 return 0 as jni::sys::jboolean;
             }
         };
-        let __p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
+        let __flat_p_flag = match jboolean_to_bool_31306d98(&mut env, &p_flag) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(
@@ -5502,7 +8997,10 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
                 return 0 as jni::sys::jboolean;
             }
         };
-        let __p_label = match JString_to_Option_Box_String_071e4c8c(&mut env, &p_label) {
+        let __flat_p_label = match JString_to_Option_Box_String_071e4c8c(
+            &mut env,
+            &p_label,
+        ) {
             ::core::result::Result::Ok(__v) => __v,
             ::core::result::Result::Err(__e) => {
                 signal_binding_error(
@@ -5516,16 +9014,17 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storagePutOpt<'a
                 return 0 as jni::sys::jboolean;
             }
         };
-        Some(perftest_flat::Payload {
-            id: __p_id,
-            seq: __p_seq,
-            value: __p_value,
-            flag: __p_flag,
-            label: __p_label,
+        ::core::option::Option::Some(perftest_flat::Payload {
+            id: __flat_p_id,
+            seq: __flat_p_seq,
+            value: __flat_p_value,
+            flag: __flat_p_flag,
+            label: __flat_p_label,
         })
     } else {
-        None
+        ::core::option::Option::None
     };
+    let p = __flat_p;
     let __out = perftest_flat::storage_put_opt(&mut s, p);
     match bool_to_jboolean_31306d98(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -6441,7 +9940,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
     static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
     const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
     const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
-    let __payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
+    let __flat_payload_id = match jlong_to_i64_fbf9a9bc(&mut env, &payload_id) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -6455,7 +9954,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
             return 0 as jni::sys::jlong;
         }
     };
-    let __payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
+    let __flat_payload_seq = match jint_to_i32_a3e3b6ef(&mut env, &payload_seq) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -6469,7 +9968,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
             return 0 as jni::sys::jlong;
         }
     };
-    let __payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
+    let __flat_payload_value = match jdouble_to_f64_9e4a8f70(&mut env, &payload_value) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -6483,7 +9982,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
             return 0 as jni::sys::jlong;
         }
     };
-    let __payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
+    let __flat_payload_flag = match jboolean_to_bool_31306d98(&mut env, &payload_flag) {
         ::core::result::Result::Ok(__v) => __v,
         ::core::result::Result::Err(__e) => {
             signal_binding_error(
@@ -6497,7 +9996,7 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
             return 0 as jni::sys::jlong;
         }
     };
-    let __payload_label = match JString_to_Option_Box_String_071e4c8c(
+    let __flat_payload_label = match JString_to_Option_Box_String_071e4c8c(
         &mut env,
         &payload_label,
     ) {
@@ -6514,13 +10013,14 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_storageWithPaylo
             return 0 as jni::sys::jlong;
         }
     };
-    let payload = perftest_flat::Payload {
-        id: __payload_id,
-        seq: __payload_seq,
-        value: __payload_value,
-        flag: __payload_flag,
-        label: __payload_label,
+    let __flat_payload = perftest_flat::Payload {
+        id: __flat_payload_id,
+        seq: __flat_payload_seq,
+        value: __flat_payload_value,
+        flag: __flat_payload_flag,
+        label: __flat_payload_label,
     };
+    let payload = __flat_payload;
     let __out = perftest_flat::storage_with_payload(payload);
     match Storage_to_jlong_1b233abd(&mut env, __out) {
         ::core::result::Result::Ok(__w) => __w,
@@ -8142,6 +11642,125 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalRaw<
                 &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_unsignedDataMaybe<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value_byte: jni::sys::jint,
+    value_short: jni::sys::jint,
+    value_int: jni::sys::jlong,
+    value_long: jni::sys::jlong,
+    value_maybe_long_present: jni::sys::jboolean,
+    value_maybe_long_value: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __flat_value_byte = match jint_to_u8_553cf6ec(&mut env, &value_byte) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_value_short = match jint_to_u16_28edf527(&mut env, &value_short) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_value_int = match jlong_to_u32_9594a230(&mut env, &value_int) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_value_long = match jlong_to_u64_4384a5d6(&mut env, &value_long) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __flat_value_maybe_long = if value_maybe_long_present != 0u8 {
+        let __flat_value_maybe_long_value = match jlong_to_u64_4384a5d6(
+            &mut env,
+            &value_maybe_long_value,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        ::core::option::Option::Some(__flat_value_maybe_long_value)
+    } else {
+        ::core::option::Option::None
+    };
+    let __flat_value = perftest_flat::Unsigned {
+        byte: __flat_value_byte,
+        short: __flat_value_short,
+        int: __flat_value_int,
+        long: __flat_value_long,
+        maybe_long: __flat_value_maybe_long,
+    };
+    let value = __flat_value;
+    let __out = perftest_flat::unsigned_data_maybe(&value);
+    match Option_u64_to_JObject_32be16a2(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
         }
     }
 }

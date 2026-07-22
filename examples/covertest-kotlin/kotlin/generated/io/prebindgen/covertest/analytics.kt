@@ -199,7 +199,7 @@ public fun describeSummary(
     verbose: Boolean,
     onError: JniErrorHandler<String>,
 ): String {
-    if (s1 != null && s1.isClosed()) return onError.run("Operation on a closed native handle.")
+    if (s1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
         val __locks = ArrayList<NativeHandle>()
@@ -251,9 +251,7 @@ public fun storageMatchesSummary(
     onError: JniErrorHandler<Boolean>,
 ): Boolean {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
-    if (expected1 != null && expected1.isClosed()) return onError.run(
-        "Operation on a closed native handle.",
-    )
+    if (expected1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
         val __locks = ArrayList<NativeHandle>()
@@ -391,9 +389,7 @@ public fun storageExpectSummary(
     onError: JniErrorHandler<Boolean>,
 ): Boolean {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
-    if (expected1 != null && expected1.isClosed()) return onError.run(
-        "Operation on a closed native handle.",
-    )
+    if (expected1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
         val __locks = ArrayList<NativeHandle>()
@@ -468,12 +464,8 @@ public fun summaryPrefer(
     fallback1: Summary?,
     onError: JniErrorHandler<Long>,
 ): Long {
-    if (primary1 != null && primary1.isClosed()) return onError.run(
-        "Operation on a closed native handle.",
-    )
-    if (fallback1 != null && fallback1.isClosed()) return onError.run(
-        "Operation on a closed native handle.",
-    )
+    if (primary1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
+    if (fallback1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
         val __locks = ArrayList<NativeHandle>()
@@ -567,12 +559,8 @@ public fun <R> summaryMerge(
     onError: JniErrorHandler<R>,
     build: SummaryBuilder<R>,
 ): R {
-    if (primary1 != null && primary1.isClosed()) return onError.run(
-        "Operation on a closed native handle.",
-    )
-    if (fallback1 != null && fallback1.isClosed()) return onError.run(
-        "Operation on a closed native handle.",
-    )
+    if (primary1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
+    if (fallback1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
         val __locks = ArrayList<NativeHandle>()
@@ -624,7 +612,7 @@ public fun summaryTotalOpt(
     s1: Summary?,
     onError: JniErrorHandler<Double>,
 ): Double {
-    if (s1 != null && s1.isClosed()) return onError.run("Operation on a closed native handle.")
+    if (s1?.isClosed() == true) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = run {
         val __locks = ArrayList<NativeHandle>()
@@ -715,7 +703,7 @@ public fun archiveStore(
     onError: JniErrorHandler<Unit>,
 ) {
     if (a.isClosed()) { onError.run("Operation on a closed native handle."); return }
-    if (s1 != null && s1.isClosed()) { onError.run("Operation on a closed native handle."); return }
+    if (s1?.isClosed() == true) { onError.run("Operation on a closed native handle."); return }
     val __bcap = JniErrorHandlerCapture.acquire()
     run {
         val __locks = ArrayList<NativeHandle>()

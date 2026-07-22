@@ -39,7 +39,7 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
  * input) and `Option<primitive>` / `Option<enum>` **fields** (each crossing
  * as a decoupled `(present, value)` leaf pair).
  */
-public data class Annotated(val payload: Payload, val ttl: Long?, val priority: Priority?) {
+public data class Annotated(val payload: Payload, val alternate: Payload?, val ttl: Long?, val priority: Priority?) {
     public companion object {
         @JvmStatic
         public fun fromParts(
@@ -48,9 +48,411 @@ public data class Annotated(val payload: Payload, val ttl: Long?, val priority: 
             payload_value: Double,
             payload_flag: Boolean,
             payload_label: String?,
+            alternate__present: Boolean,
+            alternate_id: Long,
+            alternate_seq: Int,
+            alternate_value: Double,
+            alternate_flag: Boolean,
+            alternate_label: String?,
             ttl: Long?,
             priority: Int?,
-        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), ttl, priority?.let { Priority.fromInt(it) })
+        ): Annotated = Annotated(Payload.fromParts(payload_id, payload_seq, payload_value, payload_flag, payload_label), if (alternate__present) Payload.fromParts(alternate_id, alternate_seq, alternate_value, alternate_flag, alternate_label) else null, ttl, priority?.let { Priority.fromInt(it) })
+    }
+}
+
+/**
+ * Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
+ *
+ * Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
+ * contain 127 `i64` leaves. The generated Kotlin constructor/fromParts bridge
+ * remains legal at 254 JVM slots, but flattening a native input parameter
+ * would require 256: 254 for the leaves plus the `JNINative` receiver and
+ * binding-error sink. Because the JVM limit is 255, this otherwise-valid data
+ * class must cross Kotlin→Rust as one `JObject`.
+ */
+public data class ObjectBoundary(val left: ObjectBoundary64, val right: ObjectBoundary63) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_left_left_left_value: Long,
+            left_left_left_left_left_left_right_value: Long,
+            left_left_left_left_left_right_left_value: Long,
+            left_left_left_left_left_right_right_value: Long,
+            left_left_left_left_right_left_left_value: Long,
+            left_left_left_left_right_left_right_value: Long,
+            left_left_left_left_right_right_left_value: Long,
+            left_left_left_left_right_right_right_value: Long,
+            left_left_left_right_left_left_left_value: Long,
+            left_left_left_right_left_left_right_value: Long,
+            left_left_left_right_left_right_left_value: Long,
+            left_left_left_right_left_right_right_value: Long,
+            left_left_left_right_right_left_left_value: Long,
+            left_left_left_right_right_left_right_value: Long,
+            left_left_left_right_right_right_left_value: Long,
+            left_left_left_right_right_right_right_value: Long,
+            left_left_right_left_left_left_left_value: Long,
+            left_left_right_left_left_left_right_value: Long,
+            left_left_right_left_left_right_left_value: Long,
+            left_left_right_left_left_right_right_value: Long,
+            left_left_right_left_right_left_left_value: Long,
+            left_left_right_left_right_left_right_value: Long,
+            left_left_right_left_right_right_left_value: Long,
+            left_left_right_left_right_right_right_value: Long,
+            left_left_right_right_left_left_left_value: Long,
+            left_left_right_right_left_left_right_value: Long,
+            left_left_right_right_left_right_left_value: Long,
+            left_left_right_right_left_right_right_value: Long,
+            left_left_right_right_right_left_left_value: Long,
+            left_left_right_right_right_left_right_value: Long,
+            left_left_right_right_right_right_left_value: Long,
+            left_left_right_right_right_right_right_value: Long,
+            left_right_left_left_left_left_left_value: Long,
+            left_right_left_left_left_left_right_value: Long,
+            left_right_left_left_left_right_left_value: Long,
+            left_right_left_left_left_right_right_value: Long,
+            left_right_left_left_right_left_left_value: Long,
+            left_right_left_left_right_left_right_value: Long,
+            left_right_left_left_right_right_left_value: Long,
+            left_right_left_left_right_right_right_value: Long,
+            left_right_left_right_left_left_left_value: Long,
+            left_right_left_right_left_left_right_value: Long,
+            left_right_left_right_left_right_left_value: Long,
+            left_right_left_right_left_right_right_value: Long,
+            left_right_left_right_right_left_left_value: Long,
+            left_right_left_right_right_left_right_value: Long,
+            left_right_left_right_right_right_left_value: Long,
+            left_right_left_right_right_right_right_value: Long,
+            left_right_right_left_left_left_left_value: Long,
+            left_right_right_left_left_left_right_value: Long,
+            left_right_right_left_left_right_left_value: Long,
+            left_right_right_left_left_right_right_value: Long,
+            left_right_right_left_right_left_left_value: Long,
+            left_right_right_left_right_left_right_value: Long,
+            left_right_right_left_right_right_left_value: Long,
+            left_right_right_left_right_right_right_value: Long,
+            left_right_right_right_left_left_left_value: Long,
+            left_right_right_right_left_left_right_value: Long,
+            left_right_right_right_left_right_left_value: Long,
+            left_right_right_right_left_right_right_value: Long,
+            left_right_right_right_right_left_left_value: Long,
+            left_right_right_right_right_left_right_value: Long,
+            left_right_right_right_right_right_left_value: Long,
+            left_right_right_right_right_right_right_value: Long,
+            right_leaves32_left_left_left_left_left_value: Long,
+            right_leaves32_left_left_left_left_right_value: Long,
+            right_leaves32_left_left_left_right_left_value: Long,
+            right_leaves32_left_left_left_right_right_value: Long,
+            right_leaves32_left_left_right_left_left_value: Long,
+            right_leaves32_left_left_right_left_right_value: Long,
+            right_leaves32_left_left_right_right_left_value: Long,
+            right_leaves32_left_left_right_right_right_value: Long,
+            right_leaves32_left_right_left_left_left_value: Long,
+            right_leaves32_left_right_left_left_right_value: Long,
+            right_leaves32_left_right_left_right_left_value: Long,
+            right_leaves32_left_right_left_right_right_value: Long,
+            right_leaves32_left_right_right_left_left_value: Long,
+            right_leaves32_left_right_right_left_right_value: Long,
+            right_leaves32_left_right_right_right_left_value: Long,
+            right_leaves32_left_right_right_right_right_value: Long,
+            right_leaves32_right_left_left_left_left_value: Long,
+            right_leaves32_right_left_left_left_right_value: Long,
+            right_leaves32_right_left_left_right_left_value: Long,
+            right_leaves32_right_left_left_right_right_value: Long,
+            right_leaves32_right_left_right_left_left_value: Long,
+            right_leaves32_right_left_right_left_right_value: Long,
+            right_leaves32_right_left_right_right_left_value: Long,
+            right_leaves32_right_left_right_right_right_value: Long,
+            right_leaves32_right_right_left_left_left_value: Long,
+            right_leaves32_right_right_left_left_right_value: Long,
+            right_leaves32_right_right_left_right_left_value: Long,
+            right_leaves32_right_right_left_right_right_value: Long,
+            right_leaves32_right_right_right_left_left_value: Long,
+            right_leaves32_right_right_right_left_right_value: Long,
+            right_leaves32_right_right_right_right_left_value: Long,
+            right_leaves32_right_right_right_right_right_value: Long,
+            right_leaves16_left_left_left_left_value: Long,
+            right_leaves16_left_left_left_right_value: Long,
+            right_leaves16_left_left_right_left_value: Long,
+            right_leaves16_left_left_right_right_value: Long,
+            right_leaves16_left_right_left_left_value: Long,
+            right_leaves16_left_right_left_right_value: Long,
+            right_leaves16_left_right_right_left_value: Long,
+            right_leaves16_left_right_right_right_value: Long,
+            right_leaves16_right_left_left_left_value: Long,
+            right_leaves16_right_left_left_right_value: Long,
+            right_leaves16_right_left_right_left_value: Long,
+            right_leaves16_right_left_right_right_value: Long,
+            right_leaves16_right_right_left_left_value: Long,
+            right_leaves16_right_right_left_right_value: Long,
+            right_leaves16_right_right_right_left_value: Long,
+            right_leaves16_right_right_right_right_value: Long,
+            right_leaves8_left_left_left_value: Long,
+            right_leaves8_left_left_right_value: Long,
+            right_leaves8_left_right_left_value: Long,
+            right_leaves8_left_right_right_value: Long,
+            right_leaves8_right_left_left_value: Long,
+            right_leaves8_right_left_right_value: Long,
+            right_leaves8_right_right_left_value: Long,
+            right_leaves8_right_right_right_value: Long,
+            right_leaves4_left_left_value: Long,
+            right_leaves4_left_right_value: Long,
+            right_leaves4_right_left_value: Long,
+            right_leaves4_right_right_value: Long,
+            right_leaves2_left_value: Long,
+            right_leaves2_right_value: Long,
+            right_leaf_value: Long,
+        ): ObjectBoundary = ObjectBoundary(ObjectBoundary64.fromParts(left_left_left_left_left_left_left_value, left_left_left_left_left_left_right_value, left_left_left_left_left_right_left_value, left_left_left_left_left_right_right_value, left_left_left_left_right_left_left_value, left_left_left_left_right_left_right_value, left_left_left_left_right_right_left_value, left_left_left_left_right_right_right_value, left_left_left_right_left_left_left_value, left_left_left_right_left_left_right_value, left_left_left_right_left_right_left_value, left_left_left_right_left_right_right_value, left_left_left_right_right_left_left_value, left_left_left_right_right_left_right_value, left_left_left_right_right_right_left_value, left_left_left_right_right_right_right_value, left_left_right_left_left_left_left_value, left_left_right_left_left_left_right_value, left_left_right_left_left_right_left_value, left_left_right_left_left_right_right_value, left_left_right_left_right_left_left_value, left_left_right_left_right_left_right_value, left_left_right_left_right_right_left_value, left_left_right_left_right_right_right_value, left_left_right_right_left_left_left_value, left_left_right_right_left_left_right_value, left_left_right_right_left_right_left_value, left_left_right_right_left_right_right_value, left_left_right_right_right_left_left_value, left_left_right_right_right_left_right_value, left_left_right_right_right_right_left_value, left_left_right_right_right_right_right_value, left_right_left_left_left_left_left_value, left_right_left_left_left_left_right_value, left_right_left_left_left_right_left_value, left_right_left_left_left_right_right_value, left_right_left_left_right_left_left_value, left_right_left_left_right_left_right_value, left_right_left_left_right_right_left_value, left_right_left_left_right_right_right_value, left_right_left_right_left_left_left_value, left_right_left_right_left_left_right_value, left_right_left_right_left_right_left_value, left_right_left_right_left_right_right_value, left_right_left_right_right_left_left_value, left_right_left_right_right_left_right_value, left_right_left_right_right_right_left_value, left_right_left_right_right_right_right_value, left_right_right_left_left_left_left_value, left_right_right_left_left_left_right_value, left_right_right_left_left_right_left_value, left_right_right_left_left_right_right_value, left_right_right_left_right_left_left_value, left_right_right_left_right_left_right_value, left_right_right_left_right_right_left_value, left_right_right_left_right_right_right_value, left_right_right_right_left_left_left_value, left_right_right_right_left_left_right_value, left_right_right_right_left_right_left_value, left_right_right_right_left_right_right_value, left_right_right_right_right_left_left_value, left_right_right_right_right_left_right_value, left_right_right_right_right_right_left_value, left_right_right_right_right_right_right_value), ObjectBoundary63.fromParts(right_leaves32_left_left_left_left_left_value, right_leaves32_left_left_left_left_right_value, right_leaves32_left_left_left_right_left_value, right_leaves32_left_left_left_right_right_value, right_leaves32_left_left_right_left_left_value, right_leaves32_left_left_right_left_right_value, right_leaves32_left_left_right_right_left_value, right_leaves32_left_left_right_right_right_value, right_leaves32_left_right_left_left_left_value, right_leaves32_left_right_left_left_right_value, right_leaves32_left_right_left_right_left_value, right_leaves32_left_right_left_right_right_value, right_leaves32_left_right_right_left_left_value, right_leaves32_left_right_right_left_right_value, right_leaves32_left_right_right_right_left_value, right_leaves32_left_right_right_right_right_value, right_leaves32_right_left_left_left_left_value, right_leaves32_right_left_left_left_right_value, right_leaves32_right_left_left_right_left_value, right_leaves32_right_left_left_right_right_value, right_leaves32_right_left_right_left_left_value, right_leaves32_right_left_right_left_right_value, right_leaves32_right_left_right_right_left_value, right_leaves32_right_left_right_right_right_value, right_leaves32_right_right_left_left_left_value, right_leaves32_right_right_left_left_right_value, right_leaves32_right_right_left_right_left_value, right_leaves32_right_right_left_right_right_value, right_leaves32_right_right_right_left_left_value, right_leaves32_right_right_right_left_right_value, right_leaves32_right_right_right_right_left_value, right_leaves32_right_right_right_right_right_value, right_leaves16_left_left_left_left_value, right_leaves16_left_left_left_right_value, right_leaves16_left_left_right_left_value, right_leaves16_left_left_right_right_value, right_leaves16_left_right_left_left_value, right_leaves16_left_right_left_right_value, right_leaves16_left_right_right_left_value, right_leaves16_left_right_right_right_value, right_leaves16_right_left_left_left_value, right_leaves16_right_left_left_right_value, right_leaves16_right_left_right_left_value, right_leaves16_right_left_right_right_value, right_leaves16_right_right_left_left_value, right_leaves16_right_right_left_right_value, right_leaves16_right_right_right_left_value, right_leaves16_right_right_right_right_value, right_leaves8_left_left_left_value, right_leaves8_left_left_right_value, right_leaves8_left_right_left_value, right_leaves8_left_right_right_value, right_leaves8_right_left_left_value, right_leaves8_right_left_right_value, right_leaves8_right_right_left_value, right_leaves8_right_right_right_value, right_leaves4_left_left_value, right_leaves4_left_right_value, right_leaves4_right_left_value, right_leaves4_right_right_value, right_leaves2_left_value, right_leaves2_right_value, right_leaf_value))
+    }
+}
+
+public data class ObjectBoundary16(val left: ObjectBoundary8, val right: ObjectBoundary8) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_value: Long,
+            left_left_left_right_value: Long,
+            left_left_right_left_value: Long,
+            left_left_right_right_value: Long,
+            left_right_left_left_value: Long,
+            left_right_left_right_value: Long,
+            left_right_right_left_value: Long,
+            left_right_right_right_value: Long,
+            right_left_left_left_value: Long,
+            right_left_left_right_value: Long,
+            right_left_right_left_value: Long,
+            right_left_right_right_value: Long,
+            right_right_left_left_value: Long,
+            right_right_left_right_value: Long,
+            right_right_right_left_value: Long,
+            right_right_right_right_value: Long,
+        ): ObjectBoundary16 = ObjectBoundary16(ObjectBoundary8.fromParts(left_left_left_left_value, left_left_left_right_value, left_left_right_left_value, left_left_right_right_value, left_right_left_left_value, left_right_left_right_value, left_right_right_left_value, left_right_right_right_value), ObjectBoundary8.fromParts(right_left_left_left_value, right_left_left_right_value, right_left_right_left_value, right_left_right_right_value, right_right_left_left_value, right_right_left_right_value, right_right_right_left_value, right_right_right_right_value))
+    }
+}
+
+public data class ObjectBoundary2(val left: ObjectBoundaryLeaf, val right: ObjectBoundaryLeaf) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(left_value: Long, right_value: Long): ObjectBoundary2 = ObjectBoundary2(ObjectBoundaryLeaf.fromParts(left_value), ObjectBoundaryLeaf.fromParts(right_value))
+    }
+}
+
+public data class ObjectBoundary32(val left: ObjectBoundary16, val right: ObjectBoundary16) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_left_value: Long,
+            left_left_left_left_right_value: Long,
+            left_left_left_right_left_value: Long,
+            left_left_left_right_right_value: Long,
+            left_left_right_left_left_value: Long,
+            left_left_right_left_right_value: Long,
+            left_left_right_right_left_value: Long,
+            left_left_right_right_right_value: Long,
+            left_right_left_left_left_value: Long,
+            left_right_left_left_right_value: Long,
+            left_right_left_right_left_value: Long,
+            left_right_left_right_right_value: Long,
+            left_right_right_left_left_value: Long,
+            left_right_right_left_right_value: Long,
+            left_right_right_right_left_value: Long,
+            left_right_right_right_right_value: Long,
+            right_left_left_left_left_value: Long,
+            right_left_left_left_right_value: Long,
+            right_left_left_right_left_value: Long,
+            right_left_left_right_right_value: Long,
+            right_left_right_left_left_value: Long,
+            right_left_right_left_right_value: Long,
+            right_left_right_right_left_value: Long,
+            right_left_right_right_right_value: Long,
+            right_right_left_left_left_value: Long,
+            right_right_left_left_right_value: Long,
+            right_right_left_right_left_value: Long,
+            right_right_left_right_right_value: Long,
+            right_right_right_left_left_value: Long,
+            right_right_right_left_right_value: Long,
+            right_right_right_right_left_value: Long,
+            right_right_right_right_right_value: Long,
+        ): ObjectBoundary32 = ObjectBoundary32(ObjectBoundary16.fromParts(left_left_left_left_left_value, left_left_left_left_right_value, left_left_left_right_left_value, left_left_left_right_right_value, left_left_right_left_left_value, left_left_right_left_right_value, left_left_right_right_left_value, left_left_right_right_right_value, left_right_left_left_left_value, left_right_left_left_right_value, left_right_left_right_left_value, left_right_left_right_right_value, left_right_right_left_left_value, left_right_right_left_right_value, left_right_right_right_left_value, left_right_right_right_right_value), ObjectBoundary16.fromParts(right_left_left_left_left_value, right_left_left_left_right_value, right_left_left_right_left_value, right_left_left_right_right_value, right_left_right_left_left_value, right_left_right_left_right_value, right_left_right_right_left_value, right_left_right_right_right_value, right_right_left_left_left_value, right_right_left_left_right_value, right_right_left_right_left_value, right_right_left_right_right_value, right_right_right_left_left_value, right_right_right_left_right_value, right_right_right_right_left_value, right_right_right_right_right_value))
+    }
+}
+
+public data class ObjectBoundary4(val left: ObjectBoundary2, val right: ObjectBoundary2) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_value: Long,
+            left_right_value: Long,
+            right_left_value: Long,
+            right_right_value: Long,
+        ): ObjectBoundary4 = ObjectBoundary4(ObjectBoundary2.fromParts(left_left_value, left_right_value), ObjectBoundary2.fromParts(right_left_value, right_right_value))
+    }
+}
+
+/** The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves. */
+public data class ObjectBoundary63(val leaves32: ObjectBoundary32, val leaves16: ObjectBoundary16, val leaves8: ObjectBoundary8, val leaves4: ObjectBoundary4, val leaves2: ObjectBoundary2, val leaf: ObjectBoundaryLeaf) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            leaves32_left_left_left_left_left_value: Long,
+            leaves32_left_left_left_left_right_value: Long,
+            leaves32_left_left_left_right_left_value: Long,
+            leaves32_left_left_left_right_right_value: Long,
+            leaves32_left_left_right_left_left_value: Long,
+            leaves32_left_left_right_left_right_value: Long,
+            leaves32_left_left_right_right_left_value: Long,
+            leaves32_left_left_right_right_right_value: Long,
+            leaves32_left_right_left_left_left_value: Long,
+            leaves32_left_right_left_left_right_value: Long,
+            leaves32_left_right_left_right_left_value: Long,
+            leaves32_left_right_left_right_right_value: Long,
+            leaves32_left_right_right_left_left_value: Long,
+            leaves32_left_right_right_left_right_value: Long,
+            leaves32_left_right_right_right_left_value: Long,
+            leaves32_left_right_right_right_right_value: Long,
+            leaves32_right_left_left_left_left_value: Long,
+            leaves32_right_left_left_left_right_value: Long,
+            leaves32_right_left_left_right_left_value: Long,
+            leaves32_right_left_left_right_right_value: Long,
+            leaves32_right_left_right_left_left_value: Long,
+            leaves32_right_left_right_left_right_value: Long,
+            leaves32_right_left_right_right_left_value: Long,
+            leaves32_right_left_right_right_right_value: Long,
+            leaves32_right_right_left_left_left_value: Long,
+            leaves32_right_right_left_left_right_value: Long,
+            leaves32_right_right_left_right_left_value: Long,
+            leaves32_right_right_left_right_right_value: Long,
+            leaves32_right_right_right_left_left_value: Long,
+            leaves32_right_right_right_left_right_value: Long,
+            leaves32_right_right_right_right_left_value: Long,
+            leaves32_right_right_right_right_right_value: Long,
+            leaves16_left_left_left_left_value: Long,
+            leaves16_left_left_left_right_value: Long,
+            leaves16_left_left_right_left_value: Long,
+            leaves16_left_left_right_right_value: Long,
+            leaves16_left_right_left_left_value: Long,
+            leaves16_left_right_left_right_value: Long,
+            leaves16_left_right_right_left_value: Long,
+            leaves16_left_right_right_right_value: Long,
+            leaves16_right_left_left_left_value: Long,
+            leaves16_right_left_left_right_value: Long,
+            leaves16_right_left_right_left_value: Long,
+            leaves16_right_left_right_right_value: Long,
+            leaves16_right_right_left_left_value: Long,
+            leaves16_right_right_left_right_value: Long,
+            leaves16_right_right_right_left_value: Long,
+            leaves16_right_right_right_right_value: Long,
+            leaves8_left_left_left_value: Long,
+            leaves8_left_left_right_value: Long,
+            leaves8_left_right_left_value: Long,
+            leaves8_left_right_right_value: Long,
+            leaves8_right_left_left_value: Long,
+            leaves8_right_left_right_value: Long,
+            leaves8_right_right_left_value: Long,
+            leaves8_right_right_right_value: Long,
+            leaves4_left_left_value: Long,
+            leaves4_left_right_value: Long,
+            leaves4_right_left_value: Long,
+            leaves4_right_right_value: Long,
+            leaves2_left_value: Long,
+            leaves2_right_value: Long,
+            leaf_value: Long,
+        ): ObjectBoundary63 = ObjectBoundary63(ObjectBoundary32.fromParts(leaves32_left_left_left_left_left_value, leaves32_left_left_left_left_right_value, leaves32_left_left_left_right_left_value, leaves32_left_left_left_right_right_value, leaves32_left_left_right_left_left_value, leaves32_left_left_right_left_right_value, leaves32_left_left_right_right_left_value, leaves32_left_left_right_right_right_value, leaves32_left_right_left_left_left_value, leaves32_left_right_left_left_right_value, leaves32_left_right_left_right_left_value, leaves32_left_right_left_right_right_value, leaves32_left_right_right_left_left_value, leaves32_left_right_right_left_right_value, leaves32_left_right_right_right_left_value, leaves32_left_right_right_right_right_value, leaves32_right_left_left_left_left_value, leaves32_right_left_left_left_right_value, leaves32_right_left_left_right_left_value, leaves32_right_left_left_right_right_value, leaves32_right_left_right_left_left_value, leaves32_right_left_right_left_right_value, leaves32_right_left_right_right_left_value, leaves32_right_left_right_right_right_value, leaves32_right_right_left_left_left_value, leaves32_right_right_left_left_right_value, leaves32_right_right_left_right_left_value, leaves32_right_right_left_right_right_value, leaves32_right_right_right_left_left_value, leaves32_right_right_right_left_right_value, leaves32_right_right_right_right_left_value, leaves32_right_right_right_right_right_value), ObjectBoundary16.fromParts(leaves16_left_left_left_left_value, leaves16_left_left_left_right_value, leaves16_left_left_right_left_value, leaves16_left_left_right_right_value, leaves16_left_right_left_left_value, leaves16_left_right_left_right_value, leaves16_left_right_right_left_value, leaves16_left_right_right_right_value, leaves16_right_left_left_left_value, leaves16_right_left_left_right_value, leaves16_right_left_right_left_value, leaves16_right_left_right_right_value, leaves16_right_right_left_left_value, leaves16_right_right_left_right_value, leaves16_right_right_right_left_value, leaves16_right_right_right_right_value), ObjectBoundary8.fromParts(leaves8_left_left_left_value, leaves8_left_left_right_value, leaves8_left_right_left_value, leaves8_left_right_right_value, leaves8_right_left_left_value, leaves8_right_left_right_value, leaves8_right_right_left_value, leaves8_right_right_right_value), ObjectBoundary4.fromParts(leaves4_left_left_value, leaves4_left_right_value, leaves4_right_left_value, leaves4_right_right_value), ObjectBoundary2.fromParts(leaves2_left_value, leaves2_right_value), ObjectBoundaryLeaf.fromParts(leaf_value))
+    }
+}
+
+public data class ObjectBoundary64(val left: ObjectBoundary32, val right: ObjectBoundary32) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_left_left_left_value: Long,
+            left_left_left_left_left_right_value: Long,
+            left_left_left_left_right_left_value: Long,
+            left_left_left_left_right_right_value: Long,
+            left_left_left_right_left_left_value: Long,
+            left_left_left_right_left_right_value: Long,
+            left_left_left_right_right_left_value: Long,
+            left_left_left_right_right_right_value: Long,
+            left_left_right_left_left_left_value: Long,
+            left_left_right_left_left_right_value: Long,
+            left_left_right_left_right_left_value: Long,
+            left_left_right_left_right_right_value: Long,
+            left_left_right_right_left_left_value: Long,
+            left_left_right_right_left_right_value: Long,
+            left_left_right_right_right_left_value: Long,
+            left_left_right_right_right_right_value: Long,
+            left_right_left_left_left_left_value: Long,
+            left_right_left_left_left_right_value: Long,
+            left_right_left_left_right_left_value: Long,
+            left_right_left_left_right_right_value: Long,
+            left_right_left_right_left_left_value: Long,
+            left_right_left_right_left_right_value: Long,
+            left_right_left_right_right_left_value: Long,
+            left_right_left_right_right_right_value: Long,
+            left_right_right_left_left_left_value: Long,
+            left_right_right_left_left_right_value: Long,
+            left_right_right_left_right_left_value: Long,
+            left_right_right_left_right_right_value: Long,
+            left_right_right_right_left_left_value: Long,
+            left_right_right_right_left_right_value: Long,
+            left_right_right_right_right_left_value: Long,
+            left_right_right_right_right_right_value: Long,
+            right_left_left_left_left_left_value: Long,
+            right_left_left_left_left_right_value: Long,
+            right_left_left_left_right_left_value: Long,
+            right_left_left_left_right_right_value: Long,
+            right_left_left_right_left_left_value: Long,
+            right_left_left_right_left_right_value: Long,
+            right_left_left_right_right_left_value: Long,
+            right_left_left_right_right_right_value: Long,
+            right_left_right_left_left_left_value: Long,
+            right_left_right_left_left_right_value: Long,
+            right_left_right_left_right_left_value: Long,
+            right_left_right_left_right_right_value: Long,
+            right_left_right_right_left_left_value: Long,
+            right_left_right_right_left_right_value: Long,
+            right_left_right_right_right_left_value: Long,
+            right_left_right_right_right_right_value: Long,
+            right_right_left_left_left_left_value: Long,
+            right_right_left_left_left_right_value: Long,
+            right_right_left_left_right_left_value: Long,
+            right_right_left_left_right_right_value: Long,
+            right_right_left_right_left_left_value: Long,
+            right_right_left_right_left_right_value: Long,
+            right_right_left_right_right_left_value: Long,
+            right_right_left_right_right_right_value: Long,
+            right_right_right_left_left_left_value: Long,
+            right_right_right_left_left_right_value: Long,
+            right_right_right_left_right_left_value: Long,
+            right_right_right_left_right_right_value: Long,
+            right_right_right_right_left_left_value: Long,
+            right_right_right_right_left_right_value: Long,
+            right_right_right_right_right_left_value: Long,
+            right_right_right_right_right_right_value: Long,
+        ): ObjectBoundary64 = ObjectBoundary64(ObjectBoundary32.fromParts(left_left_left_left_left_left_value, left_left_left_left_left_right_value, left_left_left_left_right_left_value, left_left_left_left_right_right_value, left_left_left_right_left_left_value, left_left_left_right_left_right_value, left_left_left_right_right_left_value, left_left_left_right_right_right_value, left_left_right_left_left_left_value, left_left_right_left_left_right_value, left_left_right_left_right_left_value, left_left_right_left_right_right_value, left_left_right_right_left_left_value, left_left_right_right_left_right_value, left_left_right_right_right_left_value, left_left_right_right_right_right_value, left_right_left_left_left_left_value, left_right_left_left_left_right_value, left_right_left_left_right_left_value, left_right_left_left_right_right_value, left_right_left_right_left_left_value, left_right_left_right_left_right_value, left_right_left_right_right_left_value, left_right_left_right_right_right_value, left_right_right_left_left_left_value, left_right_right_left_left_right_value, left_right_right_left_right_left_value, left_right_right_left_right_right_value, left_right_right_right_left_left_value, left_right_right_right_left_right_value, left_right_right_right_right_left_value, left_right_right_right_right_right_value), ObjectBoundary32.fromParts(right_left_left_left_left_left_value, right_left_left_left_left_right_value, right_left_left_left_right_left_value, right_left_left_left_right_right_value, right_left_left_right_left_left_value, right_left_left_right_left_right_value, right_left_left_right_right_left_value, right_left_left_right_right_right_value, right_left_right_left_left_left_value, right_left_right_left_left_right_value, right_left_right_left_right_left_value, right_left_right_left_right_right_value, right_left_right_right_left_left_value, right_left_right_right_left_right_value, right_left_right_right_right_left_value, right_left_right_right_right_right_value, right_right_left_left_left_left_value, right_right_left_left_left_right_value, right_right_left_left_right_left_value, right_right_left_left_right_right_value, right_right_left_right_left_left_value, right_right_left_right_left_right_value, right_right_left_right_right_left_value, right_right_left_right_right_right_value, right_right_right_left_left_left_value, right_right_right_left_left_right_value, right_right_right_left_right_left_value, right_right_right_left_right_right_value, right_right_right_right_left_left_value, right_right_right_right_left_right_value, right_right_right_right_right_left_value, right_right_right_right_right_right_value))
+    }
+}
+
+public data class ObjectBoundary8(val left: ObjectBoundary4, val right: ObjectBoundary4) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            left_left_left_value: Long,
+            left_left_right_value: Long,
+            left_right_left_value: Long,
+            left_right_right_value: Long,
+            right_left_left_value: Long,
+            right_left_right_value: Long,
+            right_right_left_value: Long,
+            right_right_right_value: Long,
+        ): ObjectBoundary8 = ObjectBoundary8(ObjectBoundary4.fromParts(left_left_left_value, left_left_right_value, left_right_left_value, left_right_right_value), ObjectBoundary4.fromParts(right_left_left_value, right_left_right_value, right_right_left_value, right_right_right_value))
+    }
+}
+
+/** One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree. */
+public data class ObjectBoundaryLeaf(val value: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(value: Long): ObjectBoundaryLeaf = ObjectBoundaryLeaf(value)
     }
 }
 
@@ -287,12 +689,58 @@ public fun annotatedNew(
 }
 
 /**
+ * The optional nested payload's value. Its `Option<data_class>` input leaves
+ * are guarded by one presence bit and recursively reconstructed only when
+ * present.
+ */
+public fun annotatedAlternateValue(a: Annotated, onError: JniErrorHandler<Double?>): Double? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.annotatedAlternateValue(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * The metadata TTL (`Option<prim>` field read back through a data-class
  * **input**).
  */
 public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedTtl(a, __bcap)
+    val __ret = CovNative.annotatedTtl(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
@@ -300,7 +748,24 @@ public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
 /** The metadata priority (`Option<enum>` **return**). */
 public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPriority(a, __bcap)
+    val __ret = CovNative.annotatedPriority(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret?.let { io.prebindgen.covertest.model.Priority.fromInt(it) }
 }
@@ -311,7 +776,31 @@ public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>):
  */
 public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPayloadValue(a, __bcap)
+    val __ret = CovNative.annotatedPayloadValue(
+        a.payload.id,
+        a.payload.seq,
+        a.payload.value,
+        a.payload.flag,
+        a.payload.label,
+        a.alternate != null,
+        a.alternate?.id ?: 0L,
+        a.alternate?.seq ?: 0,
+        a.alternate?.value ?: 0.0,
+        a.alternate?.flag ?: false,
+        a.alternate?.label,
+        a.ttl != null,
+        a.ttl ?: 0L,
+        a.priority != null,
+        a.priority?.value ?: 0,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+public fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.objectBoundaryValue(value, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }
@@ -349,6 +838,26 @@ public fun unsignedRoundTrip(
 public fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong? {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = CovNative.unsignedOptional(value?.toLong(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret?.let { it.toULong() }
+}
+
+/**
+ * Read the optional `u64` field through the flattened data-class input ABI.
+ * With no natural niche it crosses as `(present, raw Long)`, never a boxed
+ * `java.lang.Long`/`JObject`.
+ */
+public fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.unsignedDataMaybe(
+        value.byte,
+        value.short,
+        value.int,
+        value.long.toLong(),
+        value.maybeLong != null,
+        value.maybeLong?.toLong() ?: 0L,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret?.let { it.toULong() }
 }

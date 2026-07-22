@@ -62,6 +62,82 @@ fn bounded_duration_option_uses_u64_niche_without_boxing() {
 }
 
 #[test]
+fn flattened_field_composes_bounded_conversion_stages() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Timed {
+                    pub delay: Option<std::time::Duration>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn duration_from_millis(v: u64) -> std::time::Duration {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn duration_to_millis(v: &std::time::Duration) -> u64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn timed_use(value: &Timed) -> u64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .convert(
+            crate::convert!(std::time::Duration)
+                .input(crate::fun!(duration_from_millis))
+                .output(crate::fun!(duration_to_millis))
+                .valid_range(0u64..=1_000_000u64),
+        )
+        .package(
+            crate::package!()
+                .class(crate::data_class!(Timed))
+                .fun(crate::fun!(timed_use)),
+        );
+    let dir = unique_test_dir("jnigen_flat_staged_field");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rc: String = rust.split_whitespace().collect();
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(kc.contains("valueDelay:Long"), "{kotlin}");
+    assert!(kc.contains("value.delay?.toLong()?:-1L"), "{kotlin}");
+    assert!(rc.contains("jlong_to_u64"), "{rust}");
+    assert!(rc.contains("u64_to_Duration"), "{rust}");
+    assert!(
+        rc.contains("myflat::Timed{delay:__flat_value_delay"),
+        "{rust}"
+    );
+}
+
+#[test]
 fn duration_requires_an_explicit_conversion() {
     let function: syn::ItemFn = syn::parse_str(
         "pub fn duration_echo(v: std::time::Duration) -> std::time::Duration { unimplemented!() }",
@@ -356,17 +432,16 @@ fn option_scalar_struct_field_flattens() {
     assert!(rc.contains("o_ttl_value:jni::sys::jlong"), "{rust}");
     assert!(rc.contains("ifo_ttl_present!=0u8"), "{rust}");
     assert!(
-        rc.contains("myflat::Opts{id:__o_id,ttl:__o_ttl,flag:__o_flag"),
+        rc.contains("myflat::Opts{id:__flat_o_id,ttl:__flat_o_ttl,flag:__flat_o_flag"),
         "{rust}"
     );
     assert!(rc.contains("myflat::opts_put(&o)"), "{rust}");
 }
 
 /// A `data_class` with a NESTED data-class field plus enum / `Option<prim>` /
-/// `Option<enum>` fields — the shape that declines BOTH the fixed-builder
-/// output synthesis and the input leaf-flatten, so it round-trips through the
-/// whole-value `fromParts` / `get_field` converters. Pins three fixes those
-/// paths needed (each surfaced at runtime by `examples/covertest-kotlin`):
+/// `Option<enum>` fields. Output recursively uses `fromParts`; input now
+/// recursively flattens the same graph into primitive leaves, without passing
+/// either `Job` or `Inner` as a `JObject`.
 ///  * output `fromParts` descriptor: an `Option`-boxed primitive slot is the
 ///    BOX class (`Ljava/lang/Long;` / `Ljava/lang/Integer;`), not the bare
 ///    primitive — and the Kotlin factory takes `Int?` for `Option<enum>`,
@@ -378,7 +453,7 @@ fn option_scalar_struct_field_flattens() {
 ///    mapped back in the wrapper — previously the extern claimed the enum
 ///    class while the native side returned a boxed `Integer`.
 #[test]
-fn fromparts_fallback_boxes_option_fields() {
+fn recursive_data_class_input_flattens_nested_and_optional_fields() {
     let loc = myflat_loc();
     let items: Vec<(syn::Item, SourceLocation)> = vec![
         (
@@ -473,34 +548,238 @@ fn fromparts_fallback_boxes_option_fields() {
     assert!(kc.contains("mode?.let{Level.fromInt(it)}"), "{kotlin}");
     assert!(kc.contains("Inner.fromParts(inner_id)"), "{kotlin}");
 
-    // INPUT (`job_mode`'s whole-`Job` param): every `get_field` names the
-    // slot's exact static type; enum-typed slots decode via `getValue()I`.
+    // INPUT (`job_mode`): the native method receives the recursively flattened
+    // leaves and Rust reconstructs `Inner` before `Job`. No live wrapper-side
+    // `get_field` decode is needed.
+    assert!(kc.contains("jInnerId:Long"), "{kotlin}");
+    assert!(kc.contains("jLevel:Int"), "{kotlin}");
+    assert!(kc.contains("jTtlPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("jModeValue:Int"), "{kotlin}");
+    assert!(kc.contains("j.inner.id"), "{kotlin}");
+    assert!(rc.contains("myflat::Inner{id:__flat_j_inner_id"), "{rust}");
     assert!(
-        rc.contains(r#"get_field(v,"inner","Lio/test/jni/model/Inner;")"#),
+        rc.contains("myflat::Job{inner:__flat_j_inner,level:__flat_j_level"),
         "{rust}"
     );
-    assert!(
-        rc.contains(r#"get_field(v,"level","Lio/test/jni/model/Level;")"#),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(r#"get_field(v,"ttl","Ljava/lang/Long;")"#),
-        "{rust}"
-    );
-    assert!(
-        rc.contains(r#"get_field(v,"mode","Lio/test/jni/model/Level;")"#),
-        "{rust}"
-    );
-    assert!(rc.contains(r#""getValue","()I""#), "{rust}");
-    assert!(!rc.contains("Ljava/lang/Object;\")"), "{rust}");
 
     // RETURN (`job_mode` → `Option<Level>`): the extern wires `Int?`; the
     // wrapper maps the boxed discriminant back to the nullable enum.
-    assert!(
-        kc.contains("funjobMode(j:Job,errorSink:Any):Int?"),
-        "{kotlin}"
-    );
+    assert!(kc.contains("jModeValue:Int"), "{kotlin}");
+    assert!(kc.contains("errorSink:Any"), "{kotlin}");
+    assert!(kc.contains("):Int?"), "{kotlin}");
     assert!(kc.contains("?.let{Level.fromInt(it)}"), "{kotlin}");
+}
+
+#[test]
+fn jobject_input_is_an_explicit_hybrid_leaf_escape_hatch() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct FlatChild {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct ObjectChild {
+                    pub name: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Hybrid {
+                    pub flat: FlatChild,
+                    pub maybe: Option<FlatChild>,
+                    pub object: ObjectChild,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn hybrid_use(h: Hybrid) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn hybrid_optional(h: Option<Hybrid>) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::data_class!(FlatChild))
+            .class(crate::data_class!(ObjectChild).jobject_input())
+            .class(crate::data_class!(Hybrid))
+            .fun(crate::fun!(hybrid_use))
+            .fun(crate::fun!(hybrid_optional)),
+    );
+    let dir = unique_test_dir("jnigen_hybrid_jobject_input");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rc: String = rust.split_whitespace().collect();
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(kc.contains("hFlatId:Long"), "{kotlin}");
+    assert!(kc.contains("hObject:ObjectChild"), "{kotlin}");
+    assert!(kc.contains("h.flat.id"), "{kotlin}");
+    assert!(kc.contains("hMaybePresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("h.maybe?.id?:0L"), "{kotlin}");
+    assert!(kc.contains("h.object_"), "{kotlin}");
+    assert!(kc.contains("hPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("hObject:io.test.jni.ObjectChild?"), "{kotlin}");
+    assert!(kc.contains("h?.object_"), "{kotlin}");
+    assert!(rc.contains("JObject_to_ObjectChild"), "{rust}");
+    assert!(
+        rc.contains(
+            "myflat::Hybrid{flat:__flat_h_flat,maybe:__flat_h_maybe,object:__flat_h_object"
+        ),
+        "{rust}"
+    );
+    assert!(generation.report().contains("input `JObject` opt-in"));
+}
+
+#[test]
+fn recursive_flattened_owned_handles_join_lock_and_consume_scaffold() {
+    let loc = myflat_loc();
+    let items = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Token {
+                    pub value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Envelope {
+                    pub token: Token,
+                    pub spare: Option<Token>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn envelope_use(e: Envelope) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::ptr_class!(Token))
+            .class(crate::data_class!(Envelope))
+            .fun(crate::fun!(envelope_use)),
+    );
+    let dir = unique_test_dir("jnigen_recursive_handles");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).expect("resolve");
+    let rust = std::fs::read_to_string(generation.write_rust(dir.join("gen.rs")).unwrap()).unwrap();
+    let kotlin = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .unwrap()
+        .iter()
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rc: String = rust.split_whitespace().collect();
+    let kc: String = kotlin.split_whitespace().collect();
+
+    assert!(kc.contains("withSortedHandleLocks(__locks)"), "{kotlin}");
+    assert!(kc.contains("__locks.add(e.token)"), "{kotlin}");
+    assert!(kc.contains("e.spare?.let{__locks.add(it)}"), "{kotlin}");
+    assert!(kc.contains("e.spare?.isClosed()==true"), "{kotlin}");
+    assert!(kc.contains("valeToken_ptr=e.token.ptr"), "{kotlin}");
+    assert!(kc.contains("valeSpare_ptr=e.spare?.ptr?:0L"), "{kotlin}");
+    assert!(kc.contains("e.token.markConsumed()"), "{kotlin}");
+    assert!(kc.contains("e.spare?.markConsumed()"), "{kotlin}");
+    assert!(
+        rc.contains("Box::from_raw(e_tokenas*mutmyflat::Token)"),
+        "{rust}"
+    );
+    assert!(
+        rc.contains(
+            "Option::Some(unsafe{*::std::boxed::Box::from_raw(e_spareas*mutmyflat::Token)})"
+        ),
+        "{rust}"
+    );
+}
+
+#[test]
+fn recursive_flattening_rejects_jvm_parameter_slot_overflow() {
+    let fields = (0..127)
+        .map(|index| format!("pub f{index}: i64"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let wide: syn::ItemStruct =
+        syn::parse_str(&format!("pub struct Wide {{ {fields} }}")).expect("parse wide struct");
+    let use_wide: syn::ItemFn = syn::parse_quote!(
+        pub fn use_wide(value: Wide) -> i64 {
+            unimplemented!()
+        }
+    );
+    let loc = myflat_loc();
+    let registry = Registry::<KotlinMeta>::from_items([
+        (syn::Item::Struct(wide.clone()), loc.clone()),
+        (syn::Item::Fn(use_wide.clone()), loc.clone()),
+    ])
+    .expect("index items");
+    let jni = JniGen::new().package(
+        crate::package!()
+            .class(crate::data_class!(Wide))
+            .fun(crate::fun!(use_wide)),
+    );
+    let error = registry
+        .resolve(jni)
+        .expect_err("256 JVM slots must fail")
+        .to_string();
+    assert!(error.contains("uses 256 JVM parameter slots"), "{error}");
+    assert!(error.contains("jobject_input"), "{error}");
+
+    // The explicit object boundary keeps the same public Kotlin data class,
+    // but the native method receives it in one slot and performs the legacy
+    // whole-object field decode instead of producing an illegal signature.
+    let registry = Registry::<KotlinMeta>::from_items([
+        (syn::Item::Struct(wide), loc.clone()),
+        (syn::Item::Fn(use_wide), loc),
+    ])
+    .expect("index marked items");
+    let jni = JniGen::new().package(
+        crate::package!()
+            .class(crate::data_class!(Wide).jobject_input())
+            .fun(crate::fun!(use_wide)),
+    );
+    let generation = registry
+        .resolve(jni)
+        .expect("JObject boundary must bypass the flattened slot limit");
+    assert!(generation.report().contains("input `JObject` opt-in"));
 }
 
 /// An output-only `convert!` type must resolve with only its `.output()`
@@ -938,6 +1217,14 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
         ),
         (
             syn::Item::Fn(syn::parse_quote!(
+                pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
                 pub fn unsigned_result(value: u64) -> Result<u64, String> {
                     unimplemented!()
                 }
@@ -950,6 +1237,7 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
         crate::package!()
             .class(crate::data_class!(Unsigned))
             .fun(crate::fun!(unsigned_round_trip))
+            .fun(crate::fun!(unsigned_data_maybe))
             .fun(crate::fun!(unsigned_callback))
             .fun(crate::fun!(unsigned_result)),
     );
@@ -991,6 +1279,13 @@ fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
     assert!(kc.contains("long.toLong()"), "{kotlin}");
     assert!(kc.contains("maybeLong?.toLong()"), "{kotlin}");
     assert!(kc.contains(".toULong()"), "{kotlin}");
+    assert!(kc.contains("valueMaybeLongPresent:Boolean"), "{kotlin}");
+    assert!(kc.contains("valueMaybeLongValue:Long"), "{kotlin}");
+    assert!(kc.contains("value.maybeLong!=null"), "{kotlin}");
+    assert!(
+        rc.contains("value_maybe_long_present:jni::sys::jboolean"),
+        "{rust}"
+    );
 
     // Callback gets a typed interface plus a raw Long twin and adapter.
     assert!(kc.contains("funrun(u64:ULong)"), "{kotlin}");

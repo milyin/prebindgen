@@ -789,6 +789,7 @@ impl From<syn::Type> for EnumClassDecl {
 pub struct DataClassDecl {
     pub(crate) key: TypeKey,
     pub(crate) name_override: Option<String>,
+    pub(crate) jobject_input: bool,
     pub(crate) iface: IfaceOpts,
     pub(crate) members: Vec<(FunctionDecl, MemberKind)>,
 }
@@ -798,6 +799,7 @@ impl DataClassDecl {
         Self {
             key: TypeKey::from_type(&rust_type),
             name_override: None,
+            jobject_input: false,
             iface: IfaceOpts::default(),
             members: Vec::new(),
         }
@@ -806,6 +808,21 @@ impl DataClassDecl {
     /// Override the Kotlin **class name** (relative, no dots).
     pub fn name(mut self, name: impl Into<String>) -> Self {
         self.name_override = Some(name.into());
+        self
+    }
+
+    /// Explicitly keep this data class object-shaped on the Kotlin → Rust
+    /// boundary. By default a data class must flatten completely into its
+    /// transitive field leaves; generation fails rather than silently falling
+    /// back to Rust-side `JObject` field reads. This escape hatch is intended
+    /// for recursive/identity-bearing graphs, legacy ABI compatibility, or a
+    /// deliberately chosen object boundary.
+    ///
+    /// When the marked type is nested inside an unmarked data class, only the
+    /// marked branch crosses as a `JObject`; its siblings remain flattened.
+    /// Rust → Kotlin output construction is unaffected.
+    pub fn jobject_input(mut self) -> Self {
+        self.jobject_input = true;
         self
     }
 

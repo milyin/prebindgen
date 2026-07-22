@@ -36,7 +36,21 @@ pub(crate) fn vec_build_elem(
 ) -> Option<(syn::Type, bool)> {
     let (elem, by_ref) = slice_or_vec_elem(arg_ty)?;
     // The element must flatten; the probe ident is irrelevant here.
-    build_flat_input_plan(ext, registry, &format_ident!("e"), &elem)?;
+    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), &elem)
+        .ok()
+        .flatten()?;
+    // Recursive/optional element decomposition is intentionally outside this
+    // increment: retain the existing List/JObject collection path rather than
+    // silently changing the Vec helper ABI.
+    if plan.contains_nested
+        || plan.leaves.iter().any(|l| {
+            l.is_present_flag
+                || l.handle_target_tail.is_some()
+                || l.entry.as_ref().is_none_or(|e| !e.pre_stages.is_empty())
+        })
+    {
+        return None;
+    }
     Some((elem, by_ref))
 }
 
@@ -85,7 +99,18 @@ pub(crate) fn vec_build_helpers(
     registry: &Registry<KotlinMeta>,
     elem: &syn::Type,
 ) -> Option<VecBuildHelpers> {
-    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)?;
+    let plan = build_flat_input_plan(ext, registry, &format_ident!("e"), elem)
+        .ok()
+        .flatten()?;
+    if plan.contains_nested
+        || plan.leaves.iter().any(|l| {
+            l.is_present_flag
+                || l.handle_target_tail.is_some()
+                || l.entry.as_ref().is_none_or(|e| !e.pre_stages.is_empty())
+        })
+    {
+        return None;
+    }
     let key = TypeKey::from_type(elem);
     let kt_fqn = ext
         .types
@@ -195,8 +220,8 @@ pub(crate) fn build_vec_build_helper_items(
             ));
             inits.push(quote!(#fid: #tmp));
         }
-        let module = &h.plan.struct_module;
-        let sid = &h.plan.struct_ident;
+        let module = &h.plan.root.struct_module;
+        let sid = &h.plan.root.struct_ident;
         named.push((
             push_sym.clone(),
             syn::parse_quote!(

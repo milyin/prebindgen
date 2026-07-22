@@ -25,6 +25,11 @@ import io.prebindgen.perftest.storage.storagePutSlice
  * element work) and report **ns per call**, so comparing to `VEC_N ×` the single-op number
  * shows how the JNI per-call overhead amortizes over a batch.
  *
+ * `large_flat` and `large_obj` pass structurally identical nested data classes
+ * containing 64 `Long` leaves from Kotlin to Rust. The former expands to raw JNI
+ * scalar parameters; the latter crosses as one `JObject` and is decoded through
+ * JNI field access on the Rust side. Both native functions only sum the leaves.
+ *
  * Note on the numbers: JNI `get`/`callback` are intrinsically slower than Rust/C because
  * they cross in the native→JVM *upcall* direction (reassembling values on the Kotlin
  * side) — that asymmetry, not the codegen, is the floor.
@@ -112,6 +117,19 @@ fun main() {
     val s = storageNew(onError)
 
     correctness(s)
+
+    // One shared nested object graph under two structurally identical root
+    // classes, so the measured difference is the boundary representation.
+    val boundaryLeaf = ObjectBoundaryLeaf(1L)
+    val boundary2 = ObjectBoundary2(boundaryLeaf, boundaryLeaf)
+    val boundary4 = ObjectBoundary4(boundary2, boundary2)
+    val boundary8 = ObjectBoundary8(boundary4, boundary4)
+    val boundary16 = ObjectBoundary16(boundary8, boundary8)
+    val boundary32 = ObjectBoundary32(boundary16, boundary16)
+    val largeFlat = ObjectBoundary64(boundary32, boundary32)
+    val largeObject = ObjectBoundary64Object(boundary32, boundary32)
+    check(largeFlatInputSum(largeFlat, onError) == 64L)
+    check(largeObjectInputSum(largeObject, onError) == 64L)
 
     var sink = 0L
 
@@ -208,6 +226,8 @@ fun main() {
         storagePutSlice(s, warm, onError)
         storageGetVec(s, onError)
         storageCallbackVec(s, vcb, onError)
+        sink += largeFlatInputSum(largeFlat, onError)
+        sink += largeObjectInputSum(largeObject, onError)
         Token.tokenNew(1L, onError).close()
         TokenGc.tokenGcNew(1L, onError).close()
         sink += warmTp.tokenValue(onError)
@@ -221,6 +241,12 @@ fun main() {
     runCategory(null, "null")
     runVecCategory("hello, payload", "str")
     runVecCategory(null, "null")
+    bench("large_flat", "input.64long", N) {
+        sink += largeFlatInputSum(largeFlat, onError)
+    }
+    bench("large_obj", "input.64long", N) {
+        sink += largeObjectInputSum(largeObject, onError)
+    }
     runHandleLifecycle()
     println("END_PERFTEST")
 

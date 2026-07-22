@@ -155,6 +155,10 @@ pub(crate) struct TypeConfig {
     /// projection — it surfaces as `ByteArray`. Mutually exclusive with
     /// `opaque` / `enum_cfg`.
     pub value_blob: bool,
+    /// Explicit opt-in for a `data_class` to cross Kotlin → Rust as one
+    /// `JObject`. Unmarked data classes are required to flatten completely;
+    /// this flag is sticky across reopened declarations.
+    pub jobject_input: bool,
     /// Set by the four class declarators (`ptr_class` / `enum_class` /
     /// `data_class` / `value_class`), NOT by wrapper registration. Declared
     /// classes are required in **both** directions at scan (their converters

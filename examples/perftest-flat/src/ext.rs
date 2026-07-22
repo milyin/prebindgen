@@ -1,8 +1,9 @@
-//! Extended `#[prebindgen]` surface used **only** to exercise language-binding
+//! Extended `#[prebindgen]` surface primarily used to exercise language-binding
 //! generator features that the lean performance surface in [`crate`] does not
-//! need. None of these items are used by the `perftest-*` benchmarks; they exist
-//! so a *coverage* binding (e.g. `examples/covertest-kotlin`) can map one flat
-//! library through **every** adapter feature and assert the result.
+//! need. Most items exist so a *coverage* binding (e.g.
+//! `examples/covertest-kotlin`) can map one flat library through **every**
+//! adapter feature and assert the result; the `ObjectBoundary*` family also
+//! supports the flattened-vs-`JObject` JNI input micro-benchmark.
 //!
 //! Everything here is re-exported at the crate root (`pub use ext::*`), so a
 //! single `source_module = perftest_flat` reaches both the perf surface and this
@@ -491,6 +492,7 @@ pub fn payload_label_len(p: &Payload) -> Option<i64> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Annotated {
     pub payload: Payload,
+    pub alternate: Option<Payload>,
     pub ttl: Option<i64>,
     pub priority: Option<Priority>,
 }
@@ -501,9 +503,18 @@ pub struct Annotated {
 pub fn annotated_new(payload: Payload, ttl: Option<i64>, priority: Option<Priority>) -> Annotated {
     Annotated {
         payload,
+        alternate: None,
         ttl,
         priority,
     }
+}
+
+/// The optional nested payload's value. Its `Option<data_class>` input leaves
+/// are guarded by one presence bit and recursively reconstructed only when
+/// present.
+#[prebindgen]
+pub fn annotated_alternate_value(a: &Annotated) -> Option<f64> {
+    a.alternate.as_ref().map(|payload| payload.value)
 }
 
 /// The metadata TTL (`Option<prim>` field read back through a data-class
@@ -524,6 +535,133 @@ pub fn annotated_priority(a: &Annotated) -> Option<Priority> {
 #[prebindgen]
 pub fn annotated_payload_value(a: &Annotated) -> f64 {
     a.payload.value
+}
+
+/// One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundaryLeaf {
+    pub value: i64,
+}
+
+macro_rules! object_boundary_level {
+    ($name:ident, $child:ty) => {
+        #[prebindgen]
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        pub struct $name {
+            pub left: $child,
+            pub right: $child,
+        }
+    };
+}
+
+object_boundary_level!(ObjectBoundary2, ObjectBoundaryLeaf);
+object_boundary_level!(ObjectBoundary4, ObjectBoundary2);
+object_boundary_level!(ObjectBoundary8, ObjectBoundary4);
+object_boundary_level!(ObjectBoundary16, ObjectBoundary8);
+object_boundary_level!(ObjectBoundary32, ObjectBoundary16);
+object_boundary_level!(ObjectBoundary64, ObjectBoundary32);
+
+/// Structural twin of [`ObjectBoundary64`] used to benchmark an explicit
+/// whole-`JObject` input against recursive 64-leaf flattening.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundary64Object {
+    pub left: ObjectBoundary32,
+    pub right: ObjectBoundary32,
+}
+
+/// The right half of [`ObjectBoundary`]: 32 + 16 + 8 + 4 + 2 + 1 leaves.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundary63 {
+    pub leaves32: ObjectBoundary32,
+    pub leaves16: ObjectBoundary16,
+    pub leaves8: ObjectBoundary8,
+    pub leaves4: ObjectBoundary4,
+    pub leaves2: ObjectBoundary2,
+    pub leaf: ObjectBoundaryLeaf,
+}
+
+/// Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
+///
+/// Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
+/// contain 127 `i64` leaves. The generated Kotlin constructor/fromParts bridge
+/// remains legal at 254 JVM slots, but flattening a native input parameter
+/// would require 256: 254 for the leaves plus the `JNINative` receiver and
+/// binding-error sink. Because the JVM limit is 255, this otherwise-valid data
+/// class must cross Kotlin→Rust as one `JObject`.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectBoundary {
+    pub left: ObjectBoundary64,
+    pub right: ObjectBoundary63,
+}
+
+trait ObjectBoundarySum {
+    fn boundary_sum(&self) -> i64;
+}
+
+impl ObjectBoundarySum for ObjectBoundaryLeaf {
+    fn boundary_sum(&self) -> i64 {
+        self.value
+    }
+}
+
+macro_rules! impl_object_boundary_sum {
+    ($($name:ty),+ $(,)?) => {
+        $(
+            impl ObjectBoundarySum for $name {
+                fn boundary_sum(&self) -> i64 {
+                    self.left.boundary_sum() + self.right.boundary_sum()
+                }
+            }
+        )+
+    };
+}
+
+impl_object_boundary_sum!(
+    ObjectBoundary2,
+    ObjectBoundary4,
+    ObjectBoundary8,
+    ObjectBoundary16,
+    ObjectBoundary32,
+    ObjectBoundary64,
+    ObjectBoundary64Object,
+);
+
+impl ObjectBoundarySum for ObjectBoundary63 {
+    fn boundary_sum(&self) -> i64 {
+        self.leaves32.boundary_sum()
+            + self.leaves16.boundary_sum()
+            + self.leaves8.boundary_sum()
+            + self.leaves4.boundary_sum()
+            + self.leaves2.boundary_sum()
+            + self.leaf.boundary_sum()
+    }
+}
+
+impl ObjectBoundarySum for ObjectBoundary {
+    fn boundary_sum(&self) -> i64 {
+        self.left.boundary_sum() + self.right.boundary_sum()
+    }
+}
+
+#[prebindgen]
+pub fn object_boundary_value(value: &ObjectBoundary) -> i64 {
+    value.boundary_sum()
+}
+
+/// Sum the 64 scalar leaves after recursive JNI parameter flattening.
+#[prebindgen]
+pub fn large_flat_input_sum(value: &ObjectBoundary64) -> i64 {
+    value.boundary_sum()
+}
+
+/// Sum the same 64-leaf shape after decoding one whole `JObject` input.
+#[prebindgen]
+pub fn large_object_input_sum(value: &ObjectBoundary64Object) -> i64 {
+    value.boundary_sum()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -566,6 +704,14 @@ pub fn unsigned_round_trip(
 #[prebindgen]
 pub fn unsigned_optional(value: Option<u64>) -> Option<u64> {
     value
+}
+
+/// Read the optional `u64` field through the flattened data-class input ABI.
+/// With no natural niche it crosses as `(present, raw Long)`, never a boxed
+/// `java.lang.Long`/`JObject`.
+#[prebindgen]
+pub fn unsigned_data_maybe(value: &Unsigned) -> Option<u64> {
+    value.maybe_long
 }
 
 /// Deliver a `u64` through the generated typed/raw callback twin.
@@ -849,6 +995,12 @@ mod tests {
         assert_eq!(annotated_ttl(&a), Some(30));
         assert_eq!(annotated_priority(&a), Some(Priority::High));
         assert_eq!(annotated_payload_value(&a), 2.5);
+        assert_eq!(annotated_alternate_value(&a), None);
+        let with_alternate = Annotated {
+            alternate: Some(payload(2, 7.5, None)),
+            ..a.clone()
+        };
+        assert_eq!(annotated_alternate_value(&with_alternate), Some(7.5));
         let b = annotated_new(payload(1, 0.0, None), None, None);
         assert_eq!(annotated_ttl(&b), None);
         assert_eq!(annotated_priority(&b), None);

@@ -135,9 +135,14 @@ impl crate::api::core::Generation<JniGen> {
                 .map(|e| e.wire_type().to_token_stream().to_string())
                 .unwrap_or_else(|| "?".to_string());
             out.push_str(&format!(
-                "- `{}`: {} → `{fqn}` (wire `{wire}`)\n",
+                "- `{}`: {} → `{fqn}` (wire `{wire}`{})\n",
                 key.as_str(),
                 ext.class_kind_name(key),
+                if cfg.jobject_input {
+                    ", input `JObject` opt-in"
+                } else {
+                    ""
+                },
             ));
         }
         // Conversion sources (`convert!` decls) — the canonical single-value

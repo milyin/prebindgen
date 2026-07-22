@@ -19,7 +19,9 @@
 # ns/op per operation (the single-payload put / get / callback and the whole-batch
 # put_vec / get_vec / callback_vec) per language, followed by each language's full
 # report. The vector ops process a batch of VEC_N payloads per call (ns reported per
-# call); they run N / VEC_N iterations.
+# call); they run N / VEC_N iterations. The Kotlin report additionally compares a
+# nested 64-Long input recursively flattened into JNI scalars (`large_flat`) with
+# the identical shape passed as one `JObject` (`large_obj`).
 #
 # Usage:
 #   examples/perftest-bench.sh            # full run (N = 5,000,000, VEC_N = 16)
@@ -68,6 +70,7 @@ trap 'rm -rf "$TMP"' EXIT
 RUST_OUT="$TMP/rust.txt"
 C_OUT="$TMP/c.txt"
 KT_OUT="$TMP/kotlin.txt"
+KT_ERR="$TMP/kotlin.err"
 
 echo "==> perftest benchmark (N = $N)"
 
@@ -100,8 +103,9 @@ if have java; then
     # Gradle prints its own logs to stderr (suppressed with -q); the app's block
     # rides stdout. `-PperftestN` becomes `-Dperftest.n` for the forked app JVM.
     if ! (cd "$ROOT/examples/perftest-kotlin" &&
-        ./gradlew -q --console=plain run -PperftestN="$N" -PperftestVecN="$VEC_N") >"$KT_OUT" 2>/dev/null; then
+        ./gradlew -q --console=plain run -PperftestN="$N" -PperftestVecN="$VEC_N") >"$KT_OUT" 2>"$KT_ERR"; then
         echo "    Kotlin runner FAILED" >&2
+        sed 's/^/    /' "$KT_ERR" >&2
     fi
 else
     echo "--> Kotlin: SKIPPED (need a JDK for Gradle)"
@@ -146,19 +150,23 @@ awk -v want_n="$N" '
         for (i = 1; i <= 3; i++) if (canon[i] in order_seen) langs[++nlangs] = canon[i]
         if (nlangs == 0) { print "No benchmark output captured." ; exit 1 }
 
-        nops = split("put get callback put_vec get_vec callback_vec", ops, " ")
+        nops = split("put get callback put_vec get_vec callback_vec large_flat large_obj", ops, " ")
         # Apples-to-apples: one table per string category, null-label first.
         ncats = 0
         if ("null" in cats_seen) cattab[++ncats] = "null"
         if ("str"  in cats_seen) cattab[++ncats] = "str"
+        if ("64long" in cats_seen) cattab[++ncats] = "64long"
         if ("-"    in cats_seen) cattab[++ncats] = "-"
 
         catdesc["null"] = "null-label (no heap string \xE2\x80\x94 FFI + ownership cost only)"
         catdesc["str"]  = "with-string (realistic \xE2\x80\x94 includes the label heap alloc)"
+        catdesc["64long"] = "nested 64-Long Kotlin\xE2\x86\x92Rust input (flattened scalars vs JObject decode)"
         catdesc["-"]    = "uncategorized"
 
         for (c = 1; c <= ncats; c++) {
             cat = cattab[c]
+            if (cat == "64long") { firstop = 7; lastop = 8 }
+            else                 { firstop = 1; lastop = 6 }
             printf "================================================================\n"
             printf " perftest \xE2\x80\x94 best ns/op, %s\n", catdesc[cat]
             printf " (lower is better, N=%s)\n", want_n
@@ -166,7 +174,7 @@ awk -v want_n="$N" '
             printf " %-12s", "operation"
             for (l = 1; l <= nlangs; l++) printf " %14s", langs[l]
             printf "\n"
-            for (o = 1; o <= nops; o++) {
+            for (o = firstop; o <= lastop; o++) {
                 op = ops[o]
                 printf " %-12s", op
                 for (l = 1; l <= nlangs; l++) {
@@ -176,7 +184,7 @@ awk -v want_n="$N" '
                 printf "\n"
             }
             printf "\n winning variant per cell:\n"
-            for (o = 1; o <= nops; o++) {
+            for (o = firstop; o <= lastop; o++) {
                 op = ops[o]
                 printf "   %-12s", op
                 for (l = 1; l <= nlangs; l++) {
