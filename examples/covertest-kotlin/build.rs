@@ -53,6 +53,7 @@
 //! | binding-local fn as `.method()` / `.constructor()` | `Summary.mean()` ← `crate::summary_mean` (NO `.name` — derived by the strip hook); `Summary.fromMean` ← `crate::summary_from_mean` (FALLIBLE — sig `Result` → `onError`) |
 //! | `Result<_, E>` → typed domain `onError` | `storage_try_with_label` |
 //! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (malformed `Stamp` → binding; bad `secs` → domain) |
+//! | fixed-width unsigned scalars (#108) | `Unsigned` + direct/optional/callback/collection max-value round trips |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
@@ -212,6 +213,9 @@ fn main() {
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
                 .class(data_class!(Annotated))
+                // Fixed-width unsigned mappings: Int / Long widening plus
+                // ULong over a raw jlong bit pattern.
+                .class(data_class!(Unsigned))
                 // `Stamp` as a `@JvmInline value class` over its raw bytes; its readers
                 // become instance methods (`secs()` / `nanos()`), and `Vec<Stamp>`
                 // surfaces as `List<ByteArray>`.
@@ -380,7 +384,11 @@ fn main() {
                 .fun(fun!(annotated_new))
                 .fun(fun!(annotated_ttl))
                 .fun(fun!(annotated_priority))
-                .fun(fun!(annotated_payload_value)),
+                .fun(fun!(annotated_payload_value))
+                .fun(fun!(unsigned_round_trip))
+                .fun(fun!(unsigned_optional))
+                .fun(fun!(unsigned_emit))
+                .fun(fun!(unsigned_series)),
         )
         // analytics: the param-variant / return-field matrix (type default /
         // per-fn override, in + out). Per-fn overrides reuse the SAME

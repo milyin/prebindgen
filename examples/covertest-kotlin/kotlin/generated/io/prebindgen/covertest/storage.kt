@@ -26,9 +26,9 @@ import io.prebindgen.covertest.withSortedHandleLocks
 /** Create a new, empty storage handle. */
 public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = Storage(CovNative.storageNew(__bcap))
+    val __ret = CovNative.storageNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return Storage(__ret)
 }
 
 /**
@@ -40,15 +40,16 @@ public fun storageNew(onError: JniErrorHandler<Storage>): Storage {
  *
  * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageGet(s: Storage, onError: JniErrorHandler<Payload?>): Payload? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (CovNative.storageGet(s_ptr, __PayloadBuilder, __bcap) as Payload?)
+        CovNative.storageGet(s_ptr, __PayloadBuilder, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as Payload?
 }
 
 /**
@@ -136,15 +137,21 @@ public fun storagePutSlice(s: Storage, payloads: List<Payload>, onError: JniErro
  *
  * The Rust `Payload` result is delivered decomposed: the builder callback receives (`id`, `seq`, `value`, `flag`, `label`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageGetVec(s: Storage, onError: JniErrorHandler<List<Payload>?>): List<Payload>? {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (CovNative.storageGetVec(s_ptr, ArrayList<Payload>(), __PayloadFolderRawHolder.instance, __bcap) as List<Payload>?)
+        CovNative.storageGetVec(
+            s_ptr,
+            ArrayList<Payload>(),
+            __PayloadFolderRawHolder.instance,
+            __bcap,
+        )
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as List<Payload>?
 }
 
 /**
@@ -159,9 +166,9 @@ public fun payloadHandlerNew(
     onError: JniErrorHandler<PayloadHandler>,
 ): PayloadHandler {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = PayloadHandler(CovNative.payloadHandlerNew(f.asRaw(), __bcap))
+    val __ret = CovNative.payloadHandlerNew(f.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return PayloadHandler(__ret)
 }
 
 /**
@@ -196,9 +203,9 @@ public fun payloadVecHandlerNew(
     onError: JniErrorHandler<PayloadVecHandler>,
 ): PayloadVecHandler {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = PayloadVecHandler(CovNative.payloadVecHandlerNew(f, __bcap))
+    val __ret = CovNative.payloadVecHandlerNew(f, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return PayloadVecHandler(__ret)
 }
 
 /**
@@ -237,10 +244,10 @@ public fun storageTryWithLabel(
 ): Storage {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __dcap = StorageErrorHandlerRawCapture.acquire()
-    val __ret = Storage(CovNative.storageTryWithLabel(label, __bcap, __dcap))
+    val __ret = CovNative.storageTryWithLabel(label, __bcap, __dcap)
     if (__bcap.failed) return onBindingError.run(__bcap.ze0)
     if (__dcap.failed) return onError.run(__dcap.ze0!!, StorageError(__dcap.ze1!!))
-    return __ret
+    return Storage(__ret)
 }
 
 /**
@@ -260,10 +267,10 @@ public fun storageTryFromStamp(
 ): Storage {
     val __bcap = JniErrorHandlerCapture.acquire()
     val __dcap = StorageErrorHandlerRawCapture.acquire()
-    val __ret = Storage(CovNative.storageTryFromStamp(s.bytes, __bcap, __dcap))
+    val __ret = CovNative.storageTryFromStamp(s.bytes, __bcap, __dcap)
     if (__bcap.failed) return onBindingError.run(__bcap.ze0)
     if (__dcap.failed) return onError.run(__dcap.ze0!!, StorageError(__dcap.ze1!!))
-    return __ret
+    return Storage(__ret)
 }
 
 /**
@@ -271,30 +278,44 @@ public fun storageTryFromStamp(
  * `Vec<opaque-handle>` **return** — each element crosses as a raw pointer the
  * Kotlin folder wraps into a typed `Storage` handle).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageShards(
     count: Long,
     each: Long,
     onError: JniErrorHandler<List<Storage>>,
 ): List<Storage> {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = (CovNative.storageShards(count, each, ArrayList<Storage>(), __StorageFolderRawHolder.instance, __bcap) as List<Storage>)
+    val __ret = CovNative.storageShards(
+        count,
+        each,
+        ArrayList<Storage>(),
+        __StorageFolderRawHolder.instance,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as List<Storage>
 }
 
 /**
  * Like [`storage_shards`] but `None` when `count == 0`
  * (`Option<Vec<opaque-handle>>` — the fold under the null niche).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageShardsOpt(
     count: Long,
     each: Long,
     onError: JniErrorHandler<List<Storage>?>,
 ): List<Storage>? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = (CovNative.storageShardsOpt(count, each, ArrayList<Storage>(), __StorageFolderRawHolder.instance, __bcap) as List<Storage>?)
+    val __ret = CovNative.storageShardsOpt(
+        count,
+        each,
+        ArrayList<Storage>(),
+        __StorageFolderRawHolder.instance,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as List<Storage>?
 }
 
 /** Wrap a `Fn(Storage)` closure into a reusable [`StorageHandler`]. */
@@ -303,9 +324,9 @@ public fun storageHandlerNew(
     onError: JniErrorHandler<StorageHandler>,
 ): StorageHandler {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = StorageHandler(CovNative.storageHandlerNew(f.asRaw(), __bcap))
+    val __ret = CovNative.storageHandlerNew(f.asRaw(), __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return StorageHandler(__ret)
 }
 
 /**
@@ -345,15 +366,16 @@ public fun storageTotalLen(a: Storage, b: Storage, c: Storage, onError: JniError
  * All present labels, in storage order (`Vec<String>` **return** — the
  * single-leaf string fold).
  */
+@Suppress("UNCHECKED_CAST")
 public fun storageLabels(s: Storage, onError: JniErrorHandler<List<String>>): List<String> {
     if (s.isClosed()) return onError.run("Operation on a closed native handle.")
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (CovNative.storageLabels(s_ptr, ArrayList<String>(), __StringFolderHolder.instance, __bcap) as List<String>)
+        CovNative.storageLabels(s_ptr, ArrayList<String>(), __StringFolderHolder.instance, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as List<String>
 }
 
 /** Push `p` if present; whether it was pushed (`Option<data-class>` **input**). */

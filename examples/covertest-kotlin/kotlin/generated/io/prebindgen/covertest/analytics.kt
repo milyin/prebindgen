@@ -110,16 +110,16 @@ public class Summary(initialPtr: Long) : GcNativeHandle(initialPtr) {
          */
         public fun of(count: Long, total: Double, onError: JniErrorHandler<Summary>): Summary {
             val __bcap = JniErrorHandlerCapture.acquire()
-            val __ret = Summary(CovNative.summaryNew(count, total, __bcap))
+            val __ret = CovNative.summaryNew(count, total, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return __ret
+            return Summary(__ret)
         }
 
         public fun fromMean(count: Long, mean: Double, onError: JniErrorHandler<Summary>): Summary {
             val __bcap = JniErrorHandlerCapture.acquire()
-            val __ret = Summary(CovNative.summaryFromMean(count, mean, __bcap))
+            val __ret = CovNative.summaryFromMean(count, mean, __bcap)
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return __ret
+            return Summary(__ret)
         }
     }
 }
@@ -184,10 +184,10 @@ public fun <R> storageSummary(s: Storage, onError: JniErrorHandler<R>, build: Su
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (CovNative.storageSummary(s_ptr, build, __bcap) as R)
+        CovNative.storageSummary(s_ptr, build, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as R
 }
 
 /** Parameter `s` is the Rust `Summary` argument, expanded: pass EITHER its `summary_new` inputs OR an existing `Summary` — the selector chooses the arm (crosses as `sSel`, `s00`, `s01`, `s1`). */
@@ -291,10 +291,10 @@ public fun storageSummaryHandle(s: Storage, onError: JniErrorHandler<Summary>): 
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        Summary(CovNative.storageSummaryHandle(s_ptr, __bcap))
+        CovNative.storageSummaryHandle(s_ptr, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return Summary(__ret)
 }
 
 /**
@@ -332,10 +332,10 @@ public fun <R> storageSummaryFull(
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (CovNative.storageSummaryFull(s_ptr, build.asRaw(), __bcap) as R)
+        CovNative.storageSummaryFull(s_ptr, build.asRaw(), __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as R
 }
 
 /**
@@ -356,10 +356,10 @@ public fun <R> storageSummaryProbe(
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(s) {
         val s_ptr = s.ptr
-        (CovNative.storageSummaryProbe(s_ptr, build.asRaw(), __bcap) as R)
+        CovNative.storageSummaryProbe(s_ptr, build.asRaw(), __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as R
 }
 
 public fun storageExpectSummary(
@@ -582,7 +582,22 @@ public fun <R> summaryMerge(
             val primary1_ptr = primary1?.ptr ?: 0L
             val fallback1_ptr = fallback1?.ptr ?: 0L
             try {
-                (CovNative.summaryMerge(primarySel, primary00 != null, primary00 ?: 0L, primary01 != null, primary01 ?: 0.0, primary1_ptr, fallbackSel, fallback00 != null, fallback00 ?: 0L, fallback01 != null, fallback01 ?: 0.0, fallback1_ptr, build, __bcap) as R)
+                CovNative.summaryMerge(
+                    primarySel,
+                    primary00 != null,
+                    primary00 ?: 0L,
+                    primary01 != null,
+                    primary01 ?: 0.0,
+                    primary1_ptr,
+                    fallbackSel,
+                    fallback00 != null,
+                    fallback00 ?: 0L,
+                    fallback01 != null,
+                    fallback01 ?: 0.0,
+                    fallback1_ptr,
+                    build,
+                    __bcap,
+                )
             } finally {
                 primary1?.markConsumed()
                 fallback1?.markConsumed()
@@ -590,7 +605,7 @@ public fun <R> summaryMerge(
         }
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as R
 }
 
 /**
@@ -648,9 +663,9 @@ public fun <A> summarySeries(
     fold: SummaryFolder<A>,
 ): A {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = (CovNative.summarySeries(count, start, acc, fold, __bcap) as A)
+    val __ret = CovNative.summarySeries(count, start, acc, fold, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as A
 }
 
 /**
@@ -669,17 +684,17 @@ public fun <A> summarySeriesOpt(
     fold: SummaryFolder<A>,
 ): A? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = (CovNative.summarySeriesOpt(count, start, acc, fold, __bcap) as A?)
+    val __ret = CovNative.summarySeriesOpt(count, start, acc, fold, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as A?
 }
 
 /** Create an empty archive. */
 public fun archiveNew(onError: JniErrorHandler<SummaryVault>): SummaryVault {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = SummaryVault(CovNative.archiveNew(__bcap))
+    val __ret = CovNative.archiveNew(__bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return SummaryVault(__ret)
 }
 
 public fun archiveStore(a: SummaryVault, count: Long, total: Double, onError: JniErrorHandler<Unit>) = archiveStore(a, 0, count, total, null, onError)
@@ -737,8 +752,8 @@ public fun archiveLatest(a: SummaryVault, onError: JniErrorHandler<Summary?>): S
     val __bcap = JniErrorHandlerCapture.acquire()
     val __ret = withSortedHandleLocks(a) {
         val a_ptr = a.ptr
-        CovNative.archiveLatest(a_ptr, __bcap).let { if (it == 0L) null else Summary(it) }
+        CovNative.archiveLatest(a_ptr, __bcap)
     }
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret.let { if (it == 0L) null else Summary(it) }
 }

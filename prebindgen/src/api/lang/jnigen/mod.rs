@@ -14,6 +14,24 @@
 //!   3. [`jni::JniGen::write_kotlin`] walks the resolved registry to emit the
 //!      secondary Kotlin artifacts (typed-handle classes, data/enum classes,
 //!      exception classes, the centralized `JNINative` holder).
+//!
+//! # Fixed-width unsigned integers
+//!
+//! JniGen exposes Rust's fixed-width unsigned scalars without narrowing their
+//! domain at the Kotlin boundary:
+//!
+//! | Rust | Kotlin surface | JNI wire |
+//! |------|----------------|----------|
+//! | `u8` | `Int` | `jint` |
+//! | `u16` | `Int` | `jint` |
+//! | `u32` | `Long` | `jlong` |
+//! | `u64` | `ULong` | `jlong` / `Long` bit pattern |
+//!
+//! Inputs for `u8`, `u16`, and `u32` are range-checked and report a
+//! [`JniBindingError`] through the generated binding-error handler. `u64`
+//! uses Kotlin's bit-preserving `ULong.toLong()` / `Long.toULong()` bridge.
+//! These mappings compose through nullable/result outputs, generated data
+//! classes, callbacks, const getters, and supported output collections.
 
 pub mod jni;
 pub(crate) mod util;

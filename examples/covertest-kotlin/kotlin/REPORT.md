@@ -60,6 +60,12 @@ Base package: `io.prebindgen.covertest`
 - `stamp_new` — `fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp`
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp>`
   - shaped by: return `Stamp` decomposed → [] (Callback delivery)
+- `unsigned_emit` — `fun unsignedEmit(value: ULong, f: u64Callback, onError: JniErrorHandler<Unit>)`
+- `unsigned_optional` — `fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
+- `unsigned_round_trip` — `fun unsignedRoundTrip(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?, onError: JniErrorHandler<Unsigned>): Unsigned`
+  - shaped by: return `Unsigned` decomposed → [byte, short, int, long, maybeLong] (Callback delivery)
+- `unsigned_series` — `fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong>`
+  - shaped by: return `u64` decomposed → [] (Callback delivery)
 
 ## package `io.prebindgen.covertest.storage`
 
@@ -138,6 +144,7 @@ Base package: `io.prebindgen.covertest`
 - `StorageError`: ptr_class → `io.prebindgen.covertest.errors.StorageError` (wire `jni :: sys :: jlong`)
 - `StorageHandler`: ptr_class → `io.prebindgen.covertest.StorageHandler` (wire `jni :: sys :: jlong`)
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
+- `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
 
 ## conversions
 

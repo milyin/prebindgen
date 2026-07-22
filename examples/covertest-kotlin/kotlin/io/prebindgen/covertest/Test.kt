@@ -23,6 +23,7 @@ import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.Priority
 import io.prebindgen.covertest.model.Stamp
+import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.labelReverse
@@ -35,6 +36,10 @@ import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
 import io.prebindgen.covertest.model.stampNew
 import io.prebindgen.covertest.model.stampSeries
+import io.prebindgen.covertest.model.unsignedEmit
+import io.prebindgen.covertest.model.unsignedOptional
+import io.prebindgen.covertest.model.unsignedRoundTrip
+import io.prebindgen.covertest.model.unsignedSeries
 import io.prebindgen.covertest.storage.addMillis
 import io.prebindgen.covertest.storage.payloadHandlerNew
 import io.prebindgen.covertest.storage.payloadVecHandlerNew
@@ -112,6 +117,54 @@ fun main() {
         val p = Payload(1L, 2, 3.5, true, "hello")
         check(p.id == 1L && p.seq == 2 && p.value == 3.5 && p.flag && p.label == "hello")
         check(Payload.fromParts(9L, 9, 9.0, false, null).label == null)
+    }
+
+    // ── #108: fixed-width unsigned scalars. Small widths widen losslessly;
+    // u64 keeps all bits through the public ULong ↔ raw Long projection. ─────
+    section("fixed-width unsigned scalars") {
+        val max = unsignedRoundTrip(
+            UByte.MAX_VALUE.toInt(),
+            UShort.MAX_VALUE.toInt(),
+            UInt.MAX_VALUE.toLong(),
+            ULong.MAX_VALUE,
+            ULong.MAX_VALUE,
+            boom,
+        )
+        check(
+            max == Unsigned(
+                UByte.MAX_VALUE.toInt(),
+                UShort.MAX_VALUE.toInt(),
+                UInt.MAX_VALUE.toLong(),
+                ULong.MAX_VALUE,
+                ULong.MAX_VALUE,
+            ),
+        ) { "unsigned max round trip mismatch: $max" }
+        check(unsignedOptional(null, boom) == null)
+        check(unsignedOptional(ULong.MAX_VALUE, boom) == ULong.MAX_VALUE)
+
+        var emitted = 0uL
+        unsignedEmit(ULong.MAX_VALUE, u64Callback { emitted = it }, boom)
+        check(emitted == ULong.MAX_VALUE)
+        check(unsignedSeries(boom) == listOf(0uL, ULong.MAX_VALUE))
+
+        fun expectRangeError(
+            byte: Int,
+            short: Int,
+            int: Long,
+            expected: String,
+        ) {
+            var message: String? = null
+            val fallback = Unsigned(0, 0, 0L, 0uL, null)
+            val result = unsignedRoundTrip(byte, short, int, 0uL, null) { je ->
+                message = je
+                fallback
+            }
+            check(result == fallback)
+            check(message?.contains(expected) == true) { "unexpected range error: $message" }
+        }
+        expectRangeError(-1, 0, 0L, "u8 input out of range: -1")
+        expectRangeError(0, 65_536, 0L, "u16 input out of range: 65536")
+        expectRangeError(0, 0, 4_294_967_296L, "u32 input out of range: 4294967296")
     }
 
     // ── enum_class: return / by-value param / Option<enum> param ─────────────

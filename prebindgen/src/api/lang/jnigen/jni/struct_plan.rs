@@ -120,7 +120,7 @@ pub(crate) fn build_struct_plan(
                     s.ident, fname
                 );
             }
-            let fqn = ext.kotlin_fqn(&proj.leaf_key).map(|v| v.to_string())?;
+            let fqn = projection_leaf_kt(ext, &proj)?.to_string();
             fields.push(PlanField {
                 fname,
                 kind: PlanFieldKind::Projection { conv, proj, fqn },

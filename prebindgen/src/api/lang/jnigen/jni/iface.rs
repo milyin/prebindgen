@@ -50,13 +50,15 @@ pub(crate) enum WrapKind {
     HandleOwned(String),
     /// `Copy` value blob: raw `ByteArray` → `@JvmInline` value class (FQN).
     Blob(String),
+    /// Rust `u64`: raw `Long` bit pattern → typed Kotlin `ULong`.
+    Unsigned64,
 }
 
 impl WrapKind {
     /// The Kotlin FQN the wrap constructs, if any (for import registration).
     pub fn class_fqn(&self) -> Option<&str> {
         match self {
-            WrapKind::None => None,
+            WrapKind::None | WrapKind::Unsigned64 => None,
             WrapKind::Handle(f) | WrapKind::HandleOwned(f) | WrapKind::Blob(f) => Some(f),
         }
     }
@@ -70,6 +72,13 @@ impl WrapKind {
     /// The wrapping expression over `arg` (`raw_nullable` adds a null-safe
     /// `?.let`): `ZKeyExpr(x)` / `x?.let { ZKeyExpr(it) }` / passthrough.
     pub fn wrap_expr(&self, arg: &str, raw_nullable: bool) -> String {
+        if matches!(self, WrapKind::Unsigned64) {
+            return if raw_nullable {
+                format!("{arg}?.toULong()")
+            } else {
+                format!("{arg}.toULong()")
+            };
+        }
         match self.class_fqn() {
             None => arg.to_string(),
             Some(fqn) => {
@@ -677,7 +686,7 @@ fn leaf_iface_param(
             out_ty = &peeled;
         }
     }
-    let (builder_kt, _wire_kt, _wrap, is_vb) =
+    let (builder_kt, _wire_kt, _wrap, is_value_projection) =
         unfold_leaf_kt(ext, registry, out_ty, nullable, "x")?;
     let proj = registry
         .output_entry(out_ty)
@@ -689,16 +698,27 @@ fn leaf_iface_param(
             t
         }
     };
-    if is_vb {
-        let fqn = proj
-            .and_then(|p| ext.kotlin_fqn(&p.leaf_key))
-            .map(|f| f.to_string())?;
-        return Some(IfaceParam {
-            name,
-            typed: nullable_kt(kt::KtType::cls(fqn.clone())),
-            raw: nullable_kt(kt::KtType::byte_array()),
-            wrap: WrapKind::Blob(fqn),
-        });
+    if is_value_projection {
+        match proj?.kind {
+            ProjectionKind::ValueBlob => {
+                let fqn = ext.kotlin_fqn(&proj?.leaf_key)?.to_string();
+                return Some(IfaceParam {
+                    name,
+                    typed: nullable_kt(kt::KtType::cls(fqn.clone())),
+                    raw: nullable_kt(kt::KtType::byte_array()),
+                    wrap: WrapKind::Blob(fqn),
+                });
+            }
+            ProjectionKind::Unsigned64 => {
+                return Some(IfaceParam {
+                    name,
+                    typed: nullable_kt(kt::KtType::cls("ULong")),
+                    raw: nullable_kt(kt::KtType::long()),
+                    wrap: WrapKind::Unsigned64,
+                });
+            }
+            ProjectionKind::Handle => {}
+        }
     }
     if let Some(p) = proj.filter(|p| p.kind == ProjectionKind::Handle) {
         let fqn = ext.kotlin_fqn(&p.leaf_key)?.to_string();

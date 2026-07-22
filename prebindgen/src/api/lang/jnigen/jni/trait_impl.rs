@@ -244,6 +244,21 @@ impl JniGen {
         }
     }
 
+    /// Leaf metadata for Rust `u64`: the JNI value-context stays `Long`, while
+    /// projection-aware Kotlin emitters surface `ULong` and insert the
+    /// bit-preserving `toLong()` / `toULong()` bridge.
+    fn unsigned64_leaf_meta(&self) -> KotlinMeta {
+        KotlinMeta {
+            projection: Some(Projection {
+                leaf_key: TypeKey::parse("u64").expect("builtin type key"),
+                owned: false,
+                strategy: FoldStrategy::Base,
+                kind: ProjectionKind::Unsigned64,
+            }),
+            ..self.framework_meta(Some(kt::KtType::long()))
+        }
+    }
+
     /// If the user pinned a Kotlin name for `outer_ty` via
     /// [`Self::data_class`] (or it's an opaque-handle entry that
     /// kept its FQN in `kotlin_name`), use that name; otherwise leave
@@ -832,9 +847,11 @@ impl JniGen {
             // and multi-field data classes are not leaf-folded — data classes go
             // through `value_struct_decons`.
             Some(cfg) => cfg.value_blob || cfg.opaque.is_some(),
-            // Undeclared: only the `String` builtin crosses as a single
-            // JObject-shaped leaf (`JString`); other builtins are primitives.
-            None => is_string_type(elem),
+            // Undeclared: `String` is JObject-shaped; `u64` is the built-in
+            // scalar projection whose raw jlong leaf the Kotlin folder wraps
+            // into `ULong`. Other primitive collections retain their existing
+            // unsupported status (`Vec<u8>` is the rank-0 ByteArray special).
+            None => is_string_type(elem) || TypeKey::from_type(elem).as_str() == "u64",
         }
     }
 }
@@ -1545,13 +1562,18 @@ impl JniGen {
         if let Some((wire, body)) = primitive_input(ty) {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
+            let metadata = if TypeKey::from_type(ty).as_str() == "u64" {
+                self.unsigned64_leaf_meta()
+            } else {
+                self.framework_meta(kotlin_name)
+            };
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
                 function: self.build_input_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: self.framework_meta(kotlin_name),
+                metadata,
             });
         }
         if let Some(name) = bare_path_ident(ty) {
@@ -1750,13 +1772,18 @@ impl JniGen {
         if let Some((wire, body)) = primitive_output(ty) {
             let niches = default_niches_for_wire(&wire);
             let kotlin_name = kotlin_for_wire(&wire);
+            let metadata = if TypeKey::from_type(ty).as_str() == "u64" {
+                self.unsigned64_leaf_meta()
+            } else {
+                self.framework_meta(kotlin_name)
+            };
             return Some(ConverterImpl {
                 subs: vec![],
                 pre_stages: vec![],
                 function: self.build_output_fn(ty, &wire, &body, None),
                 destination: wire,
                 niches,
-                metadata: self.framework_meta(kotlin_name),
+                metadata,
             });
         }
         if let Some(name) = bare_path_ident(ty) {

@@ -748,3 +748,112 @@ fn data_class_members_reenter_as_field_leaves() {
     assert!(pb.contains("funorigin("), "{all}");
     assert!(pb.contains("funfromParts("), "{all}");
 }
+
+/// #108: fixed-width unsigned scalars use lossless signed JNI carriers. The
+/// public Kotlin surface widens `u8/u16/u32` and projects `u64` to `ULong`,
+/// while the harness stays primitive (`Int`/`Long`) and nullable `u64` keeps
+/// a raw `Long?` twin.
+#[test]
+fn unsigned_scalars_use_lossless_kotlin_surface_and_raw_jni_wires() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Unsigned {
+                    pub byte: u8,
+                    pub short: u16,
+                    pub int: u32,
+                    pub long: u64,
+                    pub maybe_long: Option<u64>,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn unsigned_round_trip(
+                    byte: u8,
+                    short: u16,
+                    int: u32,
+                    long: u64,
+                    maybe_long: Option<u64>,
+                ) -> Unsigned {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn unsigned_callback(f: impl Fn(u64) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn unsigned_result(value: u64) -> Result<u64, String> {
+                    unimplemented!()
+                }
+            )),
+            loc,
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::data_class!(Unsigned))
+            .fun(crate::fun!(unsigned_round_trip))
+            .fun(crate::fun!(unsigned_callback))
+            .fun(crate::fun!(unsigned_result)),
+    );
+    let dir = unique_test_dir("jnigen_unsigned");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let generation = registry.resolve(jni).expect("resolve");
+    let rust_path = generation
+        .write_rust(dir.join("gen.rs"))
+        .expect("write_rust");
+    let rust = std::fs::read_to_string(rust_path).unwrap();
+    let rc: String = rust.split_whitespace().collect();
+    assert!(rc.contains("u8::try_from(*v)"), "{rust}");
+    assert!(rc.contains("u16::try_from(*v)"), "{rust}");
+    assert!(rc.contains("u32::try_from(*v)"), "{rust}");
+    assert!(rc.contains("*vas::core::primitive::u64"), "{rust}");
+
+    let paths = generation
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin");
+    let kotlin = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+
+    // Typed wrapper + data-class surface.
+    assert!(kc.contains("byte:Int"), "{kotlin}");
+    assert!(kc.contains("short:Int"), "{kotlin}");
+    assert!(kc.contains("int:Long"), "{kotlin}");
+    assert!(kc.contains("long:ULong"), "{kotlin}");
+    assert!(kc.contains("maybeLong:ULong?"), "{kotlin}");
+
+    // Raw harness and wrapper bridges retain stable JNI primitives.
+    assert!(kc.contains("externalfununsignedRoundTrip("), "{kotlin}");
+    assert!(kc.contains("long:Long"), "{kotlin}");
+    assert!(kc.contains("maybeLong:Long?"), "{kotlin}");
+    assert!(kc.contains("long.toLong()"), "{kotlin}");
+    assert!(kc.contains("maybeLong?.toLong()"), "{kotlin}");
+    assert!(kc.contains(".toULong()"), "{kotlin}");
+
+    // Callback gets a typed interface plus a raw Long twin and adapter.
+    assert!(kc.contains("funrun(u64:ULong)"), "{kotlin}");
+    assert!(kc.contains("funrun(u64:Long)"), "{kotlin}");
+    assert!(kc.contains("u64.toULong()"), "{kotlin}");
+
+    // The projection composes through Result's success arm while retaining
+    // the ordinary typed domain-error callback.
+    assert!(kc.contains("fununsignedResult(value:ULong"), "{kotlin}");
+    assert!(kc.contains("):ULong"), "{kotlin}");
+}

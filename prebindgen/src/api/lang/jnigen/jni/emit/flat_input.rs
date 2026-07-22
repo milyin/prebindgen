@@ -104,6 +104,36 @@ pub(crate) fn struct_input_body(
                         let #fname_ident = #field_conv(env, &#raw_ident)?;
                     });
                 }
+                ProjectionKind::Unsigned64 => {
+                    if let Some(inner_ty) = option_inner_type(&field.ty) {
+                        let inner_conv =
+                            registry.input_entry(&inner_ty)?.function.sig.ident.clone();
+                        let tmp_ident = format_ident!("__{}_jobj", fname_ident);
+                        field_preludes.push(quote! {
+                            let #tmp_ident: jni::objects::JObject = env
+                                .get_field(v, #camel, "Lkotlin/ULong;")
+                                .and_then(|val| val.l())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                            let #fname_ident = if #tmp_ident.is_null() {
+                                ::core::option::Option::None
+                            } else {
+                                let #raw_ident: jni::sys::jlong = env
+                                    .call_method(&#tmp_ident, "unbox-impl", "()J", &[])
+                                    .and_then(|val| val.j())
+                                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                                ::core::option::Option::Some(#inner_conv(env, &#raw_ident)?)
+                            };
+                        });
+                    } else {
+                        field_preludes.push(quote! {
+                            let #raw_ident: jni::sys::jlong = env
+                                .get_field(v, #camel, "J")
+                                .and_then(|val| val.j())
+                                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                            let #fname_ident = #field_conv(env, &#raw_ident)?;
+                        });
+                    }
+                }
             }
             field_init.push(quote!(#fname_ident));
             continue;
@@ -524,6 +554,67 @@ pub(crate) fn build_flat_input_plan(
         }
 
         let fentry = registry.input_entry(&field.ty)?;
+        // Rust `u64` projection: the public data-class property is `ULong`,
+        // while flattened JNI leaves stay raw `Long`. `Option<u64>` uses the
+        // same present/value pair as other optional scalars because all 64
+        // bit patterns are live values and no niche is available.
+        if fentry
+            .metadata
+            .projection
+            .as_ref()
+            .is_some_and(|p| p.kind == ProjectionKind::Unsigned64)
+        {
+            let inner_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+            let inner = registry.input_entry(&inner_ty)?;
+            let conv = inner.function.sig.ident.clone();
+            let field_ref = if optional {
+                format!("?.{fcamel}")
+            } else {
+                format!(".{fcamel}")
+            };
+            if option_inner_type(&field.ty).is_some() {
+                leaves.push(FlatLeaf {
+                    native_ident: format_ident!("{}_{}_present", param_name, fident),
+                    native_wire_ty: quote!(jni::sys::jboolean),
+                    kt_name: snake_to_camel(&format!("{}_{}_present", param_name, fident)),
+                    kt_wire_ty: "Boolean".to_string(),
+                    kt_access_tail: format!("{field_ref} != null"),
+                    conv: None,
+                    field: Some(fident.clone()),
+                    is_present_flag: true,
+                    opt_scalar: false,
+                });
+                leaves.push(FlatLeaf {
+                    native_ident: format_ident!("{}_{}_value", param_name, fident),
+                    native_wire_ty: quote!(jni::sys::jlong),
+                    kt_name: snake_to_camel(&format!("{}_{}_value", param_name, fident)),
+                    kt_wire_ty: "Long".to_string(),
+                    kt_access_tail: format!("{field_ref}?.toLong() ?: 0L"),
+                    conv: Some(conv),
+                    field: Some(fident.clone()),
+                    is_present_flag: false,
+                    opt_scalar: true,
+                });
+            } else {
+                let tail = if optional {
+                    format!("{field_ref}?.toLong() ?: 0L")
+                } else {
+                    format!("{field_ref}.toLong()")
+                };
+                leaves.push(FlatLeaf {
+                    native_ident: format_ident!("{}_{}", param_name, fident),
+                    native_wire_ty: quote!(jni::sys::jlong),
+                    kt_name: snake_to_camel(&format!("{}_{}", param_name, fident)),
+                    kt_wire_ty: "Long".to_string(),
+                    kt_access_tail: tail,
+                    conv: Some(conv),
+                    field: Some(fident.clone()),
+                    is_present_flag: false,
+                    opt_scalar: false,
+                });
+            }
+            continue;
+        }
         // Reject anything outside the simple-leaf set (keeps the object path).
         if !fentry.pre_stages.is_empty() {
             return None;

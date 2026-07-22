@@ -532,8 +532,19 @@ fn cross_artifact_optional_iterable_fold_agrees() {
         ),
         "optional fold wrapper surface (returns A?, null = None):\n{wrappers}"
     );
+    let call = kc
+        .find("val__ret=JNINative.zThingsMaybe(acc,fold.asRaw(),__bcap)")
+        .expect("optional fold stores the erased native result");
+    let check = call
+        + kc[call..]
+            .find("if(__bcap.failed)returnonError.run(__bcap.ze0)")
+            .expect("optional fold checks the binding-error capture");
+    let cast = check
+        + kc[check..]
+            .find("return__retasA?")
+            .expect("optional fold casts the successful result to A?");
     assert!(
-        kc.contains("JNINative.zThingsMaybe(acc,fold.asRaw(),__bcap)asA?"),
-        "optional fold call site casts the erased result to A?:\n{wrappers}"
+        call < check && check < cast,
+        "optional fold must redispatch a native error before casting its erased result:\n{wrappers}"
     );
 }

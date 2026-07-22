@@ -310,18 +310,16 @@ public class Storage(initialPtr: Long) : NativeHandle(initialPtr), StorageApi, C
          */
         public fun withPayload(payload: Payload, onError: JniErrorHandler<Storage>): Storage {
             val __bcap = JniErrorHandlerCapture.acquire()
-            val __ret = Storage(
-                CovNative.storageWithPayload(
-                    payload.id,
-                    payload.seq,
-                    payload.value,
-                    payload.flag,
-                    payload.label,
-                    __bcap,
-                ),
+            val __ret = CovNative.storageWithPayload(
+                payload.id,
+                payload.seq,
+                payload.value,
+                payload.flag,
+                payload.label,
+                __bcap,
             )
             if (__bcap.failed) return onError.run(__bcap.ze0)
-            return __ret
+            return Storage(__ret)
         }
     }
 }
@@ -393,6 +391,22 @@ public fun StorageCallback.asRaw(): StorageCallbackRaw =
         }
     }
 
+public fun interface u64Callback {
+    public fun run(u64: ULong)
+}
+
+public fun interface u64CallbackRaw {
+    public fun run(u64: Long)
+}
+
+public fun u64Callback.asRaw(): u64CallbackRaw =
+    u64CallbackRaw {
+        u64 ->
+        run(
+            u64.toULong()
+        )
+    }
+
 public fun interface PayloadBuilder<out R> {
     public fun run(id: Long, seq: Int, value: Double, flag: Boolean, label: String?): R
 }
@@ -460,6 +474,30 @@ internal object __StringFolderHolder {
     @JvmField
     val instance: StringFolder<ArrayList<String>> =
     StringFolder { acc, element -> acc.add(element); acc }
+}
+
+public fun interface u64Folder<A> {
+    public fun run(acc: A, element: ULong): A
+}
+
+public fun interface u64FolderRaw<A> {
+    public fun run(acc: A, element: Long): A
+}
+
+public fun <A> u64Folder<A>.asRaw(): u64FolderRaw<A> =
+    u64FolderRaw<A> {
+        acc,
+        element ->
+        run(
+            acc,
+            element.toULong()
+        )
+    }
+
+internal object __u64FolderRawHolder {
+    @JvmField
+    val instance: u64FolderRaw<ArrayList<ULong>> =
+    u64FolderRaw { acc, element -> acc.add(element.toULong()); acc }
 }
 
 /**
@@ -846,6 +884,22 @@ internal object CovNative {
     ): Double
 
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+
+    external fun unsignedEmit(value: Long, f: Any, errorSink: Any)
+
+    external fun unsignedOptional(value: Long?, errorSink: Any): Long?
+
+    external fun unsignedRoundTrip(
+        byte: Int,
+        short: Int,
+        int: Long,
+        long: Long,
+        maybeLong: Long?,
+        build: Any,
+        errorSink: Any,
+    ): Any?
+
+    external fun unsignedSeries(acc: Any?, fold: Any, errorSink: Any): Any?
 
     external fun constGetCoverMagic(errorSink: Any): Long
 

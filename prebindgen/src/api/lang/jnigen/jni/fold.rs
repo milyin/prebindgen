@@ -52,6 +52,26 @@ pub(crate) fn handle_kt_type(strategy: &FoldStrategy, leaf: &kt::KtType) -> kt::
     )
 }
 
+/// Typed Kotlin leaf of a projection. Declared handle/value-blob projections
+/// take their configured class FQN; the built-in `u64` projection is Kotlin's
+/// stable unsigned scalar type.
+pub(crate) fn projection_leaf_kt(ext: &JniGen, proj: &Projection) -> Option<kt::KtType> {
+    match proj.kind {
+        ProjectionKind::Handle | ProjectionKind::ValueBlob => {
+            ext.kotlin_fqn(&proj.leaf_key).map(kt::KtType::cls)
+        }
+        ProjectionKind::Unsigned64 => Some(kt::KtType::cls("ULong")),
+    }
+}
+
+/// Wrap one raw projection leaf into its typed Kotlin form.
+pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str) -> String {
+    match kind {
+        ProjectionKind::Handle | ProjectionKind::ValueBlob => format!("{short}({raw})"),
+        ProjectionKind::Unsigned64 => format!("{raw}.toULong()"),
+    }
+}
+
 /// For a projection (handle / value-class / value-blob) **struct field**,
 /// compute the `(wire_param_type, wrap_expr)` the data class's `fromParts`
 /// factory uses: the wire param type matches the leaf wire
@@ -72,6 +92,7 @@ pub(crate) fn factory_projection_wire_wrap(
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
         Handle => (kt::KtType::long(), format!("{short}({name})")),
         ValueBlob => (kt::KtType::byte_array(), format!("{short}({name})")),
+        Unsigned64 => (kt::KtType::long(), format!("{name}.toULong()")),
     };
     match strategy {
         Base => direct(kind),
@@ -93,6 +114,9 @@ pub(crate) fn factory_projection_wire_wrap(
                     kt::KtType::byte_array().nullable(),
                     format!("{name}?.let {{ {short}(it) }}"),
                 ),
+                // `Option<u64>` has no spare bit pattern, so its primitive
+                // wire is boxed and JVM null represents `None`.
+                Unsigned64 => (kt::KtType::long().nullable(), format!("{name}?.toULong()")),
             }
         }
         Iterable(_) => panic!(
@@ -306,6 +330,7 @@ pub(crate) fn render_handle_close(
 pub(crate) fn fold_projection_wrap(
     strategy: &crate::api::lang::jnigen::jni::FoldStrategy,
     receiver: &str,
+    kind: &crate::api::lang::jnigen::jni::ProjectionKind,
     wrap_class: &str,
     niche_sentinel: Option<&str>,
 ) -> String {
@@ -313,22 +338,27 @@ pub(crate) fn fold_projection_wrap(
     fn go(
         s: &crate::api::lang::jnigen::jni::FoldStrategy,
         r: &str,
+        kind: &crate::api::lang::jnigen::jni::ProjectionKind,
         w: &str,
         sentinel: Option<&str>,
         depth: usize,
     ) -> String {
         match s {
-            Base => format!("{w}({r})"),
-            Optional(kind, inner) => match (kind, &**inner) {
+            Base => projection_wrap_expr(kind, w, r),
+            Optional(nullable_kind, inner) => match (nullable_kind, &**inner) {
                 // Primitive-wired niche → can't carry null on the wire, so
                 // compare against the sentinel and synthesize null on the
                 // Kotlin side.
                 (NullableKind::Niche, Base) if sentinel.is_some() => {
                     let s = sentinel.unwrap();
-                    format!("{r}.let {{ if (it == {s}) null else {w}(it) }}")
+                    let wrapped = projection_wrap_expr(kind, w, "it");
+                    format!("{r}.let {{ if (it == {s}) null else {wrapped} }}")
                 }
                 // Object-wired niche or fully boxed Nullable → `?.let { W(it) }`.
-                (_, Base) => format!("{r}?.let {{ {w}(it) }}"),
+                (_, Base) => {
+                    let wrapped = projection_wrap_expr(kind, w, "it");
+                    format!("{r}?.let {{ {wrapped} }}")
+                }
                 // Deeper nesting. The niche/boxed distinction is only
                 // observable at the outermost layer covering a `Direct`
                 // leaf; intermediate layers (nullable-of-iterable etc.)
@@ -338,23 +368,26 @@ pub(crate) fn fold_projection_wrap(
                     let v = format!("e{depth}");
                     format!(
                         "{r}?.let {{ {v} -> {} }}",
-                        go(inner, &v, w, sentinel, depth + 1)
+                        go(inner, &v, kind, w, sentinel, depth + 1)
                     )
                 }
             },
             Iterable(inner) => match &**inner {
-                Base => format!("{r}.map {{ {w}(it) }}"),
+                Base => {
+                    let wrapped = projection_wrap_expr(kind, w, "it");
+                    format!("{r}.map {{ {wrapped} }}")
+                }
                 _ => {
                     let v = format!("e{depth}");
                     format!(
                         "{r}.map {{ {v} -> {} }}",
-                        go(inner, &v, w, sentinel, depth + 1)
+                        go(inner, &v, kind, w, sentinel, depth + 1)
                     )
                 }
             },
         }
     }
-    go(strategy, receiver, wrap_class, niche_sentinel, 0)
+    go(strategy, receiver, kind, wrap_class, niche_sentinel, 0)
 }
 
 /// JNI extern's declared Kotlin wire-return for a projection. The leaf wire
@@ -372,6 +405,7 @@ pub(crate) fn projection_wire_return(
         ProjectionKind::Handle => (kt::KtType::long(), true),
         // Value-blob's inner wire is always `ByteArray` (object-shaped).
         ProjectionKind::ValueBlob => (kt::KtType::byte_array(), false),
+        ProjectionKind::Unsigned64 => (kt::KtType::long(), true),
     };
     fold_shape(
         &proj.strategy,
@@ -403,6 +437,9 @@ pub(crate) fn projection_leaf_sentinel(
         // primitive sentinel; JVM `null` represents the absent value, so
         // `?.let` covers nullability.
         ProjectionKind::ValueBlob => syn::parse_quote!(jni::objects::JByteArray),
+        // No niche exists for `u64`; `Option<u64>` uses the boxed path, so a
+        // primitive sentinel must never be synthesized.
+        ProjectionKind::Unsigned64 => return None,
     };
     kotlin_null_sentinel(&leaf_wire).map(|s| s.to_string())
 }

@@ -6,6 +6,9 @@ import io.prebindgen.covertest.JniErrorHandler
 import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
+import io.prebindgen.covertest.__u64FolderRawHolder
+import io.prebindgen.covertest.asRaw
+import io.prebindgen.covertest.u64Callback
 
 public interface PriorityKind {
     val value: Int
@@ -52,6 +55,24 @@ public data class Annotated(val payload: Payload, val ttl: Long?, val priority: 
 }
 
 /**
+ * Every fixed-width Rust unsigned scalar in one generated Kotlin data class.
+ * The first three fields widen losslessly; `long`/`maybe_long` surface as
+ * `ULong`/`ULong?` over raw JNI `Long` bit patterns.
+ */
+public data class Unsigned(val byte: Int, val short: Int, val int: Long, val long: ULong, val maybeLong: ULong?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            byte: Int,
+            short: Int,
+            int: Long,
+            long: Long,
+            maybeLong: Long?,
+        ): Unsigned = Unsigned(byte, short, int, long.toULong(), maybeLong?.toULong())
+    }
+}
+
+/**
  * A plain `Copy` timestamp. Declared `value_class` in the binding, so it
  * crosses **by value as its raw bytes** in a `ByteArray` (no heap handle, no
  * `close()`), and `Vec<Stamp>` surfaces as `List<ByteArray>`.
@@ -77,6 +98,33 @@ public value class Stamp(public val bytes: ByteArray) {
         return __ret
     }
 }
+
+public fun interface UnsignedBuilder<out R> {
+    public fun run(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?): R
+}
+
+public fun interface UnsignedBuilderRaw<out R> {
+    public fun run(byte: Int, short: Int, int: Long, long: Long, maybeLong: Long?): R
+}
+
+public fun <R> UnsignedBuilder<R>.asRaw(): UnsignedBuilderRaw<R> =
+    UnsignedBuilderRaw<R> {
+        byte,
+        short,
+        int,
+        long,
+        maybeLong ->
+        run(
+            byte,
+            short,
+            int,
+            long.toULong(),
+            maybeLong?.toULong()
+        )
+    }
+
+internal val __UnsignedBuilderRaw: UnsignedBuilderRaw<Unsigned> =
+UnsignedBuilderRaw { byte, short, int, long, maybeLong -> Unsigned.fromParts(byte, short, int, long, maybeLong) }
 
 public fun interface StampFolder<A> {
     public fun run(acc: A, element: Stamp): A
@@ -105,11 +153,9 @@ internal object __StampFolderRawHolder {
 /** Classify a payload by magnitude of its `value` (enum **return**). */
 public fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.model.Priority.fromInt(
-        CovNative.payloadPriority(p.id, p.seq, p.value, p.flag, p.label, __bcap),
-    )
+    val __ret = CovNative.payloadPriority(p.id, p.seq, p.value, p.flag, p.label, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return io.prebindgen.covertest.model.Priority.fromInt(__ret)
 }
 
 /** Numeric weight of a priority (enum **by-value parameter**). */
@@ -127,30 +173,34 @@ public fun priorityOr(
     onError: JniErrorHandler<Priority>,
 ): Priority {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = io.prebindgen.covertest.model.Priority.fromInt(
-        CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __bcap),
-    )
+    val __ret = CovNative.priorityOr(p != null, p?.value ?: 0, fallback.value, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return io.prebindgen.covertest.model.Priority.fromInt(__ret)
 }
 
 /** Build a [`Stamp`] (value-class **return**). */
 public fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = Stamp(CovNative.stampNew(secs, nanos, __bcap))
+    val __ret = CovNative.stampNew(secs, nanos, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return Stamp(__ret)
 }
 
 /**
  * A monotonically increasing run of stamps (`Vec<value-class>` →
  * `List<ByteArray>`).
  */
+@Suppress("UNCHECKED_CAST")
 public fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp> {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = (CovNative.stampSeries(count, ArrayList<Stamp>(), __StampFolderRawHolder.instance, __bcap) as List<Stamp>)
+    val __ret = CovNative.stampSeries(
+        count,
+        ArrayList<Stamp>(),
+        __StampFolderRawHolder.instance,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret as List<Stamp>
 }
 
 /**
@@ -227,11 +277,9 @@ public fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long? {
 /** The metadata priority (`Option<enum>` **return**). */
 public fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority? {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.annotatedPriority(a, __bcap)?.let {
-        io.prebindgen.covertest.model.Priority.fromInt(it)
-    }
+    val __ret = CovNative.annotatedPriority(a, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
-    return __ret
+    return __ret?.let { io.prebindgen.covertest.model.Priority.fromInt(it) }
 }
 
 /**
@@ -243,4 +291,60 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
     val __ret = CovNative.annotatedPayloadValue(a, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
+}
+
+/**
+ * Round-trip direct unsigned parameters through an unsigned data-class
+ * return, covering both checked widening and the `ULong` projection.
+ *
+ * The Rust `Unsigned` result is delivered decomposed: the builder callback receives (`byte`, `short`, `int`, `long`, `maybeLong`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun unsignedRoundTrip(
+    byte: Int,
+    short: Int,
+    int: Long,
+    long: ULong,
+    maybeLong: ULong?,
+    onError: JniErrorHandler<Unsigned>,
+): Unsigned {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.unsignedRoundTrip(
+        byte,
+        short,
+        int,
+        long.toLong(),
+        maybeLong?.toLong(),
+        __UnsignedBuilderRaw,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Unsigned
+}
+
+/** Direct nullable `u64` projection in both directions. */
+public fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.unsignedOptional(value?.toLong(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret?.let { it.toULong() }
+}
+
+/** Deliver a `u64` through the generated typed/raw callback twin. */
+public fun unsignedEmit(value: ULong, f: u64Callback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.unsignedEmit(value.toLong(), f.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Output collection fold whose raw `jlong` leaves become `ULong` values on
+ * the Kotlin side.
+ */
+@Suppress("UNCHECKED_CAST")
+public fun unsignedSeries(onError: JniErrorHandler<List<ULong>>): List<ULong> {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.unsignedSeries(ArrayList<ULong>(), __u64FolderRawHolder.instance, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as List<ULong>
 }

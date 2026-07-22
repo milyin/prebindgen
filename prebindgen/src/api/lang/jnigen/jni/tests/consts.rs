@@ -104,6 +104,40 @@ fn declared_consts_emit_getter_and_val() {
     assert!(nc.contains("externalfunconstGetGreeting("), "{native}");
 }
 
+/// A `u64` const uses the same typed/raw projection as an ordinary function
+/// return: public `ULong`, private/native `Long`, with a bit-preserving wrap.
+#[test]
+fn unsigned_const_uses_ulong_surface() {
+    let registry = Registry::<KotlinMeta>::from_items(vec![(
+        syn::Item::Const(syn::parse_quote!(
+            pub const MAX_UNSIGNED: u64 = u64::MAX;
+        )),
+        myflat_loc(),
+    )])
+    .expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(crate::package!("cfg").constant(crate::constant!(MAX_UNSIGNED)));
+    let dir = unique_test_dir("jnigen_consts_unsigned");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let kotlin = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let kc: String = kotlin.split_whitespace().collect();
+    assert!(kc.contains("valMAX_UNSIGNED:ULongbylazy"), "{kotlin}");
+    assert!(kc.contains("privatefunconstGetMaxUnsigned("), "{kotlin}");
+    assert!(kc.contains("):ULong"), "{kotlin}");
+    assert!(kc.contains("externalfunconstGetMaxUnsigned("), "{kotlin}");
+    assert!(kc.contains("):Long"), "{kotlin}");
+    assert!(kc.contains(".toULong()"), "{kotlin}");
+}
+
 /// An undeclared const emits nothing (JniGen has a const declaration
 /// mechanism, so const emission is declared-only); `ignore_const`
 /// acknowledges it without emitting.

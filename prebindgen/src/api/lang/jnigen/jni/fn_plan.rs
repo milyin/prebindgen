@@ -112,6 +112,9 @@ pub(crate) enum InputKind {
     /// Non-lockable value projection (`value_blob`): the call site passes the
     /// unwrapped inline-class `field`; the extern keeps the erased wire.
     ValueUnwrap { field: String },
+    /// Rust `u64`: typed Kotlin `ULong`, raw JNI `Long`. The wrapper passes
+    /// the bit-preserving `toLong()` representation and takes no lock.
+    Unsigned64,
     /// Everything else: the resolved entry's converter/wire as-is.
     Plain,
 }
@@ -527,6 +530,7 @@ fn classify_leaf(
                     });
                 InputKind::ValueUnwrap { field }
             }
+            Some(ProjectionKind::Unsigned64) => InputKind::Unsigned64,
             None => InputKind::Plain,
         }
     };
@@ -535,7 +539,7 @@ fn classify_leaf(
     // the projection's leaf key); everything else the entry's resolved name.
     let kt_meta = entry.metadata.kotlin_name.clone();
     let kt_public = match entry.metadata.projection.as_ref() {
-        Some(p) => ext.kotlin_fqn(&p.leaf_key).map(kt::KtType::cls),
+        Some(p) => projection_leaf_kt(ext, p),
         None => kt_meta.clone(),
     };
 
@@ -684,7 +688,7 @@ impl ReturnSurface {
         // return type's converter metadata — one source of truth, no
         // shape-specific peeling.
         if let Some(h) = outer_meta.as_ref().and_then(|m| m.projection.clone()) {
-            let leaf_fqn = ext.kotlin_fqn(&h.leaf_key);
+            let leaf_fqn = projection_leaf_kt(ext, &h).map(|t| t.to_string());
             return (
                 Self::Projected {
                     projection: h,

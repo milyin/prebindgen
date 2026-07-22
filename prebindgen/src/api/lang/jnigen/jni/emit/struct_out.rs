@@ -219,6 +219,32 @@ fn encode_plan(
                             default: quote!(jni::objects::JObject::null()),
                         });
                     }
+                    ProjectionKind::Unsigned64 => match proj.strategy {
+                        FoldStrategy::Base => {
+                            preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
+                            slots.push(EncSlot {
+                                ident: id,
+                                wire_ty: quote!(jni::sys::jlong),
+                                descriptor: "J".to_string(),
+                                is_object: false,
+                                default: quote!(0i64),
+                            });
+                        }
+                        FoldStrategy::Optional(_, _) => {
+                            preludes
+                                .extend(quote! { let #id: jni::objects::JObject = #value_expr; });
+                            slots.push(EncSlot {
+                                ident: id,
+                                wire_ty: quote!(jni::objects::JObject),
+                                descriptor: "Ljava/lang/Long;".to_string(),
+                                is_object: true,
+                                default: quote!(jni::objects::JObject::null()),
+                            });
+                        }
+                        FoldStrategy::Iterable(_) => unreachable!(
+                            "projection collection fields are rejected by build_struct_plan"
+                        ),
+                    },
                 }
             }
             // Enum leaf → jint discriminant (Kotlin `fromParts` calls `fromInt`).
