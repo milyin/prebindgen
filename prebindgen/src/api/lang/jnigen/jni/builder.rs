@@ -1351,7 +1351,7 @@ impl JniGen {
                 let mut ty = candidate.to_type();
                 let mut depth = 0;
                 while crate::api::core::types_util::is_option_type(&ty) {
-                    let Some(inner) = crate::api::core::types_util::first_type_arg(&ty) else {
+                    let Some(inner) = option_inner_type(&ty) else {
                         return 0;
                     };
                     ty = inner;
