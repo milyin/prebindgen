@@ -61,6 +61,20 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
 }
 
 /**
+ * Data-class composition probe for the bounded duration representation.
+ * The coverage binding deliberately marks this class `.jobject_input()` so
+ * its echo executes both the whole-object input decoder and the `fromParts`
+ * output encoder; the nullable duration itself still uses the raw `jlong`
+ * niche whenever it crosses a generated JNI call boundary.
+ */
+public data class DurationBoundary(val delay: ULong?) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(delay: Long): DurationBoundary = DurationBoundary(if (delay == -1L) null else delay.toULong())
+    }
+}
+
+/**
  * Deliberate object-boundary fixture for `data_class!(T).jobject_input()`.
  *
  * Its [`ObjectBoundary64`] and [`ObjectBoundary63`] children recursively
@@ -501,6 +515,25 @@ public value class Stamp(public val bytes: ByteArray) {
     }
 }
 
+public fun interface DurationBoundaryBuilder<out R> {
+    public fun run(delay: ULong?): R
+}
+
+public fun interface DurationBoundaryBuilderRaw<out R> {
+    public fun run(delay: Long): R
+}
+
+public fun <R> DurationBoundaryBuilder<R>.asRaw(): DurationBoundaryBuilderRaw<R> =
+    DurationBoundaryBuilderRaw<R> {
+        delay ->
+        run(
+            if (delay == -1L) null else delay.toULong()
+        )
+    }
+
+internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
+DurationBoundaryBuilderRaw { delay -> DurationBoundary.fromParts(delay) }
+
 public fun interface UnsignedBuilder<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?): R
 }
@@ -891,6 +924,22 @@ public fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): UL
     val __ret = CovNative.durationOptional(value?.toLong() ?: -1L, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret.let { if (it == -1L) null else it.toULong() }
+}
+
+/**
+ * Round-trip [`DurationBoundary`] through the explicit object-input bridge.
+ *
+ * The Rust `DurationBoundary` result is delivered decomposed: the builder callback receives (`delay`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun durationBoundaryEcho(
+    value: DurationBoundary,
+    onError: JniErrorHandler<DurationBoundary>,
+): DurationBoundary {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.durationBoundaryEcho(value, __DurationBoundaryBuilderRaw, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as DurationBoundary
 }
 
 /**

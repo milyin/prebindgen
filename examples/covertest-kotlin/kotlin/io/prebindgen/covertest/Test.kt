@@ -21,6 +21,7 @@ import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.ObjectBoundary2
 import io.prebindgen.covertest.model.ObjectBoundary4
@@ -37,6 +38,7 @@ import io.prebindgen.covertest.model.annotatedNew
 import io.prebindgen.covertest.model.annotatedAlternateValue
 import io.prebindgen.covertest.model.celsiusDouble
 import io.prebindgen.covertest.model.durationOptional
+import io.prebindgen.covertest.model.durationBoundaryEcho
 import io.prebindgen.covertest.model.durationOutOfRange
 import io.prebindgen.covertest.model.labelReverse
 import io.prebindgen.covertest.model.percentInvalidOutput
@@ -202,6 +204,20 @@ fun main() {
         check(durationOptional(null, boom) == null)
         check(durationOptional(0uL, boom) == 0uL)
         check(durationOptional(86_400_000uL, boom) == 86_400_000uL)
+
+        // The data-class property is semantic `ULong?`, while its native
+        // output factory receives primitive Long + niche. The echo's explicit
+        // object input also executes the complete ULong -> Duration decoder.
+        val fromParts = DurationBoundary::class.java.getDeclaredMethod(
+            "fromParts",
+            java.lang.Long.TYPE,
+        )
+        check(fromParts.parameterTypes.single() == java.lang.Long.TYPE)
+        check(durationBoundaryEcho(DurationBoundary(null), boom) == DurationBoundary(null))
+        check(
+            durationBoundaryEcho(DurationBoundary(12_345uL), boom) ==
+                DurationBoundary(12_345uL),
+        )
 
         var inputError: String? = null
         val inputFallback = durationOptional(86_400_001uL) { je ->

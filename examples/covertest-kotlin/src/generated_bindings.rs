@@ -486,6 +486,30 @@ pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     Ok(<perftest_flat::Celsius as ::core::convert::Into<i32>>::into(v))
 }
 #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn DurationBoundary_to_JObject_9c5bf9bc<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::DurationBoundary,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___delay: jni::sys::jlong = Option_Duration_to_jlong_1cfa4d44(
+            env,
+            v.delay.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/DurationBoundary",
+                "fromParts",
+                "(J)Lio/prebindgen/covertest/model/DurationBoundary;",
+                &[jni::objects::JValue::from(___delay)],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
 pub(crate) unsafe fn Duration_to_u64_e3980876<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Duration,
@@ -600,6 +624,34 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
             alternate,
             ttl,
             priority,
+        }
+    })
+}
+#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::DurationBoundary, __JniErr> {
+    Ok({
+        let __delay_jobj: jni::objects::JObject = env
+            .get_field(v, "delay", "Lkotlin/ULong;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("DurationBoundary.delay: {}", e)))?;
+        let delay = if __delay_jobj.is_null() {
+            ::core::option::Option::None
+        } else {
+            let __delay_raw: jni::sys::jlong = env
+                .call_method(&__delay_jobj, "unbox-impl", "()J", &[])
+                .and_then(|val| val.j())
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("DurationBoundary.delay: {}", e)))?;
+            jlong_to_Option_Duration_1cfa4d44(env, &__delay_raw)?
+        };
+        perftest_flat::DurationBoundary {
+            delay,
         }
     })
 }
@@ -6326,6 +6378,79 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_coverTagRuntime<
                 __SINK_FQN,
                 __SINK_DESCR,
                 &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_durationBoundaryEcho<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    value: jni::objects::JObject<'a>,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let value = match JObject_to_DurationBoundary_9c5bf9bc(&mut env, &value) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/DurationBoundaryBuilderRaw";
+    const __CB_DESCR: &str = "(J)Ljava/lang/Object;";
+    let __out = perftest_flat::duration_boundary_echo(&value);
+    let __obj0: jni::sys::jvalue = {
+        let __enc0 = match Option_Duration_to_jlong_1cfa4d44(
+            &mut env,
+            __out.delay.clone(),
+        ) {
+            ::core::result::Result::Ok(__w) => __w,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+        jni::sys::jvalue { j: __enc0 }
+    };
+    match __CB_MID
+        .call_object(&mut env, __CB_FQN, "run", __CB_DESCR, &__builder, &[__obj0])
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
             );
             jni::objects::JObject::null().into()
         }

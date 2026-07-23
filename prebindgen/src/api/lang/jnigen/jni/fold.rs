@@ -78,32 +78,36 @@ pub(crate) fn projection_wrap_expr(kind: &ProjectionKind, short: &str, raw: &str
 /// `struct_output_body` passes (handle → `Long` jlong sentinel, value class /
 /// blob → `ByteArray`), and the wrap reconstructs the typed value in JVM
 /// bytecode (`Short(arg)`, with null mapped from the `0L` sentinel for handles
-/// or JVM null for value classes). Only the `Direct` and `Nullable{Direct}`
-/// shapes a scalar projection field can take are supported — a collection
+/// or the declared invalid `Long` for a bounded unsigned representation; JVM
+/// null remains the fallback for non-niche value projections). Only the
+/// `Direct` and `Nullable{Direct}` shapes a scalar projection field can take
+/// are supported — a collection
 /// (`Vec<projection>`) field is rejected (matching the struct bridge's
 /// scalar-only guard).
 pub(crate) fn factory_projection_wire_wrap(
-    kind: &crate::api::lang::jnigen::jni::ProjectionKind,
-    strategy: &crate::api::lang::jnigen::jni::FoldStrategy,
+    proj: &crate::api::lang::jnigen::jni::Projection,
     short: &str,
     name: &str,
 ) -> (kt::KtType, String) {
-    use crate::api::{core::shape::Shape::*, lang::jnigen::jni::ProjectionKind::*};
+    use crate::api::{
+        core::shape::Shape::*,
+        lang::jnigen::jni::{NullableKind, ProjectionKind::*},
+    };
     let direct = |kind: &crate::api::lang::jnigen::jni::ProjectionKind| match kind {
         Handle => (kt::KtType::long(), format!("{short}({name})")),
         ValueBlob => (kt::KtType::byte_array(), format!("{short}({name})")),
         Unsigned64 => (kt::KtType::long(), format!("{name}.toULong()")),
     };
-    match strategy {
-        Base => direct(kind),
-        Optional(_, inner) => {
+    match &proj.strategy {
+        Base => direct(&proj.kind),
+        Optional(nullable, inner) => {
             if !matches!(**inner, Base) {
                 panic!(
                     "factory_projection_wire_wrap: only `Nullable<Direct>` projection struct \
                      fields are supported (field `{name}`)"
                 );
             }
-            match kind {
+            match proj.kind {
                 // Handle null rides the `0L` jlong sentinel.
                 Handle => (
                     kt::KtType::long(),
@@ -114,9 +118,28 @@ pub(crate) fn factory_projection_wire_wrap(
                     kt::KtType::byte_array().nullable(),
                     format!("{name}?.let {{ {short}(it) }}"),
                 ),
-                // `Option<u64>` has no spare bit pattern, so its primitive
-                // wire is boxed and JVM null represents `None`.
-                Unsigned64 => (kt::KtType::long().nullable(), format!("{name}?.toULong()")),
+                Unsigned64 => match nullable {
+                    // A bounded unsigned representation reserves an invalid
+                    // raw value for `None`, so the factory receives primitive
+                    // `Long` and restores the nullable semantic property.
+                    NullableKind::Niche => {
+                        let sentinel = projection_leaf_sentinel(proj).unwrap_or_else(|| {
+                            panic!(
+                                "factory_projection_wire_wrap: niche unsigned field `{name}` \
+                                 has no declared sentinel"
+                            )
+                        });
+                        (
+                            kt::KtType::long(),
+                            format!("if ({name} == {sentinel}) null else {name}.toULong()"),
+                        )
+                    }
+                    // Plain `Option<u64>` has no spare bit pattern, so its
+                    // primitive wire is boxed and JVM null represents `None`.
+                    NullableKind::Boxed => {
+                        (kt::KtType::long().nullable(), format!("{name}?.toULong()"))
+                    }
+                },
             }
         }
         Iterable(_) => panic!(
@@ -188,8 +211,7 @@ fn factory_from_plan(
             // Projection leaf (handle / value class / blob).
             PlanFieldKind::Projection { proj, fqn, .. } => {
                 let short = register_fqn(fqn, imports);
-                let (wire_ty, wrap) =
-                    factory_projection_wire_wrap(&proj.kind, &proj.strategy, &short, &base);
+                let (wire_ty, wrap) = factory_projection_wire_wrap(proj, &short, &base);
                 params.push((base.clone(), wire_ty));
                 parts.push(wrap);
             }

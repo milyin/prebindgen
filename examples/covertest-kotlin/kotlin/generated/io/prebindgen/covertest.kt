@@ -2,6 +2,7 @@
 package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.ObjectBoundary
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
@@ -721,6 +722,8 @@ internal object CovNative {
     external fun celsiusDouble(c: Int, errorSink: Any): Int
 
     external fun coverTagRuntime(errorSink: Any): String
+
+    external fun durationBoundaryEcho(value: DurationBoundary, build: Any, errorSink: Any): Any?
 
     external fun durationOptional(value: Long, errorSink: Any): Long
 

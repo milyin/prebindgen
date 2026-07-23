@@ -50,15 +50,16 @@ pub(crate) enum WrapKind {
     HandleOwned(String),
     /// `Copy` value blob: raw `ByteArray` → `@JvmInline` value class (FQN).
     Blob(String),
-    /// Rust `u64`: raw `Long` bit pattern → typed Kotlin `ULong`.
-    Unsigned64,
+    /// Rust `u64`: raw `Long` bit pattern → typed Kotlin `ULong`. A bounded
+    /// optional representation carries its `None` niche as a primitive value.
+    Unsigned64 { niche_sentinel: Option<String> },
 }
 
 impl WrapKind {
     /// The Kotlin FQN the wrap constructs, if any (for import registration).
     pub fn class_fqn(&self) -> Option<&str> {
         match self {
-            WrapKind::None | WrapKind::Unsigned64 => None,
+            WrapKind::None | WrapKind::Unsigned64 { .. } => None,
             WrapKind::Handle(f) | WrapKind::HandleOwned(f) | WrapKind::Blob(f) => Some(f),
         }
     }
@@ -72,11 +73,16 @@ impl WrapKind {
     /// The wrapping expression over `arg` (`raw_nullable` adds a null-safe
     /// `?.let`): `ZKeyExpr(x)` / `x?.let { ZKeyExpr(it) }` / passthrough.
     pub fn wrap_expr(&self, arg: &str, raw_nullable: bool) -> String {
-        if matches!(self, WrapKind::Unsigned64) {
-            return if raw_nullable {
-                format!("{arg}?.toULong()")
-            } else {
-                format!("{arg}.toULong()")
+        if let WrapKind::Unsigned64 { niche_sentinel } = self {
+            return match (raw_nullable, niche_sentinel) {
+                (true, Some(sentinel)) => {
+                    format!("{arg}?.let {{ if (it == {sentinel}) null else it.toULong() }}")
+                }
+                (true, None) => format!("{arg}?.toULong()"),
+                (false, Some(sentinel)) => {
+                    format!("if ({arg} == {sentinel}) null else {arg}.toULong()")
+                }
+                (false, None) => format!("{arg}.toULong()"),
             };
         }
         match self.class_fqn() {
@@ -710,11 +716,17 @@ fn leaf_iface_param(
                 });
             }
             ProjectionKind::Unsigned64 => {
+                let mut raw = projection_wire_return(proj?);
+                if nullable && !raw.is_nullable() {
+                    raw = raw.nullable();
+                }
                 return Some(IfaceParam {
                     name,
-                    typed: nullable_kt(kt::KtType::cls("ULong")),
-                    raw: nullable_kt(kt::KtType::long()),
-                    wrap: WrapKind::Unsigned64,
+                    typed: builder_kt.clone(),
+                    raw,
+                    wrap: WrapKind::Unsigned64 {
+                        niche_sentinel: projection_leaf_sentinel(proj?),
+                    },
                 });
             }
             ProjectionKind::Handle => {}

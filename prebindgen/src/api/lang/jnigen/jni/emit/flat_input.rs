@@ -106,9 +106,25 @@ pub(crate) fn struct_input_body(
                 }
                 ProjectionKind::Unsigned64 => {
                     if let Some(inner_ty) = option_inner_type(&field.ty) {
+                        let niche = matches!(
+                            proj.strategy,
+                            FoldStrategy::Optional(NullableKind::Niche, _)
+                        );
                         let inner_conv =
                             registry.input_entry(&inner_ty)?.function.sig.ident.clone();
                         let tmp_ident = format_ident!("__{}_jobj", fname_ident);
+                        let decode = if niche {
+                            // The Kotlin data-class property is still `ULong?`
+                            // (and therefore boxed in object storage), but its
+                            // JNI converter is niche-keyed on primitive jlong.
+                            // Run the complete field converter so every custom
+                            // semantic stage (e.g. u64 -> Duration) is applied.
+                            quote! { #field_conv(env, &#raw_ident)? }
+                        } else {
+                            quote! {
+                                ::core::option::Option::Some(#inner_conv(env, &#raw_ident)?)
+                            }
+                        };
                         field_preludes.push(quote! {
                             let #tmp_ident: jni::objects::JObject = env
                                 .get_field(v, #camel, "Lkotlin/ULong;")
@@ -121,7 +137,7 @@ pub(crate) fn struct_input_body(
                                     .call_method(&#tmp_ident, "unbox-impl", "()J", &[])
                                     .and_then(|val| val.j())
                                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                                ::core::option::Option::Some(#inner_conv(env, &#raw_ident)?)
+                                #decode
                             };
                         });
                     } else {
