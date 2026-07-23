@@ -604,17 +604,20 @@ pub(crate) fn build_flat_input_plan(
     }
     let mut leaves: Vec<FlatLeaf> = Vec::new();
     let mut stack = Vec::new();
-    let root = build_flat_struct_node(
+    let mut ctx = FlatRecurseCtx {
         ext,
         registry,
+        root: &key,
+        stack: &mut stack,
+        leaves: &mut leaves,
+    };
+    let root = build_flat_struct_node(
+        &mut ctx,
         st,
         optional,
         &param_name.to_string(),
         "",
         optional,
-        &key,
-        &mut stack,
-        &mut leaves,
     )?;
     let contains_nested = root
         .fields
@@ -628,45 +631,48 @@ pub(crate) fn build_flat_input_plan(
     }))
 }
 
-#[allow(clippy::too_many_arguments)]
+struct FlatRecurseCtx<'a> {
+    ext: &'a JniGen,
+    registry: &'a Registry<KotlinMeta>,
+    root: &'a TypeKey,
+    stack: &'a mut Vec<TypeKey>,
+    leaves: &'a mut Vec<FlatLeaf>,
+}
+
 fn build_flat_struct_node(
-    ext: &JniGen,
-    registry: &Registry<KotlinMeta>,
+    ctx: &mut FlatRecurseCtx<'_>,
     st: &syn::ItemStruct,
     optional: bool,
     native_prefix: &str,
     access_prefix: &str,
     nullable_context: bool,
-    root: &TypeKey,
-    stack: &mut Vec<TypeKey>,
-    leaves: &mut Vec<FlatLeaf>,
 ) -> Result<FlatStructNode, FlatInputError> {
     let node_key = TypeKey::from_ident(&st.ident);
-    if stack.contains(&node_key) {
+    if ctx.stack.contains(&node_key) {
         return Err(flat_error(
-            root,
+            ctx.root,
             native_prefix,
             "recursive data-class cycle",
         ));
     }
-    if stack.len() >= 16 {
+    if ctx.stack.len() >= 16 {
         return Err(flat_error(
-            root,
+            ctx.root,
             native_prefix,
             "recursive flattening exceeds depth 16",
         ));
     }
     let syn::Fields::Named(named) = &st.fields else {
         return Err(flat_error(
-            root,
+            ctx.root,
             native_prefix,
             "only named-field structs can flatten",
         ));
     };
-    stack.push(node_key);
+    ctx.stack.push(node_key);
     let present_ident = if optional {
         let native = format!("{native_prefix}_present");
-        push_present_leaf(leaves, &native, format!("{access_prefix} != null"), None);
+        push_present_leaf(ctx.leaves, &native, format!("{access_prefix} != null"), None);
         Some(format_ident!("{native}"))
     } else {
         None
@@ -674,7 +680,7 @@ fn build_flat_struct_node(
     let mut fields = Vec::new();
     for field in &named.named {
         let Some(fident) = field.ident.clone() else {
-            return Err(flat_error(root, native_prefix, "unnamed field"));
+            return Err(flat_error(ctx.root, native_prefix, "unnamed field"));
         };
         let fcamel = mangle_kotlin_ident(&snake_to_camel(&fident.to_string()));
         let child_native = format!("{native_prefix}_{}", fident);
@@ -687,21 +693,17 @@ fn build_flat_struct_node(
         if let TypeKind::DataStruct {
             st: child,
             cfg: Some(cfg),
-        } = ext.type_kind(registry, &nested_ty)
+        } = ctx.ext.type_kind(ctx.registry, &nested_ty)
         {
             if cfg.name_spec.is_some() && !cfg.special_decl() && !cfg.jobject_input {
                 let child_optional = option_inner_type(&field.ty).is_some();
                 let node = build_flat_struct_node(
-                    ext,
-                    registry,
+                    ctx,
                     child,
                     child_optional,
                     &child_native,
                     &field_ref,
                     nullable_context || child_optional,
-                    root,
-                    stack,
-                    leaves,
                 )?;
                 fields.push(FlatFieldNode::Nested {
                     field: fident,
@@ -712,9 +714,9 @@ fn build_flat_struct_node(
         }
 
         let path = child_native.clone();
-        let Some(fentry) = registry.input_entry(&field.ty) else {
+        let Some(fentry) = ctx.registry.input_entry(&field.ty) else {
             return Err(flat_error(
-                root,
+                ctx.root,
                 &path,
                 format!(
                     "field type `{}` has no input converter",
@@ -727,25 +729,25 @@ fn build_flat_struct_node(
         // `(present, value)` representation at every recursion depth.
         if let Some(inner_ty) = option_inner_type(&field.ty) {
             if !matches!(inner_ty, syn::Type::Reference(_)) {
-                if let Some(inner) = registry.input_entry(&inner_ty) {
+                if let Some(inner) = ctx.registry.input_entry(&inner_ty) {
                     if let Some(prim) = JniPrim::from_wire(&inner.destination) {
                         if inner.niches.clone().carve().is_none()
                             && inner.metadata.projection.is_none()
                             && inner.pre_stages.is_empty()
                         {
                             let present_index = push_present_leaf(
-                                leaves,
+                                ctx.leaves,
                                 &format!("{child_native}_present"),
                                 format!("{field_ref} != null"),
                                 Some(fident.clone()),
                             );
-                            let value_access = if ext.is_kotlin_enum(&inner_ty) {
+                            let value_access = if ctx.ext.is_kotlin_enum(&inner_ty) {
                                 format!("{field_ref}?.value ?: {}", prim.kotlin_zero())
                             } else {
                                 format!("{field_ref} ?: {}", prim.kotlin_zero())
                             };
                             let value_index = push_value_leaf(
-                                leaves,
+                                ctx.leaves,
                                 &format!("{child_native}_value"),
                                 fident.clone(),
                                 inner,
@@ -777,9 +779,9 @@ fn build_flat_struct_node(
             if proj.kind == ProjectionKind::Unsigned64 {
                 if let Some(inner_ty) = option_inner_type(&field.ty) {
                     if JniPrim::from_wire(&fentry.destination).is_none() {
-                        let inner = registry.input_entry(&inner_ty).ok_or_else(|| {
+                        let inner = ctx.registry.input_entry(&inner_ty).ok_or_else(|| {
                             flat_error(
-                                root,
+                                ctx.root,
                                 &path,
                                 format!(
                                     "unsigned field representation `{}` has no input converter",
@@ -788,13 +790,13 @@ fn build_flat_struct_node(
                             )
                         })?;
                         let present_index = push_present_leaf(
-                            leaves,
+                            ctx.leaves,
                             &format!("{child_native}_present"),
                             format!("{field_ref} != null"),
                             Some(fident.clone()),
                         );
                         let value_index = push_value_leaf(
-                            leaves,
+                            ctx.leaves,
                             &format!("{child_native}_value"),
                             fident.clone(),
                             inner,
@@ -817,14 +819,14 @@ fn build_flat_struct_node(
                 ProjectionKind::Handle => {
                     if matches!(proj.strategy, FoldStrategy::Iterable(_)) {
                         return Err(flat_error(
-                            root,
+                            ctx.root,
                             &path,
                             "collections of handles retain their collection boundary",
                         ));
                     }
                     let optional_handle = option_inner_type(&field.ty).is_some();
                     let value_index = push_handle_leaf(
-                        leaves,
+                        ctx.leaves,
                         &child_native,
                         fident.clone(),
                         field_ref,
@@ -851,7 +853,7 @@ fn build_flat_struct_node(
                         access.push_str(" ?: ByteArray(0)");
                     }
                     let value_index = push_value_leaf(
-                        leaves,
+                        ctx.leaves,
                         &child_native,
                         fident.clone(),
                         fentry,
@@ -881,7 +883,7 @@ fn build_flat_struct_node(
                         format!("{field_ref}.toLong()")
                     };
                     let value_index = push_value_leaf(
-                        leaves,
+                        ctx.leaves,
                         &child_native,
                         fident.clone(),
                         fentry,
@@ -902,7 +904,7 @@ fn build_flat_struct_node(
         }
 
         let field_is_option = option_inner_type(&field.ty).is_some();
-        let mut access = if ext.is_kotlin_enum(&flat_probe_inner(&field.ty)) {
+        let mut access = if ctx.ext.is_kotlin_enum(&flat_probe_inner(&field.ty)) {
             if field_is_option || nullable_context {
                 format!("{field_ref}?.value ?: 0")
             } else {
@@ -919,7 +921,7 @@ fn build_flat_struct_node(
             }
         }
         let value_index = push_value_leaf(
-            leaves,
+            ctx.leaves,
             &child_native,
             fident.clone(),
             fentry,
@@ -935,9 +937,9 @@ fn build_flat_struct_node(
             rust_ty: Box::new(field.ty.clone()),
         });
     }
-    stack.pop();
+    ctx.stack.pop();
     Ok(FlatStructNode {
-        struct_module: struct_module_path(ext, registry, st),
+        struct_module: struct_module_path(ctx.ext, ctx.registry, st),
         struct_ident: st.ident.clone(),
         binding: format_ident!("__flat_{native_prefix}"),
         optional,
