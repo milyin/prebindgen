@@ -6,6 +6,30 @@
 
 use super::*;
 
+/// The `#[allow(...)]` carried by every generated converter `fn`.
+///
+/// Generated converters are uniform templates, not hand-written idiomatic Rust,
+/// so beyond the name / unused suppressions this allows the clippy lints those
+/// templates inherently trip — none of which flag a real issue in generated
+/// code, and which are only avoidable by contorting the emitted code:
+/// * `needless_question_mark` — a range-checked input's `Ok(try_from(..)?)`;
+/// * `let_and_return` — a multi-stage conversion fold's trailing `let`;
+/// * `nonminimal_bool` / `eq_op` — a representation-domain guard whose bounds
+///   are the scalar's min/max (`true &&`) or which has no exclusions (`!(false)`).
+fn generated_converter_attr() -> syn::Attribute {
+    syn::parse_quote!(#[allow(
+        non_snake_case,
+        unused_mut,
+        unused_variables,
+        unused_braces,
+        dead_code,
+        clippy::needless_question_mark,
+        clippy::let_and_return,
+        clippy::nonminimal_bool,
+        clippy::eq_op
+    )])
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Inherent helpers — wrapper builders (used by both Prebindgen impl
 // and consuming-crate wrapper exts like ZenohJniExt).
@@ -35,16 +59,17 @@ impl JniGen {
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "v");
         let err_type = exc.cloned().unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
+        let gen_allow = generated_converter_attr();
         if matches!(wire, syn::Type::Ptr(_)) {
             syn::parse_quote!(
-                #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+                #gen_allow
                 pub(crate) unsafe fn #name<'env>(env: &mut jni::JNIEnv<'env>, v: #wire) -> ::core::result::Result<#rust_with_lifetime, #err_type> {
                     #ret_body
                 }
             )
         } else {
             syn::parse_quote!(
-                #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+                #gen_allow
                 pub(crate) unsafe fn #name<'env, 'v>(env: &mut jni::JNIEnv<'env>, v: &#wire_with_lifetime) -> ::core::result::Result<#rust_with_lifetime, #err_type> {
                     #ret_body
                 }
@@ -69,8 +94,9 @@ impl JniGen {
         let wire_with_lifetime = annotate_jobject_with_lifetime(wire, "a");
         let err_type = exc.cloned().unwrap_or_else(default_err_type);
         let ret_body = body_for_exc(body, exc);
+        let gen_allow = generated_converter_attr();
         syn::parse_quote!(
-            #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+            #gen_allow
             pub(crate) unsafe fn #name<'a>(env: &mut jni::JNIEnv<'a>, v: #rust) -> ::core::result::Result<#wire_with_lifetime, #err_type> {
                 #ret_body
             }
@@ -194,8 +220,9 @@ impl JniGen {
     pub fn opaque_handle_input(&self, ty: &syn::Type) -> ConverterImpl<KotlinMeta> {
         let wire: syn::Type = syn::parse_quote!(jni::sys::jlong);
         let name = input_name(ty, &wire);
+        let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+            #gen_allow
             pub(crate) unsafe fn #name<'env, 'v>(
                 env: &mut jni::JNIEnv<'env>,
                 v: &jni::sys::jlong,
@@ -640,8 +667,9 @@ impl JniGen {
             syn::parse_quote!(Option<&#t1>)
         };
         let name = input_name(&outer_ty, &inner_wire);
+        let gen_allow = generated_converter_attr();
         let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+            #gen_allow
             pub(crate) unsafe fn #name<'env, 'v>(
                 env: &mut jni::JNIEnv<'env>,
                 v: &#inner_wire,
@@ -747,8 +775,9 @@ impl JniGen {
                 let inner_wire = inner.destination.clone();
                 let outer_ty: syn::Type = syn::parse_quote!(Option<#t1>);
                 let name = input_name(&outer_ty, &inner_wire);
+                let gen_allow = generated_converter_attr();
                 let function: syn::ItemFn = syn::parse_quote!(
-                    #[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+                    #gen_allow
                     pub(crate) unsafe fn #name<'env, 'v>(
                         env: &mut jni::JNIEnv<'env>,
                         v: &#inner_wire,
