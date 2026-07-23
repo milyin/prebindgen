@@ -61,6 +61,22 @@ public data class Annotated(val payload: Payload, val alternate: Payload?, val t
 }
 
 /**
+ * Outer cache config crossed as `Option<CacheConfig>`. Its optional-ness
+ * propagates into the non-optional nested [`RepliesConfig`], whose non-null
+ * `priority` enum field must decode with exactly **one** Elvis default (#144).
+ */
+public data class CacheConfig(val replies: RepliesConfig, val ttl: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            replies_priority: Int,
+            replies_maxSamples: Long,
+            ttl: Long,
+        ): CacheConfig = CacheConfig(RepliesConfig.fromParts(replies_priority, replies_maxSamples), ttl)
+    }
+}
+
+/**
  * Data-class composition probe for the bounded duration representation.
  * The coverage binding deliberately marks this class `.jobject_input()` so
  * its echo executes both the whole-object input decoder and the `fromParts`
@@ -471,6 +487,21 @@ public data class ObjectBoundaryLeaf(val value: Long) {
 }
 
 /**
+ * Inner, **non-optional** delivery config carrying a **non-null enum field**
+ * (`priority`). Nested inside [`CacheConfig`], which crosses as
+ * `Option<CacheConfig>`, so the outer optional's `nullable_context`
+ * propagates down to this non-optional struct — the exact shape that made the
+ * JNI input builder emit a dead double-Elvis default (`?.value ?: 0 ?: 0`)
+ * for a non-null enum field (#144).
+ */
+public data class RepliesConfig(val priority: Priority, val maxSamples: Long) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(priority: Int, maxSamples: Long): RepliesConfig = RepliesConfig(Priority.fromInt(priority), maxSamples)
+    }
+}
+
+/**
  * Every fixed-width Rust unsigned scalar in one generated Kotlin data class.
  * The first three fields widen losslessly; `long`/`maybe_long` surface as
  * `ULong`/`ULong?` over raw JNI `Long` bit patterns.
@@ -825,6 +856,24 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
         a.ttl ?: 0L,
         a.priority != null,
         a.priority?.value ?: 0,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * The cache's replies-priority weight plus its `ttl`, or `-1` when the cache
+ * is absent (`Option<CacheConfig>` **input** — the #144 reproduction: a
+ * non-null enum field reached through the outer optional data class).
+ */
+public fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.cacheConfigWeight(
+        cache != null,
+        cache?.replies?.priority?.value ?: 0,
+        cache?.replies?.maxSamples ?: 0L,
+        cache?.ttl ?: 0L,
         __bcap,
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)

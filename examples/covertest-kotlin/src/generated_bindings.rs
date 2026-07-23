@@ -509,6 +509,49 @@ pub(crate) unsafe fn Archive_to_jlong_cd73502c<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn CacheConfig_to_JObject_db89a97c<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::CacheConfig,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___replies_priority: jni::sys::jint = Priority_to_jint_447102d2(
+            env,
+            v.replies.priority.clone(),
+        )?;
+        let ___replies_max_samples: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.replies.max_samples.clone(),
+        )?;
+        let ___ttl: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.ttl.clone())?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/CacheConfig",
+                "fromParts",
+                "(IJJ)Lio/prebindgen/covertest/model/CacheConfig;",
+                &[
+                    jni::objects::JValue::from(___replies_priority),
+                    jni::objects::JValue::from(___replies_max_samples),
+                    jni::objects::JValue::from(___ttl),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Celsius,
@@ -704,6 +747,42 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
             alternate,
             ttl,
             priority,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_CacheConfig_db89a97c<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::CacheConfig, __JniErr> {
+    Ok({
+        let __replies_raw: jni::objects::JObject = env
+            .get_field(v, "replies", "Lio/prebindgen/covertest/model/RepliesConfig;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("CacheConfig.replies: {}", e)))?;
+        let replies = JObject_to_RepliesConfig_eb8e9079(env, &__replies_raw)?;
+        let __ttl_raw: jni::sys::jlong = env
+            .get_field(v, "ttl", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("CacheConfig.ttl: {}", e)))? as _;
+        let ttl = jlong_to_i64_fbf9a9bc(env, &__ttl_raw)?;
+        perftest_flat::CacheConfig {
+            replies,
+            ttl,
         }
     })
 }
@@ -1104,6 +1183,25 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JObject_to_Option_CacheConfig_a6be794d<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<Option<perftest_flat::CacheConfig>, __JniErr> {
+    Ok({
+        if v.is_null() { None } else { Some(JObject_to_CacheConfig_db89a97c(env, v)?) }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_Payload_97036642<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1325,6 +1423,48 @@ pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
             value,
             flag,
             label,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_RepliesConfig_eb8e9079<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::RepliesConfig, __JniErr> {
+    Ok({
+        let __priority_jobj: jni::objects::JObject = env
+            .get_field(v, "priority", "Lio/prebindgen/covertest/model/Priority;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("RepliesConfig.priority: {}", e)))?;
+        let __priority_raw: jni::sys::jint = env
+            .call_method(&__priority_jobj, "getValue", "()I", &[])
+            .and_then(|val| val.i())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("RepliesConfig.priority: {}", e)))?;
+        let priority = jint_to_Priority_447102d2(env, &__priority_raw)?;
+        let __max_samples_raw: jni::sys::jlong = env
+            .get_field(v, "maxSamples", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("RepliesConfig.maxSamples: {}", e)))? as _;
+        let max_samples = jlong_to_i64_fbf9a9bc(env, &__max_samples_raw)?;
+        perftest_flat::RepliesConfig {
+            priority,
+            max_samples,
         }
     })
 }
@@ -4827,6 +4967,47 @@ pub(crate) unsafe fn Priority_to_jint_447102d2<'a>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn RepliesConfig_to_JObject_eb8e9079<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::RepliesConfig,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___priority: jni::sys::jint = Priority_to_jint_447102d2(
+            env,
+            v.priority.clone(),
+        )?;
+        let ___max_samples: jni::sys::jlong = i64_to_jlong_fbf9a9bc(
+            env,
+            v.max_samples.clone(),
+        )?;
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/RepliesConfig",
+                "fromParts",
+                "(IJ)Lio/prebindgen/covertest/model/RepliesConfig;",
+                &[
+                    jni::objects::JValue::from(___priority),
+                    jni::objects::JValue::from(___max_samples),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Result_Storage_StorageError_to_Storage_7ccce404<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Result<perftest_flat::Storage, perftest_flat::StorageError>,
@@ -7383,6 +7564,98 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_archiveStore<'a>
                 &__e.to_string(),
             );
             ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_cacheConfigWeight<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    cache_present: jni::sys::jboolean,
+    cache_replies_priority: jni::sys::jint,
+    cache_replies_max_samples: jni::sys::jlong,
+    cache_ttl: jni::sys::jlong,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jint {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __flat_cache = if cache_present != 0u8 {
+        let __flat_cache_replies_priority = match jint_to_Priority_447102d2(
+            &mut env,
+            &cache_replies_priority,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0 as jni::sys::jint;
+            }
+        };
+        let __flat_cache_replies_max_samples = match jlong_to_i64_fbf9a9bc(
+            &mut env,
+            &cache_replies_max_samples,
+        ) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0 as jni::sys::jint;
+            }
+        };
+        let __flat_cache_replies = perftest_flat::RepliesConfig {
+            priority: __flat_cache_replies_priority,
+            max_samples: __flat_cache_replies_max_samples,
+        };
+        let __flat_cache_ttl = match jlong_to_i64_fbf9a9bc(&mut env, &cache_ttl) {
+            ::core::result::Result::Ok(__v) => __v,
+            ::core::result::Result::Err(__e) => {
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e.to_string(),
+                );
+                return 0 as jni::sys::jint;
+            }
+        };
+        ::core::option::Option::Some(perftest_flat::CacheConfig {
+            replies: __flat_cache_replies,
+            ttl: __flat_cache_ttl,
+        })
+    } else {
+        ::core::option::Option::None
+    };
+    let cache = __flat_cache;
+    let __out = perftest_flat::cache_config_weight(cache);
+    match i32_to_jint_a3e3b6ef(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jint
         }
     }
 }
