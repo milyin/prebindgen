@@ -52,6 +52,7 @@ Base package: `io.prebindgen.covertest`
 - `annotated_payload_value` — `fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double`
 - `annotated_priority` — `fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority?`
 - `annotated_ttl` — `fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long?`
+- `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
   - shaped by: return `DurationBoundary` decomposed → [delay] (Callback delivery)
@@ -143,6 +144,7 @@ Base package: `io.prebindgen.covertest`
 
 - `Annotated`: data_class → `io.prebindgen.covertest.model.Annotated` (wire `jni :: objects :: JObject`)
 - `Archive`: ptr_class → `io.prebindgen.covertest.analytics.SummaryVault` (wire `jni :: sys :: jlong`)
+- `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
@@ -158,6 +160,7 @@ Base package: `io.prebindgen.covertest`
 - `PayloadHandler`: ptr_class → `io.prebindgen.covertest.PayloadHandler` (wire `jni :: sys :: jlong`)
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)
 - `Priority`: enum_class → `io.prebindgen.covertest.model.Priority` (wire `jni :: sys :: jint`)
+- `RepliesConfig`: data_class → `io.prebindgen.covertest.model.RepliesConfig` (wire `jni :: objects :: JObject`)
 - `Stamp`: value_class → `io.prebindgen.covertest.model.Stamp` (wire `jni :: objects :: JByteArray`)
 - `Storage`: ptr_class → `io.prebindgen.covertest.Storage` (wire `jni :: sys :: jlong`)
 - `StorageError`: ptr_class → `io.prebindgen.covertest.errors.StorageError` (wire `jni :: sys :: jlong`)

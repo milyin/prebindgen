@@ -918,8 +918,13 @@ fn build_flat_struct_node(
         }
 
         let field_is_option = option_inner_type(&field.ty).is_some();
+        // The enum branch is self-contained: when it coalesces (`?.value ?: 0`)
+        // it already yields a non-null `Int`, so block (B) below must not append
+        // a second default (which produced the dead `?: 0 ?: 0`, issue #144).
+        let mut enum_coalesced = false;
         let mut access = if ext.is_kotlin_enum(&flat_probe_inner(&field.ty)) {
             if field_is_option || nullable_context {
+                enum_coalesced = true;
                 format!("{field_ref}?.value ?: 0")
             } else {
                 format!("{field_ref}.value")
@@ -927,7 +932,7 @@ fn build_flat_struct_node(
         } else {
             field_ref.clone()
         };
-        if nullable_context && !field_is_option {
+        if nullable_context && !field_is_option && !enum_coalesced {
             if let Some((sig, _, _)) = jni_field_access(&fentry.destination) {
                 if let Some(default) = kt_leaf_default(sig, false) {
                     access = format!("{access} ?: {default}");

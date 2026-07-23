@@ -21,6 +21,8 @@ import io.prebindgen.covertest.analytics.summaryTotalRaw
 import io.prebindgen.covertest.errors.StorageErrorHandler
 import io.prebindgen.covertest.esc_pkg.Esc_Probe
 import io.prebindgen.covertest.model.Annotated
+import io.prebindgen.covertest.model.CacheConfig
+import io.prebindgen.covertest.model.RepliesConfig
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.ObjectBoundary2
@@ -47,6 +49,7 @@ import io.prebindgen.covertest.model.percentScale
 import io.prebindgen.covertest.model.annotatedPayloadValue
 import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
+import io.prebindgen.covertest.model.cacheConfigWeight
 import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
@@ -733,6 +736,21 @@ fun main() {
         check(annotatedPriority(c, boom) == Priority.LOW)
         check(annotatedPayloadValue(c, boom) == 9.0)
         check(annotatedAlternateValue(c, boom) == 11.0)
+    }
+
+    // ── #144: non-null enum field reached through Option<data_class> input ────
+    // The outer `Option<CacheConfig>` propagates nullable-context into the
+    // non-optional nested `RepliesConfig`, whose non-null `priority` enum field
+    // must decode with a SINGLE Elvis default. Before the fix the generated
+    // Kotlin was `cache?.replies?.priority?.value ?: 0 ?: 0` — a dead second
+    // default that the Kotlin compiler warned about. This exercises the decode
+    // (present + absent) and is the regression guard for that codegen.
+    section("Option<data_class> with non-null nested enum field (#144)") {
+        val cache = CacheConfig(RepliesConfig(Priority.HIGH, 4L), 7L)
+        check(cacheConfigWeight(cache, boom) == 17)   // weight(HIGH)=10 + ttl 7
+        check(cacheConfigWeight(null, boom) == -1)    // absent outer optional
+        val low = CacheConfig(RepliesConfig(Priority.LOW, 0L), 3L)
+        check(cacheConfigWeight(low, boom) == 4)      // weight(LOW)=1 + ttl 3
     }
 
     section("data_class JVM-slot-limited JObject input boundary") {

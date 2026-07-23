@@ -554,6 +554,45 @@ pub fn annotated_payload_value(a: &Annotated) -> f64 {
     a.payload.value
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CacheConfig / RepliesConfig — a non-null enum field reached through an outer
+// `Option<data_class>` (the nullable-context input path, issue #144).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Inner, **non-optional** delivery config carrying a **non-null enum field**
+/// (`priority`). Nested inside [`CacheConfig`], which crosses as
+/// `Option<CacheConfig>`, so the outer optional's `nullable_context`
+/// propagates down to this non-optional struct — the exact shape that made the
+/// JNI input builder emit a dead double-Elvis default (`?.value ?: 0 ?: 0`)
+/// for a non-null enum field (#144).
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RepliesConfig {
+    pub priority: Priority,
+    pub max_samples: i64,
+}
+
+/// Outer cache config crossed as `Option<CacheConfig>`. Its optional-ness
+/// propagates into the non-optional nested [`RepliesConfig`], whose non-null
+/// `priority` enum field must decode with exactly **one** Elvis default (#144).
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CacheConfig {
+    pub replies: RepliesConfig,
+    pub ttl: i64,
+}
+
+/// The cache's replies-priority weight plus its `ttl`, or `-1` when the cache
+/// is absent (`Option<CacheConfig>` **input** — the #144 reproduction: a
+/// non-null enum field reached through the outer optional data class).
+#[prebindgen]
+pub fn cache_config_weight(cache: Option<CacheConfig>) -> i32 {
+    match cache {
+        Some(c) => priority_weight(c.replies.priority) + c.ttl as i32,
+        None => -1,
+    }
+}
+
 /// One `i64` leaf in the deliberately wide [`ObjectBoundary`] tree.
 #[prebindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1021,6 +1060,20 @@ mod tests {
         let b = annotated_new(payload(1, 0.0, None), None, None);
         assert_eq!(annotated_ttl(&b), None);
         assert_eq!(annotated_priority(&b), None);
+    }
+
+    #[test]
+    fn cache_config_weight_reaches_nested_enum() {
+        let cache = CacheConfig {
+            replies: RepliesConfig {
+                priority: Priority::High,
+                max_samples: 4,
+            },
+            ttl: 7,
+        };
+        // priority_weight(High) == 10, plus ttl 7.
+        assert_eq!(cache_config_weight(Some(cache)), 17);
+        assert_eq!(cache_config_weight(None), -1);
     }
 
     #[test]

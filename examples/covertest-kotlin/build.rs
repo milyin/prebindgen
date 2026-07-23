@@ -57,6 +57,7 @@
 //! | two-caller split (#45): `onBindingError` + `onError` on one fallible wrapper | `storage_try_from_stamp` (malformed `Stamp` → binding; bad `secs` → domain) |
 //! | fixed-width unsigned scalars (#108) | `Unsigned` + direct/optional/callback/collection max-value round trips |
 //! | `Option<T>`                          | `Option<Payload>` (in + out) / `Option<Vec>` / `Option<i64>` / `Option<enum>` (param + return + field) |
+//! | non-null enum field under nullable-context (#144) | `Option<CacheConfig>` → nested `RepliesConfig.priority` (single Elvis default) |
 //! | `impl Fn` callbacks (single + slice) | `payload_handler_new` / `payload_vec_handler_new` |
 //! | owned-handle callback (`Fn(Storage)`)| `storage_handler_new` / `storage_emit` |
 //! | `Vec<handle>` / `Option<Vec<handle>>`| `storage_shards` / `storage_shards_opt` (Kotlin-side handle fold) |
@@ -233,6 +234,13 @@ fn main() {
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
                 .class(data_class!(Annotated))
+                // #144: a NON-NULL enum field (`RepliesConfig.priority`) reached
+                // through an outer `Option<CacheConfig>` param. The outer
+                // optional propagates `nullable_context` into the non-optional
+                // nested struct, so its enum field must decode with exactly one
+                // Elvis default (regression guard for the dead `?: 0 ?: 0`).
+                .class(data_class!(RepliesConfig))
+                .class(data_class!(CacheConfig))
                 // Compose the bounded `Option<Duration>` niche through a
                 // data-class field. Explicit JObject input makes the runtime
                 // execute the whole-object decoder as well as the primitive-
@@ -425,6 +433,9 @@ fn main() {
                 .fun(fun!(annotated_ttl))
                 .fun(fun!(annotated_priority))
                 .fun(fun!(annotated_payload_value))
+                // #144: `Option<CacheConfig>` input reaching a non-null enum
+                // field through the nested `RepliesConfig`.
+                .fun(fun!(cache_config_weight))
                 .fun(fun!(object_boundary_value))
                 .fun(fun!(unsigned_round_trip))
                 .fun(fun!(unsigned_optional))

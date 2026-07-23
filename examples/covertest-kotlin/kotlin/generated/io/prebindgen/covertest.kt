@@ -719,6 +719,14 @@ internal object CovNative {
         errorSink: Any,
     )
 
+    external fun cacheConfigWeight(
+        cachePresent: Boolean,
+        cacheRepliesPriority: Int,
+        cacheRepliesMaxSamples: Long,
+        cacheTtl: Long,
+        errorSink: Any,
+    ): Int
+
     external fun celsiusDouble(c: Int, errorSink: Any): Int
 
     external fun coverTagRuntime(errorSink: Any): String
