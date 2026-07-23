@@ -445,12 +445,6 @@ fn wire_kotlin_type(entry: &crate::api::core::registry::TypeEntry<KotlinMeta>) -
             return match last.ident.to_string().as_str() {
                 "JString" => "String".to_string(),
                 "JByteArray" => "ByteArray".to_string(),
-                "JObject" => entry
-                    .metadata
-                    .kotlin_name
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .unwrap_or_else(|| "Any".to_string()),
                 _ => entry
                     .metadata
                     .kotlin_name
