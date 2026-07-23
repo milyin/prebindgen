@@ -95,6 +95,14 @@ fn flattened_field_composes_bounded_conversion_stages() {
                     unimplemented!()
                 }
             )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn timed_echo(value: &Timed) -> Timed {
+                    unimplemented!()
+                }
+            )),
             loc,
         ),
     ];
@@ -110,7 +118,8 @@ fn flattened_field_composes_bounded_conversion_stages() {
         .package(
             crate::package!()
                 .class(crate::data_class!(Timed))
-                .fun(crate::fun!(timed_use)),
+                .fun(crate::fun!(timed_use))
+                .fun(crate::fun!(timed_echo)),
         );
     let dir = unique_test_dir("jnigen_flat_staged_field");
     let _ = std::fs::remove_dir_all(&dir);
@@ -129,8 +138,30 @@ fn flattened_field_composes_bounded_conversion_stages() {
 
     assert!(kc.contains("valueDelay:Long"), "{kotlin}");
     assert!(kc.contains("value.delay?.toLong()?:-1L"), "{kotlin}");
+    assert!(
+        kc.contains("funfromParts(delay:Long):Timed=Timed(if(delay==-1L)nullelsedelay.toULong())"),
+        "the struct factory must receive the niche as a primitive Long:\n{kotlin}"
+    );
+    assert!(
+        kc.contains("TimedBuilderRaw<outR>{publicfunrun(delay:Long):R}"),
+        "{kotlin}"
+    );
+    assert!(
+        kc.contains("if(delay==-1L)nullelsedelay.toULong()"),
+        "the raw builder adapter must restore the optional niche:\n{kotlin}"
+    );
     assert!(rc.contains("jlong_to_u64"), "{rust}");
     assert!(rc.contains("u64_to_Duration"), "{rust}");
+    assert!(
+        rc.contains("jlong_to_Option_std_time_Duration") && rc.contains("env,&__delay_raw)?"),
+        "whole-JObject input must invoke the complete optional Duration converter:\n{rust}"
+    );
+    assert!(
+        rc.contains("let___delay:jni::sys::jlong=Option_std_time_Duration_to_jlong")
+            && rc.contains("\"(J)Lio/test/jni/Timed;\""),
+        "whole-struct output must pass the niche as primitive jlong:\n{rust}"
+    );
+    assert!(!rc.contains("let___delay:jni::objects::JObject"), "{rust}");
     assert!(
         rc.contains("myflat::Timed{delay:__flat_value_delay"),
         "{rust}"

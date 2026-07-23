@@ -27,7 +27,7 @@
 //! | `convert!` `.input(from!)`/`.output(into!)` | `Celsius` ⇄ `Int` via `From`/`Into` impls |
 //! | fallible conversion stages under `Option` | `Option<Percent>` ⇄ `Int?`; raw `TryFrom::Error` input and binding-local `String` output errors normalize to `JniErrorHandler` |
 //! | `convert!` sources `fun!(crate::…).sig(sig!)` | `Label` ⇄ `String` via binding-local fns (`crate::label_in`/`label_out`); the sig's `Result` = error channel, empty label → `onError` |
-//! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError` |
+//! | bounded conversion domains + niches | `Option<Duration>` ⇄ bounded millisecond `ULong?`; raw JNI remains primitive `Long`, `None` uses an invalid `u64`, invalid input/output routes to `onError`; `DurationBoundary` composes the niche through a data-class field and whole-object decode |
 //! | `.method()` / `.constructor()`       | `Storage` + `Summary` + `Stamp` members |
 //! | `expand_param!` `.variant()` (+`_self`)| `Summary` default input (splittable, checked #52) |
 //! | Optional combined-selector expansion  | `summary_total_opt(Option<&Summary>)` — selector `-1` = absent, borrow-identity arm clones |
@@ -233,6 +233,11 @@ fn main() {
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
                 .class(data_class!(Annotated))
+                // Compose the bounded `Option<Duration>` niche through a
+                // data-class field. Explicit JObject input makes the runtime
+                // execute the whole-object decoder as well as the primitive-
+                // niche `fromParts` encoder (#138).
+                .class(data_class!(DurationBoundary).jobject_input())
                 // These small nested classes form a 127-Long-leaf tree. Its
                 // constructor is legal, but flattening the root function input
                 // would consume 256 JVM slots, so it keeps one JObject input.
@@ -427,6 +432,7 @@ fn main() {
                 .fun(fun!(unsigned_emit))
                 .fun(fun!(unsigned_series))
                 .fun(fun!(duration_optional))
+                .fun(fun!(duration_boundary_echo))
                 .fun(fun!(duration_out_of_range)),
         )
         // analytics: the param-variant / return-field matrix (type default /

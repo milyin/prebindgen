@@ -380,6 +380,23 @@ pub fn duration_out_of_range() -> Option<Duration> {
     Some(Duration::from_millis(DURATION_MAX_MILLIS + 1))
 }
 
+/// Data-class composition probe for the bounded duration representation.
+/// The coverage binding deliberately marks this class `.jobject_input()` so
+/// its echo executes both the whole-object input decoder and the `fromParts`
+/// output encoder; the nullable duration itself still uses the raw `jlong`
+/// niche whenever it crosses a generated JNI call boundary.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DurationBoundary {
+    pub delay: Option<Duration>,
+}
+
+/// Round-trip [`DurationBoundary`] through the explicit object-input bridge.
+#[prebindgen]
+pub fn duration_boundary_echo(value: &DurationBoundary) -> DurationBoundary {
+    value.clone()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // convert! source-kind fixtures — one type per conversion source. Like
 // `Millis`, none of these types is `#[prebindgen]`-marked: each crosses the

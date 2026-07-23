@@ -230,7 +230,17 @@ fn encode_plan(
                                 default: quote!(0i64),
                             });
                         }
-                        FoldStrategy::Optional(_, _) => {
+                        FoldStrategy::Optional(NullableKind::Niche, _) => {
+                            preludes.extend(quote! { let #id: jni::sys::jlong = #value_expr; });
+                            slots.push(EncSlot {
+                                ident: id,
+                                wire_ty: quote!(jni::sys::jlong),
+                                descriptor: "J".to_string(),
+                                is_object: false,
+                                default: quote!(0i64),
+                            });
+                        }
+                        FoldStrategy::Optional(NullableKind::Boxed, _) => {
                             preludes
                                 .extend(quote! { let #id: jni::objects::JObject = #value_expr; });
                             slots.push(EncSlot {

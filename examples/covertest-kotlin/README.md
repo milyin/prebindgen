@@ -80,7 +80,9 @@ for the full table; in brief:
   `u64` with `.valid_range(...)`; `Option<Duration>` is `ULong?` publicly but
   remains primitive `Long` at the native boundary, using an invalid value as
   the `None` niche. The runtime checks both conversion directions, both domain
-  error paths, and the unboxed JNI signature.
+  error paths, the unboxed JNI signature, and composition through the
+  `DurationBoundary.delay` data-class field (including explicit whole-object
+  input decoding and primitive-`Long` `fromParts` output).
 - **fallible stages under structural wrappers:** `Option<Percent>` composes a
   raw `TryFrom::Error` input stage and a raw `String` output stage. The runtime
   checks null/value round trips and verifies both stage errors normalize to
