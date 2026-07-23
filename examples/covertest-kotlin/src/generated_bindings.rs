@@ -363,7 +363,17 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_constGetCoverBan
         }
     }
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Annotated,
@@ -471,21 +481,51 @@ pub(crate) unsafe fn Annotated_to_JObject_b543f0d9<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Archive_to_jlong_cd73502c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Archive,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Celsius_to_i32_88c8e884<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Celsius,
 ) -> ::core::result::Result<i32, __JniErr> {
     Ok(<perftest_flat::Celsius as ::core::convert::Into<i32>>::into(v))
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn DurationBoundary_to_JObject_9c5bf9bc<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::DurationBoundary,
@@ -509,7 +549,17 @@ pub(crate) unsafe fn DurationBoundary_to_JObject_9c5bf9bc<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Duration_to_u64_e3980876<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Duration,
@@ -541,14 +591,34 @@ pub(crate) unsafe fn Duration_to_u64_e3980876<'a>(
         }
     }
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn EscapeProbe_to_jlong_416aab42<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::EscapeProbe,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JByteArray_to_Stamp_2fc9bd18<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JByteArray<'v>,
@@ -573,7 +643,17 @@ pub(crate) unsafe fn JByteArray_to_Stamp_2fc9bd18<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -627,7 +707,17 @@ pub(crate) unsafe fn JObject_to_Annotated_b543f0d9<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -655,7 +745,17 @@ pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary16_e9d41606<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -681,7 +781,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary16_e9d41606<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary2_a8f288cc<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -707,7 +817,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary2_a8f288cc<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary32_ed80fac3<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -733,7 +853,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary32_ed80fac3<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary4_ea3fd497<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -759,7 +889,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary4_ea3fd497<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary63_29aa82ff<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -817,7 +957,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary63_29aa82ff<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary64_b2751ca5<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -843,7 +993,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary64_b2751ca5<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary8_55b82b02<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -869,7 +1029,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary8_55b82b02<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundaryLeaf_93531764<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -887,7 +1057,17 @@ pub(crate) unsafe fn JObject_to_ObjectBoundaryLeaf_93531764<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -913,14 +1093,34 @@ pub(crate) unsafe fn JObject_to_ObjectBoundary_dc5ac22b<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_Payload_97036642<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
 ) -> ::core::result::Result<Option<perftest_flat::Payload>, __JniErr> {
     Ok({ if v.is_null() { None } else { Some(JObject_to_Payload_98f64326(env, v)?) } })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -947,7 +1147,17 @@ pub(crate) unsafe fn JObject_to_Option_Percent_544dd364<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -967,7 +1177,17 @@ pub(crate) unsafe fn JObject_to_Option_Priority_ad5cbb32<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -987,7 +1207,17 @@ pub(crate) unsafe fn JObject_to_Option_f64_b3f3e9a9<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1007,7 +1237,17 @@ pub(crate) unsafe fn JObject_to_Option_i64_2ba9a5ed<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1027,7 +1267,17 @@ pub(crate) unsafe fn JObject_to_Option_u64_32be16a2<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1078,7 +1328,17 @@ pub(crate) unsafe fn JObject_to_Payload_98f64326<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Unsigned_7e3cc618<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1138,7 +1398,17 @@ pub(crate) unsafe fn JObject_to_Unsigned_7e3cc618<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1170,7 +1440,17 @@ pub(crate) unsafe fn JObject_to_Vec_Payload_8b7084d2<'env, 'v>(
         __out
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1435,7 +1715,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_95073668<'env, 
         })
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1599,7 +1889,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906<'env, 
         })
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_Storage_Send_Sync_static_2f26edcf<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1674,7 +1974,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Storage_Send_Sync_static_2f26edcf<'env, 
         })
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_impl_Fn_u64_Send_Sync_static_c7830b57<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1744,7 +2054,17 @@ pub(crate) unsafe fn JObject_to_impl_Fn_u64_Send_Sync_static_c7830b57<'env, 'v>(
         })
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
@@ -1757,7 +2077,17 @@ pub(crate) unsafe fn JString_to_Option_Box_String_071e4c8c<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JString_to_String_c7f3ca43<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
@@ -1773,7 +2103,17 @@ pub(crate) unsafe fn JString_to_String_c7f3ca43<'env, 'v>(
         s.into()
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JString_to_std_boxed_Box_std_string_String_cfbab680<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JString<'v>,
@@ -1789,21 +2129,51 @@ pub(crate) unsafe fn JString_to_std_boxed_Box_std_string_String_cfbab680<'env, '
         ::std::boxed::Box::new(::std::string::String::from(s))
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Label_to_String_63dec766<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Label,
 ) -> ::core::result::Result<String, __JniErr> {
     Ok(crate::label_out(v))
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Millis_to_i64_61ecf054<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Millis,
 ) -> ::core::result::Result<i64, __JniErr> {
     Ok(cov_helpers::millis_value(&v))
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary16,
@@ -1904,7 +2274,17 @@ pub(crate) unsafe fn ObjectBoundary16_to_JObject_e9d41606<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary2,
@@ -1935,7 +2315,17 @@ pub(crate) unsafe fn ObjectBoundary2_to_JObject_a8f288cc<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary32,
@@ -2116,7 +2506,17 @@ pub(crate) unsafe fn ObjectBoundary32_to_JObject_ed80fac3<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary4,
@@ -2157,7 +2557,17 @@ pub(crate) unsafe fn ObjectBoundary4_to_JObject_ea3fd497<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary63_to_JObject_29aa82ff<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary63,
@@ -2559,7 +2969,17 @@ pub(crate) unsafe fn ObjectBoundary63_to_JObject_29aa82ff<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary64,
@@ -2984,7 +3404,17 @@ pub(crate) unsafe fn ObjectBoundary64_to_JObject_b2751ca5<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary8,
@@ -3045,7 +3475,17 @@ pub(crate) unsafe fn ObjectBoundary8_to_JObject_55b82b02<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundaryLeaf,
@@ -3066,7 +3506,17 @@ pub(crate) unsafe fn ObjectBoundaryLeaf_to_JObject_93531764<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::ObjectBoundary,
@@ -3946,7 +4396,17 @@ pub(crate) unsafe fn ObjectBoundary_to_JObject_dc5ac22b<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Box<String>>,
@@ -3960,7 +4420,17 @@ pub(crate) unsafe fn Option_Box_String_to_JString_071e4c8c<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Duration>,
@@ -3978,7 +4448,17 @@ pub(crate) unsafe fn Option_Duration_to_jlong_1cfa4d44<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Payload>,
@@ -3990,7 +4470,17 @@ pub(crate) unsafe fn Option_Payload_to_JObject_97036642<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Percent>,
@@ -4014,7 +4504,17 @@ pub(crate) unsafe fn Option_Percent_to_JObject_544dd364<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<perftest_flat::Priority>,
@@ -4032,7 +4532,17 @@ pub(crate) unsafe fn Option_Priority_to_JObject_ad5cbb32<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<&perftest_flat::Summary>,
@@ -4044,7 +4554,17 @@ pub(crate) unsafe fn Option_Summary_to_jlong_828826f3<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<Vec<perftest_flat::Payload>>,
@@ -4056,7 +4576,17 @@ pub(crate) unsafe fn Option_Vec_Payload_to_JObject_b9a4637e<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_f64_to_JObject_b3f3e9a9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<f64>,
@@ -4074,7 +4604,17 @@ pub(crate) unsafe fn Option_f64_to_JObject_b3f3e9a9<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_i64_to_JObject_2ba9a5ed<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<i64>,
@@ -4092,7 +4632,17 @@ pub(crate) unsafe fn Option_i64_to_JObject_2ba9a5ed<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Option_u64_to_JObject_32be16a2<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Option<u64>,
@@ -4110,21 +4660,51 @@ pub(crate) unsafe fn Option_u64_to_JObject_32be16a2<'a>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn PayloadHandler_to_jlong_d61fd890<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::PayloadHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn PayloadVecHandler_to_jlong_b32d2812<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::PayloadVecHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Payload_to_JObject_25cd94ea<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: &[perftest_flat::Payload],
@@ -4154,7 +4734,17 @@ pub(crate) unsafe fn Payload_to_JObject_25cd94ea<'a>(
         __list_obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Payload,
@@ -4192,35 +4782,85 @@ pub(crate) unsafe fn Payload_to_JObject_98f64326<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Percent_to_i32_01484801<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Percent,
 ) -> ::core::result::Result<i32, String> {
     crate::percent_out(v)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Priority_to_jint_447102d2<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Priority,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     Ok({ v as jni::sys::jint })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Result_Storage_StorageError_to_Storage_7ccce404<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Result<perftest_flat::Storage, perftest_flat::StorageError>,
 ) -> ::core::result::Result<perftest_flat::Storage, perftest_flat::StorageError> {
     v
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Result_Summary_String_to_Summary_dfdf7f9e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Result<perftest_flat::Summary, String>,
 ) -> ::core::result::Result<perftest_flat::Summary, String> {
     v
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Stamp_to_JByteArray_2fc9bd18<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Stamp,
@@ -4240,28 +4880,68 @@ pub(crate) unsafe fn Stamp_to_JByteArray_2fc9bd18<'a>(
             })?
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn StorageError_to_jlong_26b2d298<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::StorageError,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn StorageHandler_to_jlong_3b4d3ed3<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::StorageHandler,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Storage_to_jlong_1b233abd<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Storage,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: String,
@@ -4275,28 +4955,68 @@ pub(crate) unsafe fn String_to_JString_c7f3ca43<'a>(
             })?
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn String_to_Label_c1a79668<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: String,
 ) -> ::core::result::Result<perftest_flat::Label, String> {
     crate::label_in(v)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Summary_to_jlong_3cb103b9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Summary,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v)) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Summary_to_jlong_ccacdeac<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: &perftest_flat::Summary,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v.clone())) as i64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Unsigned_to_JObject_7e3cc618<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: perftest_flat::Unsigned,
@@ -4330,7 +5050,17 @@ pub(crate) unsafe fn Unsigned_to_JObject_7e3cc618<'a>(
         __obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<perftest_flat::Payload>,
@@ -4357,7 +5087,17 @@ pub(crate) unsafe fn Vec_Payload_to_JObject_8b7084d2<'a>(
         __list_obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Vec_Stamp_to_JObject_8954d9be<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<perftest_flat::Stamp>,
@@ -4384,7 +5124,17 @@ pub(crate) unsafe fn Vec_Stamp_to_JObject_8954d9be<'a>(
         __list_obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: Vec<String>,
@@ -4411,28 +5161,68 @@ pub(crate) unsafe fn Vec_String_to_JObject_1e282499<'a>(
         __list_obj
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn bool_to_jboolean_31306d98<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: bool,
 ) -> ::core::result::Result<jni::sys::jboolean, __JniErr> {
     Ok(v as jni::sys::jboolean)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn f64_to_jdouble_9e4a8f70<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: f64,
 ) -> ::core::result::Result<jni::sys::jdouble, __JniErr> {
     Ok(v as jni::sys::jdouble)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn i32_to_Celsius_8c363100<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i32,
 ) -> ::core::result::Result<perftest_flat::Celsius, __JniErr> {
     Ok(<i32 as ::core::convert::Into<perftest_flat::Celsius>>::into(v))
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn i32_to_Percent_db3641cc<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i32,
@@ -4442,42 +5232,102 @@ pub(crate) unsafe fn i32_to_Percent_db3641cc<'a>(
 > {
     <i32 as ::core::convert::TryInto<perftest_flat::Percent>>::try_into(v)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn i32_to_jint_a3e3b6ef<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i32,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     Ok(v as jni::sys::jint)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn i64_to_Millis_bb88777a<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i64,
 ) -> ::core::result::Result<perftest_flat::Millis, __JniErr> {
     Ok(cov_helpers::millis_from_long(v))
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn i64_to_jlong_fbf9a9bc<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: i64,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(v as jni::sys::jlong)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jboolean_to_bool_31306d98<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jboolean,
 ) -> ::core::result::Result<bool, __JniErr> {
     Ok(*v != 0)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jdouble_to_f64_9e4a8f70<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jdouble,
 ) -> ::core::result::Result<f64, __JniErr> {
     Ok(*v)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jint_to_Priority_447102d2<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -4497,14 +5347,34 @@ pub(crate) unsafe fn jint_to_Priority_447102d2<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jint_to_i32_a3e3b6ef<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
 ) -> ::core::result::Result<i32, __JniErr> {
     Ok(*v)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jint_to_u16_28edf527<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -4518,7 +5388,17 @@ pub(crate) unsafe fn jint_to_u16_28edf527<'env, 'v>(
             })?,
     )
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jint_to_u8_553cf6ec<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jint,
@@ -4532,7 +5412,17 @@ pub(crate) unsafe fn jint_to_u8_553cf6ec<'env, 'v>(
             })?,
     )
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4546,7 +5436,17 @@ pub(crate) unsafe fn jlong_to_Archive_cd73502c<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Archive) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_EscapeProbe_416aab42<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4560,7 +5460,17 @@ pub(crate) unsafe fn jlong_to_EscapeProbe_416aab42<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::EscapeProbe) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4580,7 +5490,17 @@ pub(crate) unsafe fn jlong_to_Option_Duration_1cfa4d44<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4599,14 +5519,34 @@ pub(crate) unsafe fn jlong_to_Option_Summary_252ef2ba<'env, 'v>(
         }
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Option_Summary_828826f3<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<Option<OwnedObject<perftest_flat::Summary>>, __JniErr> {
     Ok({ if *v == 0 { None } else { Some(jlong_to_Summary_3cb103b9(env, v)?) } })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_PayloadHandler_d61fd890<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4620,7 +5560,17 @@ pub(crate) unsafe fn jlong_to_PayloadHandler_d61fd890<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadHandler) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_PayloadVecHandler_b32d2812<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4634,7 +5584,17 @@ pub(crate) unsafe fn jlong_to_PayloadVecHandler_b32d2812<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::PayloadVecHandler) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_StorageError_26b2d298<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4648,7 +5608,17 @@ pub(crate) unsafe fn jlong_to_StorageError_26b2d298<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::StorageError) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_StorageHandler_3b4d3ed3<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4662,7 +5632,17 @@ pub(crate) unsafe fn jlong_to_StorageHandler_3b4d3ed3<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::StorageHandler) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Storage_1b233abd<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4676,7 +5656,17 @@ pub(crate) unsafe fn jlong_to_Storage_1b233abd<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Storage) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_Summary_3cb103b9<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4690,14 +5680,34 @@ pub(crate) unsafe fn jlong_to_Summary_3cb103b9<'env, 'v>(
     }
     Ok(unsafe { OwnedObject::from_raw(*v as *const perftest_flat::Summary) })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_i64_fbf9a9bc<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<i64, __JniErr> {
     Ok(*v)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_u32_9594a230<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
@@ -4711,14 +5721,34 @@ pub(crate) unsafe fn jlong_to_u32_9594a230<'env, 'v>(
             })?,
     )
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn jlong_to_u64_4384a5d6<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::sys::jlong,
 ) -> ::core::result::Result<u64, __JniErr> {
     Ok(*v as ::core::primitive::u64)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn std_boxed_Box_std_string_String_to_JString_cfbab680<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: ::std::boxed::Box<::std::string::String>,
@@ -4732,7 +5762,17 @@ pub(crate) unsafe fn std_boxed_Box_std_string_String_to_JString_cfbab680<'a>(
             })?
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: &str,
@@ -4746,21 +5786,51 @@ pub(crate) unsafe fn str_to_JString_7b77dc67<'a>(
             })?
     })
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn u16_to_jint_28edf527<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: u16,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     Ok(v as jni::sys::jint)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn u32_to_jlong_9594a230<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: u32,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(v as jni::sys::jlong)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn u64_to_Duration_7c0845f9<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: u64,
@@ -4781,21 +5851,51 @@ pub(crate) unsafe fn u64_to_Duration_7c0845f9<'a>(
         }
     }
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn u64_to_jlong_4384a5d6<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: u64,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(v as jni::sys::jlong)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn u8_to_jint_553cf6ec<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: u8,
 ) -> ::core::result::Result<jni::sys::jint, __JniErr> {
     Ok(v as jni::sys::jint)
 }
-#[allow(non_snake_case, unused_mut, unused_variables, unused_braces, dead_code)]
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn unit_to_unit_9ecccf8e<'a>(
     env: &mut jni::JNIEnv<'a>,
     v: (),
