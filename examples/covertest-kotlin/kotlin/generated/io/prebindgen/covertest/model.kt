@@ -59,7 +59,15 @@ public sealed interface Reading {
     /** A described reading: a `String` beside a declared `enum_class` payload. */
     public data class Tagged(public val v0: String, public val v1: Priority) : Reading
 
-    public companion object {
+    /**
+     * A variant whose name collides with the Kotlin **companion object** the
+     * binding emits to hold `fromParts`. The source crate keeps the name it
+     * wants: `Companion` is not reserved by Kotlin, it is the generator's own
+     * default, so the generator renames *its* companion instead.
+     */
+    public data class Companion(public val v0: Long) : Reading
+
+    public companion object Companion_ {
         @JvmStatic
         public fun fromParts(
             tag: Int,
@@ -68,12 +76,14 @@ public sealed interface Reading {
             range_high: Long,
             tagged_v0: String,
             tagged_v1: Priority,
+            companion_v0: Long,
         ): Reading =
             when (tag) {
                 0 -> Missing
                 1 -> Exact(exact_v0)
                 2 -> Range(range_low, range_high)
                 3 -> Tagged(tagged_v0, tagged_v1)
+                4 -> Companion(companion_v0)
                 else -> throw IllegalArgumentException("Reading: invalid tag $tag")
             }
     }

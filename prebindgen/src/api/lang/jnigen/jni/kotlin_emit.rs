@@ -801,7 +801,45 @@ impl JniGen {
         });
         factory = factory.expr_body(body);
 
-        class.companion(KtClass::companion_object().vis(Vis::Public).member(factory))
+        // The companion is named only when it has to be (a variant took
+        // `Companion`), so ordinary emission keeps the anonymous form.
+        let mut companion = KtClass::companion_object().vis(Vis::Public).member(factory);
+        let companion_name = self.sum_companion_name(sum_cfg, item_enum);
+        if companion_name != "Companion" {
+            companion.name = companion_name;
+        }
+        class.companion(companion)
+    }
+
+    /// Kotlin name of the companion object holding a sum's `fromParts`.
+    ///
+    /// Normally the implicit `Companion`. A variant class of that name is a
+    /// "Conflicting declarations" error in Kotlin — but the colliding name is
+    /// **ours**, an artifact of emitting a companion at all, not something
+    /// the language reserves. So the generator moves rather than making the
+    /// source crate rename a legitimate variant: the companion takes a
+    /// trailing `_` until it is free, the same escape
+    /// [`mangle_kotlin_ident`] uses for a taken name.
+    ///
+    /// Renaming it is invisible on the wire: `@JvmStatic` on a *named*
+    /// companion still emits `fromParts` as a real static method on the
+    /// interface class, which is what `call_static_method` /
+    /// `GetStaticMethodID` resolve.
+    pub(crate) fn sum_companion_name(
+        &self,
+        sum_cfg: &SumConfig,
+        item_enum: &syn::ItemEnum,
+    ) -> String {
+        let taken: std::collections::HashSet<String> = item_enum
+            .variants
+            .iter()
+            .map(|v| self.sum_variant_class_name(sum_cfg, &v.ident))
+            .collect();
+        let mut name = "Companion".to_string();
+        while taken.contains(&name) {
+            name.push('_');
+        }
+        name
     }
 
     /// The Kotlin class name of one variant: its `.variant(variant!(V).name())`

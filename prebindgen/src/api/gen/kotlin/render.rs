@@ -191,7 +191,12 @@ fn render_class(c: &KtClass, level: usize, imports: &mut ImportSet, out: &mut St
     indent(level, out);
     out.push_str(c.vis.prefix());
     out.push_str(class_keyword(&c.kind));
-    if !matches!(c.kind, ClassKind::Companion) {
+    // A companion object is normally anonymous (`companion object { … }`,
+    // implicitly named `Companion`). Kotlin also allows naming it
+    // (`companion object Factory { … }`) — which an emitter needs when the
+    // implicit `Companion` would collide with a sibling declaration. An
+    // empty name keeps the anonymous form.
+    if !matches!(c.kind, ClassKind::Companion) || !c.name.is_empty() {
         out.push(' ');
         out.push_str(&c.name);
     }

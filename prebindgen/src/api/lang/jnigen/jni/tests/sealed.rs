@@ -385,33 +385,15 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
         }
     };
 
-    // 1. A variant whose RUST IDENT is `Companion`.
-    let e: syn::ItemEnum = syn::parse_quote!(
-        pub enum Reading {
-            Companion(i64),
-            Exact(i64),
-        }
-    );
-    let msg = resolve_err(crate::sealed_class!(Reading), e);
-    assert!(msg.contains("Companion"), "{msg}");
-    assert!(msg.contains("companion object"), "{msg}");
-
-    // 2. A variant RENAMED to `Companion` via the per-decl override.
     let e: syn::ItemEnum = syn::parse_quote!(
         pub enum Reading {
             Missing,
             Exact(i64),
         }
     );
-    let msg = resolve_err(
-        crate::sealed_class!(Reading).variant(crate::variant!(Exact).name("Companion")),
-        e.clone(),
-    );
-    assert!(msg.contains("Companion"), "{msg}");
-    assert!(msg.contains("companion object"), "{msg}");
 
-    // 3. A variant taking the interface's own name — its supertype reference
-    //    would resolve to the variant itself.
+    // A variant taking the interface's own name — its supertype reference
+    // would resolve to the variant itself.
     let e2: syn::ItemEnum = syn::parse_quote!(
         pub enum Reading {
             Reading(i64),
@@ -422,8 +404,8 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
     assert!(msg.contains("Reading"), "{msg}");
     assert!(msg.contains("supertype"), "{msg}");
 
-    // 4. Same, through a rename — and the check follows the *Kotlin* name, so
-    //    renaming the INTERFACE moves the collision with it.
+    // Same, through a rename — and the check follows the *Kotlin* name, so
+    // renaming the INTERFACE moves the collision with it.
     let msg = resolve_err(
         crate::sealed_class!(Reading)
             .name("Measure")
@@ -443,6 +425,83 @@ fn variant_cannot_take_a_name_the_interface_body_already_uses() {
     );
     let ok = resolve_err(crate::sealed_class!(Reading).name("Measure"), e3);
     assert!(ok.is_empty(), "expected no error, got: {ok}");
+}
+
+/// A variant legitimately named `Companion` does **not** oblige the source
+/// crate to rename anything: that name is the generator's own default for
+/// the companion object holding `fromParts`, not something Kotlin reserves,
+/// so the generator moves its companion instead.
+///
+/// Verified against kotlinc that this is sound: a *named* companion still
+/// emits `fromParts` as a real static on the interface class (the reflection
+/// probe reported `static-on-interface=true`), so the rename is invisible to
+/// `call_static_method` / `GetStaticMethodID`.
+#[test]
+fn variant_named_companion_moves_the_companion_not_the_variant() {
+    let loc = myflat_loc();
+    let emit = |decl: crate::lang::SealedClassDecl, item: syn::ItemEnum, tag: &str| -> String {
+        let registry =
+            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Enum(item), loc.clone())])
+                .expect("index items");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!().class(decl));
+        let dir = unique_test_dir(tag);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = registry.resolve(jni).expect("resolve");
+        gen.write_kotlin(&dir.join("kotlin"))
+            .expect("write_kotlin")
+            .iter()
+            .map(|p| std::fs::read_to_string(p).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    // The variant keeps the name the Rust source gave it…
+    let e: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Companion(i64),
+            Exact(i64),
+        }
+    );
+    let kt = emit(crate::sealed_class!(Reading), e, "sealed_companion_variant");
+    let c: String = kt.split_whitespace().collect();
+    assert!(
+        c.contains("publicdataclassCompanion(publicvalv0:Long):Reading"),
+        "{kt}"
+    );
+    // …and OUR companion object steps aside, keeping `fromParts` on it.
+    assert!(c.contains("publiccompanionobjectCompanion_{"), "{kt}");
+    assert!(c.contains("funfromParts("), "{kt}");
+    assert!(c.contains("0->Companion(companion_v0)"), "{kt}");
+
+    // The escape is deterministic and keeps stepping aside if needed.
+    let e2: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Companion(i64),
+            Other(i64),
+        }
+    );
+    let kt = emit(
+        crate::sealed_class!(Reading).variant(crate::variant!(Other).name("Companion_")),
+        e2,
+        "sealed_companion_twice",
+    );
+    let c: String = kt.split_whitespace().collect();
+    assert!(c.contains("publiccompanionobjectCompanion__{"), "{kt}");
+
+    // With no such variant the companion stays anonymous — the ordinary
+    // emission is untouched.
+    let e3: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Missing,
+            Exact(i64),
+        }
+    );
+    let kt = emit(crate::sealed_class!(Reading), e3, "sealed_companion_plain");
+    let c: String = kt.split_whitespace().collect();
+    assert!(c.contains("publiccompanionobject{"), "{kt}");
 }
 
 /// A payload whose **output** converter did not resolve is a generation

@@ -288,6 +288,7 @@ fun main() {
                 is Reading.Exact -> "exact ${r.v0}"
                 is Reading.Range -> "range ${r.low}..${r.high}"
                 is Reading.Tagged -> "${r.v0}/${r.v1.value}"
+                is Reading.Companion -> "companion ${r.v0}"
             }
         check(describe(missing) == "missing")
         check(describe(exact) == "exact 42")
@@ -296,19 +297,29 @@ fun main() {
 
         // `fromParts(tag, …every group's slots side by side…)`: the tag picks
         // the live group; the inert slots are ignored.
-        check(Reading.fromParts(0, 0L, 0L, 0L, "", Priority.LOW) === Reading.Missing)
-        check(Reading.fromParts(1, 42L, 0L, 0L, "", Priority.LOW) == exact)
-        check(Reading.fromParts(2, 0L, 1L, 9L, "", Priority.LOW) == range)
-        check(Reading.fromParts(3, 0L, 0L, 0L, "warm", Priority.HIGH) == tagged)
+        check(Reading.fromParts(0, 0L, 0L, 0L, "", Priority.LOW, 0L) === Reading.Missing)
+        check(Reading.fromParts(1, 42L, 0L, 0L, "", Priority.LOW, 0L) == exact)
+        check(Reading.fromParts(2, 0L, 1L, 9L, "", Priority.LOW, 0L) == range)
+        check(Reading.fromParts(3, 0L, 0L, 0L, "warm", Priority.HIGH, 0L) == tagged)
+
+        // A variant may legitimately be named `Companion`: that name is the
+        // generator's own default for the `fromParts` holder, not a Kotlin
+        // reserved word, so the generator renamed ITS companion (to
+        // `Companion_`) rather than obliging the source crate to rename a
+        // domain variant. `fromParts` is still reached through the interface.
+        val companion: Reading = Reading.Companion(5L)
+        check(companion is Reading.Companion && (companion as Reading.Companion).v0 == 5L)
+        check(Reading.fromParts(4, 0L, 0L, 0L, "", Priority.LOW, 5L) == companion)
+        check(Reading.Companion_.fromParts(4, 0L, 0L, 0L, "", Priority.LOW, 5L) == companion)
 
         // A tag outside 0..N-1 is an error, never a variant.
         var invalid: String? = null
         try {
-            Reading.fromParts(4, 0L, 0L, 0L, "", Priority.LOW)
+            Reading.fromParts(5, 0L, 0L, 0L, "", Priority.LOW, 0L)
         } catch (e: IllegalArgumentException) {
             invalid = e.message
         }
-        check(invalid == "Reading: invalid tag 4")
+        check(invalid == "Reading: invalid tag 5")
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

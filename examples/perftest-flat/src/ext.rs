@@ -98,6 +98,11 @@ pub enum Reading {
     Range { low: i64, high: i64 },
     /// A described reading: a `String` beside a declared `enum_class` payload.
     Labeled(String, Priority),
+    /// A variant whose name collides with the Kotlin **companion object** the
+    /// binding emits to hold `fromParts`. The source crate keeps the name it
+    /// wants: `Companion` is not reserved by Kotlin, it is the generator's own
+    /// default, so the generator renames *its* companion instead.
+    Companion(i64),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

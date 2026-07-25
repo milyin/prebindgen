@@ -102,39 +102,31 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
         // A sealed class's variants are Kotlin classes too — nested inside the
         // interface, so they are NOT registered as top-level names (nesting is
         // exactly what keeps them out of the package namespace). They instead
-        // share the interface body, which is its own scope with its own
-        // occupancy: seed that scope's taken names, then let the ordinary
-        // collision check cover variants-vs-variants and variants-vs-seed
-        // alike.
+        // share the interface body, which is its own scope: check them against
+        // each other, and against the one name in that scope the generator
+        // cannot move.
         //
-        // The seeded names are NOT reserved *words* — `Companion` is a
-        // perfectly legal Kotlin identifier and no keyword list can flag it
-        // ([`is_valid_kotlin_ident`] answers "is this a legal identifier",
-        // which is a different question). They are occupied by what this
-        // emitter unconditionally puts in the body, so they belong here as
-        // data, beside the variants that compete with them:
+        // The companion object is deliberately NOT seeded here. Its default
+        // name `Companion` is ours — an artifact of emitting a companion at
+        // all, not a name Kotlin reserves — so when a variant wants it the
+        // generator renames the companion instead of making the source crate
+        // rename a legitimate variant (`JniGen::sum_companion_name`).
         //
-        //   * `Companion` — the default name of the companion object holding
-        //     `fromParts`. A variant class of that name is "Conflicting
-        //     declarations: data class Companion, companion object".
-        //   * the interface's own short name — the variants name it as their
-        //     supertype, and an inner classifier shadows it there, so the
-        //     supertype resolves to the variant itself: "There's a cycle in
-        //     the inheritance hierarchy for this type".
-        //
-        // Both are the complete set: the body holds exactly the variant
-        // classes plus that companion object.
+        // The interface's own name is different: BOTH colliding names come
+        // from the source crate (the enum's name and its variant's), so the
+        // generator has no basis to pick which one to change — renaming
+        // either would silently reshape the user's public Kotlin API. It is
+        // also not repairable by qualifying the supertype: an inner
+        // classifier shadows the outer name for the whole body, so
+        // `fromParts`'s return type resolves to the variant too ("Type
+        // mismatch: inferred type is E.Missing but E.E was expected").
+        // Verified against kotlinc. So this one is a declaration error, and
+        // the message names both ways to disambiguate.
         if let Some(sum_cfg) = cfg.sum_cfg.as_ref() {
-            let mut seen: BTreeMap<String, String> = BTreeMap::from([
-                (
-                    "Companion".to_string(),
-                    format!("the companion object of sealed class `{key}` (holds `fromParts`)"),
-                ),
-                (
-                    short.to_string(),
-                    format!("sealed class `{key}` itself (the variants' supertype)"),
-                ),
-            ]);
+            let mut seen: BTreeMap<String, String> = BTreeMap::from([(
+                short.to_string(),
+                format!("sealed class `{key}` itself (its variants' supertype)"),
+            )]);
             if let Some((item_enum, _)) =
                 bare_path_ident(&key.to_type()).and_then(|i| registry.enums.get(&i))
             {
@@ -145,8 +137,8 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
                     if let Some(prev) = seen.insert(name.clone(), vorigin.clone()) {
                         errors.push(format!(
                             "Kotlin name `{name}` is taken twice inside sealed class `{key}`: \
-                             by {prev} and by {vorigin} — rename one with \
-                             `variant!(...).name(\"...\")`",
+                             by {prev} and by {vorigin} — rename either with \
+                             `variant!(...).name(\"...\")` or `sealed_class!(...).name(\"...\")`",
                         ));
                     }
                 }
