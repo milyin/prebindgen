@@ -52,6 +52,8 @@ import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
 import io.prebindgen.covertest.model.cacheConfigWeight
 import io.prebindgen.covertest.model.objectBoundaryValue
+import io.prebindgen.covertest.model.Observation
+import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
@@ -320,6 +322,36 @@ fun main() {
             invalid = e.message
         }
         check(invalid == "Reading: invalid tag 5")
+    }
+
+    // ── a sum as a data-class FIELD, crossing Rust → Kotlin ───────────────────
+    // The tag and every variant's group ride the parent's single `fromParts`;
+    // inert groups are wire-defaulted, which is why an inert object slot must
+    // be nullable (`reading_tagged_v0: String?`) and re-asserted `!!` in its
+    // own live arm. No JVM object is built for the sum itself.
+    section("sum as a data-class field (tag-gated groups on one fromParts)") {
+        // Every alternative survives the crossing, including the payload-less
+        // one and the two whose groups sit beside object-shaped slots.
+        check(observationNew(0, false, boom).reading == Reading.Missing)
+        check(observationNew(1, false, boom).reading == Reading.Exact(42L))
+        check(observationNew(2, false, boom).reading == Reading.Range(1L, 9L))
+        check(observationNew(3, false, boom).reading == Reading.Tagged("warm", Priority.HIGH))
+        check(observationNew(4, false, boom).reading == Reading.Companion(5L))
+
+        // The sum sits beside ordinary flattened leaves — they must not be
+        // disturbed by the tag-gated groups interleaved with them.
+        val obs = observationNew(3, false, boom)
+        check(obs.id == 7L && obs.note == "obs")
+
+        // `Option<sum>`: the present flag and the tag are independent facts,
+        // so an absent optional is null regardless of what its tag slot holds.
+        check(observationNew(1, false, boom).fallback == null)
+        check(observationNew(1, true, boom).fallback == Reading.Range(1L, 9L))
+        // …and an object-payload variant round-trips through the optional too.
+        check(observationNew(2, true, boom).fallback == Reading.Tagged("warm", Priority.HIGH))
+        // Both sums live at once, each with its own tag.
+        val both = observationNew(4, true, boom)
+        check(both.reading == Reading.Companion(5L) && both.fallback == Reading.Missing)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

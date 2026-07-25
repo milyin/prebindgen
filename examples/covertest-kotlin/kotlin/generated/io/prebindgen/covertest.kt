@@ -4,6 +4,7 @@ package io.prebindgen.covertest
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.DurationBoundary
 import io.prebindgen.covertest.model.ObjectBoundary
+import io.prebindgen.covertest.model.Observation
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -746,6 +747,8 @@ internal object CovNative {
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
+
+    external fun observationNew(which: Int, withFallback: Boolean, errorSink: Any): Observation
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
 

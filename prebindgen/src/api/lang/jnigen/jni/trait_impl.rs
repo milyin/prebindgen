@@ -1622,6 +1622,34 @@ impl JniGen {
             });
         }
         if let Some(name) = bare_path_ident(ty) {
+            // A `sealed_class` sum reached as a whole `JObject` — a field of a
+            // data class, or any position where the parent is already an
+            // object. Its own converter, so the parent's generic field branch
+            // delegates exactly as it does for a nested data class. (The
+            // OUTPUT direction has no counterpart: a sum crosses Rust →
+            // Kotlin flattened, always.)
+            if self.types.get(&key).is_some_and(|c| c.sum_cfg.is_some()) {
+                if let Some((e, _)) = registry.enums.get(&name) {
+                    let (wire, body) = sum_input_body(self, e, registry)?;
+                    // The wire's own null niche, exactly as a data class gets
+                    // — that is what lets `Option<sum>` fold with JVM null as
+                    // `None` instead of needing a boxed wrapper.
+                    let niches = default_niches_for_wire(&wire);
+                    let kotlin_name = self
+                        .types
+                        .get(&key)
+                        .and_then(|c| c.name_spec.as_ref())
+                        .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                    return Some(ConverterImpl {
+                        subs: vec![],
+                        pre_stages: vec![],
+                        function: self.build_input_fn(ty, &wire, &body, None),
+                        destination: wire,
+                        niches,
+                        metadata: self.framework_meta(kotlin_name),
+                    });
+                }
+            }
             if let Some((s, _)) = registry.structs.get(&name) {
                 let (wire, body) = struct_input_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);

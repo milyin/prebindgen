@@ -236,6 +236,11 @@ fn main() {
                 // .name("Tagged")` exercises the per-variant rename (which
                 // also renames its `fromParts` slots).
                 .class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
+                // `Observation` carries that sum as a data-class FIELD —
+                // required (`reading`) and optional (`fallback`) — beside
+                // ordinary flattened leaves, so the tag-gated groups must
+                // interleave with them on one `fromParts` call.
+                .class(data_class!(Observation))
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
@@ -439,6 +444,9 @@ fn main() {
                 .fun(fun!(annotated_ttl))
                 .fun(fun!(annotated_priority))
                 .fun(fun!(annotated_payload_value))
+                // A sum as a data-class field, crossing OUT: the tag plus every
+                // variant's group ride the parent's single `fromParts`.
+                .fun(fun!(observation_new))
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))

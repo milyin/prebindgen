@@ -544,6 +544,43 @@ public data class ObjectBoundaryLeaf(val value: Long) {
 }
 
 /**
+ * A data class carrying a **sum** as a field — the position where "exactly one
+ * of" composes with ordinary product data.
+ *
+ * `reading` is required and `fallback` optional, so the binding has to gate a
+ * tag *and* a present flag independently; both sit beside already-flattened
+ * siblings (`id`, `note`) so the tag-gated groups must interleave correctly
+ * with ordinary leaves rather than only working in isolation. `Reading`'s
+ * `Labeled` arm carries a `String`, which is the payload that proves an inert
+ * group's object slot is wire-defaulted to null and therefore nullable in the
+ * generated `fromParts`.
+ */
+public data class Observation(val id: Long, val reading: Reading, val fallback: Reading?, val note: String) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            reading__tag: Int,
+            reading_exact_v0: Long,
+            reading_range_low: Long,
+            reading_range_high: Long,
+            reading_tagged_v0: String?,
+            reading_tagged_v1: Int,
+            reading_companion_v0: Long,
+            fallback__present: Boolean,
+            fallback__tag: Int,
+            fallback_exact_v0: Long,
+            fallback_range_low: Long,
+            fallback_range_high: Long,
+            fallback_tagged_v0: String?,
+            fallback_tagged_v1: Int,
+            fallback_companion_v0: Long,
+            note: String,
+        ): Observation = Observation(id, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading_exact_v0); 2 -> Reading.Range(reading_range_low, reading_range_high); 3 -> Reading.Tagged(reading_tagged_v0!!, Priority.fromInt(reading_tagged_v1)); 4 -> Reading.Companion(reading_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, if (fallback__present) when (fallback__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(fallback_exact_v0); 2 -> Reading.Range(fallback_range_low, fallback_range_high); 3 -> Reading.Tagged(fallback_tagged_v0!!, Priority.fromInt(fallback_tagged_v1)); 4 -> Reading.Companion(fallback_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $fallback__tag") } else null, note)
+    }
+}
+
+/**
  * Inner, **non-optional** delivery config carrying a **non-null enum field**
  * (`priority`). Nested inside [`CacheConfig`], which crosses as
  * `Option<CacheConfig>`, so the outer optional's `nullable_context`
@@ -915,6 +952,22 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
         a.priority?.value ?: 0,
         __bcap,
     )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Build an [`Observation`] carrying the selected alternative, optionally with
+ * a `fallback` (the next alternative round-robin) — a **sum as a struct
+ * field** crossing Rust → Kotlin, required and optional in one value.
+ */
+public fun observationNew(
+    which: Int,
+    withFallback: Boolean,
+    onError: JniErrorHandler<Observation>,
+): Observation {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.observationNew(which, withFallback, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

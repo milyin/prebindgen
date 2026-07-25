@@ -105,6 +105,50 @@ pub enum Reading {
     Companion(i64),
 }
 
+/// A data class carrying a **sum** as a field — the position where "exactly one
+/// of" composes with ordinary product data.
+///
+/// `reading` is required and `fallback` optional, so the binding has to gate a
+/// tag *and* a present flag independently; both sit beside already-flattened
+/// siblings (`id`, `note`) so the tag-gated groups must interleave correctly
+/// with ordinary leaves rather than only working in isolation. `Reading`'s
+/// `Labeled` arm carries a `String`, which is the payload that proves an inert
+/// group's object slot is wire-defaulted to null and therefore nullable in the
+/// generated `fromParts`.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Observation {
+    pub id: i64,
+    pub reading: Reading,
+    pub fallback: Option<Reading>,
+    pub note: String,
+}
+
+/// The `Reading` alternative selected by `which` (declaration order, so it is
+/// the same numbering as the generated tag).
+fn reading_for(which: i32) -> Reading {
+    match which {
+        0 => Reading::Missing,
+        1 => Reading::Exact(42),
+        2 => Reading::Range { low: 1, high: 9 },
+        3 => Reading::Labeled("warm".to_string(), Priority::High),
+        _ => Reading::Companion(5),
+    }
+}
+
+/// Build an [`Observation`] carrying the selected alternative, optionally with
+/// a `fallback` (the next alternative round-robin) — a **sum as a struct
+/// field** crossing Rust → Kotlin, required and optional in one value.
+#[prebindgen]
+pub fn observation_new(which: i32, with_fallback: bool) -> Observation {
+    Observation {
+        id: 7,
+        reading: reading_for(which),
+        fallback: with_fallback.then(|| reading_for((which + 1) % 5)),
+        note: "obs".to_string(),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stamp — a small `Copy` value type (→ Kotlin value class over raw bytes).
 // ─────────────────────────────────────────────────────────────────────────────

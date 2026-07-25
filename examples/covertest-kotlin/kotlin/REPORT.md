@@ -60,6 +60,7 @@ Base package: `io.prebindgen.covertest`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
+- `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation>): Observation`
 - `payload_priority` — `fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority`
 - `percent_invalid_output` — `fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int?`
 - `percent_optional` — `fun percentOptional(p: Int?, onError: JniErrorHandler<Int?>): Int?`
@@ -156,6 +157,7 @@ Base package: `io.prebindgen.covertest`
 - `ObjectBoundary64`: data_class → `io.prebindgen.covertest.model.ObjectBoundary64` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary8`: data_class → `io.prebindgen.covertest.model.ObjectBoundary8` (wire `jni :: objects :: JObject`)
 - `ObjectBoundaryLeaf`: data_class → `io.prebindgen.covertest.model.ObjectBoundaryLeaf` (wire `jni :: objects :: JObject`)
+- `Observation`: data_class → `io.prebindgen.covertest.model.Observation` (wire `jni :: objects :: JObject`)
 - `Payload`: data_class → `io.prebindgen.covertest.Payload` (wire `jni :: objects :: JObject`)
 - `PayloadHandler`: ptr_class → `io.prebindgen.covertest.PayloadHandler` (wire `jni :: sys :: jlong`)
 - `PayloadVecHandler`: ptr_class → `io.prebindgen.covertest.PayloadVecHandler` (wire `jni :: sys :: jlong`)

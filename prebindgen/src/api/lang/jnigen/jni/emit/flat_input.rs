@@ -269,6 +269,213 @@ pub(crate) fn struct_input_body(
     Some((syn::parse_quote!(jni::objects::JObject), body))
 }
 
+/// Whole-object **input** decode for a `sealed_class` sum: a `JObject` of the
+/// sealed interface → the Rust enum, by `instanceof` dispatch over the nested
+/// variant classes and a property read per payload.
+///
+/// This is the counterpart of a nested data class's own input converter, not
+/// a second mechanism: a sum reached as a **field** sits inside a parent
+/// `JObject` that is already being read field-by-field, so the parent's
+/// generic field branch just delegates here — the same delegation
+/// `Annotated.payload` uses. The tag-gated *flattened* form is the separate
+/// parameter path.
+///
+/// The output direction deliberately has no such converter: a sum crosses
+/// Rust → Kotlin **flattened, always** (`PlanFieldKind::Sum`), which is the
+/// design's rejected-alternative note about per-crossing JVM objects. Reading
+/// one field out of a `JObject` the caller already handed us costs nothing
+/// extra, so the asymmetry is real rather than an oversight.
+pub(crate) fn sum_input_body(
+    ext: &JniGen,
+    e: &syn::ItemEnum,
+    registry: &Registry<KotlinMeta>,
+) -> Option<(syn::Type, syn::Expr)> {
+    use crate::api::core::types_util::SumSpec;
+
+    let key = TypeKey::from_ident(&e.ident);
+    let cfg = ext.types.get(&key)?;
+    let sum_cfg = cfg.sum_cfg.as_ref()?;
+    let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
+    let iface_path = iface_fqn.replace('.', "/");
+    let source_module = ext.fn_module(registry, &e.ident);
+    let enum_ident = &e.ident;
+    let enum_name = e.ident.to_string();
+
+    let spec = SumSpec::from_item_enum(e);
+    let mut arms: Vec<TokenStream> = Vec::new();
+    for (v, item_variant) in spec.variants.iter().zip(&e.variants) {
+        let vident = &v.ident;
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, vident);
+        // A variant class is NESTED in the interface, so its JVM binary name
+        // is `Outer$Variant`.
+        let jvm_class = format!("{iface_path}${kotlin_name}");
+
+        let mut preludes: Vec<TokenStream> = Vec::new();
+        let mut inits: Vec<TokenStream> = Vec::new();
+        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
+            let prop = crate::api::lang::jnigen::jni::struct_plan::sum_field_prop_name(f);
+            let bind = format_ident!("__p_{}", prop);
+            let err_prefix = format!("{enum_name}.{kotlin_name}.{prop}: {{}}");
+            let (pre, value) = read_kotlin_property(
+                ext,
+                registry,
+                &quote!(__obj),
+                &prop,
+                &item_field.ty,
+                &bind,
+                &err_prefix,
+            )?;
+            preludes.push(pre);
+            match &f.member {
+                syn::Member::Named(n) => inits.push(quote!(#n: #value)),
+                syn::Member::Unnamed(_) => inits.push(quote!(#value)),
+            }
+        }
+        let ctor = match item_variant.fields {
+            syn::Fields::Unit => quote!(#source_module::#enum_ident::#vident),
+            syn::Fields::Named(_) => {
+                quote!(#source_module::#enum_ident::#vident { #(#inits),* })
+            }
+            syn::Fields::Unnamed(_) => {
+                quote!(#source_module::#enum_ident::#vident(#(#inits),*))
+            }
+        };
+        arms.push(quote! {
+            if env.is_instance_of(__obj, #jvm_class)
+                .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(
+                    format!(concat!(#enum_name, ": instanceof ", #jvm_class, ": {}"), e)))?
+            {
+                #(#preludes)*
+                return ::core::result::Result::Ok(#ctor);
+            }
+        });
+    }
+
+    // No arm matched: the JVM object is not one of the declared variants —
+    // a binding error through the ordinary channel, never a panic.
+    let no_match = format!("{enum_name}: value is not one of its declared variants");
+    let body: syn::Expr = syn::parse_quote!({
+        let __obj = v;
+        (|| -> ::core::result::Result<#source_module::#enum_ident, __JniErr> {
+            #(#arms)*
+            ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<String>>::from(#no_match.to_string()),
+            )
+        })()?
+    });
+    Some((syn::parse_quote!(jni::objects::JObject), body))
+}
+
+/// Read one Kotlin property off `receiver` and decode it to its Rust value,
+/// binding the result to `bind`. Mirrors the per-field decode
+/// [`struct_input_body`] performs, for the positions that are properties of a
+/// generated class rather than fields of a data class.
+fn read_kotlin_property(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    receiver: &TokenStream,
+    prop: &str,
+    ty: &syn::Type,
+    bind: &syn::Ident,
+    err_prefix: &str,
+) -> Option<(TokenStream, TokenStream)> {
+    let entry = registry.input_entry(ty)?;
+    let wire = entry.destination.clone();
+    let conv = entry.function.sig.ident.clone();
+    let raw = format_ident!("{}_raw", bind);
+
+    // A handle property is a `NativeHandle` object whose raw pointer comes
+    // from `peek()`; an enum property is the Kotlin enum class, decoded
+    // through its `getValue`. Both mirror `struct_input_body`.
+    if let Some(proj) = &entry.metadata.projection {
+        if matches!(proj.kind, ProjectionKind::Handle) {
+            let fqn = handle_field_fqn(ext, proj).replace('.', "/");
+            let sig = format!("L{fqn};");
+            let obj = format_ident!("{}_obj", bind);
+            return Some((
+                quote! {
+                    let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                    let #raw: jni::sys::jlong = if #obj.is_null() {
+                        0
+                    } else {
+                        env.call_method(&#obj, "peek", "()J", &[])
+                            .and_then(|val| val.j())
+                            .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
+                    };
+                    let #bind = #conv(env, &#raw)?;
+                },
+                quote!(#bind),
+            ));
+        }
+    }
+    if ext.is_kotlin_enum(ty) {
+        let fqn = bare_path_ident(ty)
+            .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
+            .map(|v| v.to_string())?;
+        let sig = format!("L{};", fqn.replace('.', "/"));
+        let obj = format_ident!("{}_obj", bind);
+        return Some((
+            quote! {
+                let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
+                    .and_then(|val| val.l())
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
+                    .and_then(|val| val.i())
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                let #bind = #conv(env, &#raw)?;
+            },
+            quote!(#bind),
+        ));
+    }
+    match jni_field_access(&wire) {
+        Some((sig, accessor, false)) => Some((
+            quote! {
+                let #raw: #wire = env.get_field(#receiver, #prop, #sig)
+                    .and_then(|val| val.#accessor())
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))? as _;
+                let #bind = #conv(env, &#raw)?;
+            },
+            quote!(#bind),
+        )),
+        Some((sig, _, true)) => {
+            let obj = format_ident!("{}_obj", bind);
+            Some((
+                quote! {
+                    let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                    let #raw: #wire = #obj.into();
+                    let #bind = #conv(env, &#raw)?;
+                },
+                quote!(#bind),
+            ))
+        }
+        None => {
+            // Object-shaped wire with no fixed descriptor (a nested data
+            // class, another sum, a `List`): the slot's descriptor is the
+            // registered Kotlin class and the value decodes through its own
+            // converter — the same delegation the data-class path uses.
+            let slot_ty = option_inner_type(ty).unwrap_or_else(|| ty.clone());
+            let sig = bare_path_ident(&slot_ty)
+                .and_then(|name| ext.kotlin_fqn(&TypeKey::from_ident(&name)))
+                .map(|v| format!("L{};", v.replace('.', "/")))
+                .or_else(|| pat_match_top(&slot_ty, "Vec").then(|| "Ljava/util/List;".to_string()))
+                .unwrap_or_else(|| "Ljava/lang/Object;".to_string());
+            Some((
+                quote! {
+                    let #raw: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
+                        .and_then(|val| val.l())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                    let #bind = #conv(env, &#raw)?;
+                },
+                quote!(#bind),
+            ))
+        }
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Struct input flattening (pass a data_class param as its leaf fields)
 // ──────────────────────────────────────────────────────────────────────
