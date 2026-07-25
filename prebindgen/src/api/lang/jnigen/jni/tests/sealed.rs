@@ -357,6 +357,94 @@ fn a_type_gets_one_class_declarator() {
     .is_ok());
 }
 
+/// The interface body is a scope with names this emitter already occupies:
+/// the `Companion` object holding `fromParts`, and the interface's own name
+/// (which the variants use as their supertype). Both are perfectly legal
+/// Kotlin identifiers, so no keyword list catches them — they are caught by
+/// the same collision check the variants run against each other.
+///
+/// Verified against the Kotlin compiler: a `Companion` variant is
+/// "Conflicting declarations: data class Companion, companion object", and a
+/// variant named after the interface is "There's a cycle in the inheritance
+/// hierarchy for this type".
+#[test]
+fn variant_cannot_take_a_name_the_interface_body_already_uses() {
+    let loc = myflat_loc();
+    // Resolve is where `validate_symbols` runs, so the error surfaces before
+    // any artifact writer touches disk.
+    let resolve_err = |decl: crate::lang::SealedClassDecl, item: syn::ItemEnum| -> String {
+        let registry =
+            Registry::<KotlinMeta>::from_items(vec![(syn::Item::Enum(item), loc.clone())])
+                .expect("index items");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!().class(decl));
+        match registry.resolve(jni) {
+            Ok(_) => String::new(),
+            Err(e) => e.to_string(),
+        }
+    };
+
+    // 1. A variant whose RUST IDENT is `Companion`.
+    let e: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Companion(i64),
+            Exact(i64),
+        }
+    );
+    let msg = resolve_err(crate::sealed_class!(Reading), e);
+    assert!(msg.contains("Companion"), "{msg}");
+    assert!(msg.contains("companion object"), "{msg}");
+
+    // 2. A variant RENAMED to `Companion` via the per-decl override.
+    let e: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Missing,
+            Exact(i64),
+        }
+    );
+    let msg = resolve_err(
+        crate::sealed_class!(Reading).variant(crate::variant!(Exact).name("Companion")),
+        e.clone(),
+    );
+    assert!(msg.contains("Companion"), "{msg}");
+    assert!(msg.contains("companion object"), "{msg}");
+
+    // 3. A variant taking the interface's own name — its supertype reference
+    //    would resolve to the variant itself.
+    let e2: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Reading(i64),
+            Exact(i64),
+        }
+    );
+    let msg = resolve_err(crate::sealed_class!(Reading), e2);
+    assert!(msg.contains("Reading"), "{msg}");
+    assert!(msg.contains("supertype"), "{msg}");
+
+    // 4. Same, through a rename — and the check follows the *Kotlin* name, so
+    //    renaming the INTERFACE moves the collision with it.
+    let msg = resolve_err(
+        crate::sealed_class!(Reading)
+            .name("Measure")
+            .variant(crate::variant!(Exact).name("Measure")),
+        e.clone(),
+    );
+    assert!(msg.contains("Measure"), "{msg}");
+    assert!(msg.contains("supertype"), "{msg}");
+
+    // …and a variant named `Reading` is then FINE, because the interface is
+    // no longer called that.
+    let e3: syn::ItemEnum = syn::parse_quote!(
+        pub enum Reading {
+            Reading(i64),
+            Exact(i64),
+        }
+    );
+    let ok = resolve_err(crate::sealed_class!(Reading).name("Measure"), e3);
+    assert!(ok.is_empty(), "expected no error, got: {ok}");
+}
+
 /// A payload whose **output** converter did not resolve is a generation
 /// error naming it — never a Kotlin surface quietly derived from whichever
 /// direction happened to resolve. The property type, its nullability and its
