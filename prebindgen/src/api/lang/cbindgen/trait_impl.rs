@@ -646,13 +646,23 @@ impl Cbindgen {
         items
     }
 
-    /// Enums: `#[repr(C)]` mirror (variant idents + their resolved
-    /// discriminants). Every variant is emitted with an explicit `= N`
-    /// taken from the shared
-    /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values)
-    /// — the same resolution the JNI decode and the Kotlin `value(N)`
-    /// constants use — so the mirror states the numbering the source enum
-    /// implies instead of re-deriving Rust's assignment rule inline.
+    /// Enums: `#[repr(C)]` mirror — variant idents with each discriminant
+    /// **re-emitted verbatim**, exactly as the source wrote it.
+    ///
+    /// Deliberately NOT routed through the shared
+    /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values).
+    /// That helper resolves each variant to a concrete `i64`, which is what an
+    /// adapter needs when it must *know the number* — JniGen's `jint` decode
+    /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
+    /// Rust source that cbindgen re-reads, so passing the expression through
+    /// keeps every discriminant C already accepted — a `const` or `cfg`-driven
+    /// expression, and any value the source's own `repr` admits, including
+    /// ones outside `i64`. Resolving here would narrow that domain to what
+    /// `i64` and a literal can express, for no gain.
+    ///
+    /// The two adapters therefore agree on the *rule* (Rust's own assignment
+    /// order, which the shared helper encodes) while differing on what they
+    /// need from it — a number versus a spelling.
     fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
@@ -665,12 +675,13 @@ impl Cbindgen {
             };
             assert_unit_enum(e);
             let cname = self.c_type_ident(&ty);
-            let variants = crate::api::core::types_util::enum_discriminant_values(e)
-                .into_iter()
-                .map(|(id, value)| {
-                    let lit = proc_macro2::Literal::i64_unsuffixed(value);
-                    quote!(#id = #lit)
-                });
+            let variants = e.variants.iter().map(|v| {
+                let id = &v.ident;
+                match &v.discriminant {
+                    Some((_, expr)) => quote!(#id = #expr),
+                    None => quote!(#id),
+                }
+            });
             items.push(syn::parse_quote!(
                 #[repr(C)]
                 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

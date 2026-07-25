@@ -223,3 +223,45 @@ fn qualified_signature_spelling_matches_bare_opaque_ptr() {
     assert!(compact.contains("extern\"C\"fnz_keyexpr_len("), "{src}");
     assert!(compact.contains("zenoh_flat::z_keyexpr_len("), "{src}");
 }
+
+/// C's discriminant domain is wider than `i64` literals: the mirror is Rust
+/// source cbindgen re-reads, so a discriminant is re-emitted **verbatim**.
+/// Resolving it to a number (which the JNI side needs, and which the shared
+/// `enum_discriminant_values` does) would reject a `const` expression and any
+/// value outside `i64` — both of which C accepted before and still must.
+#[test]
+fn enum_mirror_preserves_the_source_discriminant_domain() {
+    let loc = SourceLocation::default();
+    let e: syn::ItemEnum = syn::parse_quote!(
+        pub enum Wide {
+            FromConst = SOME_CONST,
+            Huge = 18446744073709551615,
+            Implicit,
+        }
+    );
+    let f: syn::ItemFn = syn::parse_quote!(
+        pub fn wide_get() -> Wide {
+            unimplemented!()
+        }
+    );
+    let registry = Registry::<()>::from_items([
+        (syn::Item::Enum(e), loc.clone()),
+        (syn::Item::Fn(f), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(myflat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .enum_type(syn::parse_quote!(Wide))
+        .function(syn::parse_quote!(wide_get));
+
+    let src = write(cbindgen, registry, "enum_domain");
+    let compact: String = src.split_whitespace().collect();
+    // A non-literal expression survives…
+    assert!(compact.contains("FromConst=SOME_CONST"), "{src}");
+    // …as does a value no `i64` can hold…
+    assert!(compact.contains("Huge=18446744073709551615"), "{src}");
+    // …and an implicit discriminant stays implicit.
+    assert!(compact.contains("Implicit,"), "{src}");
+}
