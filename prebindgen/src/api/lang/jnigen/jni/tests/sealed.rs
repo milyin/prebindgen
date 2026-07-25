@@ -1029,6 +1029,62 @@ fn two_sum_callback_args_keep_their_own_selectors() {
     );
 }
 
+/// A sum in the **success position of a fallible return** has no lowering, and
+/// says so. `Result` returns deliberately keep their whole-value converter (so
+/// a fallible factory still hands back a handle), and a sum has no whole-value
+/// converter to keep — the decomposition lives on the builder-callback lane the
+/// `Result` path does not use.
+#[test]
+fn sum_in_result_ok_position_is_rejected_with_its_reason() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_try(n: i64) -> Result<Reading, Probe> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .class(crate::ptr_class!(Probe))
+            .fun(crate::fun!(read_try)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    assert!(
+        err.contains("read_try") && err.contains("success position of a fallible return"),
+        "the error must name the function and the unsupported position: {err}"
+    );
+    assert!(
+        err.contains("Return `Reading` directly"),
+        "…and say what to write instead: {err}"
+    );
+}
+
 /// A **slice of sums** as a callback argument has no lowering, and says so.
 ///
 /// Folding a sequence of tag-gated groups into the foreign list needs the

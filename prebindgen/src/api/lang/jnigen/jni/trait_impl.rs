@@ -1236,17 +1236,44 @@ impl Prebindgen for JniGen {
                 }
             }
         }
-        // A **slice of sums** delivered to a callback (`impl Fn(&[E])`) has no
-        // lowering: the element fold would need the sum's folder-appender
-        // singleton, which is emitted per *return* position, so the shape
-        // resolves to nothing and would otherwise surface as "`E` has no
-        // output converter" — naming the sum rather than the position, since a
-        // sum has no whole-value converter by design. Reject it here, where the
-        // message can say what is actually unsupported.
+        // Two sum positions have no lowering. Both would otherwise fail as
+        // "`E` has no output converter", which names the sum rather than the
+        // position — actively misleading, because a sum has no whole-value
+        // converter BY DESIGN, so that message sends the reader looking for
+        // something that must not exist. Reject them here, where the message
+        // can say what is actually unsupported and what to write instead.
         for ident in self.declared_functions() {
             let Some((item_fn, _)) = registry.functions.get(&ident) else {
                 continue;
             };
+            // (1) A sum in the `Ok` position of a fallible return. A sum is
+            // delivered DECOMPOSED through a builder callback, and the
+            // `Result` lane has no builder: a `Result` return deliberately
+            // keeps its whole-value converter so a fallible factory still
+            // yields a handle (see `unfold::returns_type`).
+            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
+                if let Some(ok) = crate::api::core::types_util::result_ok_type(ret) {
+                    let core = crate::api::core::types_util::peel_ref_option_vec(&ok);
+                    if matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                        return Err(format!(
+                            "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
+                             supported in the success position of a fallible return. A sum \
+                             crosses decomposed (a tag plus one leaf group per variant) \
+                             through a builder callback, which the `Result` lane does not \
+                             have — a fallible return keeps its whole-value converter so a \
+                             factory can still hand back a handle. Return `{}` directly and \
+                             report failure through the error channel, or model the failure \
+                             as one of the sum's own variants",
+                            ok.to_token_stream(),
+                            ok.to_token_stream(),
+                        ));
+                    }
+                }
+            }
+            // (2) A **slice of sums** delivered to a callback
+            // (`impl Fn(&[E])`): the element fold would need the sum's
+            // folder-appender singleton, which is emitted per `Vec<E>` RETURN
+            // position, so the shape resolves to nothing.
             for input in &item_fn.sig.inputs {
                 let syn::FnArg::Typed(pt) = input else {
                     continue;
