@@ -825,7 +825,7 @@ impl Cbindgen {
                 }
             ));
 
-            if !drop_arms.is_empty() {
+if registry.output_entry(&ty).is_some() && !drop_arms.is_empty() {
                 let drop_ident = self.destructor_symbol(&ty);
                 items.push(syn::parse_quote!(
                     #[no_mangle]
