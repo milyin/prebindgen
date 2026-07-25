@@ -149,6 +149,50 @@ pub fn observation_new(which: i32, with_fallback: bool) -> Observation {
     }
 }
 
+/// A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
+/// enum object (or null) in the JVM slot, which the tag-gated flat form cannot
+/// express. The binding therefore lets this one cross as a whole object through
+/// its own converter rather than failing — the degradation path — which is also
+/// what exercises the `Option<enum>` property read.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub enum Marker {
+    None_,
+    Ranked(Option<Priority>),
+}
+
+/// A data class carrying the object-shaped sum.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tagged {
+    pub id: i64,
+    pub marker: Marker,
+}
+
+/// Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`.
+#[prebindgen]
+pub fn tagged_new(which: i32) -> Tagged {
+    Tagged {
+        id: 3,
+        marker: match which {
+            0 => Marker::None_,
+            1 => Marker::Ranked(None),
+            _ => Marker::Ranked(Some(Priority::High)),
+        },
+    }
+}
+
+/// Read it back — the whole-object sum decode, including the `Option<enum>`
+/// payload, crossing Kotlin → Rust.
+#[prebindgen]
+pub fn tagged_rank(t: Tagged) -> i32 {
+    match t.marker {
+        Marker::None_ => -1,
+        Marker::Ranked(None) => 0,
+        Marker::Ranked(Some(p)) => priority_weight(p),
+    }
+}
+
 /// Which alternative an [`Observation`]'s `reading` holds, by declaration
 /// order — the sum crossing back **in** as part of a data-class parameter.
 #[prebindgen]

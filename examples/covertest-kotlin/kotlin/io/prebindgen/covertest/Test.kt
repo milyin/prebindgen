@@ -55,6 +55,10 @@ import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.observationWhich
+import io.prebindgen.covertest.model.Marker
+import io.prebindgen.covertest.model.Tagged
+import io.prebindgen.covertest.model.taggedNew
+import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
@@ -388,6 +392,24 @@ fun main() {
         check(invalidTag != null && invalidTag!!.contains("Reading: invalid tag")) {
             "expected the binding-error channel to carry the invalid tag, got: $invalidTag"
         }
+    }
+
+    // ── a sum whose payload is NOT leaf-shaped ────────────────────────────────
+    // `Marker.Ranked` carries `Option<Priority>` — an enum object or null in the
+    // JVM slot, which tag-gated groups cannot express. The sum degrades to a
+    // whole-object crossing rather than failing the build, and that path is what
+    // reads an enum property back (bare and optional read differently: the slot
+    // holds the enum OBJECT, not a boxed Int).
+    section("sum with a non-leaf payload (whole-object crossing, Option<enum>)") {
+        check(taggedRank(taggedNew(0, boom), boom) == -1)
+        check(taggedRank(taggedNew(1, boom), boom) == 0)
+        check(taggedRank(taggedNew(2, boom), boom) == 10)
+
+        // Kotlin-constructed values cross identically — including the two
+        // `Ranked` shapes that differ only by the optional being present.
+        check(taggedRank(Tagged(1L, Marker.None_), boom) == -1)
+        check(taggedRank(Tagged(1L, Marker.Ranked(null)), boom) == 0)
+        check(taggedRank(Tagged(1L, Marker.Ranked(Priority.HIGH)), boom) == 10)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

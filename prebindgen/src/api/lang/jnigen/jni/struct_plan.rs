@@ -199,14 +199,14 @@ pub(crate) fn classify_field(
                 core.to_token_stream(),
             );
         }
-        return Some(sum_plan_kind(
+        return sum_plan_kind(
             ext,
             registry,
             &bare,
             owner,
             option_inner_type(&effective_ty).is_some(),
             depth,
-        ));
+        );
     }
 
     let field_entry = registry.output_entry(&effective_ty)?;
@@ -332,6 +332,12 @@ pub(crate) fn classify_field(
 /// a sum reaching its own type has no `jobject_input`-style escape hatch (the
 /// flatten plan is finite by construction), so it fails loudly here rather
 /// than expanding until the guard trips with an unhelpful message.
+/// `None` propagates the resolver's **deferral** protocol: a payload whose
+/// converter has not resolved *yet* means "retry on the next fixed-point
+/// iteration", exactly as [`classify_field`] signals it for a struct field.
+/// Panicking there instead would turn a transient state into a build failure
+/// whenever a payload's converter happened to resolve later than this plan
+/// was first attempted.
 fn sum_plan_kind(
     ext: &JniGen,
     registry: &Registry<KotlinMeta>,
@@ -339,7 +345,7 @@ fn sum_plan_kind(
     owner: &str,
     optional: bool,
     depth: usize,
-) -> PlanFieldKind {
+) -> Option<PlanFieldKind> {
     use crate::api::core::types_util::SumSpec;
 
     let ident = bare_path_ident(ty).unwrap_or_else(|| {
@@ -364,43 +370,31 @@ fn sum_plan_kind(
         .unwrap_or_else(|| panic!("fromParts bridge: sealed class `{ident}` has no Kotlin name"));
 
     let spec = SumSpec::from_item_enum(item_enum);
-    let variants = spec
-        .variants
-        .iter()
-        .zip(&item_enum.variants)
-        .map(|(v, item_variant)| {
-            let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
-            let fields = v
-                .fields
-                .iter()
-                .zip(item_variant.fields.iter())
-                .map(|(f, item_field)| {
-                    let prop = sum_field_prop_name(f);
-                    let slot = sum_slot_fragment(&kotlin_name, &prop);
-                    let owner = format!("{ident}::{}.{prop}", v.ident);
-                    let kind = classify_field(ext, registry, &item_field.ty, &owner, depth + 1)
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "fromParts bridge: sealed-class payload `{owner}` has no resolved \
-                                 output converter"
-                            )
-                        });
-                    SumPlanField {
-                        member: f.member.clone(),
-                        slot,
-                        kind,
-                    }
-                })
-                .collect();
-            SumPlanVariant {
-                rust_ident: v.ident.clone(),
-                kotlin_name,
-                fields,
-            }
-        })
-        .collect();
+    let mut variants: Vec<SumPlanVariant> = Vec::new();
+    for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+        let kotlin_name = ext.sum_variant_class_name(sum_cfg, &v.ident);
+        let mut fields: Vec<SumPlanField> = Vec::new();
+        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
+            let prop = sum_field_prop_name(f);
+            let slot = sum_slot_fragment(&kotlin_name, &prop);
+            let owner = format!("{ident}::{}.{prop}", v.ident);
+            // `?` — a payload whose converter has not resolved yet defers the
+            // whole plan to the next iteration, it does not fail the build.
+            let kind = classify_field(ext, registry, &item_field.ty, &owner, depth + 1)?;
+            fields.push(SumPlanField {
+                member: f.member.clone(),
+                slot,
+                kind,
+            });
+        }
+        variants.push(SumPlanVariant {
+            rust_ident: v.ident.clone(),
+            kotlin_name,
+            fields,
+        });
+    }
 
-    PlanFieldKind::Sum {
+    Some(PlanFieldKind::Sum {
         source: {
             let module = ext.fn_module(registry, &ident);
             syn::parse_quote!(#module::#ident)
@@ -408,7 +402,7 @@ fn sum_plan_kind(
         kotlin_fqn,
         optional,
         variants,
-    }
+    })
 }
 
 /// Kotlin property name of one sum payload field — a named field keeps its

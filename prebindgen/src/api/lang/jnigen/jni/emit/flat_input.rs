@@ -354,9 +354,21 @@ pub(crate) fn sum_input_body(
     // No arm matched: the JVM object is not one of the declared variants —
     // a binding error through the ordinary channel, never a panic.
     let no_match = format!("{enum_name}: value is not one of its declared variants");
+    // NULL must be rejected BEFORE the dispatch: JNI specifies that
+    // `IsInstanceOf(NULL, any)` is true ("a NULL object can be cast to any
+    // class"), so a null would match the first arm and silently decode as
+    // that variant — for a unit first variant, without even a failed field
+    // read to give it away. An `Option<sum>` never reaches here with null:
+    // its wrapper carves the null niche first and yields `None`.
+    let null_msg = format!("{enum_name}: null value where a variant was required");
     let body: syn::Expr = syn::parse_quote!({
         let __obj = v;
         (|| -> ::core::result::Result<#source_module::#enum_ident, __JniErr> {
+            if __obj.is_null() {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<String>>::from(#null_msg.to_string()),
+                );
+            }
             #(#arms)*
             ::core::result::Result::Err(
                 <__JniErr as ::core::convert::From<String>>::from(#no_match.to_string()),
@@ -410,21 +422,52 @@ fn read_kotlin_property(
             ));
         }
     }
-    if ext.is_kotlin_enum(ty) {
-        let fqn = bare_path_ident(ty)
+    // An enum property — bare or under `Option` — is stored as the Kotlin
+    // **enum object**, so it is read through `getValue`, NOT through the
+    // generic converters: the bare-enum one is `jint`-keyed and the
+    // `Option<enum>` one unboxes a `java.lang.Integer`, and neither matches
+    // what the JVM slot actually holds. `struct_input_body` makes the same
+    // distinction for data-class fields; this is that logic for a property.
+    let enum_inner = option_inner_type(ty).unwrap_or_else(|| ty.clone());
+    if ext.is_kotlin_enum(&enum_inner) {
+        let fqn = bare_path_ident(&enum_inner)
             .and_then(|n| ext.kotlin_fqn(&TypeKey::from_ident(&n)))
             .map(|v| v.to_string())?;
         let sig = format!("L{};", fqn.replace('.', "/"));
         let obj = format_ident!("{}_obj", bind);
+        // Under `Option`, JVM null is `None` and the INNER converter decodes
+        // the discriminant; the outer converter would expect a boxed Integer.
+        let decode = if option_inner_type(ty).is_some() {
+            let inner_conv = registry
+                .input_entry(&enum_inner)?
+                .function
+                .sig
+                .ident
+                .clone();
+            quote! {
+                let #bind = if #obj.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
+                        .and_then(|val| val.i())
+                        .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                    ::core::option::Option::Some(#inner_conv(env, &#raw)?)
+                };
+            }
+        } else {
+            quote! {
+                let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
+                    .and_then(|val| val.i())
+                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
+                let #bind = #conv(env, &#raw)?;
+            }
+        };
         return Some((
             quote! {
                 let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
                     .and_then(|val| val.l())
                     .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                let #raw: jni::sys::jint = env.call_method(&#obj, "getValue", "()I", &[])
-                    .and_then(|val| val.i())
-                    .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?;
-                let #bind = #conv(env, &#raw)?;
+                #decode
             },
             quote!(#bind),
         ));

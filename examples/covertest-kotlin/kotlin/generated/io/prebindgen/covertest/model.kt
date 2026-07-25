@@ -33,6 +33,31 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
 }
 
 /**
+ * A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
+ * enum object (or null) in the JVM slot, which the tag-gated flat form cannot
+ * express. The binding therefore lets this one cross as a whole object through
+ * its own converter rather than failing — the degradation path — which is also
+ * what exercises the `Option<enum>` property read.
+ *
+ * JVM-side surface for the native Rust `Marker` sum: exactly one alternative is live.
+ */
+public sealed interface Marker {
+    public data object None_ : Marker
+
+    public data class Ranked(public val v0: Priority?) : Marker
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, ranked_v0: Priority?): Marker =
+            when (tag) {
+                0 -> None_
+                1 -> Ranked(ranked_v0)
+                else -> throw IllegalArgumentException("Marker: invalid tag $tag")
+            }
+    }
+}
+
+/**
  * A sensor reading: exactly **one** of these alternatives is live, and it
  * carries that alternative's payload. Written as plain Rust — the "exactly
  * one of" invariant is in the type, not in a doc comment on a struct of
@@ -595,6 +620,14 @@ public data class RepliesConfig(val priority: Priority, val maxSamples: Long) {
     }
 }
 
+/** A data class carrying the object-shaped sum. */
+public data class Tagged(val id: Long, val marker: Marker) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: Long, marker__tag: Int, marker_ranked_v0: Int?): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(marker_ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
+    }
+}
+
 /**
  * Every fixed-width Rust unsigned scalar in one generated Kotlin data class.
  * The first three fields widen losslessly; `long`/`maybe_long` surface as
@@ -1006,6 +1039,25 @@ public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int 
         o.note,
         __bcap,
     )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`. */
+public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged>): Tagged {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.taggedNew(which, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Read it back — the whole-object sum decode, including the `Option<enum>`
+ * payload, crossing Kotlin → Rust.
+ */
+public fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.taggedRank(t.id, t.marker, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

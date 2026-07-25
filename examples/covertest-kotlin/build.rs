@@ -241,6 +241,11 @@ fn main() {
                 // ordinary flattened leaves, so the tag-gated groups must
                 // interleave with them on one `fromParts` call.
                 .class(data_class!(Observation))
+                // `Marker`'s `Option<enum>` payload is not leaf-shaped, so the
+                // sum degrades to a whole-object crossing instead of failing —
+                // and that path is what reads an enum property back.
+                .class(sealed_class!(Marker))
+                .class(data_class!(Tagged))
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
@@ -448,6 +453,8 @@ fn main() {
                 // variant's group ride the parent's single `fromParts`.
                 .fun(fun!(observation_new))
                 .fun(fun!(observation_which))
+                .fun(fun!(tagged_new))
+                .fun(fun!(tagged_rank))
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))

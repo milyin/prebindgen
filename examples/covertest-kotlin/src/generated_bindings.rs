@@ -835,6 +835,86 @@ pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JObject_to_Marker_3dc81334<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
+    Ok({
+        let __obj = v;
+        (|| -> ::core::result::Result<perftest_flat::Marker, __JniErr> {
+            if __obj.is_null() {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Marker: null value where a variant was required".to_string(),
+                    ),
+                );
+            }
+            if env
+                .is_instance_of(__obj, "io/prebindgen/covertest/model/Marker$None_")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        concat!("Marker", ": instanceof ",
+                        "io/prebindgen/covertest/model/Marker$None_", ": {}"), e
+                    ),
+                ))?
+            {
+                return ::core::result::Result::Ok(perftest_flat::Marker::None_);
+            }
+            if env
+                .is_instance_of(__obj, "io/prebindgen/covertest/model/Marker$Ranked")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        concat!("Marker", ": instanceof ",
+                        "io/prebindgen/covertest/model/Marker$Ranked", ": {}"), e
+                    ),
+                ))?
+            {
+                let __p_v0_obj: jni::objects::JObject = env
+                    .get_field(__obj, "v0", "Lio/prebindgen/covertest/model/Priority;")
+                    .and_then(|val| val.l())
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Marker.Ranked.v0: {}", e)))?;
+                let __p_v0 = if __p_v0_obj.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    let __p_v0_raw: jni::sys::jint = env
+                        .call_method(&__p_v0_obj, "getValue", "()I", &[])
+                        .and_then(|val| val.i())
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Marker.Ranked.v0: {}", e)))?;
+                    ::core::option::Option::Some(
+                        jint_to_Priority_447102d2(env, &__p_v0_raw)?,
+                    )
+                };
+                return ::core::result::Result::Ok(perftest_flat::Marker::Ranked(__p_v0));
+            }
+            ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from("Marker: value is not one of its declared variants".to_string()),
+            )
+        })()?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_ObjectBoundary16_e9d41606<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -1514,6 +1594,15 @@ pub(crate) unsafe fn JObject_to_Reading_2261050f<'env, 'v>(
     Ok({
         let __obj = v;
         (|| -> ::core::result::Result<perftest_flat::Reading, __JniErr> {
+            if __obj.is_null() {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Reading: null value where a variant was required".to_string(),
+                    ),
+                );
+            }
             if env
                 .is_instance_of(__obj, "io/prebindgen/covertest/model/Reading$Missing")
                 .map_err(|e| <__JniErr as ::core::convert::From<
@@ -1684,6 +1773,42 @@ pub(crate) unsafe fn JObject_to_RepliesConfig_eb8e9079<'env, 'v>(
         perftest_flat::RepliesConfig {
             priority,
             max_samples,
+        }
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_Tagged_641b984c<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::Tagged, __JniErr> {
+    Ok({
+        let __id_raw: jni::sys::jlong = env
+            .get_field(v, "id", "J")
+            .and_then(|val| val.j())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Tagged.id: {}", e)))? as _;
+        let id = jlong_to_i64_fbf9a9bc(env, &__id_raw)?;
+        let __marker_raw: jni::objects::JObject = env
+            .get_field(v, "marker", "Lio/prebindgen/covertest/model/Marker;")
+            .and_then(|val| val.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Tagged.marker: {}", e)))?;
+        let marker = JObject_to_Marker_3dc81334(env, &__marker_raw)?;
+        perftest_flat::Tagged {
+            id,
+            marker,
         }
     })
 }
@@ -5633,6 +5758,57 @@ pub(crate) unsafe fn Summary_to_jlong_ccacdeac<'a>(
     v: &perftest_flat::Summary,
 ) -> ::core::result::Result<jni::sys::jlong, __JniErr> {
     Ok(std::boxed::Box::into_raw(std::boxed::Box::new(v.clone())) as i64)
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn Tagged_to_JObject_641b984c<'a>(
+    env: &mut jni::JNIEnv<'a>,
+    v: perftest_flat::Tagged,
+) -> ::core::result::Result<jni::objects::JObject<'a>, __JniErr> {
+    Ok({
+        let ___id: jni::sys::jlong = i64_to_jlong_fbf9a9bc(env, v.id.clone())?;
+        let ___marker__tag: jni::sys::jint;
+        let ___marker_g0: jni::objects::JObject;
+        match &v.marker {
+            perftest_flat::Marker::None_ => {
+                ___marker__tag = 0;
+                ___marker_g0 = jni::objects::JObject::null();
+            }
+            perftest_flat::Marker::Ranked(__s0_0) => {
+                let ___marker_ranked_v0: jni::objects::JObject = Option_Priority_to_JObject_ad5cbb32(
+                    env,
+                    __s0_0.clone(),
+                )?;
+                ___marker__tag = 1;
+                ___marker_g0 = ___marker_ranked_v0;
+            }
+        }
+        let __obj = env
+            .call_static_method(
+                "io/prebindgen/covertest/model/Tagged",
+                "fromParts",
+                "(JILjava/lang/Integer;)Lio/prebindgen/covertest/model/Tagged;",
+                &[
+                    jni::objects::JValue::from(___id),
+                    jni::objects::JValue::from(___marker__tag),
+                    jni::objects::JValue::Object(&___marker_g0),
+                ],
+            )
+            .and_then(|__v| __v.l())
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("encode struct via fromParts: {}", e)))?;
+        __obj
+    })
 }
 #[allow(
     non_snake_case,
@@ -14000,6 +14176,110 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_summaryTotalRaw<
                 &__e.to_string(),
             );
             0.0 as jni::sys::jdouble
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_taggedNew<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    which: jni::sys::jint,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let which = match jint_to_i32_a3e3b6ef(&mut env, &which) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let __out = perftest_flat::tagged_new(which);
+    match Tagged_to_JObject_641b984c(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_taggedRank<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    t_id: jni::sys::jlong,
+    t_marker: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jint {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __flat_t_id = match jlong_to_i64_fbf9a9bc(&mut env, &t_id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __flat_t_marker = match JObject_to_Marker_3dc81334(&mut env, &t_marker) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __flat_t = perftest_flat::Tagged {
+        id: __flat_t_id,
+        marker: __flat_t_marker,
+    };
+    let t = __flat_t;
+    let __out = perftest_flat::tagged_rank(t);
+    match i32_to_jint_a3e3b6ef(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jint
         }
     }
 }

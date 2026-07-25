@@ -3,8 +3,10 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.DurationBoundary
+import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
 import io.prebindgen.covertest.model.Observation
+import io.prebindgen.covertest.model.Tagged
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -1000,6 +1002,10 @@ internal object CovNative {
     ): Double
 
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+
+    external fun taggedNew(which: Int, errorSink: Any): Tagged
+
+    external fun taggedRank(tId: Long, tMarker: Marker, errorSink: Any): Int
 
     external fun unsignedDataMaybe(
         valueByte: Int,

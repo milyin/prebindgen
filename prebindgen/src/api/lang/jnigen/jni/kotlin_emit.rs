@@ -921,12 +921,32 @@ impl JniGen {
                 field.ty.to_token_stream(),
             )
         });
-        // The input side must agree: Kotlin reads these very properties back
-        // when the value crosses the other way.
+        // The input side must agree on WHICH TYPE the property is — Kotlin
+        // reads these very properties back when the value crosses the other
+        // way, so a genuine disagreement (`String` in, `Long` out) is drift
+        // that belongs at the declaration.
+        //
+        // Nullability is deliberately excluded from the comparison: the two
+        // directions record it by different conventions. For `Option<T>` the
+        // output converter's name carries the `?` while the input converter's
+        // does not, because the input side expresses absence in the wire (a
+        // boxed value, a present flag, a niche) rather than in the type name.
+        // Comparing the rendered types would reject that legitimate shape —
+        // which is what an `Option<enum>` payload does.
         if let Some(inp) = registry.input_entry(&field.ty) {
-            if let Some(in_ty) = inp.metadata.kotlin_name.clone() {
+            if let (Some(in_ty), (Some(a), Some(b))) = (
+                inp.metadata.kotlin_name.clone(),
+                (
+                    inp.metadata
+                        .kotlin_name
+                        .as_ref()
+                        .and_then(|t| t.leaf_name())
+                        .map(str::to_string),
+                    ty.leaf_name().map(str::to_string),
+                ),
+            ) {
                 assert!(
-                    in_ty.to_string() == ty.to_string(),
+                    a == b,
                     "{}: the input and output converters for `{}` disagree on its Kotlin \
                      type (`{}` in, `{}` out) — a sealed class's properties are read by both \
                      directions, so they must map to one type",

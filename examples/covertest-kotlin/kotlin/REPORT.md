@@ -71,6 +71,8 @@ Base package: `io.prebindgen.covertest`
 - `stamp_new` — `fun stampNew(secs: Long, nanos: Long, onError: JniErrorHandler<Stamp>): Stamp`
 - `stamp_series` — `fun stampSeries(count: Long, onError: JniErrorHandler<List<Stamp>>): List<Stamp>`
   - shaped by: return `Stamp` decomposed → [] (Callback delivery)
+- `tagged_new` — `fun taggedNew(which: Int, onError: JniErrorHandler<Tagged>): Tagged`
+- `tagged_rank` — `fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int`
 - `unsigned_data_maybe` — `fun unsignedDataMaybe(value: Unsigned, onError: JniErrorHandler<ULong?>): ULong?`
 - `unsigned_emit` — `fun unsignedEmit(value: ULong, f: u64Callback, onError: JniErrorHandler<Unit>)`
 - `unsigned_optional` — `fun unsignedOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
@@ -149,6 +151,7 @@ Base package: `io.prebindgen.covertest`
 - `CacheConfig`: data_class → `io.prebindgen.covertest.model.CacheConfig` (wire `jni :: objects :: JObject`)
 - `DurationBoundary`: data_class → `io.prebindgen.covertest.model.DurationBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `EscapeProbe`: ptr_class → `io.prebindgen.covertest.esc_pkg.Esc_Probe` (wire `jni :: sys :: jlong`)
+- `Marker`: sealed_class → `io.prebindgen.covertest.model.Marker` (wire `?`)
 - `ObjectBoundary`: data_class → `io.prebindgen.covertest.model.ObjectBoundary` (wire `jni :: objects :: JObject`, input `JObject` opt-in)
 - `ObjectBoundary16`: data_class → `io.prebindgen.covertest.model.ObjectBoundary16` (wire `jni :: objects :: JObject`)
 - `ObjectBoundary2`: data_class → `io.prebindgen.covertest.model.ObjectBoundary2` (wire `jni :: objects :: JObject`)
@@ -170,6 +173,7 @@ Base package: `io.prebindgen.covertest`
 - `StorageError`: ptr_class → `io.prebindgen.covertest.errors.StorageError` (wire `jni :: sys :: jlong`)
 - `StorageHandler`: ptr_class → `io.prebindgen.covertest.StorageHandler` (wire `jni :: sys :: jlong`)
 - `Summary`: ptr_class → `io.prebindgen.covertest.analytics.Summary` (wire `jni :: sys :: jlong`)
+- `Tagged`: data_class → `io.prebindgen.covertest.model.Tagged` (wire `jni :: objects :: JObject`)
 - `Unsigned`: data_class → `io.prebindgen.covertest.model.Unsigned` (wire `jni :: objects :: JObject`)
 
 ## conversions
