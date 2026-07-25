@@ -501,6 +501,17 @@ pub(crate) struct FlatLeaf {
     /// full access is composed per site via [`Self::kt_access`], so the plan
     /// itself stays independent of the call form (`payload`, `this`, `__e`).
     pub kt_access_tail: String,
+    /// Text placed **before** the object expression, so the access is a
+    /// template (`prefix + base + tail`) rather than a suffix.
+    ///
+    /// Empty for every ordinary leaf, whose access really is a suffix. A
+    /// tag-gated variant slot is not: it needs
+    /// `(<base>.field as? Reading.Exact)?.v0 ?: 0L`, where the base sits in
+    /// the middle. Both [`Self::kt_access`] and the handle-target composition
+    /// go through it, because a variant slot can equally be a handle — and a
+    /// handle target that ignored the prefix would silently lock and consume
+    /// the wrong expression.
+    pub kt_access_prefix: String,
     /// Per-field input converter ident (`None` for the synthetic present flag).
     pub conv: Option<syn::Ident>,
     /// Struct field this leaf populates. `None` for the struct-level present
@@ -529,7 +540,16 @@ impl FlatLeaf {
     /// name, `this` for a promoted receiver, `__e` for the vec-build loop
     /// variable).
     pub fn kt_access(&self, base: &str) -> String {
-        format!("{base}{}", self.kt_access_tail)
+        format!("{}{base}{}", self.kt_access_prefix, self.kt_access_tail)
+    }
+
+    /// The Kotlin expression yielding the handle this leaf carries, rooted at
+    /// `base` — the thing the lock scaffold locks and `markConsumed()`s.
+    /// `None` when the leaf is not a handle. Composed through the same
+    /// template as [`Self::kt_access`].
+    pub fn kt_handle_target(&self, base: &str) -> Option<String> {
+        let tail = self.handle_target_tail.as_ref()?;
+        Some(format!("{}{base}{tail}", self.kt_access_prefix))
     }
 
     /// Native call argument for this leaf. Handle pointers are bound under
@@ -702,6 +722,7 @@ fn push_present_leaf(
         kt_name: snake_to_camel(native),
         kt_wire_ty: "Boolean".to_string(),
         kt_access_tail: access,
+        kt_access_prefix: String::new(),
         conv: None,
         field,
         is_present_flag: true,
@@ -732,6 +753,7 @@ fn push_value_leaf(
         kt_name: snake_to_camel(native),
         kt_wire_ty,
         kt_access_tail: access,
+        kt_access_prefix: String::new(),
         conv: Some(entry.function.sig.ident.clone()),
         field: Some(field),
         is_present_flag: false,
@@ -756,6 +778,7 @@ fn push_handle_leaf(
         kt_name: snake_to_camel(native),
         kt_wire_ty: "Long".to_string(),
         kt_access_tail: target.clone(),
+        kt_access_prefix: String::new(),
         conv: None,
         field: Some(field),
         is_present_flag: false,
