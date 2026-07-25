@@ -182,16 +182,21 @@ pub(crate) fn classify_field(
     // boundary-only. Demanding an output entry before this point would send
     // every sum-typed field down the `None` path and fail the whole parent's
     // plan with an unresolved-converter error naming the wrong thing.
+    // `Vec` is peeled alongside `Option` here purely to CLASSIFY: `type_kind`
+    // answers about a bare ident, so it reports `Vec<Reading>` as `Other` and
+    // a rejection guarded on the unpeeled type could never fire. Peeling first
+    // is what makes the `Vec<sum>` error reachable at all.
     let bare = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
-    if matches!(ext.type_kind(registry, &bare), TypeKind::Sum) {
+    let core = vec_inner_type(&bare).unwrap_or_else(|| bare.clone());
+    if matches!(ext.type_kind(registry, &core), TypeKind::Sum) {
         // A `Vec` of tag-gated groups has variable arity, exactly like a `Vec`
         // of nested data classes — the flattened bridge is fixed-layout by
         // construction.
-        if pat_match_top(&effective_ty, "Vec") {
+        if vec_inner_type(&bare).is_some() {
             panic!(
                 "fromParts bridge: `Vec<{}>` sealed-class field (`{owner}`) is not supported \
                  (variable arity)",
-                bare.to_token_stream(),
+                core.to_token_stream(),
             );
         }
         return Some(sum_plan_kind(

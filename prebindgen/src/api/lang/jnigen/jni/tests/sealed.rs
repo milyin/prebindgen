@@ -571,3 +571,66 @@ fn sum_is_its_own_type_kind() {
     let cfg = jni.types.get(&TypeKey::from_type(&ty)).expect("declared");
     assert!(cfg.special_decl());
 }
+
+/// A `Vec` of tag-gated groups has variable arity, so it cannot ride the
+/// fixed-layout `fromParts` bridge — the same reason `Vec<data class>` is
+/// rejected. The guard has to peel `Vec` before asking `type_kind`, which
+/// answers about a bare ident and would otherwise report `Vec<Reading>` as
+/// `Other` and never reach this error.
+#[test]
+fn vec_of_sum_is_rejected_as_a_struct_field() {
+    let loc = myflat_loc();
+    let build = |field_ty: syn::Type| {
+        let st: syn::ItemStruct = syn::parse_quote!(
+            pub struct Holder {
+                pub readings: #field_ty,
+            }
+        );
+        let f: syn::ItemFn = syn::parse_quote!(
+            pub fn holder_new() -> Holder {
+                unimplemented!()
+            }
+        );
+        let registry = Registry::<KotlinMeta>::from_items(vec![
+            (
+                syn::Item::Enum(syn::parse_quote!(
+                    pub enum Reading {
+                        Missing,
+                        Exact(i64),
+                    }
+                )),
+                loc.clone(),
+            ),
+            (syn::Item::Struct(st), loc.clone()),
+            (syn::Item::Fn(f), loc.clone()),
+        ])
+        .expect("index items");
+        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .class(crate::data_class!(Holder))
+                .fun(crate::fun!(holder_new)),
+        );
+        let dir = unique_test_dir("sealed_vec_field");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _ = registry
+            .resolve(jni)
+            .map(|g| g.write_rust(dir.join("g.rs")));
+    };
+
+    for ty in [
+        syn::parse_quote!(Vec<Reading>),
+        syn::parse_quote!(Option<Vec<Reading>>),
+    ] {
+        let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build(ty)))
+            .expect_err("Vec<sum> must be rejected");
+        let msg = err
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default();
+        assert!(msg.contains("variable arity"), "{msg}");
+        assert!(msg.contains("Reading"), "{msg}");
+    }
+}
