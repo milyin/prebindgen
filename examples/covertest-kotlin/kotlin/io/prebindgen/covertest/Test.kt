@@ -54,6 +54,7 @@ import io.prebindgen.covertest.model.cacheConfigWeight
 import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
+import io.prebindgen.covertest.model.observationWhich
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
@@ -352,6 +353,21 @@ fun main() {
         // Both sums live at once, each with its own tag.
         val both = observationNew(4, true, boom)
         check(both.reading == Reading.Companion(5L) && both.fallback == Reading.Missing)
+
+        // …and back IN as part of a data-class parameter: every alternative
+        // reconstructs the same Rust variant it came from.
+        for (which in 0..4) {
+            check(observationWhich(observationNew(which, false, boom), boom) == which)
+        }
+        // A Kotlin-constructed value (not one that came from Rust) crosses in
+        // just the same.
+        check(observationWhich(Observation(1L, Reading.Range(2L, 3L), null, "n"), boom) == 2)
+        check(
+            observationWhich(
+                Observation(1L, Reading.Tagged("x", Priority.LOW), Reading.Missing, "n"),
+                boom,
+            ) == 3
+        )
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

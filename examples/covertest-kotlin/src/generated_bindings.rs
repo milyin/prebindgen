@@ -8699,6 +8699,103 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_observationNew<'
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_observationWhich<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    o_id: jni::sys::jlong,
+    o_reading: jni::objects::JObject<'a>,
+    o_fallback: jni::objects::JObject<'a>,
+    o_note: jni::objects::JString<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::sys::jint {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let __flat_o_id = match jlong_to_i64_fbf9a9bc(&mut env, &o_id) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __flat_o_reading = match JObject_to_Reading_2261050f(&mut env, &o_reading) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __flat_o_fallback = match JObject_to_Option_Reading_80df84a9(
+        &mut env,
+        &o_fallback,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __flat_o_note = match JString_to_String_c7f3ca43(&mut env, &o_note) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return 0 as jni::sys::jint;
+        }
+    };
+    let __flat_o = perftest_flat::Observation {
+        id: __flat_o_id,
+        reading: __flat_o_reading,
+        fallback: __flat_o_fallback,
+        note: __flat_o_note,
+    };
+    let o = __flat_o;
+    let __out = perftest_flat::observation_which(o);
+    match i32_to_jint_a3e3b6ef(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            0 as jni::sys::jint
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_payloadHandlerNew<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,

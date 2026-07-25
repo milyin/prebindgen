@@ -149,6 +149,19 @@ pub fn observation_new(which: i32, with_fallback: bool) -> Observation {
     }
 }
 
+/// Which alternative an [`Observation`]'s `reading` holds, by declaration
+/// order — the sum crossing back **in** as part of a data-class parameter.
+#[prebindgen]
+pub fn observation_which(o: Observation) -> i32 {
+    match o.reading {
+        Reading::Missing => 0,
+        Reading::Exact(_) => 1,
+        Reading::Range { .. } => 2,
+        Reading::Labeled(_, _) => 3,
+        Reading::Companion(_) => 4,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stamp — a small `Copy` value type (→ Kotlin value class over raw bytes).
 // ─────────────────────────────────────────────────────────────────────────────

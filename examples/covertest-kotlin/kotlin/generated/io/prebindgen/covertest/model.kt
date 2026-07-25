@@ -973,6 +973,17 @@ public fun observationNew(
 }
 
 /**
+ * Which alternative an [`Observation`]'s `reading` holds, by declaration
+ * order — the sum crossing back **in** as part of a data-class parameter.
+ */
+public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.observationWhich(o.id, o.reading, o.fallback, o.note, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
  * The cache's replies-priority weight plus its `ttl`, or `-1` when the cache
  * is absent (`Option<CacheConfig>` **input** — the #144 reproduction: a
  * non-null enum field reached through the outer optional data class).

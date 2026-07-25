@@ -447,6 +447,7 @@ fn main() {
                 // A sum as a data-class field, crossing OUT: the tag plus every
                 // variant's group ride the parent's single `fromParts`.
                 .fun(fun!(observation_new))
+                .fun(fun!(observation_which))
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))

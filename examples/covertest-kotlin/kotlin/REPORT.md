@@ -61,6 +61,7 @@ Base package: `io.prebindgen.covertest`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation>): Observation`
+- `observation_which` — `fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int`
 - `payload_priority` — `fun payloadPriority(p: Payload, onError: JniErrorHandler<Priority>): Priority`
 - `percent_invalid_output` — `fun percentInvalidOutput(onError: JniErrorHandler<Int?>): Int?`
 - `percent_optional` — `fun percentOptional(p: Int?, onError: JniErrorHandler<Int?>): Int?`
