@@ -99,6 +99,28 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
             check_ident(&iface, &iorigin, &mut errors);
             add_top_level(package, &iface, iorigin, &mut errors);
         }
+        // A sealed class's variants are Kotlin classes too — nested inside the
+        // interface, so they are checked for validity and for collisions with
+        // each other, but NOT registered as top-level names (nesting is
+        // exactly what keeps them out of the package namespace).
+        if let Some(sum_cfg) = cfg.sum_cfg.as_ref() {
+            let mut seen: BTreeMap<String, String> = BTreeMap::new();
+            if let Some((item_enum, _)) =
+                bare_path_ident(&key.to_type()).and_then(|i| registry.enums.get(&i))
+            {
+                for v in &item_enum.variants {
+                    let name = ext.sum_variant_class_name(sum_cfg, &v.ident);
+                    let vorigin = format!("variant `{}` of sealed class `{key}`", v.ident);
+                    check_ident(&name, &vorigin, &mut errors);
+                    if let Some(prev) = seen.insert(name.clone(), vorigin.clone()) {
+                        errors.push(format!(
+                            "duplicate Kotlin variant name `{name}` in sealed class \
+                             `{key}`: declared by both {prev} and {vorigin}",
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     // The central JNINative harness object — one per base package.

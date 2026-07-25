@@ -33,6 +33,53 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
 }
 
 /**
+ * A sensor reading: exactly **one** of these alternatives is live, and it
+ * carries that alternative's payload. Written as plain Rust — the "exactly
+ * one of" invariant is in the type, not in a doc comment on a struct of
+ * optional fields.
+ *
+ * All four variant shapes a sum can take are here: a payload-less variant, a
+ * single-payload tuple variant, a multi-field named variant, and a tuple
+ * variant whose payloads include a declared `enum_class`. The binding maps it
+ * to a Kotlin `sealed interface` with the variants nested inside
+ * (`lang::JniGen` `sealed_class!`).
+ *
+ * JVM-side surface for the native Rust `Reading` sum: exactly one alternative is live.
+ */
+public sealed interface Reading {
+    /** No reading — the empty payload group; only the tag is live. */
+    public data object Missing : Reading
+
+    /** An exact value (single-payload tuple variant). */
+    public data class Exact(public val v0: Long) : Reading
+
+    /** A bounded interval (multi-field named variant). */
+    public data class Range(public val low: Long, public val high: Long) : Reading
+
+    /** A described reading: a `String` beside a declared `enum_class` payload. */
+    public data class Tagged(public val v0: String, public val v1: Priority) : Reading
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            tag: Int,
+            exact_v0: Long,
+            range_low: Long,
+            range_high: Long,
+            tagged_v0: String,
+            tagged_v1: Priority,
+        ): Reading =
+            when (tag) {
+                0 -> Missing
+                1 -> Exact(exact_v0)
+                2 -> Range(range_low, range_high)
+                3 -> Tagged(tagged_v0, tagged_v1)
+                else -> throw IllegalArgumentException("Reading: invalid tag $tag")
+            }
+    }
+}
+
+/**
  * A [`Payload`] with optional delivery metadata. As a `data_class` it
  * exercises the shapes flat `Payload` cannot: a **nested** data-class field
  * (`payload`, recursive `fromParts` on output / recursive leaf decode on

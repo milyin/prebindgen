@@ -289,6 +289,7 @@ impl JniGen {
         match decl {
             ClassDecl::Ptr(d) => self.accept_ptr_class(subpackage, d),
             ClassDecl::Enum(d) => self.accept_enum_class(subpackage, d),
+            ClassDecl::Sealed(d) => self.accept_sealed_class(subpackage, d),
             ClassDecl::Data(d) => self.accept_data_class(subpackage, d),
             ClassDecl::Value(d) => self.accept_value_class(subpackage, d),
         }
@@ -386,6 +387,43 @@ impl JniGen {
             .get_mut(&key)
             .expect("register_class_name created the entry")
             .enum_cfg = Some(EnumConfig::default());
+        self.store_iface_opts(&key, decl.iface);
+    }
+
+    /// A `sealed_class!` declaration. The Kotlin name routes through the
+    /// **enum** mangle hook: a sum is a declared enum, and its interface is
+    /// the Kotlin name of that enum — one hook per Rust item kind, not one
+    /// per emitted shape.
+    fn accept_sealed_class(&mut self, subpackage: &str, decl: SealedClassDecl) {
+        let short = rust_short_name(&decl.key);
+        let key = decl.key;
+        assert!(
+            self.types
+                .get(&key)
+                .is_none_or(|entry| entry.opaque.is_none() && entry.enum_cfg.is_none()),
+            "SealedClassDecl: `{}` is already registered as an opaque handle or an enum class — \
+             a type can be one of those or a sealed class, not both",
+            short
+        );
+        self.register_class_name(
+            &key,
+            NameSpec {
+                subpackage: subpackage.to_string(),
+                short,
+                name_override: decl.name_override,
+                kind: NameKind::Enum,
+            },
+        );
+        let mut variant_names = HashMap::new();
+        for v in decl.variants {
+            if let Some(name) = v.name_override {
+                variant_names.insert(v.rust_ident, name);
+            }
+        }
+        self.types
+            .get_mut(&key)
+            .expect("register_class_name created the entry")
+            .sum_cfg = Some(SumConfig { variant_names });
         self.store_iface_opts(&key, decl.iface);
     }
 

@@ -29,6 +29,7 @@ mod consts;
 mod cross_artifact;
 mod flatten;
 mod niches;
+mod sealed;
 mod snapshots;
 mod symbols;
 mod values;

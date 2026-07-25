@@ -74,6 +74,33 @@ pub fn priority_or(p: Option<Priority>, fallback: Priority) -> Priority {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Reading — a data-carrying enum, i.e. a sum type (→ Kotlin `sealed interface`).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A sensor reading: exactly **one** of these alternatives is live, and it
+/// carries that alternative's payload. Written as plain Rust — the "exactly
+/// one of" invariant is in the type, not in a doc comment on a struct of
+/// optional fields.
+///
+/// All four variant shapes a sum can take are here: a payload-less variant, a
+/// single-payload tuple variant, a multi-field named variant, and a tuple
+/// variant whose payloads include a declared `enum_class`. The binding maps it
+/// to a Kotlin `sealed interface` with the variants nested inside
+/// (`lang::JniGen` `sealed_class!`).
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub enum Reading {
+    /// No reading — the empty payload group; only the tag is live.
+    Missing,
+    /// An exact value (single-payload tuple variant).
+    Exact(i64),
+    /// A bounded interval (multi-field named variant).
+    Range { low: i64, high: i64 },
+    /// A described reading: a `String` beside a declared `enum_class` payload.
+    Labeled(String, Priority),
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Stamp — a small `Copy` value type (→ Kotlin value class over raw bytes).
 // ─────────────────────────────────────────────────────────────────────────────
 

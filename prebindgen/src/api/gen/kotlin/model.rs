@@ -178,6 +178,13 @@ pub enum ClassKind {
     /// A plain `interface` — members with no body render as abstract
     /// signatures; no ctor params.
     Interface,
+    /// A `sealed interface` — an exhaustive set of alternatives whose
+    /// implementations are nested inside it as [`Self::Data`] classes and
+    /// [`Self::DataObject`]s.
+    SealedInterface,
+    /// A `data object` — the singleton counterpart of a `data class`, for an
+    /// alternative that carries no payload.
+    DataObject,
 }
 
 #[derive(Clone, Debug)]

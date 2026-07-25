@@ -103,6 +103,19 @@ pub(crate) struct OpaqueConfig {
 #[derive(Clone, Default)]
 pub(crate) struct EnumConfig {}
 
+/// Presence marker + per-variant naming of a type registered via
+/// `sealed_class!`: a `#[prebindgen]` **data-carrying** enum mirrored as a
+/// Kotlin `sealed interface`. The tag/leaf-group structure itself is read
+/// from the source enum through the neutral
+/// [`SumSpec`](crate::api::core::types_util::SumSpec) — only what the
+/// declaration adds lives here.
+#[derive(Clone, Default)]
+pub(crate) struct SumConfig {
+    /// Per-variant Kotlin class-name overrides, keyed by the Rust variant
+    /// ident. Undeclared variants keep their Rust ident.
+    pub variant_names: HashMap<String, String>,
+}
+
 /// One registered package-level `.fun(...)` entry. The Rust identifier is captured
 /// at build-script time via `syn::parse_quote` (i.e. `pq!(rust_fn_name)`); the
 /// optional override sets the Kotlin-side name when the default
@@ -149,6 +162,10 @@ pub(crate) struct TypeConfig {
     /// / `as jint`) and a generated `.kt` file. Mutually exclusive with
     /// [`Self::opaque`]; builder enforces it.
     pub enum_cfg: Option<EnumConfig>,
+    /// If `Some`, this is a `#[prebindgen]` data-carrying enum mirrored as a
+    /// Kotlin `sealed interface` — a tag plus one leaf group per variant.
+    /// Mutually exclusive with every other class kind; builder enforces it.
+    pub sum_cfg: Option<SumConfig>,
     /// Set by [`JniGen::value_class`]: this is a `Copy` Rust type passed
     /// **by value as its raw memory blob** in a `JByteArray` (wire), the
     /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no

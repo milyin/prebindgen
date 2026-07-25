@@ -149,6 +149,8 @@ fn class_keyword(kind: &ClassKind) -> &'static str {
         ClassKind::Object => "object",
         ClassKind::Companion => "companion object",
         ClassKind::Interface => "interface",
+        ClassKind::SealedInterface => "sealed interface",
+        ClassKind::DataObject => "data object",
     }
 }
 

@@ -34,6 +34,7 @@ import io.prebindgen.covertest.model.ObjectBoundary63
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
+import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
@@ -257,6 +258,57 @@ fun main() {
         // enum_class surface: value + fromInt round-trip.
         check(Priority.HIGH.value == 2)
         check(Priority.fromInt(0) == Priority.LOW)
+    }
+
+    // ── sealed_class: a data-carrying enum as a Kotlin `sealed interface` ─────
+    // The Kotlin surface only (the wire lowering is a separate stage): every
+    // variant shape, the nested placement, the per-variant rename, and
+    // `fromParts` picking the live group by tag.
+    section("sealed_class Reading (sum surface + fromParts)") {
+        // A payload-less alternative is a `data object`; the rest are `data
+        // class`es, all nested inside the interface.
+        val missing: Reading = Reading.Missing
+        val exact: Reading = Reading.Exact(42L)
+        val range: Reading = Reading.Range(1L, 9L)
+        // `variant!(Labeled).name("Tagged")` renamed the class AND its slots.
+        val tagged: Reading = Reading.Tagged("warm", Priority.HIGH)
+
+        check(exact is Reading.Exact && (exact as Reading.Exact).v0 == 42L)
+        check(range is Reading.Range && (range as Reading.Range).high == 9L)
+        check(tagged is Reading.Tagged && (tagged as Reading.Tagged).v1 == Priority.HIGH)
+        // `data object` is a singleton and `data class` gives structural equality.
+        check(missing === Reading.Missing)
+        check(Reading.Exact(42L) == exact)
+
+        // `when` over the sealed hierarchy is exhaustive with no `else` — the
+        // point of a sum: there is no "both set" or "neither set" case.
+        fun describe(r: Reading): String =
+            when (r) {
+                is Reading.Missing -> "missing"
+                is Reading.Exact -> "exact ${r.v0}"
+                is Reading.Range -> "range ${r.low}..${r.high}"
+                is Reading.Tagged -> "${r.v0}/${r.v1.value}"
+            }
+        check(describe(missing) == "missing")
+        check(describe(exact) == "exact 42")
+        check(describe(range) == "range 1..9")
+        check(describe(tagged) == "warm/2")
+
+        // `fromParts(tag, …every group's slots side by side…)`: the tag picks
+        // the live group; the inert slots are ignored.
+        check(Reading.fromParts(0, 0L, 0L, 0L, "", Priority.LOW) === Reading.Missing)
+        check(Reading.fromParts(1, 42L, 0L, 0L, "", Priority.LOW) == exact)
+        check(Reading.fromParts(2, 0L, 1L, 9L, "", Priority.LOW) == range)
+        check(Reading.fromParts(3, 0L, 0L, 0L, "warm", Priority.HIGH) == tagged)
+
+        // A tag outside 0..N-1 is an error, never a variant.
+        var invalid: String? = null
+        try {
+            Reading.fromParts(4, 0L, 0L, 0L, "", Priority.LOW)
+        } catch (e: IllegalArgumentException) {
+            invalid = e.message
+        }
+        check(invalid == "Reading: invalid tag 4")
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

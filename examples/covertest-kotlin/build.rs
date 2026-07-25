@@ -98,8 +98,8 @@
 
 use prebindgen::{
     constant, convert, core::Registry, data_class, enum_class, expand_param, expand_return, expr,
-    from, fun, into, lang::JniGen, matching, package, path, ptr_class, sig, try_from, ty,
-    value_class,
+    from, fun, into, lang::JniGen, matching, package, path, ptr_class, sealed_class, sig, try_from,
+    ty, value_class, variant,
 };
 
 fn strip_flat_class_prefix(class: &str, name: &str) -> String {
@@ -230,6 +230,12 @@ fn main() {
                         .interface_name("PriorityKind")
                         .implements("io.prebindgen.covertest.Ranked"),
                 )
+                // `Reading` as a Kotlin `sealed interface` — a data-carrying
+                // enum whose alternatives are nested classes, with the
+                // payload-less one a `data object`. `variant!(Labeled)
+                // .name("Tagged")` exercises the per-variant rename (which
+                // also renames its `fromParts` slots).
+                .class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).

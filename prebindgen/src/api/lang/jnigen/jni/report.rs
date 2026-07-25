@@ -160,8 +160,11 @@ impl crate::api::core::Generation<JniGen> {
             }
         }
         // Rust-side-only boundary types (expand decls on undeclared types).
-        let mut boundary: Vec<String> = crate::api::core::Prebindgen::boundary_only_types(ext)
-            .into_iter()
+        // A `sealed_class` sum is boundary-only too — it crosses flattened,
+        // not as one wire — but it very much materializes in Kotlin, so it is
+        // listed above with the other declared classes, not here.
+        let mut boundary: Vec<String> = ext
+            .rust_side_only_types()
             .map(|k| format!("- `{}` (never materializes in Kotlin)\n", k.as_str()))
             .collect();
         boundary.sort();
@@ -250,6 +253,8 @@ impl JniGen {
             "ptr_class"
         } else if cfg.enum_cfg.is_some() {
             "enum_class"
+        } else if cfg.sum_cfg.is_some() {
+            "sealed_class"
         } else if cfg.value_blob {
             "value_class"
         } else if cfg.class_decl {

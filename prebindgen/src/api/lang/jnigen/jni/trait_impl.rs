@@ -1283,7 +1283,20 @@ impl Prebindgen for JniGen {
     /// acknowledges them and drops their direct converter requirements once
     /// the plans are in place.
     fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.rust_side_only_types().collect()
+        // A `sealed_class!`-declared sum has no single wire: it crosses as a
+        // tag plus one leaf group per variant, so a direct converter for the
+        // value itself is genuinely not needed. Declaring it boundary-only
+        // drops that requirement while keeping the type scanned (its payload
+        // types register and resolve, which is what the Kotlin surface reads
+        // its field types from).
+        self.rust_side_only_types()
+            .chain(
+                self.types
+                    .iter()
+                    .filter(|(_, c)| c.sum_cfg.is_some())
+                    .map(|(k, _)| k.clone()),
+            )
+            .collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by
