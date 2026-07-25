@@ -742,6 +742,12 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// unit-variant only and `#[repr(i32)]`-style with explicit discriminants,
 /// so both sides agree on the numbers.
 ///
+/// A **data-carrying** enum is a different Kotlin surface — a `sealed
+/// interface` whose variants carry their payload — and is declared with
+/// `sealed_class!` instead. Handing one to `enum_class!` is a hard error,
+/// not a silent upgrade: the value would have to cross as a bare
+/// discriminant, dropping the payload.
+///
 /// Has no `.method`/`.constructor` by rule, not omission: members belong to
 /// class kinds whose instances can re-enter Rust as an object (handle /
 /// blob / field leaves). An enum value is a bare scalar with no object

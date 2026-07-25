@@ -17,7 +17,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree.
     let entries: Vec<kt::KtEnumEntry> =
-        crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
+        crate::api::core::types_util::enum_discriminant_values(item_enum)
             .into_iter()
             .map(|(ident, value)| kt::KtEnumEntry {
                 name: mangle_kotlin_ident(

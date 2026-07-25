@@ -463,5 +463,221 @@ pub(crate) fn ident(s: &str) -> syn::Ident {
     syn::Ident::new(s, Span::call_site())
 }
 
+/// Convert a `PascalCase` / `camelCase` identifier to `snake_case`
+/// (`ZKeyExpr` → `z_key_expr`). The single implementation behind the
+/// public `prebindgen::lang::snake_case` re-export and the sum-variant
+/// leaf naming in [`SumSpec`].
+pub fn pascal_to_snake(s: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if c.is_uppercase() {
+            if i != 0 {
+                out.push('_');
+            }
+            out.extend(c.to_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+// ── Enum shape: the one definition of "is this enum C-like" ────────────
+
+/// How a captured `enum` can cross a language boundary — the single
+/// classifier both adapters consult instead of each asserting on
+/// `syn::Fields` itself.
+///
+/// The two shapes are not two mechanisms: a [`Unit`](EnumShape::Unit) enum
+/// is the degenerate sum whose every variant group is empty, so a lowering
+/// written for [`Sum`](EnumShape::Sum) collapses to "just a tag" for it.
+/// The distinction exists because the *declarators* differ — `enum_class!`
+/// / `.enum_type()` accept only the degenerate case, and handing them a
+/// payload enum is an error naming the sum declarator rather than a shape
+/// assertion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EnumShape {
+    /// Every variant is fieldless: the value is exactly its discriminant.
+    Unit,
+    /// At least one variant carries a payload.
+    Sum,
+}
+
+/// Classify an enum. See [`EnumShape`].
+pub fn enum_shape(e: &syn::ItemEnum) -> EnumShape {
+    if e.variants
+        .iter()
+        .all(|v| matches!(v.fields, syn::Fields::Unit))
+    {
+        EnumShape::Unit
+    } else {
+        EnumShape::Sum
+    }
+}
+
+/// The first payload-carrying variant of an enum, if any — the offender an
+/// adapter names when rejecting a [`Sum`](EnumShape::Sum) where only a
+/// [`Unit`](EnumShape::Unit) enum is accepted.
+pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
+    e.variants
+        .iter()
+        .find(|v| !matches!(v.fields, syn::Fields::Unit))
+}
+
+/// The language-neutral description of a data-carrying enum: a **tag** —
+/// which alternative is live — plus one **leaf group per variant**.
+///
+/// Core describes the sum; adapters decide what its leaves look like on the
+/// wire (`JniGen` overlays the groups in the signature, `Cbindgen` overlays
+/// them in memory as a `#[repr(C)]` union). Nothing here names a wire
+/// detail — in particular a payload enum carries no `repr`, so tags are
+/// declaration order and never an explicit discriminant.
+/// The neutral description lands before either lowering, so both adapters
+/// read one definition instead of growing a private one each; the
+/// `dead_code` allow covers that gap and goes away with the first adapter
+/// that reads a sum.
+#[allow(dead_code)]
+pub struct SumSpec {
+    /// Canonical key of the enum type.
+    pub key: crate::api::core::registry::TypeKey,
+    /// The enum's ident as declared in the source crate — the spelling
+    /// adapters use to build `Enum::Variant` constructor paths.
+    pub source: syn::Ident,
+    /// Variants in declaration order; `variants[i].tag == i as i32`.
+    pub variants: Vec<SumVariant>,
+}
+
+/// One alternative of a [`SumSpec`].
+#[allow(dead_code)]
+pub struct SumVariant {
+    /// The variant ident as declared (`PeriodicQueries`).
+    pub ident: syn::Ident,
+    /// Declaration-order tag, `0..N-1`.
+    pub tag: i32,
+    /// The variant's payload, in declaration order. Empty for a unit
+    /// variant — the group that contributes nothing but its tag.
+    pub fields: Vec<SumField>,
+}
+
+/// One payload field of a [`SumVariant`].
+#[allow(dead_code)]
+pub struct SumField {
+    /// How the field is addressed in a pattern: `Named(ident)` for a
+    /// struct variant, `Unnamed(index)` for a tuple variant.
+    pub member: syn::Member,
+    /// Leaf name, following the existing nested-prefix convention:
+    /// `<variant_snake>_<field>` for a named field, `<variant_snake>_<i>`
+    /// for a tuple field.
+    pub name: String,
+    /// The field's declared type.
+    pub ty: syn::Type,
+}
+
+#[allow(dead_code)]
+impl SumSpec {
+    /// Describe `e` as a sum. Every enum has a description — a
+    /// [`Unit`](EnumShape::Unit) enum yields all-empty groups, which is
+    /// exactly the "tag only" lowering — so this never fails and never
+    /// consults [`enum_shape`].
+    pub fn from_item_enum(e: &syn::ItemEnum) -> Self {
+        let variants = e
+            .variants
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let prefix = pascal_to_snake(&v.ident.to_string());
+                let fields = v
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .map(|(fi, f)| match &f.ident {
+                        Some(id) => SumField {
+                            member: syn::Member::Named(id.clone()),
+                            name: format!("{prefix}_{id}"),
+                            ty: f.ty.clone(),
+                        },
+                        None => SumField {
+                            member: syn::Member::Unnamed(syn::Index::from(fi)),
+                            name: format!("{prefix}_{fi}"),
+                            ty: f.ty.clone(),
+                        },
+                    })
+                    .collect();
+                SumVariant {
+                    ident: v.ident.clone(),
+                    tag: i as i32,
+                    fields,
+                }
+            })
+            .collect();
+        Self {
+            key: crate::api::core::registry::TypeKey::from_ident(&e.ident),
+            source: e.ident.clone(),
+            variants,
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl SumVariant {
+    /// True when this variant carries no payload — its leaf group is empty
+    /// and it contributes only its tag.
+    pub fn is_unit(&self) -> bool {
+        self.fields.is_empty()
+    }
+}
+
+/// Resolve each enum variant to its discriminant value following Rust's own
+/// assignment rule: an explicit `= N` sets the value, an implicit variant
+/// takes the previous value plus one (starting at 0).
+///
+/// The single source of truth for every int↔variant mapping in the
+/// pipeline — the Kotlin `value(N)` constants, the generated `jint →
+/// variant` decode, and the `#[repr(C)]` mirror `Cbindgen` emits — keeping
+/// them from drifting and removing the need for a hand-written
+/// `TryFrom<i32>` on the source enum. Non-literal discriminants are
+/// rejected because prebindgen cannot reliably evaluate arbitrary
+/// expressions at codegen time.
+///
+/// This describes the **unit** enum's wire numbering. A payload enum's
+/// alternatives are identified by the declaration-order tag of
+/// [`SumSpec`], never by a discriminant.
+pub fn enum_discriminant_values(e: &syn::ItemEnum) -> Vec<(syn::Ident, i64)> {
+    let mut out = Vec::with_capacity(e.variants.len());
+    let mut next: i64 = 0;
+    for variant in &e.variants {
+        let value = match variant.discriminant.as_ref() {
+            Some((_, expr)) => extract_int_literal(expr).unwrap_or_else(|| {
+                panic!(
+                    "enum `{}` variant `{}` has a non-literal discriminant; use a literal integer value (e.g. `= 1`) or an implicit discriminant",
+                    e.ident,
+                    variant.ident
+                )
+            }),
+            None => next,
+        };
+        out.push((variant.ident.clone(), value));
+        next = value + 1;
+    }
+    out
+}
+
+/// Pull a signed integer out of a `syn::Expr` literal (`5`, `-3`, `0x07`).
+/// Returns `None` for anything else (constants, paths, arithmetic).
+fn extract_int_literal(expr: &syn::Expr) -> Option<i64> {
+    match expr {
+        syn::Expr::Lit(lit) => match &lit.lit {
+            syn::Lit::Int(int) => int.base10_parse::<i64>().ok(),
+            _ => None,
+        },
+        syn::Expr::Unary(syn::ExprUnary {
+            op: syn::UnOp::Neg(_),
+            expr,
+            ..
+        }) => extract_int_literal(expr).map(|v| -v),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests;

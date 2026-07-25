@@ -310,15 +310,22 @@ fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::
     registry.enums.get(&ident).map(|(e, _)| e)
 }
 
-/// Hard error on a non-C-like enum (only fieldless / unit variants supported).
-fn assert_unit_variants(e: &syn::ItemEnum) {
-    for v in &e.variants {
-        assert!(
-            matches!(v.fields, syn::Fields::Unit),
-            "Cbindgen: enum `{}` variant `{}` has fields; only C-like (fieldless) \
-             enums are supported",
-            e.ident,
-            v.ident
+/// Hard error when an `.enum_type()`-declared enum is not the shape that
+/// declarator describes. A plain C `enum` is exactly a discriminant, which
+/// is [`EnumShape::Unit`]; a data-carrying enum crosses as a tag plus a
+/// `union` and is reached through a different declarator, so this names
+/// that declarator rather than asserting on `syn::Fields`.
+fn assert_unit_enum(e: &syn::ItemEnum) {
+    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
+    if enum_shape(e) == EnumShape::Sum {
+        let offender = first_payload_variant(e)
+            .map(|v| v.ident.to_string())
+            .unwrap_or_default();
+        panic!(
+            "Cbindgen: `{}` is a data-carrying enum (variant `{}` has fields): \
+             declare it with `.tagged_union()`, not `.enum_type()` — a C `enum` \
+             is a bare discriminant and has no room for a payload",
+            e.ident, offender
         );
     }
 }
@@ -327,19 +334,9 @@ fn assert_unit_variants(e: &syn::ItemEnum) {
 /// Convert a `PascalCase` / `camelCase` identifier to `snake_case` (a
 /// convention-free helper, re-exported as `prebindgen::lang::snake_case` for
 /// consumers composing their own [`Cbindgen::mangle_rust_type`] rules).
+/// Thin alias for the core spelling, which sum-variant leaf naming shares.
 pub fn snake_case(s: &str) -> String {
-    let mut out = String::new();
-    for (i, c) in s.chars().enumerate() {
-        if c.is_uppercase() {
-            if i != 0 {
-                out.push('_');
-            }
-            out.extend(c.to_lowercase());
-        } else {
-            out.push(c);
-        }
-    }
-    out
+    crate::api::core::types_util::pascal_to_snake(s)
 }
 
 fn is_string(ty: &syn::Type) -> bool {

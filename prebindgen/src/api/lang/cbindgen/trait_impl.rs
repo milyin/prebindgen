@@ -228,7 +228,7 @@ impl Cbindgen {
             return None;
         }
         let e = enum_item(r, ty)?;
-        assert_unit_variants(e);
+        assert_unit_enum(e);
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(ty);
         let src = self.src_ty(ty);
@@ -646,7 +646,13 @@ impl Cbindgen {
         items
     }
 
-    /// Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
+    /// Enums: `#[repr(C)]` mirror (variant idents + their resolved
+    /// discriminants). Every variant is emitted with an explicit `= N`
+    /// taken from the shared
+    /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values)
+    /// — the same resolution the JNI decode and the Kotlin `value(N)`
+    /// constants use — so the mirror states the numbering the source enum
+    /// implies instead of re-deriving Rust's assignment rule inline.
     fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
@@ -657,15 +663,14 @@ impl Cbindgen {
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
-            assert_unit_variants(e);
+            assert_unit_enum(e);
             let cname = self.c_type_ident(&ty);
-            let variants = e.variants.iter().map(|v| {
-                let id = &v.ident;
-                match &v.discriminant {
-                    Some((_, expr)) => quote!(#id = #expr),
-                    None => quote!(#id),
-                }
-            });
+            let variants = crate::api::core::types_util::enum_discriminant_values(e)
+                .into_iter()
+                .map(|(id, value)| {
+                    let lit = proc_macro2::Literal::i64_unsuffixed(value);
+                    quote!(#id = #lit)
+                });
             items.push(syn::parse_quote!(
                 #[repr(C)]
                 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -1156,7 +1161,7 @@ impl Cbindgen {
         // Enum output: `match` the source enum to the C enum.
         if self.enums.contains_key(&key) {
             let e = enum_item(_r, ty)?;
-            assert_unit_variants(e);
+            assert_unit_enum(e);
             let name = Self::out_name(ty);
             let cname = self.c_type_ident(ty);
             let src = self.src_ty(ty);
