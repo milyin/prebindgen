@@ -75,7 +75,8 @@ pub(crate) fn callback_input(
             .filter(|p| super::render::is_iterable_fold(&p.shape))
         {
             // Every leaf converter must already be resolved (deferral safety).
-            for leaf in &plan.leaves {
+            // A synthesized leaf (a sum's tag) has no converter to wait for.
+            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
                 registry.output_entry(&leaf.out_ty)?;
             }
             let spec = folder_iface_for_plan(ext, registry, plan)?;
@@ -164,8 +165,11 @@ pub(crate) fn callback_input(
         if let Some(plan) = registry.callback_arg_plans.get(&TypeKey::from_type(arg_ty)) {
             // Deferral safety: every leaf converter (and identity-leaf
             // projection) must already be resolved — return None so the rank
-            // resolver retries this converter later otherwise.
-            for leaf in &plan.leaves {
+            // resolver retries this converter later otherwise. A synthesized
+            // leaf (a sum's tag) has no converter to wait for: requiring one
+            // would make the trampoline wait forever on an `i32` crossing the
+            // binding may not have.
+            for leaf in plan.leaves.iter().filter(|l| l.has_converter()) {
                 let e = registry.output_entry(&leaf.out_ty)?;
                 if leaf.identity && e.metadata.projection.is_none() {
                     return None;

@@ -1386,6 +1386,13 @@ impl<M> Registry<M> {
         if !value_decons.is_empty() {
             crate::api::core::unfold::apply_value_structs(self, value_decons, &declared.functions)?;
         }
+        // Synthesized sum decompositions: the same fixed-builder wiring for a
+        // value whose alternatives are chosen at runtime (tag + one leaf group
+        // per variant) rather than being a fixed product.
+        let sum_decons = ext.sum_decons(self);
+        if !sum_decons.is_empty() {
+            crate::api::core::unfold::apply_sum_returns(self, sum_decons, &declared.functions)?;
+        }
         // Single-leaf `Vec<T>`/`&[T]` whole-element folds — the dual of the
         // `data_class` folds above, for String / value-blob / handle elements
         // (so the list is built on the foreign side, not via a Rust ArrayList).

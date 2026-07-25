@@ -324,7 +324,7 @@ pub mod lang {
         null_byte_array, null_string, CachedIfaceMethod, ClassDecl, ConstDecl, ConvertDecl,
         ConvertSourceDecl, DataClassDecl, EnumClassDecl, ExpandDecl, ExpandParamDecl,
         ExpandReturnDecl, FunctionDecl, IgnoreDecl, JniBindingError, JniGen, KotlinFile,
-        PackageDecl, PtrClassDecl, ValueClassDecl, WriteKotlinError,
+        PackageDecl, PtrClassDecl, SealedClassDecl, ValueClassDecl, VariantDecl, WriteKotlinError,
     };
 }
 

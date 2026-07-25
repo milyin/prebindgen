@@ -372,6 +372,13 @@ pub(crate) fn encode_plan_leaves(
     value: &TokenStream,
     fail: &dyn Fn(TokenStream) -> TokenStream,
 ) -> (TokenStream, Vec<TokenStream>) {
+    // A decomposed **sum** is the one plan whose leaves are not independent:
+    // only one group is live per value, so the whole list is emitted as ONE
+    // `match` rather than per-leaf expressions. Same contract, different
+    // emitter — see [`encode_sum_leaves`].
+    if is_sum_leaves(&plan.leaves) {
+        return encode_sum_leaves(ext, registry, plan, obj_idents, value, fail);
+    }
     // Per-fn origin qualification: each accessor call is prefixed with the
     // module of the crate that defines it (multi-source bindings).
     let qualify = |id: &syn::Ident| -> syn::Path { ext.fn_module(registry, id) };
@@ -634,7 +641,7 @@ pub(crate) fn encode_plan_leaves(
         // Rust expression to `body`.
         use crate::api::core::unfold::LeafSource;
         let reach = |body: &dyn Fn(TokenStream) -> TokenStream| -> TokenStream {
-            match leaf.source {
+            match &leaf.source {
                 LeafSource::Accessor => reach_leaf(
                     &qualify,
                     &leaf.path,
@@ -649,6 +656,13 @@ pub(crate) fn encode_plan_leaves(
                     let segs = &leaf.path;
                     body(quote!(#value #(.#segs)*.clone()))
                 }
+                // Group leaves never reach this walk: a plan carrying them is
+                // routed to `encode_sum_leaves` at the top of this function,
+                // because a variant payload has no path — it is bound by a
+                // `match` arm.
+                LeafSource::SumTag | LeafSource::VariantField { .. } => unreachable!(
+                    "sum leaves are encoded by `encode_sum_leaves`, not reached by path"
+                ),
             }
         };
 
@@ -705,10 +719,24 @@ pub(crate) fn leaf_is_prim(
     registry: &Registry<KotlinMeta>,
     leaf: &crate::api::core::unfold::UnfoldLeaf,
 ) -> bool {
+    // The synthesized sum selector is a `jint` by definition — it is assigned,
+    // never converted, so it has no output entry to read a wire from and must
+    // not be made to depend on one resolving.
+    if leaf.source == crate::api::core::unfold::LeafSource::SumTag {
+        return true;
+    }
     if leaf.nullable {
         return false;
     }
-    let Some(entry) = registry.output_entry(&leaf.out_ty) else {
+    leaf_ty_is_prim(registry, &leaf.out_ty)
+}
+
+/// The wire half of [`leaf_is_prim`]: does a leaf of this type occupy a **raw
+/// primitive** slot? Split out so the interface derivation can ask the question
+/// about a leaf whose own `nullable` flag it is in the middle of computing (an
+/// inert sum group slot).
+pub(crate) fn leaf_ty_is_prim(registry: &Registry<KotlinMeta>, out_ty: &syn::Type) -> bool {
+    let Some(entry) = registry.output_entry(out_ty) else {
         return false;
     };
     // No projection (plain primitive/enum wire) — or an opaque HANDLE, whose
