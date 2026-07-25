@@ -193,6 +193,67 @@ pub fn tagged_rank(t: Tagged) -> i32 {
     }
 }
 
+/// The selected alternative as the function's **own return** — a sum in
+/// return position, where nothing but the value's own tag says which group is
+/// live. Unlike a struct field (whose slots ride the parent's `fromParts`),
+/// there is no surrounding product to carry the tag, so the decomposition
+/// itself has to.
+#[prebindgen]
+pub fn reading_of(which: i32) -> Reading {
+    reading_for(which)
+}
+
+/// `Option<sum>` return: `which < 0` yields `None`. Optionality and choice stay
+/// independent — the present layer nulls the whole result rather than becoming
+/// an extra tag value.
+#[prebindgen]
+pub fn reading_maybe(which: i32) -> Option<Reading> {
+    (which >= 0).then(|| reading_for(which))
+}
+
+/// `Vec<sum>` return: alternatives `0..n`, each folded into the foreign list
+/// element by element.
+#[prebindgen]
+pub fn reading_series(n: i32) -> Vec<Reading> {
+    (0..n).map(reading_for).collect()
+}
+
+/// A sum as a **callback argument**: alternatives `0..n` delivered in turn.
+#[prebindgen]
+pub fn reading_each(n: i32, sink: impl Fn(Reading) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(reading_for(i));
+    }
+}
+
+/// A sum whose alternatives are a **payload-less** variant and one carrying an
+/// opaque **handle** — the shape a real lookup/reply result takes, and the one
+/// that proves a tag-gated group can own a native resource: the live group
+/// hands over a fresh handle, the inert group's slot stays a null pointer that
+/// is never wrapped.
+#[prebindgen]
+#[derive(Clone)]
+pub enum Lookup {
+    /// Nothing matched — only the tag is live.
+    Absent,
+    /// What matched, as a handle the caller owns (and must close).
+    Found(Summary),
+    /// Why the lookup could not run — a `String` beside the handle group, so an
+    /// inert object slot is exercised alongside an inert primitive one.
+    Failed(String),
+}
+
+/// Build a [`Lookup`]: `count < 0` is a failure, `count == 0` is absent,
+/// anything else is found.
+#[prebindgen]
+pub fn lookup_of(count: i64, total: f64) -> Lookup {
+    match count {
+        c if c < 0 => Lookup::Failed("negative count".to_string()),
+        0 => Lookup::Absent,
+        c => Lookup::Found(summary_new(c, total)),
+    }
+}
+
 /// Which alternative an [`Observation`]'s `reading` holds, by declaration
 /// order — the sum crossing back **in** as part of a data-class parameter.
 #[prebindgen]

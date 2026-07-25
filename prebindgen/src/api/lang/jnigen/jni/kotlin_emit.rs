@@ -1136,8 +1136,19 @@ impl JniGen {
         enum FixedSingleton {
             StructBuilder(DeconId),
             StructFolder(DeconId),
+            /// A decomposed **sum**: the reassembly is a `when` over the tag
+            /// picking the live group, not a `fromParts` over a fixed product.
+            SumBuilder(DeconId),
+            SumFolder(DeconId),
             LeafFolder,
         }
+        // A decomposition is a sum's when it carries the synthesized selector.
+        let is_sum = |d: &DeconId| {
+            registry
+                .decon_plans
+                .get(d)
+                .is_some_and(|p| is_sum_leaves(&p.leaves))
+        };
 
         // Fixedness sets shared with the memo derivation (`iface.rs`): a
         // fixed DeconId gets a hoisted `__<Name>Builder` / folder-appender
@@ -1222,15 +1233,23 @@ impl JniGen {
                     SpecKey::Callback(_) => (false, None),
                     SpecKey::Builder(d) => (
                         false,
-                        fixed_decons
-                            .contains(d)
-                            .then(|| FixedSingleton::StructBuilder(d.clone())),
+                        fixed_decons.contains(d).then(|| {
+                            if is_sum(d) {
+                                FixedSingleton::SumBuilder(d.clone())
+                            } else {
+                                FixedSingleton::StructBuilder(d.clone())
+                            }
+                        }),
                     ),
                     SpecKey::Folder(d) => (
                         false,
-                        fixed_decons
-                            .contains(d)
-                            .then(|| FixedSingleton::StructFolder(d.clone())),
+                        fixed_decons.contains(d).then(|| {
+                            if is_sum(d) {
+                                FixedSingleton::SumFolder(d.clone())
+                            } else {
+                                FixedSingleton::StructFolder(d.clone())
+                            }
+                        }),
                     ),
                     SpecKey::WholeFolder(el_key) => (
                         false,
@@ -1254,6 +1273,14 @@ impl JniGen {
                             file = file.import(fqn.to_string());
                         }
                     }
+                    // A group's reassembly is raw text (`Reading.Exact(…)`,
+                    // `Priority.fromInt(…)`), so the classes it names by short
+                    // name need importing here.
+                    for g in &s.typed_groups {
+                        for fqn in &g.imports {
+                            file = file.import(fqn.clone());
+                        }
+                    }
                 }
                 if is_error {
                     file = file.decl(s.to_capture_decl());
@@ -1265,6 +1292,12 @@ impl JniGen {
                         }
                         FixedSingleton::StructFolder(decon) => {
                             self.value_struct_folder_singleton(registry, &s, &decon)
+                        }
+                        FixedSingleton::SumBuilder(decon) => {
+                            self.sum_builder_singleton(registry, &s, &decon)
+                        }
+                        FixedSingleton::SumFolder(decon) => {
+                            self.sum_folder_singleton(registry, &s, &decon)
                         }
                         FixedSingleton::LeafFolder => self.whole_value_folder_singleton(&s),
                     };
@@ -1369,6 +1402,211 @@ impl JniGen {
             name: holder,
             code: kt::Code::raw_reindent(&code),
         }
+    }
+
+    /// The hoisted **fixed builder** singleton for a decomposed **sum**: the
+    /// sum's dual of [`Self::value_struct_builder_singleton`], with a `when`
+    /// over the tag in place of a `fromParts` over a fixed product.
+    ///
+    /// The sealed interface's own `fromParts` is deliberately NOT the target
+    /// here. That factory is the Kotlin-facing convenience stage C emits — its
+    /// parameters are the variants' **property** types, not the wire, and its
+    /// object slots are non-null, which an inert group's `JObject::null()`
+    /// would trip on before any code runs. The reassembly the wire needs is the
+    /// same inlined `when` a sum-typed struct field already gets from
+    /// `factory_field`, so it is emitted here directly.
+    fn sum_builder_singleton(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+        decon: &crate::api::core::unfold::DeconId,
+    ) -> kt::KtDecl {
+        let plan = &registry.decon_plans[decon];
+        let mut imports: BTreeSet<String> = BTreeSet::new();
+        let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
+        let (iface_short, when) = self.sum_reconstruct(
+            registry,
+            &plan.source,
+            &plan.leaves,
+            &spec.params,
+            &names,
+            &mut imports,
+        );
+        let builder = spec.raw_name();
+        let val_name = format!("__{builder}");
+        let code = format!(
+            "internal val {val_name}: {builder}<{iface_short}> =\n    \
+             {builder} {{ {} ->\n    {when}\n}}",
+            names.join(", "),
+        );
+        let mut body = kt::Code::raw_reindent(&code);
+        for fqn in imports {
+            body = body.import(fqn);
+        }
+        kt::KtDecl::Raw {
+            name: val_name,
+            code: body,
+        }
+    }
+
+    /// The hoisted **folder-appender** singleton for a `Vec<sum>` element fold:
+    /// per element, pick the live alternative by tag and append it to the
+    /// accumulator `ArrayList`. The sum's dual of
+    /// [`Self::value_struct_folder_singleton`]; the folder's `run` params are
+    /// `[acc, tag, group-slots…]`, so the reassembly reads all but `acc`.
+    fn sum_folder_singleton(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+        decon: &crate::api::core::unfold::DeconId,
+    ) -> kt::KtDecl {
+        let plan = &registry.decon_plans[decon];
+        let mut imports: BTreeSet<String> = BTreeSet::new();
+        let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
+        let (iface_short, when) = self.sum_reconstruct(
+            registry,
+            &plan.source,
+            &plan.leaves,
+            &spec.params[1..],
+            &names[1..],
+            &mut imports,
+        );
+        let folder = spec.raw_name();
+        let holder = spec.singleton_holder_name();
+        let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
+        let acc = &names[0];
+        let acc_ty = format!("ArrayList<{iface_short}>");
+        let code = format!(
+            "internal object {holder} {{\n    \
+             @JvmField\n    \
+             val {field}: {folder}<{acc_ty}> =\n        \
+             {folder} {{ {} -> {acc}.add({when}); {acc} }}\n\
+             }}",
+            names.join(", "),
+        );
+        let mut body = kt::Code::raw_reindent(&code);
+        for fqn in imports {
+            body = body.import(fqn);
+        }
+        kt::KtDecl::Raw {
+            name: holder,
+            code: body,
+        }
+    }
+
+    /// The wire-shaped reassembly of one decomposed sum: `(interface short
+    /// name, when-expression)`.
+    ///
+    /// `params` are the interface's `run` parameters **aligned with the plan's
+    /// leaves** (the selector first, then the groups) — so the caller strips a
+    /// folder's leading `acc`. Each group leaf's parameter is unwrapped into
+    /// its variant-constructor argument by [`Self::sum_ctor_arg`].
+    pub(crate) fn sum_reconstruct(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        source: &syn::Type,
+        leaves: &[crate::api::core::unfold::UnfoldLeaf],
+        params: &[crate::api::lang::jnigen::jni::IfaceParam],
+        names: &[String],
+        imports: &mut BTreeSet<String>,
+    ) -> (String, String) {
+        use crate::api::core::types_util::SumSpec;
+
+        let key = TypeKey::from_type(source);
+        let iface_fqn = self
+            .kotlin_fqn(&key)
+            .unwrap_or_else(|| panic!("sum builder: no Kotlin FQN for {key}"));
+        let iface_short = register_fqn(&iface_fqn, imports);
+        let ident = bare_path_ident(source)
+            .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
+        let (item_enum, _) = registry
+            .enums
+            .get(&ident)
+            .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
+        let sum_cfg = self.types[&key]
+            .sum_cfg
+            .as_ref()
+            .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
+        let spec = SumSpec::from_item_enum(item_enum);
+        let tag = &names[0];
+
+        let mut arms: Vec<String> = Vec::new();
+        for variant in &spec.variants {
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            let args: Vec<String> = leaves
+                .iter()
+                .zip(params)
+                .zip(names)
+                .filter(|((l, _), _)| l.group == Some(variant.tag))
+                .map(|((l, p), n)| self.sum_ctor_arg(registry, l, p, n, imports))
+                .collect();
+            let ctor = if args.is_empty() {
+                format!("{iface_short}.{vname}")
+            } else {
+                format!("{iface_short}.{vname}({})", args.join(", "))
+            };
+            arms.push(format!("{} -> {ctor}", variant.tag));
+        }
+        let when = format!(
+            "when ({tag}) {{ {}; else -> throw IllegalArgumentException(\"{iface_short}: invalid \
+             tag ${tag}\") }}",
+            arms.join("; "),
+        );
+        (iface_short, when)
+    }
+
+    /// The variant-constructor argument for one group leaf: its `run`
+    /// parameter, un-inerted and wrapped back into the property type.
+    ///
+    /// Two independent transforms, in this order:
+    ///
+    /// 1. **Un-inert** — an object-shaped group slot is declared nullable
+    ///    (an inert group arrives as JVM null), so inside its own live arm it is
+    ///    re-asserted with `!!`. A payload that is *itself* optional
+    ///    (`Option<T>`) keeps its null: there the JVM null means `None`, and
+    ///    `!!` would turn a legitimately absent value into an exception.
+    /// 2. **Wrap** — the raw wire becomes the property: an enum discriminant
+    ///    through `fromInt`, a handle/blob/`ULong` through the interface's own
+    ///    [`WrapKind`](crate::api::lang::jnigen::jni::WrapKind), everything else
+    ///    verbatim.
+    fn sum_ctor_arg(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        leaf: &crate::api::core::unfold::UnfoldLeaf,
+        param: &crate::api::lang::jnigen::jni::IfaceParam,
+        name: &str,
+        imports: &mut BTreeSet<String>,
+    ) -> String {
+        let optional = is_option_type(&leaf.out_ty);
+        let arg = if param.raw.is_nullable() && !optional {
+            format!("{name}!!")
+        } else {
+            name.to_string()
+        };
+        // An enum payload rides its `jint` discriminant, so the interface types
+        // it `Int` and the wrap has to name the enum class itself — read off the
+        // same output-converter metadata `factory_field` reads for an enum
+        // struct field.
+        if self.is_kotlin_enum(&enum_probe_type(&leaf.out_ty)) {
+            let inner = option_inner_type(&leaf.out_ty).unwrap_or_else(|| leaf.out_ty.clone());
+            let name = registry
+                .output_entry(&inner)
+                .and_then(|e| e.metadata.kotlin_name.clone())
+                .and_then(|t| t.leaf_name().map(str::to_string))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "sum builder: enum payload `{}` has no Kotlin type on its output converter",
+                        leaf.name
+                    )
+                });
+            let short = register_fqn(&name, imports);
+            return if optional {
+                format!("{arg}?.let {{ {short}.fromInt(it) }}")
+            } else {
+                format!("{short}.fromInt({arg})")
+            };
+        }
+        param.wrap.wrap_expr(&arg, false)
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf

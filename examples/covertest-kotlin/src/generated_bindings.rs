@@ -835,6 +835,117 @@ pub(crate) unsafe fn JObject_to_DurationBoundary_9c5bf9bc<'env, 'v>(
     clippy::nonminimal_bool,
     clippy::eq_op
 )]
+pub(crate) unsafe fn JObject_to_Lookup_94ada15e<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<perftest_flat::Lookup, __JniErr> {
+    Ok({
+        let __obj = v;
+        (|| -> ::core::result::Result<perftest_flat::Lookup, __JniErr> {
+            if __obj.is_null() {
+                return ::core::result::Result::Err(
+                    <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(
+                        "Lookup: null value where a variant was required".to_string(),
+                    ),
+                );
+            }
+            if env
+                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Absent")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        concat!("Lookup", ": instanceof ",
+                        "io/prebindgen/covertest/model/Lookup$Absent", ": {}"), e
+                    ),
+                ))?
+            {
+                return ::core::result::Result::Ok(perftest_flat::Lookup::Absent);
+            }
+            if env
+                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Found")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        concat!("Lookup", ": instanceof ",
+                        "io/prebindgen/covertest/model/Lookup$Found", ": {}"), e
+                    ),
+                ))?
+            {
+                let __p_v0_obj: jni::objects::JObject = env
+                    .get_field(
+                        __obj,
+                        "v0",
+                        "Lio/prebindgen/covertest/analytics/Summary;",
+                    )
+                    .and_then(|val| val.l())
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Lookup.Found.v0: {}", e)))?;
+                let __p_v0_raw: jni::sys::jlong = if __p_v0_obj.is_null() {
+                    0
+                } else {
+                    env.call_method(&__p_v0_obj, "peek", "()J", &[])
+                        .and_then(|val| val.j())
+                        .map_err(|e| <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from(format!("Lookup.Found.v0: {}", e)))?
+                };
+                if __p_v0_raw == 0 || (__p_v0_raw & 1) == 1 {
+                    return ::core::result::Result::Err(
+                        <__JniErr as ::core::convert::From<
+                            String,
+                        >>::from("Operation on a closed native handle.".to_string()),
+                    );
+                }
+                let __p_v0: perftest_flat::Summary = unsafe {
+                    *std::boxed::Box::from_raw(__p_v0_raw as *mut perftest_flat::Summary)
+                };
+                return ::core::result::Result::Ok(perftest_flat::Lookup::Found(__p_v0));
+            }
+            if env
+                .is_instance_of(__obj, "io/prebindgen/covertest/model/Lookup$Failed")
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(
+                    format!(
+                        concat!("Lookup", ": instanceof ",
+                        "io/prebindgen/covertest/model/Lookup$Failed", ": {}"), e
+                    ),
+                ))?
+            {
+                let __p_v0_obj: jni::objects::JObject = env
+                    .get_field(__obj, "v0", "Ljava/lang/String;")
+                    .and_then(|val| val.l())
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Lookup.Failed.v0: {}", e)))?;
+                let __p_v0_raw: jni::objects::JString = __p_v0_obj.into();
+                let __p_v0 = JString_to_String_c7f3ca43(env, &__p_v0_raw)?;
+                return ::core::result::Result::Ok(perftest_flat::Lookup::Failed(__p_v0));
+            }
+            ::core::result::Result::Err(
+                <__JniErr as ::core::convert::From<
+                    String,
+                >>::from("Lookup: value is not one of its declared variants".to_string()),
+            )
+        })()?
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
 pub(crate) unsafe fn JObject_to_Marker_3dc81334<'env, 'v>(
     env: &mut jni::JNIEnv<'env>,
     v: &jni::objects::JObject<'v>,
@@ -2370,6 +2481,242 @@ pub(crate) unsafe fn JObject_to_impl_Fn_Payload_Send_Sync_static_96d50906<'env, 
                 Ok(())
             })()
                 .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(& Payload)"));
+        })
+    })
+}
+#[allow(
+    non_snake_case,
+    unused_mut,
+    unused_variables,
+    unused_braces,
+    dead_code,
+    clippy::needless_question_mark,
+    clippy::let_and_return,
+    clippy::nonminimal_bool,
+    clippy::eq_op
+)]
+pub(crate) unsafe fn JObject_to_impl_Fn_Reading_Send_Sync_static_5964f1fc<'env, 'v>(
+    env: &mut jni::JNIEnv<'env>,
+    v: &jni::objects::JObject<'v>,
+) -> ::core::result::Result<
+    impl Fn(perftest_flat::Reading) + Send + Sync + 'static,
+    __JniErr,
+> {
+    Ok({
+        use std::sync::Arc;
+        let java_vm = Arc::new(
+            env
+                .get_java_vm()
+                .map_err(|e| <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(format!("Unable to retrieve JVM: {}", e)))?,
+        );
+        let callback_global_ref = env
+            .new_global_ref(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to global-ref callback: {}", e)))?;
+        let __invoke_class = env
+            .get_object_class(&v)
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(
+                format!("Unable to get callback class for {}: {}", "Fn(Reading)", e),
+            ))?;
+        let __invoke_id = env
+            .get_method_id(&__invoke_class, "run", "(IJJJLjava/lang/String;IJ)V")
+            .map_err(|e| <__JniErr as ::core::convert::From<
+                String,
+            >>::from(format!("Unable to resolve run for {}: {}", "Fn(Reading)", e)))?;
+        Box::new(move |__cb_arg0: perftest_flat::Reading| {
+            let _ = (|| -> ::core::result::Result<(), __JniErr> {
+                let mut env = java_vm
+                    .attach_current_thread_as_daemon()
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("Attach thread for {}: {}", "Fn(Reading)", e)))?;
+                env.push_local_frame(20)
+                    .map_err(|e| <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(format!("push local frame for {}: {}", "Fn(Reading)", e)))?;
+                let __frame_res = (|| -> ::core::result::Result<(), __JniErr> {
+                    let __cb0_obj0: jni::sys::jvalue;
+                    let __cb0_obj1: jni::sys::jvalue;
+                    let __cb0_obj2: jni::sys::jvalue;
+                    let __cb0_obj3: jni::sys::jvalue;
+                    let __cb0_obj4: jni::objects::JObject;
+                    let __cb0_obj5: jni::sys::jvalue;
+                    let __cb0_obj6: jni::sys::jvalue;
+                    match &__cb_arg0 {
+                        perftest_flat::Reading::Missing => {
+                            __cb0_obj0 = jni::sys::jvalue { i: 0 };
+                            __cb0_obj1 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj2 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj3 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj4 = jni::objects::JObject::null();
+                            __cb0_obj5 = jni::sys::jvalue { i: 0i32 };
+                            __cb0_obj6 = jni::sys::jvalue { j: 0i64 };
+                        }
+                        perftest_flat::Reading::Exact(__sv0) => {
+                            let __enc___cb0_obj1 = match i64_to_jlong_fbf9a9bc(
+                                &mut env,
+                                __sv0.clone(),
+                            ) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    return ::core::result::Result::Err(
+                                        <__JniErr as ::core::convert::From<
+                                            String,
+                                        >>::from(__e.to_string()),
+                                    );
+                                }
+                            };
+                            __cb0_obj1 = jni::sys::jvalue {
+                                j: __enc___cb0_obj1,
+                            };
+                            __cb0_obj0 = jni::sys::jvalue { i: 1 };
+                            __cb0_obj2 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj3 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj4 = jni::objects::JObject::null();
+                            __cb0_obj5 = jni::sys::jvalue { i: 0i32 };
+                            __cb0_obj6 = jni::sys::jvalue { j: 0i64 };
+                        }
+                        perftest_flat::Reading::Range { low: __sv0, high: __sv1 } => {
+                            let __enc___cb0_obj2 = match i64_to_jlong_fbf9a9bc(
+                                &mut env,
+                                __sv0.clone(),
+                            ) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    return ::core::result::Result::Err(
+                                        <__JniErr as ::core::convert::From<
+                                            String,
+                                        >>::from(__e.to_string()),
+                                    );
+                                }
+                            };
+                            __cb0_obj2 = jni::sys::jvalue {
+                                j: __enc___cb0_obj2,
+                            };
+                            let __enc___cb0_obj3 = match i64_to_jlong_fbf9a9bc(
+                                &mut env,
+                                __sv1.clone(),
+                            ) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    return ::core::result::Result::Err(
+                                        <__JniErr as ::core::convert::From<
+                                            String,
+                                        >>::from(__e.to_string()),
+                                    );
+                                }
+                            };
+                            __cb0_obj3 = jni::sys::jvalue {
+                                j: __enc___cb0_obj3,
+                            };
+                            __cb0_obj0 = jni::sys::jvalue { i: 2 };
+                            __cb0_obj1 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj4 = jni::objects::JObject::null();
+                            __cb0_obj5 = jni::sys::jvalue { i: 0i32 };
+                            __cb0_obj6 = jni::sys::jvalue { j: 0i64 };
+                        }
+                        perftest_flat::Reading::Labeled(__sv0, __sv1) => {
+                            let __enc___cb0_obj4 = match String_to_JString_c7f3ca43(
+                                &mut env,
+                                __sv0.clone(),
+                            ) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    return ::core::result::Result::Err(
+                                        <__JniErr as ::core::convert::From<
+                                            String,
+                                        >>::from(__e.to_string()),
+                                    );
+                                }
+                            };
+                            __cb0_obj4 = __enc___cb0_obj4.into();
+                            let __enc___cb0_obj5 = match Priority_to_jint_447102d2(
+                                &mut env,
+                                __sv1.clone(),
+                            ) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    return ::core::result::Result::Err(
+                                        <__JniErr as ::core::convert::From<
+                                            String,
+                                        >>::from(__e.to_string()),
+                                    );
+                                }
+                            };
+                            __cb0_obj5 = jni::sys::jvalue {
+                                i: __enc___cb0_obj5,
+                            };
+                            __cb0_obj0 = jni::sys::jvalue { i: 3 };
+                            __cb0_obj1 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj2 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj3 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj6 = jni::sys::jvalue { j: 0i64 };
+                        }
+                        perftest_flat::Reading::Companion(__sv0) => {
+                            let __enc___cb0_obj6 = match i64_to_jlong_fbf9a9bc(
+                                &mut env,
+                                __sv0.clone(),
+                            ) {
+                                ::core::result::Result::Ok(__w) => __w,
+                                ::core::result::Result::Err(__e) => {
+                                    return ::core::result::Result::Err(
+                                        <__JniErr as ::core::convert::From<
+                                            String,
+                                        >>::from(__e.to_string()),
+                                    );
+                                }
+                            };
+                            __cb0_obj6 = jni::sys::jvalue {
+                                j: __enc___cb0_obj6,
+                            };
+                            __cb0_obj0 = jni::sys::jvalue { i: 4 };
+                            __cb0_obj1 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj2 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj3 = jni::sys::jvalue { j: 0i64 };
+                            __cb0_obj4 = jni::objects::JObject::null();
+                            __cb0_obj5 = jni::sys::jvalue { i: 0i32 };
+                        }
+                    }
+                    let __call_res: ::core::result::Result<(), __JniErr> = unsafe {
+                        env.call_method_unchecked(
+                            &callback_global_ref,
+                            __invoke_id,
+                            jni::signature::ReturnType::Primitive(
+                                jni::signature::Primitive::Void,
+                            ),
+                            &[
+                                __cb0_obj0,
+                                __cb0_obj1,
+                                __cb0_obj2,
+                                __cb0_obj3,
+                                jni::sys::jvalue {
+                                    l: __cb0_obj4.as_raw(),
+                                },
+                                __cb0_obj5,
+                                __cb0_obj6,
+                            ],
+                        )
+                    }
+                        .map(|_| ())
+                        .map_err(|e| {
+                            let _ = env.exception_describe();
+                            <__JniErr as ::core::convert::From<
+                                String,
+                            >>::from(e.to_string())
+                        });
+                    __call_res?;
+                    Ok(())
+                })();
+                let _ = unsafe { env.pop_local_frame(&jni::objects::JObject::null()) };
+                __frame_res?;
+                Ok(())
+            })()
+                .map_err(|e| tracing::error!("{} callback error: {e}", "Fn(Reading)"));
         })
     })
 }
@@ -8677,6 +9024,140 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_labelReverse<'a>
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_lookupOf<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    count: jni::sys::jlong,
+    total: jni::sys::jdouble,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let count = match jlong_to_i64_fbf9a9bc(&mut env, &count) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    let total = match jdouble_to_f64_9e4a8f70(&mut env, &total) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/LookupBuilderRaw";
+    const __CB_DESCR: &str = "(IJLjava/lang/String;)Ljava/lang/Object;";
+    let __out = perftest_flat::lookup_of(count, total);
+    let __obj0: jni::sys::jvalue;
+    let __obj1: jni::sys::jvalue;
+    let __obj2: jni::objects::JObject;
+    match &__out {
+        perftest_flat::Lookup::Absent => {
+            __obj0 = jni::sys::jvalue { i: 0 };
+            __obj1 = jni::sys::jvalue { j: 0i64 };
+            __obj2 = jni::objects::JObject::null();
+        }
+        perftest_flat::Lookup::Found(__sv0) => {
+            let __enc___obj1 = match Summary_to_jlong_3cb103b9(&mut env, __sv0.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj1 = jni::sys::jvalue {
+                j: __enc___obj1,
+            };
+            __obj0 = jni::sys::jvalue { i: 1 };
+            __obj2 = jni::objects::JObject::null();
+        }
+        perftest_flat::Lookup::Failed(__sv0) => {
+            let __enc___obj2 = match String_to_JString_c7f3ca43(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj2 = __enc___obj2.into();
+            __obj0 = jni::sys::jvalue { i: 2 };
+            __obj1 = jni::sys::jvalue { j: 0i64 };
+        }
+    }
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[
+                __obj0,
+                __obj1,
+                jni::sys::jvalue {
+                    l: __obj2.as_raw(),
+                },
+            ],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
 pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_millisAdd<'a>(
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
@@ -9797,6 +10278,760 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_priorityWeight<'
             0 as jni::sys::jint
         }
     }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_readingEach<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    n: jni::sys::jint,
+    sink: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> () {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let n = match jint_to_i32_a3e3b6ef(&mut env, &n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let sink = match JObject_to_impl_Fn_Reading_Send_Sync_static_5964f1fc(
+        &mut env,
+        &sink,
+    ) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return ();
+        }
+    };
+    let __out = perftest_flat::reading_each(n, sink);
+    match unit_to_unit_9ecccf8e(&mut env, __out) {
+        ::core::result::Result::Ok(__w) => __w,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            ()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_readingMaybe<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    which: jni::sys::jint,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let which = match jint_to_i32_a3e3b6ef(&mut env, &which) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/ReadingBuilder";
+    const __CB_DESCR: &str = "(IJJJLjava/lang/String;IJ)Ljava/lang/Object;";
+    let __out = perftest_flat::reading_maybe(which);
+    match __out {
+        ::core::option::Option::Some(__inner) => {
+            let __obj0: jni::sys::jvalue;
+            let __obj1: jni::sys::jvalue;
+            let __obj2: jni::sys::jvalue;
+            let __obj3: jni::sys::jvalue;
+            let __obj4: jni::objects::JObject;
+            let __obj5: jni::sys::jvalue;
+            let __obj6: jni::sys::jvalue;
+            match &__inner {
+                perftest_flat::Reading::Missing => {
+                    __obj0 = jni::sys::jvalue { i: 0 };
+                    __obj1 = jni::sys::jvalue { j: 0i64 };
+                    __obj2 = jni::sys::jvalue { j: 0i64 };
+                    __obj3 = jni::sys::jvalue { j: 0i64 };
+                    __obj4 = jni::objects::JObject::null();
+                    __obj5 = jni::sys::jvalue { i: 0i32 };
+                    __obj6 = jni::sys::jvalue { j: 0i64 };
+                }
+                perftest_flat::Reading::Exact(__sv0) => {
+                    let __enc___obj1 = match i64_to_jlong_fbf9a9bc(
+                        &mut env,
+                        __sv0.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __obj1 = jni::sys::jvalue {
+                        j: __enc___obj1,
+                    };
+                    __obj0 = jni::sys::jvalue { i: 1 };
+                    __obj2 = jni::sys::jvalue { j: 0i64 };
+                    __obj3 = jni::sys::jvalue { j: 0i64 };
+                    __obj4 = jni::objects::JObject::null();
+                    __obj5 = jni::sys::jvalue { i: 0i32 };
+                    __obj6 = jni::sys::jvalue { j: 0i64 };
+                }
+                perftest_flat::Reading::Range { low: __sv0, high: __sv1 } => {
+                    let __enc___obj2 = match i64_to_jlong_fbf9a9bc(
+                        &mut env,
+                        __sv0.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __obj2 = jni::sys::jvalue {
+                        j: __enc___obj2,
+                    };
+                    let __enc___obj3 = match i64_to_jlong_fbf9a9bc(
+                        &mut env,
+                        __sv1.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __obj3 = jni::sys::jvalue {
+                        j: __enc___obj3,
+                    };
+                    __obj0 = jni::sys::jvalue { i: 2 };
+                    __obj1 = jni::sys::jvalue { j: 0i64 };
+                    __obj4 = jni::objects::JObject::null();
+                    __obj5 = jni::sys::jvalue { i: 0i32 };
+                    __obj6 = jni::sys::jvalue { j: 0i64 };
+                }
+                perftest_flat::Reading::Labeled(__sv0, __sv1) => {
+                    let __enc___obj4 = match String_to_JString_c7f3ca43(
+                        &mut env,
+                        __sv0.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __obj4 = __enc___obj4.into();
+                    let __enc___obj5 = match Priority_to_jint_447102d2(
+                        &mut env,
+                        __sv1.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __obj5 = jni::sys::jvalue {
+                        i: __enc___obj5,
+                    };
+                    __obj0 = jni::sys::jvalue { i: 3 };
+                    __obj1 = jni::sys::jvalue { j: 0i64 };
+                    __obj2 = jni::sys::jvalue { j: 0i64 };
+                    __obj3 = jni::sys::jvalue { j: 0i64 };
+                    __obj6 = jni::sys::jvalue { j: 0i64 };
+                }
+                perftest_flat::Reading::Companion(__sv0) => {
+                    let __enc___obj6 = match i64_to_jlong_fbf9a9bc(
+                        &mut env,
+                        __sv0.clone(),
+                    ) {
+                        ::core::result::Result::Ok(__w) => __w,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return jni::objects::JObject::null().into();
+                        }
+                    };
+                    __obj6 = jni::sys::jvalue {
+                        j: __enc___obj6,
+                    };
+                    __obj0 = jni::sys::jvalue { i: 4 };
+                    __obj1 = jni::sys::jvalue { j: 0i64 };
+                    __obj2 = jni::sys::jvalue { j: 0i64 };
+                    __obj3 = jni::sys::jvalue { j: 0i64 };
+                    __obj4 = jni::objects::JObject::null();
+                    __obj5 = jni::sys::jvalue { i: 0i32 };
+                }
+            }
+            match __CB_MID
+                .call_object(
+                    &mut env,
+                    __CB_FQN,
+                    "run",
+                    __CB_DESCR,
+                    &__builder,
+                    &[
+                        __obj0,
+                        __obj1,
+                        __obj2,
+                        __obj3,
+                        jni::sys::jvalue {
+                            l: __obj4.as_raw(),
+                        },
+                        __obj5,
+                        __obj6,
+                    ],
+                )
+            {
+                ::core::result::Result::Ok(__o) => __o,
+                ::core::result::Result::Err(__e) => {
+                    let _ = env.exception_describe();
+                    let __e2 = <__JniErr as ::core::convert::From<
+                        String,
+                    >>::from(__e.to_string());
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e2.to_string(),
+                    );
+                    jni::objects::JObject::null().into()
+                }
+            }
+        }
+        ::core::option::Option::None => jni::objects::JObject::null().into(),
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_readingOf<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    which: jni::sys::jint,
+    __builder: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let which = match jint_to_i32_a3e3b6ef(&mut env, &which) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/ReadingBuilder";
+    const __CB_DESCR: &str = "(IJJJLjava/lang/String;IJ)Ljava/lang/Object;";
+    let __out = perftest_flat::reading_of(which);
+    let __obj0: jni::sys::jvalue;
+    let __obj1: jni::sys::jvalue;
+    let __obj2: jni::sys::jvalue;
+    let __obj3: jni::sys::jvalue;
+    let __obj4: jni::objects::JObject;
+    let __obj5: jni::sys::jvalue;
+    let __obj6: jni::sys::jvalue;
+    match &__out {
+        perftest_flat::Reading::Missing => {
+            __obj0 = jni::sys::jvalue { i: 0 };
+            __obj1 = jni::sys::jvalue { j: 0i64 };
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::sys::jvalue { j: 0i64 };
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::sys::jvalue { i: 0i32 };
+            __obj6 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Reading::Exact(__sv0) => {
+            let __enc___obj1 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj1 = jni::sys::jvalue {
+                j: __enc___obj1,
+            };
+            __obj0 = jni::sys::jvalue { i: 1 };
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::sys::jvalue { j: 0i64 };
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::sys::jvalue { i: 0i32 };
+            __obj6 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Reading::Range { low: __sv0, high: __sv1 } => {
+            let __enc___obj2 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj2 = jni::sys::jvalue {
+                j: __enc___obj2,
+            };
+            let __enc___obj3 = match i64_to_jlong_fbf9a9bc(&mut env, __sv1.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj3 = jni::sys::jvalue {
+                j: __enc___obj3,
+            };
+            __obj0 = jni::sys::jvalue { i: 2 };
+            __obj1 = jni::sys::jvalue { j: 0i64 };
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::sys::jvalue { i: 0i32 };
+            __obj6 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Reading::Labeled(__sv0, __sv1) => {
+            let __enc___obj4 = match String_to_JString_c7f3ca43(
+                &mut env,
+                __sv0.clone(),
+            ) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj4 = __enc___obj4.into();
+            let __enc___obj5 = match Priority_to_jint_447102d2(&mut env, __sv1.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj5 = jni::sys::jvalue {
+                i: __enc___obj5,
+            };
+            __obj0 = jni::sys::jvalue { i: 3 };
+            __obj1 = jni::sys::jvalue { j: 0i64 };
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::sys::jvalue { j: 0i64 };
+            __obj6 = jni::sys::jvalue { j: 0i64 };
+        }
+        perftest_flat::Reading::Companion(__sv0) => {
+            let __enc___obj6 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                ::core::result::Result::Ok(__w) => __w,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return jni::objects::JObject::null().into();
+                }
+            };
+            __obj6 = jni::sys::jvalue {
+                j: __enc___obj6,
+            };
+            __obj0 = jni::sys::jvalue { i: 4 };
+            __obj1 = jni::sys::jvalue { j: 0i64 };
+            __obj2 = jni::sys::jvalue { j: 0i64 };
+            __obj3 = jni::sys::jvalue { j: 0i64 };
+            __obj4 = jni::objects::JObject::null();
+            __obj5 = jni::sys::jvalue { i: 0i32 };
+        }
+    }
+    match __CB_MID
+        .call_object(
+            &mut env,
+            __CB_FQN,
+            "run",
+            __CB_DESCR,
+            &__builder,
+            &[
+                __obj0,
+                __obj1,
+                __obj2,
+                __obj3,
+                jni::sys::jvalue {
+                    l: __obj4.as_raw(),
+                },
+                __obj5,
+                __obj6,
+            ],
+        )
+    {
+        ::core::result::Result::Ok(__o) => __o,
+        ::core::result::Result::Err(__e) => {
+            let _ = env.exception_describe();
+            let __e2 = <__JniErr as ::core::convert::From<
+                String,
+            >>::from(__e.to_string());
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e2.to_string(),
+            );
+            jni::objects::JObject::null().into()
+        }
+    }
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, dead_code)]
+pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_readingSeries<'a>(
+    mut env: jni::JNIEnv<'a>,
+    _class: jni::objects::JClass<'a>,
+    n: jni::sys::jint,
+    __acc: jni::objects::JObject<'a>,
+    __fold: jni::objects::JObject<'a>,
+    __error_sink: jni::objects::JObject<'a>,
+) -> jni::objects::JObject<'a> {
+    #[allow(non_upper_case_globals)]
+    static __SINK_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __SINK_FQN: &str = "io/prebindgen/covertest/JniErrorHandler";
+    const __SINK_DESCR: &str = "(Ljava/lang/String;)Ljava/lang/Object;";
+    let n = match jint_to_i32_a3e3b6ef(&mut env, &n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__e) => {
+            signal_binding_error(
+                &mut env,
+                &__error_sink,
+                &__SINK_MID,
+                __SINK_FQN,
+                __SINK_DESCR,
+                &__e.to_string(),
+            );
+            return jni::objects::JObject::null().into();
+        }
+    };
+    #[allow(non_upper_case_globals)]
+    static __CB_MID: ::prebindgen::lang::CachedIfaceMethod = ::prebindgen::lang::CachedIfaceMethod::new();
+    const __CB_FQN: &str = "io/prebindgen/covertest/model/ReadingFolderRaw";
+    const __CB_DESCR: &str = "(Ljava/lang/Object;IJJJLjava/lang/String;IJ)Ljava/lang/Object;";
+    let __vec = perftest_flat::reading_series(n);
+    let mut __acc = __acc;
+    for __elem in __vec.into_iter() {
+        let __obj0: jni::sys::jvalue;
+        let __obj1: jni::sys::jvalue;
+        let __obj2: jni::sys::jvalue;
+        let __obj3: jni::sys::jvalue;
+        let __obj4: jni::objects::JObject;
+        let __obj5: jni::sys::jvalue;
+        let __obj6: jni::sys::jvalue;
+        match &__elem {
+            perftest_flat::Reading::Missing => {
+                __obj0 = jni::sys::jvalue { i: 0 };
+                __obj1 = jni::sys::jvalue { j: 0i64 };
+                __obj2 = jni::sys::jvalue { j: 0i64 };
+                __obj3 = jni::sys::jvalue { j: 0i64 };
+                __obj4 = jni::objects::JObject::null();
+                __obj5 = jni::sys::jvalue { i: 0i32 };
+                __obj6 = jni::sys::jvalue { j: 0i64 };
+            }
+            perftest_flat::Reading::Exact(__sv0) => {
+                let __enc___obj1 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __obj1 = jni::sys::jvalue {
+                    j: __enc___obj1,
+                };
+                __obj0 = jni::sys::jvalue { i: 1 };
+                __obj2 = jni::sys::jvalue { j: 0i64 };
+                __obj3 = jni::sys::jvalue { j: 0i64 };
+                __obj4 = jni::objects::JObject::null();
+                __obj5 = jni::sys::jvalue { i: 0i32 };
+                __obj6 = jni::sys::jvalue { j: 0i64 };
+            }
+            perftest_flat::Reading::Range { low: __sv0, high: __sv1 } => {
+                let __enc___obj2 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __obj2 = jni::sys::jvalue {
+                    j: __enc___obj2,
+                };
+                let __enc___obj3 = match i64_to_jlong_fbf9a9bc(&mut env, __sv1.clone()) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __obj3 = jni::sys::jvalue {
+                    j: __enc___obj3,
+                };
+                __obj0 = jni::sys::jvalue { i: 2 };
+                __obj1 = jni::sys::jvalue { j: 0i64 };
+                __obj4 = jni::objects::JObject::null();
+                __obj5 = jni::sys::jvalue { i: 0i32 };
+                __obj6 = jni::sys::jvalue { j: 0i64 };
+            }
+            perftest_flat::Reading::Labeled(__sv0, __sv1) => {
+                let __enc___obj4 = match String_to_JString_c7f3ca43(
+                    &mut env,
+                    __sv0.clone(),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __obj4 = __enc___obj4.into();
+                let __enc___obj5 = match Priority_to_jint_447102d2(
+                    &mut env,
+                    __sv1.clone(),
+                ) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __obj5 = jni::sys::jvalue {
+                    i: __enc___obj5,
+                };
+                __obj0 = jni::sys::jvalue { i: 3 };
+                __obj1 = jni::sys::jvalue { j: 0i64 };
+                __obj2 = jni::sys::jvalue { j: 0i64 };
+                __obj3 = jni::sys::jvalue { j: 0i64 };
+                __obj6 = jni::sys::jvalue { j: 0i64 };
+            }
+            perftest_flat::Reading::Companion(__sv0) => {
+                let __enc___obj6 = match i64_to_jlong_fbf9a9bc(&mut env, __sv0.clone()) {
+                    ::core::result::Result::Ok(__w) => __w,
+                    ::core::result::Result::Err(__e) => {
+                        signal_binding_error(
+                            &mut env,
+                            &__error_sink,
+                            &__SINK_MID,
+                            __SINK_FQN,
+                            __SINK_DESCR,
+                            &__e.to_string(),
+                        );
+                        return jni::objects::JObject::null().into();
+                    }
+                };
+                __obj6 = jni::sys::jvalue {
+                    j: __enc___obj6,
+                };
+                __obj0 = jni::sys::jvalue { i: 4 };
+                __obj1 = jni::sys::jvalue { j: 0i64 };
+                __obj2 = jni::sys::jvalue { j: 0i64 };
+                __obj3 = jni::sys::jvalue { j: 0i64 };
+                __obj4 = jni::objects::JObject::null();
+                __obj5 = jni::sys::jvalue { i: 0i32 };
+            }
+        }
+        __acc = match __CB_MID
+            .call_object(
+                &mut env,
+                __CB_FQN,
+                "run",
+                __CB_DESCR,
+                &__fold,
+                &[
+                    jni::sys::jvalue {
+                        l: __acc.as_raw(),
+                    },
+                    __obj0,
+                    __obj1,
+                    __obj2,
+                    __obj3,
+                    jni::sys::jvalue {
+                        l: __obj4.as_raw(),
+                    },
+                    __obj5,
+                    __obj6,
+                ],
+            )
+        {
+            ::core::result::Result::Ok(__o) => __o,
+            ::core::result::Result::Err(__e) => {
+                let _ = env.exception_describe();
+                let __e2 = <__JniErr as ::core::convert::From<
+                    String,
+                >>::from(__e.to_string());
+                signal_binding_error(
+                    &mut env,
+                    &__error_sink,
+                    &__SINK_MID,
+                    __SINK_FQN,
+                    __SINK_DESCR,
+                    &__e2.to_string(),
+                );
+                return jni::objects::JObject::null().into();
+            }
+        };
+    }
+    __acc
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, dead_code)]

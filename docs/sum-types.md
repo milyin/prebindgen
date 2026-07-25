@@ -252,16 +252,49 @@ core work, because `api/core/unfold.rs` is a deterministic **product** — "ever
 and contributes its leaf … there is no selector" (`src/api/core/unfold.rs:8-11`). It gains one:
 
 - `LeafSource::VariantField { variant, member }` beside `Accessor` / `Field`
-  (`src/api/core/unfold/plan.rs:63-78`), so a leaf can be reached through a variant pattern rather
-  than a field chain.
-- Per-leaf group membership plus a synthesized tag leaf, so the Rust emitter emits one `match` over
-  the value instead of independent per-leaf expressions.
-- `apply_sum_returns`, modeled on `apply_value_structs` (`src/api/core/unfold.rs:455`): for every
-  declared function returning a declared sum (`E` / `&E` / `Option<E>` / `Vec<E>`), build a
-  `fixed_builder` `UnfoldPlan` whose foreign builder is the sealed interface's `fromParts`.
+  (`src/api/core/unfold/plan.rs`), so a leaf can be reached through a variant pattern rather
+  than a field chain, plus `LeafSource::SumTag` for the synthesized selector.
+- Per-leaf group membership (`UnfoldLeaf::group`), so the Rust emitter emits one `match` over
+  the value instead of independent per-leaf expressions. The tag leaf is the one leaf with **no
+  converter** (`UnfoldLeaf::has_converter()`): it is assigned per arm, so requiring an output
+  converter for it would make every sum depend on an unrelated `i32` crossing existing.
+- `apply_sum_returns`, modeled on `apply_value_structs`: for every declared function returning a
+  declared sum (`E` / `&E` / `Option<E>` / `Vec<E>`) and every `impl Fn(E)` / `impl Fn(&E)`
+  callback parameter, build a `fixed_builder` `UnfoldPlan` over the tag + groups. It also drops the
+  declared return's scan-time output requirement at **every layer** (`E`, `Option<E>`, `Vec<E>`) —
+  a sum has no whole-value converter by construction, and the boundary-only pass only reaches the
+  bare type.
 
 `Option` / `Vec` layers need nothing new — they ride the existing `Shape` fold
 (`src/api/core/shape.rs`), same as for a data class.
+
+**The wire target is the hoisted builder singleton, not `Sum.fromParts`.** §4.2's `fromParts` is the
+Kotlin-facing convenience: its parameters are the variants' **property** types (`Priority`, not the
+`Int` discriminant) and its object slots are non-null, which an inert group's `JObject::null()`
+would trip on inside the JVM's intrinsic null check before any generated code ran. So the return
+path reassembles through the same inlined `when` over the tag that a sum-typed struct field already
+gets, emitted into the hoisted `__<Name>Builder` / folder-appender singleton (and into the `asRaw`
+proxy for a callback argument). Both come from one derivation, so the two positions cannot drift:
+
+```kotlin
+internal val __ReadingBuilder: ReadingBuilder<Reading> =
+    ReadingBuilder { tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 ->
+        when (tag) {
+            0 -> Reading.Missing
+            1 -> Reading.Exact(exact_v0)
+            2 -> Reading.Range(range_low, range_high)
+            3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1))
+            4 -> Reading.Companion(companion_v0)
+            else -> throw IllegalArgumentException("Reading: invalid tag $tag")
+        }
+    }
+```
+
+The `!!` is §4.4's inert-slot rule at the interface boundary: an object-shaped group slot is
+declared nullable (`tagged_v0: String?`) because an inert group is wire-defaulted to JVM null, and
+re-asserted inside its own live arm. Primitive slots keep their `0`/`false` default unboxed — a
+handle payload rides its raw `jlong`, so an inert handle group is the `0L` sentinel that is simply
+never wrapped.
 
 ### 4.6 Rejections
 
@@ -375,3 +408,8 @@ do not count.
 | **C** | [#148](https://github.com/milyin/prebindgen/issues/148) | jnigen: `sealed_class!` + `variant!`, `TypeKind::Sum`, `TypeConfig.sum_cfg`, the sealed-interface emitter (sibling of `write_enum_classes`, `src/api/lang/jnigen/jni/kotlin_emit.rs:555`). | A |
 | **D** | [#149](https://github.com/milyin/prebindgen/issues/149) | jnigen: tag-gated groups on both flatten paths — `FlatFieldNode::Sum`, the struct-or-sum root, the `kt_access` expression-template refactor, `PlanFieldKind::Sum`. Unblocks flat #31 + #11, and flat #30 in its struct-field form (`ReplyStruct { result: ReplyResult, … }`). | C |
 | **E** | [#150](https://github.com/milyin/prebindgen/issues/150) | core + jnigen: sum-typed returns and callback arguments — the unfold selector. Needed when a function's **own** return (or a callback argument) is the sum, e.g. a `reply_get_result(&Reply) -> ReplyResult` accessor mirroring base's `Reply::result()`. | D |
+
+A sum nested as a **data-class field** keeps the whole-value `fromParts` path (stage D's
+`PlanFieldKind::Sum`); the fixed-builder leaf synthesis for value structs still declines a sum
+field. Flattening that too is a wire-width/allocation optimization of an already-correct path, not
+a capability, so it is deliberately not part of stage E.

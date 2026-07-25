@@ -135,13 +135,52 @@ pub(crate) struct TypedGroup {
     /// User-facing (typed) parameter type (the whole value, or a single leaf's
     /// typed view for a passthrough group).
     pub typed: kt::KtType,
-    /// `Some(class_short)` ⇒ reassemble this group's leaves via
-    /// `class_short.fromParts(leaves…)`; `None` ⇒ a single passthrough leaf
-    /// (the typed value IS the one raw param, optionally wrapped by its
+    /// `Some(expr)` ⇒ this group's raw leaves reassemble into ONE typed value
+    /// through `expr` — `Class.fromParts($0, $1, …)` for a fixed product, a
+    /// `when` over the tag for a sum. `None` ⇒ a single passthrough leaf (the
+    /// typed value IS the one raw param, optionally wrapped by its
     /// [`IfaceParam::wrap`]).
+    ///
+    /// Written with **positional placeholders** `$0`, `$1`, … over this group's
+    /// leaves rather than with their names: the signature-wide
+    /// [`dedup_names`] pass runs after a group is described, so a name captured
+    /// here could be stale by the time [`IfaceSpec::to_as_raw_fun`] renders it.
     pub reassemble: Option<String>,
+    /// FQNs the reassembly expression names in raw text (variant classes,
+    /// enums) and therefore needs imported where it is rendered.
+    pub imports: Vec<String>,
     /// Number of consecutive `params` (raw leaves) this group consumes.
     pub leaf_count: usize,
+}
+
+/// Substitute a [`TypedGroup::reassemble`] expression's `$k` placeholders with
+/// the group's actual parameter names. Scans left to right taking the longest
+/// digit run, so `$10` never resolves as `$1` followed by `0`.
+fn fill_placeholders(expr: &str, names: &[&str]) -> String {
+    let mut out = String::with_capacity(expr.len());
+    let mut rest = expr;
+    while let Some(pos) = rest.find('$') {
+        out.push_str(&rest[..pos]);
+        let digits: String = rest[pos + 1..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
+        if digits.is_empty() {
+            out.push('$');
+            rest = &rest[pos + 1..];
+            continue;
+        }
+        let idx: usize = digits.parse().expect("digit run parses");
+        out.push_str(names.get(idx).copied().unwrap_or_else(|| {
+            panic!(
+                "reassembly placeholder ${idx} has no leaf in a {}-leaf group",
+                names.len()
+            )
+        }));
+        rest = &rest[pos + 1 + digits.len()..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// One generated `fun interface`: identity, Kotlin surface (typed + raw
@@ -422,8 +461,8 @@ impl IfaceSpec {
                     .map(|p| p.name.as_str())
                     .collect();
                 match &g.reassemble {
-                    Some(cls) => args.push(RunArg {
-                        expr: format!("{cls}.fromParts({})", names.join(", ")),
+                    Some(expr) => args.push(RunArg {
+                        expr: fill_placeholders(expr, &names),
                         owned: false,
                         nullable: false,
                     }),
@@ -646,16 +685,44 @@ fn plan_leaf_params(
     let names = plan_leaf_names(leaves);
     let mut out = Vec::with_capacity(leaves.len());
     for (name, leaf) in names.into_iter().zip(leaves.iter()) {
-        out.push(leaf_iface_param(
-            ext,
-            registry,
-            name,
-            &leaf.out_ty,
-            leaf.nullable,
-            true,
-        )?);
+        out.push(plan_leaf_param(ext, registry, name, leaf)?);
     }
     Some(out)
+}
+
+/// Both interface views of ONE decomposition leaf. The single entry point for a
+/// plan leaf, so the builder/folder/handler signatures and a callback's
+/// flattened `run` params classify it identically — the tag slot and the
+/// inert-group nullability rule below have to hold at every one of those sites,
+/// not just where the plan happens to be walked as a whole.
+fn plan_leaf_param(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    name: String,
+    leaf: &crate::api::core::unfold::UnfoldLeaf,
+) -> Option<IfaceParam> {
+    use crate::api::core::unfold::LeafSource;
+    // The sum selector has no converter behind it — it is a plain `Int` the
+    // emitter assigns per `match` arm.
+    if leaf.source == LeafSource::SumTag {
+        return Some(IfaceParam::same(name, kt::KtType::int()));
+    }
+    // A group slot is INERT whenever another variant is live, and the encoder
+    // fills an inert object slot with `JObject::null()`. A JVM null handed to a
+    // non-null Kotlin parameter throws inside the intrinsic null-check before
+    // any generated code runs, so every object-shaped group slot is nullable
+    // here and re-asserted (`!!`) inside its own live arm — the same rule
+    // `nullable_group_part` applies to the parent-inlined `fromParts`. Primitive
+    // slots take their `0`/`false` default and stay unboxed.
+    let inert_nullable = leaf.group.is_some() && !leaf_ty_is_prim(registry, &leaf.out_ty);
+    leaf_iface_param(
+        ext,
+        registry,
+        name,
+        &leaf.out_ty,
+        leaf.nullable || inert_nullable,
+        true,
+    )
 }
 
 /// Both interface views of one delivered leaf.
@@ -941,6 +1008,36 @@ impl JniGen {
     }
 }
 
+/// The [`TypedGroup::reassemble`] expression (and its raw-text imports) for a
+/// **fixed-builder** decomposition's leaves — the one place the two shapes are
+/// distinguished, so the callback proxy and the `Vec` folder cannot pick
+/// different reassemblies for the same type.
+///
+/// A product reassembles through the class's own `fromParts`; a **sum** cannot
+/// — its `fromParts` is the Kotlin-facing convenience whose parameters are
+/// property types, not the wire — so it reassembles through the same inlined
+/// `when` over the tag that a sum-typed struct field gets.
+fn fixed_reassembly(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    source: &syn::Type,
+    leaves: &[crate::api::core::unfold::UnfoldLeaf],
+    class_fqn: &str,
+) -> (String, Vec<String>) {
+    let slots: Vec<String> = (0..leaves.len()).map(|i| format!("${i}")).collect();
+    if !is_sum_leaves(leaves) {
+        let class_short = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
+        return (
+            format!("{class_short}.fromParts({})", slots.join(", ")),
+            Vec::new(),
+        );
+    }
+    let params = plan_leaf_params(ext, registry, leaves).unwrap_or_default();
+    let mut imports: BTreeSet<String> = BTreeSet::new();
+    let (_, when) = ext.sum_reconstruct(registry, source, leaves, &params, &slots, &mut imports);
+    (when, imports.into_iter().collect())
+}
+
 /// Interface for an `impl Fn(args)` delivery: one `run` parameter per
 /// flattened leaf of each arg's callback plan (the arg whole when plan-less),
 /// returning `Unit`. Named `<ArgShorts>Callback` (`Fn()` → `VoidCallback`),
@@ -961,12 +1058,33 @@ pub(crate) fn callback_iface_spec(
         /// Whole-value typed view (`Some`) or `None` ⇒ use the leaf's own typed.
         typed: Option<kt::KtType>,
         reassemble: Option<String>,
+        imports: Vec<String>,
         leaf_count: usize,
     }
-    // (leaf name, out_ty, nullable, from_plan, owned_handle). `owned_handle`
-    // marks a plan-less opaque-handle arg delivered as a raw `jlong` and wrapped
-    // + closed Kotlin-side (Phase 3).
-    let mut leaf_tys: Vec<(String, syn::Type, bool, bool, bool)> = Vec::new();
+    /// One flattened `run` parameter before naming/dedup. A **plan** leaf keeps
+    /// the leaf itself, so it classifies through the shared
+    /// [`plan_leaf_param`] (tag slot, inert-group nullability) rather than a
+    /// second, weaker derivation here; a **whole** arg carries just its type,
+    /// and `owned_handle` marks a plan-less opaque handle delivered as a raw
+    /// `jlong` and wrapped + closed Kotlin-side (Phase 3).
+    enum LeafDesc {
+        Plan(String, crate::api::core::unfold::UnfoldLeaf),
+        Whole {
+            name: String,
+            ty: syn::Type,
+            nullable: bool,
+            owned_handle: bool,
+        },
+    }
+    impl LeafDesc {
+        fn name(&self) -> &str {
+            match self {
+                LeafDesc::Plan(n, _) => n,
+                LeafDesc::Whole { name, .. } => name,
+            }
+        }
+    }
+    let mut leaf_tys: Vec<LeafDesc> = Vec::new();
     let mut groups: Vec<GroupDesc> = Vec::new();
     let mut any_fixed = false;
 
@@ -983,7 +1101,7 @@ pub(crate) fn callback_iface_spec(
         if let Some(plan) = plan {
             let leaf_names = plan_leaf_names(&plan.leaves);
             for (n, l) in leaf_names.iter().zip(plan.leaves.iter()) {
-                leaf_tys.push((n.clone(), l.out_ty.clone(), l.nullable, true, false));
+                leaf_tys.push(LeafDesc::Plan(n.clone(), l.clone()));
             }
             if plan.fixed_builder {
                 any_fixed = true;
@@ -992,11 +1110,13 @@ pub(crate) fn callback_iface_spec(
                     other => other.clone(),
                 };
                 let fqn = ext.kotlin_fqn(&TypeKey::from_type(&core))?;
-                let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
+                let (reassemble, imports) =
+                    fixed_reassembly(ext, registry, &core, &plan.leaves, &fqn);
                 groups.push(GroupDesc {
                     name: whole_value_name(t, i),
                     typed: Some(kt::KtType::cls(fqn.to_string())),
-                    reassemble: Some(class_short),
+                    reassemble: Some(reassemble),
+                    imports,
                     leaf_count: plan.leaves.len(),
                 });
             } else {
@@ -1007,6 +1127,7 @@ pub(crate) fn callback_iface_spec(
                         name: n.clone(),
                         typed: None,
                         reassemble: None,
+                        imports: Vec::new(),
                         leaf_count: 1,
                     });
                 }
@@ -1019,36 +1140,37 @@ pub(crate) fn callback_iface_spec(
                 .and_then(|e| e.metadata.projection.as_ref())
                 .map(|p| p.kind == ProjectionKind::Handle)
                 .unwrap_or(false);
-            leaf_tys.push((
-                whole_value_name(t, i),
-                t.clone(),
-                is_option_type(t),
-                false,
+            leaf_tys.push(LeafDesc::Whole {
+                name: whole_value_name(t, i),
+                ty: t.clone(),
+                nullable: is_option_type(t),
                 owned_handle,
-            ));
+            });
             groups.push(GroupDesc {
                 name: whole_value_name(t, i),
                 typed: None,
                 reassemble: None,
+                imports: Vec::new(),
                 leaf_count: 1,
             });
         }
     }
-    let mut names: Vec<String> = leaf_tys.iter().map(|(n, ..)| n.clone()).collect();
+    let mut names: Vec<String> = leaf_tys.iter().map(|d| d.name().to_string()).collect();
     dedup_names(&mut names);
     let mut params = Vec::with_capacity(leaf_tys.len());
-    for (k, (_, out_ty, nullable, from_plan, owned_handle)) in leaf_tys.iter().enumerate() {
-        let param = if *owned_handle {
-            owned_handle_iface_param(ext, registry, names[k].clone(), out_ty, *nullable)?
-        } else {
-            leaf_iface_param(
-                ext,
-                registry,
-                names[k].clone(),
-                out_ty,
-                *nullable,
-                *from_plan,
-            )?
+    for (k, desc) in leaf_tys.iter().enumerate() {
+        let name = names[k].clone();
+        let param = match desc {
+            LeafDesc::Plan(_, leaf) => plan_leaf_param(ext, registry, name, leaf)?,
+            LeafDesc::Whole {
+                ty,
+                nullable,
+                owned_handle: true,
+                ..
+            } => owned_handle_iface_param(ext, registry, name, ty, *nullable)?,
+            LeafDesc::Whole { ty, nullable, .. } => {
+                leaf_iface_param(ext, registry, name, ty, *nullable, false)?
+            }
         };
         params.push(param);
     }
@@ -1066,6 +1188,7 @@ pub(crate) fn callback_iface_spec(
                 name: group_names[gi].clone(),
                 typed,
                 reassemble: g.reassemble.clone(),
+                imports: g.imports.clone(),
                 leaf_count: g.leaf_count,
             });
             at += g.leaf_count;
@@ -1222,18 +1345,20 @@ pub(crate) fn fixed_folder_typed_groups(
 ) -> Option<Vec<TypedGroup>> {
     let spec = registry.decon_plans.get(decon)?;
     let fqn = ext.kotlin_fqn(&TypeKey::from_type(&spec.source))?;
-    let class_short = fqn.rsplit('.').next().unwrap_or(&fqn).to_string();
+    let (reassemble, imports) = fixed_reassembly(ext, registry, &spec.source, &spec.leaves, &fqn);
     Some(vec![
         TypedGroup {
             name: "acc".to_string(),
             typed: kt::KtType::var_("A"),
             reassemble: None,
+            imports: Vec::new(),
             leaf_count: 1,
         },
         TypedGroup {
             name: "element".to_string(),
             typed: kt::KtType::cls(fqn.to_string()),
-            reassemble: Some(class_short),
+            reassemble: Some(reassemble),
+            imports,
             leaf_count: spec.leaves.len(),
         },
     ])

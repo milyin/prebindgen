@@ -34,6 +34,7 @@ import io.prebindgen.covertest.model.ObjectBoundary63
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
+import io.prebindgen.covertest.model.Lookup
 import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
@@ -55,6 +56,11 @@ import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.observationWhich
+import io.prebindgen.covertest.model.lookupOf
+import io.prebindgen.covertest.model.readingEach
+import io.prebindgen.covertest.model.readingMaybe
+import io.prebindgen.covertest.model.readingOf
+import io.prebindgen.covertest.model.readingSeries
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.Tagged
 import io.prebindgen.covertest.model.taggedNew
@@ -392,6 +398,73 @@ fun main() {
         check(invalidTag != null && invalidTag!!.contains("Reading: invalid tag")) {
             "expected the binding-error channel to carry the invalid tag, got: $invalidTag"
         }
+    }
+
+    // ── a sum as the function's OWN return / callback argument ────────────────
+    // Nothing surrounds the value here, so the decomposition carries its own
+    // tag: the wrapper hands the native side a hoisted builder (or folder)
+    // singleton, and the live group is picked by a `when` over that tag. Still
+    // no JVM object built on the Rust side — only the tag and the raw slots
+    // cross.
+    section("sum in return position (tag + groups through a fixed builder)") {
+        // Bare `E` return: every variant shape survives, including the
+        // payload-less one and the ones whose groups carry object slots.
+        check(readingOf(0, boom) == Reading.Missing)
+        check(readingOf(1, boom) == Reading.Exact(42L))
+        check(readingOf(2, boom) == Reading.Range(1L, 9L))
+        check(readingOf(3, boom) == Reading.Tagged("warm", Priority.HIGH))
+        check(readingOf(4, boom) == Reading.Companion(5L))
+        // The payload-less alternative is still the singleton `data object` —
+        // the tag alone rebuilt it, no group was read.
+        check(readingOf(0, boom) === Reading.Missing)
+
+        // `Option<E>` return: the present layer nulls the whole result and is
+        // independent of the tag (which is 0 — `Missing` — in the null case,
+        // and must not be mistaken for one).
+        check(readingMaybe(-1, boom) == null)
+        check(readingMaybe(0, boom) == Reading.Missing)
+        check(readingMaybe(3, boom) == Reading.Tagged("warm", Priority.HIGH))
+
+        // `Vec<E>` return: each element's tag + groups cross raw and the
+        // folder singleton appends the rebuilt alternative.
+        check(readingSeries(0, boom).isEmpty())
+        check(
+            readingSeries(5, boom) == listOf(
+                Reading.Missing,
+                Reading.Exact(42L),
+                Reading.Range(1L, 9L),
+                Reading.Tagged("warm", Priority.HIGH),
+                Reading.Companion(5L),
+            )
+        )
+
+        // Callback argument: the user callback receives the whole reassembled
+        // sum while the wire still carries decoupled slots.
+        val seen = ArrayList<Reading>()
+        readingEach(5, { r -> seen.add(r) }, boom)
+        check(seen == readingSeries(5, boom))
+    }
+
+    // ── a tag-gated group that owns a native resource ─────────────────────────
+    // `Lookup.Found` carries an opaque handle: the live group hands over a
+    // freshly boxed pointer the caller owns, while an inert handle slot stays
+    // the `0L` sentinel that is never wrapped (wrapping it would fabricate a
+    // handle to nothing). `Failed`'s `String` group proves an inert OBJECT slot
+    // arrives as JVM null and so must be nullable in the raw builder.
+    section("sum return with a handle payload") {
+        check(lookupOf(0L, 0.0, boom) === Lookup.Absent)
+
+        val failed = lookupOf(-1L, 0.0, boom)
+        check(failed is Lookup.Failed && (failed as Lookup.Failed).v0 == "negative count")
+
+        val found = lookupOf(3L, 7.5, boom)
+        check(found is Lookup.Found)
+        val summary = (found as Lookup.Found).v0
+        // The handle is live and owns its own copy of the native object.
+        check(summary.count(boom) == 3L)
+        check(summary.total(boom) == 7.5)
+        summary.close()
+        check(summary.isClosed())
     }
 
     // ── a sum whose payload is NOT leaf-shaped ────────────────────────────────

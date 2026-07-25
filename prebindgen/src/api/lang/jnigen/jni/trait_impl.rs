@@ -985,6 +985,42 @@ impl Prebindgen for JniGen {
         out
     }
 
+    /// Synthesize the tag-plus-groups decomposition of every `sealed_class`
+    /// type, so a function whose own return (or callback argument) IS the sum
+    /// delivers it as a tag plus one leaf group per variant — the same wire
+    /// layout a sum-typed struct field already gets, reassembled by the hoisted
+    /// builder singleton instead of by the parent's `fromParts`.
+    ///
+    /// Emitted for every declared sum, not only the ones currently returned: a
+    /// decomposition with no matching function wires no plan, and an unused
+    /// `DeconSpec` emits nothing.
+    fn sum_decons(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<crate::api::core::unfold::SumDecon> {
+        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        let mut out = Vec::new();
+        for key in keys {
+            let Some(sum_cfg) = self.types[key].sum_cfg.as_ref() else {
+                continue;
+            };
+            let source = key.to_type();
+            let Some(ident) = bare_path_ident(&source) else {
+                continue;
+            };
+            let Some((item_enum, _)) = registry.enums.get(&ident) else {
+                continue;
+            };
+            out.push(crate::api::core::unfold::SumDecon {
+                key: key.clone(),
+                source,
+                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, item_enum),
+            });
+        }
+        out
+    }
+
     /// Nominate every **single-leaf** element type that appears in a `Vec<T>` /
     /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
     /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection

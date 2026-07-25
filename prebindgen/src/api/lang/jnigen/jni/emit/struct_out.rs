@@ -148,6 +148,7 @@ pub(crate) fn synth_value_struct_leaves(
             identity: false,
             nullable: false,
             source: LeafSource::Field,
+            group: None,
         });
     }
     Some(leaves)
