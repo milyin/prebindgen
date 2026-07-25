@@ -15,9 +15,9 @@ A source crate cannot currently express "exactly one of these alternatives". Bot
 payload variants outright:
 
 - `lang::Cbindgen` — `assert_unit_variants` guards the mirror emission and both converters
-  (`src/api/lang/cbindgen/trait_impl.rs:231`, `:660`, `:1159`).
+  (`prebindgen/src/api/lang/cbindgen/trait_impl.rs:231`, `:660`, `:1159`).
 - `lang::JniGen` — `enum_class!`'s contract is "the enum must be unit-variant only"
-  (`src/api/lang/jnigen/jni/decl.rs:739-748`).
+  (`prebindgen/src/api/lang/jnigen/jni/decl.rs:739-748`).
 
 So authors encode sums as products and demote the invariant to prose. Two live examples in
 zenoh-flat:
@@ -71,14 +71,15 @@ Two facts make this cheap to build:
 
 1. **The type graph already walks variant payloads.** `Registry::scan_enum` and
    `Registry::immediate_edges` register every variant field type in both directions
-   (`src/api/core/registry.rs:1177-1189`, `:1285-1292`), so payload converters resolve with no core
-   change.
+   (`prebindgen/src/api/core/registry.rs:1177-1189`, `:1285-1292`), so payload converters
+   resolve with no core change.
 2. **Both directions already gate leaf groups — with `N = 1`.** An `Option<Struct>` input crosses as
    a synthetic `present: Boolean` plus field slots that are wire-defaulted when absent
-   (`FlatLeaf::is_present_flag`, `src/api/lang/jnigen/jni/emit/flat_input.rs:306`); an
+   (`FlatLeaf::is_present_flag`, `prebindgen/src/api/lang/jnigen/jni/emit/flat_input.rs:306`); an
    `Option<nested>` output does the same in the `fromParts` bridge
-   (`PlanFieldKind::Nested { optional }`, `src/api/lang/jnigen/jni/struct_plan.rs:66`). A sum is that
-   mechanism with an `Int` tag instead of a `Boolean` flag and `N` groups instead of one.
+   (`PlanFieldKind::Nested { optional }`,
+   `prebindgen/src/api/lang/jnigen/jni/struct_plan.rs:66`). A sum is that mechanism with an `Int`
+   tag instead of a `Boolean` flag and `N` groups instead of one.
 
 ### Chosen lowering: flattened, always
 
@@ -88,16 +89,16 @@ Rust-side. Rejected alternative: give the sum an ordinary terminal converter wit
 in every position immediately, but it reintroduces the per-crossing JVM object and per-field JNI
 reflection that this codebase deliberately removed (the `fromParts` flattening was worth 2.4×,
 leaf folds 3–8×), and it would force an exemption to the rule that a data class flattens *completely*
-or generation fails (`src/api/lang/jnigen/jni/decl.rs:814-819`). `ReplyStruct` is on the
+or generation fails (`prebindgen/src/api/lang/jnigen/jni/decl.rs:814-819`). `ReplyStruct` is on the
 per-message path, so the slow shape would not have survived anyway.
 
 ## 3. Locked decisions
 
 | Decision | Rule |
 |---|---|
-| **Tag numbering** | Declaration order, `0..N-1`. Payload enums carry no `repr` — a `repr` is a wire detail the neutral tier must not name. Unit enums keep explicit-discriminant support through `enum_discriminant_values` (`src/api/lang/jnigen/util.rs:98`), which **moves into core** so both adapters share one implementation instead of two. |
-| **Leaf naming** | Variant field leaf = `<variant_snake>_<field>`, matching the existing nested-prefix convention (`payload_id` for the nested field `payload.id`). Tuple field ⇒ `<variant_snake>_0`. The synthetic tag leaf = `<field>__tag`, using the same double-underscore marker as the existing `<field>__present` gate. Core `DeconSpec` leaf names keep their `__` chain separator. |
-| **Kotlin surface** | `sealed interface E` with the variant classes **nested inside it** — `data class PeriodicQueries(val period: Long) : E`, `data object Heartbeat : E` — so variant names cannot collide package-wide. Tuple payload fields are named `v0`, `v1`, …. A `fromParts(tag, …)` companion on the interface reassembles from the tag + slots. |
+| **Tag numbering** | Declaration order, `0..N-1`. Payload enums carry no `repr` — a `repr` is a wire detail the neutral tier must not name. Unit enums keep explicit-discriminant support through `enum_discriminant_values` (`prebindgen/src/api/lang/jnigen/util.rs:98`), which **moves into core** so both adapters share one implementation instead of two. |
+| **Leaf naming** | A variant field's **wire slot** = `<variantCamel>_<property>` (`range_low`, `exact_v0`), matching the existing nested-prefix convention (`payload_id` for the nested field `payload.id`). It is keyed on the **Kotlin** variant name, so a `variant!(V).name(...)` rename carries through to the slots. Under a parent field the slot is prefixed with it (`mode_periodicQueries_period`) and the synthetic tag leaf is `<field>__tag`, using the same double-underscore marker as the existing `<field>__present` gate; standing alone (a sum in return position) the tag leaf is just `tag`. Core's neutral `SumField::name` (`<variant_snake>_<field>`, tuple ⇒ `<variant_snake>_0`) is a language-agnostic label an adapter may ignore — the JNI wire slot is the rule above. Core `DeconSpec` leaf names keep their `__` chain separator. |
+| **Kotlin surface** | `sealed interface E` with the variant classes **nested inside it** — `data class PeriodicQueries(val period: Long) : E`, `data object Heartbeat : E` — so variant names cannot collide package-wide. A named payload field keeps its camelCased name; tuple payload fields are named `v0`, `v1`, … (so a tuple variant `Exact(i64)` surfaces as `data class Exact(val v0: Long)` with the slot `exact_v0`). A `fromParts(tag, …)` companion on the interface reassembles from the tag + slots. |
 | **Unit-only enums** | Unchanged path. Handing a payload enum to `enum_class!` / `.enum_type()` is a **hard error** naming `sealed_class!` / `.tagged_union()` — no silent upgrade, matching the "invalid = ERROR" declaration policy. |
 | **Handle payloads** | Allowed. `ReplyResult` (flat #30) needs them: `SampleStruct` carries `KeyExpr`, `ZBytes`, `Encoding`. A tag-gated handle leaf reuses `FlatLeaf::handle_nullable`, which already means "gated by an optional ancestor" (`flat_input.rs:315-317`), and joins the existing N-ary `withSortedHandleLocks` collection unchanged. |
 | **Optionality** | `Option<E>` keeps its own present-flag gate; the tag domain is never overloaded with a `-1 = absent`. Optionality and choice are independent facts and stay independent leaves. |
@@ -110,8 +111,8 @@ Running example:
 
 ```rust
 pub enum RecoveryMode {
-    PeriodicQueries(Duration),   // tag 0
-    Heartbeat,                   // tag 1
+    PeriodicQueries { period: Duration },   // tag 0
+    Heartbeat,                              // tag 1
 }
 pub struct RecoveryConfig {
     pub mode: Option<RecoveryMode>,
@@ -123,10 +124,14 @@ pub struct RecoveryConfig {
 
 ```rust
 .package(package!("io.zenoh.jni")
-    .class(sealed_class!(RecoveryMode)
-        .variant(variant!(PeriodicQueries).name("Periodic")))   // optional per-variant rename
+    .class(sealed_class!(RecoveryMode))
     .class(data_class!(RecoveryConfig)))
 ```
+
+A per-variant `.variant(variant!(V).name("…"))` renames the emitted class **and every slot derived
+from it**, so the surface stays self-consistent; the running example below keeps the source names so
+each snippet reads as one contract. `examples/covertest-kotlin` exercises the rename
+(`variant!(Labeled).name("Tagged")` ⇒ the class `Tagged` and the slots `tagged_v0` / `tagged_v1`).
 
 `sealed_class!(E)` is a fifth class kind beside `ptr_class!` / `data_class!` / `enum_class!` /
 `value_class!`: one simple argument, sub-builder, `.name()`, per-variant `.variant(variant!(V))`, and
@@ -180,15 +185,15 @@ public data class RecoveryConfig(val mode: RecoveryMode?, val retentionPeriod: L
 ### 4.3 Output path (Rust → Kotlin)
 
 `PlanFieldKind::Sum { tag_slot, variants }` joins the shared bridge plan
-(`src/api/lang/jnigen/jni/struct_plan.rs`). The Rust encoder emits **one `match`** binding the tag
-and every slot, inert slots filled by the existing `primitive_default_for_descriptor`
-(`src/api/lang/jnigen/jni/emit/struct_out.rs:51`):
+(`prebindgen/src/api/lang/jnigen/jni/struct_plan.rs`). The Rust encoder emits **one `match`**
+binding the tag and every slot, inert slots filled by the existing
+`primitive_default_for_descriptor` (`prebindgen/src/api/lang/jnigen/jni/emit/struct_out.rs:51`):
 
 ```rust
 let (mode__present, mode__tag, mode_periodic_queries_period) = match &v.mode {
     None => (false, 0i32, 0i64),
-    Some(RecoveryMode::PeriodicQueries(p)) => (true, 0i32, __out_Duration(p.clone())),
-    Some(RecoveryMode::Heartbeat)          => (true, 1i32, 0i64),
+    Some(RecoveryMode::PeriodicQueries { period }) => (true, 0i32, __out_Duration(period.clone())),
+    Some(RecoveryMode::Heartbeat)                 => (true, 1i32, 0i64),
 };
 ```
 
@@ -198,9 +203,10 @@ for the sum, and both sides enumerate the same slots in the same order because b
 
 ### 4.4 Input path (Kotlin → Rust)
 
-`FlatFieldNode::Sum` joins `Value` / `Nested` (`src/api/lang/jnigen/jni/emit/flat_input.rs:349`), and
-`FlatInputPlan.root` generalizes from `FlatStructNode` to a struct-or-sum root so a **sum-typed
-parameter** flattens too. Extern signature:
+`FlatFieldNode::Sum` joins `Value` / `Nested`
+(`prebindgen/src/api/lang/jnigen/jni/emit/flat_input.rs:349`), and `FlatInputPlan.root` generalizes
+from `FlatStructNode` to a struct-or-sum root so a **sum-typed parameter** flattens too. Extern
+signature:
 
 ```kotlin
 external fun sessionDeclareAdvancedSubscriber(
@@ -220,7 +226,7 @@ Rust reconstruct, with an invalid tag going to the binding-error channel rather 
 ```rust
 let mode = if mode_present {
     Some(match mode_tag {
-        0 => RecoveryMode::PeriodicQueries(__in_Duration(mode_periodic_queries_period)),
+        0 => RecoveryMode::PeriodicQueries { period: __in_Duration(mode_periodic_queries_period) },
         1 => RecoveryMode::Heartbeat,
         t => return __jni_err(env, error_sink, format!("RecoveryMode: invalid tag {t}")),
     })
@@ -249,11 +255,12 @@ recoveryModeTag = when (recovery?.mode) {
 
 A sum returned by a function (or delivered as a callback argument) is the one position that needs
 core work, because `api/core/unfold.rs` is a deterministic **product** — "every record always runs
-and contributes its leaf … there is no selector" (`src/api/core/unfold.rs:8-11`). It gains one:
+and contributes its leaf … there is no selector" (`prebindgen/src/api/core/unfold.rs:8-11`). It
+gains one:
 
 - `LeafSource::VariantField { variant, member }` beside `Accessor` / `Field`
-  (`src/api/core/unfold/plan.rs`), so a leaf can be reached through a variant pattern rather
-  than a field chain, plus `LeafSource::SumTag` for the synthesized selector.
+  (`prebindgen/src/api/core/unfold/plan.rs`), so a leaf can be reached through a variant pattern
+  rather than a field chain, plus `LeafSource::SumTag` for the synthesized selector.
 - Per-leaf group membership (`UnfoldLeaf::group`), so the Rust emitter emits one `match` over
   the value instead of independent per-leaf expressions. The tag leaf is the one leaf with **no
   converter** (`UnfoldLeaf::has_converter()`): it is assigned per arm, so requiring an output
@@ -266,7 +273,7 @@ and contributes its leaf … there is no selector" (`src/api/core/unfold.rs:8-11
   bare type.
 
 `Option` / `Vec` layers need nothing new — they ride the existing `Shape` fold
-(`src/api/core/shape.rs`), same as for a data class.
+(`prebindgen/src/api/core/shape.rs`), same as for a data class.
 
 **The wire target is the hoisted builder singleton, not `Sum.fromParts`.** §4.2's `fromParts` is the
 Kotlin-facing convenience: its parameters are the variants' **property** types (`Priority`, not the
@@ -309,16 +316,17 @@ Generation errors, each naming the offending path:
 
 ### 5.1 Declaration
 
-`.tagged_union(ty)` beside `.enum_type(ty)` (`src/api/lang/cbindgen/builder.rs:398`), wired into the
-same three places every declarator touches: the already-declared guard (`:306`), the universal
-`.name()` override, and the `CurrentDecl` cursor for error messages (`:701`). `.enum_type()` on a
-payload enum errors with a pointer to it.
+`.tagged_union(ty)` beside `.enum_type(ty)` (`prebindgen/src/api/lang/cbindgen/builder.rs:398`),
+wired into the same three places every declarator touches: the already-declared guard (`:306`), the
+universal `.name()` override, and the `CurrentDecl` cursor for error messages (`:701`).
+`.enum_type()` on a payload enum errors with a pointer to it.
 
 ### 5.2 The mirror type
 
-`prereq_tagged_unions` mirrors `prereq_enums` (`src/api/lang/cbindgen/trait_impl.rs:650`), emitting a
-`#[repr(C)]` enum whose payload fields carry **wire** types chosen by the same `mirror_field_wire`
-policy `data_struct` uses (`trait_impl.rs:513`):
+`prereq_tagged_unions` mirrors `prereq_enums`
+(`prebindgen/src/api/lang/cbindgen/trait_impl.rs:650`), emitting a `#[repr(C)]` enum whose payload
+fields carry **wire** types chosen by the same `mirror_field_wire` policy `data_struct` uses
+(`trait_impl.rs:513`):
 
 ```rust
 #[repr(C)]
@@ -343,7 +351,7 @@ reusing the per-field converters the resolver already produced:
 pub(crate) fn __in_z_recovery_mode_t(v: z_recovery_mode_t) -> RecoveryMode {
     match v {
         z_recovery_mode_t::PeriodicQueries { period } =>
-            RecoveryMode::PeriodicQueries(__in_Duration(period)),
+            RecoveryMode::PeriodicQueries { period: __in_Duration(period) },
         z_recovery_mode_t::Heartbeat => RecoveryMode::Heartbeat,
     }
 }
@@ -361,15 +369,15 @@ leak.
 
 | Piece | Home |
 |---|---|
-| `EnumShape::{Unit, Sum}` classifier — the single definition of "is this enum C-like" | `src/api/core/types_util.rs` |
-| `SumSpec { key, source, variants: Vec<SumVariant> }`, `SumVariant { ident, tag, fields }`, `SumField { member, name, ty }` — the neutral description both adapters read | `src/api/core/types_util.rs` |
-| `enum_discriminant_values`, moved out of `jnigen/util.rs` | `src/api/core/types_util.rs` |
-| The unfold selector (`LeafSource::VariantField`, tag leaf, group membership, `apply_sum_returns`) | `src/api/core/unfold.rs` |
+| `EnumShape::{Unit, Sum}` classifier — the single definition of "is this enum C-like" | `prebindgen/src/api/core/types_util.rs` |
+| `SumSpec { key, source, variants: Vec<SumVariant> }`, `SumVariant { ident, tag, fields }`, `SumField { member, name, ty }` — the neutral description both adapters read | `prebindgen/src/api/core/types_util.rs` |
+| `enum_discriminant_values`, moved out of `jnigen/util.rs` | `prebindgen/src/api/core/types_util.rs` |
+| The unfold selector (`LeafSource::VariantField`, tag leaf, group membership, `apply_sum_returns`) | `prebindgen/src/api/core/unfold.rs` |
 
 Everything else is adapter-local. Payload **wire** choice stays per-adapter, exactly as `ValueDecon`
 leaves are adapter-built today (`Prebindgen::value_struct_decons`,
-`src/api/core/prebindgen.rs:218`) — core describes the sum, adapters decide what its leaves look like
-on the wire.
+`prebindgen/src/api/core/prebindgen.rs:218`) — core describes the sum, adapters decide what its
+leaves look like on the wire.
 
 ## 7. Test obligations
 
@@ -405,7 +413,7 @@ do not count.
 |---|---|---|---|
 | **A** | [#146](https://github.com/milyin/prebindgen/issues/146) | core: `EnumShape` classifier, `SumSpec`, `enum_discriminant_values` moved into core, the three `assert_unit_variants` sites and `enum_class!`'s contract replaced by classifier-driven errors. No behavior change for existing enums. | — |
 | **B** | [#147](https://github.com/milyin/prebindgen/issues/147) | cbindgen: `.tagged_union()`, `prereq_tagged_unions`, `in_/out_tagged_union`, the payload-ownership drop rule, goldens + C smoke test. | A |
-| **C** | [#148](https://github.com/milyin/prebindgen/issues/148) | jnigen: `sealed_class!` + `variant!`, `TypeKind::Sum`, `TypeConfig.sum_cfg`, the sealed-interface emitter (sibling of `write_enum_classes`, `src/api/lang/jnigen/jni/kotlin_emit.rs:555`). | A |
+| **C** | [#148](https://github.com/milyin/prebindgen/issues/148) | jnigen: `sealed_class!` + `variant!`, `TypeKind::Sum`, `TypeConfig.sum_cfg`, the sealed-interface emitter (sibling of `write_enum_classes`, `prebindgen/src/api/lang/jnigen/jni/kotlin_emit.rs:555`). | A |
 | **D** | [#149](https://github.com/milyin/prebindgen/issues/149) | jnigen: tag-gated groups on both flatten paths — `FlatFieldNode::Sum`, the struct-or-sum root, the `kt_access` expression-template refactor, `PlanFieldKind::Sum`. Unblocks flat #31 + #11, and flat #30 in its struct-field form (`ReplyStruct { result: ReplyResult, … }`). | C |
 | **E** | [#150](https://github.com/milyin/prebindgen/issues/150) | core + jnigen: sum-typed returns and callback arguments — the unfold selector. Needed when a function's **own** return (or a callback argument) is the sum, e.g. a `reply_get_result(&Reply) -> ReplyResult` accessor mirroring base's `Reply::result()`. | D |
 
