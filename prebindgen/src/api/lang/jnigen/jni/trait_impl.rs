@@ -1236,6 +1236,53 @@ impl Prebindgen for JniGen {
                 }
             }
         }
+        // A **slice of sums** delivered to a callback (`impl Fn(&[E])`) has no
+        // lowering: the element fold would need the sum's folder-appender
+        // singleton, which is emitted per *return* position, so the shape
+        // resolves to nothing and would otherwise surface as "`E` has no
+        // output converter" — naming the sum rather than the position, since a
+        // sum has no whole-value converter by design. Reject it here, where the
+        // message can say what is actually unsupported.
+        for ident in self.declared_functions() {
+            let Some((item_fn, _)) = registry.functions.get(&ident) else {
+                continue;
+            };
+            for input in &item_fn.sig.inputs {
+                let syn::FnArg::Typed(pt) = input else {
+                    continue;
+                };
+                let Some(args) = extract_fn_trait_args(&pt.ty) else {
+                    continue;
+                };
+                for arg in args {
+                    let after_ref = match &arg {
+                        syn::Type::Reference(r) => (*r.elem).clone(),
+                        other => other.clone(),
+                    };
+                    let syn::Type::Slice(s) = &after_ref else {
+                        continue;
+                    };
+                    let elem = match &*s.elem {
+                        syn::Type::Reference(r) => (*r.elem).clone(),
+                        other => other.clone(),
+                    };
+                    if matches!(self.type_kind(registry, &elem), TypeKind::Sum) {
+                        return Err(format!(
+                            "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
+                             is not supported as a callback argument. A sum crosses as a tag \
+                             plus one leaf group per variant, and folding a *sequence* of \
+                             those into the foreign list needs the element folder a `Vec<{}>` \
+                             RETURN provides; declare the callback over one value \
+                             (`impl Fn({})`) or return `Vec<{}>` instead",
+                            elem.to_token_stream(),
+                            elem.to_token_stream(),
+                            elem.to_token_stream(),
+                            elem.to_token_stream(),
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 

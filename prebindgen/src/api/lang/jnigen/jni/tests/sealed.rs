@@ -939,3 +939,142 @@ fn sum_return_group_can_own_a_handle() {
         "the live arm wraps the pointer into its typed handle class:\n{kotlin}"
     );
 }
+
+/// TWO sums in one callback signature: each contributes its own selector, so
+/// the signature-wide dedup renames the second to `tag2` — and the reassembly
+/// expressions must follow it, including the `$tag` Kotlin string template in
+/// the invalid-tag message. That is why a group's reassembly is stored with
+/// positional placeholders and filled at render time rather than captured by
+/// name when the group is described.
+#[test]
+fn two_sum_callback_args_keep_their_own_selectors() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Lookup {
+                    Absent,
+                    Found(Probe),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_pair(f: impl Fn(Reading, Lookup) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .class(crate::sealed_class!(Lookup))
+            .class(crate::ptr_class!(Probe))
+            .fun(crate::fun!(read_pair)),
+    );
+    let dir = unique_test_dir("jnigen_two_sum_cb");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // The user callback still sees two whole values.
+    assert!(
+        kotlin.contains("public fun run(reading: Reading, lookup: Lookup)"),
+        "{kotlin}"
+    );
+    // The raw twin carries both selectors, the second deduped.
+    assert!(
+        kotlin.contains("tag: Int,") && kotlin.contains("tag2: Int,"),
+        "each sum contributes its own selector:\n{kotlin}"
+    );
+    // Each `when` reads ITS OWN selector — in the dispatch and in the message.
+    assert!(
+        kotlin.contains("when (tag) { 0 -> Reading.Missing;")
+            && kotlin.contains(r#"IllegalArgumentException("Reading: invalid tag $tag")"#),
+        "{kotlin}"
+    );
+    assert!(
+        kotlin.contains("when (tag2) { 0 -> Lookup.Absent;")
+            && kotlin.contains(r#"IllegalArgumentException("Lookup: invalid tag $tag2")"#),
+        "the second sum's reassembly must follow its renamed selector, template \
+         included:\n{kotlin}"
+    );
+}
+
+/// A **slice of sums** as a callback argument has no lowering, and says so.
+///
+/// Folding a sequence of tag-gated groups into the foreign list needs the
+/// element folder that a `Vec<E>` *return* provides; without one the shape
+/// would resolve to nothing and surface as "`E` has no output converter",
+/// which names the sum rather than the position — misleading, because a sum
+/// has no whole-value converter by design. The declaration is rejected up
+/// front instead.
+#[test]
+fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_batch(f: impl Fn(&[Reading]) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .fun(crate::fun!(read_batch)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    assert!(
+        err.contains("read_batch") && err.contains("slice of a sealed_class"),
+        "the error must name the function and the unsupported position: {err}"
+    );
+    assert!(
+        err.contains("impl Fn(Reading)") && err.contains("Vec<Reading>"),
+        "…and point at the two shapes that do work: {err}"
+    );
+}
