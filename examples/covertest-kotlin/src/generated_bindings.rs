@@ -8703,8 +8703,21 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_observationWhich
     mut env: jni::JNIEnv<'a>,
     _class: jni::objects::JClass<'a>,
     o_id: jni::sys::jlong,
-    o_reading: jni::objects::JObject<'a>,
-    o_fallback: jni::objects::JObject<'a>,
+    o_reading__tag: jni::sys::jint,
+    o_reading_exact_v0: jni::sys::jlong,
+    o_reading_range_low: jni::sys::jlong,
+    o_reading_range_high: jni::sys::jlong,
+    o_reading_tagged_v0: jni::objects::JString<'a>,
+    o_reading_tagged_v1: jni::sys::jint,
+    o_reading_companion_v0: jni::sys::jlong,
+    o_fallback_present: jni::sys::jboolean,
+    o_fallback__tag: jni::sys::jint,
+    o_fallback_exact_v0: jni::sys::jlong,
+    o_fallback_range_low: jni::sys::jlong,
+    o_fallback_range_high: jni::sys::jlong,
+    o_fallback_tagged_v0: jni::objects::JString<'a>,
+    o_fallback_tagged_v1: jni::sys::jint,
+    o_fallback_companion_v0: jni::sys::jlong,
     o_note: jni::objects::JString<'a>,
     __error_sink: jni::objects::JObject<'a>,
 ) -> jni::sys::jint {
@@ -8726,36 +8739,282 @@ pub unsafe extern "C" fn Java_io_prebindgen_covertest_CovNative_observationWhich
             return 0 as jni::sys::jint;
         }
     };
-    let __flat_o_reading = match JObject_to_Reading_2261050f(&mut env, &o_reading) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
+    let __flat_o_reading: perftest_flat::Reading = match o_reading__tag {
+        0 => perftest_flat::Reading::Missing,
+        1 => {
+            let __flat_o_reading_o_reading_exact_v0 = match jlong_to_i64_fbf9a9bc(
+                &mut env,
+                &o_reading_exact_v0,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            };
+            perftest_flat::Reading::Exact(__flat_o_reading_o_reading_exact_v0)
+        }
+        2 => {
+            let __flat_o_reading_o_reading_range_low = match jlong_to_i64_fbf9a9bc(
+                &mut env,
+                &o_reading_range_low,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            };
+            let __flat_o_reading_o_reading_range_high = match jlong_to_i64_fbf9a9bc(
+                &mut env,
+                &o_reading_range_high,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            };
+            perftest_flat::Reading::Range {
+                low: __flat_o_reading_o_reading_range_low,
+                high: __flat_o_reading_o_reading_range_high,
+            }
+        }
+        3 => {
+            let __flat_o_reading_o_reading_tagged_v0 = match JString_to_String_c7f3ca43(
+                &mut env,
+                &o_reading_tagged_v0,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            };
+            let __flat_o_reading_o_reading_tagged_v1 = match jint_to_Priority_447102d2(
+                &mut env,
+                &o_reading_tagged_v1,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            };
+            perftest_flat::Reading::Labeled(
+                __flat_o_reading_o_reading_tagged_v0,
+                __flat_o_reading_o_reading_tagged_v1,
+            )
+        }
+        4 => {
+            let __flat_o_reading_o_reading_companion_v0 = match jlong_to_i64_fbf9a9bc(
+                &mut env,
+                &o_reading_companion_v0,
+            ) {
+                ::core::result::Result::Ok(__v) => __v,
+                ::core::result::Result::Err(__e) => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        &__e.to_string(),
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            };
+            perftest_flat::Reading::Companion(__flat_o_reading_o_reading_companion_v0)
+        }
+        _ => {
             signal_binding_error(
                 &mut env,
                 &__error_sink,
                 &__SINK_MID,
                 __SINK_FQN,
                 __SINK_DESCR,
-                &__e.to_string(),
+                "Reading: invalid tag",
             );
             return 0 as jni::sys::jint;
         }
     };
-    let __flat_o_fallback = match JObject_to_Option_Reading_80df84a9(
-        &mut env,
-        &o_fallback,
-    ) {
-        ::core::result::Result::Ok(__v) => __v,
-        ::core::result::Result::Err(__e) => {
-            signal_binding_error(
-                &mut env,
-                &__error_sink,
-                &__SINK_MID,
-                __SINK_FQN,
-                __SINK_DESCR,
-                &__e.to_string(),
-            );
-            return 0 as jni::sys::jint;
-        }
+    let __flat_o_fallback: Option<perftest_flat::Reading> = if o_fallback_present != 0u8
+    {
+        ::core::option::Option::Some(
+            match o_fallback__tag {
+                0 => perftest_flat::Reading::Missing,
+                1 => {
+                    let __flat_o_fallback_o_fallback_exact_v0 = match jlong_to_i64_fbf9a9bc(
+                        &mut env,
+                        &o_fallback_exact_v0,
+                    ) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return 0 as jni::sys::jint;
+                        }
+                    };
+                    perftest_flat::Reading::Exact(__flat_o_fallback_o_fallback_exact_v0)
+                }
+                2 => {
+                    let __flat_o_fallback_o_fallback_range_low = match jlong_to_i64_fbf9a9bc(
+                        &mut env,
+                        &o_fallback_range_low,
+                    ) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return 0 as jni::sys::jint;
+                        }
+                    };
+                    let __flat_o_fallback_o_fallback_range_high = match jlong_to_i64_fbf9a9bc(
+                        &mut env,
+                        &o_fallback_range_high,
+                    ) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return 0 as jni::sys::jint;
+                        }
+                    };
+                    perftest_flat::Reading::Range {
+                        low: __flat_o_fallback_o_fallback_range_low,
+                        high: __flat_o_fallback_o_fallback_range_high,
+                    }
+                }
+                3 => {
+                    let __flat_o_fallback_o_fallback_tagged_v0 = match JString_to_String_c7f3ca43(
+                        &mut env,
+                        &o_fallback_tagged_v0,
+                    ) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return 0 as jni::sys::jint;
+                        }
+                    };
+                    let __flat_o_fallback_o_fallback_tagged_v1 = match jint_to_Priority_447102d2(
+                        &mut env,
+                        &o_fallback_tagged_v1,
+                    ) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return 0 as jni::sys::jint;
+                        }
+                    };
+                    perftest_flat::Reading::Labeled(
+                        __flat_o_fallback_o_fallback_tagged_v0,
+                        __flat_o_fallback_o_fallback_tagged_v1,
+                    )
+                }
+                4 => {
+                    let __flat_o_fallback_o_fallback_companion_v0 = match jlong_to_i64_fbf9a9bc(
+                        &mut env,
+                        &o_fallback_companion_v0,
+                    ) {
+                        ::core::result::Result::Ok(__v) => __v,
+                        ::core::result::Result::Err(__e) => {
+                            signal_binding_error(
+                                &mut env,
+                                &__error_sink,
+                                &__SINK_MID,
+                                __SINK_FQN,
+                                __SINK_DESCR,
+                                &__e.to_string(),
+                            );
+                            return 0 as jni::sys::jint;
+                        }
+                    };
+                    perftest_flat::Reading::Companion(
+                        __flat_o_fallback_o_fallback_companion_v0,
+                    )
+                }
+                _ => {
+                    signal_binding_error(
+                        &mut env,
+                        &__error_sink,
+                        &__SINK_MID,
+                        __SINK_FQN,
+                        __SINK_DESCR,
+                        "Reading: invalid tag",
+                    );
+                    return 0 as jni::sys::jint;
+                }
+            },
+        )
+    } else {
+        ::core::option::Option::None
     };
     let __flat_o_note = match JString_to_String_c7f3ca43(&mut env, &o_note) {
         ::core::result::Result::Ok(__v) => __v,

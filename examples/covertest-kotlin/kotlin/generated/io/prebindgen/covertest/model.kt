@@ -978,7 +978,34 @@ public fun observationNew(
  */
 public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int {
     val __bcap = JniErrorHandlerCapture.acquire()
-    val __ret = CovNative.observationWhich(o.id, o.reading, o.fallback, o.note, __bcap)
+    val __ret = CovNative.observationWhich(
+        o.id,
+        when (o.reading) {
+            is io.prebindgen.covertest.model.Reading.Missing,
+            ->
+            0; is io.prebindgen.covertest.model.Reading.Exact -> 1; is io.prebindgen.covertest.model.Reading.Range -> 2; is io.prebindgen.covertest.model.Reading.Tagged -> 3; is io.prebindgen.covertest.model.Reading.Companion -> 4
+        },
+        (o.reading as? io.prebindgen.covertest.model.Reading.Exact)?.v0 ?: 0L,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Range)?.low ?: 0L,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Range)?.high ?: 0L,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Tagged)?.v0,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Tagged)?.v1?.value ?: 0,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Companion)?.v0 ?: 0L,
+        o.fallback != null,
+        when (o.fallback) {
+            null,
+            ->
+            0; is io.prebindgen.covertest.model.Reading.Missing -> 0; is io.prebindgen.covertest.model.Reading.Exact -> 1; is io.prebindgen.covertest.model.Reading.Range -> 2; is io.prebindgen.covertest.model.Reading.Tagged -> 3; is io.prebindgen.covertest.model.Reading.Companion -> 4
+        },
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Exact)?.v0 ?: 0L,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Range)?.low ?: 0L,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Range)?.high ?: 0L,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Tagged)?.v0,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Tagged)?.v1?.value ?: 0,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Companion)?.v0 ?: 0L,
+        o.note,
+        __bcap,
+    )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
 }

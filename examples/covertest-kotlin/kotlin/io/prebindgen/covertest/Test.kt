@@ -368,6 +368,26 @@ fun main() {
                 boom,
             ) == 3
         )
+
+        // A tag outside 0..N-1 reaches the binding-error channel — never a
+        // panic across the boundary (the locked rule in the design). The
+        // generated wrapper computes the tag from an exhaustive `when` and so
+        // can never produce one, which is exactly why this calls the extern
+        // directly: it is the only way to exercise the guard.
+        var invalidTag: String? = null
+        val cap = JniErrorHandlerCapture.acquire()
+        CovNative.observationWhich(
+            1L,
+            99, 0L, 0L, 0L, null, 0, 0L,
+            false,
+            0, 0L, 0L, 0L, null, 0, 0L,
+            "n",
+            cap,
+        )
+        if (cap.failed) invalidTag = cap.ze0
+        check(invalidTag != null && invalidTag!!.contains("Reading: invalid tag")) {
+            "expected the binding-error channel to carry the invalid tag, got: $invalidTag"
+        }
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

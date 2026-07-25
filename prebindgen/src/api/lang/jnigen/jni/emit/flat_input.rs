@@ -586,6 +586,31 @@ pub(crate) enum FlatFieldNode {
         field: syn::Ident,
         node: Box<FlatStructNode>,
     },
+    /// A data-carrying enum crossing as an `Int` **tag** leaf plus one leaf
+    /// group per variant, inert groups filled with their wire defaults — the
+    /// N-way form of the `present` gating `Option` already uses.
+    Sum {
+        field: syn::Ident,
+        /// Index of the synthetic tag leaf.
+        tag_leaf: usize,
+        /// Index of the `present` gate when the field is `Option<sum>`.
+        /// Optionality and choice stay independent facts: the tag domain is
+        /// never overloaded with an "absent" value.
+        present_leaf: Option<usize>,
+        /// Qualified path to the source enum, for the reconstruct's arms.
+        source: syn::Path,
+        /// Variants in declaration order; index == tag.
+        variants: Vec<FlatSumVariant>,
+        rust_ty: Box<syn::Type>,
+    },
+}
+
+/// One alternative of a [`FlatFieldNode::Sum`].
+pub(crate) struct FlatSumVariant {
+    pub rust_ident: syn::Ident,
+    /// This variant's payload: how each field is addressed when rebuilding
+    /// it, paired with the leaf carrying its value. Empty for a unit variant.
+    pub fields: Vec<(syn::Member, usize)>,
 }
 
 /// A flattened plan for one struct input parameter. Built once by
@@ -707,6 +732,184 @@ fn wire_kotlin_type(entry: &crate::api::core::registry::TypeEntry<KotlinMeta>) -
             .map(ToString::to_string)
             .unwrap_or_else(|| "Any".to_string())
     }
+}
+
+/// Plan a **data-carrying enum** field as a tag leaf plus one leaf group per
+/// variant, so the sum crosses flattened instead of as one `JObject` per call.
+///
+/// Returns `None` when some payload cannot be expressed as a flat leaf — a
+/// handle, say, whose ownership the group-gated form does not yet model. That
+/// is deliberately a **graceful degradation, not a rejection**: the caller
+/// falls through to the ordinary value leaf, and the sum crosses as a whole
+/// object through its own converter, exactly as it did before this path
+/// existed. Refusing instead would turn a working binding into a build error
+/// for a shape the generator can already handle.
+///
+/// Kotlin references are emitted **fully qualified** (`is io.x.Reading.Exact`)
+/// so the call site needs no import bookkeeping — these expressions are raw
+/// text spliced into a wrapper whose import set this plan does not own.
+#[allow(clippy::too_many_arguments)]
+fn build_flat_sum_field(
+    ext: &JniGen,
+    registry: &Registry<KotlinMeta>,
+    sum_ty: &syn::Type,
+    field: syn::Ident,
+    optional: bool,
+    native_prefix: &str,
+    field_ref: &str,
+    nullable_access: bool,
+    rust_ty: &syn::Type,
+    leaves: &mut Vec<FlatLeaf>,
+) -> Option<FlatFieldNode> {
+    use crate::api::core::types_util::SumSpec;
+
+    let ident = bare_path_ident(sum_ty)?;
+    let (item_enum, _) = registry.enums.get(&ident)?;
+    let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
+    let sum_cfg = cfg.sum_cfg.as_ref()?;
+    let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
+    let spec = SumSpec::from_item_enum(item_enum);
+
+    // Plan every group first: a single unflattenable payload means the whole
+    // sum stays object-shaped, so nothing may be pushed until all of them are
+    // known good.
+    struct Planned {
+        rust_ident: syn::Ident,
+        kotlin: String,
+        fields: Vec<(syn::Member, PlannedLeaf)>,
+    }
+    struct PlannedLeaf {
+        native: String,
+        entry: crate::api::core::registry::TypeEntry<KotlinMeta>,
+        access_tail: String,
+        nullable_wire: bool,
+    }
+    let mut planned: Vec<Planned> = Vec::new();
+    for (v, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+        let kotlin = ext.sum_variant_class_name(sum_cfg, &v.ident);
+        let mut fields = Vec::new();
+        for (f, item_field) in v.fields.iter().zip(item_variant.fields.iter()) {
+            let entry = registry.input_entry(&item_field.ty)?;
+            // A projection payload (handle / value blob) carries ownership
+            // and locking rules the tag-gated group does not model yet.
+            if entry.metadata.projection.is_some() {
+                return None;
+            }
+            // Nested objects would need their own recursive group; today only
+            // leaf-shaped payloads flatten.
+            let prim = JniPrim::from_wire(&entry.destination);
+            let is_string_like = matches!(&entry.destination, syn::Type::Path(tp)
+                if tp.path.segments.last().is_some_and(|s| s.ident == "JString"));
+            if prim.is_none() && !is_string_like {
+                return None;
+            }
+            let prop = crate::api::lang::jnigen::jni::struct_plan::sum_field_prop_name(f);
+            let slot =
+                crate::api::lang::jnigen::jni::struct_plan::sum_slot_fragment(&kotlin, &prop);
+            // `(<base>.field as? io.x.E.V)?.prop` — inert groups yield null,
+            // so a primitive slot takes its zero and an object slot stays
+            // nullable. The Rust side only converts the live group.
+            //
+            // An `enum_class` payload is a Kotlin enum object whose wire is
+            // the `jint` discriminant, so the access reads `.value` — without
+            // it the slot would be `Priority?` where the wire wants `Int`.
+            let read = if ext.is_kotlin_enum(&item_field.ty) {
+                format!("{prop}?.value")
+            } else {
+                prop.clone()
+            };
+            let cast = format!("{field_ref} as? {iface_fqn}.{kotlin})?.{read}");
+            let (access_tail, nullable_wire) = match &prim {
+                Some(p) => (format!("{cast} ?: {}", p.kotlin_zero()), false),
+                None => (cast, true),
+            };
+            fields.push((
+                f.member.clone(),
+                PlannedLeaf {
+                    native: format!("{native_prefix}_{slot}"),
+                    entry: entry.clone(),
+                    access_tail,
+                    nullable_wire,
+                },
+            ));
+        }
+        planned.push(Planned {
+            rust_ident: v.ident.clone(),
+            kotlin,
+            fields,
+        });
+    }
+
+    // Everything flattens — now push the leaves, tag first.
+    let present_leaf = optional.then(|| {
+        push_present_leaf(
+            leaves,
+            &format!("{native_prefix}_present"),
+            format!("{field_ref} != null"),
+            Some(field.clone()),
+        )
+    });
+
+    // The tag is computed once per call site by matching the value against
+    // its own variant classes. A nullable access adds the `null` arm the
+    // present flag already gates on.
+    let mut arms: Vec<String> = Vec::new();
+    if nullable_access || optional {
+        arms.push("null -> 0".to_string());
+    }
+    for (tag, p) in planned.iter().enumerate() {
+        arms.push(format!("is {iface_fqn}.{} -> {tag}", p.kotlin));
+    }
+    let tag_leaf = leaves.len();
+    leaves.push(FlatLeaf {
+        native_ident: format_ident!("{}__tag", native_prefix),
+        native_wire_ty: quote!(jni::sys::jint),
+        kt_name: snake_to_camel(&format!("{native_prefix}__tag")),
+        kt_wire_ty: "Int".to_string(),
+        kt_access_tail: format!("{field_ref}) {{ {} }}", arms.join("; ")),
+        kt_access_prefix: "when (".to_string(),
+        conv: None,
+        field: Some(field.clone()),
+        is_present_flag: false,
+        entry: None,
+        handle_target_tail: None,
+        handle_nullable: false,
+    });
+
+    let variants = planned
+        .into_iter()
+        .map(|p| FlatSumVariant {
+            rust_ident: p.rust_ident,
+            fields: p
+                .fields
+                .into_iter()
+                .map(|(member, l)| {
+                    let idx = push_value_leaf(
+                        leaves,
+                        &l.native,
+                        field.clone(),
+                        &l.entry,
+                        l.access_tail,
+                        l.nullable_wire,
+                    );
+                    // The access is a cast expression, so the base sits in the
+                    // middle rather than at the front.
+                    leaves[idx].kt_access_prefix = "(".to_string();
+                    (member, idx)
+                })
+                .collect(),
+        })
+        .collect();
+
+    let module = ext.fn_module(registry, &ident);
+    Some(FlatFieldNode::Sum {
+        field,
+        tag_leaf,
+        present_leaf,
+        source: syn::parse_quote!(#module::#ident),
+        variants,
+        rust_ty: Box::new(rust_ty.clone()),
+    })
 }
 
 fn push_present_leaf(
@@ -930,6 +1133,27 @@ fn build_flat_struct_node(
             format!("{access_prefix}.{fcamel}")
         };
         let nested_ty = option_inner_type(&field.ty).unwrap_or_else(|| field.ty.clone());
+        // A data-carrying enum flattens into a tag plus one group per variant.
+        // `None` means some payload is not leaf-shaped — fall through and let
+        // it cross as one object through its own converter.
+        if matches!(ext.type_kind(registry, &nested_ty), TypeKind::Sum) {
+            let field_optional = option_inner_type(&field.ty).is_some();
+            if let Some(node) = build_flat_sum_field(
+                ext,
+                registry,
+                &nested_ty,
+                fident.clone(),
+                field_optional,
+                &child_native,
+                &field_ref,
+                nullable_context,
+                &field.ty,
+                leaves,
+            ) {
+                fields.push(node);
+                continue;
+            }
+        }
         if let TypeKind::DataStruct {
             st: child,
             cfg: Some(cfg),
@@ -1281,6 +1505,77 @@ fn render_flat_struct_node(
                 decodes.extend(render_flat_struct_node(plan, child, on_err));
                 let child_binding = &child.binding;
                 inits.push(quote!(#field: #child_binding));
+            }
+            // Tag-gated groups: one `match` over the tag rebuilds the live
+            // variant. ONLY that arm's leaves are converted — the inert
+            // groups carry wire defaults nobody reads.
+            FlatFieldNode::Sum {
+                field,
+                tag_leaf,
+                present_leaf,
+                source,
+                variants,
+                rust_ty,
+            } => {
+                let tmp = format_ident!("{}_{}", node.binding, field);
+                let tag = &plan.leaves[*tag_leaf].native_ident;
+                let arms = variants.iter().enumerate().map(|(t, v)| {
+                    let vident = &v.rust_ident;
+                    let tag_lit = proc_macro2::Literal::i32_unsuffixed(t as i32);
+                    let mut pre = TokenStream::new();
+                    let mut inits: Vec<TokenStream> = Vec::new();
+                    for (member, leaf_idx) in &v.fields {
+                        let leaf = &plan.leaves[*leaf_idx];
+                        let entry = leaf.entry.as_ref().expect("sum payload leaf has an entry");
+                        let wire = &leaf.native_ident;
+                        let bind = format_ident!("{}_{}", tmp, wire);
+                        pre.extend(render_entry_decode(entry, wire, &bind, on_err));
+                        match member {
+                            syn::Member::Named(n) => inits.push(quote!(#n: #bind)),
+                            syn::Member::Unnamed(_) => inits.push(quote!(#bind)),
+                        }
+                    }
+                    let ctor = if v.fields.is_empty() {
+                        quote!(#source::#vident)
+                    } else if matches!(v.fields[0].0, syn::Member::Named(_)) {
+                        quote!(#source::#vident { #(#inits),* })
+                    } else {
+                        quote!(#source::#vident(#(#inits),*))
+                    };
+                    quote! { #tag_lit => { #pre #ctor } }
+                });
+                // A tag outside `0..N-1` is a binding error through the
+                // ordinary channel — never a panic across the boundary.
+                let bad_tag = format!(
+                    "{}: invalid tag",
+                    source
+                        .segments
+                        .last()
+                        .map(|s| s.ident.to_string())
+                        .unwrap_or_default()
+                );
+                let build = quote! {
+                    match #tag {
+                        #(#arms)*
+                        _ => {
+                            signal_binding_error(&mut env, &__error_sink, &__SINK_MID, __SINK_FQN, __SINK_DESCR, #bad_tag);
+                            return #on_err;
+                        }
+                    }
+                };
+                if let Some(p) = present_leaf {
+                    let present = &plan.leaves[*p].native_ident;
+                    decodes.extend(quote! {
+                        let #tmp: #rust_ty = if #present != 0u8 {
+                            ::core::option::Option::Some(#build)
+                        } else {
+                            ::core::option::Option::None
+                        };
+                    });
+                } else {
+                    decodes.extend(quote! { let #tmp: #rust_ty = #build; });
+                }
+                inits.push(quote!(#field: #tmp));
             }
             FlatFieldNode::Value {
                 field,
