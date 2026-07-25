@@ -634,3 +634,72 @@ fn vec_of_sum_is_rejected_as_a_struct_field() {
         assert!(msg.contains("Reading"), "{msg}");
     }
 }
+
+/// A sum that reaches its own type must fail deterministically, never run
+/// away. Rust's sizedness rules make an unindirected cycle impossible to
+/// declare, so the reachable shapes are the indirected ones — each of which
+/// must produce a clear outcome rather than a stack overflow.
+#[test]
+fn recursive_sum_shapes_fail_deterministically() {
+    let loc = myflat_loc();
+    let attempt = |variant: proc_macro2::TokenStream, tag: &str| -> Result<(), String> {
+        let e: syn::ItemEnum = syn::parse_quote!(
+            pub enum Node {
+                Leaf(i64),
+                #variant
+            }
+        );
+        let st: syn::ItemStruct = syn::parse_quote!(
+            pub struct Holder {
+                pub node: Node,
+            }
+        );
+        let f: syn::ItemFn = syn::parse_quote!(
+            pub fn holder_new() -> Holder {
+                unimplemented!()
+            }
+        );
+        let registry = Registry::<KotlinMeta>::from_items(vec![
+            (syn::Item::Enum(e), loc.clone()),
+            (syn::Item::Struct(st), loc.clone()),
+            (syn::Item::Fn(f), loc.clone()),
+        ])
+        .expect("index items");
+        let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+            crate::package!()
+                .class(crate::sealed_class!(Node))
+                .class(crate::data_class!(Holder))
+                .fun(crate::fun!(holder_new)),
+        );
+        let dir = unique_test_dir(tag);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            registry
+                .resolve(jni)
+                .map(|g| g.write_rust(dir.join("g.rs")))
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        }));
+        match outcome {
+            Ok(r) => r,
+            Err(p) => Err(p
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_else(|| "panic".to_string())),
+        }
+    };
+
+    // `Vec<Node>` — variable arity, rejected with the intended message.
+    let msg = attempt(quote::quote!(Branch(Vec<Node>)), "rec_vec").expect_err("must fail");
+    assert!(msg.contains("variable arity"), "{msg}");
+
+    // `Box<Node>` — not a bare ident, so it never classifies as a sum; it
+    // fails as an unresolvable payload rather than recursing.
+    let msg = attempt(quote::quote!(Branch(Box<Node>)), "rec_box").expect_err("must fail");
+    assert!(
+        !msg.contains("too deep"),
+        "expected a resolution failure, not the depth guard: {msg}"
+    );
+}

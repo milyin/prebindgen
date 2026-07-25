@@ -328,10 +328,10 @@ pub(crate) fn classify_field(
 /// leaf group per variant, each payload classified through
 /// [`classify_field`].
 ///
-/// Recursion is bounded by the same depth guard the nested-struct path uses;
-/// a sum reaching its own type has no `jobject_input`-style escape hatch (the
-/// flatten plan is finite by construction), so it fails loudly here rather
-/// than expanding until the guard trips with an unhelpful message.
+/// Recursion is bounded by this function's own depth guard (see below) — a
+/// sum reaching its own type has no `jobject_input`-style escape hatch, since
+/// the flatten plan is finite by construction.
+///
 /// `None` propagates the resolver's **deferral** protocol: a payload whose
 /// converter has not resolved *yet* means "retry on the next fixed-point
 /// iteration", exactly as [`classify_field`] signals it for a struct field.
@@ -348,6 +348,19 @@ fn sum_plan_kind(
 ) -> Option<PlanFieldKind> {
     use crate::api::core::types_util::SumSpec;
 
+    // Sum expansion needs its OWN depth guard. A sum whose payload is a sum
+    // never passes through `build_struct_plan`, so that function's assert —
+    // the only one on this recursion before now — cannot see a chain made
+    // purely of sums. Rust's sizedness rules make an unindirected cycle
+    // impossible to declare, and every indirection either classifies as
+    // `Other` (`Box<E>` is not a bare ident) or is already rejected
+    // (`Vec<E>`), so this is defence in depth rather than a reachable path
+    // today. It costs one comparison and makes the bound true for every
+    // future shape instead of true-by-accident.
+    assert!(
+        depth <= 16,
+        "fromParts bridge: sealed-class expansion too deep at `{owner}` (recursive sum?)"
+    );
     let ident = bare_path_ident(ty).unwrap_or_else(|| {
         panic!("fromParts bridge: sealed-class field `{owner}` is not a path type")
     });
