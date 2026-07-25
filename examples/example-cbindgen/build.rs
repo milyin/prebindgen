@@ -72,6 +72,13 @@ fn generate_ffi_bindings() -> PathBuf {
     // The primitive-repr `Operation` enum -> a C enum.
     cbindgen = cbindgen.enum_type(pq!(Operation));
 
+    // The data-carrying `Shape` enum -> a `#[repr(C)]` enum with payload
+    // variants, which cbindgen renders as a C tag + `union`. Its `Labeled` arm
+    // owns a `char *`, so a typed `shape_drop` is generated to free the active
+    // arm. `Drawing` carries one as a by-value field.
+    cbindgen = cbindgen.tagged_union(pq!(Shape));
+    cbindgen = cbindgen.data_struct(pq!(Drawing));
+
     // Multi-target cfg demonstration: `InsideFoo` (a fieldless enum whose
     // discriminants vary by `target_arch`) and `Foo` (a by-value data struct whose
     // field set varies by `target_arch` + feature). Declared unconditionally —
@@ -98,6 +105,15 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(foo_new),
         pq!(foo_get_id),
         pq!(inside_foo_default),
+        // The tagged union in every position: constructed and returned, taken
+        // by value as a parameter, and carried through a data-struct field.
+        pq!(shape_new_empty),
+        pq!(shape_new_circle),
+        pq!(shape_new_rect),
+        pq!(shape_area),
+        pq!(shape_get_label),
+        pq!(drawing_new),
+        pq!(drawing_get_shape),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -123,6 +139,8 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_to_string),
         pq!(calculator_get_history),
         pq!(calculator_for_each),
+        // `&str` label input is fallible (null-checked) with no `Result`.
+        pq!(shape_new_labeled),
     ] {
         cbindgen = cbindgen.function(function).panic();
     }

@@ -15,6 +15,7 @@ impl Cbindgen {
             .or_else(|| self.in_data_struct(ty, registry))
             .or_else(|| self.in_value_opaque(ty, registry))
             .or_else(|| self.in_enum(ty, registry))
+            .or_else(|| self.in_tagged_union(ty, registry))
             .or_else(|| self.in_string(ty))
             .or_else(|| self.in_str(ty))
             .or_else(|| self.in_scalar(ty))

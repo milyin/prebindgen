@@ -8,6 +8,7 @@ mod inputs;
 mod lowering;
 mod returns;
 mod structs;
+mod tagged_unions;
 
 fn write(cbindgen: Cbindgen, registry: Registry<()>, tag: &str) -> String {
     let dir = unique_test_dir(&format!("cbindgen_{tag}"));

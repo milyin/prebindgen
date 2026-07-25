@@ -305,7 +305,8 @@ impl Cbindgen {
             !self.opaque.contains_key(&key)
                 && !self.data.contains_key(&key)
                 && !self.value_opaque.contains_key(&key)
-                && !self.enums.contains_key(&key),
+                && !self.enums.contains_key(&key)
+                && !self.tagged_unions.contains_key(&key),
             "Cbindgen::ignore_type cannot ignore `{}` because it is already declared",
             key
         );
@@ -343,6 +344,12 @@ impl Cbindgen {
             Some(CurrentDecl::Enum(key)) => {
                 self.enums.get_mut(&key).expect("entry vanished").base = Some(base);
             }
+            Some(CurrentDecl::TaggedUnion(key)) => {
+                self.tagged_unions
+                    .get_mut(&key)
+                    .expect("entry vanished")
+                    .base = Some(base);
+            }
             Some(CurrentDecl::Callback(key)) => {
                 self.callbacks.get_mut(&key).expect("entry vanished").base = Some(base);
             }
@@ -354,8 +361,8 @@ impl Cbindgen {
             }
             None => panic!(
                 "Cbindgen::base_name must be chained directly after a declaration \
-                 (`opaque_ptr` / `data_struct` / `enum_type` / `callback` / `function` / \
-                 `convert`)"
+                 (`opaque_ptr` / `data_struct` / `enum_type` / `tagged_union` / `callback` / \
+                 `function` / `convert`)"
             ),
         }
         self
@@ -411,6 +418,36 @@ impl Cbindgen {
         );
         self.enums.insert(key.clone(), TypeCfg::default());
         self.current = Some(CurrentDecl::Enum(key));
+        self
+    }
+
+    /// Declare a **data-carrying** enum: it crosses by value as a `#[repr(C)]`
+    /// enum with payload variants, which cbindgen renders as the idiomatic C
+    /// tagged union (a tag enum plus a `union` of the variant bodies). The
+    /// counterpart of [`Self::enum_type`], which is for the unit-variant-only
+    /// case a plain C `enum` can hold. (Mirrors `JniExt`'s `sealed_class`.)
+    ///
+    /// Each payload field crosses as its own wire, chosen by the same policy a
+    /// [`Self::repr_c_struct`] field uses, extended with `String` → `char *`:
+    /// a scalar passes through, a declared [`Self::enum_type`] becomes its C
+    /// enum, a `String` becomes a malloc'd `char *`, and an opaque pointer
+    /// `Option<Box<T>>` / `Box<T>` (with `T` a declared [`Self::opaque_ptr`])
+    /// becomes `*mut t_t`. Anything else is a generation error.
+    ///
+    /// **Ownership.** The union crosses by value, so when any variant's
+    /// payload wire owns memory (`char *`, an opaque pointer) a typed
+    /// `<base>_drop(t_t *)` is generated that frees the **active arm** —
+    /// consistent with the existing typed per-pointer drops. A union whose
+    /// payloads are all plain data needs no drop and gets none.
+    pub fn tagged_union(mut self, ty: syn::Type) -> Self {
+        let key = TypeKey::from_type(&ty);
+        assert!(
+            !self.ignored_types.contains(&key),
+            "Cbindgen::tagged_union cannot declare `{}` because it is already ignored",
+            key
+        );
+        self.tagged_unions.insert(key.clone(), TypeCfg::default());
+        self.current = Some(CurrentDecl::TaggedUnion(key));
         self
     }
 
@@ -580,6 +617,7 @@ impl Cbindgen {
             .or_else(|| self.data.get(&key))
             .or_else(|| self.value_opaque.get(&key).map(|c| &c.cfg))
             .or_else(|| self.enums.get(&key))
+            .or_else(|| self.tagged_unions.get(&key))
     }
 
     /// The opaque counterpart type of a declared inline-opaque type, if any.
@@ -706,6 +744,7 @@ fn describe_current(current: &Option<CurrentDecl>) -> String {
         Some(CurrentDecl::Data(k)) => format!("data_struct `{}`", k.as_str()),
         Some(CurrentDecl::ValueOpaque(k)) => format!("value_opaque `{}`", k.as_str()),
         Some(CurrentDecl::Enum(k)) => format!("enum_type `{}`", k.as_str()),
+        Some(CurrentDecl::TaggedUnion(k)) => format!("tagged_union `{}`", k.as_str()),
         Some(CurrentDecl::Callback(k)) => {
             let args: Vec<&str> = k.iter().map(|t| t.as_str()).collect();
             format!("callback `impl Fn({})`", args.join(", "))

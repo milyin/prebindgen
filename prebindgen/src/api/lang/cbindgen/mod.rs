@@ -12,7 +12,8 @@
 //!
 //! Items are **opt-in**: nothing is converted unless it is explicitly declared
 //! with [`Cbindgen::function`] / [`Cbindgen::opaque_ptr`] /
-//! [`Cbindgen::data_struct`] / [`Cbindgen::enum_type`]. The C name of a declared
+//! [`Cbindgen::data_struct`] / [`Cbindgen::enum_type`] /
+//! [`Cbindgen::tagged_union`]. The C name of a declared
 //! type's generated destructor can be pinned by chaining [`Cbindgen::name`].
 //!
 //! ## C ABI conventions
@@ -40,6 +41,11 @@
 //!   so a function taking an enum by value needs either a `Result` return or
 //!   [`Cbindgen::panic`]. This relies on cbindgen's C rendering; the `C++`
 //!   language mode is not supported.
+//! * **Tagged union** (declared with [`Cbindgen::tagged_union`]): a
+//!   data-carrying enum crossing by value as a `#[repr(C)]` enum with payload
+//!   variants, which cbindgen renders as a tag enum plus a `union` of the
+//!   variant bodies. When any variant's payload wire owns memory, a typed
+//!   `<name>_drop` frees the **active arm**.
 //! * **Direct `String` output**: a bare `char *` — a `malloc`'d, null-terminated
 //!   raw block (no wrapper struct), freed via the `free_memory_function`.
 //! * **[`Cbindgen::free_memory_function`]**: the single, type-agnostic raw memory
@@ -194,6 +200,7 @@ enum CurrentDecl {
     Data(TypeKey),
     ValueOpaque(TypeKey),
     Enum(TypeKey),
+    TaggedUnion(TypeKey),
     Callback(CallbackKey),
     Function(syn::Ident),
     Convert(TypeKey),
@@ -239,8 +246,12 @@ pub struct Cbindgen {
     /// opaque `#[repr(C, align(_))]` counterpart of identical size+align (no
     /// `Box`). Keyed by the Rust type; the value carries the opaque counterpart.
     value_opaque: HashMap<TypeKey, ValueOpaqueCfg>,
-    /// Enum types.
+    /// Enum types (unit-variant only — a C `enum` is a bare discriminant).
     enums: HashMap<TypeKey, TypeCfg>,
+    /// Data-carrying enum types crossing by value as a `#[repr(C)]` enum with
+    /// payload variants, which cbindgen renders as the idiomatic C tag +
+    /// `union`. Declared with [`Cbindgen::tagged_union`].
+    tagged_unions: HashMap<TypeKey, TypeCfg>,
     /// Declared callback signatures (`impl Fn(...) + Send + Sync + 'static`),
     /// keyed by their argument-type list. Each emits one `#[repr(C)]` closure
     /// struct.
@@ -323,6 +334,85 @@ fn type_short(ty: &syn::Type) -> String {
 fn enum_item<'r>(registry: &'r Registry<()>, ty: &syn::Type) -> Option<&'r syn::ItemEnum> {
     let ident = type_path_tail(ty)?;
     registry.enums.get(&ident).map(|(e, _)| e)
+}
+
+/// Hard error when a `.tagged_union()`-declared enum is unit-only. The
+/// counterpart of [`assert_unit_enum`]: a fieldless enum is exactly a
+/// discriminant, so it belongs to `.enum_type()` — declaring it here would
+/// emit a `union` with no bodies and a needlessly indirect C surface. Neither
+/// declarator silently accepts the other's shape.
+fn assert_payload_enum(e: &syn::ItemEnum) {
+    use crate::api::core::types_util::{enum_shape, EnumShape};
+    if enum_shape(e) == EnumShape::Unit {
+        panic!(
+            "Cbindgen: `{}` has no payload variants: declare it with `.enum_type()`, \
+             not `.tagged_union()` — a fieldless enum crosses as a plain C `enum`",
+            e.ident
+        );
+    }
+}
+
+/// If `fty` is an opaque-pointer payload — `Box<T>` or `Option<Box<T>>` with
+/// `T` a path type — return `T`. The shape check only; whether `T` is a
+/// declared `opaque_ptr` is [`Cbindgen::mirror_field_wire`]'s call, and this
+/// is only reached for a field that already passed it.
+fn opaque_ptr_payload_inner(fty: &syn::Type) -> Option<syn::Type> {
+    if is_option(fty) {
+        first_type_arg(fty).and_then(|inner| box_inner(&inner))
+    } else {
+        box_inner(fty)
+    }
+}
+
+/// The `Type` form of a generated C type ident, for the shared
+/// [`variant_ctor`] helper (which takes the enum's path either as a source
+/// type or as a mirror ident).
+fn cname_ty(cname: &syn::Ident) -> syn::Type {
+    syn::parse_quote!(#cname)
+}
+
+/// `Enum::Variant { a: __f0, .. }` / `Enum::Variant(__f0, ..)` / `Enum::Variant`
+/// — the match pattern binding every field of one variant, shaped like the
+/// variant itself. Used for both the source enum and its C mirror, and for
+/// both directions, so the two sides always destructure the same way.
+fn variant_pattern(
+    enum_path: &impl ToTokens,
+    variant: &syn::Ident,
+    fields: &syn::Fields,
+    binds: &[syn::Ident],
+) -> TokenStream {
+    match fields {
+        syn::Fields::Unit => quote!(#enum_path::#variant),
+        syn::Fields::Named(named) => {
+            let pairs = named.named.iter().zip(binds).map(|(f, b)| {
+                let n = f.ident.as_ref().expect("named field");
+                quote!(#n: #b)
+            });
+            quote!(#enum_path::#variant { #(#pairs),* })
+        }
+        syn::Fields::Unnamed(_) => quote!(#enum_path::#variant(#(#binds),*)),
+    }
+}
+
+/// The constructor counterpart of [`variant_pattern`]: rebuild one variant
+/// from already-converted field expressions.
+fn variant_ctor(
+    enum_path: &impl ToTokens,
+    variant: &syn::Ident,
+    fields: &syn::Fields,
+    exprs: &[TokenStream],
+) -> TokenStream {
+    match fields {
+        syn::Fields::Unit => quote!(#enum_path::#variant),
+        syn::Fields::Named(named) => {
+            let pairs = named.named.iter().zip(exprs).map(|(f, e)| {
+                let n = f.ident.as_ref().expect("named field");
+                quote!(#n: #e)
+            });
+            quote!(#enum_path::#variant { #(#pairs),* })
+        }
+        syn::Fields::Unnamed(_) => quote!(#enum_path::#variant(#(#exprs),*)),
+    }
 }
 
 /// Hard error when an `.enum_type()`-declared enum is not the shape that
