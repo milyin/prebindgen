@@ -404,6 +404,30 @@ fn read_kotlin_property(
             let fqn = handle_field_fqn(ext, proj).replace('.', "/");
             let sig = format!("L{fqn};");
             let obj = format_ident!("{}_obj", bind);
+            // A required (non-`Option`) handle payload is OWNED by the variant
+            // it builds, so it is decoded by CONSUMING the native object
+            // (`Box::from_raw`) — the mirror of the output side's
+            // `Box::into_raw`. The borrow converter would yield
+            // `OwnedObject<T>`, which cannot populate an owned field. Same rule
+            // (and same reasoning) as an owned handle field of a data class;
+            // `Option<_>` keeps the niche-aware converter (jlong 0 ⇒ `None`).
+            let closed_msg = "Operation on a closed native handle.";
+            let decode = if option_inner_type(ty).is_some() {
+                quote! { let #bind = #conv(env, &#raw)?; }
+            } else {
+                quote! {
+                    if #raw == 0 || (#raw & 1) == 1 {
+                        return ::core::result::Result::Err(
+                            <__JniErr as ::core::convert::From<String>>::from(
+                                #closed_msg.to_string(),
+                            ),
+                        );
+                    }
+                    let #bind: #ty = unsafe {
+                        *std::boxed::Box::from_raw(#raw as *mut #ty)
+                    };
+                }
+            };
             return Some((
                 quote! {
                     let #obj: jni::objects::JObject = env.get_field(#receiver, #prop, #sig)
@@ -416,7 +440,7 @@ fn read_kotlin_property(
                             .and_then(|val| val.j())
                             .map_err(|e| <__JniErr as ::core::convert::From<String>>::from(format!(#err_prefix, e)))?
                     };
-                    let #bind = #conv(env, &#raw)?;
+                    #decode
                 },
                 quote!(#bind),
             ));

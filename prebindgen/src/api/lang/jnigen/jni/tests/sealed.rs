@@ -703,3 +703,434 @@ fn recursive_sum_shapes_fail_deterministically() {
         "expected a resolution failure, not the depth guard: {msg}"
     );
 }
+
+/// Build a binding whose declared functions return a sum in every position —
+/// bare, `Option`, `Vec`, and as a callback argument — plus one whose variant
+/// payload is an opaque handle. Returns `(generated Rust, generated Kotlin)`.
+fn sum_returns(tag: &str) -> (String, String) {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Priority {
+                    Low = 0,
+                    High = 1,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                    Range { low: i64, high: i64 },
+                    Labeled(String, Priority),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Lookup {
+                    Absent,
+                    Found(Probe),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_one(which: i32) -> Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_maybe(which: i32) -> Option<Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_all(n: i32) -> Vec<Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn look_up(n: i64) -> Lookup {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_each(n: i32, sink: impl Fn(Reading) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::enum_class!(Priority))
+            .class(crate::sealed_class!(Reading))
+            .class(crate::sealed_class!(Lookup))
+            .class(crate::ptr_class!(Probe))
+            .fun(crate::fun!(read_one))
+            .fun(crate::fun!(read_maybe))
+            .fun(crate::fun!(read_all))
+            .fun(crate::fun!(look_up))
+            .fun(crate::fun!(read_each)),
+    );
+
+    let dir = unique_test_dir(tag);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let rust_path = gen.write_rust(dir.join("gen.rs")).expect("write_rust");
+    let rust = std::fs::read_to_string(&rust_path).unwrap();
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    (rust, kotlin)
+}
+
+/// A sum in RETURN position crosses as its synthesized tag plus one leaf group
+/// per variant, laid side by side — the same wire layout a sum-typed struct
+/// field gets, but reassembled by a hoisted builder singleton because there is
+/// no parent `fromParts` to ride.
+///
+/// The builder's parameters are **wire** types (the enum payload is its `Int`
+/// discriminant), and every object-shaped group slot is nullable: an inert
+/// group is wire-defaulted to JVM null, which a non-null Kotlin parameter would
+/// reject in its intrinsic null check before any generated code ran.
+#[test]
+fn sum_return_builds_through_a_wire_shaped_singleton() {
+    let (_, kotlin) = sum_returns("jnigen_sum_return");
+
+    assert!(
+        kotlin.contains(
+            "public fun run(\n        tag: Int,\n        exact_v0: Long,\n        \
+             range_low: Long,\n        range_high: Long,\n        labeled_v0: String?,\n        \
+             labeled_v1: Int,\n    ): R"
+        ),
+        "builder must take the tag plus every group's WIRE slots, inert object \
+         slots nullable:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains(
+            "when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); \
+             2 -> Reading.Range(range_low, range_high); \
+             3 -> Reading.Labeled(labeled_v0!!, Priority.fromInt(labeled_v1)); \
+             else -> throw IllegalArgumentException(\"Reading: invalid tag $tag\") }"
+        ),
+        "the singleton picks the live group by tag, re-asserts the inert-nullable \
+         slot in its own arm, and rebuilds the enum payload from its \
+         discriminant:\n{kotlin}"
+    );
+    // An out-of-range tag is an error, never a variant.
+    assert!(kotlin.contains("Reading: invalid tag $tag"), "{kotlin}");
+}
+
+/// The sealed interface's own `fromParts` is the Kotlin-facing convenience
+/// stage C emits, NOT the wire target: its parameters are the variants'
+/// property types and its object slots are non-null. The return path therefore
+/// reassembles through its own singleton and leaves this factory alone —
+/// asserted here so the two do not silently converge.
+#[test]
+fn sum_from_parts_stays_the_property_typed_convenience() {
+    let (_, kotlin) = sum_returns("jnigen_sum_fromparts");
+    assert!(
+        kotlin.contains("labeled_v0: String,\n            labeled_v1: Priority,"),
+        "`fromParts` keeps property types and non-null object slots:\n{kotlin}"
+    );
+}
+
+/// The Rust side emits ONE `match` over the returned value: the live arm
+/// converts its own group's payloads and every other slot takes the wire
+/// default. No leaf is an independent expression — that is what a product
+/// decomposition does, and a sum is not one.
+#[test]
+fn sum_return_emits_one_match_with_wire_defaults() {
+    let (rust, _) = sum_returns("jnigen_sum_match");
+    let at = rust
+        .find("fn Java_io_test_jni_JNINative_readOne")
+        .expect("extern");
+    let body = &rust[at..at + 4000];
+    assert!(
+        body.contains("match &__out"),
+        "one match over the value:\n{body}"
+    );
+    assert!(
+        body.contains("myflat::Reading::Missing =>")
+            && body.contains("myflat::Reading::Range { low"),
+        "arms bind each variant's payload by pattern:\n{body}"
+    );
+    // The payload-less arm assigns the tag and defaults every group slot.
+    assert!(
+        body.contains("jni :: objects :: JObject :: null ()") || body.contains("JObject::null()"),
+        "an inert object slot is wire-defaulted to null:\n{body}"
+    );
+}
+
+/// `Option` and `Vec` layers ride the existing shape fold, so a sum needs
+/// nothing new for them: the optional nulls the whole result and the vector
+/// folds element by element, each element rebuilt by the same `when`.
+#[test]
+fn sum_return_composes_with_option_and_vec() {
+    let (_, kotlin) = sum_returns("jnigen_sum_layers");
+    assert!(
+        kotlin.contains(
+            "public fun readMaybe(which: Int, onError: JniErrorHandler<Reading?>): Reading?"
+        ),
+        "Option<sum> return is a nullable sum:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains(
+            "public fun readAll(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading>"
+        ) && kotlin.contains("__ReadingFolderRawHolder.instance"),
+        "Vec<sum> folds through a hoisted appender singleton:\n{kotlin}"
+    );
+    // Callback argument: the user callback receives the whole reassembled sum
+    // while the raw twin still carries the decoupled slots.
+    assert!(
+        kotlin.contains(
+            "public fun interface ReadingCallback {\n    public fun run(reading: Reading)\n}"
+        ),
+        "the user callback sees the whole sum:\n{kotlin}"
+    );
+}
+
+/// A variant payload may be an opaque **handle**: it rides its raw `jlong`
+/// like any other handle leaf, so its slot stays a primitive (an inert group
+/// leaves the `0L` sentinel, never a fabricated handle object).
+#[test]
+fn sum_return_group_can_own_a_handle() {
+    let (_, kotlin) = sum_returns("jnigen_sum_handle");
+    assert!(
+        kotlin.contains("public fun run(tag: Int, found_v0: Long): R"),
+        "a handle payload's group slot is the raw pointer:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains("1 -> Lookup.Found(Probe(found_v0))"),
+        "the live arm wraps the pointer into its typed handle class:\n{kotlin}"
+    );
+}
+
+/// TWO sums in one callback signature: each contributes its own selector, so
+/// the signature-wide dedup renames the second to `tag2` — and the reassembly
+/// expressions must follow it, including the `$tag` Kotlin string template in
+/// the invalid-tag message. That is why a group's reassembly is stored with
+/// positional placeholders and filled at render time rather than captured by
+/// name when the group is described.
+#[test]
+fn two_sum_callback_args_keep_their_own_selectors() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Lookup {
+                    Absent,
+                    Found(Probe),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_pair(f: impl Fn(Reading, Lookup) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .class(crate::sealed_class!(Lookup))
+            .class(crate::ptr_class!(Probe))
+            .fun(crate::fun!(read_pair)),
+    );
+    let dir = unique_test_dir("jnigen_two_sum_cb");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let kotlin = gen
+        .write_kotlin(&dir.join("kotlin"))
+        .expect("write_kotlin")
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // The user callback still sees two whole values.
+    assert!(
+        kotlin.contains("public fun run(reading: Reading, lookup: Lookup)"),
+        "{kotlin}"
+    );
+    // The raw twin carries both selectors, the second deduped.
+    assert!(
+        kotlin.contains("tag: Int,") && kotlin.contains("tag2: Int,"),
+        "each sum contributes its own selector:\n{kotlin}"
+    );
+    // Each `when` reads ITS OWN selector — in the dispatch and in the message.
+    assert!(
+        kotlin.contains("when (tag) { 0 -> Reading.Missing;")
+            && kotlin.contains(r#"IllegalArgumentException("Reading: invalid tag $tag")"#),
+        "{kotlin}"
+    );
+    assert!(
+        kotlin.contains("when (tag2) { 0 -> Lookup.Absent;")
+            && kotlin.contains(r#"IllegalArgumentException("Lookup: invalid tag $tag2")"#),
+        "the second sum's reassembly must follow its renamed selector, template \
+         included:\n{kotlin}"
+    );
+}
+
+/// A sum in the **success position of a fallible return** has no lowering, and
+/// says so. `Result` returns deliberately keep their whole-value converter (so
+/// a fallible factory still hands back a handle), and a sum has no whole-value
+/// converter to keep — the decomposition lives on the builder-callback lane the
+/// `Result` path does not use.
+#[test]
+fn sum_in_result_ok_position_is_rejected_with_its_reason() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Probe {
+                    value: i64,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_try(n: i64) -> Result<Reading, Probe> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .class(crate::ptr_class!(Probe))
+            .fun(crate::fun!(read_try)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    assert!(
+        err.contains("read_try") && err.contains("success position of a fallible return"),
+        "the error must name the function and the unsupported position: {err}"
+    );
+    assert!(
+        err.contains("Return `Reading` directly"),
+        "…and say what to write instead: {err}"
+    );
+}
+
+/// A **slice of sums** as a callback argument has no lowering, and says so.
+///
+/// Folding a sequence of tag-gated groups into the foreign list needs the
+/// element folder that a `Vec<E>` *return* provides; without one the shape
+/// would resolve to nothing and surface as "`E` has no output converter",
+/// which names the sum rather than the position — misleading, because a sum
+/// has no whole-value converter by design. The declaration is rejected up
+/// front instead.
+#[test]
+fn slice_of_sum_callback_arg_is_rejected_with_its_reason() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_batch(f: impl Fn(&[Reading]) + Send + Sync + 'static) {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .fun(crate::fun!(read_batch)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    assert!(
+        err.contains("read_batch") && err.contains("slice of a sealed_class"),
+        "the error must name the function and the unsupported position: {err}"
+    );
+    assert!(
+        err.contains("impl Fn(Reading)") && err.contains("Vec<Reading>"),
+        "…and point at the two shapes that do work: {err}"
+    );
+}

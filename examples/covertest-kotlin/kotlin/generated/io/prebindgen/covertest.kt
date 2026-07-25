@@ -746,6 +746,8 @@ internal object CovNative {
 
     external fun labelReverse(l: String, errorSink: Any): String
 
+    external fun lookupOf(count: Long, total: Double, build: Any, errorSink: Any): Any?
+
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
@@ -804,6 +806,14 @@ internal object CovNative {
     external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
 
     external fun priorityWeight(p: Int, errorSink: Any): Int
+
+    external fun readingEach(n: Int, sink: Any, errorSink: Any)
+
+    external fun readingMaybe(which: Int, build: Any, errorSink: Any): Any?
+
+    external fun readingOf(which: Int, build: Any, errorSink: Any): Any?
+
+    external fun readingSeries(n: Int, acc: Any?, fold: Any, errorSink: Any): Any?
 
     external fun stampNanos(s: ByteArray, errorSink: Any): Long
 

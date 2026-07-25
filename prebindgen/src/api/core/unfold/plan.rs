@@ -59,7 +59,7 @@ pub struct DeconSpec {
 }
 
 /// How a leaf's [`UnfoldLeaf::path`] is reached from the decomposed value.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum LeafSource {
     /// The path is a chain of `#[prebindgen]` **accessor functions**:
     /// `source_module::f(&value)`, composing nested accessors. Nesting steps
@@ -74,6 +74,27 @@ pub enum LeafSource {
     /// fields cross as decoupled leaves and the foreign side reassembles the
     /// object (so no Java object is built on the Rust side).
     Field,
+    /// The **synthesized selector** of a decomposed sum: an `i32` naming which
+    /// alternative is live. It is not read off the value at all — the emitter
+    /// assigns it per `match` arm — so it has no path. Emitted once, ahead of
+    /// the groups it selects between (see
+    /// [`crate::api::core::unfold::apply_sum_returns`]).
+    SumTag,
+    /// A payload field of ONE alternative of a decomposed sum, reached through
+    /// a **variant pattern** rather than an accessor chain or a field chain:
+    /// the emitter binds `member` inside `variant`'s `match` arm. The leaf is
+    /// live only when [`UnfoldLeaf::group`] equals the value's tag; in every
+    /// other arm its slot carries the wire default.
+    ///
+    /// This is the selector [`Accessor`](Self::Accessor) and
+    /// [`Field`](Self::Field) deliberately lack — both are deterministic
+    /// products, every record contributing unconditionally.
+    VariantField {
+        /// The variant's ident as declared in the source enum.
+        variant: syn::Ident,
+        /// How the payload field is addressed in the arm's pattern.
+        member: syn::Member,
+    },
 }
 
 /// A resolved output expansion for one function.
@@ -146,6 +167,28 @@ pub struct UnfoldLeaf {
     /// `match Some/None`.
     pub nullable: bool,
     /// How [`Self::path`] is reached from the value — an accessor-fn chain
-    /// (default) or a struct-field chain (synthesized `data_class`).
+    /// (default), a struct-field chain (synthesized `data_class`), or a
+    /// variant pattern binding (decomposed sum).
     pub source: LeafSource,
+    /// **Group membership**: `Some(tag)` marks the leaf as belonging to the
+    /// leaf group of the sum alternative with that tag — live only when the
+    /// value's [`LeafSource::SumTag`] leaf equals `tag`, wire-defaulted
+    /// otherwise. `None` for an unconditional (product) leaf, including the
+    /// tag leaf itself, which selects between groups rather than joining one.
+    ///
+    /// Grouping is what turns a leaf list into a `match`: leaves sharing a
+    /// group are emitted together in one arm instead of as independent
+    /// per-leaf expressions.
+    pub group: Option<i32>,
+}
+
+impl UnfoldLeaf {
+    /// Whether this leaf's [`out_ty`](Self::out_ty) needs a resolved **output
+    /// converter**. False only for the synthesized [`LeafSource::SumTag`]
+    /// selector: it is assigned per `match` arm, never converted, so requiring
+    /// a converter for it would make every sum depend on an unrelated `i32`
+    /// crossing existing in the binding.
+    pub fn has_converter(&self) -> bool {
+        self.source != LeafSource::SumTag
+    }
 }
