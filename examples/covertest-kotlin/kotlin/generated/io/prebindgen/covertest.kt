@@ -3,7 +3,10 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.DurationBoundary
+import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
+import io.prebindgen.covertest.model.Observation
+import io.prebindgen.covertest.model.Tagged
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -743,9 +746,34 @@ internal object CovNative {
 
     external fun labelReverse(l: String, errorSink: Any): String
 
+    external fun lookupOf(count: Long, total: Double, build: Any, errorSink: Any): Any?
+
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
+
+    external fun observationNew(which: Int, withFallback: Boolean, errorSink: Any): Observation
+
+    external fun observationWhich(
+        oId: Long,
+        oReadingTag: Int,
+        oReadingExactV0: Long,
+        oReadingRangeLow: Long,
+        oReadingRangeHigh: Long,
+        oReadingTaggedV0: String?,
+        oReadingTaggedV1: Int,
+        oReadingCompanionV0: Long,
+        oFallbackPresent: Boolean,
+        oFallbackTag: Int,
+        oFallbackExactV0: Long,
+        oFallbackRangeLow: Long,
+        oFallbackRangeHigh: Long,
+        oFallbackTaggedV0: String?,
+        oFallbackTaggedV1: Int,
+        oFallbackCompanionV0: Long,
+        oNote: String,
+        errorSink: Any,
+    ): Int
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
 
@@ -778,6 +806,14 @@ internal object CovNative {
     external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
 
     external fun priorityWeight(p: Int, errorSink: Any): Int
+
+    external fun readingEach(n: Int, sink: Any, errorSink: Any)
+
+    external fun readingMaybe(which: Int, build: Any, errorSink: Any): Any?
+
+    external fun readingOf(which: Int, build: Any, errorSink: Any): Any?
+
+    external fun readingSeries(n: Int, acc: Any?, fold: Any, errorSink: Any): Any?
 
     external fun stampNanos(s: ByteArray, errorSink: Any): Long
 
@@ -976,6 +1012,10 @@ internal object CovNative {
     ): Double
 
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+
+    external fun taggedNew(which: Int, errorSink: Any): Tagged
+
+    external fun taggedRank(tId: Long, tMarker: Marker, errorSink: Any): Int
 
     external fun unsignedDataMaybe(
         valueByte: Int,

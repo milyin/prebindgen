@@ -236,6 +236,20 @@ fn main() {
                 // .name("Tagged")` exercises the per-variant rename (which
                 // also renames its `fromParts` slots).
                 .class(sealed_class!(Reading).variant(variant!(Labeled).name("Tagged")))
+                // `Lookup` is the sum in RETURN position whose groups own
+                // resources: one alternative carries an opaque handle, one
+                // carries nothing at all.
+                .class(sealed_class!(Lookup))
+                // `Observation` carries that sum as a data-class FIELD —
+                // required (`reading`) and optional (`fallback`) — beside
+                // ordinary flattened leaves, so the tag-gated groups must
+                // interleave with them on one `fromParts` call.
+                .class(data_class!(Observation))
+                // `Marker`'s `Option<enum>` payload is not leaf-shaped, so the
+                // sum degrades to a whole-object crossing instead of failing —
+                // and that path is what reads an enum property back.
+                .class(sealed_class!(Marker))
+                .class(data_class!(Tagged))
                 // `Annotated` exercises a NESTED data-class field (`payload`,
                 // recursive fromParts / recursive leaf decode) plus Option<prim> and
                 // Option<enum> FIELDS (each a decoupled `(present, value)` leaf pair).
@@ -439,6 +453,22 @@ fn main() {
                 .fun(fun!(annotated_ttl))
                 .fun(fun!(annotated_priority))
                 .fun(fun!(annotated_payload_value))
+                // A sum as a data-class field, crossing OUT: the tag plus every
+                // variant's group ride the parent's single `fromParts`.
+                .fun(fun!(observation_new))
+                .fun(fun!(observation_which))
+                .fun(fun!(tagged_new))
+                .fun(fun!(tagged_rank))
+                // A sum as the function's OWN return (and callback argument):
+                // the tag + groups ride the hoisted builder / folder singleton
+                // instead of a parent's `fromParts`. All four positions —
+                // bare, `Option`, `Vec`, callback — plus a group owning a
+                // native handle.
+                .fun(fun!(reading_of))
+                .fun(fun!(reading_maybe))
+                .fun(fun!(reading_series))
+                .fun(fun!(reading_each))
+                .fun(fun!(lookup_of))
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))

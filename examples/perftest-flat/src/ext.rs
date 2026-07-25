@@ -105,6 +105,168 @@ pub enum Reading {
     Companion(i64),
 }
 
+/// A data class carrying a **sum** as a field — the position where "exactly one
+/// of" composes with ordinary product data.
+///
+/// `reading` is required and `fallback` optional, so the binding has to gate a
+/// tag *and* a present flag independently; both sit beside already-flattened
+/// siblings (`id`, `note`) so the tag-gated groups must interleave correctly
+/// with ordinary leaves rather than only working in isolation. `Reading`'s
+/// `Labeled` arm carries a `String`, which is the payload that proves an inert
+/// group's object slot is wire-defaulted to null and therefore nullable in the
+/// generated `fromParts`.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Observation {
+    pub id: i64,
+    pub reading: Reading,
+    pub fallback: Option<Reading>,
+    pub note: String,
+}
+
+/// The `Reading` alternative selected by `which` (declaration order, so it is
+/// the same numbering as the generated tag).
+fn reading_for(which: i32) -> Reading {
+    match which {
+        0 => Reading::Missing,
+        1 => Reading::Exact(42),
+        2 => Reading::Range { low: 1, high: 9 },
+        3 => Reading::Labeled("warm".to_string(), Priority::High),
+        _ => Reading::Companion(5),
+    }
+}
+
+/// Build an [`Observation`] carrying the selected alternative, optionally with
+/// a `fallback` (the next alternative round-robin) — a **sum as a struct
+/// field** crossing Rust → Kotlin, required and optional in one value.
+#[prebindgen]
+pub fn observation_new(which: i32, with_fallback: bool) -> Observation {
+    Observation {
+        id: 7,
+        reading: reading_for(which),
+        fallback: with_fallback.then(|| reading_for((which + 1) % 5)),
+        note: "obs".to_string(),
+    }
+}
+
+/// A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
+/// enum object (or null) in the JVM slot, which the tag-gated flat form cannot
+/// express. The binding therefore lets this one cross as a whole object through
+/// its own converter rather than failing — the degradation path — which is also
+/// what exercises the `Option<enum>` property read.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub enum Marker {
+    None_,
+    Ranked(Option<Priority>),
+}
+
+/// A data class carrying the object-shaped sum.
+#[prebindgen]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tagged {
+    pub id: i64,
+    pub marker: Marker,
+}
+
+/// Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`.
+#[prebindgen]
+pub fn tagged_new(which: i32) -> Tagged {
+    Tagged {
+        id: 3,
+        marker: match which {
+            0 => Marker::None_,
+            1 => Marker::Ranked(None),
+            _ => Marker::Ranked(Some(Priority::High)),
+        },
+    }
+}
+
+/// Read it back — the whole-object sum decode, including the `Option<enum>`
+/// payload, crossing Kotlin → Rust.
+#[prebindgen]
+pub fn tagged_rank(t: Tagged) -> i32 {
+    match t.marker {
+        Marker::None_ => -1,
+        Marker::Ranked(None) => 0,
+        Marker::Ranked(Some(p)) => priority_weight(p),
+    }
+}
+
+/// The selected alternative as the function's **own return** — a sum in
+/// return position, where nothing but the value's own tag says which group is
+/// live. Unlike a struct field (whose slots ride the parent's `fromParts`),
+/// there is no surrounding product to carry the tag, so the decomposition
+/// itself has to.
+#[prebindgen]
+pub fn reading_of(which: i32) -> Reading {
+    reading_for(which)
+}
+
+/// `Option<sum>` return: `which < 0` yields `None`. Optionality and choice stay
+/// independent — the present layer nulls the whole result rather than becoming
+/// an extra tag value.
+#[prebindgen]
+pub fn reading_maybe(which: i32) -> Option<Reading> {
+    (which >= 0).then(|| reading_for(which))
+}
+
+/// `Vec<sum>` return: alternatives `0..n`, each folded into the foreign list
+/// element by element.
+#[prebindgen]
+pub fn reading_series(n: i32) -> Vec<Reading> {
+    (0..n).map(reading_for).collect()
+}
+
+/// A sum as a **callback argument**: alternatives `0..n` delivered in turn.
+#[prebindgen]
+pub fn reading_each(n: i32, sink: impl Fn(Reading) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(reading_for(i));
+    }
+}
+
+/// A sum whose alternatives are a **payload-less** variant and one carrying an
+/// opaque **handle** — the shape a real lookup/reply result takes, and the one
+/// that proves a tag-gated group can own a native resource: the live group
+/// hands over a fresh handle, the inert group's slot stays a null pointer that
+/// is never wrapped.
+#[prebindgen]
+#[derive(Clone)]
+pub enum Lookup {
+    /// Nothing matched — only the tag is live.
+    Absent,
+    /// What matched, as a handle the caller owns (and must close).
+    Found(Summary),
+    /// Why the lookup could not run — a `String` beside the handle group, so an
+    /// inert object slot is exercised alongside an inert primitive one.
+    Failed(String),
+}
+
+/// Build a [`Lookup`]: `count < 0` is a failure, `count == 0` is absent,
+/// anything else is found.
+#[prebindgen]
+pub fn lookup_of(count: i64, total: f64) -> Lookup {
+    match count {
+        c if c < 0 => Lookup::Failed("negative count".to_string()),
+        0 => Lookup::Absent,
+        c => Lookup::Found(summary_new(c, total)),
+    }
+}
+
+/// Which alternative an [`Observation`]'s `reading` holds, by declaration
+/// order — the sum crossing back **in** as part of a data-class parameter.
+#[prebindgen]
+pub fn observation_which(o: Observation) -> i32 {
+    match o.reading {
+        Reading::Missing => 0,
+        Reading::Exact(_) => 1,
+        Reading::Range { .. } => 2,
+        Reading::Labeled(_, _) => 3,
+        Reading::Companion(_) => 4,
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stamp — a small `Copy` value type (→ Kotlin value class over raw bytes).
 // ─────────────────────────────────────────────────────────────────────────────

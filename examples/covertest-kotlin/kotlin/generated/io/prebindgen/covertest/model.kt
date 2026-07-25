@@ -7,6 +7,7 @@ import io.prebindgen.covertest.JniErrorHandlerCapture
 import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.__u64FolderRawHolder
+import io.prebindgen.covertest.analytics.Summary
 import io.prebindgen.covertest.asRaw
 import io.prebindgen.covertest.u64Callback
 
@@ -29,6 +30,65 @@ public enum class Priority(public override val value: Int) : PriorityKind, Ranke
     public companion object {
         @JvmStatic
         public fun fromInt(value: Int): Priority = entries.first { it.value == value }
+    }
+}
+
+/**
+ * A sum whose alternatives are a **payload-less** variant and one carrying an
+ * opaque **handle** — the shape a real lookup/reply result takes, and the one
+ * that proves a tag-gated group can own a native resource: the live group
+ * hands over a fresh handle, the inert group's slot stays a null pointer that
+ * is never wrapped.
+ *
+ * JVM-side surface for the native Rust `Lookup` sum: exactly one alternative is live.
+ */
+public sealed interface Lookup {
+    /** Nothing matched — only the tag is live. */
+    public data object Absent : Lookup
+
+    /** What matched, as a handle the caller owns (and must close). */
+    public data class Found(public val v0: Summary) : Lookup
+
+    /**
+     * Why the lookup could not run — a `String` beside the handle group, so an
+     * inert object slot is exercised alongside an inert primitive one.
+     */
+    public data class Failed(public val v0: String) : Lookup
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, found_v0: Summary, failed_v0: String): Lookup =
+            when (tag) {
+                0 -> Absent
+                1 -> Found(found_v0)
+                2 -> Failed(failed_v0)
+                else -> throw IllegalArgumentException("Lookup: invalid tag $tag")
+            }
+    }
+}
+
+/**
+ * A second sum whose payload is **not leaf-shaped**: `Option<Priority>` is an
+ * enum object (or null) in the JVM slot, which the tag-gated flat form cannot
+ * express. The binding therefore lets this one cross as a whole object through
+ * its own converter rather than failing — the degradation path — which is also
+ * what exercises the `Option<enum>` property read.
+ *
+ * JVM-side surface for the native Rust `Marker` sum: exactly one alternative is live.
+ */
+public sealed interface Marker {
+    public data object None_ : Marker
+
+    public data class Ranked(public val v0: Priority?) : Marker
+
+    public companion object {
+        @JvmStatic
+        public fun fromParts(tag: Int, ranked_v0: Priority?): Marker =
+            when (tag) {
+                0 -> None_
+                1 -> Ranked(ranked_v0)
+                else -> throw IllegalArgumentException("Marker: invalid tag $tag")
+            }
     }
 }
 
@@ -544,6 +604,43 @@ public data class ObjectBoundaryLeaf(val value: Long) {
 }
 
 /**
+ * A data class carrying a **sum** as a field — the position where "exactly one
+ * of" composes with ordinary product data.
+ *
+ * `reading` is required and `fallback` optional, so the binding has to gate a
+ * tag *and* a present flag independently; both sit beside already-flattened
+ * siblings (`id`, `note`) so the tag-gated groups must interleave correctly
+ * with ordinary leaves rather than only working in isolation. `Reading`'s
+ * `Labeled` arm carries a `String`, which is the payload that proves an inert
+ * group's object slot is wire-defaulted to null and therefore nullable in the
+ * generated `fromParts`.
+ */
+public data class Observation(val id: Long, val reading: Reading, val fallback: Reading?, val note: String) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(
+            id: Long,
+            reading__tag: Int,
+            reading_exact_v0: Long,
+            reading_range_low: Long,
+            reading_range_high: Long,
+            reading_tagged_v0: String?,
+            reading_tagged_v1: Int,
+            reading_companion_v0: Long,
+            fallback__present: Boolean,
+            fallback__tag: Int,
+            fallback_exact_v0: Long,
+            fallback_range_low: Long,
+            fallback_range_high: Long,
+            fallback_tagged_v0: String?,
+            fallback_tagged_v1: Int,
+            fallback_companion_v0: Long,
+            note: String,
+        ): Observation = Observation(id, when (reading__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(reading_exact_v0); 2 -> Reading.Range(reading_range_low, reading_range_high); 3 -> Reading.Tagged(reading_tagged_v0!!, Priority.fromInt(reading_tagged_v1)); 4 -> Reading.Companion(reading_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $reading__tag") }, if (fallback__present) when (fallback__tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(fallback_exact_v0); 2 -> Reading.Range(fallback_range_low, fallback_range_high); 3 -> Reading.Tagged(fallback_tagged_v0!!, Priority.fromInt(fallback_tagged_v1)); 4 -> Reading.Companion(fallback_companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $fallback__tag") } else null, note)
+    }
+}
+
+/**
  * Inner, **non-optional** delivery config carrying a **non-null enum field**
  * (`priority`). Nested inside [`CacheConfig`], which crosses as
  * `Option<CacheConfig>`, so the outer optional's `nullable_context`
@@ -555,6 +652,14 @@ public data class RepliesConfig(val priority: Priority, val maxSamples: Long) {
     public companion object {
         @JvmStatic
         public fun fromParts(priority: Int, maxSamples: Long): RepliesConfig = RepliesConfig(Priority.fromInt(priority), maxSamples)
+    }
+}
+
+/** A data class carrying the object-shaped sum. */
+public data class Tagged(val id: Long, val marker: Marker) {
+    public companion object {
+        @JvmStatic
+        public fun fromParts(id: Long, marker__tag: Int, marker_ranked_v0: Int?): Tagged = Tagged(id, when (marker__tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(marker_ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $marker__tag") })
     }
 }
 
@@ -603,6 +708,36 @@ public value class Stamp(public val bytes: ByteArray) {
     }
 }
 
+public fun interface ReadingCallback {
+    public fun run(reading: Reading)
+}
+
+public fun interface ReadingCallbackRaw {
+    public fun run(
+        tag: Int,
+        exact_v0: Long,
+        range_low: Long,
+        range_high: Long,
+        tagged_v0: String?,
+        tagged_v1: Int,
+        companion_v0: Long,
+    )
+}
+
+public fun ReadingCallback.asRaw(): ReadingCallbackRaw =
+    ReadingCallbackRaw {
+        tag,
+        exact_v0,
+        range_low,
+        range_high,
+        tagged_v0,
+        tagged_v1,
+        companion_v0 ->
+        run(
+            when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
+        )
+    }
+
 public fun interface DurationBoundaryBuilder<out R> {
     public fun run(delay: ULong?): R
 }
@@ -621,6 +756,48 @@ public fun <R> DurationBoundaryBuilder<R>.asRaw(): DurationBoundaryBuilderRaw<R>
 
 internal val __DurationBoundaryBuilderRaw: DurationBoundaryBuilderRaw<DurationBoundary> =
 DurationBoundaryBuilderRaw { delay -> DurationBoundary.fromParts(delay) }
+
+public fun interface LookupBuilder<out R> {
+    public fun run(tag: Int, found_v0: Summary, failed_v0: String?): R
+}
+
+public fun interface LookupBuilderRaw<out R> {
+    public fun run(tag: Int, found_v0: Long, failed_v0: String?): R
+}
+
+public fun <R> LookupBuilder<R>.asRaw(): LookupBuilderRaw<R> =
+    LookupBuilderRaw<R> {
+        tag,
+        found_v0,
+        failed_v0 ->
+        run(
+            tag,
+            Summary(found_v0),
+            failed_v0
+        )
+    }
+
+internal val __LookupBuilderRaw: LookupBuilderRaw<Lookup> =
+LookupBuilderRaw { tag, found_v0, failed_v0 ->
+    when (tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(found_v0)); 2 -> Lookup.Failed(failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
+}
+
+public fun interface ReadingBuilder<out R> {
+    public fun run(
+        tag: Int,
+        exact_v0: Long,
+        range_low: Long,
+        range_high: Long,
+        tagged_v0: String?,
+        tagged_v1: Int,
+        companion_v0: Long,
+    ): R
+}
+
+internal val __ReadingBuilder: ReadingBuilder<Reading> =
+ReadingBuilder { tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 ->
+    when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
+}
 
 public fun interface UnsignedBuilder<out R> {
     public fun run(byte: Int, short: Int, int: Long, long: ULong, maybeLong: ULong?): R
@@ -648,6 +825,45 @@ public fun <R> UnsignedBuilder<R>.asRaw(): UnsignedBuilderRaw<R> =
 
 internal val __UnsignedBuilderRaw: UnsignedBuilderRaw<Unsigned> =
 UnsignedBuilderRaw { byte, short, int, long, maybeLong -> Unsigned.fromParts(byte, short, int, long, maybeLong) }
+
+public fun interface ReadingFolder<A> {
+    public fun run(acc: A, element: Reading): A
+}
+
+public fun interface ReadingFolderRaw<A> {
+    public fun run(
+        acc: A,
+        tag: Int,
+        exact_v0: Long,
+        range_low: Long,
+        range_high: Long,
+        tagged_v0: String?,
+        tagged_v1: Int,
+        companion_v0: Long,
+    ): A
+}
+
+public fun <A> ReadingFolder<A>.asRaw(): ReadingFolderRaw<A> =
+    ReadingFolderRaw<A> {
+        acc,
+        tag,
+        exact_v0,
+        range_low,
+        range_high,
+        tagged_v0,
+        tagged_v1,
+        companion_v0 ->
+        run(
+            acc,
+            when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }
+        )
+    }
+
+internal object __ReadingFolderRawHolder {
+    @JvmField
+    val instance: ReadingFolderRaw<ArrayList<Reading>> =
+    ReadingFolderRaw { acc, tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0 -> acc.add(when (tag) { 0 -> Reading.Missing; 1 -> Reading.Exact(exact_v0); 2 -> Reading.Range(range_low, range_high); 3 -> Reading.Tagged(tagged_v0!!, Priority.fromInt(tagged_v1)); 4 -> Reading.Companion(companion_v0); else -> throw IllegalArgumentException("Reading: invalid tag $tag") }); acc }
+}
 
 public fun interface StampFolder<A> {
     public fun run(acc: A, element: Stamp): A
@@ -917,6 +1133,151 @@ public fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>)
     )
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
+}
+
+/**
+ * Build an [`Observation`] carrying the selected alternative, optionally with
+ * a `fallback` (the next alternative round-robin) — a **sum as a struct
+ * field** crossing Rust → Kotlin, required and optional in one value.
+ */
+public fun observationNew(
+    which: Int,
+    withFallback: Boolean,
+    onError: JniErrorHandler<Observation>,
+): Observation {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.observationNew(which, withFallback, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Which alternative an [`Observation`]'s `reading` holds, by declaration
+ * order — the sum crossing back **in** as part of a data-class parameter.
+ */
+public fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.observationWhich(
+        o.id,
+        when (o.reading) {
+            is io.prebindgen.covertest.model.Reading.Missing,
+            ->
+            0; is io.prebindgen.covertest.model.Reading.Exact -> 1; is io.prebindgen.covertest.model.Reading.Range -> 2; is io.prebindgen.covertest.model.Reading.Tagged -> 3; is io.prebindgen.covertest.model.Reading.Companion -> 4
+        },
+        (o.reading as? io.prebindgen.covertest.model.Reading.Exact)?.v0 ?: 0L,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Range)?.low ?: 0L,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Range)?.high ?: 0L,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Tagged)?.v0,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Tagged)?.v1?.value ?: 0,
+        (o.reading as? io.prebindgen.covertest.model.Reading.Companion)?.v0 ?: 0L,
+        o.fallback != null,
+        when (o.fallback) {
+            null,
+            ->
+            0; is io.prebindgen.covertest.model.Reading.Missing -> 0; is io.prebindgen.covertest.model.Reading.Exact -> 1; is io.prebindgen.covertest.model.Reading.Range -> 2; is io.prebindgen.covertest.model.Reading.Tagged -> 3; is io.prebindgen.covertest.model.Reading.Companion -> 4
+        },
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Exact)?.v0 ?: 0L,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Range)?.low ?: 0L,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Range)?.high ?: 0L,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Tagged)?.v0,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Tagged)?.v1?.value ?: 0,
+        (o.fallback as? io.prebindgen.covertest.model.Reading.Companion)?.v0 ?: 0L,
+        o.note,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/** Build a [`Tagged`]: `which` 0 = `None_`, 1 = `Ranked(None)`, 2 = `Ranked(Some(High))`. */
+public fun taggedNew(which: Int, onError: JniErrorHandler<Tagged>): Tagged {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.taggedNew(which, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * Read it back — the whole-object sum decode, including the `Option<enum>`
+ * payload, crossing Kotlin → Rust.
+ */
+public fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.taggedRank(t.id, t.marker, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret
+}
+
+/**
+ * The selected alternative as the function's **own return** — a sum in
+ * return position, where nothing but the value's own tag says which group is
+ * live. Unlike a struct field (whose slots ride the parent's `fromParts`),
+ * there is no surrounding product to carry the tag, so the decomposition
+ * itself has to.
+ *
+ * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun readingOf(which: Int, onError: JniErrorHandler<Reading>): Reading {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.readingOf(which, __ReadingBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Reading
+}
+
+/**
+ * `Option<sum>` return: `which < 0` yields `None`. Optionality and choice stay
+ * independent — the present layer nulls the whole result rather than becoming
+ * an extra tag value.
+ *
+ * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun readingMaybe(which: Int, onError: JniErrorHandler<Reading?>): Reading? {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.readingMaybe(which, __ReadingBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Reading?
+}
+
+/**
+ * `Vec<sum>` return: alternatives `0..n`, each folded into the foreign list
+ * element by element.
+ *
+ * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun readingSeries(n: Int, onError: JniErrorHandler<List<Reading>>): List<Reading> {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.readingSeries(
+        n,
+        ArrayList<Reading>(),
+        __ReadingFolderRawHolder.instance,
+        __bcap,
+    )
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as List<Reading>
+}
+
+/** A sum as a **callback argument**: alternatives `0..n` delivered in turn. */
+public fun readingEach(n: Int, sink: ReadingCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.readingEach(n, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Build a [`Lookup`]: `count < 0` is a failure, `count == 0` is absent,
+ * anything else is found.
+ *
+ * The Rust `Lookup` result is delivered decomposed: the builder callback receives (`tag`, `found_v0`, `failed_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>): Lookup {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.lookupOf(count, total, __LookupBuilderRaw, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Lookup
 }
 
 /**

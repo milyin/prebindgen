@@ -1175,8 +1175,10 @@ fn classify_params(
                     .leaves
                     .iter()
                     .filter_map(|leaf| {
-                        let tail = leaf.handle_target_tail.as_ref()?;
-                        let target = format!("{name}{tail}");
+                        // Through the leaf's own access template, so a
+                        // tag-gated variant handle locks the expression it
+                        // actually came from.
+                        let target = leaf.kt_handle_target(&name)?;
                         let consume_null = if leaf.handle_nullable {
                             format!("{target}?.markConsumed()")
                         } else {

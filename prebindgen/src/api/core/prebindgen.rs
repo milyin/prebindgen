@@ -222,6 +222,24 @@ pub trait Prebindgen {
         Vec::new()
     }
 
+    /// Synthesized **sum** decompositions for this adapter — the
+    /// selector-carrying sibling of [`Self::value_struct_decons`]. Each names a
+    /// data-carrying enum, its synthesized tag leaf and one leaf group per
+    /// alternative. Consulted by `write_rust` right after
+    /// [`Self::value_struct_decons`]: each is wired by
+    /// [`crate::api::core::unfold::apply_sum_returns`] into a fixed-builder
+    /// [`crate::api::core::unfold::UnfoldPlan`] for every function whose own
+    /// return (or callback argument) IS the sum, so the value crosses as a tag
+    /// plus tag-gated groups and the foreign side picks the live alternative.
+    ///
+    /// Default: empty.
+    fn sum_decons(
+        &self,
+        _registry: &Registry<Self::Metadata>,
+    ) -> Vec<crate::api::core::unfold::SumDecon> {
+        Vec::new()
+    }
+
     /// Element types the adapter nominates for a **whole-element leaf fold**: a
     /// `Vec<T>` / `Option<Vec<T>>` return (or `impl Fn(&[T])` callback arg) whose
     /// element `T` is a single boundary leaf (e.g. a String, a value blob, an
