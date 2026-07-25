@@ -159,28 +159,34 @@ pub(crate) struct TypeConfig {
     pub opaque: Option<OpaqueConfig>,
     /// If `Some`, this is a `#[prebindgen]` enum mirrored as a Kotlin
     /// `enum class` — gets jint wire (input + output via `TryFrom<i32>`
-    /// / `as jint`) and a generated `.kt` file. Mutually exclusive with
-    /// [`Self::opaque`]; builder enforces it.
+    /// / `as jint`) and a generated `.kt` file. Class kinds are mutually
+    /// exclusive — see the note on [`Self::class_decl`].
     pub enum_cfg: Option<EnumConfig>,
     /// If `Some`, this is a `#[prebindgen]` data-carrying enum mirrored as a
     /// Kotlin `sealed interface` — a tag plus one leaf group per variant.
-    /// Mutually exclusive with every other class kind; builder enforces it.
     pub sum_cfg: Option<SumConfig>,
     /// Set by [`JniGen::value_class`]: this is a `Copy` Rust type passed
     /// **by value as its raw memory blob** in a `JByteArray` (wire), the
     /// value-level peer of an opaque handle's `jlong`. No Kotlin class, no
-    /// projection — it surfaces as `ByteArray`. Mutually exclusive with
-    /// `opaque` / `enum_cfg`.
+    /// projection — it surfaces as `ByteArray`.
     pub value_blob: bool,
     /// Explicit opt-in for a `data_class` to cross Kotlin → Rust as one
     /// `JObject`. Unmarked data classes are required to flatten completely;
     /// this flag is sticky across reopened declarations.
     pub jobject_input: bool,
-    /// Set by the four class declarators (`ptr_class` / `enum_class` /
-    /// `data_class` / `value_class`), NOT by wrapper registration. Declared
-    /// classes are required in **both** directions at scan (their converters
-    /// always resolve both ways); a wrapper-only entry is required per
-    /// **usage** direction, so an output-only wrapper needs no input twin.
+    /// Set by the five class declarators (`ptr_class` / `enum_class` /
+    /// `sealed_class` / `data_class` / `value_class`), NOT by wrapper
+    /// registration. Declared classes are required in **both** directions at
+    /// scan (their converters always resolve both ways); a wrapper-only entry
+    /// is required per **usage** direction, so an output-only wrapper needs no
+    /// input twin.
+    ///
+    /// A type gets exactly **one** of the five: the kind markers above are
+    /// mutually exclusive, enforced in one place for all of them by
+    /// `JniGen::assert_class_kind`. Reopening the *same* declarator is legal
+    /// and merges its options. This flag is also what identifies a **data
+    /// class** — the declarator with no marker of its own is precisely a
+    /// declared class that is none of the special kinds.
     pub class_decl: bool,
     /// Emit the generated interface mirroring the class's public instance
     /// surface, and make the class implement it with `override` on every

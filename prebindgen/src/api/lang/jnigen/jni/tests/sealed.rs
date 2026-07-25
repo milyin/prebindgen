@@ -210,6 +210,153 @@ fn unknown_variant_is_an_error() {
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).is_err());
 }
 
+/// Reopening `sealed_class!(E)` **merges**, like every other class kind: a
+/// second declaration adding one `.variant(...)` must not drop the renames
+/// the first one set.
+#[test]
+fn reopened_sealed_class_merges_variant_names() {
+    let loc = myflat_loc();
+    let registry = Registry::<KotlinMeta>::from_items(vec![(
+        syn::Item::Enum(syn::parse_quote!(
+            pub enum Reading {
+                Missing,
+                Exact(i64),
+                Range { low: i64, high: i64 },
+            }
+        )),
+        loc.clone(),
+    )])
+    .expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .package(
+            crate::package!().class(
+                crate::sealed_class!(Reading).variant(crate::variant!(Missing).name("None_")),
+            ),
+        )
+        // Reopened in a second `.package(...)` context, adding one more
+        // rename — the first one must survive.
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading).variant(crate::variant!(Exact).name("One"))),
+        );
+
+    let dir = unique_test_dir("sealed_reopen");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let gen = registry.resolve(jni).expect("resolve");
+    let paths = gen.write_kotlin(&dir.join("kotlin")).expect("write_kotlin");
+    let kt: String = paths
+        .iter()
+        .map(|p| std::fs::read_to_string(p).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let c: String = kt.split_whitespace().collect();
+
+    assert!(c.contains("publicdataobjectNone_:Reading"), "{kt}");
+    assert!(
+        c.contains("publicdataclassOne(publicvalv0:Long):Reading"),
+        "{kt}"
+    );
+    // The undeclared variant keeps its Rust ident.
+    assert!(c.contains("publicdataclassRange("), "{kt}");
+    assert!(c.contains("0->None_"), "{kt}");
+    assert!(c.contains("1->One(one_v0)"), "{kt}");
+}
+
+/// A type gets exactly **one** class declarator. Two different ones would
+/// emit two Kotlin declarations for the same FQN, so the second is a hard
+/// error — symmetrically, whichever order they come in.
+#[test]
+fn a_type_gets_one_class_declarator() {
+    let loc = myflat_loc();
+    let items = || {
+        vec![
+            (
+                syn::Item::Enum(syn::parse_quote!(
+                    pub enum Reading {
+                        Missing,
+                        Exact(i64),
+                    }
+                )),
+                loc.clone(),
+            ),
+            (
+                syn::Item::Struct(syn::parse_quote!(
+                    pub struct Sample {
+                        pub id: i64,
+                    }
+                )),
+                loc.clone(),
+            ),
+        ]
+    };
+    let declare = |first: crate::lang::ClassDecl, second: crate::lang::ClassDecl| {
+        let registry = Registry::<KotlinMeta>::from_items(items()).expect("index items");
+        let _ = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!().class(first).class(second));
+        drop(registry);
+    };
+
+    // Every conflicting pair among the five declarators is rejected, in both
+    // orders — the check runs before any registration, so it does not depend
+    // on which came first.
+    type MakeDecl = fn() -> crate::lang::ClassDecl;
+    let pairs: Vec<(MakeDecl, MakeDecl)> = vec![
+        (
+            || crate::sealed_class!(Reading).into(),
+            || crate::value_class!(Reading).into(),
+        ),
+        (
+            || crate::value_class!(Reading).into(),
+            || crate::sealed_class!(Reading).into(),
+        ),
+        (
+            || crate::sealed_class!(Reading).into(),
+            || crate::enum_class!(Reading).into(),
+        ),
+        (
+            || crate::sealed_class!(Reading).into(),
+            || crate::ptr_class!(Reading).into(),
+        ),
+        (
+            || crate::data_class!(Sample).into(),
+            || crate::value_class!(Sample).into(),
+        ),
+        (
+            || crate::value_class!(Sample).into(),
+            || crate::data_class!(Sample).into(),
+        ),
+        (
+            || crate::ptr_class!(Sample).into(),
+            || crate::data_class!(Sample).into(),
+        ),
+    ];
+    for (a, b) in pairs {
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| declare(a(), b()))).is_err(),
+            "a conflicting declarator pair was accepted"
+        );
+    }
+
+    // Reopening the SAME declarator stays legal (options merge).
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        declare(
+            crate::sealed_class!(Reading).into(),
+            crate::sealed_class!(Reading).into(),
+        );
+    }))
+    .is_ok());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        declare(
+            crate::data_class!(Sample).into(),
+            crate::data_class!(Sample).into(),
+        );
+    }))
+    .is_ok());
+}
+
 /// A sum is `TypeKind::Sum`, not a data struct — it has its own emitter and
 /// must never be picked up by the data-class flattener.
 #[test]
