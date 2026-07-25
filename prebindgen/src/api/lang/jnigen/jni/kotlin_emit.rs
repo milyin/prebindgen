@@ -819,10 +819,28 @@ impl JniGen {
         }
     }
 
-    /// Kotlin type of one payload field — the same derivation a data-class
-    /// field uses (projection metadata first, then the converter's registered
-    /// Kotlin name), so a payload and a struct field of the same Rust type
-    /// surface identically.
+    /// Kotlin type of one payload field, derived from the **output**
+    /// converter entry — one direction, authoritatively.
+    ///
+    /// A sealed class is a bidirectional contract: the Rust output encoder
+    /// builds it through `fromParts`, and the Kotlin input destructure reads
+    /// the same properties back out. The property's Kotlin type, its
+    /// nullability and its wire slot are therefore **one** decision, and
+    /// every fact behind it has to come from the same entry — deriving the
+    /// type from whichever direction happens to have resolved while reading
+    /// the wire from the other is how the two flatten paths drift apart.
+    /// Output is the authoritative side because this emitter declares the
+    /// `fromParts` slots the output encoder fills.
+    ///
+    /// So there is deliberately **no** output-then-input fallback here:
+    ///
+    /// * a missing output entry is a generation error naming the payload,
+    ///   rather than a Kotlin surface quietly emitted for a direction that
+    ///   never resolved;
+    /// * an input entry that disagrees on the Kotlin type is a generation
+    ///   error too — that disagreement is exactly the drift the shared plans
+    ///   exist to prevent, and it must surface at the declaration, not as an
+    ///   ABI mismatch at runtime.
     fn sum_payload_kt_type(
         &self,
         registry: &Registry<KotlinMeta>,
@@ -831,49 +849,61 @@ impl JniGen {
         prop: &str,
         field: &syn::Field,
     ) -> KtType {
-        let projection = registry
-            .output_entry(&field.ty)
-            .and_then(|e| e.metadata.projection.clone())
-            .or_else(|| {
-                registry
-                    .input_entry(&field.ty)
-                    .and_then(|e| e.metadata.projection.clone())
-            });
-        if let Some(h) = projection {
+        let where_ = || {
+            format!(
+                "sealed_class!({}) payload `{variant}.{prop}`",
+                item_enum.ident
+            )
+        };
+        let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
+            panic!(
+                "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
+                 cannot be derived — register converters for the payload type before \
+                 declaring the sealed class",
+                where_(),
+                field.ty.to_token_stream(),
+            )
+        });
+
+        if let Some(h) = out.metadata.projection.clone() {
             let leaf = projection_leaf_kt(self, &h).unwrap_or_else(|| {
                 panic!(
-                    "sealed_class!({}): payload `{}.{}` leaf `{}` has no Kotlin FQN \
-                     registered (ptr_class / value_class)",
-                    item_enum.ident, variant, prop, h.leaf_key
+                    "{}: leaf `{}` has no Kotlin FQN registered (ptr_class / value_class)",
+                    where_(),
+                    h.leaf_key
                 )
             });
             return handle_kt_type(&h.strategy, &leaf);
         }
-        let ty = registry
-            .output_entry(&field.ty)
-            .and_then(|e| e.metadata.kotlin_name.clone())
-            .or_else(|| {
-                registry
-                    .input_entry(&field.ty)
-                    .and_then(|e| e.metadata.kotlin_name.clone())
-            })
-            .unwrap_or_else(|| {
-                panic!(
-                    "sealed_class!({}): payload `{}.{}` has no Kotlin type mapping; register \
-                     converters for `{}` before declaring the sealed class",
-                    item_enum.ident,
-                    variant,
-                    prop,
-                    field.ty.to_token_stream()
-                )
-            });
+
+        let ty = out.metadata.kotlin_name.clone().unwrap_or_else(|| {
+            panic!(
+                "{}: `{}` has no Kotlin type mapping on its output converter",
+                where_(),
+                field.ty.to_token_stream(),
+            )
+        });
+        // The input side must agree: Kotlin reads these very properties back
+        // when the value crosses the other way.
+        if let Some(inp) = registry.input_entry(&field.ty) {
+            if let Some(in_ty) = inp.metadata.kotlin_name.clone() {
+                assert!(
+                    in_ty.to_string() == ty.to_string(),
+                    "{}: the input and output converters for `{}` disagree on its Kotlin \
+                     type (`{}` in, `{}` out) — a sealed class's properties are read by both \
+                     directions, so they must map to one type",
+                    where_(),
+                    field.ty.to_token_stream(),
+                    in_ty,
+                    ty,
+                );
+            }
+        }
         // An `Option<T>` payload whose wire is a JNI primitive is encoded as
         // the bare primitive with a sentinel, exactly as for a data-class
-        // field — the Kotlin type must match that slot.
-        let primitive_wire = registry
-            .output_entry(&field.ty)
-            .map(|e| crate::api::lang::jnigen::jni::is_jni_primitive(&e.destination))
-            .unwrap_or(false);
+        // field — the Kotlin type must match that slot. Read from the same
+        // entry the type came from.
+        let primitive_wire = crate::api::lang::jnigen::jni::is_jni_primitive(&out.destination);
         if is_option_type(&field.ty) && !primitive_wire {
             ty.nullable()
         } else {

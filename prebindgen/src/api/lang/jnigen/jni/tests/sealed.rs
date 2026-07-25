@@ -357,6 +357,47 @@ fn a_type_gets_one_class_declarator() {
     .is_ok());
 }
 
+/// A payload whose **output** converter did not resolve is a generation
+/// error naming it — never a Kotlin surface quietly derived from whichever
+/// direction happened to resolve. The property type, its nullability and its
+/// wire slot are one decision and come from one entry.
+#[test]
+fn payload_without_output_converter_is_an_error() {
+    let loc = myflat_loc();
+    let boom = || {
+        let registry = Registry::<KotlinMeta>::from_items(vec![(
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    // `Unmapped` is captured by nothing and declared as
+                    // nothing, so no converter resolves for it.
+                    Exact(Unmapped),
+                }
+            )),
+            loc.clone(),
+        )])
+        .expect("index items");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!().class(crate::sealed_class!(Reading)));
+        let dir = unique_test_dir("sealed_unmapped_payload");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let gen = registry.resolve(jni).expect("resolve");
+        let _ = gen.write_kotlin(&dir.join("kotlin"));
+    };
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(boom)).expect_err("must fail");
+    let msg = err
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default();
+    // The message locates the offending payload, not just the type.
+    assert!(msg.contains("Reading"), "{msg}");
+    assert!(msg.contains("Exact.v0"), "{msg}");
+    assert!(msg.contains("OUTPUT converter"), "{msg}");
+}
+
 /// A sum is `TypeKind::Sum`, not a data struct — it has its own emitter and
 /// must never be picked up by the data-class flattener.
 #[test]
