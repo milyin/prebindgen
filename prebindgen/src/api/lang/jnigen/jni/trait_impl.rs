@@ -1236,7 +1236,8 @@ impl Prebindgen for JniGen {
                 }
             }
         }
-        // Two sum positions have no lowering. Both would otherwise fail as
+        // Three sum positions in a declared signature are wrong. Two have no
+        // lowering at all and would otherwise fail as
         // "`E` has no output converter", which names the sum rather than the
         // position — actively misleading, because a sum has no whole-value
         // converter BY DESIGN, so that message sends the reader looking for
@@ -1270,7 +1271,56 @@ impl Prebindgen for JniGen {
                     }
                 }
             }
-            // (2) A **slice of sums** delivered to a callback
+            // (2) A sum in the **error** position of a `Result` with no
+            // deconstructor declared for it. Unlike the other two this one
+            // RESOLVES — it takes the generic undecomposed-`E` path, where the
+            // `Err` is routed to the plain binding-error channel as
+            // `e.to_string()`. So the author declares a sealed hierarchy and
+            // Kotlin silently receives a `String`, and the generated crate
+            // quietly acquires an `E: Display` bound that fails downstream in
+            // generated code rather than at the declaration. Emitting
+            // something misleading is worse than not emitting: say so here.
+            //
+            // An error plan can only come from a TYPE-level `expand_return!`
+            // (auto-applied to every fn with that `E`); a per-fn
+            // `.expand_return(...)` always targets the Output position. So the
+            // declaration set is the whole story, and this stays a pre-resolve
+            // check.
+            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
+                if let Some(err_ty) = crate::api::core::types_util::result_err_type(ret) {
+                    let core = crate::api::core::types_util::peel_ref_option_vec(&err_ty);
+                    let declared = self
+                        .return_expand_decls
+                        .iter()
+                        .any(|d| d.key == TypeKey::from_type(&err_ty));
+                    if !declared && matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                        return Err(format!(
+                            "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
+                             but nothing decomposes it in the error position, so it would be \
+                             delivered as `e.to_string()` on the plain binding-error channel \
+                             rather than as the sealed hierarchy (and would silently require \
+                             `{}: Display`). Declare `expand_return!({})` with the fields to \
+                             deliver, so the error crosses through the typed domain-handler \
+                             channel; or, if a text message really is what you want, drop the \
+                             `sealed_class!` declaration for this type",
+                            // `Result<_, E>` and the `expand_return!` key are
+                            // the WHOLE error type: the `Display` bound falls
+                            // on it (the generated code calls `__e.to_string()`
+                            // on the `Err` value), and the auto-apply matches a
+                            // deconstructor by that same whole type. Only the
+                            // "is declared `sealed_class!`" clause names the
+                            // peeled sum, since that is what carries the
+                            // declaration. Identical for a bare `E`; they
+                            // diverge once it is wrapped.
+                            err_ty.to_token_stream(),
+                            core.to_token_stream(),
+                            err_ty.to_token_stream(),
+                            err_ty.to_token_stream(),
+                        ));
+                    }
+                }
+            }
+            // (3) A **slice of sums** delivered to a callback
             // (`impl Fn(&[E])`): the element fold would need the sum's
             // folder-appender singleton, which is emitted per `Vec<E>` RETURN
             // position, so the shape resolves to nothing.

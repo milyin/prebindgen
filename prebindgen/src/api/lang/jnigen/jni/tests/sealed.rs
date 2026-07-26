@@ -1130,6 +1130,157 @@ fn sum_in_result_ok_position_is_rejected_with_its_reason() {
     );
 }
 
+/// A sum in the **error** position of a `Result`, with nothing declared to
+/// decompose it. Unlike the other two rejected positions this one RESOLVES —
+/// it takes the generic undecomposed-`E` path and routes the `Err` to the
+/// plain binding-error channel as `e.to_string()`. Kotlin would receive a
+/// `String` from a hierarchy the author explicitly declared, and the generated
+/// crate would quietly require `E: Display`, failing downstream in generated
+/// code. Emitting something misleading is worse than not emitting.
+#[test]
+fn undeclared_sum_in_result_error_position_is_rejected() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_try(n: i64) -> Result<i64, Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .fun(crate::fun!(read_try)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    assert!(
+        err.contains("read_try") && err.contains("Result<_, Reading>"),
+        "the error must name the function and the position: {err}"
+    );
+    assert!(
+        err.contains("e.to_string()") && err.contains("Display"),
+        "…and both consequences of the silent path: {err}"
+    );
+    assert!(
+        err.contains("expand_return!(Reading)"),
+        "…and what to write instead: {err}"
+    );
+}
+
+/// A WRAPPED error type (`Result<_, Option<Sum>>`) is where the diagnostic's
+/// two type spellings diverge, so it pins which is which: the `Display` bound
+/// and the `expand_return!` key are the WHOLE error type (that is what
+/// `__e.to_string()` runs on, and what the deconstructor auto-apply matches),
+/// while only the "is declared `sealed_class!`" clause names the peeled sum.
+/// Getting these backwards would hand the author advice that cannot work.
+#[test]
+fn the_diagnostic_names_the_whole_error_type_where_it_must() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_try(n: i64) -> Result<i64, Option<Reading>> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new().set_package_prefix("io.test.jni").package(
+        crate::package!()
+            .class(crate::sealed_class!(Reading))
+            .fun(crate::fun!(read_try)),
+    );
+    let err = registry
+        .resolve(jni)
+        .expect_err("must be rejected")
+        .to_string();
+    let compact: String = err.split_whitespace().collect();
+
+    // The whole `E` — the position, the `Display` bound, and the fix.
+    assert!(compact.contains("`Result<_,Option<Reading>>`"), "{err}");
+    assert!(compact.contains("`Option<Reading>:Display`"), "{err}");
+    assert!(compact.contains("expand_return!(Option<Reading>)"), "{err}");
+    // …and the peeled sum only where the declaration lives.
+    assert!(
+        compact.contains("`Reading`isdeclared`sealed_class!`"),
+        "{err}"
+    );
+}
+
+/// The counterpart: a sum error type WITH a type-level deconstructor is the
+/// supported shape and must keep resolving — the diagnostic above must not
+/// become a blanket ban on sums in the error position.
+#[test]
+fn declared_sum_in_result_error_position_resolves() {
+    let loc = myflat_loc();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Reading {
+                    Missing,
+                    Exact(i64),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn reading_code(v: &Reading) -> i64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_try(n: i64) -> Result<i64, Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
+    let jni = JniGen::new()
+        .set_package_prefix("io.test.jni")
+        .expand(crate::expand_return!(Reading).field(crate::fun!(reading_code)))
+        .package(
+            crate::package!()
+                .class(crate::sealed_class!(Reading))
+                .fun(crate::fun!(read_try)),
+        );
+    registry
+        .resolve(jni)
+        .expect("a declared error deconstructor is the supported shape");
+}
+
 /// A **slice of sums** as a callback argument has no lowering, and says so.
 ///
 /// Folding a sequence of tag-gated groups into the foreign list needs the
