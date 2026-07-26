@@ -1011,8 +1011,8 @@ impl Cbindgen {
     /// reject anything outside `0..variants`. `v` is the `MaybeUninit`
     /// binding in scope; on rejection the fn returns `Err`.
     ///
-    /// Shared by the input converter and the typed drop, so a union reached
-    /// through either entry point is checked the same way.
+    /// Shared by the input converter; the typed drop performs the same check inline
+    /// (it returns `()` rather than `Result`).
     fn tag_guard(&self, cname: &syn::Ident, variants: usize) -> TokenStream {
         let n = variants as i64;
         let bounds_msg = format!(
