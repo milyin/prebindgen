@@ -602,8 +602,14 @@ fn wire_fixed_returns<M>(
             // Drop the scan-time registrations of every layer (the boundary-only
             // pass only reaches the bare type), so the missing converters are not
             // flagged as unresolved-required.
+            // All THREE peeled layers, the `Vec` element included. The shape
+            // fold peels here, so the matching unrequire belongs here; leaving
+            // the element out made the invariant depend on the adapter's
+            // `boundary_only_types` covering it — true for JniGen today, and
+            // the only reason a `Vec<sum>`-only declaration resolves.
             registry.unrequire_output(&ret);
             registry.unrequire_output(&after_opt);
+            registry.unrequire_output(&core);
         }
         for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
             registry.require_output(&leaf.out_ty, &loc);

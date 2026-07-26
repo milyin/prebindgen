@@ -1762,6 +1762,32 @@ fn sum_return_layers_ride_the_shape_fold() {
     }
 }
 
+/// A `Vec<sum>` return **on its own** — no bare or `Option`-wrapped return of
+/// the same sum anywhere in the binding. The test above cannot state this: its
+/// `Option<Reading>` fixture unrequires the bare type through a *different*
+/// layer, so it would keep passing if the `Vec` element were left required.
+///
+/// At this level the element is not in the scan set to begin with (only a
+/// top-level return is registered as required), so this pins the invariant
+/// rather than catching a regression — the `unrequire_output(&core)` that makes
+/// it hold for every path is defence against a caller that does require it.
+#[test]
+fn a_vec_only_sum_return_drops_the_bare_requirement() {
+    let mut reg = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_all"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    for ty in ["Vec<Reading>", "Reading"] {
+        let ty: syn::Type = syn::parse_str(ty).unwrap();
+        assert!(
+            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            "no layer of a sum return may require a whole-value converter: {}",
+            ty.to_token_stream()
+        );
+    }
+}
+
 /// An `impl Fn(E)` callback argument decomposes the same way a return does —
 /// the plan is keyed by the arg type, so the trampoline delivers the tag and
 /// groups instead of a whole value built on the Rust side.
