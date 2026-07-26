@@ -1,10 +1,23 @@
 name: Rust
 
+# A stacked feature branch is reviewed as a chain of PRs targeting the branch
+# below it, not `main`. With a `branches: [main]` filter on `pull_request` none
+# of those PRs ran CI, so an umbrella branch could accumulate a whole feature
+# and meet clippy / fmt / the golden-diff check for the first time only at the
+# merge to `main`. The filter is therefore on `push` only (where it keeps the
+# duplicate run off feature branches); every PR runs, whatever it targets.
+# `workflow_dispatch` allows a manual run on a long-lived integration branch.
 on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+
+# Every PR running means a push to a branch with an open PR would otherwise
+# queue a second identical run; keep only the newest per ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,6 +48,10 @@ jobs:
 
     - name: Build
       run: cargo build
+    # `--all-features` is NOT optional here: the whole `lang::Cbindgen` suite is
+    # behind `unstable-cbindgen`, so a bare `cargo test` silently skips ~60
+    # tests. Both lines are kept — the first proves the default feature set
+    # still builds and passes on its own.
     - name: Run tests
       run: |
         cargo test
