@@ -459,6 +459,10 @@ fn main() {
                 .fun(fun!(observation_which))
                 .fun(fun!(tagged_new))
                 .fun(fun!(tagged_rank))
+                // The same `Option<enum>` payload in RETURN position — the
+                // `synth_sum_leaves` path, which the struct field above does
+                // not reach (it degrades to the whole-object crossing).
+                .fun(fun!(marker_of))
                 // A sum as the function's OWN return (and callback argument):
                 // the tag + groups ride the hoisted builder / folder singleton
                 // instead of a parent's `fromParts`. All four positions —

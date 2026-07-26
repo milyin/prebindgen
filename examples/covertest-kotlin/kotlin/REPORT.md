@@ -67,6 +67,8 @@ Base package: `io.prebindgen.covertest`
 - `lookup_each` — `fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>)`
 - `lookup_of` — `fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>): Lookup`
   - shaped by: return `Lookup` decomposed → [tag, found_v0, failed_v0] (Callback delivery)
+- `marker_of` — `fun markerOf(which: Int, onError: JniErrorHandler<Marker>): Marker`
+  - shaped by: return `Marker` decomposed → [tag, ranked_v0] (Callback delivery)
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`
 - `observation_new` — `fun observationNew(which: Int, withFallback: Boolean, onError: JniErrorHandler<Observation>): Observation`
 - `observation_which` — `fun observationWhich(o: Observation, onError: JniErrorHandler<Int>): Int`

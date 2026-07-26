@@ -67,6 +67,7 @@ import io.prebindgen.covertest.model.readingOf
 import io.prebindgen.covertest.model.readingSeries
 import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.Tagged
+import io.prebindgen.covertest.model.markerOf
 import io.prebindgen.covertest.model.taggedNew
 import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
@@ -556,6 +557,30 @@ fun main() {
         check(taggedRank(Tagged(1L, Marker.None_), boom) == -1)
         check(taggedRank(Tagged(1L, Marker.Ranked(null)), boom) == 0)
         check(taggedRank(Tagged(1L, Marker.Ranked(Priority.HIGH)), boom) == 10)
+    }
+
+    // ── the same Option<enum> payload in RETURN position ──────────────────────
+    // The field above degrades to the whole-object crossing, so it never reaches
+    // `synth_sum_leaves` — which hardcodes `nullable: false` on every group leaf
+    // and lets `plan_leaf_param` widen from the inert side. Two nullabilities
+    // meet in this one slot and must not collapse into each other: the payload's
+    // own `None`, and the slot being inert because the OTHER variant is live.
+    // Both arrive as a JVM null, so only the tag tells `Ranked(null)` from
+    // `None_`.
+    section("Option<enum> payload in a returned sum") {
+        check(markerOf(0, boom) === Marker.None_)
+
+        val absent = markerOf(1, boom)
+        check(absent is Marker.Ranked && absent.v0 == null)
+
+        val present = markerOf(2, boom)
+        check(present is Marker.Ranked && present.v0 == Priority.HIGH)
+
+        // The two nulls are distinguishable in both directions: each value the
+        // return path built crosses back in and reads as itself.
+        check(taggedRank(Tagged(1L, markerOf(0, boom)), boom) == -1)
+        check(taggedRank(Tagged(1L, markerOf(1, boom)), boom) == 0)
+        check(taggedRank(Tagged(1L, markerOf(2, boom)), boom) == 10)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

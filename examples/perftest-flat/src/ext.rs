@@ -182,6 +182,25 @@ pub fn tagged_new(which: i32) -> Tagged {
     }
 }
 
+/// The same `Option<enum>` payload with the sum in **return** position rather
+/// than as a struct field. Only this reaches `synth_sum_leaves`, which hardcodes
+/// `nullable: false` on every group leaf and lets `plan_leaf_param` widen from
+/// the inert side; a struct field takes `PlanFieldKind::Sum` and, for this
+/// payload, degrades to the whole-object crossing instead.
+///
+/// Two nullabilities meet in one slot and must not collapse into each other:
+/// the payload's own `None`, and the slot being inert because the other variant
+/// is live. Both arrive as a JVM null, so `Ranked(null)` and `None_` are only
+/// told apart by the tag.
+#[prebindgen]
+pub fn marker_of(which: i32) -> Marker {
+    match which {
+        0 => Marker::None_,
+        1 => Marker::Ranked(None),
+        _ => Marker::Ranked(Some(Priority::High)),
+    }
+}
+
 /// Read it back — the whole-object sum decode, including the `Option<enum>`
 /// payload, crossing Kotlin → Rust.
 #[prebindgen]
