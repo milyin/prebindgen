@@ -52,6 +52,109 @@ pub enum Operation {
     Div = 3,
 }
 
+/// A **data-carrying enum** (a sum type): exactly one alternative is live, and it
+/// carries that alternative's payload. Written as plain Rust — the invariant is in
+/// the type, not in a doc comment on a struct of optional fields.
+///
+/// The four variant shapes a sum can take are all here: a unit variant, a
+/// single-payload tuple variant, a multi-field named variant, and a tuple variant
+/// with an **owning** payload (a `String`, which crosses to C as a malloc'd
+/// `char *`) beside a payload that is itself a declared enum. The C adapter
+/// lowers the whole thing to a `#[repr(C)]` enum, which cbindgen renders as the
+/// idiomatic tag + `union`. (`lang::Cbindgen` `.tagged_union`.)
+#[prebindgen]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Shape {
+    /// Unit variant: the empty payload group — only the tag is live.
+    Empty,
+    /// Single-payload tuple variant.
+    Circle(f64),
+    /// Multi-field named variant.
+    Rect { width: f64, height: f64 },
+    /// Owning payload: the `String` is handed to C as a malloc'd `char *` that the
+    /// generated `shape_drop` releases, beside a declared-`enum_type` payload.
+    Labeled(String, Operation),
+}
+
+/// A by-value data struct carrying a sum as a **field** — the position that makes
+/// "exactly one of" compose with ordinary product data.
+#[prebindgen]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Drawing {
+    pub id: u64,
+    pub shape: Shape,
+}
+
+/// The empty shape (the unit variant).
+#[prebindgen]
+pub fn shape_new_empty() -> Shape {
+    Shape::Empty
+}
+
+/// A circle of the given radius (single-payload tuple variant).
+#[prebindgen]
+pub fn shape_new_circle(radius: f64) -> Shape {
+    Shape::Circle(radius)
+}
+
+/// A rectangle (multi-field named variant).
+#[prebindgen]
+pub fn shape_new_rect(width: f64, height: f64) -> Shape {
+    Shape::Rect { width, height }
+}
+
+/// A labeled shape (owning `String` payload beside an enum payload).
+#[prebindgen]
+pub fn shape_new_labeled(label: &str, op: Operation) -> Shape {
+    Shape::Labeled(label.to_string(), op)
+}
+
+/// Area of a shape — the sum in **parameter** position, consumed by value. Every
+/// alternative is handled; there is no "both set" or "neither set" case to guard.
+#[prebindgen]
+pub fn shape_area(s: Shape) -> f64 {
+    match s {
+        Shape::Empty => 0.0,
+        Shape::Circle(r) => std::f64::consts::PI * r * r,
+        Shape::Rect { width, height } => width * height,
+        Shape::Labeled(_, _) => f64::NAN,
+    }
+}
+
+/// Area of a shape, reporting the alternative that has none through the error
+/// channel — the sum in parameter position on a **fallible** function. The C
+/// binding routes a rejected tag (a discriminant no variant has, which a C
+/// caller can always supply) to this same `char **e`, so the boundary check is
+/// observable instead of aborting.
+#[prebindgen]
+pub fn shape_try_area(s: Shape) -> Result<f64, Error> {
+    match s {
+        Shape::Labeled(_, _) => Err("a labeled shape has no area".to_string().into()),
+        other => Ok(shape_area(other)),
+    }
+}
+
+/// The label of a `Labeled` shape, or the empty string for any other alternative.
+#[prebindgen]
+pub fn shape_get_label(s: Shape) -> String {
+    match s {
+        Shape::Labeled(label, _) => label,
+        _ => String::new(),
+    }
+}
+
+/// Wrap a shape into a drawing (the sum crossing back out as a struct field).
+#[prebindgen]
+pub fn drawing_new(id: u64, shape: Shape) -> Drawing {
+    Drawing { id, shape }
+}
+
+/// Take a drawing's shape back out (the sum crossing in as a struct field).
+#[prebindgen]
+pub fn drawing_get_shape(d: Drawing) -> Shape {
+    d.shape
+}
+
 /// A stateful accumulator. This is a plain Rust type used as an opaque handle:
 /// the binding holds it behind a pointer and frees it with `calculator_drop`.
 pub struct Calculator {

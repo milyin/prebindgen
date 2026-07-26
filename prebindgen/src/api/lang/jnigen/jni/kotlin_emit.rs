@@ -82,6 +82,7 @@ impl JniGen {
         let mut fragments: Vec<kt::KtFile> = Vec::new();
         fragments.push(self.write_native_handle());
         fragments.extend(self.write_enum_classes(registry)?);
+        fragments.extend(self.write_sealed_classes(registry)?);
         fragments.extend(self.write_data_classes(registry));
         fragments.extend(self.write_value_blobs(registry)?);
 
@@ -535,6 +536,37 @@ impl JniGen {
     }
 }
 
+/// Kotlin property name of one sum payload field: a named field keeps its
+/// (camelCased) name, a tuple field becomes `v0`, `v1`, …. Derived from the
+/// neutral [`SumField`](crate::api::core::types_util::SumField)'s `member`,
+/// so core's leaf naming and the Kotlin surface cannot drift apart.
+fn sum_field_property_name(field: &crate::api::core::types_util::SumField) -> String {
+    match &field.member {
+        syn::Member::Named(id) => mangle_kotlin_ident(&kt_snake_to_camel(&id.to_string())),
+        syn::Member::Unnamed(i) => format!("v{}", i.index),
+    }
+}
+
+/// Slot name of one variant field in the flattened `fromParts` signature:
+/// `<variantCamel>_<property>` (`periodicQueries_period`, `pair_v0`) — the
+/// existing nested-prefix convention, with `_` marking the variant boundary
+/// exactly as core's `<variant_snake>_<field>` leaf names do.
+///
+/// Keyed on the **Kotlin** variant class name, not the Rust ident, so a
+/// `variant!(V).name(...)` rename carries through to the slots and the
+/// emitted surface stays self-consistent.
+fn sum_slot_name(kotlin_variant: &str, property: &str) -> String {
+    // The variant class name is PascalCase; lower its first character so the
+    // slot reads as an ordinary Kotlin parameter (`PeriodicQueries` →
+    // `periodicQueries_period`).
+    let mut chars = kotlin_variant.chars();
+    let head: String = match chars.next() {
+        Some(c) => c.to_lowercase().collect(),
+        None => String::new(),
+    };
+    format!("{head}{}_{property}", chars.as_str())
+}
+
 /// Owned counterpart of [`TypedHandle`] — used internally so the
 /// `collect_typed_handles` helper doesn't have to hand out borrows of
 /// `self.types`.
@@ -594,6 +626,347 @@ impl JniGen {
             written.push(file.decl(class));
         }
         Ok(written)
+    }
+
+    /// Emit one Kotlin `sealed interface` per `sealed_class`-declared type —
+    /// the surface of a sum where the target language has sums natively.
+    ///
+    /// The shape follows the neutral
+    /// [`SumSpec`](crate::api::core::types_util::SumSpec) directly: a variant
+    /// with an empty leaf group becomes a `data object`, one with a payload a
+    /// `data class`, both **nested inside** the interface so variant names
+    /// cannot collide package-wide. The `fromParts(tag, …slots)` companion is
+    /// the reassembly point: it takes the tag plus every variant's slots side
+    /// by side and picks the live group, throwing `IllegalArgumentException`
+    /// on a tag outside `0..N-1` rather than letting an invalid tag become a
+    /// variant.
+    ///
+    /// A unit-only enum never reaches here — that is `enum_class!`'s shape,
+    /// and each declarator rejects the other's.
+    pub(crate) fn write_sealed_classes(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Result<Vec<kt::KtFile>, WriteKotlinError> {
+        use crate::api::core::types_util::{enum_shape, EnumShape, SumSpec};
+
+        let mut written = Vec::new();
+        // Deterministic order by canonical Rust type-key.
+        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        for key in keys {
+            let cfg = &self.types[key];
+            let Some(sum_cfg) = cfg.sum_cfg.as_ref() else {
+                continue;
+            };
+            let Some(kotlin_fqn) = cfg.name_spec.as_ref().map(|s| self.fqn_of(s)) else {
+                continue;
+            };
+            let ty = key.to_type();
+            let Some(ident) = bare_path_ident(&ty) else {
+                continue;
+            };
+            let Some((item_enum, _)) = registry.enums.get(&ident) else {
+                continue;
+            };
+            assert!(
+                enum_shape(item_enum) == EnumShape::Sum,
+                "`{}` has no payload variants: declare it with `enum_class!({})`, not \
+                 `sealed_class!({})` — a fieldless enum crosses as a bare discriminant and \
+                 needs no sealed hierarchy",
+                ident,
+                ident,
+                ident
+            );
+
+            let spec = SumSpec::from_item_enum(item_enum);
+            // Every declared `.variant(...)` must name a real variant —
+            // a typo would otherwise silently do nothing.
+            for declared in sum_cfg.variant_names.keys() {
+                assert!(
+                    spec.variants.iter().any(|v| v.ident == declared),
+                    "sealed_class!({ident}): variant!({declared}) does not name a variant of \
+                     `{ident}`"
+                );
+            }
+
+            let (package, class_name) = match kotlin_fqn.rsplit_once('.') {
+                Some((p, c)) => (p.to_string(), c.to_string()),
+                None => (String::new(), kotlin_fqn.clone()),
+            };
+            let mut class =
+                self.build_sealed_class(registry, &class_name, item_enum, &spec, sum_cfg);
+            let mut file = kt::KtFile::new(package);
+            if let Some(iface) =
+                self.apply_class_interface(key, &mut class, &class_name, &[], Vec::new(), true)
+            {
+                file = file.decl(iface);
+            }
+            written.push(file.decl(class));
+        }
+        Ok(written)
+    }
+
+    /// The `sealed interface` model for one sum: nested variant classes plus
+    /// the `fromParts` companion. Payload Kotlin types come from the same
+    /// resolved converter metadata a data-class field reads, so a sum's
+    /// payload and a struct's field of the same Rust type surface
+    /// identically.
+    fn build_sealed_class(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        class_name: &str,
+        item_enum: &syn::ItemEnum,
+        spec: &crate::api::core::types_util::SumSpec,
+        sum_cfg: &SumConfig,
+    ) -> KtClass {
+        let framework_line = format!(
+            "JVM-side surface for the native Rust `{}` sum: exactly one alternative is live.",
+            item_enum.ident
+        );
+        let kdoc = crate::api::lang::jnigen::util::doc_string(&item_enum.attrs)
+            .map(|d| format!("{d}\n\n{framework_line}"))
+            .unwrap_or(framework_line);
+
+        let mut class = KtClass::new(ClassKind::SealedInterface, class_name)
+            .vis(Vis::Public)
+            .kdoc(kdoc);
+
+        // Nested variant classes, in declaration (tag) order.
+        for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            let mut vclass = if variant.is_unit() {
+                KtClass::new(ClassKind::DataObject, &vname)
+            } else {
+                KtClass::new(ClassKind::Data, &vname)
+            }
+            .vis(Vis::Public)
+            .supertype(KtType::cls(class_name), None);
+            if let Some(doc) = crate::api::lang::jnigen::util::doc_string(&item_variant.attrs) {
+                vclass = vclass.kdoc(doc);
+            }
+            for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
+                let prop = sum_field_property_name(field);
+                let ty = self.sum_payload_kt_type(
+                    registry,
+                    item_enum,
+                    &variant.ident,
+                    &prop,
+                    item_field,
+                );
+                vclass = vclass.ctor_param(KtCtorParam::new(&prop, ty).val().vis(Vis::Public));
+            }
+            class = class.member(vclass);
+        }
+
+        // `fromParts(tag, …)` — the tag slot plus every variant's slots side
+        // by side, in the same order both sides enumerate them.
+        let mut factory = KtFun::new("fromParts")
+            .vis(Vis::Public)
+            .annotation("JvmStatic")
+            .param(KtParam::new("tag", KtType::int()))
+            .returns(KtType::cls(class_name));
+        for (variant, item_variant) in spec.variants.iter().zip(&item_enum.variants) {
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            for (field, item_field) in variant.fields.iter().zip(item_variant.fields.iter()) {
+                let prop = sum_field_property_name(field);
+                let ty = self.sum_payload_kt_type(
+                    registry,
+                    item_enum,
+                    &variant.ident,
+                    &prop,
+                    item_field,
+                );
+                factory = factory.param(KtParam::new(sum_slot_name(&vname, &prop), ty));
+            }
+        }
+        let mut body = Code::new();
+        body = body.blk("when (tag) {", |mut w| {
+            for variant in &spec.variants {
+                let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+                let args: Vec<String> = variant
+                    .fields
+                    .iter()
+                    .map(|f| sum_slot_name(&vname, &sum_field_property_name(f)))
+                    .collect();
+                let ctor = if variant.is_unit() {
+                    vname
+                } else {
+                    format!("{vname}({})", args.join(", "))
+                };
+                w = w.line(format!("{} -> {ctor}", variant.tag));
+            }
+            w.line(format!(
+                "else -> throw IllegalArgumentException(\"{class_name}: invalid tag $tag\")"
+            ))
+        });
+        factory = factory.expr_body(body);
+
+        // The companion is named only when it has to be (a variant took
+        // `Companion`), so ordinary emission keeps the anonymous form.
+        let mut companion = KtClass::companion_object().vis(Vis::Public).member(factory);
+        let companion_name = self.sum_companion_name(sum_cfg, item_enum);
+        if companion_name != "Companion" {
+            companion.name = companion_name;
+        }
+        class.companion(companion)
+    }
+
+    /// Kotlin name of the companion object holding a sum's `fromParts`.
+    ///
+    /// Normally the implicit `Companion`. A variant class of that name is a
+    /// "Conflicting declarations" error in Kotlin — but the colliding name is
+    /// **ours**, an artifact of emitting a companion at all, not something
+    /// the language reserves. So the generator moves rather than making the
+    /// source crate rename a legitimate variant: the companion takes a
+    /// trailing `_` until it is free, the same escape
+    /// [`mangle_kotlin_ident`] uses for a taken name.
+    ///
+    /// Renaming it is invisible on the wire: `@JvmStatic` on a *named*
+    /// companion still emits `fromParts` as a real static method on the
+    /// interface class, which is what `call_static_method` /
+    /// `GetStaticMethodID` resolve.
+    pub(crate) fn sum_companion_name(
+        &self,
+        sum_cfg: &SumConfig,
+        item_enum: &syn::ItemEnum,
+    ) -> String {
+        let taken: std::collections::HashSet<String> = item_enum
+            .variants
+            .iter()
+            .map(|v| self.sum_variant_class_name(sum_cfg, &v.ident))
+            .collect();
+        let mut name = "Companion".to_string();
+        while taken.contains(&name) {
+            name.push('_');
+        }
+        name
+    }
+
+    /// The Kotlin class name of one variant: its `.variant(variant!(V).name())`
+    /// override, else the Rust variant ident (already PascalCase by
+    /// convention), sanitized for Kotlin.
+    pub(crate) fn sum_variant_class_name(
+        &self,
+        sum_cfg: &SumConfig,
+        variant: &syn::Ident,
+    ) -> String {
+        let rust = variant.to_string();
+        match sum_cfg.variant_names.get(&rust) {
+            Some(n) => n.clone(),
+            None => mangle_kotlin_ident(&rust),
+        }
+    }
+
+    /// Kotlin type of one payload field, derived from the **output**
+    /// converter entry — one direction, authoritatively.
+    ///
+    /// A sealed class is a bidirectional contract: the Rust output encoder
+    /// builds it through `fromParts`, and the Kotlin input destructure reads
+    /// the same properties back out. The property's Kotlin type, its
+    /// nullability and its wire slot are therefore **one** decision, and
+    /// every fact behind it has to come from the same entry — deriving the
+    /// type from whichever direction happens to have resolved while reading
+    /// the wire from the other is how the two flatten paths drift apart.
+    /// Output is the authoritative side because this emitter declares the
+    /// `fromParts` slots the output encoder fills.
+    ///
+    /// So there is deliberately **no** output-then-input fallback here:
+    ///
+    /// * a missing output entry is a generation error naming the payload,
+    ///   rather than a Kotlin surface quietly emitted for a direction that
+    ///   never resolved;
+    /// * an input entry that disagrees on the Kotlin type is a generation
+    ///   error too — that disagreement is exactly the drift the shared plans
+    ///   exist to prevent, and it must surface at the declaration, not as an
+    ///   ABI mismatch at runtime.
+    fn sum_payload_kt_type(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        item_enum: &syn::ItemEnum,
+        variant: &syn::Ident,
+        prop: &str,
+        field: &syn::Field,
+    ) -> KtType {
+        let where_ = || {
+            format!(
+                "sealed_class!({}) payload `{variant}.{prop}`",
+                item_enum.ident
+            )
+        };
+        let out = registry.output_entry(&field.ty).unwrap_or_else(|| {
+            panic!(
+                "{}: `{}` has no resolved OUTPUT converter, so the Kotlin surface for it \
+                 cannot be derived — register converters for the payload type before \
+                 declaring the sealed class",
+                where_(),
+                field.ty.to_token_stream(),
+            )
+        });
+
+        if let Some(h) = out.metadata.projection.clone() {
+            let leaf = projection_leaf_kt(self, &h).unwrap_or_else(|| {
+                panic!(
+                    "{}: leaf `{}` has no Kotlin FQN registered (ptr_class / value_class)",
+                    where_(),
+                    h.leaf_key
+                )
+            });
+            return handle_kt_type(&h.strategy, &leaf);
+        }
+
+        let ty = out.metadata.kotlin_name.clone().unwrap_or_else(|| {
+            panic!(
+                "{}: `{}` has no Kotlin type mapping on its output converter",
+                where_(),
+                field.ty.to_token_stream(),
+            )
+        });
+        // The input side must agree on WHICH TYPE the property is — Kotlin
+        // reads these very properties back when the value crosses the other
+        // way, so a genuine disagreement (`String` in, `Long` out) is drift
+        // that belongs at the declaration.
+        //
+        // Nullability is deliberately excluded from the comparison: the two
+        // directions record it by different conventions. For `Option<T>` the
+        // output converter's name carries the `?` while the input converter's
+        // does not, because the input side expresses absence in the wire (a
+        // boxed value, a present flag, a niche) rather than in the type name.
+        // Comparing the rendered types would reject that legitimate shape —
+        // which is what an `Option<enum>` payload does.
+        if let Some(inp) = registry.input_entry(&field.ty) {
+            if let (Some(in_ty), (Some(a), Some(b))) = (
+                inp.metadata.kotlin_name.clone(),
+                (
+                    inp.metadata
+                        .kotlin_name
+                        .as_ref()
+                        .and_then(|t| t.leaf_name())
+                        .map(str::to_string),
+                    ty.leaf_name().map(str::to_string),
+                ),
+            ) {
+                assert!(
+                    a == b,
+                    "{}: the input and output converters for `{}` disagree on its Kotlin \
+                     type (`{}` in, `{}` out) — a sealed class's properties are read by both \
+                     directions, so they must map to one type",
+                    where_(),
+                    field.ty.to_token_stream(),
+                    in_ty,
+                    ty,
+                );
+            }
+        }
+        // An `Option<T>` payload whose wire is a JNI primitive is encoded as
+        // the bare primitive with a sentinel, exactly as for a data-class
+        // field — the Kotlin type must match that slot. Read from the same
+        // entry the type came from.
+        let primitive_wire = crate::api::lang::jnigen::jni::is_jni_primitive(&out.destination);
+        if is_option_type(&field.ty) && !primitive_wire {
+            ty.nullable()
+        } else {
+            ty
+        }
     }
 
     /// Build one Kotlin `data class` fragment per `data_class`-declared
@@ -763,8 +1136,19 @@ impl JniGen {
         enum FixedSingleton {
             StructBuilder(DeconId),
             StructFolder(DeconId),
+            /// A decomposed **sum**: the reassembly is a `when` over the tag
+            /// picking the live group, not a `fromParts` over a fixed product.
+            SumBuilder(DeconId),
+            SumFolder(DeconId),
             LeafFolder,
         }
+        // A decomposition is a sum's when it carries the synthesized selector.
+        let is_sum = |d: &DeconId| {
+            registry
+                .decon_plans
+                .get(d)
+                .is_some_and(|p| is_sum_leaves(&p.leaves))
+        };
 
         // Fixedness sets shared with the memo derivation (`iface.rs`): a
         // fixed DeconId gets a hoisted `__<Name>Builder` / folder-appender
@@ -849,15 +1233,23 @@ impl JniGen {
                     SpecKey::Callback(_) => (false, None),
                     SpecKey::Builder(d) => (
                         false,
-                        fixed_decons
-                            .contains(d)
-                            .then(|| FixedSingleton::StructBuilder(d.clone())),
+                        fixed_decons.contains(d).then(|| {
+                            if is_sum(d) {
+                                FixedSingleton::SumBuilder(d.clone())
+                            } else {
+                                FixedSingleton::StructBuilder(d.clone())
+                            }
+                        }),
                     ),
                     SpecKey::Folder(d) => (
                         false,
-                        fixed_decons
-                            .contains(d)
-                            .then(|| FixedSingleton::StructFolder(d.clone())),
+                        fixed_decons.contains(d).then(|| {
+                            if is_sum(d) {
+                                FixedSingleton::SumFolder(d.clone())
+                            } else {
+                                FixedSingleton::StructFolder(d.clone())
+                            }
+                        }),
                     ),
                     SpecKey::WholeFolder(el_key) => (
                         false,
@@ -881,6 +1273,14 @@ impl JniGen {
                             file = file.import(fqn.to_string());
                         }
                     }
+                    // A group's reassembly is raw text (`Reading.Exact(…)`,
+                    // `Priority.fromInt(…)`), so the classes it names by short
+                    // name need importing here.
+                    for g in &s.typed_groups {
+                        for fqn in &g.imports {
+                            file = file.import(fqn.clone());
+                        }
+                    }
                 }
                 if is_error {
                     file = file.decl(s.to_capture_decl());
@@ -892,6 +1292,12 @@ impl JniGen {
                         }
                         FixedSingleton::StructFolder(decon) => {
                             self.value_struct_folder_singleton(registry, &s, &decon)
+                        }
+                        FixedSingleton::SumBuilder(decon) => {
+                            self.sum_builder_singleton(registry, &s, &decon)
+                        }
+                        FixedSingleton::SumFolder(decon) => {
+                            self.sum_folder_singleton(registry, &s, &decon)
                         }
                         FixedSingleton::LeafFolder => self.whole_value_folder_singleton(&s),
                     };
@@ -996,6 +1402,211 @@ impl JniGen {
             name: holder,
             code: kt::Code::raw_reindent(&code),
         }
+    }
+
+    /// The hoisted **fixed builder** singleton for a decomposed **sum**: the
+    /// sum's dual of [`Self::value_struct_builder_singleton`], with a `when`
+    /// over the tag in place of a `fromParts` over a fixed product.
+    ///
+    /// The sealed interface's own `fromParts` is deliberately NOT the target
+    /// here. That factory is the Kotlin-facing convenience stage C emits — its
+    /// parameters are the variants' **property** types, not the wire, and its
+    /// object slots are non-null, which an inert group's `JObject::null()`
+    /// would trip on before any code runs. The reassembly the wire needs is the
+    /// same inlined `when` a sum-typed struct field already gets from
+    /// `factory_field`, so it is emitted here directly.
+    fn sum_builder_singleton(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+        decon: &crate::api::core::unfold::DeconId,
+    ) -> kt::KtDecl {
+        let plan = &registry.decon_plans[decon];
+        let mut imports: BTreeSet<String> = BTreeSet::new();
+        let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
+        let (iface_short, when) = self.sum_reconstruct(
+            registry,
+            &plan.source,
+            &plan.leaves,
+            &spec.params,
+            &names,
+            &mut imports,
+        );
+        let builder = spec.raw_name();
+        let val_name = format!("__{builder}");
+        let code = format!(
+            "internal val {val_name}: {builder}<{iface_short}> =\n    \
+             {builder} {{ {} ->\n    {when}\n}}",
+            names.join(", "),
+        );
+        let mut body = kt::Code::raw_reindent(&code);
+        for fqn in imports {
+            body = body.import(fqn);
+        }
+        kt::KtDecl::Raw {
+            name: val_name,
+            code: body,
+        }
+    }
+
+    /// The hoisted **folder-appender** singleton for a `Vec<sum>` element fold:
+    /// per element, pick the live alternative by tag and append it to the
+    /// accumulator `ArrayList`. The sum's dual of
+    /// [`Self::value_struct_folder_singleton`]; the folder's `run` params are
+    /// `[acc, tag, group-slots…]`, so the reassembly reads all but `acc`.
+    fn sum_folder_singleton(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        spec: &crate::api::lang::jnigen::jni::IfaceSpec,
+        decon: &crate::api::core::unfold::DeconId,
+    ) -> kt::KtDecl {
+        let plan = &registry.decon_plans[decon];
+        let mut imports: BTreeSet<String> = BTreeSet::new();
+        let names: Vec<String> = spec.params.iter().map(|p| p.name.clone()).collect();
+        let (iface_short, when) = self.sum_reconstruct(
+            registry,
+            &plan.source,
+            &plan.leaves,
+            &spec.params[1..],
+            &names[1..],
+            &mut imports,
+        );
+        let folder = spec.raw_name();
+        let holder = spec.singleton_holder_name();
+        let field = crate::api::lang::jnigen::jni::SINGLETON_FIELD;
+        let acc = &names[0];
+        let acc_ty = format!("ArrayList<{iface_short}>");
+        let code = format!(
+            "internal object {holder} {{\n    \
+             @JvmField\n    \
+             val {field}: {folder}<{acc_ty}> =\n        \
+             {folder} {{ {} -> {acc}.add({when}); {acc} }}\n\
+             }}",
+            names.join(", "),
+        );
+        let mut body = kt::Code::raw_reindent(&code);
+        for fqn in imports {
+            body = body.import(fqn);
+        }
+        kt::KtDecl::Raw {
+            name: holder,
+            code: body,
+        }
+    }
+
+    /// The wire-shaped reassembly of one decomposed sum: `(interface short
+    /// name, when-expression)`.
+    ///
+    /// `params` are the interface's `run` parameters **aligned with the plan's
+    /// leaves** (the selector first, then the groups) — so the caller strips a
+    /// folder's leading `acc`. Each group leaf's parameter is unwrapped into
+    /// its variant-constructor argument by [`Self::sum_ctor_arg`].
+    pub(crate) fn sum_reconstruct(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        source: &syn::Type,
+        leaves: &[crate::api::core::unfold::UnfoldLeaf],
+        params: &[crate::api::lang::jnigen::jni::IfaceParam],
+        names: &[String],
+        imports: &mut BTreeSet<String>,
+    ) -> (String, String) {
+        use crate::api::core::types_util::SumSpec;
+
+        let key = TypeKey::from_type(source);
+        let iface_fqn = self
+            .kotlin_fqn(&key)
+            .unwrap_or_else(|| panic!("sum builder: no Kotlin FQN for {key}"));
+        let iface_short = register_fqn(&iface_fqn, imports);
+        let ident = bare_path_ident(source)
+            .unwrap_or_else(|| panic!("sum builder: `{key}` is not a path type"));
+        let (item_enum, _) = registry
+            .enums
+            .get(&ident)
+            .unwrap_or_else(|| panic!("sum builder: no indexed enum `{ident}`"));
+        let sum_cfg = self.types[&key]
+            .sum_cfg
+            .as_ref()
+            .unwrap_or_else(|| panic!("sum builder: `{ident}` is not a sealed class"));
+        let spec = SumSpec::from_item_enum(item_enum);
+        let tag = &names[0];
+
+        let mut arms: Vec<String> = Vec::new();
+        for variant in &spec.variants {
+            let vname = self.sum_variant_class_name(sum_cfg, &variant.ident);
+            let args: Vec<String> = leaves
+                .iter()
+                .zip(params)
+                .zip(names)
+                .filter(|((l, _), _)| l.group == Some(variant.tag))
+                .map(|((l, p), n)| self.sum_ctor_arg(registry, l, p, n, imports))
+                .collect();
+            let ctor = if args.is_empty() {
+                format!("{iface_short}.{vname}")
+            } else {
+                format!("{iface_short}.{vname}({})", args.join(", "))
+            };
+            arms.push(format!("{} -> {ctor}", variant.tag));
+        }
+        let when = format!(
+            "when ({tag}) {{ {}; else -> throw IllegalArgumentException(\"{iface_short}: invalid \
+             tag ${tag}\") }}",
+            arms.join("; "),
+        );
+        (iface_short, when)
+    }
+
+    /// The variant-constructor argument for one group leaf: its `run`
+    /// parameter, un-inerted and wrapped back into the property type.
+    ///
+    /// Two independent transforms, in this order:
+    ///
+    /// 1. **Un-inert** — an object-shaped group slot is declared nullable
+    ///    (an inert group arrives as JVM null), so inside its own live arm it is
+    ///    re-asserted with `!!`. A payload that is *itself* optional
+    ///    (`Option<T>`) keeps its null: there the JVM null means `None`, and
+    ///    `!!` would turn a legitimately absent value into an exception.
+    /// 2. **Wrap** — the raw wire becomes the property: an enum discriminant
+    ///    through `fromInt`, a handle/blob/`ULong` through the interface's own
+    ///    [`WrapKind`](crate::api::lang::jnigen::jni::WrapKind), everything else
+    ///    verbatim.
+    fn sum_ctor_arg(
+        &self,
+        registry: &Registry<KotlinMeta>,
+        leaf: &crate::api::core::unfold::UnfoldLeaf,
+        param: &crate::api::lang::jnigen::jni::IfaceParam,
+        name: &str,
+        imports: &mut BTreeSet<String>,
+    ) -> String {
+        let optional = is_option_type(&leaf.out_ty);
+        let arg = if param.raw.is_nullable() && !optional {
+            format!("{name}!!")
+        } else {
+            name.to_string()
+        };
+        // An enum payload rides its `jint` discriminant, so the interface types
+        // it `Int` and the wrap has to name the enum class itself — read off the
+        // same output-converter metadata `factory_field` reads for an enum
+        // struct field.
+        if self.is_kotlin_enum(&enum_probe_type(&leaf.out_ty)) {
+            let inner = option_inner_type(&leaf.out_ty).unwrap_or_else(|| leaf.out_ty.clone());
+            let name = registry
+                .output_entry(&inner)
+                .and_then(|e| e.metadata.kotlin_name.clone())
+                .and_then(|t| t.leaf_name().map(str::to_string))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "sum builder: enum payload `{}` has no Kotlin type on its output converter",
+                        leaf.name
+                    )
+                });
+            let short = register_fqn(&name, imports);
+            return if optional {
+                format!("{arg}?.let {{ {short}.fromInt(it) }}")
+            } else {
+                format!("{short}.fromInt({arg})")
+            };
+        }
+        param.wrap.wrap_expr(&arg, false)
     }
 
     /// The hoisted **folder-appender** singleton for a **whole single-leaf

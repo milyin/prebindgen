@@ -34,6 +34,8 @@ import io.prebindgen.covertest.model.ObjectBoundary63
 import io.prebindgen.covertest.model.ObjectBoundary64
 import io.prebindgen.covertest.model.ObjectBoundaryLeaf
 import io.prebindgen.covertest.model.Priority
+import io.prebindgen.covertest.model.Lookup
+import io.prebindgen.covertest.model.Reading
 import io.prebindgen.covertest.model.Stamp
 import io.prebindgen.covertest.model.Unsigned
 import io.prebindgen.covertest.model.annotatedNew
@@ -51,6 +53,18 @@ import io.prebindgen.covertest.model.annotatedPriority
 import io.prebindgen.covertest.model.annotatedTtl
 import io.prebindgen.covertest.model.cacheConfigWeight
 import io.prebindgen.covertest.model.objectBoundaryValue
+import io.prebindgen.covertest.model.Observation
+import io.prebindgen.covertest.model.observationNew
+import io.prebindgen.covertest.model.observationWhich
+import io.prebindgen.covertest.model.lookupOf
+import io.prebindgen.covertest.model.readingEach
+import io.prebindgen.covertest.model.readingMaybe
+import io.prebindgen.covertest.model.readingOf
+import io.prebindgen.covertest.model.readingSeries
+import io.prebindgen.covertest.model.Marker
+import io.prebindgen.covertest.model.Tagged
+import io.prebindgen.covertest.model.taggedNew
+import io.prebindgen.covertest.model.taggedRank
 import io.prebindgen.covertest.model.payloadPriority
 import io.prebindgen.covertest.model.priorityOr
 import io.prebindgen.covertest.model.priorityWeight
@@ -257,6 +271,218 @@ fun main() {
         // enum_class surface: value + fromInt round-trip.
         check(Priority.HIGH.value == 2)
         check(Priority.fromInt(0) == Priority.LOW)
+    }
+
+    // ── sealed_class: a data-carrying enum as a Kotlin `sealed interface` ─────
+    // The Kotlin surface only (the wire lowering is a separate stage): every
+    // variant shape, the nested placement, the per-variant rename, and
+    // `fromParts` picking the live group by tag.
+    section("sealed_class Reading (sum surface + fromParts)") {
+        // A payload-less alternative is a `data object`; the rest are `data
+        // class`es, all nested inside the interface.
+        val missing: Reading = Reading.Missing
+        val exact: Reading = Reading.Exact(42L)
+        val range: Reading = Reading.Range(1L, 9L)
+        // `variant!(Labeled).name("Tagged")` renamed the class AND its slots.
+        val tagged: Reading = Reading.Tagged("warm", Priority.HIGH)
+
+        check(exact is Reading.Exact && (exact as Reading.Exact).v0 == 42L)
+        check(range is Reading.Range && (range as Reading.Range).high == 9L)
+        check(tagged is Reading.Tagged && (tagged as Reading.Tagged).v1 == Priority.HIGH)
+        // `data object` is a singleton and `data class` gives structural equality.
+        check(missing === Reading.Missing)
+        check(Reading.Exact(42L) == exact)
+
+        // `when` over the sealed hierarchy is exhaustive with no `else` — the
+        // point of a sum: there is no "both set" or "neither set" case.
+        fun describe(r: Reading): String =
+            when (r) {
+                is Reading.Missing -> "missing"
+                is Reading.Exact -> "exact ${r.v0}"
+                is Reading.Range -> "range ${r.low}..${r.high}"
+                is Reading.Tagged -> "${r.v0}/${r.v1.value}"
+                is Reading.Companion -> "companion ${r.v0}"
+            }
+        check(describe(missing) == "missing")
+        check(describe(exact) == "exact 42")
+        check(describe(range) == "range 1..9")
+        check(describe(tagged) == "warm/2")
+
+        // `fromParts(tag, …every group's slots side by side…)`: the tag picks
+        // the live group; the inert slots are ignored.
+        check(Reading.fromParts(0, 0L, 0L, 0L, "", Priority.LOW, 0L) === Reading.Missing)
+        check(Reading.fromParts(1, 42L, 0L, 0L, "", Priority.LOW, 0L) == exact)
+        check(Reading.fromParts(2, 0L, 1L, 9L, "", Priority.LOW, 0L) == range)
+        check(Reading.fromParts(3, 0L, 0L, 0L, "warm", Priority.HIGH, 0L) == tagged)
+
+        // A variant may legitimately be named `Companion`: that name is the
+        // generator's own default for the `fromParts` holder, not a Kotlin
+        // reserved word, so the generator renamed ITS companion (to
+        // `Companion_`) rather than obliging the source crate to rename a
+        // domain variant. `fromParts` is still reached through the interface.
+        val companion: Reading = Reading.Companion(5L)
+        check(companion is Reading.Companion && (companion as Reading.Companion).v0 == 5L)
+        check(Reading.fromParts(4, 0L, 0L, 0L, "", Priority.LOW, 5L) == companion)
+        check(Reading.Companion_.fromParts(4, 0L, 0L, 0L, "", Priority.LOW, 5L) == companion)
+
+        // A tag outside 0..N-1 is an error, never a variant.
+        var invalid: String? = null
+        try {
+            Reading.fromParts(5, 0L, 0L, 0L, "", Priority.LOW, 0L)
+        } catch (e: IllegalArgumentException) {
+            invalid = e.message
+        }
+        check(invalid == "Reading: invalid tag 5")
+    }
+
+    // ── a sum as a data-class FIELD, crossing Rust → Kotlin ───────────────────
+    // The tag and every variant's group ride the parent's single `fromParts`;
+    // inert groups are wire-defaulted, which is why an inert object slot must
+    // be nullable (`reading_tagged_v0: String?`) and re-asserted `!!` in its
+    // own live arm. No JVM object is built for the sum itself.
+    section("sum as a data-class field (tag-gated groups on one fromParts)") {
+        // Every alternative survives the crossing, including the payload-less
+        // one and the two whose groups sit beside object-shaped slots.
+        check(observationNew(0, false, boom).reading == Reading.Missing)
+        check(observationNew(1, false, boom).reading == Reading.Exact(42L))
+        check(observationNew(2, false, boom).reading == Reading.Range(1L, 9L))
+        check(observationNew(3, false, boom).reading == Reading.Tagged("warm", Priority.HIGH))
+        check(observationNew(4, false, boom).reading == Reading.Companion(5L))
+
+        // The sum sits beside ordinary flattened leaves — they must not be
+        // disturbed by the tag-gated groups interleaved with them.
+        val obs = observationNew(3, false, boom)
+        check(obs.id == 7L && obs.note == "obs")
+
+        // `Option<sum>`: the present flag and the tag are independent facts,
+        // so an absent optional is null regardless of what its tag slot holds.
+        check(observationNew(1, false, boom).fallback == null)
+        check(observationNew(1, true, boom).fallback == Reading.Range(1L, 9L))
+        // …and an object-payload variant round-trips through the optional too.
+        check(observationNew(2, true, boom).fallback == Reading.Tagged("warm", Priority.HIGH))
+        // Both sums live at once, each with its own tag.
+        val both = observationNew(4, true, boom)
+        check(both.reading == Reading.Companion(5L) && both.fallback == Reading.Missing)
+
+        // …and back IN as part of a data-class parameter: every alternative
+        // reconstructs the same Rust variant it came from.
+        for (which in 0..4) {
+            check(observationWhich(observationNew(which, false, boom), boom) == which)
+        }
+        // A Kotlin-constructed value (not one that came from Rust) crosses in
+        // just the same.
+        check(observationWhich(Observation(1L, Reading.Range(2L, 3L), null, "n"), boom) == 2)
+        check(
+            observationWhich(
+                Observation(1L, Reading.Tagged("x", Priority.LOW), Reading.Missing, "n"),
+                boom,
+            ) == 3
+        )
+
+        // A tag outside 0..N-1 reaches the binding-error channel — never a
+        // panic across the boundary (the locked rule in the design). The
+        // generated wrapper computes the tag from an exhaustive `when` and so
+        // can never produce one, which is exactly why this calls the extern
+        // directly: it is the only way to exercise the guard.
+        var invalidTag: String? = null
+        val cap = JniErrorHandlerCapture.acquire()
+        CovNative.observationWhich(
+            1L,
+            99, 0L, 0L, 0L, null, 0, 0L,
+            false,
+            0, 0L, 0L, 0L, null, 0, 0L,
+            "n",
+            cap,
+        )
+        if (cap.failed) invalidTag = cap.ze0
+        check(invalidTag != null && invalidTag!!.contains("Reading: invalid tag")) {
+            "expected the binding-error channel to carry the invalid tag, got: $invalidTag"
+        }
+    }
+
+    // ── a sum as the function's OWN return / callback argument ────────────────
+    // Nothing surrounds the value here, so the decomposition carries its own
+    // tag: the wrapper hands the native side a hoisted builder (or folder)
+    // singleton, and the live group is picked by a `when` over that tag. Still
+    // no JVM object built on the Rust side — only the tag and the raw slots
+    // cross.
+    section("sum in return position (tag + groups through a fixed builder)") {
+        // Bare `E` return: every variant shape survives, including the
+        // payload-less one and the ones whose groups carry object slots.
+        check(readingOf(0, boom) == Reading.Missing)
+        check(readingOf(1, boom) == Reading.Exact(42L))
+        check(readingOf(2, boom) == Reading.Range(1L, 9L))
+        check(readingOf(3, boom) == Reading.Tagged("warm", Priority.HIGH))
+        check(readingOf(4, boom) == Reading.Companion(5L))
+        // The payload-less alternative is still the singleton `data object` —
+        // the tag alone rebuilt it, no group was read.
+        check(readingOf(0, boom) === Reading.Missing)
+
+        // `Option<E>` return: the present layer nulls the whole result and is
+        // independent of the tag (which is 0 — `Missing` — in the null case,
+        // and must not be mistaken for one).
+        check(readingMaybe(-1, boom) == null)
+        check(readingMaybe(0, boom) == Reading.Missing)
+        check(readingMaybe(3, boom) == Reading.Tagged("warm", Priority.HIGH))
+
+        // `Vec<E>` return: each element's tag + groups cross raw and the
+        // folder singleton appends the rebuilt alternative.
+        check(readingSeries(0, boom).isEmpty())
+        check(
+            readingSeries(5, boom) == listOf(
+                Reading.Missing,
+                Reading.Exact(42L),
+                Reading.Range(1L, 9L),
+                Reading.Tagged("warm", Priority.HIGH),
+                Reading.Companion(5L),
+            )
+        )
+
+        // Callback argument: the user callback receives the whole reassembled
+        // sum while the wire still carries decoupled slots.
+        val seen = ArrayList<Reading>()
+        readingEach(5, { r -> seen.add(r) }, boom)
+        check(seen == readingSeries(5, boom))
+    }
+
+    // ── a tag-gated group that owns a native resource ─────────────────────────
+    // `Lookup.Found` carries an opaque handle: the live group hands over a
+    // freshly boxed pointer the caller owns, while an inert handle slot stays
+    // the `0L` sentinel that is never wrapped (wrapping it would fabricate a
+    // handle to nothing). `Failed`'s `String` group proves an inert OBJECT slot
+    // arrives as JVM null and so must be nullable in the raw builder.
+    section("sum return with a handle payload") {
+        check(lookupOf(0L, 0.0, boom) === Lookup.Absent)
+
+        val failed = lookupOf(-1L, 0.0, boom)
+        check(failed is Lookup.Failed && (failed as Lookup.Failed).v0 == "negative count")
+
+        val found = lookupOf(3L, 7.5, boom)
+        check(found is Lookup.Found)
+        val summary = (found as Lookup.Found).v0
+        // The handle is live and owns its own copy of the native object.
+        check(summary.count(boom) == 3L)
+        check(summary.total(boom) == 7.5)
+        summary.close()
+        check(summary.isClosed())
+    }
+
+    // ── a sum whose payload is NOT leaf-shaped ────────────────────────────────
+    // `Marker.Ranked` carries `Option<Priority>` — an enum object or null in the
+    // JVM slot, which tag-gated groups cannot express. The sum degrades to a
+    // whole-object crossing rather than failing the build, and that path is what
+    // reads an enum property back (bare and optional read differently: the slot
+    // holds the enum OBJECT, not a boxed Int).
+    section("sum with a non-leaf payload (whole-object crossing, Option<enum>)") {
+        check(taggedRank(taggedNew(0, boom), boom) == -1)
+        check(taggedRank(taggedNew(1, boom), boom) == 0)
+        check(taggedRank(taggedNew(2, boom), boom) == 10)
+
+        // Kotlin-constructed values cross identically — including the two
+        // `Ranked` shapes that differ only by the optional being present.
+        check(taggedRank(Tagged(1L, Marker.None_), boom) == -1)
+        check(taggedRank(Tagged(1L, Marker.Ranked(null)), boom) == 0)
+        check(taggedRank(Tagged(1L, Marker.Ranked(Priority.HIGH)), boom) == 10)
     }
 
     // ── value_class: by-value bytes, instance accessors, Vec<value> → List ────

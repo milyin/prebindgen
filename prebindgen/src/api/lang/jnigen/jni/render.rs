@@ -17,7 +17,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree.
     let entries: Vec<kt::KtEnumEntry> =
-        crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
+        crate::api::core::types_util::enum_discriminant_values(item_enum)
             .into_iter()
             .map(|(ident, value)| kt::KtEnumEntry {
                 name: mangle_kotlin_ident(
@@ -1175,8 +1175,10 @@ fn classify_params(
                     .leaves
                     .iter()
                     .filter_map(|leaf| {
-                        let tail = leaf.handle_target_tail.as_ref()?;
-                        let target = format!("{name}{tail}");
+                        // Through the leaf's own access template, so a
+                        // tag-gated variant handle locks the expression it
+                        // actually came from.
+                        let target = leaf.kt_handle_target(&name)?;
                         let consume_null = if leaf.handle_nullable {
                             format!("{target}?.markConsumed()")
                         } else {

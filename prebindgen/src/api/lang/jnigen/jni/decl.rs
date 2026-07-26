@@ -86,6 +86,24 @@ macro_rules! enum_class {
     };
 }
 
+/// Build a [`SealedClassDecl`] directly from a bare Rust type. See
+/// [`ptr_class!`].
+#[macro_export]
+macro_rules! sealed_class {
+    ($t:ty) => {
+        $crate::lang::SealedClassDecl::new($crate::__macro_support::parse_type(stringify!($t)))
+    };
+}
+
+/// Build a [`VariantDecl`] from a bare variant ident, for
+/// [`SealedClassDecl::variant`]: `variant!(PeriodicQueries).name("Periodic")`.
+#[macro_export]
+macro_rules! variant {
+    ($name:ident) => {
+        $crate::lang::VariantDecl::new(stringify!($name))
+    };
+}
+
 /// Build a [`DataClassDecl`] directly from a bare Rust type. See [`ptr_class!`].
 #[macro_export]
 macro_rules! data_class {
@@ -742,6 +760,12 @@ impl From<ExpandReturnDecl> for ExpandDecl {
 /// unit-variant only and `#[repr(i32)]`-style with explicit discriminants,
 /// so both sides agree on the numbers.
 ///
+/// A **data-carrying** enum is a different Kotlin surface — a `sealed
+/// interface` whose variants carry their payload — and is declared with
+/// `sealed_class!` instead. Handing one to `enum_class!` is a hard error,
+/// not a silent upgrade: the value would have to cross as a bare
+/// discriminant, dropping the payload.
+///
 /// Has no `.method`/`.constructor` by rule, not omission: members belong to
 /// class kinds whose instances can re-enter Rust as an object (handle /
 /// blob / field leaves). An enum value is a bare scalar with no object
@@ -773,6 +797,98 @@ impl EnumClassDecl {
 impl From<syn::Type> for EnumClassDecl {
     fn from(rust_type: syn::Type) -> Self {
         Self::new(rust_type)
+    }
+}
+
+/// Declares a Rust **data-carrying** enum as a Kotlin `sealed interface`
+/// whose variant classes are nested inside it — the surface a sum type gets
+/// where the target language has sums natively.
+///
+/// ```ignore
+/// .class(sealed_class!(RecoveryMode)
+///     .variant(variant!(PeriodicQueries).name("Periodic")))
+/// ```
+///
+/// ```kotlin
+/// public sealed interface RecoveryMode {
+///     public data class Periodic(val v0: Long) : RecoveryMode
+///     public data object Heartbeat : RecoveryMode
+///     public companion object { @JvmStatic public fun fromParts(…): RecoveryMode }
+/// }
+/// ```
+///
+/// A payload-less alternative becomes a `data object`; the variant classes
+/// are **nested** so their names cannot collide package-wide. Tuple payload
+/// fields surface as `v0`, `v1`, …; named fields keep their (camelCased)
+/// names.
+///
+/// The counterpart of [`enum_class!`](crate::enum_class), which is for the
+/// unit-variant-only case that crosses as a bare discriminant. Handing a
+/// payload enum to `enum_class!` — or a fieldless one here — is a hard
+/// error naming the other, never a silent upgrade.
+///
+/// Like `enum_class!` it has no `.method` / `.constructor`: a sum value has
+/// no object identity Rust-side, so a "method" on it is a free function
+/// taking it.
+pub struct SealedClassDecl {
+    pub(crate) key: TypeKey,
+    pub(crate) name_override: Option<String>,
+    pub(crate) variants: Vec<VariantDecl>,
+    pub(crate) iface: IfaceOpts,
+}
+
+impl SealedClassDecl {
+    pub fn new(rust_type: syn::Type) -> Self {
+        Self {
+            key: TypeKey::from_type(&rust_type),
+            name_override: None,
+            variants: Vec::new(),
+            iface: IfaceOpts::default(),
+        }
+    }
+
+    /// Override the Kotlin **interface name** (relative, no dots).
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name_override = Some(name.into());
+        self
+    }
+
+    /// Configure one variant — currently its Kotlin class name. Undeclared
+    /// variants keep their Rust ident; declaring a variant that the enum
+    /// does not have is a hard error.
+    pub fn variant(mut self, decl: VariantDecl) -> Self {
+        self.variants.push(decl);
+        self
+    }
+
+    class_interface_methods!("sealed_class");
+}
+
+impl From<syn::Type> for SealedClassDecl {
+    fn from(rust_type: syn::Type) -> Self {
+        Self::new(rust_type)
+    }
+}
+
+/// One variant of a [`SealedClassDecl`]. Build it with
+/// [`variant!`](crate::variant).
+pub struct VariantDecl {
+    pub(crate) rust_ident: String,
+    pub(crate) name_override: Option<String>,
+}
+
+impl VariantDecl {
+    pub fn new(rust_ident: impl Into<String>) -> Self {
+        Self {
+            rust_ident: rust_ident.into(),
+            name_override: None,
+        }
+    }
+
+    /// Override this variant's Kotlin **class name** (relative, no dots).
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name_override = Some(name.into());
+        self
     }
 }
 
@@ -913,6 +1029,7 @@ impl From<syn::Type> for ValueClassDecl {
 pub enum ClassDecl {
     Ptr(PtrClassDecl),
     Enum(EnumClassDecl),
+    Sealed(SealedClassDecl),
     Data(DataClassDecl),
     Value(ValueClassDecl),
 }
@@ -925,6 +1042,11 @@ impl From<PtrClassDecl> for ClassDecl {
 impl From<EnumClassDecl> for ClassDecl {
     fn from(d: EnumClassDecl) -> Self {
         Self::Enum(d)
+    }
+}
+impl From<SealedClassDecl> for ClassDecl {
+    fn from(d: SealedClassDecl) -> Self {
+        Self::Sealed(d)
     }
 }
 impl From<DataClassDecl> for ClassDecl {

@@ -114,7 +114,15 @@ pub(crate) fn synth_value_struct_leaves(
         // to the whole-value path.
         let probe = option_inner_type(&effective_ty).unwrap_or_else(|| effective_ty.clone());
         let nested = match ext.type_kind(registry, &probe) {
-            TypeKind::Handle | TypeKind::Enum | TypeKind::ValueBlob => return None,
+            // A sum joins the kinds this fixed builder cannot forward: it has
+            // no single leaf and no converter of its own — it crosses as a tag
+            // plus one group per variant, which only the whole-value
+            // `fromParts` path (`PlanFieldKind::Sum`) can lay out. Falling
+            // through to the simple-leaf arm below would silently synthesize a
+            // leaf whose `out_ty` is the sum and then REQUIRE an output
+            // converter for it, failing the resolve with the sum named rather
+            // than the unsupported position.
+            TypeKind::Handle | TypeKind::Enum | TypeKind::ValueBlob | TypeKind::Sum => return None,
             TypeKind::DataStruct { st, cfg: Some(_) } => Some(st.clone()),
             _ => None,
         };
@@ -140,6 +148,7 @@ pub(crate) fn synth_value_struct_leaves(
             identity: false,
             nullable: false,
             source: LeafSource::Field,
+            group: None,
         });
     }
     Some(leaves)
@@ -188,11 +197,34 @@ fn encode_plan(
     for f in &plan.fields {
         let fname = &f.fname;
         let base = format!("{}_{}", prefix, fname);
+        let value = quote! { #access.#fname };
+        let (pre, sl) = encode_field(&f.kind, &value, &base, depth, env_expr);
+        preludes.extend(pre);
+        slots.extend(sl);
+    }
+    (preludes, slots)
+}
+
+/// Emit the Rust-side wire encode of ONE value position — a struct field or a
+/// sum's variant payload. `value` is the Rust expression yielding it (`v.mode`
+/// at a struct field, the bound pattern variable inside a variant arm), which
+/// is what lets a sum reuse this for its payloads: a payload is encoded by the
+/// same code as a field of the same type, not by a parallel walk.
+fn encode_field(
+    kind: &PlanFieldKind,
+    value: &TokenStream,
+    base: &str,
+    depth: usize,
+    env_expr: &TokenStream,
+) -> (TokenStream, Vec<EncSlot>) {
+    let mut preludes = TokenStream::new();
+    let mut slots: Vec<EncSlot> = Vec::new();
+    {
         let id = format_ident!("__{}", base);
         let conv_value = |conv: &syn::Ident| -> TokenStream {
-            quote! { #conv(#env_expr, #access.#fname.clone())? }
+            quote! { #conv(#env_expr, #value.clone())? }
         };
-        match &f.kind {
+        match kind {
             // Projection leaf (opaque handle → jlong, value class / blob → ByteArray).
             PlanFieldKind::Projection { conv, proj, .. } => {
                 let value_expr = conv_value(conv);
@@ -290,16 +322,15 @@ fn encode_plan(
                 ..
             } => {
                 if !*optional {
-                    let child_access = quote! { #access.#fname };
                     let (child_pre, child_slots) =
-                        encode_plan(child, &child_access, &base, depth + 1, env_expr);
+                        encode_plan(child, value, base, depth + 1, env_expr);
                     preludes.extend(child_pre);
                     slots.extend(child_slots);
                 } else {
                     let cbind = format_ident!("__c{}", depth);
                     let child_access = quote! { #cbind };
                     let (child_pre, child_slots) =
-                        encode_plan(child, &child_access, &base, depth + 1, env_expr);
+                        encode_plan(child, &child_access, base, depth + 1, env_expr);
                     let flag_id = format_ident!("__{}_present", base);
                     let outer_ids: Vec<proc_macro2::Ident> = (0..child_slots.len())
                         .map(|i| format_ident!("__{}_o{}", base, i))
@@ -313,7 +344,7 @@ fn encode_plan(
                     preludes.extend(quote! {
                         let #flag_id: jni::sys::jboolean;
                         #( let #outer_ids: #outer_tys; )*
-                        match &#access.#fname {
+                        match &#value {
                             Some(#cbind) => {
                                 #child_pre
                                 #flag_id = 1u8;
@@ -341,6 +372,164 @@ fn encode_plan(
                             default: sl.default.clone(),
                         });
                     }
+                }
+            }
+            // Data-carrying enum: one `match` binds the tag and EVERY group's
+            // slots — the live group from its payload, the rest from the same
+            // defaults an absent `Option<nested>` uses. One crossing, no JVM
+            // object built for the sum.
+            PlanFieldKind::Sum {
+                source,
+                optional,
+                variants,
+                ..
+            } => {
+                let tag_id = format_ident!("__{}__tag", base);
+
+                // Encode each variant's group once, against its own pattern
+                // bindings. `arms` keeps them aligned with the flat slot list.
+                struct Arm {
+                    pattern: TokenStream,
+                    preludes: TokenStream,
+                    slots: Vec<EncSlot>,
+                }
+                let mut arms: Vec<Arm> = Vec::new();
+                for v in variants {
+                    let vident = &v.rust_ident;
+                    let binds: Vec<syn::Ident> = (0..v.fields.len())
+                        .map(|i| format_ident!("__s{}_{}", depth, i))
+                        .collect();
+                    let mut vpre = TokenStream::new();
+                    let mut vslots: Vec<EncSlot> = Vec::new();
+                    for (f, bind) in v.fields.iter().zip(&binds) {
+                        let fbase = format!("{base}_{}", f.slot);
+                        let bind_expr = quote!(#bind);
+                        let (p, s) = encode_field(&f.kind, &bind_expr, &fbase, depth + 1, env_expr);
+                        vpre.extend(p);
+                        vslots.extend(s);
+                    }
+                    // Bind every payload field, shaped like the variant.
+                    let pattern = match v.fields.first().map(|f| &f.member) {
+                        None => quote!(#source::#vident),
+                        Some(syn::Member::Named(_)) => {
+                            let pairs = v.fields.iter().zip(&binds).map(|(f, b)| {
+                                let syn::Member::Named(n) = &f.member else {
+                                    unreachable!("variant field shapes are uniform")
+                                };
+                                quote!(#n: #b)
+                            });
+                            quote!(#source::#vident { #(#pairs),* })
+                        }
+                        Some(syn::Member::Unnamed(_)) => quote!(#source::#vident(#(#binds),*)),
+                    };
+                    arms.push(Arm {
+                        pattern,
+                        preludes: vpre,
+                        slots: vslots,
+                    });
+                }
+
+                // Outer bindings: the tag plus every group's slots, side by
+                // side in variant order. Each arm assigns its own group from
+                // the values it just computed and defaults all the others.
+                let all: Vec<&EncSlot> = arms.iter().flat_map(|a| a.slots.iter()).collect();
+                let outer_ids: Vec<proc_macro2::Ident> = (0..all.len())
+                    .map(|i| format_ident!("__{}_g{}", base, i))
+                    .collect();
+                let outer_tys: Vec<TokenStream> = all.iter().map(|s| s.wire_ty.clone()).collect();
+                let defaults: Vec<TokenStream> = all.iter().map(|s| s.default.clone()).collect();
+
+                let mut offset = 0usize;
+                let arm_code: Vec<TokenStream> = arms
+                    .iter()
+                    .enumerate()
+                    .map(|(tag, a)| {
+                        let n = a.slots.len();
+                        let live_outer = &outer_ids[offset..offset + n];
+                        let live_inner: Vec<proc_macro2::Ident> =
+                            a.slots.iter().map(|s| s.ident.clone()).collect();
+                        // Every slot outside this arm's own group is inert.
+                        let inert_outer: Vec<proc_macro2::Ident> = outer_ids
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| *i < offset || *i >= offset + n)
+                            .map(|(_, id)| id.clone())
+                            .collect();
+                        let inert_defaults: Vec<TokenStream> = defaults
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| *i < offset || *i >= offset + n)
+                            .map(|(_, d)| d.clone())
+                            .collect();
+                        offset += n;
+                        let pattern = &a.pattern;
+                        let pre = &a.preludes;
+                        let tag_lit = proc_macro2::Literal::i32_unsuffixed(tag as i32);
+                        quote! {
+                            #pattern => {
+                                #pre
+                                #tag_id = #tag_lit;
+                                #( #live_outer = #live_inner; )*
+                                #( #inert_outer = #inert_defaults; )*
+                            }
+                        }
+                    })
+                    .collect();
+
+                let decls = quote! {
+                    let #tag_id: jni::sys::jint;
+                    #( let #outer_ids: #outer_tys; )*
+                };
+                if !*optional {
+                    preludes.extend(quote! {
+                        #decls
+                        match &#value { #(#arm_code)* }
+                    });
+                } else {
+                    // `Option<sum>` keeps its own present flag ahead of the
+                    // tag: optionality and choice are independent facts.
+                    let flag_id = format_ident!("__{}_present", base);
+                    let sbind = format_ident!("__o{}", depth);
+                    let inner_arms: Vec<TokenStream> =
+                        arm_code.iter().map(|a| quote! { #a }).collect();
+                    preludes.extend(quote! {
+                        let #flag_id: jni::sys::jboolean;
+                        #decls
+                        match &#value {
+                            ::core::option::Option::Some(#sbind) => {
+                                #flag_id = 1u8;
+                                match #sbind { #(#inner_arms)* }
+                            }
+                            ::core::option::Option::None => {
+                                #flag_id = 0u8;
+                                #tag_id = 0i32;
+                                #( #outer_ids = #defaults; )*
+                            }
+                        }
+                    });
+                    slots.push(EncSlot {
+                        ident: flag_id,
+                        wire_ty: quote!(jni::sys::jboolean),
+                        descriptor: "Z".to_string(),
+                        is_object: false,
+                        default: quote!(0u8),
+                    });
+                }
+                slots.push(EncSlot {
+                    ident: tag_id,
+                    wire_ty: quote!(jni::sys::jint),
+                    descriptor: "I".to_string(),
+                    is_object: false,
+                    default: quote!(0i32),
+                });
+                for (i, sl) in all.iter().enumerate() {
+                    slots.push(EncSlot {
+                        ident: outer_ids[i].clone(),
+                        wire_ty: sl.wire_ty.clone(),
+                        descriptor: sl.descriptor.clone(),
+                        is_object: sl.is_object,
+                        default: sl.default.clone(),
+                    });
                 }
             }
             // Simple leaf: bind per the plan's wire form.
