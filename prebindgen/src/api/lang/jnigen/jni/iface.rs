@@ -918,13 +918,36 @@ impl SpecKey {
 pub(crate) fn fixed_decon_ids(
     registry: &Registry<KotlinMeta>,
 ) -> std::collections::HashSet<DeconId> {
-    registry
+    let fixed: std::collections::HashSet<DeconId> = registry
         .unfold_plans
         .values()
         .chain(registry.callback_arg_plans.values())
         .filter(|p| p.fixed_builder)
         .filter_map(|p| p.decon.clone())
-        .collect()
+        .collect();
+    // Fixedness must be UNIFORM per identity, and two consumers now depend on
+    // that: the memo swaps in the fixed typed-group view for the whole
+    // identity, and the emitter suppresses the typed interface entirely when
+    // the singleton is its only implementation. A mixed identity would give a
+    // non-fixed wrapper a `build`/`fold` param whose interface was shaped —
+    // or removed — for the fixed case.
+    //
+    // It holds by construction: `apply_value_structs` / `apply_sum_returns` run
+    // AFTER `unfold::apply` and wire every reachable position of a type at
+    // once, so a `DeconId::Default` is all-fixed or all-not; a `DeconId::PerFn`
+    // is unique to one function and so trivially uniform. Asserted rather than
+    // assumed, so a future wiring change fails here instead of emitting a
+    // wrapper that references an interface which no longer exists.
+    debug_assert!(
+        !registry
+            .unfold_plans
+            .values()
+            .chain(registry.callback_arg_plans.values())
+            .any(|p| !p.fixed_builder && p.decon.as_ref().is_some_and(|d| fixed.contains(d))),
+        "fixed and non-fixed plans share one DeconId — the typed interface \
+         cannot be shaped (or suppressed) for both"
+    );
+    fixed
 }
 
 /// Element type keys whose whole-element fold is fixed (a synthesized
