@@ -2,6 +2,12 @@
 //! short-name helpers every pipeline stage needs. One definition here
 //! replaces the per-module copies that used to live in `core::unfold`,
 //! `core::expand`, and the jnigen adapter.
+//!
+//! `is_vec_type`, `is_unit` and `first_type_arg` used to be gated behind
+//! `unstable-cbindgen`, because the C adapter was their only caller.
+//! [`semantic`](super::semantic) — Tier 0 — needs them now, and core may not
+//! depend on an adapter's feature flag: that is the same tier boundary the
+//! module-boundary test enforces from the other direction.
 
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -363,19 +369,18 @@ pub fn is_option_type(ty: &syn::Type) -> bool {
 }
 
 /// True when `ty` is `Vec<…>` (by last path segment).
-#[cfg(feature = "unstable-cbindgen")]
 pub fn is_vec_type(ty: &syn::Type) -> bool {
     path_tail_is(ty, "Vec")
 }
 
-/// True when `ty` is `Result<…>` (by last path segment).
+/// True when `ty` is `Result<…>` (by last path segment). Still adapter-only —
+/// Tier 0 goes through [`result_parts`], which needs the arms anyway.
 #[cfg(feature = "unstable-cbindgen")]
 pub fn is_result_type(ty: &syn::Type) -> bool {
     path_tail_is(ty, "Result")
 }
 
 /// True when `ty` is the unit type `()`.
-#[cfg(feature = "unstable-cbindgen")]
 pub fn is_unit(ty: &syn::Type) -> bool {
     matches!(ty, syn::Type::Tuple(t) if t.elems.is_empty())
 }
@@ -412,7 +417,6 @@ pub fn result_err_type(ty: &syn::Type) -> Option<syn::Type> {
 /// First angle-bracketed **type** argument of a path type (`T` of `Option<T>`
 /// / `Vec<T>` / `Result<T, _>`), skipping lifetime/const args. `None` when
 /// there is no type argument.
-#[cfg(feature = "unstable-cbindgen")]
 pub fn first_type_arg(ty: &syn::Type) -> Option<syn::Type> {
     let syn::Type::Path(tp) = ty else { return None };
     let seg = tp.path.segments.last()?;
