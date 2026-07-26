@@ -357,7 +357,8 @@ through per-field converters**, so its payloads are not constrained that way. Wh
 
 | Payload | Wire |
 |---|---|
-| scalar | itself |
+| scalar (except `bool`) | itself |
+| `bool` | `MaybeUninit<bool>` — the one scalar with a restricted domain, so a C-supplied byte is normalised (nonzero is true), never materialised (§5.3) |
 | `String` | `char *` (the one type whose two directions disagree — `*const` in, `*mut` out — so the field fixes the owning form and the arms convert by hand) |
 | declared `enum_type` | `MaybeUninit<mirror>`, validated on the way in (§5.3) |
 | `Box<T>` / `Option<Box<T>>`, `T` an `opaque_ptr` | `*mut t_t` |
@@ -403,6 +404,20 @@ pub(crate) fn __in_z_recovery_mode_t(v: z_recovery_mode_t) -> RecoveryMode {
     }
 }
 ```
+
+The **boundary-validity rule** the tag check rests on: the mirror is received as
+`MaybeUninit<mirror>` (`#[repr(transparent)]`, so identical ABI and legal to hold any bit pattern),
+its leading `c_int` tag is range-checked, and only then is the value `assume_init`ed. That is sound
+because **every payload wire is bit-pattern-agnostic**, which is what makes the tag the sole
+obligation. Two Rust types are not: a declared `enum_type` (a discriminant no variant has) and
+`bool` (anything but `0`/`1`), so both ride behind `MaybeUninit` too. The enum payload goes through
+its own validating decode and propagates a rejection with `?`; a `bool` byte is read as a `u8` and
+normalised the way C converts to `_Bool` — nonzero is true, no rejection, because unlike a tag every
+byte here has an unambiguous meaning. **Invisible in C either way**: cbindgen simplifies
+`MaybeUninit<T>` to `T`.
+
+(A `bool` reached through a nested `data_struct` payload is *not* covered — that is the pre-existing
+`c_field_wire` policy, which a plain `bool` parameter shares. Tracked as #170.)
 
 ### 5.4 Payload ownership
 
