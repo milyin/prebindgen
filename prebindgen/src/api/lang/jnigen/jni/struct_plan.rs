@@ -353,7 +353,8 @@ impl PlanFieldKind {
             } => {
                 let fqn = child_fqn.as_ref().unwrap_or_else(|| {
                     panic!(
-                        "data class property `{owner}`: nested data-class field has no registered                          Kotlin class — declare the child type in a package"
+                        "data class property `{owner}`: nested data-class field has no \
+                         registered Kotlin class — declare the child type in a package"
                     )
                 });
                 let t = kt::KtType::cls(fqn);

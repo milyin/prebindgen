@@ -85,8 +85,10 @@ pub(crate) fn build_data_class(
     // disagree with its own factory parameter (#156).
     let plan = build_struct_plan(ext, registry, item_struct, 0).unwrap_or_else(|| {
         panic!(
-            "data class `{}`: could not classify every field for the fromParts bridge — each \
-             field needs a resolved OUTPUT converter (it declares the slot the encoder fills)",
+            "data class `{}`: could not classify every field for the fromParts bridge. Each \
+             field needs a resolved OUTPUT converter (that direction declares the slot the \
+             encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
+             or a registered class for a projection leaf",
             item_struct.ident
         )
     });
