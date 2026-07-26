@@ -49,6 +49,12 @@ pub unsafe extern "C" fn calculator_drop(this_: *mut calculator_t) {
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub struct caption_t {
+    pub id: u64,
+    pub text: *mut ::core::ffi::c_char,
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct drawing_t {
     pub id: u64,
     pub shape: ::core::mem::MaybeUninit<shape_t>,
@@ -75,6 +81,40 @@ pub enum operation_t {
     Sub = 1,
     Mul = 2,
     Div = 3,
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub enum note_t {
+    Silent,
+    Titled(caption_t),
+    After(u64),
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub unsafe extern "C" fn note_drop(this_: *mut ::core::mem::MaybeUninit<note_t>) {
+    if this_.is_null() {
+        return;
+    }
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < note_t > () >= ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`note_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+    };
+    let __tag: ::core::ffi::c_int = ::core::ptr::read(
+        (*this_).as_ptr() as *const ::core::ffi::c_int,
+    );
+    if !((__tag as i64) >= 0 && (__tag as i64) < 3i64) {
+        return;
+    }
+    match (*this_).assume_init_mut() {
+        note_t::Titled(__f0) => {
+            free((*__f0).text as *mut ::core::ffi::c_void);
+            (*__f0).text = ::core::ptr::null_mut();
+        }
+        _ => {}
+    }
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -134,6 +174,17 @@ pub(crate) unsafe fn __cbg_in_Calculator(
     )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_Caption(v: caption_t) -> example_flat::Caption {
+    example_flat::Caption {
+        id: v.id,
+        text: if v.text.is_null() {
+            ::std::string::String::new()
+        } else {
+            ::std::ffi::CStr::from_ptr(v.text).to_string_lossy().into_owned()
+        },
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Drawing(
     v: drawing_t,
 ) -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
@@ -177,6 +228,38 @@ pub(crate) unsafe fn __cbg_in_InsideFoo(
     }
     ::core::result::Result::Err(
         ::std::format!("invalid discriminant {} for `inside_foo_t`", __raw),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_in_Millis(v: u64) -> example_flat::Millis {
+    example_flat::millis_from_raw(v)
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_Note(
+    v: ::core::mem::MaybeUninit<note_t>,
+) -> ::core::result::Result<example_flat::Note, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < note_t > () >= ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`note_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+    };
+    let __tag: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if !((__tag as i64) >= 0 && (__tag as i64) < 3i64) {
+        return ::core::result::Result::Err(
+            ::std::format!("invalid tag {} for `note_t` (expected 0..3)", __tag),
+        );
+    }
+    let v = v.assume_init();
+    ::core::result::Result::Ok(
+        match v {
+            note_t::Silent => example_flat::Note::Silent,
+            note_t::Titled(__f0) => example_flat::Note::Titled(__cbg_in_Caption(__f0)),
+            note_t::After(__f0) => example_flat::Note::After(__cbg_in_Millis(__f0)),
+        },
     )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -359,6 +442,13 @@ pub(crate) fn __cbg_out_Calculator(v: example_flat::Calculator) -> *mut calculat
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut calculator_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Caption(v: example_flat::Caption) -> caption_t {
+    caption_t {
+        id: v.id,
+        text: __cbg_alloc_cstr(v.text),
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Drawing(v: example_flat::Drawing) -> drawing_t {
     drawing_t {
         id: v.id,
@@ -383,6 +473,20 @@ pub(crate) fn __cbg_out_InsideFoo(v: example_flat::InsideFoo) -> inside_foo_t {
         example_flat::InsideFoo::DouddleDee => inside_foo_t::DouddleDee,
         example_flat::InsideFoo::DouddleDum => inside_foo_t::DouddleDum,
     }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Millis(v: example_flat::Millis) -> u64 {
+    example_flat::millis_to_raw(&v)
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Note(v: example_flat::Note) -> ::core::mem::MaybeUninit<note_t> {
+    ::core::mem::MaybeUninit::new(
+        match v {
+            example_flat::Note::Silent => note_t::Silent,
+            example_flat::Note::Titled(__f0) => note_t::Titled(__cbg_out_Caption(__f0)),
+            example_flat::Note::After(__f0) => note_t::After(__cbg_out_Millis(__f0)),
+        },
+    )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Operation(v: example_flat::Operation) -> operation_t {
@@ -646,6 +750,24 @@ pub unsafe extern "C" fn calculator_to_string(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn caption_new(
+    id: u64,
+    text: *const ::core::ffi::c_char,
+) -> caption_t {
+    let id = __cbg_in_u64(id);
+    let text = match __cbg_in___str(text) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::caption_new(id, text);
+    let __ret: caption_t;
+    __ret = __cbg_out_Caption(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn drawing_get_shape(
     d: drawing_t,
 ) -> ::core::mem::MaybeUninit<shape_t> {
@@ -718,6 +840,57 @@ pub unsafe extern "C" fn inside_foo_value(
     let __v = example_flat::inside_foo_value(x);
     let __ret: i32;
     __ret = __cbg_out_i32(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_new_after(
+    millis: u64,
+) -> ::core::mem::MaybeUninit<note_t> {
+    let millis = __cbg_in_u64(millis);
+    let __v = example_flat::note_new_after(millis);
+    let __ret: ::core::mem::MaybeUninit<note_t>;
+    __ret = __cbg_out_Note(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_new_silent() -> ::core::mem::MaybeUninit<note_t> {
+    let __v = example_flat::note_new_silent();
+    let __ret: ::core::mem::MaybeUninit<note_t>;
+    __ret = __cbg_out_Note(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_new_titled(
+    id: u64,
+    text: *const ::core::ffi::c_char,
+) -> ::core::mem::MaybeUninit<note_t> {
+    let id = __cbg_in_u64(id);
+    let text = match __cbg_in___str(text) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::note_new_titled(id, text);
+    let __ret: ::core::mem::MaybeUninit<note_t>;
+    __ret = __cbg_out_Note(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn note_value(n: ::core::mem::MaybeUninit<note_t>) -> u64 {
+    let n = match __cbg_in_Note(n) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::note_value(n);
+    let __ret: u64;
+    __ret = __cbg_out_u64(__v);
     __ret
 }
 #[no_mangle]

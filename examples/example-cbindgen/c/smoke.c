@@ -185,16 +185,56 @@ static void test_invalid_tag(void) {
     shape_drop(&bad);
 }
 
+/* Payload kinds the zero-copy mirror policy could not express (#158 part 2):
+ * a nested `data_struct` crossing BY VALUE, and a converted leaf whose wire is
+ * its conversion's destination rather than its own layout. Both directions,
+ * plus the union's drop reaching THROUGH the struct payload to free the
+ * `char *` it owns. */
+static void test_converter_derived_payloads(void) {
+    /* Unit arm. */
+    note_t silent = note_new_silent();
+    CHECK(silent.tag == Silent);
+    CHECK(note_value(silent) == 0);
+
+    /* Converted leaf: `Millis` crosses as the `uint64_t` its conversion
+     * produces, not as its own struct layout. */
+    note_t after = note_new_after(1500);
+    CHECK(after.tag == After);
+    CHECK(after.after == 1500);
+    CHECK(note_value(after) == 1500);
+
+    /* Nested data_struct by value: the whole record rides in the union arm. */
+    note_t titled = note_new_titled(7, "chapter one");
+    CHECK(titled.tag == Titled);
+    CHECK(titled.titled.id == 7);
+    CHECK(strcmp(titled.titled.text, "chapter one") == 0);
+    /* …and crosses back IN, rebuilt through the payload's own converter. */
+    CHECK(note_value(titled) == 7);
+
+    /* The union's drop reaches through the struct payload and frees its
+     * owning field, nulling the slot so a second drop is a no-op. */
+    note_drop(&titled);
+    CHECK(titled.titled.text == NULL);
+    note_drop(&titled);
+
+    /* Non-owning arms tolerate the drop and stay readable. */
+    note_drop(&after);
+    CHECK(note_value(after) == 1500);
+    note_drop(NULL);
+}
+
 int main(void) {
     test_each_arm();
     test_struct_field();
     test_drop();
     test_invalid_tag();
+    test_converter_derived_payloads();
 
     if (failures != 0) {
         fprintf(stderr, "FAILED - %d check(s)\n", failures);
         return 1;
     }
-    printf("PASS - tagged union: every arm, every position, drop, invalid tag\n");
+    printf("PASS - tagged union: every arm, every position, drop, invalid tag, "
+           "converter-derived payloads\n");
     return 0;
 }

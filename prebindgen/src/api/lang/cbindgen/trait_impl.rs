@@ -794,7 +794,7 @@ impl Cbindgen {
                 let wires: Vec<syn::Type> = v
                     .fields
                     .iter()
-                    .map(|f| self.payload_wire_of(&ty, vident, f))
+                    .map(|f| self.payload_wire_of(&ty, vident, f, registry))
                     .collect();
                 match &v.fields {
                     syn::Fields::Unit => variant_defs.push(quote!(#vident)),
@@ -816,7 +816,7 @@ impl Cbindgen {
                     .iter()
                     .zip(&wires)
                     .enumerate()
-                    .filter(|(_, (_, w))| Cbindgen::payload_wire_owns(w))
+                    .filter(|(_, (f, w))| self.payload_wire_owns(&f.ty, w, registry))
                     .map(|(i, (f, w))| (i, f, w))
                     .collect();
                 if owning.is_empty() {
@@ -828,7 +828,7 @@ impl Cbindgen {
                 let pattern = variant_pattern(&cname, vident, &v.fields, &binds);
                 let frees = owning.iter().map(|(i, f, _)| {
                     let b = &binds[*i];
-                    self.payload_free_stmt(&f.ty, b)
+                    self.payload_free_stmt(&f.ty, b, registry)
                 });
                 drop_arms.push(quote!(#pattern => { #(#frees)* }));
             }
@@ -880,21 +880,22 @@ impl Cbindgen {
         ty: &syn::Type,
         variant: &syn::Ident,
         field: &syn::Field,
+        registry: &Registry<()>,
     ) -> syn::Type {
-        self.payload_field_wire(&field.ty).unwrap_or_else(|| {
-            panic!(
-                "Cbindgen::tagged_union: payload `{}::{}{}` has unsupported type `{}` \
-                 (expected a scalar, a `String`, a declared `enum_type`, or an opaque \
-                 pointer `Option<Box<T>>`/`Box<T>` with `T` an `opaque_ptr`)",
-                type_short(ty),
-                variant,
-                match &field.ident {
-                    Some(n) => format!(".{n}"),
-                    None => String::new(),
-                },
-                field.ty.to_token_stream()
-            )
-        })
+        self.payload_field_wire(&field.ty, registry)
+            .unwrap_or_else(|reason| {
+                panic!(
+                    "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
+                    type_short(ty),
+                    variant,
+                    match &field.ident {
+                        Some(n) => format!(".{n}"),
+                        None => String::new(),
+                    },
+                    field.ty.to_token_stream(),
+                    reason,
+                )
+            })
     }
 
     /// Release one owning payload slot held behind `binding` (a `&mut` to the
@@ -902,20 +903,48 @@ impl Cbindgen {
     /// the same union is a no-op. A `char *` block goes back to the C
     /// allocator; an opaque pointer is re-boxed and dropped, running the Rust
     /// destructor.
-    fn payload_free_stmt(&self, fty: &syn::Type, binding: &syn::Ident) -> TokenStream {
+    fn payload_free_stmt(
+        &self,
+        fty: &syn::Type,
+        binding: &syn::Ident,
+        registry: &Registry<()>,
+    ) -> TokenStream {
         if is_string(fty) {
             return quote!(
                 free(*#binding as *mut ::core::ffi::c_void);
                 *#binding = ::core::ptr::null_mut();
             );
         }
-        let inner = opaque_ptr_payload_inner(fty).unwrap_or_else(|| {
-            panic!(
-                "Cbindgen::tagged_union: owning payload `{}` is neither a `String` nor an \
-                 opaque pointer",
-                fty.to_token_stream()
-            )
-        });
+        // A nested `data_struct` payload crosses BY VALUE, so the arm binds the
+        // mirror itself and what has to be released is each of its OWNING
+        // fields — reached through the binding and nulled in place, exactly as
+        // a directly-owning payload is. This is the shape zenoh-flat#30 needs
+        // (`ReplyResult`'s alternatives are structs whose fields are handles),
+        // and without it those fields would leak silently.
+        let owning = self.owning_data_struct_fields(fty, registry);
+        if !owning.is_empty() {
+            let frees = owning.iter().map(|(fname, fty)| {
+                if is_string(fty) {
+                    quote!(
+                        free((*#binding).#fname as *mut ::core::ffi::c_void);
+                        (*#binding).#fname = ::core::ptr::null_mut();
+                    )
+                } else {
+                    let inner = opaque_ptr_payload_inner(fty).unwrap_or_else(|| fty.clone());
+                    let src_inner = self.src_ty(&inner);
+                    quote!(
+                        if !(*#binding).#fname.is_null() {
+                            drop(::std::boxed::Box::from_raw(
+                                (*#binding).#fname as *mut #src_inner,
+                            ));
+                            (*#binding).#fname = ::core::ptr::null_mut();
+                        }
+                    )
+                }
+            });
+            return quote!(#(#frees)*);
+        }
+        let inner = opaque_ptr_payload_inner(fty).unwrap_or_else(|| fty.clone());
         let src_inner = self.src_ty(&inner);
         quote!(
             if !(*#binding).is_null() {
@@ -956,6 +985,19 @@ impl Cbindgen {
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(ty);
         let src = self.src_ty(ty);
+        // A payload that crosses through its own converter needs that converter
+        // to exist before this one can call it. `subs` only drives the
+        // post-resolution propagation pass, so it cannot order the build —
+        // returning `None` here is the resolver's DEFERRAL protocol, and it
+        // retries at the next fixed point. Without this the payload silently
+        // degrades to a passthrough and the generated code does not compile.
+        for v in &e.variants {
+            for f in &v.fields {
+                if self.payload_needs_converter(&f.ty) && r.input_entry(&f.ty).is_none() {
+                    return None;
+                }
+            }
+        }
         let mut subs: Vec<syn::Type> = Vec::new();
         let arms: Vec<TokenStream> = e
             .variants
@@ -971,12 +1013,16 @@ impl Cbindgen {
                     .iter()
                     .zip(&binds)
                     .map(|(f, b)| {
-                        // Payload fields with their own converter (a declared
-                        // `enum_type`) contribute a resolver dependency.
-                        if self.enums.contains_key(&TypeKey::from_type(&f.ty)) {
+                        // Every payload that crosses through a converter of its
+                        // own — a declared `enum_type`, a nested `data_struct`,
+                        // an opaque handle, a converted leaf — is a resolver
+                        // dependency, so its converter exists before this one is
+                        // emitted. Without it the payload silently falls back to
+                        // a passthrough and the generated code does not compile.
+                        if self.payload_needs_converter(&f.ty) {
                             subs.push(f.ty.clone());
                         }
-                        self.payload_in_expr(&f.ty, b)
+                        self.payload_in_expr(&f.ty, b, r)
                     })
                     .collect();
                 let to = variant_ctor(&src, vident, &v.fields, &exprs);
@@ -1069,6 +1115,14 @@ impl Cbindgen {
         let name = Self::out_name(ty);
         let cname = self.c_type_ident(ty);
         let src = self.src_ty(ty);
+        // Deferral, as in `in_tagged_union` — the output counterpart.
+        for v in &e.variants {
+            for f in &v.fields {
+                if self.payload_needs_converter(&f.ty) && r.output_entry(&f.ty).is_none() {
+                    return None;
+                }
+            }
+        }
         let mut subs: Vec<syn::Type> = Vec::new();
         let arms: Vec<TokenStream> = e
             .variants
@@ -1084,10 +1138,10 @@ impl Cbindgen {
                     .iter()
                     .zip(&binds)
                     .map(|(f, b)| {
-                        if self.enums.contains_key(&TypeKey::from_type(&f.ty)) {
+                        if self.payload_needs_converter(&f.ty) {
                             subs.push(f.ty.clone());
                         }
-                        self.payload_out_expr(&f.ty, b)
+                        self.payload_out_expr(&f.ty, b, r)
                     })
                     .collect();
                 let to = variant_ctor(&cname_ty(&cname), vident, &v.fields, &exprs);
@@ -1116,7 +1170,12 @@ impl Cbindgen {
     /// One payload field, C wire → Rust value. Mirrors the `data_struct`
     /// input policy, plus the opaque-pointer and declared-enum cases the
     /// mirror wire allows.
-    fn payload_in_expr(&self, fty: &syn::Type, b: &syn::Ident) -> TokenStream {
+    fn payload_in_expr(
+        &self,
+        fty: &syn::Type,
+        b: &syn::Ident,
+        registry: &Registry<()>,
+    ) -> TokenStream {
         if is_string(fty) {
             return quote!(if #b.is_null() {
                 ::std::string::String::new()
@@ -1161,12 +1220,35 @@ impl Cbindgen {
                 })
             };
         }
-        quote!(#b)
+        // A scalar is its own wire and needs no call.
+        if is_scalar(fty) {
+            return quote!(#b);
+        }
+        // Everything else rides its own resolved input converter — the wire
+        // came from that converter's destination, so the two cannot disagree.
+        // A fallible one propagates with `?`, which the union's own `Result`
+        // already provides.
+        match registry.input_entry(fty) {
+            Some(entry) => {
+                let conv = &entry.function.sig.ident;
+                if returns_result(&entry.function.sig.output) {
+                    quote!(#conv(#b)?)
+                } else {
+                    quote!(#conv(#b))
+                }
+            }
+            None => quote!(#b),
+        }
     }
 
     /// One payload field, Rust value → C wire. The `String` arm allocates the
     /// `char *` block the union's typed drop later frees.
-    fn payload_out_expr(&self, fty: &syn::Type, b: &syn::Ident) -> TokenStream {
+    fn payload_out_expr(
+        &self,
+        fty: &syn::Type,
+        b: &syn::Ident,
+        registry: &Registry<()>,
+    ) -> TokenStream {
         if is_string(fty) {
             return quote!(__cbg_alloc_cstr(#b));
         }
@@ -1187,7 +1269,20 @@ impl Cbindgen {
                 quote!(::std::boxed::Box::into_raw(#b) as *mut #c)
             };
         }
-        quote!(#b)
+        if is_scalar(fty) {
+            return quote!(#b);
+        }
+        // The output counterpart of the input dispatch above. Acceptance —
+        // including the refusal of a FALLIBLE output converter, which a union
+        // cannot report through — is decided once in `payload_field_wire`, so
+        // this site only emits the call.
+        match registry.output_entry(fty) {
+            Some(entry) => {
+                let conv = entry.function.sig.ident.clone();
+                quote!(#conv(#b))
+            }
+            None => quote!(#b),
+        }
     }
 
     /// Callback closure structs: one `#[repr(C)]` `{ context, call, drop }`

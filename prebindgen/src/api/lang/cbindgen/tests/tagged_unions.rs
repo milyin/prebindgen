@@ -351,6 +351,62 @@ fn declarators_do_not_accept_each_others_shape() {
     assert!(catch(unit_as_union));
 }
 
+/// Each way a payload can be refused reports ITS OWN reason. The wire policy
+/// has four of them, and a message that lists all four on every failure — or,
+/// worse, names the wrong one — is what makes a rejection hard to act on. A
+/// `Vec` payload is the case that proves it: it HAS an output converter and
+/// its directions agree, so a message about missing or mismatched converters
+/// would be flatly wrong.
+#[test]
+fn each_payload_rejection_names_its_own_reason() {
+    let loc = SourceLocation::default();
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn odd_new() -> Odd {
+            unimplemented!()
+        }
+    );
+
+    // (1) `Vec` — two wires needed, one field available.
+    let vec_case = || {
+        let e: syn::ItemEnum = syn::parse_quote!(
+            pub enum Odd {
+                Nothing,
+                Many(Vec<u8>),
+            }
+        );
+        let registry = Registry::<()>::from_items([
+            (syn::Item::Enum(e), loc.clone()),
+            (syn::Item::Fn(make.clone()), loc.clone()),
+        ])
+        .expect("index items");
+        let cbindgen = Cbindgen::new()
+            .source_module(syn::parse_quote!(example_flat))
+            .free_memory_function("example_free")
+            .mangle_type_name(|base| format!("{base}_t"))
+            .tagged_union(syn::parse_quote!(Odd))
+            .function(syn::parse_quote!(odd_new));
+        let _ = write(cbindgen, registry, "reject_vec_payload");
+    };
+    let msg = catch_msg(vec_case);
+    assert!(
+        msg.contains("Odd::Many"),
+        "names the offending payload: {msg}"
+    );
+    assert!(
+        msg.contains("TWO C wires") && msg.contains("pointer + length"),
+        "…and why a Vec cannot cross, not a converter complaint: {msg}"
+    );
+    assert!(
+        !msg.contains("no resolved OUTPUT converter"),
+        "a Vec HAS an output converter — that reason would be wrong: {msg}"
+    );
+
+    // The other three reasons (no output converter, wire mismatch, fallible
+    // output converter) are guards: an undeclared payload type fails at
+    // RESOLVE, before `prereq_tagged_unions` runs, so nothing reaches them
+    // from a fixture. Their messages are specific, but unexercised.
+}
+
 /// A payload type outside the supported wire set is a generation error naming
 /// the offending variant field, not a silently wrong wire.
 #[test]
@@ -438,6 +494,129 @@ fn null_opaque_payload_is_reported_not_materialised() {
     // The `Option` arm keeps NULL as a legitimate value.
     assert!(
         compact.contains("if__f0.is_null(){::core::option::Option::None}"),
+        "{src}"
+    );
+}
+
+/// A payload's wire is its **resolved converter destination**, not the
+/// layout-preserving `repr_c_struct` mirror policy (#158 part 2). That is what
+/// admits a nested `data_struct` by value and a converted leaf whose wire is
+/// its conversion's destination — the shapes zenoh-flat#30's `ReplyResult`
+/// needs, and which the mirror policy rejected outright.
+#[test]
+fn payload_wires_come_from_the_converter_destination() {
+    let loc = SourceLocation::default();
+    let items: Vec<(syn::Item, SourceLocation)> = vec![
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Caption {
+                    pub id: u64,
+                    pub text: String,
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Millis(pub u64);
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Enum(syn::parse_quote!(
+                pub enum Note {
+                    Silent,
+                    Titled(Caption),
+                    After(Millis),
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn millis_from_raw(v: u64) -> Millis {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn millis_to_raw(v: &Millis) -> u64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn note_new() -> Note {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn note_value(n: Note) -> u64 {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+    ];
+    let registry = Registry::<()>::from_items(items).expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(example_flat))
+        .free_memory_function("example_free")
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .data_struct(syn::parse_quote!(Caption))
+        .convert(
+            crate::convert!(Millis)
+                .input(crate::fun!(millis_from_raw))
+                .output(crate::fun!(millis_to_raw)),
+        )
+        .ignore_function(syn::parse_quote!(millis_from_raw))
+        .ignore_function(syn::parse_quote!(millis_to_raw))
+        .tagged_union(syn::parse_quote!(Note))
+        .function(syn::parse_quote!(note_new))
+        .function(syn::parse_quote!(note_value))
+        .panic();
+
+    let src = write(cbindgen, registry, "payload_converter_wires");
+    let compact: String = src.split_whitespace().collect();
+
+    // The mirror: a nested data struct rides BY VALUE as its own mirror, and a
+    // converted leaf rides as the wire its conversion produces.
+    assert!(compact.contains("Titled(caption_t),"), "{src}");
+    assert!(compact.contains("After(u64),"), "{src}");
+    // Both directions route through the payload's own converter.
+    assert!(
+        compact.contains("note_t::Titled(__cbg_out_Caption(__f0))"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("note_t::After(__cbg_out_Millis(__f0))"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("example_flat::Note::Titled(__cbg_in_Caption(__f0))"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("example_flat::Note::After(__cbg_in_Millis(__f0))"),
+        "{src}"
+    );
+    // The struct payload owns a `char *`, so the union's drop reaches THROUGH
+    // the by-value payload to release it and nulls the slot.
+    assert!(
+        compact.contains("free((*__f0).textas*mut::core::ffi::c_void);"),
+        "{src}"
+    );
+    assert!(
+        compact.contains("(*__f0).text=::core::ptr::null_mut();"),
         "{src}"
     );
 }

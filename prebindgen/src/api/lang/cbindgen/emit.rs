@@ -76,15 +76,78 @@ impl Cbindgen {
     /// enum with a discriminant no variant has would be UB). That is what makes
     /// the mirror's tag the *only* thing [`Cbindgen::in_tagged_union`] has to
     /// validate before `assume_init`.
-    pub(super) fn payload_field_wire(&self, fty: &syn::Type) -> Option<syn::Type> {
+    pub(super) fn payload_field_wire(
+        &self,
+        fty: &syn::Type,
+        registry: &Registry<()>,
+    ) -> Result<syn::Type, String> {
+        // `String` is the one type whose two directions disagree on the wire
+        // (`*const c_char` in, `*mut c_char` out), so the union field fixes the
+        // OWNING form and the per-arm expressions convert by hand.
         if is_string(fty) {
-            return Some(syn::parse_quote!(*mut ::core::ffi::c_char));
+            return Ok(syn::parse_quote!(*mut ::core::ffi::c_char));
         }
         if self.enums.contains_key(&TypeKey::from_type(fty)) {
             let c = self.c_type_ident(fty);
-            return Some(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
+            return Ok(syn::parse_quote!(::core::mem::MaybeUninit<#c>));
         }
-        self.mirror_field_wire(fty)
+        // A `Vec` payload needs TWO C wires (pointer + length) and one union
+        // field can carry only one, so its length would be silently dropped.
+        // Rejected explicitly, because the converter-destination rule below
+        // would otherwise hand back the pointer alone and look like it worked.
+        if is_vec(fty) {
+            return Err(
+                "a `Vec` needs TWO C wires (pointer + length) and one union field carries only \
+                 one, so its length would be silently dropped — hand the sequence over through \
+                 a separate function, or wrap it in a declared `opaque_ptr` handle"
+                    .to_string(),
+            );
+        }
+        // Layout-identical shapes first (scalar, `Box<T>`/`Option<Box<T>>`
+        // opaque pointer), so what already worked keeps its exact wire.
+        if let Some(w) = self.mirror_field_wire(fty) {
+            return Ok(w);
+        }
+        // Otherwise the payload's wire is its **resolved converter
+        // destination** — the same source a `data_struct` field effectively
+        // uses. A union is rebuilt arm by arm through real per-field
+        // conversions, so its payloads are not constrained to the
+        // layout-preserving shapes a `repr_c_struct` mirror needs; this is
+        // what admits a nested `data_struct`, a bare `opaque_ptr` handle, and
+        // a converted leaf (`Duration` → `u64`).
+        //
+        // One field serves both directions, so they must agree on it. They can
+        // legitimately differ (a `String`'s const-ness above), which is why a
+        // disagreement is `None` — a rejection naming the payload — rather
+        // than a silent pick of one side.
+        let out_entry = registry.output_entry(fty).ok_or_else(|| {
+            "no resolved OUTPUT converter — a payload crosses as its converter's destination, so \
+             it must be a scalar, a `String`, or a type this binding declares (`enum_type`, \
+             `data_struct`, `opaque_ptr`, or a `convert!` conversion)"
+                .to_string()
+        })?;
+        // Decided here rather than at the emit site, so every reason a payload
+        // can be refused is reported from ONE place, at the declaration.
+        if returns_result(&out_entry.function.sig.output) {
+            return Err(
+                "its OUTPUT converter is fallible, but a union is encoded without an error \
+                 channel — the encoder always writes a live arm, so there is nowhere for the \
+                 failure to go. Use an infallible conversion for this payload"
+                    .to_string(),
+            );
+        }
+        let out = out_entry.destination.clone();
+        if let Some(inp) = registry.input_entry(fty) {
+            if TypeKey::from_type(&inp.destination) != TypeKey::from_type(&out) {
+                return Err(format!(
+                    "its input and output converters disagree on the wire (`{}` in, `{}` out) \
+                     and one union field serves both directions",
+                    inp.destination.to_token_stream(),
+                    out.to_token_stream(),
+                ));
+            }
+        }
+        Ok(out)
     }
 
     /// Wire type of a `data_struct` field: the free [`c_field_wire`] policy
@@ -112,8 +175,63 @@ impl Cbindgen {
     /// True when a payload wire hands owned memory to C — a `char *` block or
     /// an opaque pointer — and therefore has to be released by the union's
     /// typed drop.
-    pub(super) fn payload_wire_owns(wire: &syn::Type) -> bool {
-        matches!(wire, syn::Type::Ptr(_))
+    ///
+    /// A nested `data_struct` payload crosses BY VALUE, so the wire itself is
+    /// not a pointer, but its mirror's own fields may be: the union's drop
+    /// then has to reach through and release each of them (see
+    /// [`Cbindgen::payload_free_stmt`]). Without this a `String` or handle
+    /// inside a struct payload would leak, silently, for exactly the shape
+    /// zenoh-flat#30 needs.
+    pub(super) fn payload_wire_owns(
+        &self,
+        fty: &syn::Type,
+        wire: &syn::Type,
+        registry: &Registry<()>,
+    ) -> bool {
+        if matches!(wire, syn::Type::Ptr(_)) {
+            return true;
+        }
+        !self.owning_data_struct_fields(fty, registry).is_empty()
+    }
+
+    /// Whether a tagged-union payload crosses through a converter of its own,
+    /// rather than being its own wire. Everything except a scalar and the
+    /// hand-written `String` / opaque-pointer shapes does — a declared
+    /// `enum_type`, a nested `data_struct`, a bare `opaque_ptr` handle, a
+    /// converted leaf. Such a payload must be registered as a resolver
+    /// dependency so its converter exists by the time the union's own is
+    /// emitted; without that it silently degrades to a passthrough and the
+    /// generated code does not compile.
+    pub(super) fn payload_needs_converter(&self, fty: &syn::Type) -> bool {
+        if is_string(fty) || is_scalar(fty) || is_vec(fty) {
+            return false;
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            return true;
+        }
+        // `Box<T>` / `Option<Box<T>>` opaque pointers are built inline from the
+        // handle's C ident, not through a converter call.
+        !matches!(self.mirror_field_wire(fty), Some(syn::Type::Ptr(_)))
+    }
+
+    /// The `(name, type)` of every field of a declared `data_struct` whose own
+    /// C wire owns memory. Empty when `fty` is not a declared data struct.
+    pub(super) fn owning_data_struct_fields(
+        &self,
+        fty: &syn::Type,
+        registry: &Registry<()>,
+    ) -> Vec<(syn::Ident, syn::Type)> {
+        if !self.data.contains_key(&TypeKey::from_type(fty)) {
+            return Vec::new();
+        }
+        self.struct_fields(registry, fty)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, fty)| {
+                self.data_field_wire(fty)
+                    .is_some_and(|w| matches!(w, syn::Type::Ptr(_)))
+            })
+            .collect()
     }
 
     /// Whether any declared function returns a `Vec<_>` (possibly nested under
