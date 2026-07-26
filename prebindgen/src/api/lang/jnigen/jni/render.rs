@@ -17,7 +17,7 @@ pub(crate) fn build_enum_class(class_name: &str, item_enum: &syn::ItemEnum) -> k
     // Same discriminant source of truth the Rust `jint → variant` decode
     // uses, so Kotlin `value(N)` and the generated decode agree.
     let entries: Vec<kt::KtEnumEntry> =
-        crate::api::lang::jnigen::util::enum_discriminant_values(item_enum)
+        crate::api::core::types_util::enum_discriminant_values(item_enum)
             .into_iter()
             .map(|(ident, value)| kt::KtEnumEntry {
                 name: mangle_kotlin_ident(
@@ -79,12 +79,26 @@ pub(crate) fn build_data_class(
         }
     };
 
+    // The class declaration is derived from the SAME plan the `fromParts`
+    // factory and the Rust encoder walk. Deriving it separately — a third
+    // classification with its own rules — is what let a property's type
+    // disagree with its own factory parameter (#156).
+    let plan = build_struct_plan(ext, registry, item_struct, 0).unwrap_or_else(|| {
+        panic!(
+            "data class `{}`: could not classify every field for the fromParts bridge. Each \
+             field needs a resolved OUTPUT converter (that direction declares the slot the \
+             encoder fills) AND the Kotlin metadata that converter carries — a `kotlin_name`, \
+             or a registered class for a projection leaf",
+            item_struct.ident
+        )
+    });
+
     let mut ctor_params: Vec<kt::KtCtorParam> = Vec::new();
     // Track per-field destructible (name, folded close strategy) so the
     // bottom emitter can produce a matching `close()` body for each.
     let mut destructible_fields: Vec<(String, crate::api::lang::jnigen::jni::FoldStrategy)> =
         Vec::new();
-    for field in fields_named {
+    for (field, pf) in fields_named.iter().zip(&plan.fields) {
         let field_ident = field.ident.as_ref().unwrap_or_else(|| {
             panic!(
                 "render_data_class_source: struct `{}` has an unnamed field in named-fields context",
@@ -92,76 +106,42 @@ pub(crate) fn build_data_class(
             )
         });
         let kotlin_field_name = mangle_kotlin_ident(&kt_snake_to_camel(&field_ident.to_string()));
+        let owner = format!("{}.{}", item_struct.ident, field_ident);
 
-        // Projection field (opaque handle or value class): the typed Kotlin
-        // type (`ZKeyExpr?`, `List<ZKeyExpr>`, `ZenohId`, `List<ZenohId>`, …)
-        // is derived from the folded `Projection` the type-unfolding mechanism
-        // propagated onto this field's converter metadata, instead of a
-        // syntactic `Option<T>` peel. Closeable `close()` emission applies
-        // only to `Handle` kind (and only when owned); value classes are
-        // erased to their inner wire, so they never close.
-        let field_projection = registry
-            .output_entry(&field.ty)
-            .and_then(|e| e.metadata.projection.clone())
-            .or_else(|| {
-                registry
-                    .input_entry(&field.ty)
-                    .and_then(|e| e.metadata.projection.clone())
-            });
-        if let Some(h) = field_projection {
-            let leaf = projection_leaf_kt(ext, &h).unwrap_or_else(|| {
-                panic!(
-                    "render_data_class_source: projection field `{}.{}` leaf `{}` has no \
-                         Kotlin FQN registered (ptr_class / value_class)",
-                    item_struct.ident, field_ident, h.leaf_key
-                )
-            });
-            ctor_params.push(
-                kt::KtCtorParam::new(&kotlin_field_name, handle_kt_type(&h.strategy, &leaf)).val(),
-            );
-            if matches!(
-                h.kind,
-                crate::api::lang::jnigen::jni::ProjectionKind::Handle
-            ) && h.owned
+        // The declaration reads ONE direction — output — because that is the
+        // direction that declares the `fromParts` slots the encoder fills, and
+        // it is the direction both plans already use exclusively
+        // (`build_struct_plan` output-only, `flat_input.rs` input-only). A
+        // property whose type came from whichever direction happened to
+        // resolve, while its wire came from the other, is how the declaration
+        // drifted from the plans.
+        //
+        // A projection visible only on the INPUT side is exactly that drift
+        // made reachable: the old walk emitted a typed handle property (plus
+        // `AutoCloseable`) while the plan classified the same field as an
+        // ordinary leaf, so the property and its own factory parameter
+        // disagreed. Reject it at the declaration instead.
+        if !matches!(pf.kind, PlanFieldKind::Projection { .. }) {
+            if let Some(proj) = registry
+                .input_entry(&field.ty)
+                .and_then(|e| e.metadata.projection.clone())
             {
-                destructible_fields.push((kotlin_field_name, h.strategy));
+                panic!(
+                    "data class field `{owner}`: the INPUT converter projects this field as `{:?}` \
+                     but the OUTPUT converter does not, so the property type and its own \
+                     `fromParts` parameter would disagree. The output direction declares the \
+                     bridge, so give the field an output converter with the same projection — or \
+                     drop the input-side projection",
+                    proj.kind
+                );
             }
-            continue;
         }
 
-        let kotlin_ty = registry
-            .output_entry(&field.ty)
-            .and_then(|e| e.metadata.kotlin_name.clone())
-            .or_else(|| registry.input_entry(&field.ty).and_then(|e| e.metadata.kotlin_name.clone()))
-            .unwrap_or_else(|| {
-                panic!(
-                    "render_data_class_source: field `{}.{}` has no Kotlin type mapping; register converters before declaring data_class",
-                    item_struct.ident,
-                    field_ident
-                )
-            });
-        let ty = kotlin_ty;
-        // `Option<T>` whose wire is a JNI primitive (jlong/jint/jboolean/…)
-        // and that *isn't* an opaque handle (handled above) is encoded by
-        // the struct emitter as the bare primitive with a sentinel for
-        // `None` (0 / 0.0 / false). The Kotlin field must match that JVM
-        // slot: declare it non-nullable so the constructor signature
-        // stays primitive (`J` vs `Ljava/lang/Long;`). Nullable boxing
-        // for non-handle primitives would require generator-side changes
-        // in `struct_output_body` to `Long.valueOf(...)`.
-        let wire = registry
-            .output_entry(&field.ty)
-            .map(|e| e.destination.clone());
-        let primitive_wire = wire
-            .as_ref()
-            .map(crate::api::lang::jnigen::jni::is_jni_primitive)
-            .unwrap_or(false);
-        let ty = if is_option_type(&field.ty) && !primitive_wire {
-            ty.nullable()
-        } else {
-            ty
-        };
-        ctor_params.push(kt::KtCtorParam::new(&kotlin_field_name, ty).val());
+        ctor_params
+            .push(kt::KtCtorParam::new(&kotlin_field_name, pf.kind.property_type(&owner)).val());
+        if let Some(strategy) = pf.kind.destructible() {
+            destructible_fields.push((kotlin_field_name, strategy));
+        }
     }
 
     // `fromParts` companion factory — recursively flattened the same way as the
@@ -1175,8 +1155,16 @@ fn classify_params(
                     .leaves
                     .iter()
                     .filter_map(|leaf| {
-                        let tail = leaf.handle_target_tail.as_ref()?;
-                        let target = format!("{name}{tail}");
+                        // Through the leaf's own access template rather than a
+                        // reconstructed `<name>.<field>`, so the lock target is
+                        // whatever expression the leaf actually reads from.
+                        // No live case needs it yet — `build_flat_sum_field`
+                        // returns `None` for a projection payload, so a
+                        // tag-gated handle leaf cannot reach here — but the
+                        // template is the leaf's own answer to "where did this
+                        // come from", and deriving it twice is how the two
+                        // drift apart.
+                        let target = leaf.kt_handle_target(&name)?;
                         let consume_null = if leaf.handle_nullable {
                             format!("{target}?.markConsumed()")
                         } else {

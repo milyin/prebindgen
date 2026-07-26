@@ -15,6 +15,7 @@ mod delivery;
 mod flat_input;
 mod names;
 mod struct_out;
+mod sum_out;
 mod vec_build;
 mod wrapper;
 
@@ -24,5 +25,6 @@ pub(crate) use delivery::*;
 pub(crate) use flat_input::*;
 pub(crate) use names::*;
 pub(crate) use struct_out::*;
+pub(crate) use sum_out::*;
 pub(crate) use vec_build::*;
 pub(crate) use wrapper::*;

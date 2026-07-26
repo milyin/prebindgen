@@ -8,6 +8,7 @@ mod inputs;
 mod lowering;
 mod returns;
 mod structs;
+mod tagged_unions;
 
 fn write(cbindgen: Cbindgen, registry: Registry<()>, tag: &str) -> String {
     let dir = unique_test_dir(&format!("cbindgen_{tag}"));
@@ -28,4 +29,18 @@ fn error_struct() -> syn::ItemStruct {
 
 fn catch<F: FnOnce()>(f: F) -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err()
+}
+
+/// Like [`catch`], but returns the panic MESSAGE — for asserting that a
+/// rejection names the reason that actually applies, not merely that it
+/// rejected.
+fn catch_msg<F: FnOnce()>(f: F) -> String {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .err()
+        .and_then(|e| {
+            e.downcast_ref::<String>()
+                .cloned()
+                .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+        })
+        .expect("expected a panic carrying a message")
 }

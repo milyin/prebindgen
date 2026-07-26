@@ -458,89 +458,184 @@ pub fn apply_value_structs<M>(
     declared_fns: &std::collections::HashSet<syn::Ident>,
 ) -> Result<(), UnfoldError> {
     for vd in &decons {
-        let decon = DeconId::Default(vd.key.to_string());
-        require_unique_leaf_names(&vd.source, &vd.leaves)?;
-        registry
-            .decon_plans
-            .entry(decon.clone())
-            .or_insert_with(|| DeconSpec {
-                source: vd.source.clone(),
-                leaves: vd.leaves.clone(),
-            });
+        let decon = wire_fixed_decon(registry, &vd.key, &vd.source, &vd.leaves)?;
 
         // Output position: a declared fn returning the struct
         // (`T` / `&T` / `Option<T|&T>` / `Vec<T|&T>`) decomposes into a
         // fixed-builder plan. (`Result<T, E>` is left to the whole-value
         // converter — the synthesizer covers the infallible returns.)
-        for func in declared_fns {
-            let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
-                continue;
-            };
-            let ret = fn_return(&item_fn);
-            if !returns_type(&ret, &vd.key) || registry.unfold_plans.contains_key(func) {
-                continue;
-            }
-            // Shape over the field decomposition: peel an outer `Option`, then a
-            // `Vec`, then a leading `&`. `Vec<T|&T>` ⇒ Iterable (a **fixed
-            // folder**: each element's field leaves cross raw and the foreign
-            // folder rebuilds it via `fromParts` + appends, so no Java object is
-            // built on the Rust side); `Option<…>` wraps the inner shape in
-            // Optional (`None` ⇒ a null result). `element: None` keeps the
-            // decomposed-leaf path. The element/inner borrow-ness sets `by_ref`
-            // (the field reach clones either way).
-            let (optional, after_opt) = match option_inner_type(&ret) {
-                Some(inner) => (true, inner),
-                None => (false, ret.clone()),
-            };
-            let (iterable, core) = match vec_inner_type(&after_opt) {
-                Some(inner) => (true, inner),
-                None => (false, after_opt),
-            };
-            let by_ref = matches!(&core, syn::Type::Reference(_));
-            let inner_shape = if iterable {
-                UnfoldShape::Iterable(Box::new(UnfoldShape::Base))
-            } else {
-                UnfoldShape::Base
-            };
-            let shape = if optional {
-                UnfoldShape::Optional((), Box::new(inner_shape))
-            } else {
-                inner_shape
-            };
-            for leaf in &vd.leaves {
-                registry.require_output(&leaf.out_ty, &loc);
-            }
-            let plan = UnfoldPlan {
-                source: vd.source.clone(),
-                decon: Some(decon.clone()),
-                by_ref,
-                shape,
-                leaves: vd.leaves.clone(),
-                element: None,
-                delivery: Delivery::Callback,
-                convert_out_ty: None,
-                fixed_builder: true,
-            };
-            registry.unfold_plans.insert(func.clone(), plan);
-        }
+        wire_fixed_returns(registry, vd, &decon, declared_fns, false);
 
         // Callback-argument position: an `impl Fn(&T)` / `impl Fn(T)` parameter
         // of a declared fn delivers the flattened leaves to the foreign
         // callback, which reassembles the whole value via the data class's
         // `fromParts` before invoking the user's typed callback (the group
         // reassembly lives in the JNI adapter's `asRaw` proxy).
-        apply_value_struct_callbacks(registry, vd, &decon, declared_fns)?;
+        wire_fixed_callbacks(registry, vd, &decon, declared_fns)?;
     }
     Ok(())
 }
 
+/// A synthesized **sum** decomposition, produced by the language adapter (which
+/// knows how each payload encodes) and fed to [`apply_sum_returns`] — the
+/// selector-carrying sibling of [`ValueDecon`].
+///
+/// Its [`leaves`](Self::leaves) are a [`LeafSource::SumTag`] selector followed
+/// by one **group** per alternative ([`LeafSource::VariantField`] leaves
+/// carrying [`UnfoldLeaf::group`]). Exactly one group is live per value; the
+/// emitter reads the whole list as ONE `match` over the value, filling every
+/// inert slot with its wire default. The foreign side picks the live group by
+/// the tag and rebuilds the alternative, so no object is built on the Rust
+/// side.
+pub struct SumDecon {
+    /// Canonical key of the sum type (the `DeconId::Default` key).
+    pub key: TypeKey,
+    /// The enum type (owned) the leaves decompose.
+    pub source: syn::Type,
+    /// The tag leaf followed by every variant's group, in tag order.
+    pub leaves: Vec<UnfoldLeaf>,
+}
+
+/// Wire the synthesized **sum** decompositions into the registry — the
+/// [`apply_value_structs`] analog for a value whose alternatives are chosen at
+/// runtime instead of being a fixed product.
+///
+/// For every declared function returning the sum (`E` / `&E` / `Option<E>` /
+/// `Vec<E>`) and every `impl Fn(E)` / `impl Fn(&E)` callback parameter, builds a
+/// **fixed-builder** [`UnfoldPlan`] over the tag + group leaves, registering
+/// each leaf's `out_ty` as a required output.
+///
+/// A sum has no converter of its own (it is boundary-only: a tag plus groups is
+/// not a single wire), so the declared return's scan-time output requirement —
+/// including the `Option<E>` / `Vec<E>` layers, which the boundary-only pass
+/// does not reach — is dropped here as the plan takes over.
+///
+/// Runs in `write_rust` right after [`apply_value_structs`] and before `resolve`.
+pub fn apply_sum_returns<M>(
+    registry: &mut Registry<M>,
+    decons: Vec<SumDecon>,
+    declared_fns: &std::collections::HashSet<syn::Ident>,
+) -> Result<(), UnfoldError> {
+    for sd in &decons {
+        let decon = wire_fixed_decon(registry, &sd.key, &sd.source, &sd.leaves)?;
+        let vd = ValueDecon {
+            key: sd.key.clone(),
+            source: sd.source.clone(),
+            leaves: sd.leaves.clone(),
+        };
+        wire_fixed_returns(registry, &vd, &decon, declared_fns, true);
+        wire_fixed_callbacks(registry, &vd, &decon, declared_fns)?;
+    }
+    Ok(())
+}
+
+/// Register the declaration-canonical [`DeconSpec`] of a synthesized
+/// decomposition (first writer wins) and return its identity.
+fn wire_fixed_decon<M>(
+    registry: &mut Registry<M>,
+    key: &TypeKey,
+    source: &syn::Type,
+    leaves: &[UnfoldLeaf],
+) -> Result<DeconId, UnfoldError> {
+    let decon = DeconId::Default(key.to_string());
+    require_unique_leaf_names(source, leaves)?;
+    registry
+        .decon_plans
+        .entry(decon.clone())
+        .or_insert_with(|| DeconSpec {
+            source: source.clone(),
+            leaves: leaves.to_vec(),
+        });
+    Ok(decon)
+}
+
+/// Build the fixed-builder output plan for every declared fn returning the
+/// decomposed type (`T` / `&T` / `Option<T|&T>` / `Vec<T|&T>`). `no_converter`
+/// marks a type that has no whole-value converter at all (a sum), so the
+/// declared return's scan-time output requirement is dropped as the plan
+/// replaces it.
+fn wire_fixed_returns<M>(
+    registry: &mut Registry<M>,
+    vd: &ValueDecon,
+    decon: &DeconId,
+    declared_fns: &std::collections::HashSet<syn::Ident>,
+    no_converter: bool,
+) {
+    for func in declared_fns {
+        let Some((item_fn, loc)) = registry.functions.get(func).cloned() else {
+            continue;
+        };
+        let ret = fn_return(&item_fn);
+        if !returns_type(&ret, &vd.key) || registry.unfold_plans.contains_key(func) {
+            continue;
+        }
+        // Shape over the leaf decomposition: peel an outer `Option`, then a
+        // `Vec`, then a leading `&`. `Vec<T|&T>` ⇒ Iterable (a **fixed
+        // folder**: each element's leaves cross raw and the foreign folder
+        // rebuilds it + appends, so no Java object is built on the Rust
+        // side); `Option<…>` wraps the inner shape in Optional (`None` ⇒ a
+        // null result). `element: None` keeps the decomposed-leaf path. The
+        // element/inner borrow-ness sets `by_ref` (the reach clones either
+        // way).
+        let (optional, after_opt) = match option_inner_type(&ret) {
+            Some(inner) => (true, inner),
+            None => (false, ret.clone()),
+        };
+        let (iterable, core) = match vec_inner_type(&after_opt) {
+            Some(inner) => (true, inner),
+            None => (false, after_opt.clone()),
+        };
+        let by_ref = matches!(&core, syn::Type::Reference(_));
+        let inner_shape = if iterable {
+            UnfoldShape::Iterable(Box::new(UnfoldShape::Base))
+        } else {
+            UnfoldShape::Base
+        };
+        let shape = if optional {
+            UnfoldShape::Optional((), Box::new(inner_shape))
+        } else {
+            inner_shape
+        };
+        if no_converter {
+            // The plan delivers the return leaf-by-leaf, so no converter is
+            // needed for the declared return — and for a sum none can exist.
+            // Drop the scan-time registrations of every layer (the boundary-only
+            // pass only reaches the bare type), so the missing converters are not
+            // flagged as unresolved-required.
+            // All THREE peeled layers, the `Vec` element included. The shape
+            // fold peels here, so the matching unrequire belongs here; leaving
+            // the element out made the invariant depend on the adapter's
+            // `boundary_only_types` covering it — true for JniGen today, and
+            // the only reason a `Vec<sum>`-only declaration resolves.
+            registry.unrequire_output(&ret);
+            registry.unrequire_output(&after_opt);
+            registry.unrequire_output(&core);
+        }
+        for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
+            registry.require_output(&leaf.out_ty, &loc);
+        }
+        let plan = UnfoldPlan {
+            source: vd.source.clone(),
+            decon: Some(decon.clone()),
+            by_ref,
+            shape,
+            leaves: vd.leaves.clone(),
+            element: None,
+            delivery: Delivery::Callback,
+            convert_out_ty: None,
+            fixed_builder: true,
+        };
+        registry.unfold_plans.insert(func.clone(), plan);
+    }
+}
+
 /// Build a fixed-builder callback-arg plan for every `impl Fn(&T)` /
-/// `impl Fn(T)` parameter (of a declared fn) whose value is the value struct
-/// `vd`. The foreign callback receives the flattened leaves (reassembled there
-/// via the data class's `fromParts`) instead of a whole value built on the Rust
-/// side. Separate from the output-position wiring so the callback path (which
-/// needs the foreign-side group-reassembly adapter) can be enabled on its own.
-fn apply_value_struct_callbacks<M>(
+/// `impl Fn(T)` parameter (of a declared fn) whose value is the decomposed type
+/// `vd`. The foreign callback receives the flattened leaves (reassembled there)
+/// instead of a whole value built on the Rust side. Separate from the
+/// output-position wiring so the callback path (which needs the foreign-side
+/// group-reassembly adapter) can be enabled on its own.
+fn wire_fixed_callbacks<M>(
     registry: &mut Registry<M>,
     vd: &ValueDecon,
     decon: &DeconId,
@@ -582,7 +677,7 @@ fn apply_value_struct_callbacks<M>(
                 if registry.callback_arg_plans.contains_key(&key) {
                     continue;
                 }
-                for leaf in &vd.leaves {
+                for leaf in vd.leaves.iter().filter(|l| l.has_converter()) {
                     registry.require_output(&leaf.out_ty, &loc);
                 }
                 let plan = UnfoldPlan {
@@ -1147,6 +1242,7 @@ fn flatten<M>(
                     identity: true,
                     nullable,
                     source: LeafSource::Accessor,
+                    group: None,
                 });
             }
             DeconRecord::Acc { name, .. } | DeconRecord::LocalAcc { name, .. } => {
@@ -1244,6 +1340,7 @@ fn flatten<M>(
                         identity,
                         nullable,
                         source: LeafSource::Accessor,
+                        group: None,
                     });
                 }
             }

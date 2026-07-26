@@ -5,10 +5,10 @@
 use super::*;
 
 /// The adapter-declared kind of a **bare** (already `Option`/`&`-stripped)
-/// Rust type, in fixed precedence: opaque handle → enum class → value blob
-/// → registered source struct → everything else.
+/// Rust type, in fixed precedence: opaque handle → enum class → sealed class
+/// → value blob → registered source struct → everything else.
 ///
-/// The three special kinds are mutually exclusive by builder enforcement;
+/// The four special kinds are mutually exclusive by builder enforcement;
 /// the precedence order only pins down behavior if that invariant is ever
 /// violated. `DataStruct` is any struct captured from the source crate —
 /// `cfg` tells whether it was also declared to the builder (a `data_class`
@@ -18,6 +18,10 @@ pub(crate) enum TypeKind<'r, 'c> {
     Handle,
     /// Declared via `enum_class` — jint wire, Kotlin `enum class`.
     Enum,
+    /// Declared via `sealed_class` — a data-carrying enum: an `Int` tag plus
+    /// one leaf group per variant, surfacing as a Kotlin `sealed interface`.
+    /// It has no single wire of its own; it crosses flattened.
+    Sum,
     /// Declared via `value_class` — raw-memory `JByteArray` wire.
     ValueBlob,
     /// A `#[prebindgen]` struct from the source crate that is none of the
@@ -31,11 +35,14 @@ pub(crate) enum TypeKind<'r, 'c> {
 }
 
 impl TypeConfig {
-    /// Declared as one of the three non-data-class kinds (`ptr_class` /
-    /// `enum_class` / `value_class`) — types with their own dedicated
-    /// Kotlin emitters, never flattened as data classes.
+    /// Declared as one of the four non-data-class kinds (`ptr_class` /
+    /// `enum_class` / `sealed_class` / `value_class`) — types with their own
+    /// dedicated Kotlin emitters, never flattened as data classes.
     pub(crate) fn special_decl(&self) -> bool {
-        self.opaque.is_some() || self.enum_cfg.is_some() || self.value_blob
+        self.opaque.is_some()
+            || self.enum_cfg.is_some()
+            || self.sum_cfg.is_some()
+            || self.value_blob
     }
 }
 
@@ -55,6 +62,9 @@ impl JniGen {
             }
             if c.enum_cfg.is_some() {
                 return TypeKind::Enum;
+            }
+            if c.sum_cfg.is_some() {
+                return TypeKind::Sum;
             }
             if c.value_blob {
                 return TypeKind::ValueBlob;

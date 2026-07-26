@@ -207,7 +207,31 @@ fn factory_from_plan(
         } else {
             format!("{prefix}_{camel}")
         };
-        match &f.kind {
+        let (p, part) = factory_field(&f.kind, &base, imports)?;
+        params.extend(p);
+        parts.push(part);
+    }
+
+    let reconstruct = format!("{class_name}({})", parts.join(", "));
+    Some((params, reconstruct))
+}
+
+/// Declare the `fromParts` slots of ONE value position and the expression
+/// that rebuilds it — the Kotlin mirror of
+/// [`encode_field`](super::encode_field). A sum's payloads go through here
+/// too, so a payload and a struct field of the same type declare the same
+/// slot on both sides.
+fn factory_field(
+    kind: &PlanFieldKind,
+    base: &str,
+    imports: &mut BTreeSet<String>,
+) -> Option<(Vec<(String, kt::KtType)>, String)> {
+    let mut params: Vec<(String, kt::KtType)> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
+    let base = base.to_string();
+    {
+        let f_kind = kind;
+        match f_kind {
             // Projection leaf (handle / value class / blob).
             PlanFieldKind::Projection { proj, fqn, .. } => {
                 let short = register_fqn(fqn, imports);
@@ -229,6 +253,53 @@ fn factory_from_plan(
                 let short = register_fqn(kotlin.leaf_name()?, imports);
                 params.push((base.clone(), kt::KtType::int().nullable()));
                 parts.push(format!("{base}?.let {{ {short}.fromInt(it) }}"));
+            }
+            // Data-carrying enum — the tag slot plus every variant's group
+            // side by side, rebuilt by an inlined `when` (no JNI crossing,
+            // exactly like a nested data class).
+            PlanFieldKind::Sum {
+                kotlin_fqn,
+                optional,
+                variants,
+                ..
+            } => {
+                let iface_short = register_fqn(kotlin_fqn, imports);
+                let flag = format!("{base}__present");
+                if *optional {
+                    params.push((flag.clone(), kt::KtType::boolean()));
+                }
+                params.push((format!("{base}__tag"), kt::KtType::int()));
+
+                let mut arms: Vec<String> = Vec::new();
+                for (tag, v) in variants.iter().enumerate() {
+                    // Each group's slots are declared once, in variant order,
+                    // and are INERT whenever another variant is live — so the
+                    // nullability rule below applies to every group, not just
+                    // to an optional one.
+                    let mut fwd: Vec<String> = Vec::new();
+                    for pf in &v.fields {
+                        let slot = format!("{base}_{}", pf.slot);
+                        let (group_params, part) = factory_field(&pf.kind, &slot, imports)?;
+                        fwd.push(nullable_group_part(&mut params, group_params, part));
+                    }
+                    let ctor = if v.fields.is_empty() {
+                        format!("{iface_short}.{}", v.kotlin_name)
+                    } else {
+                        format!("{iface_short}.{}({})", v.kotlin_name, fwd.join(", "))
+                    };
+                    arms.push(format!("{tag} -> {ctor}"));
+                }
+                let when = format!(
+                    "when ({base}__tag) {{ {}; else -> throw IllegalArgumentException(\"{}: \
+                     invalid tag ${base}__tag\") }}",
+                    arms.join("; "),
+                    iface_short,
+                );
+                parts.push(if *optional {
+                    format!("if ({flag}) {when} else null")
+                } else {
+                    when
+                });
             }
             // Nested data-class field — inline its leaves and reconstruct via
             // the child's own `fromParts` (in bytecode, no JNI crossing).
@@ -293,8 +364,76 @@ fn factory_from_plan(
         }
     }
 
-    let reconstruct = format!("{class_name}({})", parts.join(", "));
-    Some((params, reconstruct))
+    debug_assert_eq!(
+        parts.len(),
+        1,
+        "factory_field must yield exactly one reconstruct expression"
+    );
+    Some((params, parts.remove(0)))
+}
+
+/// Declare one variant group's slots and return the expression that forwards
+/// them into the variant constructor.
+///
+/// A group is **inert** whenever another variant is live, and the Rust
+/// encoder fills an inert object slot with `JObject::null()`
+/// ([`primitive_default_for_descriptor`](super::primitive_default_for_descriptor)).
+/// A JVM `null` handed to a non-null Kotlin parameter throws inside the
+/// intrinsic null-check, before any generated code runs — so every
+/// object-shaped group slot must be declared nullable and forwarded `!!`
+/// inside its own (live) arm, where it is non-null again. Primitives take
+/// their `0`/`false` default and need no such treatment.
+///
+/// This is the N=1 `Option<nested>` rule (see the `Nested { optional }` arm)
+/// generalized to N groups; both call it so the two paths cannot drift.
+fn nullable_group_part(
+    params: &mut Vec<(String, kt::KtType)>,
+    group_params: Vec<(String, kt::KtType)>,
+    part: String,
+) -> String {
+    let mut part = part;
+    for (n, t) in group_params {
+        if is_kotlin_primitive_ty(&t) || t.is_nullable() {
+            params.push((n, t));
+        } else {
+            // The reconstruct expression references the slot by name; the
+            // live arm re-asserts non-nullness there.
+            part = replace_ident(&part, &n, &format!("{n}!!"));
+            params.push((n, t.nullable()));
+        }
+    }
+    part
+}
+
+/// Replace whole-identifier occurrences of `from` in a rendered Kotlin
+/// expression. Whole-identifier: a match must not be flanked by identifier
+/// characters, so rewriting `x` never touches `x_2` or `ax` — slot names of
+/// one group share a prefix (`exact_v0`, `exact_v01`), and a substring
+/// replace would corrupt them.
+///
+/// The left-hand character is taken from what has already been **written**,
+/// never from the remaining input: `rest` advances past a rejected occurrence,
+/// so by the next candidate the character preceding it can already have been
+/// consumed. Re-slicing `rest` there loses it and turns two adjacent
+/// occurrences (`"axx"`, rewriting `x`) into one accepted match.
+fn replace_ident(haystack: &str, from: &str, to: &str) -> String {
+    let is_ident_char = |c: char| c == '_' || c.is_alphanumeric();
+    let mut out = String::with_capacity(haystack.len());
+    let mut rest = haystack;
+    while let Some(pos) = rest.find(from) {
+        out.push_str(&rest[..pos]);
+        let before_ok = out.chars().next_back().is_none_or(|c| !is_ident_char(c));
+        let after = &rest[pos + from.len()..];
+        let after_ok = after.chars().next().is_none_or(|c| !is_ident_char(c));
+        if before_ok && after_ok {
+            out.push_str(to);
+        } else {
+            out.push_str(from);
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Render the Kotlin `close()` expression for a handle `receiver` through
@@ -506,5 +645,42 @@ pub(crate) fn register_fqn(fqn: &str, used: &mut BTreeSet<String>) -> String {
         fqn.rsplit('.').next().unwrap_or(fqn).to_string()
     } else {
         fqn.to_string()
+    }
+}
+
+#[cfg(test)]
+mod replace_ident_tests {
+    use super::replace_ident;
+
+    /// The property the function exists for: a slot name is rewritten only as a
+    /// whole identifier, so the `!!` never lands on a longer name that merely
+    /// starts (or ends) with it.
+    #[test]
+    fn only_whole_identifiers_are_rewritten() {
+        assert_eq!(replace_ident("x", "x", "x!!"), "x!!");
+        assert_eq!(replace_ident("x_2", "x", "x!!"), "x_2");
+        assert_eq!(replace_ident("ax", "x", "x!!"), "ax");
+        assert_eq!(
+            replace_ident("Reading.Exact(exact_v0)", "exact_v0", "exact_v0!!"),
+            "Reading.Exact(exact_v0!!)"
+        );
+        // A prefix of a longer slot name of the same group is left alone.
+        assert_eq!(
+            replace_ident("f(exact_v0, exact_v01)", "exact_v0", "exact_v0!!"),
+            "f(exact_v0!!, exact_v01)"
+        );
+    }
+
+    /// A rejected occurrence must not consume the context of the next one: with
+    /// the left character re-sliced out of the remaining input, `"axx"` rewrote
+    /// its second `x` — the first having been dropped from `rest` along with the
+    /// `a` that disqualified it.
+    #[test]
+    fn a_rejected_match_keeps_its_left_context() {
+        assert_eq!(replace_ident("axx", "x", "x!!"), "axx");
+        assert_eq!(replace_ident("xxx", "x", "x!!"), "xxx");
+        assert_eq!(replace_ident("x ax", "x", "x!!"), "x!! ax");
+        // Every occurrence of a genuinely standalone identifier is rewritten.
+        assert_eq!(replace_ident("x + x", "x", "x!!"), "x!! + x!!");
     }
 }

@@ -985,6 +985,42 @@ impl Prebindgen for JniGen {
         out
     }
 
+    /// Synthesize the tag-plus-groups decomposition of every `sealed_class`
+    /// type, so a function whose own return (or callback argument) IS the sum
+    /// delivers it as a tag plus one leaf group per variant — the same wire
+    /// layout a sum-typed struct field already gets, reassembled by the hoisted
+    /// builder singleton instead of by the parent's `fromParts`.
+    ///
+    /// Emitted for every declared sum, not only the ones currently returned: a
+    /// decomposition with no matching function wires no plan, and an unused
+    /// `DeconSpec` emits nothing.
+    fn sum_decons(
+        &self,
+        registry: &Registry<KotlinMeta>,
+    ) -> Vec<crate::api::core::unfold::SumDecon> {
+        let mut keys: Vec<&TypeKey> = self.types.keys().collect();
+        keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+        let mut out = Vec::new();
+        for key in keys {
+            let Some(sum_cfg) = self.types[key].sum_cfg.as_ref() else {
+                continue;
+            };
+            let source = key.to_type();
+            let Some(ident) = bare_path_ident(&source) else {
+                continue;
+            };
+            let Some((item_enum, _)) = registry.enums.get(&ident) else {
+                continue;
+            };
+            out.push(crate::api::core::unfold::SumDecon {
+                key: key.clone(),
+                source,
+                leaves: crate::api::lang::jnigen::jni::synth_sum_leaves(self, sum_cfg, item_enum),
+            });
+        }
+        out
+    }
+
     /// Nominate every **single-leaf** element type that appears in a `Vec<T>` /
     /// `Option<Vec<T>>` return or an `impl Fn(&[T])` callback arg, so
     /// [`crate::api::core::unfold::apply_leaf_vec_folds`] routes the collection
@@ -1200,6 +1236,130 @@ impl Prebindgen for JniGen {
                 }
             }
         }
+        // Three sum positions in a declared signature are wrong. Two have no
+        // lowering at all and would otherwise fail as
+        // "`E` has no output converter", which names the sum rather than the
+        // position — actively misleading, because a sum has no whole-value
+        // converter BY DESIGN, so that message sends the reader looking for
+        // something that must not exist. Reject them here, where the message
+        // can say what is actually unsupported and what to write instead.
+        for ident in self.declared_functions() {
+            let Some((item_fn, _)) = registry.functions.get(&ident) else {
+                continue;
+            };
+            // (1) A sum in the `Ok` position of a fallible return. A sum is
+            // delivered DECOMPOSED through a builder callback, and the
+            // `Result` lane has no builder: a `Result` return deliberately
+            // keeps its whole-value converter so a fallible factory still
+            // yields a handle (see `unfold::returns_type`).
+            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
+                if let Some(ok) = crate::api::core::types_util::result_ok_type(ret) {
+                    let core = crate::api::core::types_util::peel_ref_option_vec(&ok);
+                    if matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                        return Err(format!(
+                            "fn `{ident}`: `Result<{}, _>` — a sealed_class value is not \
+                             supported in the success position of a fallible return. A sum \
+                             crosses decomposed (a tag plus one leaf group per variant) \
+                             through a builder callback, which the `Result` lane does not \
+                             have — a fallible return keeps its whole-value converter so a \
+                             factory can still hand back a handle. Return `{}` directly and \
+                             report failure through the error channel, or model the failure \
+                             as one of the sum's own variants",
+                            ok.to_token_stream(),
+                            ok.to_token_stream(),
+                        ));
+                    }
+                }
+            }
+            // (2) A sum in the **error** position of a `Result` with no
+            // deconstructor declared for it. Unlike the other two this one
+            // RESOLVES — it takes the generic undecomposed-`E` path, where the
+            // `Err` is routed to the plain binding-error channel as
+            // `e.to_string()`. So the author declares a sealed hierarchy and
+            // Kotlin silently receives a `String`, and the generated crate
+            // quietly acquires an `E: Display` bound that fails downstream in
+            // generated code rather than at the declaration. Emitting
+            // something misleading is worse than not emitting: say so here.
+            //
+            // An error plan can only come from a TYPE-level `expand_return!`
+            // (auto-applied to every fn with that `E`); a per-fn
+            // `.expand_return(...)` always targets the Output position. So the
+            // declaration set is the whole story, and this stays a pre-resolve
+            // check.
+            if let syn::ReturnType::Type(_, ret) = &item_fn.sig.output {
+                if let Some(err_ty) = crate::api::core::types_util::result_err_type(ret) {
+                    let core = crate::api::core::types_util::peel_ref_option_vec(&err_ty);
+                    let declared = self
+                        .return_expand_decls
+                        .iter()
+                        .any(|d| d.key == TypeKey::from_type(&err_ty));
+                    if !declared && matches!(self.type_kind(registry, &core), TypeKind::Sum) {
+                        return Err(format!(
+                            "fn `{ident}`: `Result<_, {}>` — `{}` is declared `sealed_class!`, \
+                             but nothing decomposes it in the error position, so it would be \
+                             delivered as `e.to_string()` on the plain binding-error channel \
+                             rather than as the sealed hierarchy (and would silently require \
+                             `{}: Display`). Declare `expand_return!({})` with the fields to \
+                             deliver, so the error crosses through the typed domain-handler \
+                             channel; or, if a text message really is what you want, drop the \
+                             `sealed_class!` declaration for this type",
+                            // `Result<_, E>` and the `expand_return!` key are
+                            // the WHOLE error type: the `Display` bound falls
+                            // on it (the generated code calls `__e.to_string()`
+                            // on the `Err` value), and the auto-apply matches a
+                            // deconstructor by that same whole type. Only the
+                            // "is declared `sealed_class!`" clause names the
+                            // peeled sum, since that is what carries the
+                            // declaration. Identical for a bare `E`; they
+                            // diverge once it is wrapped.
+                            err_ty.to_token_stream(),
+                            core.to_token_stream(),
+                            err_ty.to_token_stream(),
+                            err_ty.to_token_stream(),
+                        ));
+                    }
+                }
+            }
+            // (3) A **slice of sums** delivered to a callback
+            // (`impl Fn(&[E])`): the element fold would need the sum's
+            // folder-appender singleton, which is emitted per `Vec<E>` RETURN
+            // position, so the shape resolves to nothing.
+            for input in &item_fn.sig.inputs {
+                let syn::FnArg::Typed(pt) = input else {
+                    continue;
+                };
+                let Some(args) = extract_fn_trait_args(&pt.ty) else {
+                    continue;
+                };
+                for arg in args {
+                    let after_ref = match &arg {
+                        syn::Type::Reference(r) => (*r.elem).clone(),
+                        other => other.clone(),
+                    };
+                    let syn::Type::Slice(s) = &after_ref else {
+                        continue;
+                    };
+                    let elem = match &*s.elem {
+                        syn::Type::Reference(r) => (*r.elem).clone(),
+                        other => other.clone(),
+                    };
+                    if matches!(self.type_kind(registry, &elem), TypeKind::Sum) {
+                        return Err(format!(
+                            "fn `{ident}`: `impl Fn(&[{}])` — a slice of a sealed_class value \
+                             is not supported as a callback argument. A sum crosses as a tag \
+                             plus one leaf group per variant, and folding a *sequence* of \
+                             those into the foreign list needs the element folder a `Vec<{}>` \
+                             RETURN provides; declare the callback over one value \
+                             (`impl Fn({})`) or return `Vec<{}>` instead",
+                            elem.to_token_stream(),
+                            elem.to_token_stream(),
+                            elem.to_token_stream(),
+                            elem.to_token_stream(),
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -1283,7 +1443,20 @@ impl Prebindgen for JniGen {
     /// acknowledges them and drops their direct converter requirements once
     /// the plans are in place.
     fn boundary_only_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.rust_side_only_types().collect()
+        // A `sealed_class!`-declared sum has no single wire: it crosses as a
+        // tag plus one leaf group per variant, so a direct converter for the
+        // value itself is genuinely not needed. Declaring it boundary-only
+        // drops that requirement while keeping the type scanned (its payload
+        // types register and resolve, which is what the Kotlin surface reads
+        // its field types from).
+        self.rust_side_only_types()
+            .chain(
+                self.types
+                    .iter()
+                    .filter(|(_, c)| c.sum_cfg.is_some())
+                    .map(|(k, _)| k.clone()),
+            )
+            .collect()
     }
 
     /// Emit the `OwnedObject<T>` borrow wrapper used by
@@ -1609,6 +1782,34 @@ impl JniGen {
             });
         }
         if let Some(name) = bare_path_ident(ty) {
+            // A `sealed_class` sum reached as a whole `JObject` — a field of a
+            // data class, or any position where the parent is already an
+            // object. Its own converter, so the parent's generic field branch
+            // delegates exactly as it does for a nested data class. (The
+            // OUTPUT direction has no counterpart: a sum crosses Rust →
+            // Kotlin flattened, always.)
+            if self.types.get(&key).is_some_and(|c| c.sum_cfg.is_some()) {
+                if let Some((e, _)) = registry.enums.get(&name) {
+                    let (wire, body) = sum_input_body(self, e, registry)?;
+                    // The wire's own null niche, exactly as a data class gets
+                    // — that is what lets `Option<sum>` fold with JVM null as
+                    // `None` instead of needing a boxed wrapper.
+                    let niches = default_niches_for_wire(&wire);
+                    let kotlin_name = self
+                        .types
+                        .get(&key)
+                        .and_then(|c| c.name_spec.as_ref())
+                        .map(|s| kt::KtType::cls(self.fqn_of(s)));
+                    return Some(ConverterImpl {
+                        subs: vec![],
+                        pre_stages: vec![],
+                        function: self.build_input_fn(ty, &wire, &body, None),
+                        destination: wire,
+                        niches,
+                        metadata: self.framework_meta(kotlin_name),
+                    });
+                }
+            }
             if let Some((s, _)) = registry.structs.get(&name) {
                 let (wire, body) = struct_input_body(self, s, registry)?;
                 let niches = default_niches_for_wire(&wire);

@@ -28,6 +28,70 @@ typedef struct calculator_t {
   uint8_t _private[0];
 } calculator_t;
 
+typedef struct caption_t {
+  uint64_t id;
+  char *text;
+} caption_t;
+
+typedef enum shape_t_Tag {
+  Empty,
+  Circle,
+  Rect,
+  Labeled,
+} shape_t_Tag;
+
+typedef struct Rect_Body {
+  double width;
+  double height;
+} Rect_Body;
+
+typedef struct Labeled_Body {
+  char *_0;
+  enum operation_t _1;
+} Labeled_Body;
+
+typedef struct shape_t {
+  shape_t_Tag tag;
+  union {
+    struct {
+      double circle;
+    };
+    Rect_Body rect;
+    Labeled_Body labeled;
+  };
+} shape_t;
+
+typedef struct drawing_t {
+  uint64_t id;
+  struct shape_t shape;
+} drawing_t;
+
+typedef enum note_t_Tag {
+  Silent,
+  Titled,
+  After,
+  Flagged,
+  Sketched,
+} note_t_Tag;
+
+typedef struct note_t {
+  note_t_Tag tag;
+  union {
+    struct {
+      struct caption_t titled;
+    };
+    struct {
+      uint64_t after;
+    };
+    struct {
+      bool flagged;
+    };
+    struct {
+      struct drawing_t sketched;
+    };
+  };
+} note_t;
+
 typedef struct closure_value_t {
   void *context;
   void (*call)(double, void*);
@@ -47,6 +111,10 @@ extern void free(void *ptr);
 void example_free(void *p);
 
 void calculator_drop(struct calculator_t *this_);
+
+void note_drop(struct note_t *this_);
+
+void shape_drop(struct shape_t *this_);
 
 bool calculator_apply(struct calculator_t *c,
                       enum operation_t op,
@@ -72,6 +140,12 @@ struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 char *calculator_to_string(const struct calculator_t *c);
 
+struct caption_t caption_new(uint64_t id, const char *text);
+
+struct shape_t drawing_get_shape(struct drawing_t d);
+
+struct drawing_t drawing_new(uint64_t id, struct shape_t shape);
+
 uint64_t foo_get_id(struct foo_t f);
 
 struct foo_t foo_new(uint64_t id);
@@ -79,5 +153,31 @@ struct foo_t foo_new(uint64_t id);
 enum inside_foo_t inside_foo_default(void);
 
 int32_t inside_foo_value(enum inside_foo_t x);
+
+struct note_t note_new_after(uint64_t millis);
+
+struct note_t note_new_flagged(bool flag);
+
+struct note_t note_new_silent(void);
+
+struct note_t note_new_sketched(uint64_t id, const char *label);
+
+struct note_t note_new_titled(uint64_t id, const char *text);
+
+uint64_t note_value(struct note_t n);
+
+double shape_area(struct shape_t s);
+
+char *shape_get_label(struct shape_t s);
+
+struct shape_t shape_new_circle(double radius);
+
+struct shape_t shape_new_empty(void);
+
+struct shape_t shape_new_labeled(const char *label, enum operation_t op);
+
+struct shape_t shape_new_rect(double width, double height);
+
+bool shape_try_area(struct shape_t s, double *out, char **e);
 
 #endif  /* EXAMPLE_FLAT_H */

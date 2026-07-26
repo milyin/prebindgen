@@ -1,0 +1,170 @@
+//! Boundary smoke tests: call the generated `extern "C"` surface the way a C
+//! caller would, including with values no Rust type has.
+//!
+//! A C `enum` is an `int` at the ABI, so a caller can pass a discriminant no
+//! variant declares. The generated wrappers take such an enum as
+//! `MaybeUninit<mirror>` — same ABI, same C spelling, but legal to hold any bit
+//! pattern — and validate the raw integer before building the Rust enum. These
+//! tests construct exactly that out-of-range value; written against the previous
+//! (bare mirror enum) signature they would have been undefined behaviour, which
+//! is the point.
+//!
+//! The `.panic()` route (`inside_foo_value`, which has no `char **e` to report
+//! through) is deliberately not exercised: a panic out of an `extern "C"` fn
+//! aborts the process rather than unwinding, so it cannot be asserted in-process.
+
+use core::{
+    ffi::{c_char, c_int, c_void, CStr},
+    mem::{align_of, MaybeUninit},
+    ptr,
+};
+
+use crate::{
+    calculator_apply, calculator_drop, calculator_get_value, calculator_new, example_free,
+    inside_foo_default, inside_foo_value, note_new_flagged, note_t, note_value, operation_t,
+};
+
+/// The wire value a C caller passing `value` produces — including a `value`
+/// that matches no variant.
+unsafe fn raw_operation(value: c_int) -> MaybeUninit<operation_t> {
+    let mut slot = MaybeUninit::<operation_t>::uninit();
+    ptr::write(slot.as_mut_ptr().cast::<c_int>(), value);
+    slot
+}
+
+#[test]
+fn valid_operation_discriminant_applies() {
+    unsafe {
+        let c = calculator_new();
+        assert!(!c.is_null());
+        let mut out = 0.0f64;
+        let mut err: *mut c_char = ptr::null_mut();
+
+        assert!(calculator_apply(
+            c,
+            MaybeUninit::new(operation_t::Add),
+            2.0,
+            &mut out,
+            &mut err
+        ));
+        assert!(err.is_null());
+        assert_eq!(out, 2.0);
+        assert_eq!(calculator_get_value(c), 2.0);
+
+        calculator_drop(c);
+    }
+}
+
+#[test]
+fn out_of_range_operation_discriminant_reaches_the_error_channel() {
+    unsafe {
+        let c = calculator_new();
+        assert!(!c.is_null());
+        let mut out = 0.0f64;
+        let mut err: *mut c_char = ptr::null_mut();
+        assert!(calculator_apply(
+            c,
+            MaybeUninit::new(operation_t::Add),
+            2.0,
+            &mut out,
+            &mut err
+        ));
+        let before = calculator_get_value(c);
+
+        // 99 is not a discriminant of `operation_t`.
+        let mut out = -1.0f64;
+        assert!(!calculator_apply(
+            c,
+            raw_operation(99),
+            3.0,
+            &mut out,
+            &mut err
+        ));
+
+        // Reported as a binding error, and the call had no effect: nothing was
+        // constructed from the invalid value.
+        assert!(!err.is_null());
+        let msg = CStr::from_ptr(err).to_string_lossy().into_owned();
+        assert!(msg.contains("invalid discriminant 99"), "{msg}");
+        assert_eq!(out, -1.0);
+        assert_eq!(calculator_get_value(c), before);
+
+        example_free(err.cast::<c_void>());
+        calculator_drop(c);
+    }
+}
+
+/// A negative value is out of range too — the raw discriminant is read as a
+/// signed `c_int`, so it is compared, not truncated into some variant.
+#[test]
+fn negative_operation_discriminant_is_rejected() {
+    unsafe {
+        let c = calculator_new();
+        let mut out = 0.0f64;
+        let mut err: *mut c_char = ptr::null_mut();
+
+        assert!(!calculator_apply(
+            c,
+            raw_operation(-1),
+            3.0,
+            &mut out,
+            &mut err
+        ));
+        assert!(!err.is_null());
+        let msg = CStr::from_ptr(err).to_string_lossy().into_owned();
+        assert!(msg.contains("invalid discriminant -1"), "{msg}");
+
+        example_free(err.cast::<c_void>());
+        calculator_drop(c);
+    }
+}
+
+/// The wire a C caller produces by writing raw union bytes: tag `Flagged` with
+/// `byte` in the payload slot.
+///
+/// A `#[repr(C)]` enum with payload variants is laid out as a leading `int`
+/// discriminant followed by the variant union, padded to the union's alignment
+/// — so the payload begins at the whole type's alignment. The `0`/`1` cases in
+/// the test below pin that offset against the generated encoder.
+unsafe fn raw_flagged(byte: u8) -> MaybeUninit<note_t> {
+    const FLAGGED_TAG: c_int = 3;
+    let mut slot = MaybeUninit::<note_t>::zeroed();
+    ptr::write(slot.as_mut_ptr().cast::<c_int>(), FLAGGED_TAG);
+    ptr::write(
+        slot.as_mut_ptr().cast::<u8>().add(align_of::<note_t>()),
+        byte,
+    );
+    slot
+}
+
+/// `bool` is the one scalar whose domain is restricted (`0`/`1`), so a `bool`
+/// payload crosses behind `MaybeUninit` like a declared enum does: the byte C
+/// wrote is read as a `u8` and normalised the way C converts to `_Bool`, never
+/// materialised as a Rust `bool`. Written against a bare `bool` payload wire the
+/// `2` case below would have been undefined behaviour at `assume_init` — before
+/// any `match` — which is the point.
+#[test]
+fn out_of_domain_bool_payload_is_normalised_not_materialised() {
+    unsafe {
+        // Rust's own `true`/`false` round trip.
+        assert_eq!(note_value(note_new_flagged(true)), 1);
+        assert_eq!(note_value(note_new_flagged(false)), 0);
+        // The hand-written wire agrees with the generated encoder.
+        assert_eq!(note_value(raw_flagged(0)), 0);
+        assert_eq!(note_value(raw_flagged(1)), 1);
+        // Bytes no Rust `bool` may hold: accepted, normalised to `true`.
+        assert_eq!(note_value(raw_flagged(2)), 1);
+        assert_eq!(note_value(raw_flagged(0xff)), 1);
+    }
+}
+
+/// The round trip an enum takes across both directions: `inside_foo_default`
+/// returns the mirror by value (Rust builds it, so it is always valid), and
+/// `inside_foo_value` takes it back in through the validating wire.
+#[test]
+fn enum_round_trips_through_the_validating_wire() {
+    unsafe {
+        let v = inside_foo_default();
+        assert_eq!(inside_foo_value(MaybeUninit::new(v)), v as i32);
+    }
+}

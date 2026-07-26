@@ -72,6 +72,29 @@ fn generate_ffi_bindings() -> PathBuf {
     // The primitive-repr `Operation` enum -> a C enum.
     cbindgen = cbindgen.enum_type(pq!(Operation));
 
+    // The data-carrying `Shape` enum -> a `#[repr(C)]` enum with payload
+    // variants, which cbindgen renders as a C tag + `union`. Its `Labeled` arm
+    // owns a `char *`, so a typed `shape_drop` is generated to free the active
+    // arm. `Drawing` carries one as a by-value field.
+    cbindgen = cbindgen.tagged_union(pq!(Shape));
+    cbindgen = cbindgen.data_struct(pq!(Drawing));
+
+    // #158 part 2: payload wires come from the resolved CONVERTER DESTINATION,
+    // not the layout-preserving mirror policy. `Note` exercises the two shapes
+    // that admits — a nested `data_struct` by value (`Caption`, owning a
+    // `char *` the union's drop must reach through and free) and a converted
+    // leaf (`Millis` → `u64`).
+    cbindgen = cbindgen.data_struct(pq!(Caption));
+    cbindgen = cbindgen.convert(
+        prebindgen::convert!(Millis)
+            .input(prebindgen::fun!(millis_from_raw))
+            .output(prebindgen::fun!(millis_to_raw)),
+    );
+    cbindgen = cbindgen
+        .ignore_function(pq!(millis_from_raw))
+        .ignore_function(pq!(millis_to_raw));
+    cbindgen = cbindgen.tagged_union(pq!(Note));
+
     // Multi-target cfg demonstration: `InsideFoo` (a fieldless enum whose
     // discriminants vary by `target_arch`) and `Foo` (a by-value data struct whose
     // field set varies by `target_arch` + feature). Declared unconditionally —
@@ -87,8 +110,10 @@ fn generate_ffi_bindings() -> PathBuf {
         .base_name("value");
 
     // Constructors / `Result`-returning ops (fallible inputs route through the
-    // error out-param), plus the infallible by-value `Foo`/`InsideFoo` accessors —
-    // none need `.panic()`.
+    // error out-param), plus the infallible by-value `Foo` accessors and the
+    // `InsideFoo` producer — none need `.panic()`. `calculator_apply` takes an
+    // `Operation` by value, so its `char **e` also carries an invalid-discriminant
+    // rejection (see `inside_foo_value` below).
     for function in [
         pq!(calculator_new),
         pq!(calculator_new_from_str),
@@ -96,7 +121,19 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(foo_new),
         pq!(foo_get_id),
         pq!(inside_foo_default),
-        pq!(inside_foo_value),
+        // The tagged union crossing OUT: constructed and returned. Nothing to
+        // validate on this side — Rust always writes a live arm.
+        pq!(shape_new_empty),
+        pq!(shape_new_circle),
+        pq!(shape_new_rect),
+        // The union crossing IN on a fallible function: an out-of-range tag
+        // reports through the same `char **e` as the domain error.
+        pq!(shape_try_area),
+        // `Note`'s constructors: the nested-struct, converted-leaf and `bool`
+        // payloads crossing OUT.
+        pq!(note_new_silent),
+        pq!(note_new_after),
+        pq!(note_new_flagged),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -109,8 +146,24 @@ fn generate_ffi_bindings() -> PathBuf {
 
     // Borrow-only accessors / predicates / the callback driver: they have fallible
     // (null-checked) borrow inputs but no `Result` channel, so `.panic()` lets the
-    // wrapper abort on a null handle.
+    // wrapper abort on a null handle. `inside_foo_value` joins them for the same
+    // reason with a different fallible input: a C enum is an `int` at the ABI, so
+    // its discriminant is validated on the way in (never materialised unchecked),
+    // and with no `char **e` to report an out-of-range one it aborts. The three
+    // union-consuming accessors are the same case one level up — the tag a C
+    // caller supplies is validated before the Rust enum exists, here abortively.
     for function in [
+        pq!(inside_foo_value),
+        pq!(shape_area),
+        pq!(shape_get_label),
+        pq!(drawing_new),
+        pq!(drawing_get_shape),
+        // `Note` crossing IN (tag validated, so fallible without a `Result`),
+        // and its `&str`-taking constructor.
+        pq!(note_value),
+        pq!(note_new_titled),
+        pq!(note_new_sketched),
+        pq!(caption_new),
         pq!(calculator_new_clone),
         pq!(calculator_get_value),
         pq!(calculator_get_count),
@@ -118,6 +171,8 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_to_string),
         pq!(calculator_get_history),
         pq!(calculator_for_each),
+        // `&str` label input is fallible (null-checked) with no `Result`.
+        pq!(shape_new_labeled),
     ] {
         cbindgen = cbindgen.function(function).panic();
     }

@@ -420,7 +420,7 @@ pub(crate) fn enum_input_body(
     // otherwise a bare `Enum::Variant` fails to resolve when the enum lives
     // in a source crate (the usual flat-library case).
     let source_module = ext.fn_module(registry, ident);
-    let arms = crate::api::lang::jnigen::util::enum_discriminant_values(e)
+    let arms = crate::api::core::types_util::enum_discriminant_values(e)
         .into_iter()
         .map(|(variant, value)| {
             let lit = proc_macro2::Literal::i64_unsuffixed(value);
@@ -454,19 +454,26 @@ pub(crate) fn enum_output_body(_ext: &JniGen, e: &syn::ItemEnum) -> (syn::Type, 
     (syn::parse_quote!(jni::sys::jint), body)
 }
 
-/// Hard error on any enum that's not C-like (unit variants only).
-/// `enum_class`'s discriminant-keyed Kotlin emission and `as jint`
-/// encode both depend on unit variants — bail loudly at build time
-/// rather than emitting wrong code.
+/// Hard error when an `enum_class!`-declared enum is not the shape that
+/// declarator describes. `enum_class`'s discriminant-keyed Kotlin emission
+/// and `as jint` encode both depend on the value being exactly its
+/// discriminant, which is [`EnumShape::Unit`] — a data-carrying enum is a
+/// different Kotlin surface (a `sealed interface`) reached through a
+/// different declarator, so this names that declarator rather than
+/// asserting on `syn::Fields`.
 pub(crate) fn assert_only_unit_variants(e: &syn::ItemEnum) {
-    for variant in &e.variants {
-        if !matches!(variant.fields, syn::Fields::Unit) {
-            panic!(
-                "enum_class only supports C-like enums (unit variants), \
-                 but `{}::{}` has fields",
-                e.ident, variant.ident
-            );
-        }
+    use crate::api::core::types_util::{enum_shape, first_payload_variant, EnumShape};
+    if enum_shape(e) == EnumShape::Sum {
+        let offender = first_payload_variant(e)
+            .map(|v| v.ident.to_string())
+            .unwrap_or_default();
+        panic!(
+            "`{}` is a data-carrying enum (variant `{}` has fields): declare it \
+             with `sealed_class!({})`, not `enum_class!({})` — `enum_class` \
+             crosses the boundary as a bare discriminant and has no room for a \
+             payload",
+            e.ident, offender, e.ident, e.ident
+        );
     }
 }
 

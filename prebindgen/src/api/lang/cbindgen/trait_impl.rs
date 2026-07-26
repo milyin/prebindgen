@@ -56,6 +56,8 @@ impl Cbindgen {
         let c_struct = self.c_type_ident(ty);
         let src = self.src_ty(ty);
         let mut inits: Vec<TokenStream> = Vec::new();
+        let mut subs: Vec<syn::Type> = Vec::new();
+        let mut fallible = false;
         for (fname, fty) in &fields {
             if is_string(fty) {
                 inits.push(quote!(#fname: if v.#fname.is_null() {
@@ -63,18 +65,39 @@ impl Cbindgen {
                 } else {
                     ::std::ffi::CStr::from_ptr(v.#fname).to_string_lossy().into_owned()
                 }));
+            } else if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
+                // A sum field crosses by value as its mirror; its own converter
+                // validates the tag and rebuilds the live arm, which is what
+                // makes this whole decode fallible.
+                let conv = Self::in_name(fty);
+                subs.push(fty.clone());
+                fallible = true;
+                inits.push(quote!(#fname: #conv(v.#fname)?));
             } else {
                 inits.push(quote!(#fname: v.#fname));
             }
         }
-        let function: syn::ItemFn = syn::parse_quote!(
-            #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) unsafe fn #name(v: #c_struct) -> #src {
-                #src { #(#inits),* }
-            }
-        );
+        // Only a union field can fail; a struct of strings and scalars keeps
+        // its infallible signature (and its callers keep theirs).
+        let function: syn::ItemFn = if fallible {
+            syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(
+                    v: #c_struct,
+                ) -> ::core::result::Result<#src, ::std::string::String> {
+                    ::core::result::Result::Ok(#src { #(#inits),* })
+                }
+            )
+        } else {
+            syn::parse_quote!(
+                #[allow(non_snake_case, unused_variables, dead_code)]
+                pub(crate) unsafe fn #name(v: #c_struct) -> #src {
+                    #src { #(#inits),* }
+                }
+            )
+        };
         Some(ConverterImpl {
-            subs: vec![],
+            subs,
             destination: syn::parse_quote!(#c_struct),
             function,
             pre_stages: vec![],
@@ -221,30 +244,74 @@ impl Cbindgen {
         })
     }
 
-    /// Enum input: `match` the C enum back to the source enum — infallible.
+    /// Enum input: read the C-supplied discriminant as a plain integer,
+    /// **validate** it, then build the source enum — fallible.
+    ///
+    /// A C `enum` is an `int` at the ABI, so nothing stops a caller passing a
+    /// value no variant has. Taking the mirror `#[repr(C)]` enum by value would
+    /// **materialise** that invalid discriminant at the boundary — undefined
+    /// behaviour *before* any `match` in this converter could inspect it, which
+    /// is why validating an already-materialised enum is not a fix (#158).
+    ///
+    /// So the wire is [`::core::mem::MaybeUninit<mirror>`], which is
+    /// `#[repr(transparent)]` over the mirror (identical ABI, identical C
+    /// spelling — cbindgen renders `MaybeUninit<T>` as `T`) and, unlike the
+    /// mirror itself, may legally hold **any** bit pattern. The discriminant is
+    /// then read out as `c_int` — the representation a `#[repr(C)]` fieldless
+    /// enum has by definition, asserted below — and compared against the
+    /// mirror's own variants, so a `const`- or `cfg`-driven discriminant needs
+    /// no generator-side evaluation. An unmatched value is a binding error
+    /// through the wrapper's error channel; no Rust enum is ever constructed
+    /// from it.
     pub(crate) fn in_enum(&self, ty: &syn::Type, r: &Registry<()>) -> Option<ConverterImpl<()>> {
         let key = TypeKey::from_type(ty);
         if !self.enums.contains_key(&key) {
             return None;
         }
         let e = enum_item(r, ty)?;
-        assert_unit_variants(e);
+        assert_unit_enum(e);
         let name = Self::in_name(ty);
         let cname = self.c_type_ident(ty);
         let src = self.src_ty(ty);
+        let cname_str = cname.to_string();
         let arms = e.variants.iter().map(|v| {
             let id = &v.ident;
-            quote!(#cname::#id => #src::#id,)
+            quote!(
+                if __raw == #cname::#id as ::core::ffi::c_int {
+                    return ::core::result::Result::Ok(#src::#id);
+                }
+            )
         });
+        let bad_msg = format!("invalid discriminant {{}} for `{cname_str}`");
+        let size_msg = format!("`{cname_str}`: a #[repr(C)] enum must have the size of a C `int`");
+        let align_msg =
+            format!("`{cname_str}`: a #[repr(C)] enum must have the alignment of a C `int`");
         let function: syn::ItemFn = syn::parse_quote!(
             #[allow(non_snake_case, unused_variables, dead_code)]
-            pub(crate) fn #name(v: #cname) -> #src {
-                match v { #(#arms)* }
+            pub(crate) unsafe fn #name(
+                v: ::core::mem::MaybeUninit<#cname>,
+            ) -> ::core::result::Result<#src, ::std::string::String> {
+                const _: () = {
+                    assert!(
+                        ::core::mem::size_of::<#cname>()
+                            == ::core::mem::size_of::<::core::ffi::c_int>(),
+                        #size_msg
+                    );
+                    assert!(
+                        ::core::mem::align_of::<#cname>()
+                            == ::core::mem::align_of::<::core::ffi::c_int>(),
+                        #align_msg
+                    );
+                };
+                let __raw: ::core::ffi::c_int =
+                    ::core::ptr::read(v.as_ptr() as *const ::core::ffi::c_int);
+                #(#arms)*
+                ::core::result::Result::Err(::std::format!(#bad_msg, __raw))
             }
         );
         Some(ConverterImpl {
             subs: vec![],
-            destination: syn::parse_quote!(#cname),
+            destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
             function,
             pre_stages: vec![],
             niches: Niches::empty(),
@@ -469,7 +536,7 @@ impl Cbindgen {
             let c_struct = self.c_type_ident(&ty);
             let mut field_defs: Vec<TokenStream> = Vec::new();
             for (fname, fty) in &fields {
-                let wire = c_field_wire(fty).unwrap_or_else(|| {
+                let wire = self.data_field_wire(fty).unwrap_or_else(|| {
                     panic!(
                         "Cbindgen: field `{}` of data struct `{}` has unsupported type `{}`",
                         fname,
@@ -646,7 +713,23 @@ impl Cbindgen {
         items
     }
 
-    /// Enums: `#[repr(C)]` mirror (variant idents + explicit discriminants).
+    /// Enums: `#[repr(C)]` mirror — variant idents with each discriminant
+    /// **re-emitted verbatim**, exactly as the source wrote it.
+    ///
+    /// Deliberately NOT routed through the shared
+    /// [`enum_discriminant_values`](crate::api::core::types_util::enum_discriminant_values).
+    /// That helper resolves each variant to a concrete `i64`, which is what an
+    /// adapter needs when it must *know the number* — JniGen's `jint` decode
+    /// and the Kotlin `value(N)` constants. This mirror needs no number: it is
+    /// Rust source that cbindgen re-reads, so passing the expression through
+    /// keeps every discriminant C already accepted — a `const` or `cfg`-driven
+    /// expression, and any value the source's own `repr` admits, including
+    /// ones outside `i64`. Resolving here would narrow that domain to what
+    /// `i64` and a literal can express, for no gain.
+    ///
+    /// The two adapters therefore agree on the *rule* (Rust's own assignment
+    /// order, which the shared helper encodes) while differing on what they
+    /// need from it — a number versus a spelling.
     fn prereq_enums(&self, registry: &Registry<()>) -> Vec<syn::Item> {
         let mut items: Vec<syn::Item> = Vec::new();
         for (key, _cfg) in sorted_by_key(&self.enums) {
@@ -657,7 +740,7 @@ impl Cbindgen {
             let Some(e) = enum_item(registry, &ty) else {
                 continue;
             };
-            assert_unit_variants(e);
+            assert_unit_enum(e);
             let cname = self.c_type_ident(&ty);
             let variants = e.variants.iter().map(|v| {
                 let id = &v.ident;
@@ -676,6 +759,556 @@ impl Cbindgen {
             ));
         }
         items
+    }
+
+    /// Tagged unions: the `#[repr(C)]` mirror with payload variants, which
+    /// cbindgen renders as a tag enum plus a `union` of the variant bodies —
+    /// the idiomatic C tagged union, with no hand-written header fragment.
+    /// Variant shape is mirrored faithfully (named stays named, tuple stays
+    /// tuple, unit stays unit); each payload field takes the wire chosen by
+    /// [`Cbindgen::payload_field_wire`].
+    ///
+    /// A union whose payload wires own memory also gets a typed
+    /// `<base>_drop(t_t *)` that frees the **active arm** and nulls the freed
+    /// slots, so a second drop is a no-op. A union of plain data owns nothing
+    /// and gets no drop.
+    fn prereq_tagged_unions(&self, registry: &Registry<()>) -> Vec<syn::Item> {
+        let mut items: Vec<syn::Item> = Vec::new();
+        for (key, _cfg) in sorted_by_key(&self.tagged_unions) {
+            let ty = key.to_type();
+            if registry.input_entry(&ty).is_none() && registry.output_entry(&ty).is_none() {
+                continue;
+            }
+            let Some(e) = enum_item(registry, &ty) else {
+                continue;
+            };
+            assert_payload_enum(e);
+            let cname = self.c_type_ident(&ty);
+
+            let mut variant_defs: Vec<TokenStream> = Vec::new();
+            // Per-variant drop arm, collected only for variants that own
+            // something; the rest fall to a single wildcard arm.
+            let mut drop_arms: Vec<TokenStream> = Vec::new();
+            for v in &e.variants {
+                let vident = &v.ident;
+                let wires: Vec<syn::Type> = v
+                    .fields
+                    .iter()
+                    .map(|f| self.payload_wire_of(&ty, vident, f, registry))
+                    .collect();
+                match &v.fields {
+                    syn::Fields::Unit => variant_defs.push(quote!(#vident)),
+                    syn::Fields::Named(named) => {
+                        let defs = named.named.iter().zip(&wires).map(|(f, w)| {
+                            let n = f.ident.as_ref().expect("named field");
+                            quote!(#n: #w)
+                        });
+                        variant_defs.push(quote!(#vident { #(#defs),* }));
+                    }
+                    syn::Fields::Unnamed(_) => {
+                        variant_defs.push(quote!(#vident(#(#wires),*)));
+                    }
+                }
+
+                // Drop arm: bind every field, free the owning ones.
+                let owning: Vec<(usize, &syn::Field, &syn::Type)> = v
+                    .fields
+                    .iter()
+                    .zip(&wires)
+                    .enumerate()
+                    .filter(|(_, (f, w))| self.payload_wire_owns(&f.ty, w, registry))
+                    .map(|(i, (f, w))| (i, f, w))
+                    .collect();
+                if owning.is_empty() {
+                    continue;
+                }
+                let binds: Vec<syn::Ident> = (0..v.fields.len())
+                    .map(|i| format_ident!("__f{}", i))
+                    .collect();
+                let pattern = variant_pattern(&cname, vident, &v.fields, &binds);
+                let frees = owning.iter().map(|(i, f, _)| {
+                    let b = &binds[*i];
+                    self.payload_free_stmt(&f.ty, b, registry)
+                });
+                drop_arms.push(quote!(#pattern => { #(#frees)* }));
+            }
+
+            items.push(syn::parse_quote!(
+                #[repr(C)]
+                #[allow(non_camel_case_types)]
+                pub enum #cname {
+                    #(#variant_defs),*
+                }
+            ));
+
+            // The same predicate a CONTAINING struct uses to decide whether to
+            // call this drop, so a nested union can never be freed through a
+            // symbol that was not emitted.
+            if self.tagged_union_has_drop(&ty, registry) {
+                debug_assert!(!drop_arms.is_empty(), "has_drop implies an owning arm");
+                let drop_ident = self.destructor_symbol(&ty);
+                // The drop is a second C entry point into the same bytes, so it
+                // owes the same tag check as the input converter — `&mut *this_`
+                // on an out-of-range tag would be the very UB that check exists
+                // to prevent. It emits that check from the same place, and,
+                // having nowhere to report to, ignores the value (there is no
+                // live arm to release), which keeps `_drop` the always-safe
+                // no-op it is everywhere else.
+                let tag_guard =
+                    self.tag_guard(&cname, e.variants.len(), quote!((*this_)), quote!(return;));
+                items.push(syn::parse_quote!(
+                    #[no_mangle]
+                    #[allow(non_snake_case, unused_variables)]
+                    pub unsafe extern "C" fn #drop_ident(
+                        this_: *mut ::core::mem::MaybeUninit<#cname>,
+                    ) {
+                        if this_.is_null() {
+                            return;
+                        }
+                        #tag_guard
+                        match (*this_).assume_init_mut() {
+                            #(#drop_arms)*
+                            _ => {}
+                        }
+                    }
+                ));
+            }
+        }
+        items
+    }
+
+    /// The wire of one payload field, or a generation error naming the
+    /// offending variant field and the supported set.
+    fn payload_wire_of(
+        &self,
+        ty: &syn::Type,
+        variant: &syn::Ident,
+        field: &syn::Field,
+        registry: &Registry<()>,
+    ) -> syn::Type {
+        self.payload_field_wire(&field.ty, registry)
+            .unwrap_or_else(|reason| {
+                panic!(
+                    "Cbindgen::tagged_union: payload `{}::{}{}` of type `{}` cannot cross: {}",
+                    type_short(ty),
+                    variant,
+                    match &field.ident {
+                        Some(n) => format!(".{n}"),
+                        None => String::new(),
+                    },
+                    field.ty.to_token_stream(),
+                    reason,
+                )
+            })
+    }
+
+    /// Release one owning payload slot held behind `binding` (a `&mut` to the
+    /// wire, from a `match &mut *this_` arm) and null it, so a second drop of
+    /// the same union is a no-op. A `char *` block goes back to the C
+    /// allocator; an opaque pointer is re-boxed and dropped, running the Rust
+    /// destructor.
+    fn payload_free_stmt(
+        &self,
+        fty: &syn::Type,
+        binding: &syn::Ident,
+        registry: &Registry<()>,
+    ) -> TokenStream {
+        if is_string(fty) {
+            return quote!(
+                free(*#binding as *mut ::core::ffi::c_void);
+                *#binding = ::core::ptr::null_mut();
+            );
+        }
+        // A nested `data_struct` payload crosses BY VALUE, so the arm binds the
+        // mirror itself and what has to be released is each of its OWNING
+        // fields — reached through the binding and nulled in place, exactly as
+        // a directly-owning payload is. This is the shape zenoh-flat#30 needs
+        // (`ReplyResult`'s alternatives are structs whose fields are handles),
+        // and without it those fields would leak silently.
+        let owning = self.owning_data_struct_fields(fty, registry);
+        if !owning.is_empty() {
+            let frees = owning.iter().map(|(fname, fty)| {
+                if is_string(fty) {
+                    quote!(
+                        free((*#binding).#fname as *mut ::core::ffi::c_void);
+                        (*#binding).#fname = ::core::ptr::null_mut();
+                    )
+                } else if self.tagged_union_has_drop(fty, registry) {
+                    // The field is ANOTHER union, crossing by value. Its own
+                    // typed drop releases whichever arm is live and nulls the
+                    // slot, so this stays idempotent like every other arm here
+                    // — and the owning pointer is reached even though it is two
+                    // levels down. Nothing else can reach it: a union arm is not
+                    // a top-level struct field the C caller releases by hand.
+                    let drop_ident = self.destructor_symbol(fty);
+                    quote!(#drop_ident(&mut (*#binding).#fname);)
+                } else {
+                    // `owning_data_struct_fields` yields exactly the two shapes
+                    // above (`data_field_owns`), so this is unreachable — and a
+                    // silent fall-through here would be a leak, which is the
+                    // defect this whole path exists to prevent.
+                    panic!(
+                        "Cbindgen: data-struct field `{}` of type `{}` is owning but has no \
+                         release form (expected a `String` or a declared `tagged_union`)",
+                        fname,
+                        fty.to_token_stream(),
+                    )
+                }
+            });
+            return quote!(#(#frees)*);
+        }
+        let inner = opaque_ptr_payload_inner(fty).unwrap_or_else(|| fty.clone());
+        let src_inner = self.src_ty(&inner);
+        quote!(
+            if !(*#binding).is_null() {
+                drop(::std::boxed::Box::from_raw(*#binding as *mut #src_inner));
+                *#binding = ::core::ptr::null_mut();
+            }
+        )
+    }
+
+    /// Tagged-union **input**: **validate the tag**, then `match` the C union
+    /// back to the source enum, converting each arm's payload through the
+    /// per-field policy. The generalization of [`Self::in_enum`] from "match
+    /// idents" to "match idents and convert each arm's fields" — fallible for
+    /// the same reason, and by the same rule (#158): a Rust `enum` must never
+    /// be *materialised* from C-supplied bytes without checking first, because
+    /// an undeclared discriminant is UB at the boundary, before any `match`.
+    ///
+    /// So the wire is [`::core::mem::MaybeUninit`] over the mirror. A
+    /// `#[repr(C)]` enum with payload variants is laid out as a leading
+    /// discriminant of a C `int` followed by the variant union, so the tag is
+    /// read from the front as a plain `c_int` and range-checked against the
+    /// variants (the mirror carries no explicit discriminants, so its tags are
+    /// declaration order `0..N`). Only then is the value `assume_init`ed —
+    /// which is sound because [`Cbindgen::payload_field_wire`] makes every
+    /// payload wire bit-pattern-agnostic, leaving the tag as the sole
+    /// obligation.
+    pub(crate) fn in_tagged_union(
+        &self,
+        ty: &syn::Type,
+        r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
+        let key = TypeKey::from_type(ty);
+        if !self.tagged_unions.contains_key(&key) {
+            return None;
+        }
+        let e = enum_item(r, ty)?;
+        assert_payload_enum(e);
+        let name = Self::in_name(ty);
+        let cname = self.c_type_ident(ty);
+        let src = self.src_ty(ty);
+        // A payload that crosses through its own converter needs that converter
+        // to exist before this one can call it. `subs` only drives the
+        // post-resolution propagation pass, so it cannot order the build —
+        // returning `None` here is the resolver's DEFERRAL protocol, and it
+        // retries at the next fixed point. Without this the payload silently
+        // degrades to a passthrough and the generated code does not compile.
+        for v in &e.variants {
+            for f in &v.fields {
+                if self.payload_needs_converter(&f.ty) && r.input_entry(&f.ty).is_none() {
+                    return None;
+                }
+            }
+        }
+        let mut subs: Vec<syn::Type> = Vec::new();
+        let arms: Vec<TokenStream> = e
+            .variants
+            .iter()
+            .map(|v| {
+                let vident = &v.ident;
+                let binds: Vec<syn::Ident> = (0..v.fields.len())
+                    .map(|i| format_ident!("__f{}", i))
+                    .collect();
+                let from = variant_pattern(&cname, vident, &v.fields, &binds);
+                let exprs: Vec<TokenStream> = v
+                    .fields
+                    .iter()
+                    .zip(&binds)
+                    .map(|(f, b)| {
+                        // Every payload that crosses through a converter of its
+                        // own — a declared `enum_type`, a nested `data_struct`,
+                        // an opaque handle, a converted leaf — is a resolver
+                        // dependency, so its converter exists before this one is
+                        // emitted. Without it the payload silently falls back to
+                        // a passthrough and the generated code does not compile.
+                        if self.payload_needs_converter(&f.ty) {
+                            subs.push(f.ty.clone());
+                        }
+                        self.payload_in_expr(&f.ty, b, r)
+                    })
+                    .collect();
+                let to = variant_ctor(&src, vident, &v.fields, &exprs);
+                quote!(#from => #to,)
+            })
+            .collect();
+        let bad_msg = format!(
+            "invalid tag {{}} for `{cname}` (expected 0..{})",
+            e.variants.len()
+        );
+        let tag_guard = self.tag_guard(
+            &cname,
+            e.variants.len(),
+            quote!(v),
+            quote!(return ::core::result::Result::Err(::std::format!(#bad_msg, __tag));),
+        );
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) unsafe fn #name(
+                v: ::core::mem::MaybeUninit<#cname>,
+            ) -> ::core::result::Result<#src, ::std::string::String> {
+                #tag_guard
+                let v = v.assume_init();
+                ::core::result::Result::Ok(match v { #(#arms)* })
+            }
+        );
+        Some(ConverterImpl {
+            subs,
+            destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// The statements that make a C-supplied `MaybeUninit<mirror>` safe to
+    /// `assume_init`: read the leading discriminant as a plain `c_int` and
+    /// reject anything outside `0..variants`.
+    ///
+    /// `slot` is an expression for the `MaybeUninit` in scope and `on_bad` is
+    /// what to do with an out-of-range tag — the **only** thing the two C entry
+    /// points into these bytes differ in (the input converter returns `Err`,
+    /// the typed drop returns `()` and so just bails). Passing that difference
+    /// in, rather than letting the drop repeat the check inline, is what keeps
+    /// the two from drifting apart.
+    fn tag_guard(
+        &self,
+        cname: &syn::Ident,
+        variants: usize,
+        slot: TokenStream,
+        on_bad: TokenStream,
+    ) -> TokenStream {
+        let n = variants as i64;
+        let bounds_msg = format!(
+            "`{cname}`: a #[repr(C)] enum with payload variants must be at least as large as \
+             its C `int` discriminant"
+        );
+        quote!(
+            const _: () = {
+                assert!(
+                    ::core::mem::size_of::<#cname>()
+                        >= ::core::mem::size_of::<::core::ffi::c_int>(),
+                    #bounds_msg
+                );
+            };
+            let __tag: ::core::ffi::c_int =
+                ::core::ptr::read(#slot.as_ptr() as *const ::core::ffi::c_int);
+            if !((__tag as i64) >= 0 && (__tag as i64) < #n) {
+                #on_bad
+            }
+        )
+    }
+
+    /// Tagged-union **output**: `match` the source enum to the C union,
+    /// converting each arm's payload. The counterpart of
+    /// [`Self::in_tagged_union`]; a `String` payload is allocated here and
+    /// released by the union's typed drop.
+    pub(crate) fn out_tagged_union(
+        &self,
+        ty: &syn::Type,
+        r: &Registry<()>,
+    ) -> Option<ConverterImpl<()>> {
+        let key = TypeKey::from_type(ty);
+        if !self.tagged_unions.contains_key(&key) {
+            return None;
+        }
+        let e = enum_item(r, ty)?;
+        assert_payload_enum(e);
+        let name = Self::out_name(ty);
+        let cname = self.c_type_ident(ty);
+        let src = self.src_ty(ty);
+        // Deferral, as in `in_tagged_union` — the output counterpart.
+        for v in &e.variants {
+            for f in &v.fields {
+                if self.payload_needs_converter(&f.ty) && r.output_entry(&f.ty).is_none() {
+                    return None;
+                }
+            }
+        }
+        let mut subs: Vec<syn::Type> = Vec::new();
+        let arms: Vec<TokenStream> = e
+            .variants
+            .iter()
+            .map(|v| {
+                let vident = &v.ident;
+                let binds: Vec<syn::Ident> = (0..v.fields.len())
+                    .map(|i| format_ident!("__f{}", i))
+                    .collect();
+                let from = variant_pattern(&src, vident, &v.fields, &binds);
+                let exprs: Vec<TokenStream> = v
+                    .fields
+                    .iter()
+                    .zip(&binds)
+                    .map(|(f, b)| {
+                        if self.payload_needs_converter(&f.ty) {
+                            subs.push(f.ty.clone());
+                        }
+                        self.payload_out_expr(&f.ty, b, r)
+                    })
+                    .collect();
+                let to = variant_ctor(&cname_ty(&cname), vident, &v.fields, &exprs);
+                quote!(#from => #to,)
+            })
+            .collect();
+        // Same wire as the input direction — one mirror type serves both, and a
+        // union carried through a `data_struct` field has only one field type
+        // to be. Rust always writes a live arm, so nothing is validated here.
+        let function: syn::ItemFn = syn::parse_quote!(
+            #[allow(non_snake_case, unused_variables, dead_code)]
+            pub(crate) fn #name(v: #src) -> ::core::mem::MaybeUninit<#cname> {
+                ::core::mem::MaybeUninit::new(match v { #(#arms)* })
+            }
+        );
+        Some(ConverterImpl {
+            subs,
+            destination: syn::parse_quote!(::core::mem::MaybeUninit<#cname>),
+            function,
+            pre_stages: vec![],
+            niches: Niches::empty(),
+            metadata: (),
+        })
+    }
+
+    /// One payload field, C wire → Rust value. Mirrors the `data_struct`
+    /// input policy, plus the opaque-pointer and declared-enum cases the
+    /// mirror wire allows.
+    fn payload_in_expr(
+        &self,
+        fty: &syn::Type,
+        b: &syn::Ident,
+        registry: &Registry<()>,
+    ) -> TokenStream {
+        if is_string(fty) {
+            return quote!(if #b.is_null() {
+                ::std::string::String::new()
+            } else {
+                ::std::ffi::CStr::from_ptr(#b).to_string_lossy().into_owned()
+            });
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            // The payload rides as `MaybeUninit<enum mirror>` and goes through
+            // the same validating decode a top-level enum parameter does; an
+            // out-of-range one propagates out of the union's own converter.
+            let conv = Self::in_name(fty);
+            return quote!(#conv(#b)?);
+        }
+        if let Some(inner) = opaque_ptr_payload_inner(fty) {
+            let src_inner = self.src_ty(&inner);
+            let boxed = quote!(::std::boxed::Box::from_raw(#b as *mut #src_inner));
+            return if is_option(fty) {
+                quote!(if #b.is_null() {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(#boxed)
+                })
+            } else {
+                // A bare `Box<T>` has no null representation, so a NULL slot
+                // cannot be decoded — and it is reachable, not hypothetical:
+                // the typed drop nulls the arm it frees, so a union passed back
+                // in after being dropped arrives here NULL. Same rule as the
+                // tag: report it, never materialise it.
+                let null_msg = format!(
+                    "null payload for `{}` (a non-optional `Box` payload cannot be NULL — the \
+                     union may already have been dropped)",
+                    type_short(&inner)
+                );
+                quote!({
+                    if #b.is_null() {
+                        return ::core::result::Result::Err(
+                            ::std::string::String::from(#null_msg),
+                        );
+                    }
+                    #boxed
+                })
+            };
+        }
+        // A `bool` payload rides as `MaybeUninit<bool>` (see
+        // `payload_field_wire`), so the byte C wrote is read out as a `u8` —
+        // legal for any bit pattern — and normalised the way C converts to
+        // `_Bool`: nonzero is true. No rejection: unlike a tag, every byte here
+        // has an unambiguous meaning.
+        if is_bool(fty) {
+            return quote!(::core::ptr::read(#b.as_ptr() as *const u8) != 0);
+        }
+        // A scalar is its own wire and needs no call.
+        if is_scalar(fty) {
+            return quote!(#b);
+        }
+        // Everything else rides its own resolved input converter — the wire
+        // came from that converter's destination, so the two cannot disagree.
+        // A fallible one propagates with `?`, which the union's own `Result`
+        // already provides.
+        match registry.input_entry(fty) {
+            Some(entry) => {
+                let conv = &entry.function.sig.ident;
+                if returns_result(&entry.function.sig.output) {
+                    quote!(#conv(#b)?)
+                } else {
+                    quote!(#conv(#b))
+                }
+            }
+            None => quote!(#b),
+        }
+    }
+
+    /// One payload field, Rust value → C wire. The `String` arm allocates the
+    /// `char *` block the union's typed drop later frees.
+    fn payload_out_expr(
+        &self,
+        fty: &syn::Type,
+        b: &syn::Ident,
+        registry: &Registry<()>,
+    ) -> TokenStream {
+        if is_string(fty) {
+            return quote!(__cbg_alloc_cstr(#b));
+        }
+        if self.enums.contains_key(&TypeKey::from_type(fty)) {
+            let conv = Self::out_name(fty);
+            return quote!(::core::mem::MaybeUninit::new(#conv(#b)));
+        }
+        if let Some(inner) = opaque_ptr_payload_inner(fty) {
+            let c = self.c_type_ident(&inner);
+            return if is_option(fty) {
+                quote!(match #b {
+                    ::core::option::Option::Some(__b) => {
+                        ::std::boxed::Box::into_raw(__b) as *mut #c
+                    }
+                    ::core::option::Option::None => ::core::ptr::null_mut(),
+                })
+            } else {
+                quote!(::std::boxed::Box::into_raw(#b) as *mut #c)
+            };
+        }
+        // The counterpart of the normalising read above: Rust always writes a
+        // valid `0`/`1`, so this only wraps.
+        if is_bool(fty) {
+            return quote!(::core::mem::MaybeUninit::new(#b));
+        }
+        if is_scalar(fty) {
+            return quote!(#b);
+        }
+        // The output counterpart of the input dispatch above. Acceptance —
+        // including the refusal of a FALLIBLE output converter, which a union
+        // cannot report through — is decided once in `payload_field_wire`, so
+        // this site only emits the call.
+        match registry.output_entry(fty) {
+            Some(entry) => {
+                let conv = entry.function.sig.ident.clone();
+                quote!(#conv(#b))
+            }
+            None => quote!(#b),
+        }
     }
 
     /// Callback closure structs: one `#[repr(C)]` `{ context, call, drop }`
@@ -819,6 +1452,7 @@ impl Prebindgen for Cbindgen {
             .chain(self.data.keys())
             .chain(self.value_opaque.keys())
             .chain(self.enums.keys())
+            .chain(self.tagged_unions.keys())
             .cloned()
             .collect()
     }
@@ -842,6 +1476,7 @@ impl Prebindgen for Cbindgen {
         items.extend(self.prereq_data_structs(registry));
         items.extend(self.prereq_value_opaque(registry));
         items.extend(self.prereq_enums(registry));
+        items.extend(self.prereq_tagged_unions(registry));
         items.extend(self.prereq_callback_structs(registry));
         items.extend(self.prereq_domain_constants(registry));
         items
@@ -1107,9 +1742,14 @@ impl Cbindgen {
             let c_struct = self.c_type_ident(ty);
             let src = self.src_ty(ty);
             let mut inits: Vec<TokenStream> = Vec::new();
+            let mut subs: Vec<syn::Type> = Vec::new();
             for (fname, fty) in &fields {
                 if is_string(fty) {
                     inits.push(quote!(#fname: __cbg_alloc_cstr(v.#fname)));
+                } else if self.tagged_unions.contains_key(&TypeKey::from_type(fty)) {
+                    let conv = Self::out_name(fty);
+                    subs.push(fty.clone());
+                    inits.push(quote!(#fname: #conv(v.#fname)));
                 } else {
                     inits.push(quote!(#fname: v.#fname));
                 }
@@ -1121,7 +1761,7 @@ impl Cbindgen {
                 }
             );
             return Some(ConverterImpl {
-                subs: vec![],
+                subs,
                 destination: syn::parse_quote!(#c_struct),
                 function,
                 pre_stages: vec![],
@@ -1156,7 +1796,7 @@ impl Cbindgen {
         // Enum output: `match` the source enum to the C enum.
         if self.enums.contains_key(&key) {
             let e = enum_item(_r, ty)?;
-            assert_unit_variants(e);
+            assert_unit_enum(e);
             let name = Self::out_name(ty);
             let cname = self.c_type_ident(ty);
             let src = self.src_ty(ty);
@@ -1178,6 +1818,12 @@ impl Cbindgen {
                 niches: Niches::empty(),
                 metadata: (),
             });
+        }
+
+        // Tagged-union output: `match` the source enum to the C union,
+        // converting each arm's payload.
+        if let Some(c) = self.out_tagged_union(ty, _r) {
+            return Some(c);
         }
 
         None

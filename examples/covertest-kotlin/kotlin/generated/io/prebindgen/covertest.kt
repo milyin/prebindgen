@@ -3,7 +3,10 @@ package io.prebindgen.covertest
 
 import io.prebindgen.covertest.model.Annotated
 import io.prebindgen.covertest.model.DurationBoundary
+import io.prebindgen.covertest.model.Marker
 import io.prebindgen.covertest.model.ObjectBoundary
+import io.prebindgen.covertest.model.Observation
+import io.prebindgen.covertest.model.Tagged
 import java.lang.ref.Cleaner
 import java.lang.ref.Cleaner.Cleanable
 import java.util.concurrent.atomic.AtomicLong
@@ -416,27 +419,9 @@ public fun interface PayloadBuilder<out R> {
 internal val __PayloadBuilder: PayloadBuilder<Payload> =
 PayloadBuilder { id, seq, value, flag, label -> Payload.fromParts(id, seq, value, flag, label) }
 
-public fun interface PayloadFolder<A> {
-    public fun run(acc: A, element: Payload): A
-}
-
 public fun interface PayloadFolderRaw<A> {
     public fun run(acc: A, id: Long, seq: Int, value: Double, flag: Boolean, label: String?): A
 }
-
-public fun <A> PayloadFolder<A>.asRaw(): PayloadFolderRaw<A> =
-    PayloadFolderRaw<A> {
-        acc,
-        id,
-        seq,
-        value,
-        flag,
-        label ->
-        run(
-            acc,
-            Payload.fromParts(id, seq, value, flag, label)
-        )
-    }
 
 internal object __PayloadFolderRawHolder {
     @JvmField
@@ -444,23 +429,9 @@ internal object __PayloadFolderRawHolder {
     PayloadFolderRaw { acc, id, seq, value, flag, label -> acc.add(Payload.fromParts(id, seq, value, flag, label)); acc }
 }
 
-public fun interface StorageFolder<A> {
-    public fun run(acc: A, element: Storage): A
-}
-
 public fun interface StorageFolderRaw<A> {
     public fun run(acc: A, element: Long): A
 }
-
-public fun <A> StorageFolder<A>.asRaw(): StorageFolderRaw<A> =
-    StorageFolderRaw<A> {
-        acc,
-        element ->
-        run(
-            acc,
-            Storage(element)
-        )
-    }
 
 internal object __StorageFolderRawHolder {
     @JvmField
@@ -478,23 +449,9 @@ internal object __StringFolderHolder {
     StringFolder { acc, element -> acc.add(element); acc }
 }
 
-public fun interface u64Folder<A> {
-    public fun run(acc: A, element: ULong): A
-}
-
 public fun interface u64FolderRaw<A> {
     public fun run(acc: A, element: Long): A
 }
-
-public fun <A> u64Folder<A>.asRaw(): u64FolderRaw<A> =
-    u64FolderRaw<A> {
-        acc,
-        element ->
-        run(
-            acc,
-            element.toULong()
-        )
-    }
 
 internal object __u64FolderRawHolder {
     @JvmField
@@ -708,6 +665,12 @@ internal object CovNative {
 
     external fun archiveNew(errorSink: Any): Long
 
+    external fun archiveReading(a: Long, build: Any, errorSink: Any): Any?
+
+    external fun archiveReadingMaybe(a: Long, build: Any, errorSink: Any): Any?
+
+    external fun archiveSetReading(a: Long, which: Int, errorSink: Any)
+
     external fun archiveStore(
         a: Long,
         sSel: Int,
@@ -743,9 +706,38 @@ internal object CovNative {
 
     external fun labelReverse(l: String, errorSink: Any): String
 
+    external fun lookupEach(n: Long, total: Double, sink: Any, errorSink: Any)
+
+    external fun lookupOf(count: Long, total: Double, build: Any, errorSink: Any): Any?
+
+    external fun markerOf(which: Int, build: Any, errorSink: Any): Any?
+
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
+
+    external fun observationNew(which: Int, withFallback: Boolean, errorSink: Any): Observation
+
+    external fun observationWhich(
+        oId: Long,
+        oReadingTag: Int,
+        oReadingExactV0: Long,
+        oReadingRangeLow: Long,
+        oReadingRangeHigh: Long,
+        oReadingTaggedV0: String?,
+        oReadingTaggedV1: Int,
+        oReadingCompanionV0: Long,
+        oFallbackPresent: Boolean,
+        oFallbackTag: Int,
+        oFallbackExactV0: Long,
+        oFallbackRangeLow: Long,
+        oFallbackRangeHigh: Long,
+        oFallbackTaggedV0: String?,
+        oFallbackTaggedV1: Int,
+        oFallbackCompanionV0: Long,
+        oNote: String,
+        errorSink: Any,
+    ): Int
 
     external fun payloadHandlerNew(f: Any, errorSink: Any): Long
 
@@ -778,6 +770,14 @@ internal object CovNative {
     external fun priorityOr(pPresent: Boolean, pValue: Int, fallback: Int, errorSink: Any): Int
 
     external fun priorityWeight(p: Int, errorSink: Any): Int
+
+    external fun readingEach(n: Int, sink: Any, errorSink: Any)
+
+    external fun readingMaybe(which: Int, build: Any, errorSink: Any): Any?
+
+    external fun readingOf(which: Int, build: Any, errorSink: Any): Any?
+
+    external fun readingSeries(n: Int, acc: Any?, fold: Any, errorSink: Any): Any?
 
     external fun stampNanos(s: ByteArray, errorSink: Any): Long
 
@@ -976,6 +976,10 @@ internal object CovNative {
     ): Double
 
     external fun summaryTotalRaw(s: Long, errorSink: Any): Double
+
+    external fun taggedNew(which: Int, errorSink: Any): Tagged
+
+    external fun taggedRank(tId: Long, tMarker: Marker, errorSink: Any): Int
 
     external fun unsignedDataMaybe(
         valueByte: Int,

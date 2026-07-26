@@ -1072,6 +1072,7 @@ fn value_struct_vec_is_fixed_iterable_fold() {
         identity: false,
         nullable: false,
         source: LeafSource::Field,
+        group: None,
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
@@ -1124,6 +1125,7 @@ fn value_struct_slice_callback_is_fixed_iterable_fold() {
         identity: false,
         nullable: false,
         source: LeafSource::Field,
+        group: None,
     };
     let vd = ValueDecon {
         key: TypeKey::from_type(&syn::parse_quote!(Payload)),
@@ -1650,4 +1652,170 @@ fn duplicate_declarations_collected() {
         text.contains("duplicate output expansion for `z_session_key`"),
         "{text}"
     );
+}
+
+/// The tag + group leaves a sum decomposition is made of. Mirrors what the
+/// JNI adapter synthesizes: a selector followed by one group per alternative.
+fn reading_sum_decon() -> SumDecon {
+    let tag = UnfoldLeaf {
+        name: "tag".to_string(),
+        path: vec![],
+        out_ty: syn::parse_quote!(i32),
+        identity: false,
+        nullable: false,
+        source: LeafSource::SumTag,
+        group: None,
+    };
+    let field = |name: &str, variant: &str, idx: u32, ty: syn::Type, group: i32| UnfoldLeaf {
+        name: name.to_string(),
+        path: vec![],
+        out_ty: ty,
+        identity: false,
+        nullable: false,
+        source: LeafSource::VariantField {
+            variant: ident(variant),
+            member: syn::Member::Unnamed(syn::Index::from(idx as usize)),
+        },
+        group: Some(group),
+    };
+    SumDecon {
+        key: TypeKey::from_type(&syn::parse_quote!(Reading)),
+        source: syn::parse_quote!(Reading),
+        leaves: vec![
+            tag,
+            // group 0 (`Missing`) is empty — a unit variant contributes only
+            // its tag.
+            field("exact_v0", "Exact", 0, syn::parse_quote!(i64), 1),
+        ],
+    }
+}
+
+/// A sum returned by a function decomposes into a **fixed-builder** plan over
+/// its tag and groups — the same delivery a by-value `data_class` gets, with
+/// the selector added. The declared return's own output requirement is dropped:
+/// a sum has no whole-value converter by construction, so leaving it required
+/// would fail the resolve on a converter that must not exist.
+#[test]
+fn sum_return_is_a_fixed_builder_plan() {
+    let mut reg = reg_with(&["fn read_one(which: i32) -> Reading { todo!() }"]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_one"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    let plan = reg.unfold_plans.get(&ident("read_one")).expect("plan");
+    assert!(plan.fixed_builder, "sum ⇒ fixed builder");
+    assert_eq!(plan.delivery, Delivery::Callback);
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert!(!plan.by_ref);
+    assert_eq!(plan.leaves.len(), 2, "the tag plus one group leaf");
+    assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
+    assert_eq!(plan.leaves[0].group, None, "the selector joins no group");
+    assert_eq!(
+        plan.leaves[1].group,
+        Some(1),
+        "the group is its variant's tag"
+    );
+    assert!(matches!(
+        &plan.leaves[1].source,
+        LeafSource::VariantField { variant, .. } if variant == "Exact"
+    ));
+    // The selector is synthesized, so it must not drag an `i32` output
+    // requirement into a binding that has no `i32` crossing of its own.
+    assert!(!plan.leaves[0].has_converter());
+    assert!(plan.leaves[1].has_converter());
+    assert!(
+        !reg.required_outputs_scan
+            .contains(&TypeKey::from_type(&syn::parse_quote!(Reading))),
+        "a sum has no whole-value converter, so its return must not require one"
+    );
+}
+
+/// `Option` and `Vec` layers ride the existing shape fold — a sum needs
+/// nothing new for them — and each layer's own scan-time output requirement is
+/// dropped along with the bare type's.
+#[test]
+fn sum_return_layers_ride_the_shape_fold() {
+    let mut reg = reg_with(&[
+        "fn read_maybe(w: i32) -> Option<Reading> { todo!() }",
+        "fn read_all(n: i32) -> Vec<Reading> { todo!() }",
+    ]);
+    let declared: std::collections::HashSet<syn::Ident> = ["read_maybe", "read_all"]
+        .iter()
+        .map(|s| ident(s))
+        .collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    let opt = reg.unfold_plans.get(&ident("read_maybe")).expect("plan");
+    assert!(matches!(&opt.shape,
+        UnfoldShape::Optional((), inner) if matches!(**inner, UnfoldShape::Base)));
+    let vec_plan = reg.unfold_plans.get(&ident("read_all")).expect("plan");
+    assert!(matches!(&vec_plan.shape,
+        UnfoldShape::Iterable(inner) if matches!(**inner, UnfoldShape::Base)));
+    assert!(vec_plan.element.is_none(), "decomposed-leaf fold");
+    for ty in ["Option<Reading>", "Vec<Reading>", "Reading"] {
+        let ty: syn::Type = syn::parse_str(ty).unwrap();
+        assert!(
+            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            "no layer of a sum return may require a whole-value converter: {}",
+            ty.to_token_stream()
+        );
+    }
+}
+
+/// A `Vec<sum>` return **on its own** — no bare or `Option`-wrapped return of
+/// the same sum anywhere in the binding. The test above cannot state this: its
+/// `Option<Reading>` fixture unrequires the bare type through a *different*
+/// layer, so it would keep passing if the `Vec` element were left required.
+///
+/// The bare requirement is **seeded explicitly**. A scan registers only the
+/// top-level return, so `Reading` would not be in the set to begin with and the
+/// assertion would hold whether or not `wire_fixed_returns` unrequired the
+/// peeled element — passing while testing nothing. Seeding reproduces what an
+/// adapter that does require the element leaves behind, which is the state the
+/// unrequire exists for.
+#[test]
+fn a_vec_only_sum_return_drops_the_bare_requirement() {
+    let mut reg = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
+    let bare: syn::Type = syn::parse_quote!(Reading);
+    reg.require_output(&bare, &crate::SourceLocation::default());
+    assert!(
+        reg.required_outputs_scan
+            .contains(&TypeKey::from_type(&bare)),
+        "fixture precondition: the bare element starts out required"
+    );
+
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_all"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    for ty in ["Vec<Reading>", "Reading"] {
+        let ty: syn::Type = syn::parse_str(ty).unwrap();
+        assert!(
+            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            "no layer of a sum return may require a whole-value converter: {}",
+            ty.to_token_stream()
+        );
+    }
+}
+
+/// An `impl Fn(E)` callback argument decomposes the same way a return does —
+/// the plan is keyed by the arg type, so the trampoline delivers the tag and
+/// groups instead of a whole value built on the Rust side.
+#[test]
+fn sum_callback_arg_is_a_fixed_builder_plan() {
+    let mut reg = reg_with(&[
+        "fn read_each(n: i32, f: impl Fn(Reading) + Send + Sync + 'static) { todo!() }",
+    ]);
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_each"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    let key = TypeKey::from_type(&syn::parse_quote!(Reading));
+    let plan = reg
+        .callback_arg_plans
+        .get(&key)
+        .expect("callback-arg plan keyed by the arg type");
+    assert!(plan.fixed_builder);
+    assert!(matches!(plan.shape, UnfoldShape::Base));
+    assert_eq!(plan.leaves[0].source, LeafSource::SumTag);
 }
