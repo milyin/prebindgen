@@ -357,7 +357,21 @@ impl ShapeGraph {
 
     /// Peel the source's use qualifier off `ty` and intern what remains.
     fn intern_use<M>(&mut self, ty: &syn::Type, registry: &Registry<M>) -> SemanticUse {
-        let (source, inner) = peel_source_use(ty);
+        // Transparent wrappers are stripped on **both** sides of the peel, not
+        // just one:
+        //
+        //   `&Box<T>`  needs the strip AFTER  — peel yields `Box<T>`;
+        //   `Box<&T>`  needs the strip BEFORE — otherwise the `&` is still
+        //              there when the key is formed, and the reference ends up
+        //              *inside* the interned node instead of on the edge.
+        //
+        // That second case is what makes the order load-bearing rather than
+        // cosmetic: a node keyed `& T` contradicts this tier's own rule that a
+        // use qualifier lives on the edge, and `build` would classify it as a
+        // `Leaf` — silently losing the structure of a declared `T`.
+        let outer = strip_transparent(ty);
+        let (source, inner) = peel_source_use(&outer);
+        let inner = strip_transparent(&inner);
         SemanticUse {
             shape: self.intern(&inner, registry),
             source,
@@ -371,10 +385,16 @@ impl ShapeGraph {
     /// makes a recursive type terminate: the recursive occurrence finds the
     /// reserved id in `by_key` and becomes a back-edge instead of recursing
     /// forever.
+    /// `ty` must already be normalized by [`Self::intern_use`] — no use
+    /// qualifier and no transparent wrapper — so an interning key can never
+    /// contain a reference.
     fn intern<M>(&mut self, ty: &syn::Type, registry: &Registry<M>) -> ShapeId {
-        // `Box` is heap indirection, not structure — see the module docs.
-        let ty = strip_transparent(ty);
-        let key = TypeKey::from_type(&ty);
+        debug_assert!(
+            !matches!(ty, syn::Type::Reference(_)),
+            "intern received an unpeeled reference `{}` — the use qualifier belongs on the edge",
+            quote::ToTokens::to_token_stream(ty)
+        );
+        let key = TypeKey::from_type(ty);
         if let Some(id) = self.by_key.get(&key) {
             return *id;
         }
@@ -385,7 +405,7 @@ impl ShapeGraph {
         self.keys.push(key.clone());
         self.by_key.insert(key.clone(), id);
 
-        let built = self.build(&ty, &key, registry);
+        let built = self.build(ty, &key, registry);
         self.nodes[id.0] = built;
         id
     }

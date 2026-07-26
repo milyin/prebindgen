@@ -179,6 +179,88 @@ fn box_is_transparent() {
     assert_eq!(g.key(inner.shape), &key("Rec"));
 }
 
+/// A transparent wrapper is stripped on **both** sides of the use peel.
+///
+/// `&Box<T>` needs the strip after the peel; `Box<&T>` needs it before —
+/// otherwise the `&` is still present when the interning key is formed, the
+/// reference lands *inside* the node instead of on the edge, and `build`
+/// classifies it as a `Leaf`, silently losing the structure of a declared `T`.
+/// Both spellings must name the same node as a bare `T` and differ only in
+/// their edge qualifier.
+#[test]
+fn transparent_wrappers_are_stripped_on_both_sides_of_the_peel() {
+    for (spelling, want_use) in [
+        ("Box<Rec>", SourceUse::Value),
+        ("&Box<Rec>", SourceUse::SharedRef),
+        ("&mut Box<Rec>", SourceUse::ExclusiveRef),
+        ("Box<&Rec>", SourceUse::SharedRef),
+        ("Box<&mut Rec>", SourceUse::ExclusiveRef),
+        ("Box<Box<&Rec>>", SourceUse::SharedRef),
+    ] {
+        let (g, root) = graph_of(&["pub struct Rec { pub id: u64 }"], spelling);
+        assert_eq!(root.source, want_use, "edge qualifier for `{spelling}`");
+        // The node is `Rec` itself — not `& Rec`, and not a `Leaf`.
+        assert_eq!(g.key(root.shape), &key("Rec"), "node key for `{spelling}`");
+        assert!(
+            matches!(g.get(root.shape), SemanticShape::Product { .. }),
+            "`{spelling}` must keep the product's structure, got {:?}",
+            g.get(root.shape)
+        );
+    }
+
+    // …and the same one level down, where the wrapper sits on a field.
+    let (g, root) = graph_of(
+        &[
+            "pub struct Holder { pub a: Box<&'static Rec>, pub b: Vec<Box<&'static Rec>> }",
+            "pub struct Rec { pub id: u64 }",
+        ],
+        "Holder",
+    );
+    let SemanticShape::Product { fields, .. } = g.get(root.shape) else {
+        panic!("expected a product");
+    };
+    assert_eq!(fields[0].uses.source, SourceUse::SharedRef);
+    assert_eq!(g.key(fields[0].uses.shape), &key("Rec"));
+    let SemanticShape::Sequence { elem, .. } = g.get(fields[1].uses.shape) else {
+        panic!("expected a sequence");
+    };
+    assert_eq!(elem.source, SourceUse::SharedRef);
+    assert_eq!(elem.shape, fields[0].uses.shape);
+}
+
+/// **No node is a reference.** A use qualifier lives on the edge, so a node
+/// keyed `& T` would be this tier contradicting its own rule — that is exactly
+/// the `Box<&T>` defect above, where the `&` survived into the key.
+///
+/// Note what this does *not* say: a **layer's** key legitimately contains its
+/// element's spelling, so `Option<&Rec>` is a perfectly good key. It has to be
+/// — `Option<Rec>` and `Option<&Rec>` are different layers (their element edges
+/// differ) and must not collide. The invariant is about the node's own head,
+/// not about the characters in its key.
+#[test]
+fn no_node_is_itself_a_reference() {
+    let (g, _) = graph_of(
+        &[
+            "pub struct Holder { pub a: Box<&'static Rec>, pub b: &'static [Rec], \
+              pub c: Option<&'static Rec>, pub d: Vec<&'static Rec> }",
+            "pub struct Rec { pub id: u64 }",
+        ],
+        "Holder",
+    );
+    for id in g.ids() {
+        let k = g.key(id).as_str();
+        assert!(
+            !k.trim_start().starts_with('&'),
+            "node {id:?} is itself a reference (`{k}`) — the qualifier belongs on the edge"
+        );
+    }
+    // The layer keys that legitimately mention a reference are still there, and
+    // still distinct from their by-value counterparts.
+    assert!(g.id_of(&key("Option<&'static Rec>")).is_some());
+    assert!(g.id_of(&key("Vec<&'static Rec>")).is_some());
+    assert!(g.id_of(&key("Option<Rec>")).is_none());
+}
+
 /// `Result<T, E>` is a two-alternative sum at the source. Both adapters route
 /// it to an error channel, but that is a Tier 1 decision — modelling it as an
 /// opaque leaf would hide `T` and `E` from the tier whose job is structure.
@@ -398,6 +480,104 @@ fn children_covers_every_node_kind() {
 
 // ── the tier boundary ───────────────────────────────────────────────────
 
+/// Strip Rust comments — both `//` line comments and `/* … */` blocks —
+/// while leaving **string literals intact**.
+///
+/// The module documents what it may not name, so its own prose about
+/// `descriptor` and `Kotlin` is the point rather than a violation. String
+/// literals are deliberately *not* stripped: Tier 0 naming adapter vocabulary
+/// inside a panic message would be a real violation, so the scan should still
+/// see it. The scanner tracks strings only so that a `/*` or `//` appearing
+/// inside one does not open a phantom comment.
+///
+/// Char literals are not tracked: `'` is overwhelmingly a lifetime in this
+/// file, and a naive char-literal state would swallow code from `'a` to the
+/// next quote. The cost of that omission is a `//` inside a char literal being
+/// treated as a comment, which nothing in this crate writes.
+fn code_without_comments(src: &str) -> String {
+    #[derive(Clone, Copy, PartialEq)]
+    enum St {
+        Code,
+        Line,
+        Block,
+        Str,
+        StrEsc,
+    }
+    let mut out = String::with_capacity(src.len());
+    let mut st = St::Code;
+    let mut chars = src.chars().peekable();
+    while let Some(c) = chars.next() {
+        match st {
+            St::Code => match (c, chars.peek()) {
+                ('/', Some('/')) => {
+                    chars.next();
+                    st = St::Line;
+                }
+                ('/', Some('*')) => {
+                    chars.next();
+                    st = St::Block;
+                }
+                ('"', _) => {
+                    st = St::Str;
+                    out.push(c);
+                }
+                _ => out.push(c),
+            },
+            St::Line => {
+                if c == '\n' {
+                    st = St::Code;
+                    out.push(c);
+                }
+            }
+            St::Block => {
+                if c == '*' && chars.peek() == Some(&'/') {
+                    chars.next();
+                    st = St::Code;
+                } else if c == '\n' {
+                    // Keep line structure so the import scan below still works.
+                    out.push(c);
+                }
+            }
+            St::Str => {
+                out.push(c);
+                st = match c {
+                    '\\' => St::StrEsc,
+                    '"' => St::Code,
+                    _ => St::Str,
+                };
+            }
+            St::StrEsc => {
+                out.push(c);
+                st = St::Str;
+            }
+        }
+    }
+    out
+}
+
+/// The stripper itself, since the boundary test is only as good as it is.
+#[test]
+fn comment_stripping_handles_blocks_and_leaves_strings_alone() {
+    let src = r#"
+// line comment mentioning jlong
+/* block comment
+   mentioning Kotlin */
+let a = "a string with jlong in it";
+let b = "not a // comment"; /* trailing */ let c = 1;
+"#;
+    let code = code_without_comments(src);
+    // Both comment forms are gone…
+    assert!(!code.contains("line comment"), "{code}");
+    assert!(!code.contains("block comment"), "{code}");
+    assert!(!code.contains("mentioning"), "{code}");
+    assert!(!code.contains("trailing"), "{code}");
+    // …string literals survive, including one containing `//`…
+    assert!(code.contains(r#""a string with jlong in it""#), "{code}");
+    assert!(code.contains(r#""not a // comment""#), "{code}");
+    // …and code after a block comment on the same line is kept.
+    assert!(code.contains("let c = 1;"), "{code}");
+}
+
 /// **Tier 0 may not name a JVM descriptor, a C ABI type, a Kotlin class, or a
 /// delivery protocol.**
 ///
@@ -405,19 +585,13 @@ fn children_covers_every_node_kind() {
 /// here" — `semantic.rs` could import from `api::lang` and still compile. So
 /// the boundary is checked against the module's own text, which is crude but is
 /// the only form of this check that can actually fail.
+///
+/// Comments are stripped by [`code_without_comments`], which handles both
+/// comment forms and leaves string literals in the scan — a message naming
+/// adapter vocabulary would be a real violation.
 #[test]
 fn no_adapter_policy_is_reachable_from_tier_0() {
-    let src = include_str!("../semantic.rs");
-    // Strip comments: the module *documents* what it may not name, and those
-    // sentences are the point rather than a violation.
-    let code: String = src
-        .lines()
-        .filter(|l| {
-            let t = l.trim_start();
-            !t.starts_with("//")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let code = code_without_comments(include_str!("../semantic.rs"));
 
     for forbidden in [
         // adapters and their modules
