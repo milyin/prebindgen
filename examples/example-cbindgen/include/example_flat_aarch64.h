@@ -28,11 +28,44 @@ typedef struct calculator_t {
   uint8_t _private[0];
 } calculator_t;
 
+typedef enum shape_t_Tag {
+  Empty,
+  Circle,
+  Rect,
+  Labeled,
+} shape_t_Tag;
+
+typedef struct Rect_Body {
+  double width;
+  double height;
+} Rect_Body;
+
+typedef struct Labeled_Body {
+  char *_0;
+  enum operation_t _1;
+} Labeled_Body;
+
+typedef struct shape_t {
+  shape_t_Tag tag;
+  union {
+    struct {
+      double circle;
+    };
+    Rect_Body rect;
+    Labeled_Body labeled;
+  };
+} shape_t;
+
 typedef struct closure_value_t {
   void *context;
   void (*call)(double, void*);
   void (*drop)(void*);
 } closure_value_t;
+
+typedef struct drawing_t {
+  uint64_t id;
+  struct shape_t shape;
+} drawing_t;
 
 typedef struct foo_t {
   uint64_t id;
@@ -47,6 +80,8 @@ extern void free(void *ptr);
 void example_free(void *p);
 
 void calculator_drop(struct calculator_t *this_);
+
+void shape_drop(struct shape_t *this_);
 
 bool calculator_apply(struct calculator_t *c,
                       enum operation_t op,
@@ -72,6 +107,10 @@ struct calculator_t *calculator_new_from_str(const char *s, char **e);
 
 char *calculator_to_string(const struct calculator_t *c);
 
+struct shape_t drawing_get_shape(struct drawing_t d);
+
+struct drawing_t drawing_new(uint64_t id, struct shape_t shape);
+
 uint64_t foo_get_id(struct foo_t f);
 
 struct foo_t foo_new(uint64_t id);
@@ -79,5 +118,19 @@ struct foo_t foo_new(uint64_t id);
 enum inside_foo_t inside_foo_default(void);
 
 int32_t inside_foo_value(enum inside_foo_t x);
+
+double shape_area(struct shape_t s);
+
+char *shape_get_label(struct shape_t s);
+
+struct shape_t shape_new_circle(double radius);
+
+struct shape_t shape_new_empty(void);
+
+struct shape_t shape_new_labeled(const char *label, enum operation_t op);
+
+struct shape_t shape_new_rect(double width, double height);
+
+bool shape_try_area(struct shape_t s, double *out, char **e);
 
 #endif  /* EXAMPLE_FLAT_H */

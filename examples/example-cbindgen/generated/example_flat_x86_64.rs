@@ -49,6 +49,12 @@ pub unsafe extern "C" fn calculator_drop(this_: *mut calculator_t) {
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub struct drawing_t {
+    pub id: u64,
+    pub shape: ::core::mem::MaybeUninit<shape_t>,
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct foo_t {
     pub id: u64,
     pub x86_64_field: u64,
@@ -69,6 +75,41 @@ pub enum operation_t {
     Sub = 1,
     Mul = 2,
     Div = 3,
+}
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub enum shape_t {
+    Empty,
+    Circle(f64),
+    Rect { width: f64, height: f64 },
+    Labeled(*mut ::core::ffi::c_char, ::core::mem::MaybeUninit<operation_t>),
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_variables)]
+pub unsafe extern "C" fn shape_drop(this_: *mut ::core::mem::MaybeUninit<shape_t>) {
+    if this_.is_null() {
+        return;
+    }
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+    };
+    let __tag: ::core::ffi::c_int = ::core::ptr::read(
+        (*this_).as_ptr() as *const ::core::ffi::c_int,
+    );
+    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+        return;
+    }
+    match (*this_).assume_init_mut() {
+        shape_t::Labeled(__f0, __f1) => {
+            free(*__f0 as *mut ::core::ffi::c_void);
+            *__f0 = ::core::ptr::null_mut();
+        }
+        _ => {}
+    }
 }
 #[repr(C)]
 #[allow(non_camel_case_types)]
@@ -93,6 +134,15 @@ pub(crate) unsafe fn __cbg_in_Calculator(
     )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_Drawing(
+    v: drawing_t,
+) -> ::core::result::Result<example_flat::Drawing, ::std::string::String> {
+    ::core::result::Result::Ok(example_flat::Drawing {
+        id: v.id,
+        shape: __cbg_in_Shape(v.shape)?,
+    })
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     example_flat::Foo {
         id: v.id,
@@ -101,19 +151,128 @@ pub(crate) unsafe fn __cbg_in_Foo(v: foo_t) -> example_flat::Foo {
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_InsideFoo(v: inside_foo_t) -> example_flat::InsideFoo {
-    match v {
-        inside_foo_t::DouddleDee => example_flat::InsideFoo::DouddleDee,
-        inside_foo_t::DouddleDum => example_flat::InsideFoo::DouddleDum,
+pub(crate) unsafe fn __cbg_in_InsideFoo(
+    v: ::core::mem::MaybeUninit<inside_foo_t>,
+) -> ::core::result::Result<example_flat::InsideFoo, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < inside_foo_t > () == ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`inside_foo_t`: a #[repr(C)] enum must have the size of a C `int`"
+        );
+        assert!(
+            ::core::mem::align_of:: < inside_foo_t > () == ::core::mem::align_of:: <
+            ::core::ffi::c_int > (),
+            "`inside_foo_t`: a #[repr(C)] enum must have the alignment of a C `int`"
+        );
+    };
+    let __raw: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if __raw == inside_foo_t::DouddleDee as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::InsideFoo::DouddleDee);
     }
+    if __raw == inside_foo_t::DouddleDum as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::InsideFoo::DouddleDum);
+    }
+    ::core::result::Result::Err(
+        ::std::format!("invalid discriminant {} for `inside_foo_t`", __raw),
+    )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
-pub(crate) fn __cbg_in_Operation(v: operation_t) -> example_flat::Operation {
-    match v {
-        operation_t::Add => example_flat::Operation::Add,
-        operation_t::Sub => example_flat::Operation::Sub,
-        operation_t::Mul => example_flat::Operation::Mul,
-        operation_t::Div => example_flat::Operation::Div,
+pub(crate) unsafe fn __cbg_in_Operation(
+    v: ::core::mem::MaybeUninit<operation_t>,
+) -> ::core::result::Result<example_flat::Operation, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < operation_t > () == ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`operation_t`: a #[repr(C)] enum must have the size of a C `int`"
+        );
+        assert!(
+            ::core::mem::align_of:: < operation_t > () == ::core::mem::align_of:: <
+            ::core::ffi::c_int > (),
+            "`operation_t`: a #[repr(C)] enum must have the alignment of a C `int`"
+        );
+    };
+    let __raw: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if __raw == operation_t::Add as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Add);
+    }
+    if __raw == operation_t::Sub as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Sub);
+    }
+    if __raw == operation_t::Mul as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Mul);
+    }
+    if __raw == operation_t::Div as ::core::ffi::c_int {
+        return ::core::result::Result::Ok(example_flat::Operation::Div);
+    }
+    ::core::result::Result::Err(
+        ::std::format!("invalid discriminant {} for `operation_t`", __raw),
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_Shape(
+    v: ::core::mem::MaybeUninit<shape_t>,
+) -> ::core::result::Result<example_flat::Shape, ::std::string::String> {
+    const _: () = {
+        assert!(
+            ::core::mem::size_of:: < shape_t > () >= ::core::mem::size_of:: <
+            ::core::ffi::c_int > (),
+            "`shape_t`: a #[repr(C)] enum with payload variants must be at least as large as its C `int` discriminant"
+        );
+    };
+    let __tag: ::core::ffi::c_int = ::core::ptr::read(
+        v.as_ptr() as *const ::core::ffi::c_int,
+    );
+    if !((__tag as i64) >= 0 && (__tag as i64) < 4i64) {
+        return ::core::result::Result::Err(
+            ::std::format!("invalid tag {} for `shape_t` (expected 0..4)", __tag),
+        );
+    }
+    let v = v.assume_init();
+    ::core::result::Result::Ok(
+        match v {
+            shape_t::Empty => example_flat::Shape::Empty,
+            shape_t::Circle(__f0) => example_flat::Shape::Circle(__f0),
+            shape_t::Rect { width: __f0, height: __f1 } => {
+                example_flat::Shape::Rect {
+                    width: __f0,
+                    height: __f1,
+                }
+            }
+            shape_t::Labeled(__f0, __f1) => {
+                example_flat::Shape::Labeled(
+                    if __f0.is_null() {
+                        ::std::string::String::new()
+                    } else {
+                        ::std::ffi::CStr::from_ptr(__f0).to_string_lossy().into_owned()
+                    },
+                    __cbg_in_Operation(__f1)?,
+                )
+            }
+        },
+    )
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) unsafe fn __cbg_in_String(
+    v: *const ::core::ffi::c_char,
+) -> ::core::result::Result<::std::string::String, ::std::string::String> {
+    if v.is_null() {
+        return ::core::result::Result::Err(
+            ::std::string::String::from("null pointer passed for String argument"),
+        );
+    }
+    match ::std::ffi::CStr::from_ptr(v).to_str() {
+        ::core::result::Result::Ok(s) => ::core::result::Result::Ok(s.to_owned()),
+        ::core::result::Result::Err(_) => {
+            ::core::result::Result::Err(
+                ::std::string::String::from("invalid UTF-8 in String argument"),
+            )
+        }
     }
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
@@ -200,6 +359,13 @@ pub(crate) fn __cbg_out_Calculator(v: example_flat::Calculator) -> *mut calculat
     ::std::boxed::Box::into_raw(::std::boxed::Box::new(v)) as *mut calculator_t
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Drawing(v: example_flat::Drawing) -> drawing_t {
+    drawing_t {
+        id: v.id,
+        shape: __cbg_out_Shape(v.shape),
+    }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_Error(v: example_flat::Error) -> *mut ::core::ffi::c_char {
     __cbg_alloc_cstr(example_flat::error_get_message(&v))
 }
@@ -226,6 +392,29 @@ pub(crate) fn __cbg_out_Operation(v: example_flat::Operation) -> operation_t {
         example_flat::Operation::Mul => operation_t::Mul,
         example_flat::Operation::Div => operation_t::Div,
     }
+}
+#[allow(non_snake_case, unused_variables, dead_code)]
+pub(crate) fn __cbg_out_Shape(
+    v: example_flat::Shape,
+) -> ::core::mem::MaybeUninit<shape_t> {
+    ::core::mem::MaybeUninit::new(
+        match v {
+            example_flat::Shape::Empty => shape_t::Empty,
+            example_flat::Shape::Circle(__f0) => shape_t::Circle(__f0),
+            example_flat::Shape::Rect { width: __f0, height: __f1 } => {
+                shape_t::Rect {
+                    width: __f0,
+                    height: __f1,
+                }
+            }
+            example_flat::Shape::Labeled(__f0, __f1) => {
+                shape_t::Labeled(
+                    __cbg_alloc_cstr(__f0),
+                    ::core::mem::MaybeUninit::new(__cbg_out_Operation(__f1)),
+                )
+            }
+        },
+    )
 }
 #[allow(non_snake_case, unused_variables, dead_code)]
 pub(crate) fn __cbg_out_String(v: ::std::string::String) -> *mut ::core::ffi::c_char {
@@ -259,7 +448,7 @@ pub(crate) fn __cbg_result_Result___f64___Error__() {}
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn calculator_apply(
     c: *mut calculator_t,
-    op: operation_t,
+    op: ::core::mem::MaybeUninit<operation_t>,
     operand: f64,
     out: *mut f64,
     e: *mut *mut ::core::ffi::c_char,
@@ -277,7 +466,19 @@ pub unsafe extern "C" fn calculator_apply(
             return false;
         }
     };
-    let op = __cbg_in_Operation(op);
+    let op = match __cbg_in_Operation(op) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return false;
+        }
+    };
     let operand = __cbg_in_f64(operand);
     match example_flat::calculator_apply(c, op, operand) {
         ::core::result::Result::Ok(__v) => {
@@ -445,6 +646,40 @@ pub unsafe extern "C" fn calculator_to_string(
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn drawing_get_shape(
+    d: drawing_t,
+) -> ::core::mem::MaybeUninit<shape_t> {
+    let d = match __cbg_in_Drawing(d) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::drawing_get_shape(d);
+    let __ret: ::core::mem::MaybeUninit<shape_t>;
+    __ret = __cbg_out_Shape(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn drawing_new(
+    id: u64,
+    shape: ::core::mem::MaybeUninit<shape_t>,
+) -> drawing_t {
+    let id = __cbg_in_u64(id);
+    let shape = match __cbg_in_Shape(shape) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::drawing_new(id, shape);
+    let __ret: drawing_t;
+    __ret = __cbg_out_Drawing(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
 pub unsafe extern "C" fn foo_get_id(f: foo_t) -> u64 {
     let f = __cbg_in_Foo(f);
     let __v = example_flat::foo_get_id(f);
@@ -471,12 +706,137 @@ pub unsafe extern "C" fn inside_foo_default() -> inside_foo_t {
 }
 #[no_mangle]
 #[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
-pub unsafe extern "C" fn inside_foo_value(x: inside_foo_t) -> i32 {
-    let x = __cbg_in_InsideFoo(x);
+pub unsafe extern "C" fn inside_foo_value(
+    x: ::core::mem::MaybeUninit<inside_foo_t>,
+) -> i32 {
+    let x = match __cbg_in_InsideFoo(x) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
     let __v = example_flat::inside_foo_value(x);
     let __ret: i32;
     __ret = __cbg_out_i32(__v);
     __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_area(s: ::core::mem::MaybeUninit<shape_t>) -> f64 {
+    let s = match __cbg_in_Shape(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::shape_area(s);
+    let __ret: f64;
+    __ret = __cbg_out_f64(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_get_label(
+    s: ::core::mem::MaybeUninit<shape_t>,
+) -> *mut ::core::ffi::c_char {
+    let s = match __cbg_in_Shape(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::shape_get_label(s);
+    let __ret: *mut ::core::ffi::c_char;
+    __ret = __cbg_out_String(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_new_circle(
+    radius: f64,
+) -> ::core::mem::MaybeUninit<shape_t> {
+    let radius = __cbg_in_f64(radius);
+    let __v = example_flat::shape_new_circle(radius);
+    let __ret: ::core::mem::MaybeUninit<shape_t>;
+    __ret = __cbg_out_Shape(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_new_empty() -> ::core::mem::MaybeUninit<shape_t> {
+    let __v = example_flat::shape_new_empty();
+    let __ret: ::core::mem::MaybeUninit<shape_t>;
+    __ret = __cbg_out_Shape(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_new_labeled(
+    label: *const ::core::ffi::c_char,
+    op: ::core::mem::MaybeUninit<operation_t>,
+) -> ::core::mem::MaybeUninit<shape_t> {
+    let label = match __cbg_in___str(label) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let op = match __cbg_in_Operation(op) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            panic!("{}", __msg);
+        }
+    };
+    let __v = example_flat::shape_new_labeled(label, op);
+    let __ret: ::core::mem::MaybeUninit<shape_t>;
+    __ret = __cbg_out_Shape(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_new_rect(
+    width: f64,
+    height: f64,
+) -> ::core::mem::MaybeUninit<shape_t> {
+    let width = __cbg_in_f64(width);
+    let height = __cbg_in_f64(height);
+    let __v = example_flat::shape_new_rect(width, height);
+    let __ret: ::core::mem::MaybeUninit<shape_t>;
+    __ret = __cbg_out_Shape(__v);
+    __ret
+}
+#[no_mangle]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_unsafe, dead_code)]
+pub unsafe extern "C" fn shape_try_area(
+    s: ::core::mem::MaybeUninit<shape_t>,
+    out: *mut f64,
+    e: *mut *mut ::core::ffi::c_char,
+) -> bool {
+    let s = match __cbg_in_Shape(s) {
+        ::core::result::Result::Ok(__v) => __v,
+        ::core::result::Result::Err(__msg) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(
+                    <example_flat::Error as ::core::convert::From<
+                        ::std::string::String,
+                    >>::from(__msg),
+                );
+            }
+            return false;
+        }
+    };
+    match example_flat::shape_try_area(s) {
+        ::core::result::Result::Ok(__v) => {
+            *out = __cbg_out_f64(__v);
+            true
+        }
+        ::core::result::Result::Err(__err) => {
+            if !e.is_null() {
+                *e = __cbg_out_Error(__err);
+            }
+            false
+        }
+    }
 }
 const _: () = {
     konst::assertc_eq!(

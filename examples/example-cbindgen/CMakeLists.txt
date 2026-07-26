@@ -17,13 +17,14 @@
 #   cmake -S . -B build
 #   cmake --build build                                  # builds both targets
 #   cmake --build build --target show_generated_diff     # show the per-target diff
+#   cmake --build build --target run_smoke               # host C smoke test
 #
 # Options:
 #   -DEXAMPLE_TARGETS="triple-a;triple-b"   override the target triples
 #   -DEXAMPLE_FEATURES=unstable             forward cargo features
 
 cmake_minimum_required(VERSION 3.16)
-project(example_cbindgen_multitarget LANGUAGES NONE)
+project(example_cbindgen_multitarget LANGUAGES C)
 
 find_program(CARGO cargo REQUIRED)
 
@@ -65,5 +66,40 @@ add_custom_target(show_generated_diff
   COMMAND ${CMAKE_COMMAND} -E echo "Per-target generated headers differ by target_arch:"
   COMMAND sh -c "diff '${CMAKE_CURRENT_SOURCE_DIR}/include/example_flat_x86_64.h' '${CMAKE_CURRENT_SOURCE_DIR}/include/example_flat_aarch64.h' || true"
   DEPENDS build_all_targets
+  VERBATIM
+)
+
+# ── Host C smoke test ──────────────────────────────────────────────────────
+#
+# Compiles `c/smoke.c` against the committed header for the HOST architecture
+# and links it to the host cdylib, then runs it. It exercises the tagged union
+# (`shape_t`): every arm, every position (return / parameter / data-struct
+# field), and `shape_drop` freeing the active arm.
+#
+#   cmake --build build --target run_smoke
+
+get_filename_component(_workspace_root "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+set(_host_dir "${_workspace_root}/target/debug")
+set(_host_dylib
+  "${_host_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}example_cbindgen${CMAKE_SHARED_LIBRARY_SUFFIX}")
+
+add_custom_command(
+  OUTPUT "${_host_dylib}"
+  COMMAND ${CARGO} build --manifest-path "${_manifest}" -p example-cbindgen ${_feature_args}
+  COMMENT "cargo build example-cbindgen for the host (cdylib + regenerated header)"
+  VERBATIM
+)
+add_custom_target(host_cdylib DEPENDS "${_host_dylib}")
+
+add_executable(example_smoke c/smoke.c)
+add_dependencies(example_smoke host_cdylib)
+target_include_directories(example_smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(example_smoke PRIVATE "${_host_dylib}" m)
+# Find the cdylib at runtime without installing it.
+set_target_properties(example_smoke PROPERTIES BUILD_RPATH "${_host_dir}")
+
+add_custom_target(run_smoke
+  COMMAND example_smoke
+  DEPENDS example_smoke
   VERBATIM
 )
