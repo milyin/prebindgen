@@ -8,8 +8,10 @@ import io.prebindgen.covertest.Payload
 import io.prebindgen.covertest.Ranked
 import io.prebindgen.covertest.__u64FolderRawHolder
 import io.prebindgen.covertest.analytics.Summary
+import io.prebindgen.covertest.analytics.SummaryVault
 import io.prebindgen.covertest.asRaw
 import io.prebindgen.covertest.u64Callback
+import io.prebindgen.covertest.withSortedHandleLocks
 
 public interface PriorityKind {
     val value: Int
@@ -708,6 +710,24 @@ public value class Stamp(public val bytes: ByteArray) {
     }
 }
 
+public fun interface LookupCallback {
+    public fun run(lookup: Lookup)
+}
+
+public fun interface LookupCallbackRaw {
+    public fun run(tag: Int, found_v0: Long, failed_v0: String?)
+}
+
+public fun LookupCallback.asRaw(): LookupCallbackRaw =
+    LookupCallbackRaw {
+        tag,
+        found_v0,
+        failed_v0 ->
+        run(
+            when (tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(found_v0)); 2 -> Lookup.Failed(failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
+        )
+    }
+
 public fun interface ReadingCallback {
     public fun run(reading: Reading)
 }
@@ -1278,6 +1298,76 @@ public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>
     val __ret = CovNative.lookupOf(count, total, __LookupBuilderRaw, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret as Lookup
+}
+
+/**
+ * A handle-carrying sum as a **callback argument** — the same `Lookup` that
+ * [`lookup_of`] returns, arriving through `impl Fn` instead. Alternatives are
+ * delivered in turn (`Failed`, `Absent`, `Found`, then `Found` again), so a
+ * live group hands a native resource to the callback while the inert groups'
+ * slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
+ * but not closed by the proxy: it is the callback body's to close, exactly as
+ * for a returned sum.
+ */
+public fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>) {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    CovNative.lookupEach(n, total, sink.asRaw(), __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * Store the `which` alternative as the archive's own reading, and the same one
+ * as its optional fallback. A **negative** `which` clears the fallback and
+ * resets the reading to the first alternative, so the two borrow shapes can be
+ * exercised independently: `&Reading` always has a value, `Option<&Reading>`
+ * does not.
+ */
+public fun archiveSetReading(a: SummaryVault, which: Int, onError: JniErrorHandler<Unit>) {
+    if (a.isClosed()) { onError.run("Operation on a closed native handle."); return }
+    val __bcap = JniErrorHandlerCapture.acquire()
+    withSortedHandleLocks(a) {
+        val a_ptr = a.ptr
+        CovNative.archiveSetReading(a_ptr, which, __bcap)
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+}
+
+/**
+ * A sum returned **borrowed** (`&Reading`). The value stays owned by the
+ * archive; the binding decomposes it in place — the encoder matches through
+ * the reference instead of consuming — and the caller gets an ordinary
+ * Kotlin value with no borrow to track.
+ *
+ * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun archiveReading(a: SummaryVault, onError: JniErrorHandler<Reading>): Reading {
+    if (a.isClosed()) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(a) {
+        val a_ptr = a.ptr
+        CovNative.archiveReading(a_ptr, __ReadingBuilder, __bcap)
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Reading
+}
+
+/**
+ * The optional layer over the same borrow (`Option<&Reading>`): `None` nulls
+ * the whole result, exactly as for an owned `Option<Reading>`.
+ *
+ * The Rust `Reading` result is delivered decomposed: the builder callback receives (`tag`, `exact_v0`, `range_low`, `range_high`, `tagged_v0`, `tagged_v1`, `companion_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading?>): Reading? {
+    if (a.isClosed()) return onError.run("Operation on a closed native handle.")
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = withSortedHandleLocks(a) {
+        val a_ptr = a.ptr
+        CovNative.archiveReadingMaybe(a_ptr, __ReadingBuilder, __bcap)
+    }
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Reading?
 }
 
 /**

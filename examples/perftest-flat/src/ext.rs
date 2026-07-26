@@ -254,6 +254,20 @@ pub fn lookup_of(count: i64, total: f64) -> Lookup {
     }
 }
 
+/// A handle-carrying sum as a **callback argument** — the same `Lookup` that
+/// [`lookup_of`] returns, arriving through `impl Fn` instead. Alternatives are
+/// delivered in turn (`Failed`, `Absent`, `Found`, then `Found` again), so a
+/// live group hands a native resource to the callback while the inert groups'
+/// slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
+/// but not closed by the proxy: it is the callback body's to close, exactly as
+/// for a returned sum.
+#[prebindgen]
+pub fn lookup_each(n: i64, total: f64, sink: impl Fn(Lookup) + Send + Sync + 'static) {
+    for i in 0..n {
+        sink(lookup_of(i - 1, total));
+    }
+}
+
 /// Which alternative an [`Observation`]'s `reading` holds, by declaration
 /// order — the sum crossing back **in** as part of a data-class parameter.
 #[prebindgen]
@@ -1047,9 +1061,24 @@ pub fn storage_emit(n: i64, h: &StorageHandler) {
 /// **borrowed** — the shape zenoh-flat's `z_*` accessors use for the C tier's
 /// zero-copy borrows — which the JVM binding lowers by **cloning** into a fresh
 /// owned handle (the JVM keeps its handle past the call).
-#[derive(Default)]
 pub struct Archive {
     latest: Option<Summary>,
+    /// A sum the archive OWNS, so it can hand one back **borrowed** (`&Reading`)
+    /// — the return shape whose encoder must match on the value behind the
+    /// reference rather than moving it.
+    reading: Reading,
+    /// The same, optional, for the `Option<&Reading>` shape.
+    fallback: Option<Reading>,
+}
+
+impl Default for Archive {
+    fn default() -> Self {
+        Self {
+            latest: None,
+            reading: Reading::Missing,
+            fallback: None,
+        }
+    }
 }
 
 /// Create an empty archive.
@@ -1062,6 +1091,33 @@ pub fn archive_new() -> Archive {
 #[prebindgen]
 pub fn archive_store(a: &mut Archive, s: Summary) {
     a.latest = Some(s);
+}
+
+/// Store the `which` alternative as the archive's own reading, and the same one
+/// as its optional fallback. A **negative** `which` clears the fallback and
+/// resets the reading to the first alternative, so the two borrow shapes can be
+/// exercised independently: `&Reading` always has a value, `Option<&Reading>`
+/// does not.
+#[prebindgen]
+pub fn archive_set_reading(a: &mut Archive, which: i32) {
+    a.reading = reading_for(which.max(0));
+    a.fallback = (which >= 0).then(|| reading_for(which));
+}
+
+/// A sum returned **borrowed** (`&Reading`). The value stays owned by the
+/// archive; the binding decomposes it in place — the encoder matches through
+/// the reference instead of consuming — and the caller gets an ordinary
+/// Kotlin value with no borrow to track.
+#[prebindgen]
+pub fn archive_reading(a: &Archive) -> &Reading {
+    &a.reading
+}
+
+/// The optional layer over the same borrow (`Option<&Reading>`): `None` nulls
+/// the whole result, exactly as for an owned `Option<Reading>`.
+#[prebindgen]
+pub fn archive_reading_maybe(a: &Archive) -> Option<&Reading> {
+    a.fallback.as_ref()
 }
 
 /// The stored summary, borrowed (`Option<&Summary>` **return** — `None` when

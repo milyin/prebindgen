@@ -52,6 +52,11 @@ Base package: `io.prebindgen.covertest`
 - `annotated_payload_value` — `fun annotatedPayloadValue(a: Annotated, onError: JniErrorHandler<Double>): Double`
 - `annotated_priority` — `fun annotatedPriority(a: Annotated, onError: JniErrorHandler<Priority?>): Priority?`
 - `annotated_ttl` — `fun annotatedTtl(a: Annotated, onError: JniErrorHandler<Long?>): Long?`
+- `archive_reading` — `fun archiveReading(a: SummaryVault, onError: JniErrorHandler<Reading>): Reading`
+  - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
+- `archive_reading_maybe` — `fun archiveReadingMaybe(a: SummaryVault, onError: JniErrorHandler<Reading?>): Reading?`
+  - shaped by: return `Reading` decomposed → [tag, exact_v0, range_low, range_high, tagged_v0, tagged_v1, companion_v0] (Callback delivery)
+- `archive_set_reading` — `fun archiveSetReading(a: SummaryVault, which: Int, onError: JniErrorHandler<Unit>)`
 - `cache_config_weight` — `fun cacheConfigWeight(cache: CacheConfig?, onError: JniErrorHandler<Int>): Int`
 - `celsius_double` — `fun celsiusDouble(c: Int, onError: JniErrorHandler<Int>): Int`
 - `duration_boundary_echo` — `fun durationBoundaryEcho(value: DurationBoundary, onError: JniErrorHandler<DurationBoundary>): DurationBoundary`
@@ -59,6 +64,7 @@ Base package: `io.prebindgen.covertest`
 - `duration_optional` — `fun durationOptional(value: ULong?, onError: JniErrorHandler<ULong?>): ULong?`
 - `duration_out_of_range` — `fun durationOutOfRange(onError: JniErrorHandler<ULong?>): ULong?`
 - `label_reverse` — `fun labelReverse(l: String, onError: JniErrorHandler<String>): String`
+- `lookup_each` — `fun lookupEach(n: Long, total: Double, sink: LookupCallback, onError: JniErrorHandler<Unit>)`
 - `lookup_of` — `fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>): Lookup`
   - shaped by: return `Lookup` decomposed → [tag, found_v0, failed_v0] (Callback delivery)
 - `object_boundary_value` — `fun objectBoundaryValue(value: ObjectBoundary, onError: JniErrorHandler<Long>): Long`

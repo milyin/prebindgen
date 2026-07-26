@@ -787,6 +787,22 @@ fn sum_returns(tag: &str) -> (String, String) {
             )),
             loc.clone(),
         ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_borrowed(p: &Probe) -> &Reading {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
+        (
+            syn::Item::Fn(syn::parse_quote!(
+                pub fn read_borrowed_maybe(p: &Probe) -> Option<&Reading> {
+                    unimplemented!()
+                }
+            )),
+            loc.clone(),
+        ),
     ];
     let registry = Registry::<KotlinMeta>::from_items(items).expect("index items");
     let jni = JniGen::new().set_package_prefix("io.test.jni").package(
@@ -799,7 +815,9 @@ fn sum_returns(tag: &str) -> (String, String) {
             .fun(crate::fun!(read_maybe))
             .fun(crate::fun!(read_all))
             .fun(crate::fun!(look_up))
-            .fun(crate::fun!(read_each)),
+            .fun(crate::fun!(read_each))
+            .fun(crate::fun!(read_borrowed))
+            .fun(crate::fun!(read_borrowed_maybe)),
     );
 
     let dir = unique_test_dir(tag);
@@ -893,6 +911,54 @@ fn sum_return_emits_one_match_with_wire_defaults() {
     assert!(
         body.contains("jni :: objects :: JObject :: null ()") || body.contains("JObject::null()"),
         "an inert object slot is wire-defaulted to null:\n{body}"
+    );
+}
+
+/// A sum returned **borrowed** (`&E`, `Option<&E>`). `unfold::returns_type`
+/// peels the leading `&` and `wire_fixed_returns` records `by_ref`, so the
+/// encoder matches THROUGH the reference rather than moving the value out of
+/// the owner. Each live group then clones what it needs, and Kotlin receives an
+/// ordinary value with no borrow to track — the borrow never crosses (#161).
+#[test]
+fn borrowed_sum_return_matches_through_the_reference() {
+    let (rust, kotlin) = sum_returns("jnigen_sum_borrowed");
+
+    for extern_fn in ["readBorrowed", "readBorrowedMaybe"] {
+        let at = rust
+            .find(&format!("fn Java_io_test_jni_JNINative_{extern_fn}"))
+            .unwrap_or_else(|| panic!("{extern_fn} extern missing:\n{rust}"));
+        let body = &rust[at..at + 4000];
+        // The value is borrowed from its owner, and the match is over that
+        // borrow — never `match __out` on a moved value.
+        assert!(
+            body.contains("match __out") || body.contains("match &__out"),
+            "{extern_fn}: one match over the borrowed value:\n{body}"
+        );
+        assert!(
+            body.contains("myflat::Reading::Missing =>"),
+            "{extern_fn}: arms bind each variant through the reference:\n{body}"
+        );
+        // A payload reached through a borrow cannot be moved out, so the live
+        // group clones it.
+        assert!(
+            body.contains(".clone()"),
+            "{extern_fn}: a borrowed group's payload is cloned, not moved:\n{body}"
+        );
+    }
+
+    // Kotlin sees a plain value / nullable value — a borrowed sum is not a
+    // handle, so there is nothing to close and no lifetime to track.
+    assert!(
+        kotlin.contains(
+            "public fun readBorrowed(p: Probe, onError: JniErrorHandler<Reading>): Reading"
+        ),
+        "a borrowed sum arrives as an ordinary value:\n{kotlin}"
+    );
+    assert!(
+        kotlin.contains(
+            "public fun readBorrowedMaybe(p: Probe, onError: JniErrorHandler<Reading?>): Reading?"
+        ),
+        "and the optional layer only nulls the whole result:\n{kotlin}"
     );
 }
 

@@ -711,6 +711,12 @@ internal object CovNative {
 
     external fun archiveNew(errorSink: Any): Long
 
+    external fun archiveReading(a: Long, build: Any, errorSink: Any): Any?
+
+    external fun archiveReadingMaybe(a: Long, build: Any, errorSink: Any): Any?
+
+    external fun archiveSetReading(a: Long, which: Int, errorSink: Any)
+
     external fun archiveStore(
         a: Long,
         sSel: Int,
@@ -745,6 +751,8 @@ internal object CovNative {
     external fun escape_probe_value(p: Long, errorSink: Any): Long
 
     external fun labelReverse(l: String, errorSink: Any): String
+
+    external fun lookupEach(n: Long, total: Double, sink: Any, errorSink: Any)
 
     external fun lookupOf(count: Long, total: Double, build: Any, errorSink: Any): Any?
 

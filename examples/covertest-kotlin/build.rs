@@ -469,6 +469,13 @@ fn main() {
                 .fun(fun!(reading_series))
                 .fun(fun!(reading_each))
                 .fun(fun!(lookup_of))
+                // #161: the two positions the four above do not reach — a
+                // handle-carrying sum arriving through a CALLBACK, and a sum
+                // returned BORROWED (`&E` / `Option<&E>`).
+                .fun(fun!(lookup_each))
+                .fun(fun!(archive_set_reading))
+                .fun(fun!(archive_reading))
+                .fun(fun!(archive_reading_maybe))
                 // #144: `Option<CacheConfig>` input reaching a non-null enum
                 // field through the nested `RepliesConfig`.
                 .fun(fun!(cache_config_weight))
