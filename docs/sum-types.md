@@ -303,6 +303,28 @@ re-asserted inside its own live arm. Primitive slots keep their `0`/`false` defa
 handle payload rides its raw `jlong`, so an inert handle group is the `0L` sentinel that is simply
 never wrapped.
 
+**Who closes a handle payload: the receiver, in both positions.** A sum payload is a plan **leaf**,
+so it takes `WrapKind::Handle` — the generated code wraps the pointer into its typed handle class
+and stops there. It does *not* take the `WrapKind::HandleOwned` contract that a plan-less
+`impl Fn(Handle)` argument gets, where the proxy also `close()`s the handle in a `finally`
+(close-unless-taken). So:
+
+- a **returned** sum hands over a handle the caller owns and must `close()`;
+- a sum delivered to a **callback** does the same — the handle is live for the duration of `run` and
+  stays live after it returns, and closing it is the receiver's job.
+
+The two positions agree, which is the point: the reassembly comes from one derivation, so the
+ownership contract cannot differ between them. Both are exercised on the JVM in
+`examples/covertest-kotlin` ("sum return with a handle payload", "sum with a handle payload
+delivered to a callback"), the latter asserting the handle is usable inside `run` and still
+closeable afterwards.
+
+**A borrowed sum return (`&E`, `Option<&E>`) crosses like an owned one.** `unfold::returns_type`
+peels the leading `&` and `wire_fixed_returns` records `by_ref`, so the encoder matches *through*
+the reference instead of moving the value out of its owner; each live group clones what it needs.
+Kotlin therefore receives an ordinary value with no borrow to track and nothing to close — the
+borrow never crosses the boundary — and the owner is unchanged and can be read again.
+
 ### 4.6 Rejections
 
 Generation errors, each naming the offending path:

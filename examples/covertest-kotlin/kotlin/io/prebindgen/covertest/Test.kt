@@ -56,7 +56,11 @@ import io.prebindgen.covertest.model.objectBoundaryValue
 import io.prebindgen.covertest.model.Observation
 import io.prebindgen.covertest.model.observationNew
 import io.prebindgen.covertest.model.observationWhich
+import io.prebindgen.covertest.model.lookupEach
 import io.prebindgen.covertest.model.lookupOf
+import io.prebindgen.covertest.model.archiveReading
+import io.prebindgen.covertest.model.archiveReadingMaybe
+import io.prebindgen.covertest.model.archiveSetReading
 import io.prebindgen.covertest.model.readingEach
 import io.prebindgen.covertest.model.readingMaybe
 import io.prebindgen.covertest.model.readingOf
@@ -465,6 +469,75 @@ fun main() {
         check(summary.total(boom) == 7.5)
         summary.close()
         check(summary.isClosed())
+    }
+
+    // The same handle-carrying sum arriving through a CALLBACK rather than as a
+    // return. A sum payload is a plan LEAF, so the generated proxy WRAPS the
+    // pointer but does not `close()` it — unlike a plan-less `impl Fn(Handle)`
+    // arg, which closes in a `finally`. So the handle is live for as long as the
+    // receiver keeps it and is the caller's to close, exactly as for a returned
+    // sum. That contract is what this pins (#161).
+    section("sum with a handle payload delivered to a callback") {
+        val seen = mutableListOf<String>()
+        val kept = mutableListOf<Summary>()
+        lookupEach(3L, 2.5, { lookup ->
+            when (lookup) {
+                is Lookup.Failed -> seen.add("failed:${lookup.v0}")
+                Lookup.Absent -> seen.add("absent")
+                is Lookup.Found -> {
+                    val s = lookup.v0
+                    // Live INSIDE the callback: the live group's handle is a real
+                    // native object, not the inert `0L` sentinel.
+                    check(!s.isClosed())
+                    check(s.total(boom) == 2.5)
+                    seen.add("found:${s.count(boom)}")
+                    kept.add(s)
+                }
+            }
+        }, boom)
+        check(seen == listOf("failed:negative count", "absent", "found:1"))
+
+        // Still live AFTER the call returns — the proxy did not close it — and
+        // closeable by the receiver that kept it.
+        check(kept.size == 1)
+        val s = kept[0]
+        check(!s.isClosed())
+        check(s.count(boom) == 1L)
+        s.close()
+        check(s.isClosed())
+    }
+
+    // A sum returned BORROWED (`&Reading` / `Option<&Reading>`). The value stays
+    // owned by the archive; the encoder matches THROUGH the reference and clones
+    // what each live group needs, so Kotlin gets an ordinary value with no
+    // borrow to track and the owner can be read again afterwards (#161).
+    section("borrowed sum returns") {
+        val vault = archiveNew(boom)
+
+        // Every alternative, read back through `&Reading`.
+        archiveSetReading(vault, 0, boom)
+        check(archiveReading(vault, boom) === Reading.Missing)
+        archiveSetReading(vault, 1, boom)
+        check((archiveReading(vault, boom) as Reading.Exact).v0 == 42L)
+        archiveSetReading(vault, 2, boom)
+        val range = archiveReading(vault, boom) as Reading.Range
+        check(range.low == 1L && range.high == 9L)
+        archiveSetReading(vault, 3, boom)
+        val tagged = archiveReading(vault, boom) as Reading.Tagged
+        check(tagged.v0 == "warm" && tagged.v1 == Priority.HIGH)
+
+        // Borrowing does not consume: the same archive answers again, and the
+        // value it still owns is unchanged.
+        check((archiveReading(vault, boom) as Reading.Tagged).v0 == "warm")
+
+        // `Option<&Reading>`: the present layer nulls the whole result, staying
+        // independent of the tag.
+        check(archiveReadingMaybe(vault, boom) != null)
+        archiveSetReading(vault, -1, boom)
+        check(archiveReadingMaybe(vault, boom) == null)
+        check(archiveReading(vault, boom) === Reading.Missing)
+
+        vault.close()
     }
 
     // ── a sum whose payload is NOT leaf-shaped ────────────────────────────────
