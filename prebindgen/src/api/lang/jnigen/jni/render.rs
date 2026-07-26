@@ -1155,9 +1155,15 @@ fn classify_params(
                     .leaves
                     .iter()
                     .filter_map(|leaf| {
-                        // Through the leaf's own access template, so a
-                        // tag-gated variant handle locks the expression it
-                        // actually came from.
+                        // Through the leaf's own access template rather than a
+                        // reconstructed `<name>.<field>`, so the lock target is
+                        // whatever expression the leaf actually reads from.
+                        // No live case needs it yet — `build_flat_sum_field`
+                        // returns `None` for a projection payload, so a
+                        // tag-gated handle leaf cannot reach here — but the
+                        // template is the leaf's own answer to "where did this
+                        // come from", and deriving it twice is how the two
+                        // drift apart.
                         let target = leaf.kt_handle_target(&name)?;
                         let consume_null = if leaf.handle_nullable {
                             format!("{target}?.markConsumed()")

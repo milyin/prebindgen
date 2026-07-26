@@ -1762,6 +1762,42 @@ fn sum_return_layers_ride_the_shape_fold() {
     }
 }
 
+/// A `Vec<sum>` return **on its own** — no bare or `Option`-wrapped return of
+/// the same sum anywhere in the binding. The test above cannot state this: its
+/// `Option<Reading>` fixture unrequires the bare type through a *different*
+/// layer, so it would keep passing if the `Vec` element were left required.
+///
+/// The bare requirement is **seeded explicitly**. A scan registers only the
+/// top-level return, so `Reading` would not be in the set to begin with and the
+/// assertion would hold whether or not `wire_fixed_returns` unrequired the
+/// peeled element — passing while testing nothing. Seeding reproduces what an
+/// adapter that does require the element leaves behind, which is the state the
+/// unrequire exists for.
+#[test]
+fn a_vec_only_sum_return_drops_the_bare_requirement() {
+    let mut reg = reg_with(&["fn read_all(n: i32) -> Vec<Reading> { todo!() }"]);
+    let bare: syn::Type = syn::parse_quote!(Reading);
+    reg.require_output(&bare, &crate::SourceLocation::default());
+    assert!(
+        reg.required_outputs_scan
+            .contains(&TypeKey::from_type(&bare)),
+        "fixture precondition: the bare element starts out required"
+    );
+
+    let declared: std::collections::HashSet<syn::Ident> =
+        ["read_all"].iter().map(|s| ident(s)).collect();
+    apply_sum_returns(&mut reg, vec![reading_sum_decon()], &declared).expect("apply_sum_returns");
+
+    for ty in ["Vec<Reading>", "Reading"] {
+        let ty: syn::Type = syn::parse_str(ty).unwrap();
+        assert!(
+            !reg.required_outputs_scan.contains(&TypeKey::from_type(&ty)),
+            "no layer of a sum return may require a whole-value converter: {}",
+            ty.to_token_stream()
+        );
+    }
+}
+
 /// An `impl Fn(E)` callback argument decomposes the same way a return does —
 /// the plan is keyed by the arg type, so the trampoline delivers the tag and
 /// groups instead of a whole value built on the Rust side.
