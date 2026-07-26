@@ -418,6 +418,15 @@ reaches through the payload and releases each of them, nulling the slot so a sec
 Without that a `String` or handle inside a struct payload would leak silently — which is exactly the
 shape zenoh-flat#30 needs (`ReplyResult`'s alternatives are structs whose fields are handles).
 
+That reach is **recursive one level further**: a struct payload's own field may itself be a declared
+`tagged_union` with an owning arm, whose wire is again a by-value mirror rather than a pointer. The
+outer drop delegates to *that* union's typed drop, which nulls what it frees, so idempotence
+composes. Nothing else can reach it — at top level the data-struct contract is that C releases each
+owning field itself, but a union arm is not a top-level struct field. One predicate
+(`tagged_union_has_drop`) serves as both the drop's emission condition and the containing struct's
+test for whether to call it, so a nested union cannot be freed through a symbol that was never
+emitted.
+
 The drop is also a second C entry point into the same bytes, so it validates the tag the same way
 `in_tagged_union` does (§5.3) and treats an out-of-range one as nothing to release.
 
