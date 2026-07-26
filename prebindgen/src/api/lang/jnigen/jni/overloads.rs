@@ -38,7 +38,7 @@ impl JniGen {
     /// JVM, so two distinct such classes share one method descriptor.
     pub(crate) fn is_value_blob_kotlin(&self, simple: &str) -> bool {
         self.types.values().any(|c| {
-            c.value_blob
+            c.is_value_blob()
                 && c.name_spec
                     .as_ref()
                     .map(|s| self.fqn_of(s))

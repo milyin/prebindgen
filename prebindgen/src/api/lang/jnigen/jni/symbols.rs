@@ -122,7 +122,7 @@ pub(crate) fn validate_symbols(ext: &JniGen, registry: &Registry<KotlinMeta>) ->
         // mismatch: inferred type is E.Missing but E.E was expected").
         // Verified against kotlinc. So this one is a declaration error, and
         // the message names both ways to disambiguate.
-        if let Some(sum_cfg) = cfg.sum_cfg.as_ref() {
+        if let Some(sum_cfg) = cfg.sum() {
             let mut seen: BTreeMap<String, String> = BTreeMap::from([(
                 short.to_string(),
                 format!("sealed class `{key}` itself (its variants' supertype)"),

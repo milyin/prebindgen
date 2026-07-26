@@ -249,19 +249,7 @@ impl JniGen {
         let Some(cfg) = self.types.get(key) else {
             return "undeclared";
         };
-        if cfg.opaque.is_some() {
-            "ptr_class"
-        } else if cfg.enum_cfg.is_some() {
-            "enum_class"
-        } else if cfg.sum_cfg.is_some() {
-            "sealed_class"
-        } else if cfg.value_blob {
-            "value_class"
-        } else if cfg.class_decl {
-            "data_class"
-        } else {
-            "wrapper"
-        }
+        cfg.kind.macro_name()
     }
 }
 

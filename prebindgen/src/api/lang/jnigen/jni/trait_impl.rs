@@ -306,7 +306,7 @@ impl JniGen {
             // `name_spec` for FQN-consumers, but the value-context
             // name is `"Long"` (set on the rank-0 handler's metadata).
             // Don't let that FQN leak into a wrapper's metadata.
-            if cfg.opaque.is_none() {
+            if !cfg.is_opaque() {
                 if let Some(spec) = &cfg.name_spec {
                     return Some(kt::KtType::cls(self.fqn_of(spec)));
                 }
@@ -527,7 +527,7 @@ pub(crate) fn build_handle_destructor_items(
 ) -> Vec<syn::Item> {
     let mut named: Vec<(String, syn::Item)> = Vec::new();
     for (key, cfg) in &ext.types {
-        if cfg.opaque.is_none() {
+        if !cfg.is_opaque() {
             continue;
         }
         // Skip handles the (feature-aware) scan never references — their
@@ -877,7 +877,7 @@ impl JniGen {
             // that the Kotlin folder wraps into its typed handle class. Enums
             // and multi-field data classes are not leaf-folded — data classes go
             // through `value_struct_decons`.
-            Some(cfg) => cfg.value_blob || cfg.opaque.is_some(),
+            Some(cfg) => cfg.is_value_blob() || cfg.is_opaque(),
             // Undeclared: `String` is JObject-shaped; `u64` is the built-in
             // scalar projection whose raw jlong leaf the Kotlin folder wraps
             // into `ULong`. Other primitive collections retain their existing
@@ -1002,7 +1002,7 @@ impl Prebindgen for JniGen {
         keys.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         let mut out = Vec::new();
         for key in keys {
-            let Some(sum_cfg) = self.types[key].sum_cfg.as_ref() else {
+            let Some(sum_cfg) = self.types[key].sum() else {
                 continue;
             };
             let source = key.to_type();
@@ -1128,19 +1128,17 @@ impl Prebindgen for JniGen {
             .collect()
     }
 
-    /// Every type registered via one of the four **class declarators**
-    /// (`.ptr_class` / `.enum_class` / `.data_class` / `.value_class`).
-    /// These are the only structs/enums the per-item emitter walks, and the
-    /// scan requires them in BOTH directions (their converters always resolve
-    /// both ways). Wrapper-only registrations are deliberately excluded: a
+    /// Every type registered via one of the **class declarators**
+    /// (`ptr_class!` / `enum_class!` / `sealed_class!` / `data_class!` /
+    /// `value_class!`) — i.e. every entry in the type table, whose only
+    /// writer is `JniGen::register_class`. These are the only structs/enums
+    /// the per-item emitter walks, and the scan requires them in BOTH
+    /// directions (their converters always resolve both ways). Wrapper
+    /// registrations live in their own tables and are deliberately excluded: a
     /// wrapper type is required per **usage** direction, so an output-only
     /// wrapper needs no input twin.
     fn declared_types(&self) -> std::collections::HashSet<TypeKey> {
-        self.types
-            .iter()
-            .filter(|(_, c)| c.class_decl)
-            .map(|(k, _)| k.clone())
-            .collect()
+        self.types.keys().cloned().collect()
     }
 
     /// Union of every `.constant(...)` list across all
@@ -1453,7 +1451,7 @@ impl Prebindgen for JniGen {
             .chain(
                 self.types
                     .iter()
-                    .filter(|(_, c)| c.sum_cfg.is_some())
+                    .filter(|(_, c)| c.sum().is_some())
                     .map(|(k, _)| k.clone()),
             )
             .collect()
@@ -1502,7 +1500,7 @@ impl Prebindgen for JniGen {
         // converter use. The bare type name is qualified against
         // its origin module by `post_process_item` like every other body.
         for (key, cfg) in &self.types {
-            if cfg.value_blob {
+            if cfg.is_value_blob() {
                 let ty = key.to_type();
                 items.push(syn::parse_quote!(
                     const _: () = {
@@ -1631,7 +1629,7 @@ impl JniGen {
         // registered rank-0 wrappers, then built-ins).
         let key = TypeKey::from_type(ty);
         if let Some(cfg) = self.types.get(&key) {
-            if cfg.opaque.is_some() {
+            if cfg.is_opaque() {
                 return Some(self.opaque_handle_input(ty));
             }
         }
@@ -1642,7 +1640,7 @@ impl JniGen {
         // handlers. `T: Copy` ⇒ reading the value out is sound (no double
         // drop); the `Copy` bound itself is enforced by the assertion in
         // `prerequisites`.
-        if self.types.get(&key).map(|c| c.value_blob).unwrap_or(false) {
+        if self.types.get(&key).is_some_and(|c| c.is_value_blob()) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
             let body: syn::Expr = syn::parse_quote!({
                 let __bytes = env.convert_byte_array(v).map_err(|e| {
@@ -1685,7 +1683,7 @@ impl JniGen {
         // intentional. The rank-0 enum arm produces a terminal converter
         // (jint → Rust enum) with the configured Kotlin FQN in metadata.
         if let Some(cfg) = self.types.get(&key) {
-            if cfg.enum_cfg.is_some() {
+            if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_input_body(self, registry, e);
@@ -1788,7 +1786,7 @@ impl JniGen {
             // delegates exactly as it does for a nested data class. (The
             // OUTPUT direction has no counterpart: a sum crosses Rust →
             // Kotlin flattened, always.)
-            if self.types.get(&key).is_some_and(|c| c.sum_cfg.is_some()) {
+            if self.types.get(&key).is_some_and(|c| c.sum().is_some()) {
                 if let Some((e, _)) = registry.enums.get(&name) {
                     let (wire, body) = sum_input_body(self, e, registry)?;
                     // The wire's own null niche, exactly as a data class gets
@@ -1873,7 +1871,7 @@ impl JniGen {
         // unified user-registered wrapper table, then built-ins).
         let key = TypeKey::from_type(ty);
         if let Some(cfg) = self.types.get(&key) {
-            if cfg.opaque.is_some() {
+            if cfg.is_opaque() {
                 return Some(self.opaque_handle_output(ty));
             }
         }
@@ -1883,7 +1881,7 @@ impl JniGen {
         // bytes and letting it drop normally is sound. Wire is `JByteArray`
         // (jobject-shaped), so `Vec<T>` / `Option<T>` compose through the
         // existing handlers — `Vec<value-blob>` surfaces as `List<ByteArray>`.
-        if self.types.get(&key).map(|c| c.value_blob).unwrap_or(false) {
+        if self.types.get(&key).is_some_and(|c| c.is_value_blob()) {
             let wire: syn::Type = syn::parse_quote!(jni::objects::JByteArray);
             let body: syn::Expr = syn::parse_quote!({
                 let __bytes: &[u8] = unsafe {
@@ -1923,7 +1921,7 @@ impl JniGen {
         // `#[repr(i32)]` (or any repr that supports the cast) on the
         // declared enum so the discriminant value round-trips identically.
         if let Some(cfg) = self.types.get(&key) {
-            if cfg.enum_cfg.is_some() {
+            if cfg.is_enum_class() {
                 if let Some(name) = bare_path_ident(ty) {
                     if let Some((e, _)) = registry.enums.get(&name) {
                         let (wire, body) = enum_output_body(self, e);
@@ -2068,8 +2066,7 @@ impl JniGen {
                 && self
                     .types
                     .get(&TypeKey::from_type(t1))
-                    .map(|c| c.opaque.is_some())
-                    .unwrap_or(false)
+                    .is_some_and(|c| c.is_opaque())
             {
                 let mut ref_ty = r.clone();
                 *ref_ty.elem = t1.clone();

@@ -294,7 +294,7 @@ pub(crate) fn sum_input_body(
 
     let key = TypeKey::from_ident(&e.ident);
     let cfg = ext.types.get(&key)?;
-    let sum_cfg = cfg.sum_cfg.as_ref()?;
+    let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
     let iface_path = iface_fqn.replace('.', "/");
     let source_module = ext.fn_module(registry, &e.ident);
@@ -833,7 +833,7 @@ fn build_flat_sum_field(
     let ident = bare_path_ident(sum_ty)?;
     let (item_enum, _) = registry.enums.get(&ident)?;
     let cfg = ext.types.get(&TypeKey::from_ident(&ident))?;
-    let sum_cfg = cfg.sum_cfg.as_ref()?;
+    let sum_cfg = cfg.sum()?;
     let iface_fqn = cfg.name_spec.as_ref().map(|s| ext.fqn_of(s))?;
     let spec = SumSpec::from_item_enum(item_enum);
 

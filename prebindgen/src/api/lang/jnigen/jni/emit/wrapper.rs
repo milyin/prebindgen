@@ -58,11 +58,7 @@ pub(crate) fn reject_handle_constant_type(ext: &JniGen, ty: &syn::Type, what: &s
         break;
     }
     let key = TypeKey::from_type(&ty);
-    let is_handle = ext
-        .types
-        .get(&key)
-        .and_then(|cfg| cfg.opaque.as_ref())
-        .is_some();
+    let is_handle = ext.types.get(&key).is_some_and(|cfg| cfg.is_opaque());
     assert!(
         !is_handle,
         "{what} `{name}`: type `{}` is a declared opaque handle — a shared closeable Kotlin `val` is \

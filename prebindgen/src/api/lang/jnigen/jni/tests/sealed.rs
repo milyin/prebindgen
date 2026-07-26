@@ -264,6 +264,53 @@ fn reopened_sealed_class_merges_variant_names() {
     assert!(c.contains("1->One(one_v0)"), "{kt}");
 }
 
+/// The stored kind's payload merges on reopen, and `.gc_managed()` is
+/// sticky-OR: a plain `ptr_class!(T)` reopening a `.gc_managed()` one must not
+/// demote the handle. Peer of [`reopened_sealed_class_merges_variant_names`]
+/// for the other options-carrying kind — both rules live in
+/// `DeclaredKind::merge`, so this pins the order-independence they share.
+#[test]
+fn reopened_ptr_class_keeps_gc_managed() {
+    let loc = myflat_loc();
+    let items = || {
+        vec![(
+            syn::Item::Struct(syn::parse_quote!(
+                pub struct Session {
+                    pub id: i64,
+                }
+            )),
+            loc.clone(),
+        )]
+    };
+    let gc_managed_of = |first: crate::lang::PtrClassDecl, second: crate::lang::PtrClassDecl| {
+        let registry = Registry::<KotlinMeta>::from_items(items()).expect("index items");
+        let jni = JniGen::new()
+            .set_package_prefix("io.test.jni")
+            .package(crate::package!().class(first).class(second));
+        drop(registry);
+        let key = TypeKey::from_type(&syn::parse_quote!(Session));
+        jni.types
+            .get(&key)
+            .expect("declared")
+            .opaque()
+            .expect("ptr_class")
+            .gc_managed
+    };
+
+    assert!(gc_managed_of(
+        crate::ptr_class!(Session).gc_managed(),
+        crate::ptr_class!(Session),
+    ));
+    assert!(gc_managed_of(
+        crate::ptr_class!(Session),
+        crate::ptr_class!(Session).gc_managed(),
+    ));
+    assert!(!gc_managed_of(
+        crate::ptr_class!(Session),
+        crate::ptr_class!(Session),
+    ));
+}
+
 /// A type gets exactly **one** class declarator. Two different ones would
 /// emit two Kotlin declarations for the same FQN, so the second is a hard
 /// error — symmetrically, whichever order they come in.
@@ -300,8 +347,8 @@ fn a_type_gets_one_class_declarator() {
     };
 
     // Every conflicting pair among the five declarators is rejected, in both
-    // orders — the check runs before any registration, so it does not depend
-    // on which came first.
+    // orders — the second declaration is matched against the kind the first
+    // one stored, so it does not depend on which came first.
     type MakeDecl = fn() -> crate::lang::ClassDecl;
     let pairs: Vec<(MakeDecl, MakeDecl)> = vec![
         (
