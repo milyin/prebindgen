@@ -532,10 +532,13 @@ pub fn first_payload_variant(e: &syn::ItemEnum) -> Option<&syn::Variant> {
 /// them in memory as a `#[repr(C)]` union). Nothing here names a wire
 /// detail — in particular a payload enum carries no `repr`, so tags are
 /// declaration order and never an explicit discriminant.
-/// The neutral description lands before either lowering, so both adapters
-/// read one definition instead of growing a private one each; the
-/// `dead_code` allow covers that gap and goes away with the first adapter
-/// that reads a sum.
+///
+/// As of Stage T (#190) this is the **`Choice` constructor** for the Tier 0
+/// semantic tier rather than a parallel description of the same enum:
+/// [`ShapeGraph`](crate::api::core::semantic::ShapeGraph) builds
+/// [`SemanticShape::Choice`](crate::api::core::semantic::SemanticShape::Choice)
+/// through it, so declaration-order tags, `syn::Member` addressing and the
+/// nested-prefix leaf names are computed in exactly one place.
 #[allow(dead_code)]
 pub struct SumSpec {
     /// Canonical key of the enum type.
