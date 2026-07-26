@@ -774,6 +774,15 @@ LookupBuilderRaw { tag, found_v0, failed_v0 ->
     when (tag) { 0 -> Lookup.Absent; 1 -> Lookup.Found(Summary(found_v0)); 2 -> Lookup.Failed(failed_v0!!); else -> throw IllegalArgumentException("Lookup: invalid tag $tag") }
 }
 
+public fun interface MarkerBuilder<out R> {
+    public fun run(tag: Int, ranked_v0: Int?): R
+}
+
+internal val __MarkerBuilder: MarkerBuilder<Marker> =
+MarkerBuilder { tag, ranked_v0 ->
+    when (tag) { 0 -> Marker.None_; 1 -> Marker.Ranked(ranked_v0?.let { Priority.fromInt(it) }); else -> throw IllegalArgumentException("Marker: invalid tag $tag") }
+}
+
 public fun interface ReadingBuilder<out R> {
     public fun run(
         tag: Int,
@@ -1144,6 +1153,28 @@ public fun taggedRank(t: Tagged, onError: JniErrorHandler<Int>): Int {
     val __ret = CovNative.taggedRank(t.id, t.marker, __bcap)
     if (__bcap.failed) return onError.run(__bcap.ze0)
     return __ret
+}
+
+/**
+ * The same `Option<enum>` payload with the sum in **return** position rather
+ * than as a struct field. Only this reaches `synth_sum_leaves`, which hardcodes
+ * `nullable: false` on every group leaf and lets `plan_leaf_param` widen from
+ * the inert side; a struct field takes `PlanFieldKind::Sum` and, for this
+ * payload, degrades to the whole-object crossing instead.
+ *
+ * Two nullabilities meet in one slot and must not collapse into each other:
+ * the payload's own `None`, and the slot being inert because the other variant
+ * is live. Both arrive as a JVM null, so `Ranked(null)` and `None_` are only
+ * told apart by the tag.
+ *
+ * The Rust `Marker` result is delivered decomposed: the builder callback receives (`tag`, `ranked_v0`).
+ */
+@Suppress("UNCHECKED_CAST")
+public fun markerOf(which: Int, onError: JniErrorHandler<Marker>): Marker {
+    val __bcap = JniErrorHandlerCapture.acquire()
+    val __ret = CovNative.markerOf(which, __MarkerBuilder, __bcap)
+    if (__bcap.failed) return onError.run(__bcap.ze0)
+    return __ret as Marker
 }
 
 /**

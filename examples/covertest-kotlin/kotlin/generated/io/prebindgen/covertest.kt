@@ -710,6 +710,8 @@ internal object CovNative {
 
     external fun lookupOf(count: Long, total: Double, build: Any, errorSink: Any): Any?
 
+    external fun markerOf(which: Int, build: Any, errorSink: Any): Any?
+
     external fun millisAdd(a: Long, b: Long, errorSink: Any): Long
 
     external fun objectBoundaryValue(value: ObjectBoundary, errorSink: Any): Long
