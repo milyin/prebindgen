@@ -228,7 +228,7 @@ impl Cbindgen {
     /// value no variant has. Taking the mirror `#[repr(C)]` enum by value would
     /// **materialise** that invalid discriminant at the boundary — undefined
     /// behaviour *before* any `match` in this converter could inspect it, which
-    /// is why validating a already-materialised enum is not a fix (#158).
+    /// is why validating an already-materialised enum is not a fix (#158).
     ///
     /// So the wire is [`::core::mem::MaybeUninit<mirror>`], which is
     /// `#[repr(transparent)]` over the mirror (identical ABI, identical C
