@@ -485,3 +485,159 @@ fn repr_c_struct_mut_ref_and_maybe_uninit_out_param() {
         "{src}"
     );
 }
+
+/// The one position with no per-value hook (#170 instance 3, #158 instance 3):
+/// a `repr_c_struct` mirror is reinterpreted **wholesale** by one `Transmute`,
+/// so a field whose Rust type accepts only some bit patterns is undefined
+/// behaviour the moment C writes another one and hands the struct back. Every
+/// other position — a parameter, a `data_struct` field, a union payload — goes
+/// through a per-value converter and has somewhere to normalise or validate.
+///
+/// Rejected at declaration time, with the offending field named.
+#[test]
+fn repr_c_struct_restricted_validity_field_is_rejected() {
+    for (field, want) in [
+        (quote::quote!(pub flag: bool), "`flag`: `bool`"),
+        (
+            quote::quote!(pub op: Operation),
+            "`op`: a declared `enum_type`",
+        ),
+    ] {
+        let msg = catch_msg(|| {
+            let loc = SourceLocation::default();
+            let st: syn::ItemStruct = syn::parse_quote!(
+                #[repr(C)]
+                pub struct Rec {
+                    pub id: u64,
+                    #field,
+                }
+            );
+            let take: syn::ItemFn = syn::parse_quote!(
+                pub fn rec_take(r: Rec) -> u64 {
+                    unimplemented!()
+                }
+            );
+            let registry = Registry::<()>::from_items([
+                (syn::Item::Struct(st), loc.clone()),
+                (
+                    syn::Item::Enum(syn::parse_quote!(
+                        pub enum Operation {
+                            Add = 0,
+                            Sub = 1,
+                        }
+                    )),
+                    loc.clone(),
+                ),
+                (syn::Item::Fn(take), loc.clone()),
+            ])
+            .expect("index items");
+
+            let cbindgen = Cbindgen::new()
+                .source_module(syn::parse_quote!(zenoh_flat))
+                .mangle_type_name(|base| format!("{base}_t"))
+                .mangle_destructor(|base| format!("{base}_drop"))
+                .mangle_function(|n| n.to_string())
+                .enum_type(syn::parse_quote!(Operation))
+                .repr_c_struct(syn::parse_quote!(Rec))
+                .function(syn::parse_quote!(rec_take))
+                .panic();
+
+            let _ = write(cbindgen, registry, "repr_c_struct_restricted");
+        });
+        assert!(msg.contains(want), "{msg}");
+        assert!(msg.contains("assume_c_field_validity"), "{msg}");
+    }
+}
+
+/// The escape hatch: `.assume_c_field_validity()` says this binding's C side is
+/// trusted to write only in-domain bytes. It is an acknowledgement, not a fix —
+/// the mirror still holds the field verbatim — and it exists so the audit can
+/// reject silently-unsound **new** declarations without removing bindings that
+/// already ship.
+#[test]
+fn repr_c_struct_restricted_validity_field_accepted_when_acknowledged() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        pub struct Rec {
+            pub id: u64,
+            pub flag: bool,
+        }
+    );
+    let take: syn::ItemFn = syn::parse_quote!(
+        pub fn rec_take(r: Rec) -> u64 {
+            unimplemented!()
+        }
+    );
+    let registry = Registry::<()>::from_items([
+        (syn::Item::Struct(st), loc.clone()),
+        (syn::Item::Fn(take), loc.clone()),
+    ])
+    .expect("index items");
+
+    let cbindgen = Cbindgen::new()
+        .source_module(syn::parse_quote!(zenoh_flat))
+        .mangle_type_name(|base| format!("{base}_t"))
+        .mangle_destructor(|base| format!("{base}_drop"))
+        .mangle_function(|n| n.to_string())
+        .repr_c_struct(syn::parse_quote!(Rec))
+        .assume_c_field_validity()
+        .function(syn::parse_quote!(rec_take))
+        .panic();
+
+    let src = write(cbindgen, registry, "repr_c_struct_acknowledged");
+    let compact: String = src.split_whitespace().collect();
+    assert!(compact.contains("pubflag:bool"), "{src}");
+}
+
+/// The audit does **not** narrow itself to mirrors C hands back, even though
+/// only those are reachable: a declared type resolves both directions whether
+/// or not either is called, so "does it cross in" has no truthful answer at
+/// this point in the pipeline (the reachability accounting #194/#196 replace).
+/// Over-reporting is the safe direction — this pins that an output-only mirror
+/// is rejected too, and takes the acknowledgement like any other.
+#[test]
+fn repr_c_struct_restricted_validity_field_audited_even_when_output_only() {
+    let loc = SourceLocation::default();
+    let st: syn::ItemStruct = syn::parse_quote!(
+        #[repr(C)]
+        pub struct Rec {
+            pub id: u64,
+            pub flag: bool,
+        }
+    );
+    let make: syn::ItemFn = syn::parse_quote!(
+        pub fn rec_make() -> Rec {
+            unimplemented!()
+        }
+    );
+    let registry = || {
+        Registry::<()>::from_items([
+            (syn::Item::Struct(st.clone()), loc.clone()),
+            (syn::Item::Fn(make.clone()), loc.clone()),
+        ])
+        .expect("index items")
+    };
+
+    let declare = |acknowledged: bool| {
+        let mut c = Cbindgen::new()
+            .source_module(syn::parse_quote!(zenoh_flat))
+            .mangle_type_name(|base| format!("{base}_t"))
+            .mangle_destructor(|base| format!("{base}_drop"))
+            .mangle_function(|n| n.to_string())
+            .repr_c_struct(syn::parse_quote!(Rec));
+        if acknowledged {
+            c = c.assume_c_field_validity();
+        }
+        c.function(syn::parse_quote!(rec_make))
+    };
+
+    let msg = catch_msg(|| {
+        let _ = write(declare(false), registry(), "repr_c_struct_out_only");
+    });
+    assert!(msg.contains("`flag`: `bool`"), "{msg}");
+
+    let src = write(declare(true), registry(), "repr_c_struct_out_only_ack");
+    let compact: String = src.split_whitespace().collect();
+    assert!(compact.contains("pubflag:bool"), "{src}");
+}

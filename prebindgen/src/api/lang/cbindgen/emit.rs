@@ -400,26 +400,6 @@ impl Cbindgen {
             .collect()
     }
 
-    /// Whether C can hand this type's mirror **back** to Rust. Only then can a
-    /// caller-written byte reach a reinterpret, so only then does
-    /// [`Self::restricted_validity_fields`] describe a live hazard.
-    ///
-    /// Every inbound position keys its own converter, so the four spellings are
-    /// checked directly rather than inferred from the base type's entry.
-    pub(super) fn crosses_in_by_reinterpret(
-        &self,
-        registry: &Registry<()>,
-        ty: &syn::Type,
-    ) -> bool {
-        let forms: [syn::Type; 4] = [
-            ty.clone(),
-            syn::parse_quote!(&#ty),
-            syn::parse_quote!(&mut #ty),
-            syn::parse_quote!(&[#ty]),
-        ];
-        forms.iter().any(|f| registry.input_entry(f).is_some())
-    }
-
     /// Exported `#[no_mangle]` symbol for a declared function:
     /// [`Self::mangle_function`] over the base — a `.base_name(...)` override when
     /// set, else the Rust fn ident — or that base verbatim when no mangler is set.

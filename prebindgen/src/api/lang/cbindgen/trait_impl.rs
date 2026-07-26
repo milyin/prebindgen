@@ -626,27 +626,31 @@ impl Cbindgen {
                 // Restricted-validity audit (#170 instance 3, #158 instance 3):
                 // a mirror is reinterpreted whole, so a field whose Rust type
                 // rejects some bit patterns is UB the moment C writes one and
-                // hands the struct back. Only inbound mirrors can be reached
-                // that way, so a write-only mirror is left alone.
+                // hands the struct back.
+                //
+                // Not narrowed to inbound mirrors, though only those are
+                // reachable: converter reachability is not derived from use
+                // today (a declared type resolves BOTH directions whether or
+                // not either is called — the accounting #194/#196 replace), so
+                // "does it cross in" has no truthful answer here. Over-
+                // reporting is the safe direction, and the acknowledgement
+                // below is the escape for a genuinely write-only mirror.
                 let restricted = self.restricted_validity_fields(registry, &ty);
-                if !restricted.is_empty()
-                    && !cfg.assume_c_field_validity
-                    && self.crosses_in_by_reinterpret(registry, &ty)
-                {
+                if !restricted.is_empty() && !cfg.assume_c_field_validity {
                     let listed: Vec<String> = restricted
                         .iter()
                         .map(|(fname, reason)| format!("  `{fname}`: {reason}"))
                         .collect();
                     panic!(
-                        "Cbindgen::repr_c_struct: `{}` crosses IN from C by whole-struct \
+                        "Cbindgen::repr_c_struct: `{}` crosses C's memory by whole-struct \
                          reinterpret, but these fields have restricted-validity Rust types:\n\
                          {}\n\
                          A C caller can write a byte outside those domains, and the reinterpret \
                          materialises it with no hook to normalise or validate it first (#170, \
                          #158). Move the field to a `data_struct` (per-field wires), pass it as \
                          a separate parameter, or widen it to an integer. If this binding's C \
-                         side is trusted to write only in-domain bytes, acknowledge it with \
-                         `.assume_c_field_validity()`.",
+                         side is trusted to write only in-domain bytes — or never hands the \
+                         mirror back at all — acknowledge it with `.assume_c_field_validity()`.",
                         type_short(&ty),
                         listed.join("\n"),
                     );

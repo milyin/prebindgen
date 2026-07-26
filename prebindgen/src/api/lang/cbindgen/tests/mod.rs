@@ -1,6 +1,7 @@
 use super::*;
 use crate::{api::test_util::unique_test_dir, SourceLocation};
 
+mod boundary_invariants;
 mod builder;
 mod callbacks;
 mod errors;
