@@ -928,11 +928,18 @@ fn borrowed_sum_return_matches_through_the_reference() {
             .find(&format!("fn Java_io_test_jni_JNINative_{extern_fn}"))
             .unwrap_or_else(|| panic!("{extern_fn} extern missing:\n{rust}"));
         let body = &rust[at..at + 4000];
-        // The value is borrowed from its owner, and the match is over that
-        // borrow — never `match __out` on a moved value.
+        // The value is borrowed from its owner, so the encoder matches the
+        // binding DIRECTLY — `by_ref` is already reflected in `__out`'s type.
+        // Asserted exactly: a bare `contains("match __out")` would also accept
+        // `match __out2`, and accepting `match &__out` as an alternative would
+        // let a regression to double-referencing the borrow pass silently.
         assert!(
-            body.contains("match __out") || body.contains("match &__out"),
+            body.contains("match __out {"),
             "{extern_fn}: one match over the borrowed value:\n{body}"
+        );
+        assert!(
+            !body.contains("match &__out"),
+            "{extern_fn}: a borrowed return must not take a second reference:\n{body}"
         );
         assert!(
             body.contains("myflat::Reading::Missing =>"),

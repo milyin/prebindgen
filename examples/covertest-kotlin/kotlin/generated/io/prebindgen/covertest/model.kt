@@ -1303,9 +1303,10 @@ public fun lookupOf(count: Long, total: Double, onError: JniErrorHandler<Lookup>
 /**
  * A handle-carrying sum as a **callback argument** — the same `Lookup` that
  * [`lookup_of`] returns, arriving through `impl Fn` instead. Alternatives are
- * delivered in turn (`Failed`, `Absent`, `Found`, then `Found` again), so a
- * live group hands a native resource to the callback while the inert groups'
- * slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
+ * delivered in `count` order starting at `-1`, so `n >= 3` covers all three:
+ * `Failed` (`i = 0`), `Absent` (`i = 1`), then `Found` with an increasing
+ * count. A live group hands a native resource to the callback while the inert
+ * groups' slots stay defaulted. A sum payload is a plan LEAF, so the handle is wrapped
  * but not closed by the proxy: it is the callback body's to close, exactly as
  * for a returned sum.
  */
