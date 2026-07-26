@@ -22,3 +22,10 @@ args = "auto"
 # Configure struct generation
 derive_eq = false
 derive_neq = false
+
+# NOTE: a tagged union (`.tagged_union()`) renders as a tag enum plus a union of
+# the variant bodies, and cbindgen's `[enum]` section is what controls that
+# rendering — e.g. `prefix_with_name = true` would namespace the variant
+# constants as `shape_t_Empty` instead of the default bare `Empty`. This example
+# keeps cbindgen's defaults, so `include/example_flat_*.h` is the reference for
+# exactly what they produce.

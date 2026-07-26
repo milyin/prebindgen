@@ -72,6 +72,13 @@ fn generate_ffi_bindings() -> PathBuf {
     // The primitive-repr `Operation` enum -> a C enum.
     cbindgen = cbindgen.enum_type(pq!(Operation));
 
+    // The data-carrying `Shape` enum -> a `#[repr(C)]` enum with payload
+    // variants, which cbindgen renders as a C tag + `union`. Its `Labeled` arm
+    // owns a `char *`, so a typed `shape_drop` is generated to free the active
+    // arm. `Drawing` carries one as a by-value field.
+    cbindgen = cbindgen.tagged_union(pq!(Shape));
+    cbindgen = cbindgen.data_struct(pq!(Drawing));
+
     // Multi-target cfg demonstration: `InsideFoo` (a fieldless enum whose
     // discriminants vary by `target_arch`) and `Foo` (a by-value data struct whose
     // field set varies by `target_arch` + feature). Declared unconditionally —
@@ -98,6 +105,14 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(foo_new),
         pq!(foo_get_id),
         pq!(inside_foo_default),
+        // The tagged union crossing OUT: constructed and returned. Nothing to
+        // validate on this side — Rust always writes a live arm.
+        pq!(shape_new_empty),
+        pq!(shape_new_circle),
+        pq!(shape_new_rect),
+        // The union crossing IN on a fallible function: an out-of-range tag
+        // reports through the same `char **e` as the domain error.
+        pq!(shape_try_area),
     ] {
         cbindgen = cbindgen.function(function);
     }
@@ -113,9 +128,15 @@ fn generate_ffi_bindings() -> PathBuf {
     // wrapper abort on a null handle. `inside_foo_value` joins them for the same
     // reason with a different fallible input: a C enum is an `int` at the ABI, so
     // its discriminant is validated on the way in (never materialised unchecked),
-    // and with no `char **e` to report an out-of-range one it aborts.
+    // and with no `char **e` to report an out-of-range one it aborts. The three
+    // union-consuming accessors are the same case one level up — the tag a C
+    // caller supplies is validated before the Rust enum exists, here abortively.
     for function in [
         pq!(inside_foo_value),
+        pq!(shape_area),
+        pq!(shape_get_label),
+        pq!(drawing_new),
+        pq!(drawing_get_shape),
         pq!(calculator_new_clone),
         pq!(calculator_get_value),
         pq!(calculator_get_count),
@@ -123,6 +144,8 @@ fn generate_ffi_bindings() -> PathBuf {
         pq!(calculator_to_string),
         pq!(calculator_get_history),
         pq!(calculator_for_each),
+        // `&str` label input is fallible (null-checked) with no `Result`.
+        pq!(shape_new_labeled),
     ] {
         cbindgen = cbindgen.function(function).panic();
     }
